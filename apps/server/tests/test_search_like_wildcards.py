@@ -2,7 +2,7 @@
 
 #292 escaped chat search. The other searches (users, shared chats, channel
 messages, calendar events, groups, automations, prompts and their tag filter,
-notes, knowledge bases and their files, workspace models) still bound the
+notes, knowledge bases and their files, workspace models and skills) still bound the
 user's text raw into LIKE / ILIKE, so searching for `%` matched every row and
 `_` any one character. They now go through `local_llm.utils.sql_like`, with an
 explicit ESCAPE character, on SQLite (which has no default) and Postgres alike.
@@ -46,6 +46,7 @@ from local_llm.models.models import ModelForm, ModelMeta, ModelParams, Models
 from local_llm.models.notes import NoteForm, Notes
 from local_llm.models.prompts import PromptForm, Prompts
 from local_llm.models.shared_chats import SharedChats
+from local_llm.models.skills import SkillForm, Skills
 from local_llm.models.users import Users
 
 # Importing the config runs the migrations on the test run's database.
@@ -274,6 +275,21 @@ async def models(run):
     return {'models': await found(ids, search)}
 
 
+async def skills(run):
+    """The workspace skill search: the name (the id and description are searched too, so they stay neutral)."""
+    ids = {}
+    for key in TEXTS:
+        form = SkillForm(id=f'{key}-{run.tag}', name=run.text(key), description='d', content='Body')
+        skill = await Skills.insert_new_skill(run.owner.id, form)
+        ids[skill.id] = key
+
+    async def search(query):
+        result = await Skills.search_skills(run.owner.id, filter={**run.mine, 'query': query})
+        return [skill.id for skill in result.items]
+
+    return {'skills': await found(ids, search)}
+
+
 SEARCHES = (
     users,
     shared_chats,
@@ -286,6 +302,7 @@ SEARCHES = (
     knowledge_bases,
     knowledge_files,
     models,
+    skills,
 )
 
 
@@ -323,6 +340,7 @@ EXPECTED = {
     'files of a knowledge base': EACH_OWN,
     'files of a knowledge base with content': {query: sorted(EACH_OWN[query] + IN_CONTENT[query]) for query in QUERIES},
     'models': EACH_OWN,
+    'skills': EACH_OWN,
 }
 
 
