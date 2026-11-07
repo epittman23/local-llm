@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DROPPED_GRANTS_WARNING } from '@/lib/access/accessGrants';
 import {
 	type ViewOption,
 	accessLabel,
@@ -14,6 +15,7 @@ import {
 	moveItem,
 	nextAccessGrants,
 	orderIds,
+	privacyOutcome,
 	splitIds,
 	toggleId,
 	togglePlan,
@@ -46,6 +48,27 @@ describe('access and kind', () => {
 		expect(nextAccessGrants({ access_grants: [grp] })).toEqual([grp, pub]);
 		expect(nextAccessGrants({ access_grants: [grp, pub] })).toEqual([]);
 		expect(nextAccessGrants({})).toEqual([pub]);
+	});
+	it('reports the access the server stored, and warns when it dropped some (#804)', () => {
+		expect(privacyOutcome([pub], { access_grants: [pub] })).toEqual({
+			grants: [pub],
+			kind: 'success',
+			text: 'Model is now public'
+		});
+		expect(privacyOutcome([], { access_grants: [] })).toEqual({
+			grants: [],
+			kind: 'success',
+			text: 'Model is now private'
+		});
+		expect(privacyOutcome([grp, pub], { access_grants: [grp] })).toEqual({
+			grants: [grp],
+			kind: 'warning',
+			text: DROPPED_GRANTS_WARNING
+		});
+		expect(privacyOutcome([pub], { access_grants: [] }).grants).toEqual([]);
+	});
+	it('keeps the sent grants when the reply has no grant list', () => {
+		expect(privacyOutcome([pub], {})).toEqual({ grants: [pub], kind: 'success', text: 'Model is now public' });
 	});
 });
 
