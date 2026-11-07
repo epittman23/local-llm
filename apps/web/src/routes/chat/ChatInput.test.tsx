@@ -182,3 +182,65 @@ describe('ChatInput: Enter while an attachment is uploading', () => {
 		expect(box.value).toBe('read this');
 	});
 });
+
+describe('ChatInput: a suggestion list that shrinks under the selection (#623)', () => {
+	afterEach(cleanup);
+
+	const model = (id: string) => ({ id, name: id, info: { meta: {} } }) as never;
+	const three = [model('alpha'), model('beta'), model('gamma')];
+
+	/** The input with `models`, re-rendered with fewer by `shrink`: the query stays as it was. */
+	function withModels(models: unknown[]) {
+		const onAtModel = vi.fn();
+		const ui = (list: unknown[]) => (
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<ChatInput
+						onSubmit={vi.fn(() => true)}
+						onStop={vi.fn()}
+						generating={false}
+						queued={[]}
+						onRemoveQueued={vi.fn()}
+						onAtModel={onAtModel}
+						models={list as never}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		const { rerender } = render(ui(models));
+		const box = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+		return { box, onAtModel, shrink: (list: unknown[]) => rerender(ui(list)) };
+	}
+	const highlighted = () =>
+		screen
+			.getAllByRole('option')
+			.filter((o) => o.getAttribute('aria-selected') === 'true')
+			.map((o) => o.textContent);
+
+	it('highlights the last suggestion left, and Enter picks it', () => {
+		const { box, onAtModel, shrink } = withModels(three);
+		box.focus();
+		type(box, '@');
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+		expect(highlighted()).toEqual([expect.stringContaining('gamma')]);
+
+		shrink([three[0]]);
+		expect(highlighted()).toEqual([expect.stringContaining('alpha')]);
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(onAtModel).toHaveBeenCalledWith(three[0]);
+	});
+
+	it('steps the arrow keys from what is highlighted', () => {
+		const { box, shrink } = withModels(three);
+		box.focus();
+		type(box, '@');
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+
+		shrink(three.slice(0, 2));
+		expect(highlighted()).toEqual([expect.stringContaining('beta')]);
+		fireEvent.keyDown(box, { key: 'ArrowUp' });
+		expect(highlighted()).toEqual([expect.stringContaining('alpha')]);
+	});
+});
