@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.models.channels import Channels
 from local_llm.models.users import User, UserNameResponse, Users
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 ####################
 # Message DB Schema
@@ -629,7 +630,7 @@ class MessageTable:
         async with get_async_db_context(db) as db:
             stmt = select(Message).filter(
                 Message.channel_id.in_(channel_ids),
-                Message.content.ilike(f'%{query}%'),
+                Message.content.ilike(like_contains(query), escape=LIKE_ESCAPE),
             )
 
             if start_timestamp:
