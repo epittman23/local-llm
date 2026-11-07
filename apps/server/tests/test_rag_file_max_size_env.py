@@ -41,11 +41,13 @@ def test_optional_int_env(monkeypatch, value, expected):
     [
         ('', None, None),
         ('0.5', None, None),
-        ('2', None, 2 * 1024 * 1024),
-        # Its own setting wins, a 0 included (a cap of 0, as before), and an empty one falls back.
+        # Unset or empty, the cap is left to the upload size limit, read at use time (#629;
+        # tests/test_metadata_cap_follows_upload_limit.py), not folded in at startup.
+        ('2', None, None),
+        ('2', '', None),
+        # Its own setting is kept, a 0 included (a cap of 0, as before).
         ('2', '0', 0),
         ('2', '500', 500),
-        ('2', '', 2 * 1024 * 1024),
     ],
 )
 def test_the_settings_load_with_the_value(tmp_path, value, cap_setting, cap):
