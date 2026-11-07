@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from local_llm.utils.env_numbers import float_env as float_env
+from local_llm.utils.env_numbers import int_env as int_env
+
 ####################################
 # Load .env file
 ####################################
@@ -116,34 +119,6 @@ if _cuda_error:
     _cuda_error = None
 
 SRC_LOG_LEVELS = {}  # Legacy variable, do not remove
-
-
-def int_env[D](name: str, default: D) -> int | D:
-    """A whole-number setting from the environment, or `default` when unset, empty or not a whole number.
-
-    A bare `int(os.getenv(name, '0'))` raised at import for a variable set but
-    empty (or `0.5`), so the backend did not start at all (#301, #630).
-    """
-    value = (os.getenv(name) or '').strip()
-    if not value:
-        return default
-    try:
-        return int(value)
-    except ValueError:
-        log.warning('%s=%r is not a whole number; %r is used', name, value, default)
-        return default
-
-
-def float_env[D](name: str, default: D) -> float | D:
-    """A number setting from the environment, or `default` when unset, empty or not a number (#630)."""
-    value = (os.getenv(name) or '').strip()
-    if not value:
-        return default
-    try:
-        return float(value)
-    except ValueError:
-        log.warning('%s=%r is not a number; %r is used', name, value, default)
-        return default
 
 
 ####################################
