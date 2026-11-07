@@ -113,8 +113,11 @@ def without_null_settings(config: dict) -> dict:
             {**m, 'meta': m.get('meta') or {}} if isinstance(m, dict) else m for m in config['evaluation.arena.models']
         ]
     for key in API_CONFIG_KEYS:
-        if isinstance(config.get(key), dict):
-            config[key] = {idx: api_config or {} for idx, api_config in config[key].items()}
+        if key not in config:
+            continue
+        # A null or non-dict value for the whole key is stored as {} too.
+        value = config[key] if isinstance(config[key], dict) else {}
+        config[key] = {idx: api_config or {} for idx, api_config in value.items()}
     return config
 
 

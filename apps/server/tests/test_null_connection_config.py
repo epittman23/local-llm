@@ -17,6 +17,7 @@ Run from apps/server:
 """
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -237,3 +238,106 @@ def test_unloading_from_an_ollama_connection_with_a_null_config_reads_it_as_empt
     # The unload was tried, and its failure reported, instead of an AttributeError first.
     assert tried == [True]
     assert raised.value.status_code == 500
+
+
+# ── The Ollama proxy routes and the OpenAI merged model list ────────────────
+
+
+def _ollama_proxy_client(monkeypatch, sent: list) -> TestClient:
+    """The Ollama router with a null connection config, and a send_request that records the call."""
+    from local_llm.utils.auth import get_admin_user, get_verified_user
+
+    async def no_models(*_a, **_k):
+        return None
+
+    async def no_model(*_a, **_k):
+        return None
+
+    async def allowed(*_a, **_k):
+        return None
+
+    async def send_request(url, method='POST', **kwargs):
+        sent.append((url, kwargs))
+        return {'ok': True}
+
+    monkeypatch.setattr(
+        ollama,
+        'Config',
+        _Config({'ollama.enable': True, 'ollama.base_urls': ['http://a.invalid'], 'ollama.api_configs': {'0': None}}),
+    )
+    monkeypatch.setattr(ollama, 'get_all_models', no_models)
+    monkeypatch.setattr(ollama.Models, 'get_model_by_id', no_model)
+    monkeypatch.setattr(ollama, 'check_model_access', allowed)
+    monkeypatch.setattr(ollama, 'send_request', send_request)
+    app = FastAPI()
+    app.state.OLLAMA_MODELS = {'m': {'urls': [0]}}
+    app.include_router(ollama.router, prefix='/ollama')
+    app.dependency_overrides[get_admin_user] = lambda: ADMIN
+    app.dependency_overrides[get_verified_user] = lambda: ADMIN
+    return TestClient(app)
+
+
+@pytest.mark.parametrize(
+    ('path', 'body', 'upstream'),
+    [
+        ('/ollama/api/unload', {'model': 'm'}, '/api/generate'),
+        ('/ollama/api/embed/0', {'model': 'm', 'input': 'x'}, '/api/embed'),
+        ('/ollama/api/embeddings/0', {'model': 'm', 'prompt': 'x'}, '/api/embeddings'),
+        ('/ollama/api/generate/0', {'model': 'm', 'prompt': 'x'}, '/api/generate'),
+        ('/ollama/v1/messages/0', {'model': 'm', 'messages': []}, '/v1/messages'),
+        ('/ollama/v1/responses/0', {'model': 'm', 'input': 'x'}, '/v1/responses'),
+    ],
+)
+def test_an_ollama_route_forwards_with_the_default_config_when_the_stored_one_is_null(
+    monkeypatch, path, body, upstream
+):
+    sent: list = []
+
+    r = _ollama_proxy_client(monkeypatch, sent).post(path, json=body)
+
+    assert r.status_code == 200, r.text
+    assert len(sent) == 1
+    url, kwargs = sent[0]
+    assert url == f'http://a.invalid{upstream}'
+    assert kwargs['key'] is None
+    # No prefix_id in the default config: the model name goes through unchanged.
+    assert json.loads(kwargs['payload'])['model'] == 'm'
+    if 'api_config' in kwargs:
+        assert kwargs['api_config'] == {}
+
+
+def test_the_openai_merged_model_list_reads_a_null_connection_config_as_empty(monkeypatch):
+    monkeypatch.setattr(
+        openai,
+        'Config',
+        _Config(
+            {
+                'openai.enable': True,
+                'openai.api_base_urls': ['http://a.invalid/v1'],
+                'openai.api_keys': ['sk-a'],
+                'openai.api_configs': {'0': None},
+            }
+        ),
+    )
+
+    async def get_models_request(request, url, key=None, user=None, config=None):
+        return {'data': [{'id': 'm'}]}
+
+    monkeypatch.setattr(openai, 'get_models_request', get_models_request)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    user = SimpleNamespace(id='null-config-merged-list', role='admin')
+
+    merged = asyncio.run(openai.get_all_models(request, user))
+
+    assert [m['id'] for m in merged['data']] == ['m']
+    assert merged['data'][0]['urlIdx'] == 0
+    assert 'loaded' not in merged['data'][0]
+
+
+def test_an_imported_null_connection_config_key_is_stored_as_empty():
+    from local_llm.routers.configs import without_null_settings
+
+    imported = without_null_settings({'ollama.api_configs': None, 'openai.api_configs': 'x'})
+    assert imported == {'ollama.api_configs': {}, 'openai.api_configs': {}}
+    # A key the import does not carry is not added.
+    assert without_null_settings({'openai.enable': True}) == {'openai.enable': True}
