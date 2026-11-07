@@ -24,6 +24,7 @@ from local_llm.models.notes import (
 )
 from local_llm.models.users import UserResponse, Users
 from local_llm.socket.main import close_room, prune_room, sio
+from local_llm.tasks import stop_item_tasks
 from local_llm.utils.access_control import (
     filter_allowed_access_grants,
     has_permission,
@@ -767,6 +768,12 @@ async def delete_note_by_id(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
     try:
+        # A reply still running in a chat with the note, or in a chat spawned
+        # from one, stopped first, as the chat delete route does (#713).
+        for chat_id, owner_id in await Chats.get_internal_chat_owners_by_note_id(id, db=db):
+            await stop_item_tasks(request.app.state.redis, chat_id)
+            for child_id in await Chats.get_internal_chat_ids_by_parent_id(chat_id, owner_id):
+                await stop_item_tasks(request.app.state.redis, child_id)
         # The delete reports a failure as False; it was announced as done (#332).
         if not await Notes.delete_note_by_id(id, db=db):
             raise RuntimeError(f'Note {id} could not be deleted')
