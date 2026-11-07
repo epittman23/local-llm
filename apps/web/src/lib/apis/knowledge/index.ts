@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { keepaliveInit } from '@/lib/apis/keepalive';
 
 export const createNewKnowledge = async (token: string, name: string, description: string, accessGrants: object[]) => {
 	let error = null;
@@ -587,9 +588,15 @@ type KnowledgeUpdateForm = {
 	access_grants?: object[];
 };
 
-export const updateKnowledgeById = async (token: string, id: string, form: KnowledgeUpdateForm) => {
+export const updateKnowledgeById = async (token: string, id: string, form: KnowledgeUpdateForm, keepalive = false) => {
 	let error = null;
 
+	const body = JSON.stringify({
+		name: form?.name ? form.name : undefined,
+		description: form?.description ? form.description : undefined,
+		data: form?.data ? form.data : undefined,
+		access_grants: form.access_grants
+	});
 	const res = await fetch(`${WEBUI_API_BASE_URL}/knowledge/${id}/update`, {
 		method: 'POST',
 		headers: {
@@ -597,12 +604,8 @@ export const updateKnowledgeById = async (token: string, id: string, form: Knowl
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify({
-			name: form?.name ? form.name : undefined,
-			description: form?.description ? form.description : undefined,
-			data: form?.data ? form.data : undefined,
-			access_grants: form.access_grants
-		})
+		body,
+		...keepaliveInit(body, keepalive)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await errorBody(res);
