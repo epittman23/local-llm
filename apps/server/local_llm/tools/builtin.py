@@ -66,6 +66,7 @@ from local_llm.routers.retrieval import search_web as _search_web
 from local_llm.socket.main import sio
 from local_llm.tasks import stop_item_tasks
 from local_llm.tools.knowledge_fs import kb_exec, split_lines  # noqa: F401 — re-exported
+from local_llm.utils.access_control.files import is_folder_entry
 from local_llm.utils.chat_id import is_saved_chat_id
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import find_in_lowered
@@ -118,10 +119,20 @@ async def _has_read_access_to_file(
         return True
     from local_llm.utils.access_control.files import has_access_to_file
 
-    return await has_access_to_file(
+    if await has_access_to_file(
         file_id=file.id,
         access_type='read',
         user=UserModel(**user),
+    ):
+        return True
+    if not model_knowledge:
+        return False
+    # A file in a knowledge base from the chat's folder is readable through it (#755).
+    from local_llm.models.knowledge import Knowledges
+
+    return any(
+        is_folder_entry(model_knowledge, 'collection', knowledge.id)
+        for knowledge in await Knowledges.get_knowledges_by_file_id(file.id)
     )
 
 
@@ -1226,6 +1237,7 @@ async def view_note(
     note_id: str,
     __request__: Request = None,
     __user__: dict = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     Get the full content of a note by its ID.
@@ -1261,6 +1273,7 @@ async def view_note(
                 permission='read',
                 user_group_ids=set(user_group_ids),
             )
+            and not is_folder_entry(__model_knowledge__, 'note', note.id)
         ):
             return JSONCodec.dumps({'error': 'Access denied'})
 
@@ -2222,6 +2235,7 @@ async def search_knowledge_files(
                         permission='read',
                         user_group_ids=set(user_group_ids),
                     )
+                    or is_folder_entry(__model_knowledge__, 'collection', knowledge.id)
                 ):
                     continue
 
@@ -2703,6 +2717,7 @@ async def grep_knowledge_files(
                             permission='read',
                             user_group_ids=set(user_group_ids),
                         )
+                        or is_folder_entry(__model_knowledge__, 'collection', knowledge.id)
                     ):
                         continue
                     kb_files = await Knowledges.get_files_by_id(item_id)
@@ -2930,6 +2945,7 @@ async def view_knowledge_file(
     end_line: int | None = None,
     __request__: Request = None,
     __user__: dict = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     Get the content of a file from a knowledge base. Supports pagination for large files.
@@ -3001,6 +3017,7 @@ async def view_knowledge_file(
                     permission='read',
                     user_group_ids=set(user_group_ids),
                 )
+                or is_folder_entry(__model_knowledge__, 'collection', knowledge_base.id)
             ):
                 has_knowledge_access = True
                 knowledge_info = {'id': knowledge_base.id, 'name': knowledge_base.name}
@@ -3146,6 +3163,7 @@ async def list_knowledge(
                         permission='read',
                         user_group_ids=set(user_group_ids),
                     )
+                    or is_folder_entry(__model_knowledge__, 'collection', knowledge.id)
                 ):
                     # Counted, and for the targeted base paged, without loading
                     # each file's text, and in a stable order (#186).
@@ -3194,6 +3212,7 @@ async def list_knowledge(
                         resource_id=note.id,
                         permission='read',
                     )
+                    or is_folder_entry(__model_knowledge__, 'note', note.id)
                 ):
                     notes.append(
                         {
@@ -3247,6 +3266,7 @@ class _KnowledgeSearch:
         self.collection_names = []
         self.external_knowledges = []
         self.note_results = []  # Notes aren't vectorized, so their full content is returned
+        self.model_knowledge = []  # Entries from the chat's folder among them count as readable (#755)
 
     async def can_read_knowledge(self, knowledge) -> bool:
         from local_llm.models.access_grants import AccessGrants
@@ -3261,6 +3281,7 @@ class _KnowledgeSearch:
                 permission='read',
                 user_group_ids=set(self.group_ids),
             )
+            or is_folder_entry(self.model_knowledge, 'collection', knowledge.id)
         )
 
     async def can_read_note(self, note) -> bool:
@@ -3275,6 +3296,7 @@ class _KnowledgeSearch:
                 resource_id=note.id,
                 permission='read',
             )
+            or is_folder_entry(self.model_knowledge, 'note', note.id)
         )
 
     def add_knowledge(self, knowledge, collection_name: str) -> None:
@@ -3312,6 +3334,7 @@ class _KnowledgeSearch:
             )
 
     async def add_model_knowledge(self, items: list[dict]) -> None:
+        self.model_knowledge = items
         for item in items:
             item_type = item.get('type')
             item_id = item.get('id')
