@@ -630,10 +630,15 @@ async function shutdown(): Promise<void> {
 	setProgress(createProgress('shutdown', 'Stopping Local LLM', SHUTDOWN, Date.now()));
 	openStatus('progress');
 	dispatch({ type: 'begin', step: 'window', at: Date.now() });
+	// destroy() fires no unload events, so each page first goes to a blank one:
+	// its pagehide then sends the saves still in their autosave pause (#803).
+	// A page that takes longer than 2 s is not waited for.
+	const pages = BrowserWindow.getAllWindows().filter((win) => win !== statusWindow);
+	await Promise.race([Promise.all(pages.map((win) => win.loadURL('about:blank').catch(() => {}))), sleep(2000)]);
 	// Destroyed, not hidden: a hidden window keeps its streams (the Serve
 	// log, Tests and Tune progress) open, which holds uvicorn's shutdown up.
-	for (const win of BrowserWindow.getAllWindows()) {
-		if (win !== statusWindow) win.destroy();
+	for (const win of pages) {
+		if (!win.isDestroyed()) win.destroy();
 	}
 	dispatch({ type: 'begin', step: 'requests', at: Date.now() });
 	if (!tail) followLog(true);
