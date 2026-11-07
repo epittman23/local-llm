@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from local_llm.config import BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from local_llm.events import EVENTS, publish_event
-from local_llm.models.config import Config
+from local_llm.models.config import API_CONFIG_KEYS, Config
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
@@ -96,10 +96,12 @@ class ImportConfigForm(BaseModel):
 
 
 def without_null_settings(config: dict) -> dict:
-    """An imported config with a null tool-server `config` or arena model `meta` stored as `{}`.
+    """An imported config with a null tool-server `config`, arena model `meta` or connection config stored as `{}`.
 
     Readers call `.get(...)` on those, and a null broke startup and every later
-    tool-server listing until the next restart repaired it (#363).
+    tool-server listing until the next restart repaired it (#363). A null entry
+    in the OpenAI or Ollama connection configs broke that connection's
+    requests (#632).
     """
     if isinstance(config.get('tool_server.connections'), list):
         config['tool_server.connections'] = [
@@ -110,6 +112,12 @@ def without_null_settings(config: dict) -> dict:
         config['evaluation.arena.models'] = [
             {**m, 'meta': m.get('meta') or {}} if isinstance(m, dict) else m for m in config['evaluation.arena.models']
         ]
+    for key in API_CONFIG_KEYS:
+        if key not in config:
+            continue
+        # A whole value or an entry that is not an object is stored as {}.
+        value = config[key] if isinstance(config[key], dict) else {}
+        config[key] = {idx: api_config if isinstance(api_config, dict) else {} for idx, api_config in value.items()}
     return config
 
 
