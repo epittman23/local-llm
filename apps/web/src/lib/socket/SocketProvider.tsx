@@ -21,11 +21,26 @@ const DISCONNECT_TOAST_DELAY_MS = 2000;
 type SocketContextValue = {
 	socket: Socket | null;
 	connected: boolean;
+	setReady: (ready: boolean) => void;
 };
 
-const SocketContext = createContext<SocketContextValue>({ socket: null, connected: false });
+const SocketContext = createContext<SocketContextValue>({ socket: null, connected: false, setReady: () => {} });
 
 export const useSocket = () => useContext(SocketContext);
+
+/**
+ * Called by the app's shell (AppShell.tsx) with whether its listeners and its
+ * route's are mounted: the socket connects only once they are (#674). Going
+ * false later leaves a connected socket as it is.
+ */
+export function useSocketReady(on: boolean) {
+	const { setReady } = useSocket();
+	useEffect(() => {
+		if (!on) return;
+		setReady(true);
+		return () => setReady(false);
+	}, [on, setReady]);
+}
 
 /**
  * Mounted once at the app root (see src/components/App.tsx), inside
@@ -34,15 +49,17 @@ export const useSocket = () => useContext(SocketContext);
  *
  * The socket is handed to the children before it connects (#519). The backend
  * joins the user's room while connecting, so an event can arrive right after;
- * a listener attached only once the socket had connected missed it. This
- * covers the children mounted when the socket is created, as on a page load
- * with a stored session. A sign-in creates it on the sign-in page, before the
- * app's shell and its listeners mount (#674).
+ * a listener attached only once the socket had connected missed it. It
+ * connects only once the app's shell says it is ready (useSocketReady), since
+ * a sign-in creates the socket on the sign-in page, before the shell and its
+ * listeners mount (#674). Until then, as on the public pages, it stays
+ * unconnected.
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
 	const token = useAuthStore((state) => state.token);
 	const [connected, setConnected] = useState(false);
 	const [socket, setSocket] = useState<Socket | null>(null);
+	const [ready, setReady] = useState(false);
 	// Sockets their own cleanup has closed: never connected after that.
 	const closed = useRef(new WeakSet<Socket>());
 
@@ -57,7 +74,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			path: '/ws/socket.io',
 			transports: ['websocket', 'polling'],
 			auth: { token },
-			// Connected by the effect below, once the children have attached their listeners.
+			// Connected by the effect below, once the shell's listeners are attached.
 			autoConnect: false
 		});
 		setSocket(socket);
@@ -128,11 +145,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		};
 	}, [token]);
 
-	// A parent's effects run after its children's, so by now every child
-	// mounted with this socket has attached its listeners.
+	// `ready` is set from the shell's effect, after its children's effects, so
+	// by this render every listener under the shell has attached to `socket`.
 	useEffect(() => {
-		if (socket && !closed.current.has(socket)) socket.connect();
-	}, [socket]);
+		if (socket && ready && !socket.connected && !closed.current.has(socket)) socket.connect();
+	}, [socket, ready]);
 
-	return <SocketContext.Provider value={{ socket, connected }}>{children}</SocketContext.Provider>;
+	return <SocketContext.Provider value={{ socket, connected, setReady }}>{children}</SocketContext.Provider>;
 }
