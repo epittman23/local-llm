@@ -256,10 +256,12 @@ export function useKnowledgeUploads({
 				toast.error('Failed to compare files.');
 				return;
 			}
+			// Files a cleanup left in the base because their content could not be deleted (#639).
+			let kept = 0;
 			const deleted = deletedFileIds(diff);
 			if (deleted.length > 0 || diff.rmdir.length > 0) {
 				setSyncing(`Removing ${deleted.length} deleted files...`);
-				await syncKnowledgeCleanup(token, knowledgeId, deleted, diff.rmdir);
+				kept += (await syncKnowledgeCleanup(token, knowledgeId, deleted, diff.rmdir))?.kept?.length ?? 0;
 			}
 			const idByPath = await createMissingDirectories(diff, mkdirVia);
 			const total = filesToUpload(manifest, diff).length;
@@ -276,15 +278,19 @@ export function useKnowledgeUploads({
 					);
 					return uploadEntry(entry, entry.path ? idByPath[entry.path] : null);
 				},
-				(fileIds) => {
+				async (fileIds) => {
 					setSyncing(`Removing ${fileIds.length} replaced files...`);
-					return syncKnowledgeCleanup(token, knowledgeId, fileIds, []);
+					const keptIds: string[] = (await syncKnowledgeCleanup(token, knowledgeId, fileIds, []))?.kept ?? [];
+					kept += keptIds.length;
+					return keptIds;
 				}
 			);
 			if (removeError !== null)
 				toast.error(`The old copies of modified files could not be removed: ${failureReason(removeError)}`);
+			if (kept > 0)
+				toast.error(`${kept} files could not be removed from the knowledge base; the next sync tries again.`);
 			if (failed > 0) toast.error(`Upload failed for ${failed} of ${attempted} files.`);
-			if (failed === 0 && removeError === null) {
+			if (failed === 0 && removeError === null && kept === 0) {
 				toast.success(
 					`Sync complete: ${diff.added.length} added, ${diff.modified.length} modified, ${diff.deleted.length} deleted, ${diff.unmodified_count} unmodified`
 				);
