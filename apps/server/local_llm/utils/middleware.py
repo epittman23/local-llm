@@ -5111,7 +5111,8 @@ class _StreamingReply:
             if response_metadata.get('incomplete'):
                 stream.cut_off = response_metadata['incomplete']
 
-            if 'error' in response_metadata:
+            # Skipped when an error event earlier in this stream already reported the failure (#662).
+            if 'error' in response_metadata and not stream.errored:
                 # `response.failed`: save the error as the Chat Completions path
                 # does, so the reply still reads as failed after a reload, and
                 # give one with no error object a message of its own (#167).
@@ -5595,8 +5596,8 @@ class _StreamingReply:
         if stream.errored or stream.cut_off:
             if self._fail_unrun_calls() and not stream.errored:
                 error = {
-                    'message': f'The reply was cut off (reason: {stream.cut_off}) before its tool calls were complete, '
-                    'so they were not run.'
+                    'message': f'The reply was cut off (reason: {stream.cut_off}), so its tool calls may be '
+                    'incomplete and were not run.'
                 }
                 await self._save_error(error)
                 await self.event_emitter({'type': 'chat:completion', 'data': {'error': error}})
@@ -5799,9 +5800,8 @@ class _StreamingReply:
                 await asyncio.shield(response.body_iterator.aclose())
             except (asyncio.CancelledError, Exception):
                 pass
-        if not cancelled:
-            # The body failed mid-stream: its tool calls were never run (#662).
-            self._fail_unrun_calls()
+        # Cancelled or failed mid-stream: its tool calls were never run (#662).
+        self._fail_unrun_calls()
 
         async def save_cancelled_state():
             if cancelled:
@@ -5969,6 +5969,8 @@ class _StreamingReply:
         except Exception as e:
             error_content = _message_error_content(e)
             log.exception('Tool-call continuation failed: %s', error_content)
+            # A stream that died mid-call: its calls were never run, and the finish would show them completed (#662).
+            self._fail_unrun_calls()
             await self.emit_message_error(error_content)
             return False
 

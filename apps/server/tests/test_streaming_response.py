@@ -1866,7 +1866,7 @@ def test_a_response_cut_off_after_a_tool_call_runs_no_tool(monkeypatch, stream):
     assert 'should not be asked for' not in json.dumps(observed['assistant_message'])
     assert _call_statuses(observed) == ['failed']
     errors = [d['error'] for d in _emitted(observed) if 'error' in d]
-    assert errors and 'not run' in errors[0]['message']
+    assert errors and 'were not run' in errors[0]['message']
     assert {'error': {'content': errors[0]}} in _saved(observed)
 
 
@@ -1954,3 +1954,56 @@ def test_a_finished_function_call_in_a_response_that_ends_early_is_saved_as_fail
     assert not [c for c in observed['calls'] if c[0] == 'tool']
     assert _call_statuses(observed) == ['failed']
     assert [d for d in _emitted(observed) if 'error' in d]
+
+
+def test_an_upstream_failure_in_a_later_round_saves_its_unrun_call_as_failed(monkeypatch):
+    """#662: a continuation stream dying mid-call left its call in progress, which the finish showed as completed."""
+    observed = _run(
+        [tool_call_stream('lookup', '{"q": 1}'), [chunk(tool_calls=[call_delta(0, 'call_2', 'lookup', '')]), 'RESET']],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert len([c for c in observed['calls'] if c[0] == 'tool']) == 1
+    assert _call_statuses(observed) == ['completed', 'failed']
+
+
+def test_an_error_event_then_response_failed_is_reported_once(monkeypatch):
+    """#662: a provider sending both showed and saved the error twice."""
+    error = {'code': 'server_error', 'message': 'boom'}
+    observed = _run(
+        [
+            [
+                *RESP_CALL[:3],
+                sse({'type': 'error', **error}),
+                sse({'type': 'response.failed', 'response': {'error': error}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'v': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert [d['error'] for d in _emitted(observed) if 'error' in d] == [error]
+    assert [s for s in _saved(observed) if 'error' in s] == [{'error': {'content': error}}]
+
+
+def test_a_cancelled_reply_saves_its_unrun_call_as_failed(monkeypatch):
+    """#662: a reply cancelled mid-call was saved done with the call in progress, shown as finished."""
+    observed = _run(
+        [[*CHAT_CALL_DELTAS, 'CANCEL']],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [c for c in observed['calls'] if c[0] == 'tool']
+    assert _call_statuses(observed) == ['failed']
