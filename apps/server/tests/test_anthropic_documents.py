@@ -82,7 +82,7 @@ def test_file_document_placeholder_names_the_file_id():
     )
 
 
-def test_content_document_keeps_its_text_and_images():
+def test_content_document_keeps_its_text_and_images_in_order():
     content = _user_content(
         {
             'type': 'document',
@@ -98,8 +98,32 @@ def test_content_document_keeps_its_text_and_images():
         }
     )
     assert content == [
-        {'type': 'text', 'text': '[Document: Chunks]\none\ntwo'},
+        {'type': 'text', 'text': '[Document: Chunks]\none'},
         {'type': 'image_url', 'image_url': {'url': 'https://example.com/i.png'}},
+        {'type': 'text', 'text': 'two'},
+    ]
+
+
+def test_content_document_joins_adjacent_text_after_a_leading_image():
+    content = _user_content(
+        {
+            'type': 'document',
+            'title': 'Figure',
+            'source': {
+                'type': 'content',
+                'content': [
+                    {'type': 'image', 'source': {'type': 'url', 'url': 'https://example.com/f.png'}},
+                    {'type': 'text', 'text': 'a'},
+                    {'type': 'text', 'text': 'b'},
+                ],
+            },
+            'cache_control': CACHE,
+        }
+    )
+    assert content == [
+        {'type': 'text', 'text': '[Document: Figure]'},
+        {'type': 'image_url', 'image_url': {'url': 'https://example.com/f.png'}},
+        {'type': 'text', 'text': 'a\nb', 'cache_control': CACHE},
     ]
 
 

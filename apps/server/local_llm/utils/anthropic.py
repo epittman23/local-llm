@@ -200,7 +200,7 @@ def _search_result_text(block: dict) -> str:
 
 
 def _document_parts(block: dict) -> list[dict]:
-    """A message's document block as a text part, followed by any images of a content source.
+    """A message's document block as text parts, with a content source's images in their place.
 
     A source with no text to pass on (a base64 or url PDF, a Files API id) gets an
     explicit placeholder line, so the model knows a document was attached unseen.
@@ -208,29 +208,27 @@ def _document_parts(block: dict) -> list[dict]:
     """
     source = block.get('source', {})
     source_type = source.get('type')
-    text = _document_text(block)
-    images = []
+    parts = [{'type': 'text', 'text': _document_text(block)}]
     if source_type == 'content':
         content = source.get('content', '')
         blocks = [{'type': 'text', 'text': content}] if isinstance(content, str) else content
-        texts = []
         for part in blocks if isinstance(blocks, list) else []:
             if isinstance(part, dict) and part.get('type') == 'text' and part.get('text'):
-                texts.append(part['text'])
+                if parts[-1]['type'] == 'text':
+                    parts[-1]['text'] += '\n' + part['text']
+                else:
+                    parts.append({'type': 'text', 'text': part['text']})
             elif isinstance(part, dict) and part.get('type') == 'image':
                 image = _image_url_part(part)
                 if image is not None:
-                    images.append(image)
-        if texts:
-            text += '\n' + '\n'.join(texts)
+                    parts.append(image)
     elif source_type in ('base64', 'url', 'file'):
         if source_type == 'base64':
             what = f'a base64 {source.get("media_type", "application/pdf")} source'
         else:
             reference = source.get('url' if source_type == 'url' else 'file_id', '')
             what = f'a {source_type} source ({reference})' if reference else f'a {source_type} source'
-        text += f'\n[Document content not included: {what} cannot be passed on as text]'
-    parts = [{'type': 'text', 'text': text}, *images]
+        parts[0]['text'] += f'\n[Document content not included: {what} cannot be passed on as text]'
     _copy_cache_control(block, parts[-1])
     return parts
 
