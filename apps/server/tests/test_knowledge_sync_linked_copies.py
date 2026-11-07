@@ -87,6 +87,19 @@ def test_an_identical_extra_copy_is_left_alone(monkeypatch):
     assert diff.unmodified_count == 1
 
 
+@pytest.mark.parametrize('order', ['resaved-last', 'current-last'])
+def test_an_extra_copy_with_the_kept_copys_text_is_left_alone(monkeypatch, order):
+    # Other bytes, same text (a .docx saved again): its chunks are the kept copy's.
+    resaved = ('resaved', 'a.txt', 'Y2', 'text-Y', 1)
+    linked = [CURRENT, resaved] if order == 'resaved-last' else [resaved, CURRENT]
+
+    diff = _diff(monkeypatch, [('a.txt', 'Y')], linked)
+
+    assert diff.deleted == []
+    assert diff.modified == []
+    assert diff.unmodified_count == 1
+
+
 def test_a_copy_of_a_stale_copys_text_is_still_uploaded(monkeypatch):
     # b.txt holds the text of a.txt's stale copy, which this sync deletes, so it
     # is the only copy left and goes up.
