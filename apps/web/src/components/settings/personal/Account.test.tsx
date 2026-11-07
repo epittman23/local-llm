@@ -11,7 +11,8 @@ vi.mock('@/lib/apis/auths', async (original) => ({
 	getSessionUser: vi.fn(),
 	updateUserProfile: vi.fn(),
 	updateUserPassword: vi.fn(),
-	getAPIKey: vi.fn()
+	getAPIKey: vi.fn(),
+	createAPIKey: vi.fn()
 }));
 vi.mock('@/lib/apis/users', async (original) => ({
 	...(await original<typeof import('@/lib/apis/users')>()),
@@ -255,5 +256,30 @@ describe('Account tab: the API key (#526)', () => {
 
 		expect(await screen.findByDisplayValue('sk-1')).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Create new secret key' })).toBeNull();
+	});
+
+	it('asks before Regenerate replaces the key, and keeps it on Cancel (#677)', async () => {
+		vi.mocked(auths.getAPIKey).mockResolvedValueOnce('sk-1');
+		render(<Account />);
+		fireEvent.click(await screen.findByRole('button', { name: 'Regenerate API key' }));
+
+		expect(await screen.findByText('Anything using the current key will stop working.')).toBeInTheDocument();
+		expect(auths.createAPIKey).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(auths.createAPIKey).not.toHaveBeenCalled();
+		expect(screen.getByDisplayValue('sk-1')).toBeInTheDocument();
+	});
+
+	it('replaces the key once Regenerate is confirmed (#677)', async () => {
+		vi.mocked(auths.getAPIKey).mockResolvedValueOnce('sk-1');
+		vi.mocked(auths.createAPIKey).mockResolvedValueOnce('sk-2');
+		render(<Account />);
+		fireEvent.click(await screen.findByRole('button', { name: 'Regenerate API key' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+		expect(await screen.findByDisplayValue('sk-2')).toBeInTheDocument();
+		expect(auths.createAPIKey).toHaveBeenCalledWith('jwt');
 	});
 });
