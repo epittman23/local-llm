@@ -41,6 +41,7 @@ from local_llm.models.knowledge import Knowledges
 from local_llm.models.users import Users
 from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.routers.audio import transcribe
+from local_llm.routers.knowledge import delete_file_chunks
 from local_llm.routers.retrieval import ProcessFileForm, process_file, process_file_for
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
@@ -1088,9 +1089,7 @@ async def delete_file_by_id(
             await Knowledges.remove_file_from_knowledge_by_id(knowledge.id, id, db=db)
             # Clean KB embeddings (same logic as /knowledge/{id}/file/remove)
             try:
-                await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'file_id': id})
-                if file.hash:
-                    await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'hash': file.hash})
+                await delete_file_chunks(knowledge.id, file, db)
             except Exception as e:
                 log.debug('KB embedding cleanup for %s: %s', knowledge.id, e)
 
