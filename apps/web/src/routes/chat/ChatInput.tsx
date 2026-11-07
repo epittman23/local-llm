@@ -218,6 +218,11 @@ export const ChatInput = forwardRef<
 	}, [active, prompts.data, models, knowledge.data]);
 
 	useEffect(() => setSelected(0), [active?.trigger, active?.query]);
+	// The list can shrink without the query changing (the knowledge search
+	// answering after its debounce, the models list changing), so the selection
+	// is kept within it (#623), as the channel composer's is (#256), and the
+	// arrow keys step from what is highlighted.
+	const highlighted = Math.min(selected, suggestions.length - 1);
 
 	// Committed now, so the caret is placed in this same task: placed a frame
 	// later, a key typed before that frame went in at the old caret, and the
@@ -352,12 +357,12 @@ export const ChatInput = forwardRef<
 								key={s.key}
 								type="button"
 								role="option"
-								aria-selected={i === selected}
+								aria-selected={i === highlighted}
 								onMouseDown={(e) => e.preventDefault()}
 								onClick={() => void pick(s)}
 								className={cn(
 									'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-									i === selected && 'bg-muted'
+									i === highlighted && 'bg-muted'
 								)}
 							>
 								{s.kind === 'model' && (
@@ -434,14 +439,14 @@ export const ChatInput = forwardRef<
 							if (active && suggestions.length) {
 								if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 									e.preventDefault();
-									setSelected((i) =>
-										Math.max(0, Math.min(suggestions.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+									setSelected(
+										Math.max(0, Math.min(suggestions.length - 1, highlighted + (e.key === 'ArrowDown' ? 1 : -1)))
 									);
 									return;
 								}
 								if (e.key === 'Enter' || e.key === 'Tab') {
 									e.preventDefault();
-									void pick(suggestions[selected]);
+									void pick(suggestions[highlighted]);
 									return;
 								}
 								if (e.key === 'Escape') {
