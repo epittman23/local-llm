@@ -23,14 +23,14 @@ describe('useParamsAutosave', () => {
 		});
 		expect(updateChatById).not.toHaveBeenCalled();
 		act(() => void vi.advanceTimersByTime(500));
-		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { temperature: 0.2 } });
+		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { temperature: 0.2 } }, null, false);
 	});
 
 	it('saves a pending edit to its own chat at once when another chat opens', () => {
 		const { result, rerender } = render('c1');
 		act(() => result.current({ system: 'French' }));
 		rerender({ id: 'c2' });
-		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { system: 'French' } });
+		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { system: 'French' } }, null, false);
 		act(() => void vi.advanceTimersByTime(500));
 		expect(updateChatById).toHaveBeenCalledTimes(1);
 	});
@@ -39,7 +39,14 @@ describe('useParamsAutosave', () => {
 		const { result, unmount } = render('c1');
 		act(() => result.current({ system: 'French' }));
 		unmount();
-		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { system: 'French' } });
+		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { system: 'French' } }, null, false);
+	});
+
+	it('saves a pending edit as the page goes away, with keepalive (#675)', () => {
+		const { result } = render('c1');
+		act(() => result.current({ system: 'French' }));
+		act(() => void window.dispatchEvent(new Event('pagehide')));
+		expect(updateChatById).toHaveBeenCalledExactlyOnceWith('tok', 'c1', { params: { system: 'French' } }, null, true);
 	});
 
 	it('saves nothing for a new chat, whose params go with its first message', () => {
