@@ -636,6 +636,19 @@ def _fmt_date(f: dict) -> str:
     return ''
 
 
+def split_lines(text: str) -> list[str]:
+    """The lines of `text`, split on '\\n' only, with no empty line after a final newline (#666).
+
+    grep, sed and the numbered character pages all count '\\n', so a line
+    number from one reads the same line in the others; str.splitlines would
+    also split on form feeds and lone carriage returns and shift them.
+    """
+    lines = text.split('\n')
+    if lines[-1] == '':
+        lines.pop()
+    return lines
+
+
 async def _kb_cat(args: list[str], flags: set[str], user: dict, model_knowledge: list[dict] | None) -> str:
     """Read file content. Use -n for line numbers."""
     if not args:
@@ -649,7 +662,7 @@ async def _kb_cat(args: list[str], flags: set[str], user: dict, model_knowledge:
 
     content = resolved['content']
     if 'n' in flags:
-        lines = content.split('\n')
+        lines = split_lines(content)
         content = '\n'.join(f'{i}: {line}' for i, line in enumerate(lines, 1))
 
     return content
@@ -664,7 +677,7 @@ async def _kb_head(
         n = DEFAULT_HEAD_LINES
 
     if piped_input is not None:
-        lines = piped_input.split('\n')
+        lines = split_lines(piped_input)
         return '\n'.join(lines[:n])
 
     if not args:
@@ -676,7 +689,7 @@ async def _kb_head(
     if 'error' in resolved:
         return resolved['error']
 
-    lines = resolved['content'].split('\n')
+    lines = split_lines(resolved['content'])
     total = len(lines)
     result = '\n'.join(lines[:n])
     if total > n:
@@ -693,7 +706,7 @@ async def _kb_tail(
         n = DEFAULT_TAIL_LINES
 
     if piped_input is not None:
-        lines = piped_input.split('\n')
+        lines = split_lines(piped_input)
         return '\n'.join(lines[-n:])
 
     if not args:
@@ -705,7 +718,7 @@ async def _kb_tail(
     if 'error' in resolved:
         return resolved['error']
 
-    lines = resolved['content'].split('\n')
+    lines = split_lines(resolved['content'])
     total = len(lines)
     result = '\n'.join(lines[-n:])
     if total > n:
@@ -728,7 +741,7 @@ def _parse_grep_args(args: list[str]) -> tuple[str, str | None, str | None, str 
 
 def _matching_lines(text: str, matches) -> list[tuple[int, str]]:
     """(line number, line) for each line that matches, numbered from 1."""
-    return [(i, line) for i, line in enumerate(text.split('\n'), 1) if matches(line)]
+    return [(i, line) for i, line in enumerate(split_lines(text), 1) if matches(line)]
 
 
 def _grep_piped(piped_input: str, matches, pattern: str, count_only: bool, filenames_only: bool) -> str:
@@ -967,7 +980,7 @@ async def _kb_sed(
             if m:
                 start, end = int(m.group(1)), int(m.group(2))
                 args = args[1:]
-        lines = piped_input.split('\n')
+        lines = split_lines(piped_input)
         selected = lines[max(0, start - 1) : (end or len(lines))]
         return '\n'.join(selected)
 
@@ -997,7 +1010,7 @@ async def _kb_sed(
     if 'error' in resolved:
         return resolved['error']
 
-    lines = resolved['content'].split('\n')
+    lines = split_lines(resolved['content'])
     total = len(lines)
     selected = lines[max(0, start - 1) : end]
     result = '\n'.join(selected)
