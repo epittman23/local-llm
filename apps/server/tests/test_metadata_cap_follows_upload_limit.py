@@ -219,3 +219,13 @@ def test_process_metadata_applies_only_its_own_setting(monkeypatch):
 
     monkeypatch.setattr(vector_utils, 'RAG_METADATA_MAX_VALUE_CHARS', 10)
     assert vector_utils.process_metadata({'entries': BIG, 'tags': ['a'], 'n': 1}) == {'tags': "['a']", 'n': 1}
+
+
+def test_a_value_that_cannot_be_measured_is_dropped():
+    class Unprintable:
+        def __repr__(self):
+            raise ValueError('no text')
+
+    metadata = {'source': 'a.zip', 'entries': [Unprintable()]}
+
+    assert vector_utils.drop_oversized_values(metadata, 10) == {'source': 'a.zip'}
