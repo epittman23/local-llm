@@ -280,22 +280,23 @@ async def get_config(request: Request, user=Depends(get_admin_user)):
 
 @router.post('/config/update')
 async def update_config(request: Request, form_data: ImagesConfig, user=Depends(get_admin_user)):
-    if form_data.IMAGE_SIZE == 'auto' and not re.match(
-        IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN, form_data.IMAGE_GENERATION_MODEL
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=ERROR_MESSAGES.INCORRECT_FORMAT(
-                f'  (auto is only allowed with models matching {IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN}).'
-            ),
-        )
-
-    pattern = r'^\d+x\d+$'
-    if not (form_data.IMAGE_SIZE == 'auto' or form_data.IMAGE_SIZE == '' or re.match(pattern, form_data.IMAGE_SIZE)):
-        raise HTTPException(
-            status_code=400,
-            detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
-        )
+    # The size and model are checked only while the page shows them, that is while
+    # generation is on, so a value it cannot see never blocks a save (#653).
+    # A null size is no size, as an empty one is.
+    size = form_data.IMAGE_SIZE
+    if form_data.ENABLE_IMAGE_GENERATION:
+        if size == 'auto' and not re.match(IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN, form_data.IMAGE_GENERATION_MODEL):
+            raise HTTPException(
+                status_code=400,
+                detail=ERROR_MESSAGES.INCORRECT_FORMAT(
+                    f'  (auto is only allowed with models matching {IMAGE_AUTO_SIZE_MODELS_REGEX_PATTERN}).'
+                ),
+            )
+        if size and size != 'auto' and _parse_size(size) is None:
+            raise HTTPException(
+                status_code=400,
+                detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
+            )
     # The edit size too: one that is not WidthxHeight made every image edit fail (#344).
     # Checked only while the page shows it, so a value it cannot see never blocks a save.
     edit_size = form_data.IMAGE_EDIT_SIZE
@@ -662,16 +663,22 @@ async def _store_gemini_parts(request, res: dict, metadata: dict, user) -> list[
     return images
 
 
+GENERATION_SIZE_FORMAT = 'The image size must be WidthxHeight, such as 512x512, auto, or empty.'
+
+
 def _generation_size(image_config, form_data: CreateImageForm) -> tuple[int, int]:
-    # IMAGE_SIZE may be 'auto' (meaningful only to gpt-image models, and warned about on
-    # settings save); engines that need pixels then fall back to 512x512.
-    size = '512x512'
-    if image_config.IMAGE_SIZE and 'x' in image_config.IMAGE_SIZE:
-        size = image_config.IMAGE_SIZE
-    if form_data.size and 'x' in form_data.size:
-        size = form_data.size
-    width, height = tuple(map(int, size.split('x')))
-    return width, height
+    # The requested size wins when it is WidthxHeight; otherwise the configured one, if it
+    # is; otherwise 512x512. IMAGE_SIZE may be 'auto' (meaningful only to gpt-image models,
+    # and warned about on settings save), which engines that need pixels cannot use.
+    # As for an edit (#344): a configured size it cannot read (one from the environment,
+    # say) is skipped, never raised on; a requested one is refused, not replaced (#653).
+    if form_data.size and form_data.size != 'auto' and _parse_size(form_data.size) is None:
+        raise HTTPException(status_code=400, detail=GENERATION_SIZE_FORMAT)
+    for size in (form_data.size, image_config.IMAGE_SIZE):
+        parsed = _parse_size(size)
+        if parsed:
+            return parsed
+    return 512, 512
 
 
 def _sampling_params(image_config, form_data: CreateImageForm) -> dict:
