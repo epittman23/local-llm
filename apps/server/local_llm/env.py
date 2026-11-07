@@ -813,9 +813,9 @@ def optional_int_env(name: str) -> int | None:
         return None
 
 
-# The cap on a document's metadata values, when set. Unset, the cap follows the upload size limit
-# in Admin Settings > Documents, read at use time (metadata_max_value_chars in
-# retrieval/vector/utils.py).
+# The cap on a document's list and dict metadata values, in characters, when set. Unset, the
+# cap follows the upload size limit in Admin Settings > Documents, read at use time
+# (metadata_max_value_chars in retrieval/vector/utils.py).
 RAG_METADATA_MAX_VALUE_CHARS = optional_int_env('RAG_METADATA_MAX_VALUE_CHARS')
 
 MINERU_MAX_MARKDOWN_BYTES = (

@@ -1684,6 +1684,16 @@ def save_docs_to_vector_db(
                     log.info('Document with hash %s already exists', metadata['hash'])
                     raise ValueError(ERROR_MESSAGES.DUPLICATE_CONTENT)
 
+    # The cap on a metadata value follows the upload size limit as config holds it now (#629).
+    # It is applied before splitting, which copies every document's metadata into each chunk:
+    # an oversized value would otherwise be copied once per chunk before it was dropped. New
+    # Documents, since a caller may pass the same list again for another collection.
+    max_value_chars = metadata_max_value_chars(getattr(config, 'FILE_MAX_SIZE', None))
+    docs = [
+        Document(page_content=doc.page_content, metadata=drop_oversized_values(doc.metadata, max_value_chars))
+        for doc in docs
+    ]
+
     if split:
         if config.ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER:
             log.info('Using markdown header text splitter')
@@ -1752,11 +1762,9 @@ def save_docs_to_vector_db(
         raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
 
     texts = [sanitize_text_for_db(doc.page_content) for doc in docs]
-    # The cap on a metadata value follows the upload size limit as config holds it now (#629).
-    max_value_chars = metadata_max_value_chars(getattr(config, 'FILE_MAX_SIZE', None))
     metadatas = [
         {
-            **drop_oversized_values(doc.metadata, max_value_chars),
+            **doc.metadata,
             **(metadata if metadata else {}),
             'embedding_config': {
                 'engine': config.RAG_EMBEDDING_ENGINE,

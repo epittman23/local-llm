@@ -27,13 +27,13 @@ def metadata_max_value_chars(file_max_size_mb: Any) -> int | None:
     admin sets in Admin Settings > Documents, or RAG_FILE_MAX_SIZE when none is
     saved. A document cannot legitimately carry more metadata than the file
     itself is allowed to be, and left unbounded a small archive that expands
-    enormously during extraction can exhaust memory (#629). As for an upload,
-    an empty, zero or unreadable limit means none.
+    enormously during extraction can exhaust memory (#629). An empty, zero,
+    negative or unreadable limit means no cap.
     """
     if RAG_METADATA_MAX_VALUE_CHARS is not None:
         return RAG_METADATA_MAX_VALUE_CHARS
     try:
-        return int(file_max_size_mb or 0) * 1024 * 1024 or None
+        return max(int(file_max_size_mb or 0), 0) * 1024 * 1024 or None
     except (TypeError, ValueError):
         return None
 
@@ -76,7 +76,8 @@ def process_metadata(
             continue
         if value is None:
             continue
-        # Only the explicit cap: save_docs_to_vector_db has already applied the upload limit.
+        # Only the explicit cap: documents saved through save_docs_to_vector_db have already had
+        # the upload limit applied, and the other callers (memories, knowledge) store scalars.
         if _over_cap(value, RAG_METADATA_MAX_VALUE_CHARS):
             continue
         # Convert non-serializable fields to strings

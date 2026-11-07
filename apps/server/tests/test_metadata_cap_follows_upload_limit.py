@@ -53,9 +53,10 @@ def store(monkeypatch):
     return store
 
 
-def _save(file_max_size):
+def _save(file_max_size, split=False, docs=None, **settings):
     config = retrieval_router.RetrievalConfig(
         {
+            **settings,
             'FILE_MAX_SIZE': file_max_size,
             'RAG_EMBEDDING_ENGINE': '',
             'RAG_EMBEDDING_MODEL': 'm',
@@ -67,7 +68,7 @@ def _save(file_max_size):
             'RAG_AZURE_OPENAI_API_VERSION': '',
         }
     )
-    doc = Document(page_content='text', metadata={'source': 'a.zip', 'entries': BIG})
+    docs = docs or [Document(page_content='text', metadata={'source': 'a.zip', 'entries': BIG})]
 
     async def run():
         request: Any = SimpleNamespace(
@@ -76,10 +77,10 @@ def _save(file_max_size):
         return await asyncio.to_thread(
             retrieval_router.save_docs_to_vector_db,
             request,
-            docs=[doc],
+            docs=docs,
             collection_name='file-1',
             config=config,
-            split=False,
+            split=split,
         )
 
     return asyncio.run(run())
@@ -101,7 +102,7 @@ def test_raising_the_admin_upload_limit_raises_the_cap(store):
 
 @pytest.mark.parametrize(
     ('file_max_size', 'cap'),
-    [(1, MIB), ('3', 3 * MIB), (None, None), ('', None), (0, None), ('ten', None)],
+    [(1, MIB), ('3', 3 * MIB), (None, None), ('', None), (0, None), ('ten', None), (-1, None), ('-2', None)],
 )
 def test_the_cap_is_the_upload_limit_in_characters(monkeypatch, file_max_size, cap):
     monkeypatch.setattr(vector_utils, 'RAG_METADATA_MAX_VALUE_CHARS', None)
@@ -178,3 +179,43 @@ def test_a_processed_files_loader_metadata_follows_the_admin_limit(monkeypatch, 
     ((doc,),) = saved
     assert doc.metadata['page'] == 1
     assert ('entries' in doc.metadata) is kept
+
+
+def test_the_cap_is_applied_before_splitting(store, monkeypatch):
+    # The splitter copies each document's metadata into every chunk, so an oversized
+    # value must be gone before it runs, not after.
+    seen: list[dict] = []
+    splitter = retrieval_router.RecursiveCharacterTextSplitter
+
+    class Recording(splitter):
+        def split_documents(self, documents):
+            seen.extend(doc.metadata for doc in documents)
+            return super().split_documents(documents)
+
+    monkeypatch.setattr(retrieval_router, 'RecursiveCharacterTextSplitter', Recording)
+    docs = [Document(page_content='word ' * 400, metadata={'source': 'a.zip', 'entries': BIG})]
+
+    assert _save(
+        1,
+        split=True,
+        docs=docs,
+        TEXT_SPLITTER='character',
+        CHUNK_SIZE=100,
+        CHUNK_OVERLAP=0,
+        ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER=False,
+        CHUNK_MIN_SIZE_TARGET=0,
+    )
+
+    assert seen == [{'source': 'a.zip'}]
+    assert len(store.items) > 1
+    assert all('entries' not in item['metadata'] for item in store.items)
+    # The caller's documents are left as they were: a caller may save them again elsewhere.
+    assert docs[0].metadata['entries'] is BIG
+
+
+def test_process_metadata_applies_only_its_own_setting(monkeypatch):
+    monkeypatch.setattr(vector_utils, 'RAG_METADATA_MAX_VALUE_CHARS', None)
+    assert 'entries' in vector_utils.process_metadata({'entries': BIG})
+
+    monkeypatch.setattr(vector_utils, 'RAG_METADATA_MAX_VALUE_CHARS', 10)
+    assert vector_utils.process_metadata({'entries': BIG, 'tags': ['a'], 'n': 1}) == {'tags': "['a']", 'n': 1}
