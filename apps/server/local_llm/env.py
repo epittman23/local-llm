@@ -117,6 +117,35 @@ if _cuda_error:
 
 SRC_LOG_LEVELS = {}  # Legacy variable, do not remove
 
+
+def int_env[D](name: str, default: D) -> int | D:
+    """A whole-number setting from the environment, or `default` when unset, empty or not a whole number.
+
+    A bare `int(os.getenv(name, '0'))` raised at import for a variable set but
+    empty (or `0.5`), so the backend did not start at all (#301, #630).
+    """
+    value = (os.getenv(name) or '').strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        log.warning('%s=%r is not a whole number; %r is used', name, value, default)
+        return default
+
+
+def float_env[D](name: str, default: D) -> float | D:
+    """A number setting from the environment, or `default` when unset, empty or not a number (#630)."""
+    value = (os.getenv(name) or '').strip()
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        log.warning('%s=%r is not a number; %r is used', name, value, default)
+        return default
+
+
 ####################################
 # ENV (dev,test,prod)
 ####################################
@@ -190,7 +219,7 @@ LLLM_STOP_JOBS_ON_SHUTDOWN = os.getenv('LLLM_STOP_JOBS_ON_SHUTDOWN', 'False').lo
 
 # The loopback port of the pre-screen's optuna-dashboard process
 # (benchmarks/prescreen/dashboard.py). It always binds 127.0.0.1.
-LLLM_OPTUNA_DASHBOARD_PORT = int(os.getenv('LLLM_OPTUNA_DASHBOARD_PORT', '8091'))
+LLLM_OPTUNA_DASHBOARD_PORT = int_env('LLLM_OPTUNA_DASHBOARD_PORT', 8091)
 
 ####################################
 # Database
@@ -797,30 +826,12 @@ BYPASS_RETRIEVAL_ACCESS_CONTROL = os.getenv('BYPASS_RETRIEVAL_ACCESS_CONTROL', '
 ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS = os.getenv('ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS', 'False').lower() == 'true'
 
 
-def optional_int_env(name: str) -> int | None:
-    """A whole-number setting from the environment; None when unset, empty or not a whole number.
-
-    `int(os.getenv(name, '0'))` raised at import for a variable set but empty
-    (or `0.5`), so the backend did not start at all (#301).
-    """
-    value = (os.getenv(name) or '').strip()
-    if not value:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        log.warning('%s=%r is not a whole number; it is ignored', name, value)
-        return None
-
-
 # The cap on a document's list and dict metadata values, in characters, when set. Unset, the
 # cap follows the upload size limit in Admin Settings > Documents, read at use time
 # (metadata_max_value_chars in retrieval/vector/utils.py).
-RAG_METADATA_MAX_VALUE_CHARS = optional_int_env('RAG_METADATA_MAX_VALUE_CHARS')
+RAG_METADATA_MAX_VALUE_CHARS = int_env('RAG_METADATA_MAX_VALUE_CHARS', None)
 
-MINERU_MAX_MARKDOWN_BYTES = (
-    int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None
-)
+MINERU_MAX_MARKDOWN_BYTES = int_env('MINERU_MAX_MARKDOWN_BYTES', None)
 
 # When enabled, skips pydub-based preprocessing (format conversion, compression,
 # and chunked splitting) before sending files to processing engines. Useful when
@@ -847,18 +858,17 @@ OAUTH_SESSION_TOKEN_ENCRYPTION_KEY = os.getenv('OAUTH_SESSION_TOKEN_ENCRYPTION_K
 
 # Maximum number of concurrent OAuth sessions per user per provider
 # This prevents unbounded session growth while allowing multi-device usage
-OAUTH_MAX_SESSIONS_PER_USER = int(os.getenv('OAUTH_MAX_SESSIONS_PER_USER', '10'))
+OAUTH_MAX_SESSIONS_PER_USER = int_env('OAUTH_MAX_SESSIONS_PER_USER', 10)
 
 # Token Exchange Configuration
 # Allows external apps to exchange OAuth tokens for Local LLM tokens
 ENABLE_OAUTH_TOKEN_EXCHANGE = os.getenv('ENABLE_OAUTH_TOKEN_EXCHANGE', 'False').lower() == 'true'
-_oauth_token_exchange_rate_limit = (os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT') or '').strip()
 OAUTH_TOKEN_EXCHANGE_RATE_LIMIT = (
-    int(_oauth_token_exchange_rate_limit)
-    if _oauth_token_exchange_rate_limit and _oauth_token_exchange_rate_limit.lower() != 'none'
-    else None
+    None
+    if (os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT') or '').strip().lower() == 'none'
+    else int_env('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT', None)
 )
-OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW = int(os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW', str(60 * 3)))
+OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW = int_env('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW', 60 * 3)
 OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS = [
     client_id.strip()
     for client_id in os.getenv('OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS', '').split(',')
@@ -922,8 +932,7 @@ PROFILE_IMAGE_ALLOWED_MIME_TYPES = frozenset(
 
 # Max stored length (bytes) of a data:image profile URI; bounds Postgres/Redis
 # bloat from inline avatars and model icons. Unset (default) disables the cap.
-_profile_image_max_data_uri_size = os.getenv('PROFILE_IMAGE_MAX_DATA_URI_SIZE', '').strip()
-PROFILE_IMAGE_MAX_DATA_URI_SIZE = int(_profile_image_max_data_uri_size) if _profile_image_max_data_uri_size else None
+PROFILE_IMAGE_MAX_DATA_URI_SIZE = int_env('PROFILE_IMAGE_MAX_DATA_URI_SIZE', None)
 
 ####################################
 # Forward Headers
@@ -1094,10 +1103,7 @@ SENTENCE_TRANSFORMERS_CROSS_ENCODER_SIGMOID_ACTIVATION_FUNCTION = (
 
 
 def _int_env(name: str, default: int) -> int:
-    try:
-        return max(int(os.getenv(name) or default), 1)
-    except (ValueError, TypeError):
-        return default
+    return max(int_env(name, default), 1)
 
 
 # Total output of a single kb_exec call, whatever the command.
@@ -1209,7 +1215,7 @@ OTEL_RESOURCE_ATTRIBUTES = os.getenv('OTEL_RESOURCE_ATTRIBUTES', '')  # e.g. key
 OTEL_TRACES_SAMPLER = os.getenv('OTEL_TRACES_SAMPLER', 'parentbased_always_on').lower()
 OTEL_BASIC_AUTH_USERNAME = os.getenv('OTEL_BASIC_AUTH_USERNAME', '')
 OTEL_BASIC_AUTH_PASSWORD = os.getenv('OTEL_BASIC_AUTH_PASSWORD', '')
-OTEL_METRICS_EXPORT_INTERVAL_MILLIS = int(os.getenv('OTEL_METRICS_EXPORT_INTERVAL_MILLIS', '10000'))
+OTEL_METRICS_EXPORT_INTERVAL_MILLIS = int_env('OTEL_METRICS_EXPORT_INTERVAL_MILLIS', 10000)
 
 OTEL_METRICS_BASIC_AUTH_USERNAME = os.getenv('OTEL_METRICS_BASIC_AUTH_USERNAME', OTEL_BASIC_AUTH_USERNAME)
 OTEL_METRICS_BASIC_AUTH_PASSWORD = os.getenv('OTEL_METRICS_BASIC_AUTH_PASSWORD', OTEL_BASIC_AUTH_PASSWORD)
