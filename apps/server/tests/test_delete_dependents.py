@@ -258,3 +258,91 @@ def test_deleting_a_note_stops_the_replies_running_in_its_chats(monkeypatch):
 
     expected = _run(go())
     assert set(stopped) == expected and len(stopped) == len(expected)
+
+
+def test_a_note_chat_that_cannot_be_deleted_is_logged(monkeypatch, caplog):
+    """Its child chats' failed deletes were dropped silently; the chat's own was logged."""
+    import logging
+
+    from local_llm.models import chats as chats_model
+
+    tag = uuid.uuid4().hex[:8]
+
+    async def refused(*_a, **_k):
+        return False
+
+    async def go():
+        ann = await Users.insert_new_user(f'ann{tag}', 'Ann', f'ann{tag}@example.invalid', role='user')
+        note = await Notes.insert_new_note(ann.id, NoteForm(title='Plan'))
+        chat = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ann.id,
+            ChatForm(chat={'title': 'note chat'}),
+            internal_meta={'internal': True, 'type': 'note', 'note_id': note.id},
+        )
+        child = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ann.id,
+            ChatForm(chat={'title': 'subagent'}),
+            internal_meta={'internal': True, 'parent_chat_id': chat.id},
+        )
+        monkeypatch.setattr(Chats, 'delete_chat_by_id', refused)
+        await Chats.delete_internal_chats_by_note_id(note.id)
+        return chat.id, child.id
+
+    with caplog.at_level(logging.WARNING, logger=chats_model.__name__):
+        chat_id, child_id = _run(go())
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(chat_id in m for m in messages)
+    assert any(child_id in m for m in messages)
+
+
+def test_purging_a_user_with_a_successor_keeps_what_was_reassigned(monkeypatch):
+    """A shared note and a channel go to the successor with their chats, messages and members."""
+    from local_llm.models.access_grants import AccessGrants
+    from local_llm.utils import user_purge
+
+    async def nothing(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(user_purge, '_remove_stored_data', nothing)
+    tag = uuid.uuid4().hex[:8]
+
+    async def go():
+        gone = await Users.insert_new_user(f'gone{tag}', 'Gone', f'gone{tag}@example.invalid', role='user')
+        ben = await Users.insert_new_user(f'ben{tag}', 'Ben', f'ben{tag}@example.invalid', role='user')
+        admin = await Users.insert_new_user(f'adm{tag}', 'Adm', f'adm{tag}@example.invalid', role='admin')
+
+        async def successor(*_a, **_k):
+            return admin.id
+
+        # Other tests leave admins in the shared database: name the one that inherits.
+        monkeypatch.setattr(user_purge, '_successor_id', successor)
+
+        channel = await Channels.insert_new_channel(CreateChannelForm(type='group', name=f'c-{tag}'), gone.id)
+        await Channels.join_channel(channel.id, ben.id)
+        await Messages.insert_new_message(MessageForm(content='hi'), channel.id, ben.id)
+
+        note = await Notes.insert_new_note(gone.id, NoteForm(title='Plan'))
+        await AccessGrants.grant_access('note', note.id, 'user', ben.id, 'read')
+        ben_chat = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ben.id,
+            ChatForm(chat={'title': 'note chat'}),
+            internal_meta={'internal': True, 'type': 'note', 'note_id': note.id},
+        )
+
+        assert await Users.delete_user_by_id(gone.id)
+
+        return (
+            (await Channels.get_channel_by_id(channel.id)).user_id,
+            await _count(Message, Message.channel_id == channel.id),
+            await _count(ChannelMember, ChannelMember.channel_id == channel.id, ChannelMember.user_id == ben.id),
+            (await Notes.get_note_by_id(note.id)).user_id,
+            await Chats.get_chat_by_id(ben_chat.id) is not None,
+            admin.id,
+        )
+
+    channel_owner, messages, members, note_owner, chat_kept, admin_id = _run(go())
+    assert (channel_owner, messages, members, note_owner, chat_kept) == (admin_id, 1, 1, admin_id, True)

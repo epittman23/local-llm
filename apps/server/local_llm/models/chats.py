@@ -628,7 +628,10 @@ class ChatTable:
         for chat_id, user_id in await self.get_internal_chat_owners_by_note_id(note_id, db=db):
             # And the chats spawned from it (subagents, timers), as the chat delete route does.
             for child_id in await self.get_internal_chat_ids_by_parent_id(chat_id, user_id):
-                await self.delete_chat_by_id(child_id, db=db)
+                if not await self.delete_chat_by_id(child_id, db=db):
+                    log.warning(
+                        'Could not delete chat %s spawned from chat %s of deleted note %s', child_id, chat_id, note_id
+                    )
             if not await self.delete_chat_by_id(chat_id, db=db):
                 log.warning('Could not delete chat %s of deleted note %s', chat_id, note_id)
 

@@ -30,7 +30,9 @@ When no other administrator exists, what would be reassigned is deleted
 instead, except files still referenced by something that survives. A note or
 channel deleted here takes what its own delete takes: every user's chats with
 the note, and the channel's messages (anyone's), their reactions, its
-memberships, webhooks, files and grants.
+memberships, webhooks, files and grants. Those go first, each committed on
+its own, so a purge that fails after them leaves them deleted and the user in
+place; running the purge again completes it.
 """
 
 from __future__ import annotations
