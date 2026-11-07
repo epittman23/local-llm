@@ -42,7 +42,7 @@ from local_llm.utils.access_control.folders import has_folder_write_access
 from local_llm.utils.auth import bearer_security, get_admin_user, get_current_user, get_verified_user
 from local_llm.utils.chat_fork import build_fork_history
 from local_llm.utils.context_compaction import compact_chat_branch, get_chat_context_usage
-from local_llm.utils.misc import get_message_list
+from local_llm.utils.misc import find_in_lowered, get_message_list
 from local_llm.utils.models import get_all_models
 
 log = logging.getLogger(__name__)
@@ -256,17 +256,10 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            lowered = content.lower()
-            index = lowered.find(needle)
-            if index == -1:
+            match = find_in_lowered(content, needle)
+            if match is None:
                 continue
-            match_end = index + len(needle)
-            if len(lowered) != len(content):
-                # Lowering lengthened a character (U+0130 becomes two), so an
-                # index in the lowered text is off in the original, and the
-                # window missed the match (#339): map it back.
-                origin = [position for position, char in enumerate(content) for _ in char.lower()]
-                index, match_end = origin[index], origin[match_end - 1] + 1
+            index, match_end = match
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))
