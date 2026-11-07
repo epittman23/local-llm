@@ -6,6 +6,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Awaitable
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -910,18 +911,28 @@ class ChatTable:
                 await self.delete_orphan_tags_for_user(list(removed), owner_id, db=session)
 
     @staticmethod
-    async def _tag_ids_of_chats(session: AsyncSession, *criteria) -> list[str]:
+    def tag_ids_of_meta(meta: dict | None) -> list[str]:
+        """A chat's tag ids. Only a list of ids is read as tags, as a chat
+        import stores them, so a legacy chat's other values are skipped."""
+        tags = (meta or {}).get('tags')
+        return [tag_id for tag_id in tags if isinstance(tag_id, str)] if isinstance(tags, list) else []
+
+    async def _tag_ids_of_chats(self, session: AsyncSession, *criteria) -> list[str]:
         """The tag ids the chats matching *criteria* use, each once. The bulk
         writes below read them first, to keep the owner's tag rows in step
         with the chats they delete, archive or unarchive (#645)."""
-        tag_ids: dict[str, None] = {}
-        for meta in (await session.execute(select(Chat.meta).where(*criteria))).scalars().all():
-            tags = (meta or {}).get('tags')
-            # Only a list of ids is read as tags, as a chat import stores them.
-            for tag_id in tags if isinstance(tags, list) else []:
-                if isinstance(tag_id, str):
-                    tag_ids.setdefault(tag_id)
-        return list(tag_ids)
+        metas = (await session.execute(select(Chat.meta).where(*criteria))).scalars().all()
+        return list(dict.fromkeys(tag_id for meta in metas for tag_id in self.tag_ids_of_meta(meta)))
+
+    @staticmethod
+    async def _keep_tags_after(operation: str, user_id: str, step: Awaitable[object]) -> None:
+        """Run a bulk write's tag upkeep once the chats are committed. A failure
+        is logged, not raised: the write itself succeeded, and its caller must
+        not report it as failed."""
+        try:
+            await step
+        except Exception:
+            log.warning('Could not update the tag rows of user %s after %s', user_id, operation, exc_info=True)
 
     async def get_chat_title_by_id(self, id: str) -> str | None:
         async with get_async_db_context() as session:
@@ -1435,7 +1446,7 @@ class ChatTable:
                 await session.execute(update(Chat).filter_by(user_id=user_id).values(archived=False))
                 await session.commit()
                 # The rows archiving dropped, as unarchiving one chat does.
-                await Tags.ensure_tags_exist(tag_ids, user_id, db=session)
+                await self._keep_tags_after('unarchiving all chats', user_id, Tags.ensure_tags_exist(tag_ids, user_id))
                 return True
         except Exception:
             return False
@@ -1484,7 +1495,9 @@ class ChatTable:
                 await session.execute(update(Chat).filter_by(user_id=user_id).values(archived=True))
                 await session.commit()
                 # Archived chats are not counted, so none of these tags is used any more.
-                await Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id, db=session)
+                await self._keep_tags_after(
+                    'archiving all chats', user_id, Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id)
+                )
                 return True
         except Exception:
             return False
@@ -2656,7 +2669,9 @@ class ChatTable:
                 await session.execute(delete(Chat).filter_by(user_id=user_id))
                 await session.commit()
                 # No chat of theirs is left to use these tags.
-                await Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id, db=session)
+                await self._keep_tags_after(
+                    'deleting all chats', user_id, Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id)
+                )
 
                 return True
         except Exception:
@@ -2675,7 +2690,11 @@ class ChatTable:
                 await session.execute(delete(ChatMessage).filter(ChatMessage.chat_id.in_(chat_ids_stmt)))
                 await session.execute(delete(Chat).filter_by(user_id=user_id, folder_id=folder_id))
                 await session.commit()
-                await self.delete_orphan_tags_for_user(tag_ids, user_id, db=session)
+                await self._keep_tags_after(
+                    f'deleting the chats of folder {folder_id}',
+                    user_id,
+                    self.delete_orphan_tags_for_user(tag_ids, user_id),
+                )
 
                 return True
         except Exception:

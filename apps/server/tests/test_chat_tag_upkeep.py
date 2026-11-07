@@ -12,6 +12,9 @@ nor internal, still uses. The single-chat routes kept that; these did not:
 - moving an archived chat into a folder unarchives it, and did not recreate
   its rows either.
 
+The tag step runs after the chats are written, so its failure is logged and
+the write still reports success.
+
 Runs against the test run's migrated SQLite database.
 
 Run from apps/server:
@@ -85,9 +88,35 @@ def test_tags_generated_in_a_chat_an_admin_continues_are_the_owners():
     assert _tags(admin.id) == {'shared'}
 
 
-def test_deleting_a_folder_with_its_chats_drops_the_tags_only_they_used(monkeypatch):
+def _delete_folder_with_its_chats(user_id: str, folder_id: str, monkeypatch):
     monkeypatch.setattr(folders_router, 'check_folders_permission', _nothing)
     monkeypatch.setattr(folders_router, 'publish_event', _nothing)
+    app = FastAPI()
+    app.include_router(folders_router.router, prefix='/folders')
+    app.dependency_overrides[get_verified_user] = lambda: SimpleNamespace(id=user_id, role='user')
+    app.dependency_overrides[get_async_session] = lambda: None
+    return TestClient(app).delete(f'/folders/{folder_id}', params={'delete_contents': True})
+
+
+def _fail_tag_upkeep(monkeypatch):
+    async def fail(*_a, **_k):
+        raise RuntimeError('tag table went away')
+
+    monkeypatch.setattr(Tags, 'ensure_tags_exist', fail)
+    monkeypatch.setattr(Tags, 'delete_tags_by_ids_and_user_id', fail)
+    monkeypatch.setattr(Chats, 'delete_orphan_tags_for_user', fail)
+
+
+def _set_meta(chat_id: str, meta: dict):
+    async def write():
+        async with get_async_db_context() as session:
+            await session.execute(update(Chat).filter_by(id=chat_id).values(meta=meta))
+            await session.commit()
+
+    _run(write())
+
+
+def test_deleting_a_folder_with_its_chats_drops_the_tags_only_they_used(monkeypatch):
     owner = _user()
     work = _run(Folders.insert_new_folder(owner.id, FolderForm(name='Work')))
     sub = _run(Folders.insert_new_folder(owner.id, FolderForm(name='Sub'), parent_id=work.id))
@@ -96,11 +125,7 @@ def test_deleting_a_folder_with_its_chats_drops_the_tags_only_they_used(monkeypa
     _chat(owner.id, ['Project'], folder_id=sub.id)
     _chat(owner.id, ['Kept'])
 
-    app = FastAPI()
-    app.include_router(folders_router.router, prefix='/folders')
-    app.dependency_overrides[get_verified_user] = lambda: SimpleNamespace(id=owner.id, role='user')
-    app.dependency_overrides[get_async_session] = lambda: None
-    r = TestClient(app).delete(f'/folders/{work.id}', params={'delete_contents': True})
+    r = _delete_folder_with_its_chats(owner.id, work.id, monkeypatch)
 
     assert r.status_code == 200 and r.json() is True
     assert _tags(owner.id) == {'kept'}
@@ -154,12 +179,54 @@ def test_a_chat_whose_tags_are_not_a_list_of_ids_does_not_stop_a_bulk_delete(mon
     owner = _user('admin')
     _chat(owner.id, ['Work'])
     legacy = _chat(owner.id, [])
-
-    async def corrupt():
-        async with get_async_db_context() as session:
-            await session.execute(update(Chat).filter_by(id=legacy).values(meta={'tags': [{'name': 'x'}, 3]}))
-            await session.commit()
-
-    _run(corrupt())
+    _set_meta(legacy, {'tags': [{'name': 'x'}, 3]})
     assert _run(chats_router.delete_all_user_chats(SimpleNamespace(), user=owner, db=None)) is True
     assert _tags(owner.id) == set()
+
+
+def test_moving_an_archived_chat_whose_tags_are_not_all_ids_into_a_folder(monkeypatch):
+    monkeypatch.setattr(chats_router, 'publish_event', _nothing)
+    monkeypatch.setattr(chats_router, 'stop_item_tasks', _nothing)
+    owner = _user()
+    folder = _run(Folders.insert_new_folder(owner.id, FolderForm(name='Work')))
+    chat_id = _chat(owner.id, ['Work'])
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=None)))
+    assert _run(chats_router.archive_chat_by_id(request, chat_id, user=owner, db=None)) is not None
+    _set_meta(chat_id, {'tags': [{'name': 'x'}, 3, 'work']})
+
+    form = chats_router.ChatFolderIdForm(folder_id=folder.id)
+    chat = _run(chats_router.update_chat_folder_id_by_id(request, chat_id, form, user=owner, db=None))
+    assert chat is not None and chat.archived is False
+    assert _tags(owner.id) == {'work'}
+
+
+def test_a_failed_tag_step_after_a_folder_delete_still_reports_success(monkeypatch, caplog):
+    owner = _user()
+    work = _run(Folders.insert_new_folder(owner.id, FolderForm(name='Work')))
+    chat_id = _chat(owner.id, ['Project'], folder_id=work.id)
+    _fail_tag_upkeep(monkeypatch)
+
+    r = _delete_folder_with_its_chats(owner.id, work.id, monkeypatch)
+
+    assert r.status_code == 200 and r.json() is True
+    assert _run(Chats.get_chat_by_id(chat_id)) is None
+    assert owner.id in caplog.text
+
+
+def test_a_failed_tag_step_after_a_bulk_write_still_reports_success(monkeypatch, caplog):
+    monkeypatch.setattr(chats_router, 'publish_event', _nothing)
+    owner = _user('admin')
+    chat_id = _chat(owner.id, ['Work'])
+    _fail_tag_upkeep(monkeypatch)
+
+    def archived():
+        chat = _run(Chats.get_chat_by_id(chat_id))
+        return chat and chat.archived
+
+    assert _run(chats_router.archive_all_chats(SimpleNamespace(), user=owner, db=None)) is True
+    assert archived() is True
+    assert _run(chats_router.unarchive_all_chats(SimpleNamespace(), user=owner, db=None)) is True
+    assert archived() is False
+    assert _run(chats_router.delete_all_user_chats(SimpleNamespace(), user=owner, db=None)) is True
+    assert _run(Chats.get_chat_by_id(chat_id)) is None
+    assert caplog.text.count(owner.id) == 3

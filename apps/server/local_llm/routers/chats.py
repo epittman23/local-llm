@@ -1924,7 +1924,7 @@ async def update_chat_folder_id_by_id(
         if was_archived and chat and not chat.archived:
             # Moving an archived chat into a folder unarchives it: recreate the
             # tag rows archiving dropped, as unarchiving does (#645).
-            await Tags.ensure_tags_exist(chat.meta.get('tags', []), user.id, db=db)
+            await Tags.ensure_tags_exist(Chats.tag_ids_of_meta(chat.meta), user.id, db=db)
         await publish_event(
             request,
             EVENTS.CHAT_FOLDER_UPDATED,
