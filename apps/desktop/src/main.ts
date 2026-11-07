@@ -321,9 +321,11 @@ async function waitReady(origin: string, signal: AbortSignal, stopped: () => str
 	}
 }
 
+/** Written whole or not at all (#649): a kill or a full disk mid-write must not leave half a record. */
 function writeOwned(record: OwnedRecord): void {
 	mkdirSync(USER_DATA, { recursive: true });
-	writeFileSync(OWNED_FILE, `${JSON.stringify(record)}\n`);
+	writeFileSync(`${OWNED_FILE}.tmp`, `${JSON.stringify(record)}\n`);
+	renameSync(`${OWNED_FILE}.tmp`, OWNED_FILE);
 }
 
 function readOwned(): OwnedRecord | null {
@@ -592,7 +594,7 @@ async function stopEarlier(record: OwnedRecord): Promise<string | null> {
 
 function forgetOwned(): void {
 	owned = null;
-	rmSync(OWNED_FILE, { force: true });
+	forgetRecord();
 }
 
 // --- Stopping ------------------------------------------------------------------

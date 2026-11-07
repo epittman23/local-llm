@@ -36,8 +36,8 @@ To run it from the checkout instead, while working on it, use `make desktop`.
 Ctrl-C there closes the app, the same way as closing its window. Press it
 **once**: Electron takes a first SIGINT as "quit" and dies of a second, which
 leaves the stack finishing its stop with no app to see it through (the next
-launch waits for it, forcing it past the stop budget, and never signals it
-again).
+launch waits for it, forcing it once the stop budget runs out, and never
+signals it again).
 
 ## What happens when it opens
 
@@ -51,7 +51,7 @@ running:
 |---|---|---|
 | Nothing answering on `:4000` | builds `apps/web` if any source is newer than `dist/`, then runs `make backend` | stops everything it started |
 | A backend already up (from a terminal) | connects to it: nothing is restarted or rebuilt | leaves it running |
-| The stack it started before it crashed, for the same server address and checkout (`localhost` and `127.0.0.1` count as one address; `[::1]` does not, as `make backend` listens on `127.0.0.1` only) | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
+| The stack it started before it crashed, for the same server address and checkout (`localhost` and `127.0.0.1` count as one address; `[::1]` does not, as `make backend` listens on `127.0.0.1` by default) | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
 | That stack, started for another address or checkout, recorded by an earlier version of the app (which named neither), or found by a launch for a remote server | stops it first, as closing the app would, then goes on as if it had not been found; if the stop had to be forced and left containers or a `llama-server` running, it says so and waits for Retry | as the row that then applies |
 | That stack, which it was stopping when it crashed or was killed (`owned.json` says `"stopping": true`, written just before the one SIGINT) | never adopts it or sends it SIGINT again, since a second one makes uvicorn skip the teardown that stops the served model: it waits for it to exit, forcing it once the stop budget runs out, then goes on as in the row above | as the row that then applies |
 | `make frontend` on `:5174`, from the configured checkout | loads the hot-reloading dev server instead of the build, and skips the build; it asks the dev server at `/__lllm/dev-server` which `apps/web` it serves, so another project's server that took `:5174`, or another checkout's, is ignored | the dev server is left alone |
@@ -145,7 +145,10 @@ Everything lives in `~/.config/Local LLM/`, the same for the packaged app and
   quitting;
 - `owned.json`: the process group of the stack it started, and the server
   address and checkout it was started for, while it runs; `"stopping": true`
-  once it has been sent its SIGINT, until it is gone;
+  from just before its one SIGINT, until it is gone. While a launch stops a
+  stack an earlier launch started, it names that earlier stack. It is written
+  to `owned.json.tmp` and renamed into place, so it is never left half
+  written;
 - `logs/backend.log`: the build and `make backend` output of the stack it
   started (the previous run's is `backend.log.1`).
 

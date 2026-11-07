@@ -65,7 +65,9 @@ const h = vi.hoisted(() => {
 		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
 		devServer: null as ((url: string) => string | null) | null,
 		/** Builds the next spawned child; the default is one that started (#433). */
-		spawnChild: null as (() => unknown) | null
+		spawnChild: null as (() => unknown) | null,
+		/** owned.json operations that fail, as a full disk or a read-only directory would (#649). */
+		ownedFails: { rename: false, rm: false }
 	};
 	let nextId = 1;
 
@@ -163,6 +165,7 @@ const h = vi.hoisted(() => {
 		state.menu = [];
 		state.devServer = null;
 		state.spawnChild = null;
+		state.ownedFails = { rename: false, rm: false };
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -171,6 +174,23 @@ const h = vi.hoisted(() => {
 vi.mock('../node_modules/electron/index.js', () => {
 	const electron = h.electron();
 	return { ...electron, default: electron };
+});
+vi.mock('node:fs', async (original) => {
+	const fs = await original<typeof import('node:fs')>();
+	const failing = (op: 'rename' | 'rm', path: unknown) => {
+		if (h.state.ownedFails[op] && String(path).endsWith('owned.json')) {
+			throw Object.assign(new Error(`EACCES: ${op} ${String(path)}`), { code: 'EACCES' });
+		}
+	};
+	const renameSync: typeof fs.renameSync = (from, to) => {
+		failing('rename', to);
+		fs.renameSync(from, to);
+	};
+	const rmSync: typeof fs.rmSync = (path, options) => {
+		failing('rm', path);
+		fs.rmSync(path, options);
+	};
+	return { ...fs, default: { ...fs, renameSync, rmSync }, renameSync, rmSync };
 });
 vi.mock('./config', async (original) => ({ ...(await original<typeof import('./config')>()), isRepoRoot: () => true }));
 vi.mock('./stack', async (original) => ({
@@ -558,6 +578,64 @@ test('while an earlier stack stops, owned.json names it as stopping, so a crash 
 	release();
 	await tick(50);
 	expect(ownedFile()).toEqual({ pgid: 990201, startTicks: '1', origin: HERE.serverUrl, repo: HERE.repoPath });
+});
+
+test('owned.json is written whole, through a temporary file renamed into place (#649)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await cleanStop();
+
+	expect(h.state.stopCalls[0]?.owned).toMatchObject({ stopping: true });
+	expect(existsSync(join(h.state.userData, 'owned.json.tmp'))).toBe(false);
+	await tick(700); // let the stop finish, so its exit does not land in the next test
+});
+
+test('a stopping mark that cannot be written removes the record before the SIGINT, and the stop goes on (#649)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await launch();
+	expect(ownedFile()).toMatchObject({ pgid: 990201 });
+	mkdirSync(join(h.state.userData, 'owned.json.tmp')); // the temporary file the write goes through
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(10);
+	appWindows()[0]?.userClose();
+	await tick(700);
+
+	expect(h.state.stopCalls).toEqual([{ pgid: 990201, interrupt: true, owned: null }]);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a stopping mark that cannot be renamed into place removes the record before the SIGINT (#649)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await launch();
+	h.state.ownedFails.rename = true;
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(10);
+	appWindows()[0]?.userClose();
+	await tick(700);
+
+	expect(h.state.stopCalls).toEqual([{ pgid: 990201, interrupt: true, owned: null }]);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a record that can be neither marked nor removed still lets the stop and the quit go on (#649)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await launch();
+	h.state.ownedFails = { rename: true, rm: true };
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(10);
+	appWindows()[0]?.userClose();
+	await tick(700);
+
+	expect(h.state.stops).toEqual([990201]);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('an earlier stack whose record cannot be removed after its stop still lets the launch go on (#649)', async () => {
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	h.state.ownedFails.rm = true;
+	await launch();
+
+	expect(h.state.stops).toEqual([4242]);
+	expect(h.state.spawned).toBe(1);
 });
 
 // --- Settings and config.json (#424, #425, #426, #437) --------------------------

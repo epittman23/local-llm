@@ -192,7 +192,7 @@ export function parseOwned(text: string | null): OwnedRecord | null {
  * (#649): adopted, it would be sent a second SIGINT on close.
  *
  * localhost and 127.0.0.1 count as one address (#649); [::1] does not, since
- * `make backend` listens on 127.0.0.1 only.
+ * `make backend` listens on 127.0.0.1 by default.
  */
 export function ownedAction(
 	record: OwnedRecord | null,

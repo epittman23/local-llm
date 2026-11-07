@@ -201,7 +201,7 @@ describe('ownedAction (#431)', () => {
 		expect(act(record, true, { ...here, origin: 'http://localhost:4000' })).toBe('adopt');
 		expect(act({ ...record, origin: 'http://localhost:4000' }, true)).toBe('adopt');
 		expect(act(record, true, { ...here, origin: 'http://localhost:4100' })).toBe('stop');
-		// make backend listens on 127.0.0.1 only, so [::1] is another address.
+		// make backend listens on 127.0.0.1 by default, so [::1] is another address.
 		expect(act(record, true, { ...here, origin: 'http://[::1]:4000' })).toBe('stop');
 	});
 
