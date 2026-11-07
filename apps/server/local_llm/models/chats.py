@@ -882,13 +882,17 @@ class ChatTable:
     async def update_chat_tags_by_id(self, id: str, tags: list[str], user) -> None:
         """Replace a chat's tags. Runs after every completion with tag
         generation enabled, so only the meta column is read and written,
-        never the chat blob."""
+        never the chat blob.
+
+        The tag rows are the chat owner's, whoever *user* is: an admin can
+        continue another user's chat, and its tags used to be written to the
+        admin's rows (#645)."""
         async with get_async_db_context() as session:
-            row = (await session.execute(select(Chat.meta).filter_by(id=id))).one_or_none()
+            row = (await session.execute(select(Chat.meta, Chat.user_id).filter_by(id=id))).one_or_none()
             if row is None:
                 return None
 
-            meta = row[0] or {}
+            meta, owner_id = row[0] or {}, row[1]
             old_tags = meta.get('tags', [])
             new_tags = [t for t in tags if t.replace(' ', '_').lower() != 'none']
             new_tag_ids = list(dict.fromkeys(t.replace(' ', '_').lower() for t in new_tags))
@@ -898,12 +902,26 @@ class ChatTable:
             await session.commit()
 
             # Batch-create any missing tag rows
-            await Tags.ensure_tags_exist(new_tags, user.id, db=session)
+            await Tags.ensure_tags_exist(new_tags, owner_id, db=session)
 
             # Clean up orphaned old tags
             removed = set(old_tags) - set(new_tag_ids)
             if removed:
-                await self.delete_orphan_tags_for_user(list(removed), user.id, db=session)
+                await self.delete_orphan_tags_for_user(list(removed), owner_id, db=session)
+
+    @staticmethod
+    async def _tag_ids_of_chats(session: AsyncSession, *criteria) -> list[str]:
+        """The tag ids the chats matching *criteria* use, each once. The bulk
+        writes below read them first, to keep the owner's tag rows in step
+        with the chats they delete, archive or unarchive (#645)."""
+        tag_ids: dict[str, None] = {}
+        for meta in (await session.execute(select(Chat.meta).where(*criteria))).scalars().all():
+            tags = (meta or {}).get('tags')
+            # Only a list of ids is read as tags, as a chat import stores them.
+            for tag_id in tags if isinstance(tags, list) else []:
+                if isinstance(tag_id, str):
+                    tag_ids.setdefault(tag_id)
+        return list(tag_ids)
 
     async def get_chat_title_by_id(self, id: str) -> str | None:
         async with get_async_db_context() as session:
@@ -1413,8 +1431,11 @@ class ChatTable:
     async def unarchive_all_chats_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as session:
+                tag_ids = await self._tag_ids_of_chats(session, Chat.user_id == user_id, Chat.archived.is_(True))
                 await session.execute(update(Chat).filter_by(user_id=user_id).values(archived=False))
                 await session.commit()
+                # The rows archiving dropped, as unarchiving one chat does.
+                await Tags.ensure_tags_exist(tag_ids, user_id, db=session)
                 return True
         except Exception:
             return False
@@ -1459,8 +1480,11 @@ class ChatTable:
     async def archive_all_chats_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as session:
+                tag_ids = await self._tag_ids_of_chats(session, Chat.user_id == user_id, Chat.archived.is_(False))
                 await session.execute(update(Chat).filter_by(user_id=user_id).values(archived=True))
                 await session.commit()
+                # Archived chats are not counted, so none of these tags is used any more.
+                await Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id, db=session)
                 return True
         except Exception:
             return False
@@ -2618,6 +2642,7 @@ class ChatTable:
     async def delete_chats_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as session:
+                tag_ids = await self._tag_ids_of_chats(session, Chat.user_id == user_id)
                 await self.delete_shared_chats_by_user_id(user_id, db=session)
 
                 await session.execute(
@@ -2630,6 +2655,8 @@ class ChatTable:
                 )
                 await session.execute(delete(Chat).filter_by(user_id=user_id))
                 await session.commit()
+                # No chat of theirs is left to use these tags.
+                await Tags.delete_tags_by_ids_and_user_id(tag_ids, user_id, db=session)
 
                 return True
         except Exception:
@@ -2641,12 +2668,14 @@ class ChatTable:
         try:
             async with get_async_db_context(db) as session:
                 chat_ids_stmt = select(Chat.id).filter_by(user_id=user_id, folder_id=folder_id)
+                tag_ids = await self._tag_ids_of_chats(session, Chat.user_id == user_id, Chat.folder_id == folder_id)
                 await session.execute(
                     update(AutomationRun).filter(AutomationRun.chat_id.in_(chat_ids_stmt)).values(chat_id=None)
                 )
                 await session.execute(delete(ChatMessage).filter(ChatMessage.chat_id.in_(chat_ids_stmt)))
                 await session.execute(delete(Chat).filter_by(user_id=user_id, folder_id=folder_id))
                 await session.commit()
+                await self.delete_orphan_tags_for_user(tag_ids, user_id, db=session)
 
                 return True
         except Exception:
