@@ -61,7 +61,11 @@ export default function Shortcuts() {
 			<SettingsSection first>
 				<SettingRow label="Keyboard Shortcuts" description="Use keyboard shortcuts across the app.">
 					{(id) => (
-						<SettingSwitch labelledBy={id} checked={enabled} onChange={(v) => void update({ keyboardShortcuts: v })} />
+						<SettingSwitch
+							labelledBy={id}
+							checked={enabled}
+							onChange={(v) => void update({ keyboardShortcuts: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
+						/>
 					)}
 				</SettingRow>
 			</SettingsSection>
