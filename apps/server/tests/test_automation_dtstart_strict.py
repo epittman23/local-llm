@@ -46,3 +46,25 @@ def test_a_whole_dtstart_is_accepted(dtstart):
     from local_llm.utils.automations import validate_rrule
 
     validate_rrule(f'{dtstart}\n{RRULE}')
+
+
+@pytest.mark.parametrize(
+    'rule',
+    [
+        'RRULE:FREQ=DAILY;COUNT=1 DTSTART:20991201T00',
+        'DTSTART:20991201T00 RRULE:FREQ=DAILY;COUNT=1',
+        'RRULE:FREQ=DAILY;COUNT=1\tDTSTART:20991201T',
+    ],
+)
+def test_an_incomplete_dtstart_on_one_line_is_rejected(rule):
+    """dateutil splits a rule on any whitespace, not only on newlines, so the check does too."""
+    from local_llm.utils.automations import validate_rrule
+
+    with pytest.raises(ValueError):
+        validate_rrule(rule)
+
+
+def test_a_whole_dtstart_on_one_line_is_accepted():
+    from local_llm.utils.automations import validate_rrule
+
+    validate_rrule('RRULE:FREQ=DAILY;COUNT=1 DTSTART:20991201T090000')

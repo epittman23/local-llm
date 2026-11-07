@@ -166,12 +166,14 @@ def _check_dtstart(s: str) -> None:
     dateutil reads `DTSTART:20261201T00` and `DTSTART:20261201T` as midnight,
     so an incomplete start time would run the automation at 00:00. The
     forms kept are `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same with `Z`, with
-    or without parameters such as `;TZID=Europe/Paris`.
+    or without parameters such as `;TZID=Europe/Paris`. The rule is split on
+    any whitespace, as `rrulestr` splits it, so a DTSTART after a space on the
+    same line is checked too.
     """
-    for line in s.splitlines():
-        head, sep, value = line.strip().partition(':')
-        if re.match(r'DTSTART(;|$)', head, re.IGNORECASE) and not (sep and _DTSTART_VALUE.fullmatch(value.strip())):
-            raise ValueError(f'DTSTART must be a whole date or date-time, got {value.strip()!r}')
+    for part in s.split():
+        head, sep, value = part.partition(':')
+        if re.match(r'DTSTART(;|$)', head, re.IGNORECASE) and not (sep and _DTSTART_VALUE.fullmatch(value)):
+            raise ValueError(f'DTSTART must be a whole date or date-time, got {value!r}')
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
