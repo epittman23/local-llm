@@ -50,7 +50,10 @@ export default function Shortcuts() {
 		onError: (e, _next, ctx) => {
 			queryClient.setQueryData(KEYBINDINGS_KEY, ctx?.previous);
 			toast.error(`${e}`);
-		}
+		},
+		// Several saves can overlap, and a rollback to an older snapshot would
+		// undo a later save that went through; the server's keys settle it.
+		onSettled: () => queryClient.invalidateQueries({ queryKey: KEYBINDINGS_KEY })
 	});
 	const save = (next: KeybindingsMap) => saveBindings.mutate(next);
 

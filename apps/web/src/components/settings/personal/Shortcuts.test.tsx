@@ -62,4 +62,22 @@ describe('rebinding a shortcut (#808)', () => {
 		await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
 		expect(client.getQueryData(KEYBINDINGS_KEY)).toEqual({ ...DEFAULT_KEYBINDINGS, newChat: 'Cmd+J' });
 	});
+
+	it('shows what the server holds when an earlier save fails after a later one succeeded', async () => {
+		let refuse: (e: Error) => void = () => {};
+		api.updateUserSettings
+			.mockImplementationOnce(() => new Promise((_, reject) => (refuse = reject)))
+			.mockResolvedValueOnce({});
+		const server = { ...DEFAULT_KEYBINDINGS, newChat: 'Cmd+J', search: 'Cmd+L' };
+		api.getUserSettings.mockResolvedValue({ keybindings: server });
+		const client = renderTab();
+		const first = rebind();
+		const second = screen.getByRole('button', { name: 'Change shortcut for Search' });
+		fireEvent.click(second);
+		fireEvent.keyDown(second, { key: 'l', ctrlKey: true });
+		await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalledTimes(2));
+		refuse(new Error('refused'));
+		await waitFor(() => expect(client.getQueryData(KEYBINDINGS_KEY)).toEqual(server));
+		expect(first.textContent).toMatch(/J/);
+	});
 });
