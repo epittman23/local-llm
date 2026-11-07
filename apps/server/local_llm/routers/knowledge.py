@@ -2018,7 +2018,6 @@ async def sync_knowledge_diff(
             {
                 'file_id': file_model.id,
                 'checksum': (file_model.meta or {}).get('file_hash'),
-                'hash': file_model.hash,
                 'updated_at': file_model.updated_at or 0,
             }
         )
