@@ -127,6 +127,47 @@ def test_the_scheduler_recovers_timers_and_survives_a_failure(monkeypatch, caplo
     assert 'timer recovery error' in caplog.text
 
 
+def test_a_cancel_that_comes_back_as_an_error_still_stops_the_scheduler(monkeypatch, caplog):
+    # #817: cancelled twice inside the pool pre-ping, psycopg leaves the
+    # connection ACTIVE and resetting autocommit raises ProgrammingError over
+    # the CancelledError. The loop swallowed it and ran on, so asyncio.run
+    # waited forever for it at exit.
+    entered = asyncio.Event()
+    calls = []
+
+    async def claim(now_ns, limit=10):
+        calls.append(now_ns)
+        entered.set()
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            raise RuntimeError("can't change 'autocommit' now: connection in transaction status ACTIVE") from None
+        return []
+
+    async def untouched(*args, **kwargs):
+        raise AssertionError('the scheduler went on after it was cancelled')
+
+    monkeypatch.setattr(timers, 'claim_due_timers', claim)
+    monkeypatch.setattr(automations, '_recover_stale_timers', untouched)
+    monkeypatch.setattr(automations.Config, 'get', untouched)
+
+    async def scenario():
+        task = asyncio.create_task(automations.scheduler_worker_loop(None))
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=2)
+        if not done:
+            task.cancel()
+        return task, bool(done)
+
+    task, done = _run(scenario())
+
+    assert done, 'the scheduler kept running after it was cancelled'
+    assert task.cancelled()
+    assert len(calls) == 1
+    assert 'timer error' not in caplog.text
+
+
 def test_a_chat_that_only_looks_like_a_running_timer_is_left_alone():
     """An imported chat can carry any meta; only internal timer chats are recovered."""
     uid = f'timers-{uuid.uuid4().hex[:10]}'

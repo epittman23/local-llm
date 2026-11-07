@@ -385,6 +385,17 @@ async def scheduler_worker_loop(app) -> None:
         SCHEDULER_POLL_INTERVAL,
     )
     next_scheduler_poll = 0.0
+    task = asyncio.current_task()
+
+    def raise_if_cancelled() -> None:
+        # A cancel that lands in SQLAlchemy's pool pre-ping can come back as
+        # an Exception: psycopg's cleanup of the interrupted SELECT 1 is cut
+        # short by a second cancel (the lifespan's, then asyncio.run's), and
+        # resetting autocommit on the still-ACTIVE connection raises
+        # ProgrammingError over the CancelledError. Swallowed, the loop ran
+        # on and asyncio.run waited for it forever at exit (#817).
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError
 
     while True:
         try:
@@ -396,9 +407,11 @@ async def scheduler_worker_loop(app) -> None:
                 for timer_id, claim_id in await claim_due_timers(int(time.time_ns()), limit=10):
                     run_in_background(execute_due_timer(app, timer_id, claim_id))
             except Exception:
+                raise_if_cancelled()
                 log.exception('Scheduler: timer error')
 
             if now < next_scheduler_poll:
+                raise_if_cancelled()
                 await asyncio.sleep(max(1, TIMER_POLL_INTERVAL))
                 continue
             # Jitter to spread automation/calendar load across instances; timers keep a tight poll.
@@ -428,6 +441,7 @@ async def scheduler_worker_loop(app) -> None:
         except Exception:
             log.exception('Scheduler worker error')
 
+        raise_if_cancelled()
         await asyncio.sleep(max(1, TIMER_POLL_INTERVAL))
 
 
