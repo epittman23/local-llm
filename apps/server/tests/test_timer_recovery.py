@@ -224,6 +224,122 @@ def test_a_cancel_that_comes_back_as_an_error_in_the_automation_claim_stops_the_
     assert 'automation error' not in caplog.text
 
 
+def _cancel_once_entered(entered: asyncio.Event):
+    async def scenario():
+        task = asyncio.create_task(automations.scheduler_worker_loop(None))
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=2)
+        if not done:
+            task.cancel()
+        return task, bool(done)
+
+    return _run(scenario())
+
+
+async def _hang_then_fail(entered: asyncio.Event):
+    # A cancelled DB call whose cleanup raises over the CancelledError (#817).
+    entered.set()
+    try:
+        await asyncio.sleep(10)
+    except asyncio.CancelledError:
+        raise RuntimeError("can't change 'autocommit' now: connection in transaction status ACTIVE") from None
+
+
+def _no_timers(monkeypatch):
+    async def no_timers(now_ns, limit=10):
+        return []
+
+    monkeypatch.setattr(timers, 'claim_due_timers', no_timers)
+
+
+def test_a_cancel_that_comes_back_as_an_error_in_the_calendar_alerts_stops_the_scheduler(monkeypatch, caplog):
+    entered = asyncio.Event()
+    _no_timers(monkeypatch)
+
+    async def recover():
+        return None
+
+    async def config_get(key):
+        return key == 'calendar.enable'
+
+    async def calendar_alerts(app):
+        await _hang_then_fail(entered)
+
+    monkeypatch.setattr(automations, '_recover_stale_timers', recover)
+    monkeypatch.setattr(automations.Config, 'get', config_get)
+    monkeypatch.setattr(automations, '_check_calendar_alerts', calendar_alerts)
+
+    task, done = _cancel_once_entered(entered)
+
+    assert done, 'the scheduler kept running after it was cancelled'
+    assert task.cancelled()
+    assert 'calendar alert error' not in caplog.text
+
+
+def test_a_cancel_swallowed_by_timer_recovery_stops_the_scheduler_before_it_sleeps(monkeypatch):
+    # _recover_stale_timers logs and swallows its own errors, so only the
+    # check before the loop's sleep sees the cancel.
+    entered = asyncio.Event()
+    claims = []
+
+    async def claim(now_ns, limit=10):
+        claims.append(now_ns)
+        return []
+
+    async def recover(now_ns):
+        await _hang_then_fail(entered)
+
+    async def config_get(key):
+        return False
+
+    monkeypatch.setattr(timers, 'claim_due_timers', claim)
+    monkeypatch.setattr(timers, 'recover_stale_timers', recover)
+    monkeypatch.setattr(automations.Config, 'get', config_get)
+
+    task, done = _cancel_once_entered(entered)
+
+    assert done, 'the scheduler kept running after it was cancelled'
+    assert task.cancelled()
+    assert len(claims) == 1
+
+
+def test_the_scheduler_polls_timers_between_scheduler_polls_until_cancelled(monkeypatch):
+    # Between scheduler polls an iteration only claims timers, then sleeps.
+    entered = asyncio.Event()
+    claims = []
+    recoveries = []
+    real_sleep = asyncio.sleep
+
+    async def claim(now_ns, limit=10):
+        claims.append(now_ns)
+        if len(claims) == 3:
+            entered.set()
+            await asyncio.Event().wait()
+        return []
+
+    async def recover():
+        recoveries.append(1)
+
+    async def config_get(key):
+        return False
+
+    async def fast_sleep(seconds):
+        await real_sleep(0)
+
+    monkeypatch.setattr(timers, 'claim_due_timers', claim)
+    monkeypatch.setattr(automations, '_recover_stale_timers', recover)
+    monkeypatch.setattr(automations.Config, 'get', config_get)
+    monkeypatch.setattr(automations.asyncio, 'sleep', fast_sleep)
+
+    task, done = _cancel_once_entered(entered)
+
+    assert done, 'the scheduler kept running after it was cancelled'
+    assert task.cancelled()
+    assert len(claims) == 3
+    assert recoveries == [1]
+
+
 def test_a_chat_that_only_looks_like_a_running_timer_is_left_alone():
     """An imported chat can carry any meta; only internal timer chats are recovered."""
     uid = f'timers-{uuid.uuid4().hex[:10]}'
