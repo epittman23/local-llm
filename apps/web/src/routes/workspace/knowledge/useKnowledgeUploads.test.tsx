@@ -128,6 +128,21 @@ describe('useKnowledgeUploads syncDirectory', () => {
 		expect(refresh).toHaveBeenCalled();
 	});
 
+	it('says how many files the cleanups kept, instead of reporting the sync complete (#639)', async () => {
+		kb.syncKnowledgeCleanup.mockImplementation(async (_t: string, _kb: string, fileIds: string[]) => ({
+			status: true,
+			kept: fileIds.filter((id) => id === 'gone' || id === 'old-edit')
+		}));
+
+		const refresh = await sync();
+
+		expect(toast.error).toHaveBeenCalledWith(
+			'2 files could not be removed from the knowledge base; the next sync tries again.'
+		);
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(refresh).toHaveBeenCalled();
+	});
+
 	it('uploads a file refused as duplicate content again once its old copy is gone', async () => {
 		files.uploadFile.mockImplementation(async (_t: string, file: File) => {
 			calls.push(`upload ${file.name}`);
