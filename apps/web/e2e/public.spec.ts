@@ -1,5 +1,6 @@
 import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { fakeSocketServer } from './fake-socket';
 
 const sessionUser = {
 	id: 'u1',
@@ -48,6 +49,47 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 	await expect(page).toHaveURL(/\/notes$/);
 	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
 	expect(await page.evaluate(() => localStorage.getItem('token'))).toBe('signed-in-token');
+});
+
+test('a socket event sent right after signing in is not lost (#674)', async ({ page }) => {
+	await mockConfig(page, baseConfig);
+	await page.route('**/api/v1/auths/signin', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+	);
+	await page.route('**/api/v1/auths/', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+	);
+	await page.route('**/api/v1/auths/update/timezone', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+	);
+	const socket = await fakeSocketServer(page);
+
+	await page.goto('/auth?redirect=%2Fnotes');
+	await page.getByLabel('Email').fill('user@example.com');
+	await page.getByLabel('Password').fill('hunter2');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+
+	// The socket is created on the sign-in page but connects only once the
+	// app's shell has mounted its listeners, so one alert sent at once lands.
+	await socket.connected;
+	socket.emit('events', {
+		data: {
+			type: 'calendar:alert',
+			data: {
+				event_id: 'e1',
+				title: 'Dentist',
+				description: '',
+				start_at: 0,
+				minutes_until: 5,
+				calendar_id: 'personal',
+				location: ''
+			}
+		}
+	});
+	const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Dentist' }).first();
+	await expect(toast).toBeVisible();
+	await expect(toast).toContainText('Starting in 5 minutes');
+	await expect(page).toHaveURL(/\/notes$/);
 });
 
 test('a redirect that would leave the app is ignored: signing in lands home instead of failing', async ({ page }) => {

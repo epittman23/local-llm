@@ -167,6 +167,12 @@ describe('crash recovery', () => {
 			pgid: 4242,
 			startTicks: '9'
 		});
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","stopping":true}')).toEqual({
+			pgid: 4242,
+			startTicks: '9',
+			stopping: true
+		});
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","stopping":"yes"}')).toEqual({ pgid: 4242, startTicks: '9' });
 		expect(parseOwned('{"pgid":1,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('{"pgid":-5,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('nope')).toBeNull();
@@ -189,6 +195,19 @@ describe('ownedAction (#431)', () => {
 		expect(act(record, true, { ...here, origin: 'http://127.0.0.1:4100' })).toBe('stop');
 		expect(act(record, true, { ...here, repo: '/home/u/other' })).toBe('stop');
 		expect(act(record, true, { origin: 'https://llm.example.invalid', repo: here.repo, local: false })).toBe('stop');
+	});
+
+	it('adopts a stack started for 127.0.0.1 from a launch for localhost, and the other way round (#649)', () => {
+		expect(act(record, true, { ...here, origin: 'http://localhost:4000' })).toBe('adopt');
+		expect(act({ ...record, origin: 'http://localhost:4000' }, true)).toBe('adopt');
+		expect(act(record, true, { ...here, origin: 'http://localhost:4100' })).toBe('stop');
+		// make backend listens on 127.0.0.1 by default, so [::1] is another address.
+		expect(act(record, true, { ...here, origin: 'http://[::1]:4000' })).toBe('stop');
+	});
+
+	it('never adopts a stack an earlier launch was stopping, even for this address and checkout (#649)', () => {
+		expect(act({ ...record, stopping: true }, true)).toBe('stop');
+		expect(act({ ...record, stopping: true }, false)).toBe('none');
 	});
 
 	it('stops a running stack whose record predates the address and checkout', () => {
@@ -266,6 +285,27 @@ describe('stopGroup', () => {
 			llama: [777]
 		});
 		expect(group.signals).toEqual(['SIGINT:-4242', 'SIGKILL:-4242']);
+		expect(group.calls).toEqual(['timeout', 'compose down']);
+	});
+
+	it('without interrupting, waits for a group already sent its SIGINT and sends nothing (#649)', async () => {
+		const group = fakeGroup(14_000);
+		group.deps.kill(4242, 'SIGINT');
+		group.signals.length = 0;
+		expect(await stopGroup(4242, group.deps, { interrupt: false })).toEqual({ forced: false, llama: [] });
+		expect(group.signals).toEqual([]);
+		expect(group.calls).toEqual([]);
+	});
+
+	it('without interrupting, forces past the budget, never sending a SIGINT (#649)', async () => {
+		const group = fakeGroup(null);
+		group.deps.kill(4242, 'SIGINT');
+		group.signals.length = 0;
+		expect(await stopGroup(4242, group.deps, { budgetMs: 90_000, pollMs: 250, interrupt: false })).toEqual({
+			forced: true,
+			llama: [777]
+		});
+		expect(group.signals).toEqual(['SIGKILL:-4242']);
 		expect(group.calls).toEqual(['timeout', 'compose down']);
 	});
 

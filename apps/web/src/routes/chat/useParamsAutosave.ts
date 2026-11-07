@@ -9,13 +9,14 @@ import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
  * pending save, so it always lands in the chat it was edited in. A pending save
  * is made at once when the page unmounts, so leaving the page does not drop it
  * (#525), and when another chat opens, so going back to the chat straight away
- * loads the saved params. A new chat (no id) saves nothing here: its params go
- * with its first message.
+ * loads the saved params. One pending as the page goes away (a reload, a
+ * closed tab) is sent with keepalive, so it outlives the page (#675). A new
+ * chat (no id) saves nothing here: its params go with its first message.
  */
 export function useParamsAutosave(chatId: string | null | undefined, token: string) {
 	const save = useDebouncedCallback(
-		({ id, params }: { id: string; params: Record<string, unknown> }) =>
-			updateChatById(token, id, { params }).catch((e) => toast.error(`${e}`)),
+		({ id, params }: { id: string; params: Record<string, unknown> }, unloading: boolean) =>
+			updateChatById(token, id, { params }, null, unloading).catch((e) => toast.error(`${e}`)),
 		500
 	);
 	useEffect(() => {
