@@ -60,6 +60,9 @@ not the migration plan's original "new-york".
   server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
   stray one is left running, `cd apps/web && bunx astro dev stop`.
+- **The socket connects only once AppShell is mounted** (`useSocketReady`,
+  #674), so a socket consumer outside the shell, on a public page, never
+  gets a connected socket.
 - **`package.json` pins `@emnapi/core` and `@emnapi/runtime` to one
   version** (`overrides`). `@astrojs/astro2tsx` (under `@astrojs/check`)
   depends on the core but not the runtime, so it gets whichever runtime is
