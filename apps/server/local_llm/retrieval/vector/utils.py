@@ -19,18 +19,47 @@ KEYS_TO_EXCLUDE = [
 ]
 
 
-def filter_metadata(metadata: dict[str, any]) -> dict[str, any]:
+def metadata_max_value_chars(file_max_size_mb: Any) -> int | None:
+    """The cap on one list or dict metadata value, in characters; None for no cap.
+
+    RAG_METADATA_MAX_VALUE_CHARS when it is set. Otherwise the upload size limit,
+    `rag.file.max_size` in MB, which the caller reads at use time: the limit an
+    admin sets in Admin Settings > Documents, or RAG_FILE_MAX_SIZE when none is
+    saved. A document cannot legitimately carry more metadata than the file
+    itself is allowed to be, and left unbounded a small archive that expands
+    enormously during extraction can exhaust memory (#629). As for an upload,
+    an empty, zero or unreadable limit means none.
+    """
+    if RAG_METADATA_MAX_VALUE_CHARS is not None:
+        return RAG_METADATA_MAX_VALUE_CHARS
+    try:
+        return int(file_max_size_mb or 0) * 1024 * 1024 or None
+    except (TypeError, ValueError):
+        return None
+
+
+def _over_cap(value: Any, max_value_chars: int | None) -> bool:
+    if max_value_chars is None or not isinstance(value, (list, dict)):
+        return False
+    try:
+        return len(str(value)) > max_value_chars
+    except (MemoryError, RecursionError, ValueError):
+        return True
+
+
+def drop_oversized_values(metadata: dict[str, Any], max_value_chars: int | None) -> dict[str, Any]:
+    # Removes list and dict values over the cap, keeping everything else as it is.
+    return {key: value for key, value in metadata.items() if not _over_cap(value, max_value_chars)}
+
+
+def filter_metadata(metadata: dict[str, any], *, max_value_chars: int | None) -> dict[str, any]:
     # Removes large/redundant fields from metadata dict.
     result = {}
     for key, value in metadata.items():
         if key in KEYS_TO_EXCLUDE:
             continue
-        if RAG_METADATA_MAX_VALUE_CHARS is not None and isinstance(value, (list, dict)):
-            try:
-                if len(str(value)) > RAG_METADATA_MAX_VALUE_CHARS:
-                    continue
-            except (MemoryError, RecursionError, ValueError):
-                continue
+        if _over_cap(value, max_value_chars):
+            continue
         result[key] = value
     return result
 
@@ -47,12 +76,9 @@ def process_metadata(
             continue
         if value is None:
             continue
-        if RAG_METADATA_MAX_VALUE_CHARS is not None and isinstance(value, (list, dict)):
-            try:
-                if len(str(value)) > RAG_METADATA_MAX_VALUE_CHARS:
-                    continue
-            except (MemoryError, RecursionError, ValueError):
-                continue
+        # Only the explicit cap: save_docs_to_vector_db has already applied the upload limit.
+        if _over_cap(value, RAG_METADATA_MAX_VALUE_CHARS):
+            continue
         # Convert non-serializable fields to strings
         if isinstance(value, (dt.datetime, list, dict)):
             result[key] = sanitize_text_for_db(str(value))

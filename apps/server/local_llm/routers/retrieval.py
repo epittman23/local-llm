@@ -83,7 +83,7 @@ from local_llm.retrieval.utils import (
 )
 from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.retrieval.vector.factory import VECTOR_DB_CLIENT
-from local_llm.retrieval.vector.utils import filter_metadata
+from local_llm.retrieval.vector.utils import drop_oversized_values, filter_metadata, metadata_max_value_chars
 from local_llm.retrieval.web.azure import search_azure
 from local_llm.retrieval.web.bing import search_bing
 from local_llm.retrieval.web.bocha import search_bocha
@@ -1752,9 +1752,11 @@ def save_docs_to_vector_db(
         raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
 
     texts = [sanitize_text_for_db(doc.page_content) for doc in docs]
+    # The cap on a metadata value follows the upload size limit as config holds it now (#629).
+    max_value_chars = metadata_max_value_chars(getattr(config, 'FILE_MAX_SIZE', None))
     metadatas = [
         {
-            **doc.metadata,
+            **drop_oversized_values(doc.metadata, max_value_chars),
             **(metadata if metadata else {}),
             'embedding_config': {
                 'engine': config.RAG_EMBEDDING_ENGINE,
@@ -1998,11 +2000,12 @@ async def process_file_for(
                     }
                     docs = await loader.aload(file.filename, file.meta.get('content_type'), file_path)
 
+                    max_value_chars = metadata_max_value_chars(config.FILE_MAX_SIZE)
                     docs = [
                         Document(
                             page_content=doc.page_content,
                             metadata={
-                                **filter_metadata(doc.metadata),
+                                **filter_metadata(doc.metadata, max_value_chars=max_value_chars),
                                 'name': file.filename,
                                 'created_by': file.user_id,
                                 'file_id': file.id,
