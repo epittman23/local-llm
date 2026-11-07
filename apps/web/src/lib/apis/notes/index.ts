@@ -1,6 +1,7 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { getTimeRange } from '@/lib/utils/api-helpers';
 import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { keepaliveInit } from '@/lib/apis/keepalive';
 
 type NoteItem = {
 	title: string;
@@ -316,9 +317,12 @@ export const createNoteChatById = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateNoteById = async (token: string, id: string, note: NoteItem) => {
+export const updateNoteById = async (token: string, id: string, note: NoteItem, keepalive = false) => {
 	let error = null;
 
+	const body = JSON.stringify({
+		...note
+	});
 	const res = await fetch(`${WEBUI_API_BASE_URL}/notes/${id}/update`, {
 		method: 'POST',
 		headers: {
@@ -326,9 +330,8 @@ export const updateNoteById = async (token: string, id: string, note: NoteItem) 
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify({
-			...note
-		})
+		body,
+		...keepaliveInit(body, keepalive)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await errorBody(res);

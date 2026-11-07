@@ -249,18 +249,21 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	});
 
 	// --- name and description save themselves -------------------------------
-	// Leaving the page saves a pending change at once instead of dropping it.
-	const scheduleSave = useDebouncedCallback(async (next: Knowledge) => {
+	// Leaving the page saves a pending change at once instead of dropping it,
+	// with keepalive when the page itself goes away (#675).
+	const scheduleSave = useDebouncedCallback(async (next: Knowledge, unloading: boolean) => {
 		if (next.name.trim() === '' || next.description.trim() === '') {
 			toast.error('Please fill in all fields.');
 			return;
 		}
 		// Name and description only: the grants are the access dialog's to save,
 		// and these could be older than one it saved meanwhile (#522).
-		const res = await updateKnowledgeById(token, id, {
-			name: next.name,
-			description: next.description
-		}).catch((e) => {
+		const res = await updateKnowledgeById(
+			token,
+			id,
+			{ name: next.name, description: next.description },
+			unloading
+		).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		});
