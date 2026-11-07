@@ -1017,10 +1017,8 @@ async def unload_model(request: Request, form_data: ModelUnloadForm, user=Depend
         errors = []
         for idx in url_indices:
             url = ollama_base_urls[idx]
-            api_config = ollama_api_configs.get(
-                str(idx),
-                ollama_api_configs.get(url, {}),
-            )
+            # A null entry is read as empty (#632).
+            api_config = ollama_api_configs.get(str(idx), ollama_api_configs.get(url, {})) or {}
             key = api_config.get('key', None)
 
             prefix_id = api_config.get('prefix_id', None)
@@ -1061,7 +1059,7 @@ async def unload_model(request: Request, form_data: ModelUnloadForm, user=Depend
         openai_api_keys = openai_config.get('openai.api_keys') or []
         model_info = openai_models[model_id]
         idx = model_info.get('urlIdx')
-        api_config = openai_api_configs.get(str(idx), {})
+        api_config = openai_api_configs.get(str(idx)) or {}  # a null entry is read as empty (#632)
         provider = api_config.get('provider', '')
         base_url = openai_base_urls[idx]
         key = openai_api_keys[idx] if idx < len(openai_api_keys) else ''

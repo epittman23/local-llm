@@ -202,7 +202,7 @@ async def send_request(
 def get_api_key(idx, url, configs):
     parsed_url = urlparse(url)
     base_url = f'{parsed_url.scheme}://{parsed_url.netloc}'
-    return configs.get(str(idx), configs.get(base_url, {})).get('key', None)  # Legacy support
+    return (configs.get(str(idx), configs.get(base_url, {})) or {}).get('key', None)  # Legacy support
 
 
 ##########################################
@@ -325,7 +325,8 @@ async def update_config(
 ) -> dict:
     """Persist updated Ollama connection settings."""
     valid_keys = {str(i) for i in range(len(form_data.OLLAMA_BASE_URLS))}
-    api_configs = {k: v for k, v in form_data.OLLAMA_API_CONFIGS.items() if k in valid_keys}
+    # A null entry is stored as {}: the connection's readers call .get on it (#632).
+    api_configs = {k: v or {} for k, v in form_data.OLLAMA_API_CONFIGS.items() if k in valid_keys}
 
     await Config.upsert(
         {
@@ -385,8 +386,12 @@ def merge_models_lists(model_lists) -> list[dict]:
 
 
 def resolve_api_config(api_configs: dict, idx: int, url: str) -> dict:
-    """Look up the API config for a backend by numeric index, falling back to URL key (legacy)."""
-    return api_configs.get(str(idx), api_configs.get(url, {}))
+    """Look up the API config for a backend by numeric index, falling back to URL key (legacy).
+
+    An entry stored as null (an API save or a config import could store one)
+    is read as empty: every caller calls `.get(...)` on the result (#632).
+    """
+    return api_configs.get(str(idx), api_configs.get(url, {})) or {}
 
 
 async def get_ollama_connection_config() -> tuple[list, dict]:
@@ -573,10 +578,7 @@ async def get_ollama_versions(
     # Fan-out to every enabled backend
     tasks = []
     for idx, url in enumerate(await Config.get('ollama.base_urls', [])):
-        api_config = (await Config.get('ollama.api_configs', {})).get(
-            str(idx),
-            (await Config.get('ollama.api_configs', {})).get(url, {}),
-        )
+        api_config = resolve_api_config(await Config.get('ollama.api_configs', {}), idx, url)
         if api_config.get('enable', True):
             tasks.append(send_get_request(f'{url}/api/version', api_config.get('key')))
 
@@ -625,9 +627,7 @@ async def unload_model(
     errors = []
     for idx in url_indices:
         url = (await Config.get('ollama.base_urls', []))[idx]
-        api_config = (await Config.get('ollama.api_configs', {})).get(
-            str(idx), (await Config.get('ollama.api_configs', {})).get(url, {})
-        )
+        api_config = resolve_api_config(await Config.get('ollama.api_configs', {}), idx, url)
         key = get_api_key(idx, url, (await Config.get('ollama.api_configs', {})))
 
         prefix_id = api_config.get('prefix_id', None)
@@ -932,7 +932,7 @@ async def embed(
 
     base_urls, api_configs = await get_ollama_connection_config()
     url = base_urls[url_idx]
-    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))
+    api_config = resolve_api_config(api_configs, url_idx, url)
     key = get_api_key(url_idx, url, api_configs)
 
     prefix_id = api_config.get('prefix_id')
@@ -983,7 +983,7 @@ async def embeddings(
 
     base_urls, api_configs = await get_ollama_connection_config()
     url = base_urls[url_idx]
-    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))
+    api_config = resolve_api_config(api_configs, url_idx, url)
     key = get_api_key(url_idx, url, api_configs)
 
     prefix_id = api_config.get('prefix_id')
@@ -1039,7 +1039,7 @@ async def generate_completion(
 
     base_urls, api_configs = await get_ollama_connection_config()
     url = base_urls[url_idx]
-    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))
+    api_config = resolve_api_config(api_configs, url_idx, url)
 
     prefix_id = api_config.get('prefix_id')
     form_data.model = strip_provider_model_prefix(form_data.model, prefix_id)
@@ -1434,7 +1434,7 @@ async def generate_anthropic_messages(
 
     url, url_idx = await get_ollama_url(request, payload['model'], url_idx, user)
     api_configs = await Config.get('ollama.api_configs', {})
-    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))  # Legacy support
+    api_config = resolve_api_config(api_configs, url_idx, url)
 
     prefix_id = api_config.get('prefix_id', None)
     payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)
@@ -1492,7 +1492,7 @@ async def generate_responses(
 
     url, url_idx = await get_ollama_url(request, payload['model'], url_idx, user)
     api_configs = await Config.get('ollama.api_configs', {})
-    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))  # Legacy support
+    api_config = resolve_api_config(api_configs, url_idx, url)
 
     prefix_id = api_config.get('prefix_id', None)
     payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)

@@ -338,11 +338,20 @@ async def normalize_openai_api_keys(api_base_urls: list[str], api_keys: list[str
     return api_keys
 
 
+def resolve_api_config(api_configs: dict, idx: int, url: str) -> dict:
+    """Look up the API config for a connection by numeric index, falling back to URL key (legacy).
+
+    An entry stored as null (an API save or a config import could store one)
+    is read as empty: every caller calls `.get(...)` on the result (#632).
+    """
+    return api_configs.get(str(idx), api_configs.get(url, {})) or {}
+
+
 async def get_openai_connection(idx: int) -> tuple[str, str, dict]:
     _, api_base_urls, api_keys, api_configs = await get_openai_runtime_config()
     url = api_base_urls[idx]
     key = api_keys[idx]
-    api_config = api_configs.get(str(idx), api_configs.get(url, {}))
+    api_config = resolve_api_config(api_configs, idx, url)
     return url, key, api_config
 
 
@@ -566,7 +575,8 @@ async def update_config(request: Request, form_data: OpenAIConfigForm, user=Depe
         api_keys = [*api_keys, *([''] * (len(form_data.OPENAI_API_BASE_URLS) - len(api_keys)))]
 
     valid_keys = set(map(str, range(len(form_data.OPENAI_API_BASE_URLS))))
-    api_configs = {key: value for key, value in form_data.OPENAI_API_CONFIGS.items() if key in valid_keys}
+    # A null entry is stored as {}: the connection's readers call .get on it (#632).
+    api_configs = {key: value or {} for key, value in form_data.OPENAI_API_CONFIGS.items() if key in valid_keys}
 
     await Config.upsert(
         {
@@ -691,10 +701,7 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
         if (str(idx) not in api_configs) and (url not in api_configs):  # Legacy support
             request_tasks.append(get_models_request(request, url, api_keys[idx], user=user))
         else:
-            api_config = api_configs.get(
-                str(idx),
-                api_configs.get(url, {}),  # Legacy support
-            )
+            api_config = resolve_api_config(api_configs, idx, url)
 
             enable = api_config.get('enable', True)
             model_ids = api_config.get('model_ids', [])
@@ -726,10 +733,7 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
     for idx, response in enumerate(responses):
         if response:
             url = api_base_urls[idx]
-            api_config = api_configs.get(
-                str(idx),
-                api_configs.get(url, {}),  # Legacy support
-            )
+            api_config = resolve_api_config(api_configs, idx, url)
 
             connection_type = api_config.get('connection_type', 'external')
             prefix_id = api_config.get('prefix_id', None)
@@ -823,7 +827,7 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
             if model_list is not None and 'error' not in model_list:
                 base_url = api_base_urls[idx]
                 hostname = urlparse(base_url).hostname if base_url else None
-                api_config = api_configs.get(str(idx), api_configs.get(base_url, {}))
+                api_config = resolve_api_config(api_configs, idx, base_url)
 
                 for model in model_list:
                     model_id = model.get('id') or model.get('name')
