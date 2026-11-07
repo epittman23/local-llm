@@ -19,7 +19,6 @@ import asyncio
 import datetime as dt
 import itertools
 import logging
-import os
 import random
 import re
 import time
@@ -32,6 +31,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.datastructures import Headers
 
 from local_llm.constants import ERROR_MESSAGES
+from local_llm.env import int_env
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db
 from local_llm.models.automations import AutomationModel, AutomationRuns, Automations
@@ -48,14 +48,20 @@ from local_llm.utils.terminals import get_terminal_server_url
 
 log = logging.getLogger(__name__)
 
-SCHEDULER_POLL_INTERVAL = int(os.getenv('SCHEDULER_POLL_INTERVAL', os.getenv('AUTOMATION_POLL_INTERVAL', '10')))
-TIMER_POLL_INTERVAL = int(os.getenv('TIMER_POLL_INTERVAL', '1'))
-CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUTES', '10'))
+_scheduler_poll_interval = int_env('SCHEDULER_POLL_INTERVAL', None)
+SCHEDULER_POLL_INTERVAL = (
+    _scheduler_poll_interval if _scheduler_poll_interval is not None else int_env('AUTOMATION_POLL_INTERVAL', 10)
+)
+TIMER_POLL_INTERVAL = int_env('TIMER_POLL_INTERVAL', 1)
+CALENDAR_ALERT_LOOKAHEAD_MINUTES = int_env('CALENDAR_ALERT_LOOKAHEAD_MINUTES', 10)
 
 
 ####################
 # RRULE Helpers
 ####################
+
+# A sub-daily rule without a DTSTART runs on a grid from here (see `_parse_rule`).
+_EPOCH = dt.datetime(2000, 1, 1)
 
 
 def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
@@ -88,7 +94,11 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     if 'EXRULE' in upper:
         raise ValueError('EXRULE is not supported in recurrence rules')
 
-    parsed = rrulestr(s, ignoretz=True)
+    # Read from the epoch rather than dateutil's now, so a rule without a
+    # DTSTART is accepted or refused the same at any minute (#801): a
+    # sub-daily one has its grid's phase there, so a BY filter the grid
+    # misses raises whenever it is read. A longer one is read again below.
+    parsed = rrulestr(s, dtstart=_EPOCH, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     if len(rules) > 1:
         raise ValueError('only one RRULE is supported per recurrence rule')
@@ -146,8 +156,7 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
         # remaining run is at the original start, long past.
         return rrulestr(recounted, dtstart=moved if left > 0 else start, ignoretz=True)
 
-    epoch = dt.datetime(2000, 1, 1)
-    dtstart = epoch + ((anchor - epoch) // step) * step
+    dtstart = _EPOCH + ((anchor - _EPOCH) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
 
 
@@ -219,7 +228,7 @@ def _sub_daily(s: str) -> bool:
     frequency is then read from the rule's own text, which dateutil has just
     accepted: its parsed rule keeps it only in a private attribute.
     """
-    rrulestr(s, ignoretz=True)
+    rrulestr(s, dtstart=_EPOCH, ignoretz=True)
     match = _FREQ.search(s.upper())
     return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
 
@@ -342,9 +351,12 @@ def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
     own first `sample` occurrences rather than the next two after now, since a
     COUNT-bounded sub-daily rule's occurrences can all lie before now when it
     is parsed against the clock-aligned epoch start, and a rule such as
-    BYHOUR=9,10 has a short gap that the first pair may not show.
+    BYHOUR=9,10 has a short gap that the first pair may not show. A
+    sub-daily rule without a DTSTART is read from the epoch, as `_parse_rule`
+    reads it, not from dateutil's now, which refused some at an odd minute
+    only (#801); a longer one is sampled from now, as before.
     """
-    parsed = rrulestr(s, ignoretz=True)
+    parsed = rrulestr(s, dtstart=_EPOCH if _sub_daily(s) else None, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     if not rules:
         return None
@@ -396,6 +408,17 @@ async def scheduler_worker_loop(app) -> None:
         SCHEDULER_POLL_INTERVAL,
     )
     next_scheduler_poll = 0.0
+    task = asyncio.current_task()
+
+    def raise_if_cancelled() -> None:
+        # A cancel that lands in SQLAlchemy's pool pre-ping can come back as
+        # an Exception: psycopg's cleanup of the interrupted SELECT 1 is cut
+        # short by a second cancel (the lifespan's, then asyncio.run's), and
+        # resetting autocommit on the still-ACTIVE connection raises
+        # ProgrammingError over the CancelledError. Swallowed, the loop ran
+        # on and asyncio.run waited for it forever at exit (#817).
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError
 
     while True:
         try:
@@ -407,9 +430,11 @@ async def scheduler_worker_loop(app) -> None:
                 for timer_id, claim_id in await claim_due_timers(int(time.time_ns()), limit=10):
                     run_in_background(execute_due_timer(app, timer_id, claim_id))
             except Exception:
+                raise_if_cancelled()
                 log.exception('Scheduler: timer error')
 
             if now < next_scheduler_poll:
+                raise_if_cancelled()
                 await asyncio.sleep(max(1, TIMER_POLL_INTERVAL))
                 continue
             # Jitter to spread automation/calendar load across instances; timers keep a tight poll.
@@ -427,6 +452,7 @@ async def scheduler_worker_loop(app) -> None:
                     for automation in batch:
                         run_in_background(execute_automation(app, automation))
                 except Exception:
+                    raise_if_cancelled()
                     log.exception('Scheduler: automation error')
 
             # ── Calendar Alerts ──
@@ -434,11 +460,13 @@ async def scheduler_worker_loop(app) -> None:
                 try:
                     await _check_calendar_alerts(app)
                 except Exception:
+                    raise_if_cancelled()
                     log.exception('Scheduler: calendar alert error')
 
         except Exception:
             log.exception('Scheduler worker error')
 
+        raise_if_cancelled()
         await asyncio.sleep(max(1, TIMER_POLL_INTERVAL))
 
 

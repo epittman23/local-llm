@@ -27,6 +27,7 @@ import aiohttp
 
 from local_llm.benchmarks.serving.launcher import DEFAULT_PORT, resolve_model_path
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ResolvedConfig, resolve
+from local_llm.env import int_env
 from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 
 log = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def _to_profile_json(config: ResolvedConfig) -> dict:
         'arch': config.arch,
         'model': model_path,
         'alias': config.alias,
-        'port': int(os.environ.get('LLAMA_PORT') or DEFAULT_PORT),
+        'port': int_env('LLAMA_PORT', DEFAULT_PORT),
         'ctx': str(config.ctx),
         'threads': str(config.threads),
         'ngl': str(config.ngl),
@@ -114,7 +115,7 @@ def _to_profile_json(config: ResolvedConfig) -> dict:
 
 
 def port(prof: dict) -> int:
-    return int(os.environ.get('LLAMA_PORT') or prof.get('port') or DEFAULT_PORT)
+    return int_env('LLAMA_PORT', prof.get('port') or DEFAULT_PORT)
 
 
 async def served_model(session: aiohttp.ClientSession, p: int, prof: dict) -> str:
