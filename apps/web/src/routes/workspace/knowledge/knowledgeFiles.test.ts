@@ -334,4 +334,37 @@ describe('syncUploads (#317)', () => {
 		expect(upload).toHaveBeenCalledTimes(1);
 		expect(fake.holds()).toEqual(['d/a.docx=X']);
 	});
+
+	it('does not upload a duplicate again when the cleanup kept its old copy (#639)', async () => {
+		const fake = fakeBase({ oldA: { key: 'd/a.docx', text: 'X' } });
+		fake.texts['d/a.docx'] = 'X';
+		const d = syncDiff({ modified: [{ filename: 'a.docx', path: 'd', stale_file_id: 'oldA' }] });
+		const upload = vi.fn(fake.upload);
+
+		const result = await syncUploads([entry('d', 'a.docx')], d, upload, async (ids) => ids);
+
+		expect(result.failed).toBe(1);
+		expect(upload).toHaveBeenCalledTimes(1);
+		expect(fake.holds()).toEqual(['d/a.docx=X']);
+	});
+
+	it('still uploads a duplicate again when the cleanup kept only another file\u2019s old copy (#639)', async () => {
+		const fake = fakeBase({ oldA: { key: 'd/a.docx', text: 'X' }, oldB: { key: 'd/b.txt', text: 'Y' } });
+		Object.assign(fake.texts, { 'd/a.docx': 'X', 'd/b.txt': 'Z' });
+		const d = syncDiff({
+			modified: [
+				{ filename: 'a.docx', path: 'd', stale_file_id: 'oldA' },
+				{ filename: 'b.txt', path: 'd', stale_file_id: 'oldB' }
+			]
+		});
+		const keepB = async (ids: string[]) => {
+			await fake.remove(ids.filter((id) => id !== 'oldB'));
+			return ids.filter((id) => id === 'oldB');
+		};
+
+		const result = await syncUploads([entry('d', 'a.docx'), entry('d', 'b.txt')], d, fake.upload, keepB);
+
+		expect(result.failed).toBe(0);
+		expect(fake.holds()).toEqual(['d/a.docx=X', 'd/b.txt=Y', 'd/b.txt=Z']);
+	});
 });

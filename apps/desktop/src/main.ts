@@ -321,9 +321,11 @@ async function waitReady(origin: string, signal: AbortSignal, stopped: () => str
 	}
 }
 
+/** Written whole or not at all (#649): a kill or a full disk mid-write must not leave half a record. */
 function writeOwned(record: OwnedRecord): void {
 	mkdirSync(USER_DATA, { recursive: true });
-	writeFileSync(OWNED_FILE, `${JSON.stringify(record)}\n`);
+	writeFileSync(`${OWNED_FILE}.tmp`, `${JSON.stringify(record)}\n`);
+	renameSync(`${OWNED_FILE}.tmp`, OWNED_FILE);
 }
 
 function readOwned(): OwnedRecord | null {
@@ -331,6 +333,30 @@ function readOwned(): OwnedRecord | null {
 		return parseOwned(readFileSync(OWNED_FILE, 'utf8'));
 	} catch {
 		return null;
+	}
+}
+
+/**
+ * Marks the record as stopping, just before its one SIGINT (#649): a launch
+ * after a crash from here on waits for that stack, forcing it if need be,
+ * instead of adopting it or signalling it a second time, which makes uvicorn
+ * skip its teardown. A record that cannot be marked is removed: a stack left
+ * running is better than a second SIGINT.
+ */
+function markStopping(record: OwnedRecord): void {
+	try {
+		writeOwned({ ...record, stopping: true });
+	} catch {
+		forgetRecord();
+	}
+}
+
+/** Removes owned.json; a failure must not keep a stop from going on. */
+function forgetRecord(): void {
+	try {
+		rmSync(OWNED_FILE, { force: true });
+	} catch {
+		// Nothing more can be done about it here.
 	}
 }
 
@@ -508,30 +534,42 @@ async function stopEarlier(record: OwnedRecord): Promise<string | null> {
 		type: 'begin',
 		step: 'earlier',
 		at: Date.now(),
-		detail: record.origin ? `started for ${record.origin}` : undefined
+		detail: record.stopping
+			? 'an earlier launch began stopping it; waiting for it to finish'
+			: record.origin
+				? `started for ${record.origin}`
+				: undefined
 	});
-	// Forgotten first: a cancel or a crash from here on must never signal it a
-	// second time, since a second SIGINT makes uvicorn skip its teardown.
-	rmSync(OWNED_FILE, { force: true });
+	// One an earlier launch began stopping was sent its SIGINT then (#649).
+	if (!record.stopping) markStopping(record);
 	followLog(true);
 	const repo = record.repo ?? config.repoPath;
 	const env = childEnv(process.env);
 	// Kept, so a quit meanwhile waits for it (forced if need be) instead of leaving it half-stopped.
-	earlierStop = stopGroup(record.pgid, {
-		kill: process.kill,
-		sleep,
-		now: Date.now,
-		composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
-		leftoverLlama: llamaServerPids,
-		onTimeout: () => {
-			dispatch({ type: 'timeout', step: 'earlier', at: Date.now() });
-			dispatch({
-				type: 'begin',
-				step: 'force',
-				at: Date.now(),
-				detail: 'killing the process group, then docker compose down'
-			});
-		}
+	const stop = stopGroup(
+		record.pgid,
+		{
+			kill: process.kill,
+			sleep,
+			now: Date.now,
+			composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
+			leftoverLlama: llamaServerPids,
+			onTimeout: () => {
+				dispatch({ type: 'timeout', step: 'earlier', at: Date.now() });
+				dispatch({
+					type: 'begin',
+					step: 'force',
+					at: Date.now(),
+					detail: 'killing the process group, then docker compose down'
+				});
+			}
+		},
+		{ interrupt: !record.stopping }
+	);
+	// Forgotten once it is gone, before a quit waiting on it exits.
+	earlierStop = stop.then((result) => {
+		forgetRecord();
+		return result;
 	});
 	const result = await earlierStop;
 	earlierStop = null;
@@ -556,7 +594,7 @@ async function stopEarlier(record: OwnedRecord): Promise<string | null> {
 
 function forgetOwned(): void {
 	owned = null;
-	rmSync(OWNED_FILE, { force: true });
+	forgetRecord();
 }
 
 // --- Stopping ------------------------------------------------------------------
@@ -602,6 +640,8 @@ async function shutdown(): Promise<void> {
 
 	const repo = config.repoPath;
 	const env = childEnv(process.env);
+	const record = readOwned();
+	if (record?.pgid === owned.pgid) markStopping(record);
 	const result = await stopGroup(owned.pgid, {
 		kill: process.kill,
 		sleep,
