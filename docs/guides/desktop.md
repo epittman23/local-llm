@@ -85,6 +85,9 @@ otherwise has a minimal PATH. The requirements are the same as for
 
 If it started the stack, the dialog shows the shutdown:
 1. **The app window is destroyed.** Hiding it would keep its streams open.
+   First it loads a blank page, so the page's `pagehide` sends any edit
+   still in its autosave pause; it waits up to 2 s for that, then destroys
+   the window whether or not the page has finished.
 2. **One SIGINT goes to `make`'s process group,** exactly as Ctrl-C would.
    Never a second one: uvicorn takes a second SIGINT as "force exit" and skips
    the teardown that stops the served model.
