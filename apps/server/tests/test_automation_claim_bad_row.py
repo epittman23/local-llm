@@ -3,7 +3,7 @@
 The claim computed every claimed row's next run in one transaction, so an
 exception from one rolled the batch back, and the same rows came first on
 every poll: one rule that could not be read stalled every due automation.
-Such a row is now switched off, with a log line.
+Such a row is now switched off, with a log line and a failed run that says why.
 
 Run from apps/server:
 
@@ -57,7 +57,7 @@ def _insert(data: dict, next_run_at: int) -> str:
 
 
 def test_a_row_whose_next_run_cannot_be_computed_is_switched_off_and_the_rest_are_claimed(caplog):
-    from local_llm.models.automations import Automations
+    from local_llm.models.automations import AutomationRuns, Automations
 
     unreadable = _insert({'rrule': 'RRULE:FREQ=FORTNIGHTLY'}, EPOCH_2000_NS)
     missing = _insert({}, EPOCH_2000_NS)
@@ -67,10 +67,15 @@ def test_a_row_whose_next_run_cannot_be_computed_is_switched_off_and_the_rest_ar
 
     assert [a.id for a in claimed] == [good]
     assert claimed[0].next_run_at is not None
-    for automation_id in (unreadable, missing):
+    for automation_id, rule in ((unreadable, 'RRULE:FREQ=FORTNIGHTLY'), (missing, '')):
         row = asyncio.run(Automations.get_by_id(automation_id))
         assert (row.is_active, row.next_run_at, row.last_run_at) == (False, None, None)
         assert automation_id in caplog.text
+        # The user sees why, in its runs.
+        runs = asyncio.run(AutomationRuns.get_by_automation(automation_id))
+        assert [(r.status, r.chat_id) for r in runs] == [('error', None)]
+        assert runs[0].error.startswith(f'Switched off: its schedule {rule!r} cannot be read')
+    assert asyncio.run(AutomationRuns.get_by_automation(good)) == []
 
     # Switched off, they are not claimed again.
     assert asyncio.run(Automations.claim_due(EPOCH_2000_NS + 2 * DAY_NS)) == []
