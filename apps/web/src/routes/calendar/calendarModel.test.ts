@@ -169,6 +169,15 @@ describe('event form', () => {
 			endDate: ''
 		});
 	});
+	it('a rule stored with an RRULE: prefix or a DTSTART line reads as the menu rule it is (#707)', () => {
+		expect(repeatFromRrule('RRULE:FREQ=DAILY')).toBe('daily');
+		expect(repeatFromRrule('rrule:freq=weekly;byday=MO,TU,WE,TH,FR')).toBe('weekdays');
+		expect(repeatFromRrule('DTSTART:20261001T090000\nRRULE:FREQ=DAILY')).toBe('daily');
+		expect(repeatFromRrule('DTSTART;TZID=Europe/London:20261001T090000\r\nFREQ=MONTHLY')).toBe('monthly');
+		// Any other line changes what the rule does, so the menu cannot show it.
+		expect(repeatFromRrule('RRULE:FREQ=DAILY\nEXDATE:20261005T090000')).toBe('custom');
+		expect(repeatFromRrule('DTSTART:20261001T090000\nRRULE:FREQ=DAILY;INTERVAL=2')).toBe('custom');
+	});
 	it('needs a title; all-day spans the day; blanks are left out', () => {
 		const f = eventFields(null, 'cal', ns(at(2026, 8, 1, 9)));
 		expect(eventPayload(f, null)).toEqual({ error: 'Title is required' });
@@ -243,6 +252,27 @@ describe('clearing a field of an existing event (#158)', () => {
 			ns(at(2026, 8, 1, 9))
 		);
 		expect('form' in single && single.form).toMatchObject({ rrule: null, start_at: ns(at(2026, 8, 15, 9)) });
+	});
+	it('a menu rule stored in another form is kept as it was through an edit, and replaced when changed (#707)', () => {
+		const rule = 'DTSTART:20260901T090000\nRRULE:FREQ=DAILY';
+		const daily = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), { rrule: rule });
+		const renamed = eventPayload({ ...eventFields(daily, '', null), title: 'Renamed' }, daily);
+		expect('form' in renamed && renamed.form.rrule).toBe(rule);
+		const weekly = eventPayload({ ...eventFields(daily, '', null), repeat: 'weekly' }, daily);
+		expect('form' in weekly && weekly.form.rrule).toBe('FREQ=WEEKLY');
+		// From one of its occurrences, the series keeps its own start too (#318).
+		const occurrence = {
+			...daily,
+			start_at: ns(at(2026, 8, 15, 9)),
+			end_at: ns(at(2026, 8, 15, 10)),
+			instance_id: 'x'
+		};
+		const out = eventPayload(
+			{ ...eventFields(occurrence, '', null), title: 'Renamed' },
+			occurrence,
+			ns(at(2026, 8, 1, 9))
+		);
+		expect('form' in out && out.form).toMatchObject({ rrule: rule, start_at: ns(at(2026, 8, 1, 9)) });
 	});
 	it('clearing Repeat on an occurrence makes it one event at that occurrence', () => {
 		const daily = ev(at(2026, 8, 20, 9), at(2026, 8, 20, 10), { rrule: 'FREQ=DAILY', instance_id: 'x' });
