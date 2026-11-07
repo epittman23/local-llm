@@ -264,7 +264,8 @@ describe('KnowledgeBasePage name and description autosave (#228)', () => {
 		expect(updateKnowledgeById).toHaveBeenCalledWith(
 			't',
 			'kb1',
-			expect.objectContaining({ name: 'Renamed', description: 'desc' })
+			expect.objectContaining({ name: 'Renamed', description: 'desc' }),
+			false
 		);
 	});
 
@@ -277,7 +278,20 @@ describe('KnowledgeBasePage name and description autosave (#228)', () => {
 		expect(updateKnowledgeById).toHaveBeenCalledWith(
 			't',
 			'kb1',
-			expect.objectContaining({ name: 'Renamed', description: 'new desc' })
+			expect.objectContaining({ name: 'Renamed', description: 'new desc' }),
+			false
+		);
+	});
+
+	it('saves an edit as the page goes away, with keepalive (#675)', async () => {
+		await openWithFakeTimers();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		window.dispatchEvent(new Event('pagehide'));
+		expect(updateKnowledgeById).toHaveBeenCalledExactlyOnceWith(
+			't',
+			'kb1',
+			expect.objectContaining({ name: 'Renamed', description: 'desc' }),
+			true
 		);
 	});
 

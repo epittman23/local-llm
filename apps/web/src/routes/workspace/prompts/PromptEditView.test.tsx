@@ -55,7 +55,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
-		expect(updatePromptMetadata).toHaveBeenCalledWith('t', 'p1', 'Summary v2', 'summary', ['writing']);
+		expect(updatePromptMetadata).toHaveBeenCalledWith('t', 'p1', 'Summary v2', 'summary', ['writing'], false);
 	});
 
 	it('saves the last name and command when leaving after several quick edits', () => {
@@ -64,7 +64,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		fireEvent.change(screen.getByLabelText('Command'), { target: { value: 'summary-v2' } });
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
-		expect(updatePromptMetadata).toHaveBeenCalledWith('t', 'p1', 'Summary v2', 'summary-v2', ['writing']);
+		expect(updatePromptMetadata).toHaveBeenCalledWith('t', 'p1', 'Summary v2', 'summary-v2', ['writing'], false);
 	});
 
 	it('saves with the token current when leaving, not the one current at the edit', () => {
@@ -72,7 +72,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
 		act(() => useAuthStore.setState({ token: 't2' }));
 		view.unmount();
-		expect(updatePromptMetadata).toHaveBeenCalledWith('t2', 'p1', 'Summary v2', 'summary', ['writing']);
+		expect(updatePromptMetadata).toHaveBeenCalledWith('t2', 'p1', 'Summary v2', 'summary', ['writing'], false);
 	});
 
 	it('does not save again on leaving once the pause has saved the edit', () => {
@@ -82,6 +82,13 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
+	});
+
+	it('saves a name edit as the page goes away, with keepalive (#675)', () => {
+		renderView();
+		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		act(() => void window.dispatchEvent(new Event('pagehide')));
+		expect(updatePromptMetadata).toHaveBeenCalledExactlyOnceWith('t', 'p1', 'Summary v2', 'summary', ['writing'], true);
 	});
 
 	it('saves nothing on leaving a prompt the user may not edit', () => {
