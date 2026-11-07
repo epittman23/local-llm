@@ -133,11 +133,18 @@ export const CUSTOM_REPEAT = 'custom';
 /**
  * The repeat option for a stored RRULE: '' (no repeat) for none, and
  * CUSTOM_REPEAT for a rule the form cannot express, so choosing No Repeat can
- * clear it (#510).
+ * clear it (#510). A DTSTART line and an `RRULE:` prefix are ignored, as the
+ * server ignores them when it repeats the event from its own start (#707).
  */
 export function repeatFromRrule(rrule: string | null | undefined): string {
 	if (!rrule) return '';
-	const normalized = rrule.toUpperCase().replace(/\s/g, '');
+	const normalized = rrule
+		.split('\n')
+		.filter((line) => !line.trim().toUpperCase().startsWith('DTSTART'))
+		.join('')
+		.toUpperCase()
+		.replace(/\s/g, '')
+		.replace(/^RRULE:/, '');
 	return Object.entries(REPEAT_RRULES).find(([, v]) => v === normalized)?.[0] ?? CUSTOM_REPEAT;
 }
 
@@ -300,7 +307,11 @@ export function eventPayload(
 			all_day: f.allDay,
 			// A rule the Repeat menu cannot show opens as "Custom rule"; left out
 			// while that is chosen, so the update keeps it. No Repeat clears it.
-			rrule: f.repeat === CUSTOM_REPEAT ? undefined : REPEAT_RRULES[f.repeat] || blank,
+			// An unchanged choice sends the rule as it was stored (#707).
+			rrule:
+				f.repeat === CUSTOM_REPEAT
+					? undefined
+					: (editing && f.repeat === repeatFromRrule(editing.rrule) ? editing.rrule : REPEAT_RRULES[f.repeat]) || blank,
 			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}
