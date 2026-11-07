@@ -75,7 +75,10 @@ not the migration plan's original "new-york".
   to call it off. A folder's new chat waits for the folder in the same way,
   so a send made just after leaving a saved chat no longer goes with that
   chat's models, and `?q=` sends through the same wait, so it goes with the
-  model's default tools and switches (#659).
+  model's default tools and switches (#659). `?q=` is sent from the box, so
+  with `?load-url=` it also waits for that page to upload and goes with it;
+  if the page fails while the send waits for it, the page is dropped and
+  `q` stays in the box, unsent.
 - **Enter while an attachment is still uploading** holds the message
   ("Sends when the upload finishes") and sends it once every upload is
   done and the chat is not reloading (Chat.svelte cleared the box and

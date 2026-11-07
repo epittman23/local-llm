@@ -57,7 +57,9 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 			setChosen(true);
 			return;
 		}
-		if (folderId && !folder.isFetched) return;
+		// Not ready again until the folder's models are picked: counted ready as it
+		// lands, a send went before their default tools and switches were set.
+		if (folderId && !folder.isFetched) return setChosen(false);
 		const key = `new:${folderId ?? ''}`;
 		if (pickedFor.current !== key) {
 			pickedFor.current = key;

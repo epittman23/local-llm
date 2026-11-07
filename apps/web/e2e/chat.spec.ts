@@ -356,9 +356,16 @@ test('a send waiting for the model list can be called off (#659)', async ({ page
 	await expect(page.getByText('Sends when the models load')).toHaveCount(0);
 	release();
 	await expect(page.getByRole('heading', { name: 'Llama' })).toBeVisible();
-	await page.waitForTimeout(500);
-	expect(chat.seen.completions).toHaveLength(0);
 	await expect(box).toHaveValue('not yet');
+	// Sent now, the box goes whole and as the only request: had the called-off
+	// send gone once the models loaded, it would have gone first, without " now".
+	await box.press('End');
+	await page.keyboard.type(' now');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', user_message: { content: 'not yet now' } });
+	await expect(box).toHaveValue('');
+	expect(chat.seen.completions).toHaveLength(1);
 });
 
 test("`?q=` goes with the model's default tools (#659)", async ({ page }) => {
