@@ -1,3 +1,4 @@
+import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
 import { DEFAULT_CAPABILITIES } from '@/lib/constants';
 import { configuredParams } from '../interfaceTasks';
 
@@ -251,6 +252,20 @@ export const nextAccessGrants = (model: Rec): Rec[] =>
 	isPublicModel(model)
 		? []
 		: [...(model.access_grants ?? []), { principal_type: 'user', principal_id: '*', permission: 'read' }];
+
+/**
+ * What a visibility toggle did (#804): the grants to show, which are the ones
+ * the server stored (it drops those this user may not set), and the toast. A
+ * reply with no grant list keeps the sent grants. A reply that dropped some
+ * warns instead of saying the model is now public or private.
+ */
+export const privacyOutcome = (sent: Rec[], res: Rec): { grants: Rec[]; kind: 'success' | 'warning'; text: string } => {
+	const grants = Array.isArray(res.access_grants) ? res.access_grants : sent;
+	if (grantsDropped(sent as AccessGrant[], res.access_grants)) {
+		return { grants, kind: 'warning', text: DROPPED_GRANTS_WARNING };
+	}
+	return { grants, kind: 'success', text: grants.length > 0 ? 'Model is now public' : 'Model is now private' };
+};
 
 // --- import ------------------------------------------------------------------------
 
