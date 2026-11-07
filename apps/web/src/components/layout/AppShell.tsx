@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useUserSettings } from '@/lib/settings/userSettings';
+import { useSocketReady } from '@/lib/socket/SocketProvider';
 import { setAppFontFamily, setTextScale } from '@/lib/utils/textScale';
 import { useShortcuts } from '@/lib/useShortcuts';
 import { useUIStore } from '@/lib/stores/uiStore';
@@ -33,6 +34,9 @@ export function AppShell() {
 	useSettingsUrl();
 	useChannelUnreadEvents();
 	useCalendarAlerts();
+	// The socket connects once the shell and its route have attached their
+	// listeners, so nothing sent right after a sign-in is lost (#674).
+	useSocketReady(authStatus === 'authenticated');
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
