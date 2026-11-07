@@ -67,7 +67,9 @@ const h = vi.hoisted(() => {
 		/** Builds the next spawned child; the default is one that started (#433). */
 		spawnChild: null as (() => unknown) | null,
 		/** owned.json operations that fail, as a full disk or a read-only directory would (#649). */
-		ownedFails: { rename: false, rm: false }
+		ownedFails: { rename: false, rm: false },
+		/** How the app page's own load settles; it loads at once by default (#803). */
+		pageLoad: null as (() => Promise<void>) | null
 	};
 	let nextId = 1;
 
@@ -107,7 +109,7 @@ const h = vi.hoisted(() => {
 		}
 		loadURL(u: string) {
 			this.loaded = u;
-			return Promise.resolve();
+			return (u.startsWith('http') && state.pageLoad?.()) || Promise.resolve();
 		}
 		/** A user's close: 'close' listeners may preventDefault; true when the window closed. */
 		userClose(): boolean {
@@ -166,6 +168,7 @@ const h = vi.hoisted(() => {
 		state.devServer = null;
 		state.spawnChild = null;
 		state.ownedFails = { rename: false, rm: false };
+		state.pageLoad = null;
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -444,6 +447,94 @@ test('a forced stop that left the services fails the force step, and mentions a 
 	expect(shown.progress.error).toContain('1 container is still there');
 	expect(shown.progress.error).toContain('llama-server');
 	expect(h.state.exits).toEqual([]);
+});
+
+// --- The page's pending saves, before the window goes (#803) --------------------
+
+/** A running app window whose blank-page load the test holds. */
+async function heldUnload(unload: () => Promise<void>) {
+	await launch();
+	const win = appWindows()[0];
+	if (!win) throw new Error('no app window');
+	win.emit('ready-to-show');
+	await tick(10);
+	const loads: string[] = [];
+	win.loadURL = (url: string) => {
+		loads.push(url);
+		return url === 'about:blank' ? unload() : Promise.resolve();
+	};
+	return { win, loads };
+}
+
+test('closing the app unloads the page, so its pagehide sends pending saves, before destroying it and stopping (#803)', async () => {
+	let unloaded: () => void = () => {};
+	const { win, loads } = await heldUnload(() => new Promise<void>((resolve) => (unloaded = resolve)));
+
+	expect(win.userClose()).toBe(false);
+	await tick(50);
+	expect(loads).toEqual(['about:blank']);
+	// Still unloading: not destroyed, and the stack not signalled yet.
+	expect(win.isDestroyed()).toBe(false);
+	expect(h.state.stops).toEqual([]);
+
+	unloaded();
+	await tick(20);
+	expect(win.isDestroyed()).toBe(true);
+	expect(h.state.stops).toEqual([990201]);
+	await tick(700);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a page that never finishes unloading is destroyed after 2 s, and the stop goes on (#803)', async () => {
+	const { win } = await heldUnload(() => new Promise<void>(() => {}));
+
+	expect(win.userClose()).toBe(false);
+	await tick(1000);
+	expect(win.isDestroyed()).toBe(false);
+	expect(h.state.stops).toEqual([]);
+
+	await tick(1200);
+	expect(win.isDestroyed()).toBe(true);
+	expect(h.state.stops).toEqual([990201]);
+	await tick(700);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('the app page load the blank page aborts raises no unhandled rejection (#803)', async () => {
+	let abort: () => void = () => {};
+	h.state.pageLoad = () =>
+		new Promise<void>((_resolve, reject) => {
+			abort = () =>
+				reject(Object.assign(new Error('ERR_ABORTED (-3) loading http://127.0.0.1:4000'), { code: 'ERR_ABORTED' }));
+		});
+	const unhandled: unknown[] = [];
+	const record = (reason: unknown) => unhandled.push(reason);
+	process.on('unhandledRejection', record);
+	try {
+		await launch();
+		const win = appWindows()[0];
+		win?.emit('ready-to-show');
+		await tick(10);
+		win?.userClose();
+		abort(); // what loading about:blank does to a load still in flight
+		await tick(50);
+	} finally {
+		process.off('unhandledRejection', record);
+	}
+
+	expect(unhandled).toEqual([]);
+	expect(h.state.stops).toEqual([990201]);
+	await tick(700);
+});
+
+test('a blank-page load that fails still destroys the window and stops (#803)', async () => {
+	const { win } = await heldUnload(() => Promise.reject(new Error('ERR_ABORTED')));
+
+	win.userClose();
+	await tick(50);
+	expect(win.isDestroyed()).toBe(true);
+	expect(h.state.stops).toEqual([990201]);
+	await tick(700);
 });
 
 // --- A stack an earlier launch started, found in owned.json (#431) -------------
