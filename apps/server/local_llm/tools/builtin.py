@@ -65,7 +65,7 @@ from local_llm.routers.memories import (
 from local_llm.routers.retrieval import search_web as _search_web
 from local_llm.socket.main import sio
 from local_llm.tasks import stop_item_tasks
-from local_llm.tools.knowledge_fs import kb_exec  # noqa: F401 — re-exported
+from local_llm.tools.knowledge_fs import kb_exec, split_lines  # noqa: F401 — re-exported
 from local_llm.utils.chat_id import is_saved_chat_id
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.notifications import notify_target
@@ -2753,16 +2753,31 @@ async def grep_knowledge_files(
         return JSONCodec.dumps({'error': str(e)})
 
 
-def _lines_page(content: str, start_line, end_line) -> dict:
-    """Lines start_line..end_line (1-indexed, inclusive; 100 when end_line is unset), numbered, as view_file's fields.
+def _line_arg(value, name: str) -> int | None:
+    """A start_line / end_line from a tool call, which may come as text; None when unset. Raises ValueError."""
+    if value is None or value == '':
+        return None
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    elif isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise ValueError(f'{name} must be a whole number, got {value!r}')
 
-    A range that selects nothing (it starts past the end, or ends before it
+
+def _lines_page(content: str, start_line: int, end_line: int | None) -> dict:
+    """Lines start_line..end_line (1-indexed, inclusive; 100 when end_line is unset or 0), numbered, as view_file does.
+
+    Lines are split on '\\n' only, and a final newline ends the last line
+    rather than starting another (#666). A range that selects nothing (it starts past the end, or ends before it
     starts) says so in `note`, instead of a reversed `showing_lines` (#513).
     """
-    all_lines = content.split('\n')
+    all_lines = split_lines(content)
     total_lines = len(all_lines)
-    s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
-    e = min(total_lines, int(end_line) if end_line else s + 100)
+    s = max(1, start_line) - 1  # 1-indexed to 0-indexed
+    e = min(total_lines, end_line if end_line else s + 100)
     if e <= s:
         why = 'start_line is past the end of the file' if s >= total_lines else 'end_line is before start_line'
         return {'content': '', 'total_lines': total_lines, 'note': f'No lines: {why}.'}
@@ -2783,6 +2798,8 @@ def _number_page(content: str, offset: int, sliced: str) -> tuple[str, bool]:
     A page that ends on a newline gives the empty rest after it no number:
     that number is the next page's first line, which showed it twice (#513).
     """
+    if not sliced:
+        return '', False
     start_ln = content[:offset].count('\n') + 1
     lines = sliced.split('\n')
     numbered = [f'{start_ln + i}: {line}' for i, line in enumerate(lines)]
@@ -2809,8 +2826,8 @@ async def view_file(
     :param offset: Character offset to start reading from (default: 0)
     :param max_chars: Maximum characters to return (a server-side hard cap applies)
     :param line_numbers: If true, prefix each line with its 1-indexed line number
-    :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
-    :param end_line: Optional 1-indexed end line (inclusive)
+    :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set; 0 reads as 1)
+    :param end_line: Optional 1-indexed end line (inclusive; unset or 0 means 100 lines from start_line)
     :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
         with line_numbers, first_line_continued is true when the page starts mid-line; a line range
         that selects nothing returns empty content and a note saying why
@@ -2832,6 +2849,12 @@ async def view_file(
             max_chars = int(max_chars)
         except ValueError:
             max_chars = VIEW_FILE_DEFAULT_MAX_CHARS
+
+    try:
+        start_line = _line_arg(start_line, 'start_line')
+        end_line = _line_arg(end_line, 'end_line')
+    except ValueError as e:
+        return JSONCodec.dumps({'error': str(e)})
 
     # Enforce hard cap
     max_chars = min(max(max_chars, 1), VIEW_FILE_MAX_CHARS)
@@ -2917,8 +2940,8 @@ async def view_knowledge_file(
     :param offset: Character offset to start reading from (default: 0)
     :param max_chars: Maximum characters to return (a server-side hard cap applies)
     :param line_numbers: If true, prefix each line with its 1-indexed line number
-    :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
-    :param end_line: Optional 1-indexed end line (inclusive)
+    :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set; 0 reads as 1)
+    :param end_line: Optional 1-indexed end line (inclusive; unset or 0 means 100 lines from start_line)
     :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
         with line_numbers, first_line_continued is true when the page starts mid-line; a line range
         that selects nothing returns empty content and a note saying why
@@ -2940,6 +2963,12 @@ async def view_knowledge_file(
             max_chars = int(max_chars)
         except ValueError:
             max_chars = VIEW_FILE_DEFAULT_MAX_CHARS
+
+    try:
+        start_line = _line_arg(start_line, 'start_line')
+        end_line = _line_arg(end_line, 'end_line')
+    except ValueError as e:
+        return JSONCodec.dumps({'error': str(e)})
 
     # Enforce hard cap
     max_chars = min(max(max_chars, 1), VIEW_FILE_MAX_CHARS)
