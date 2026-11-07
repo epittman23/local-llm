@@ -149,3 +149,19 @@ def test_llama_port_reads_leniently(monkeypatch, value, profile, expected):
         monkeypatch.setenv('LLAMA_PORT', value)
 
     assert env_profile.port(profile) == expected
+
+
+@pytest.mark.parametrize(
+    'module', ['local_llm.benchmarks.serving.telemetry_recorder', 'local_llm.benchmarks.analysis.stats']
+)
+def test_the_recorder_side_imports_do_not_load_the_settings_module(tmp_path, module):
+    data_dir = tmp_path / 'data'
+    env = {'PATH': os.environ['PATH'], 'DATA_DIR': str(data_dir), 'HOME': str(tmp_path)}
+    script = f'import sys, {module}; assert "local_llm.env" not in sys.modules'
+
+    result = subprocess.run(
+        [sys.executable, '-c', script], cwd=SERVER_DIR, env=env, capture_output=True, text=True, timeout=600
+    )
+
+    assert result.returncode == 0, result.stderr[-3000:]
+    assert not data_dir.exists()

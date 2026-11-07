@@ -62,7 +62,7 @@ from psycopg.types.json import Jsonb
 
 from local_llm.benchmarks.analysis import stats
 from local_llm.benchmarks.serving.gpu import sample_gpu
-from local_llm.env import float_env, int_env
+from local_llm.utils.env_numbers import float_env, int_env
 
 # Consecutive failed port probes before concluding the server is gone. This is
 # the fallback stop condition; the normal one is a SIGTERM from the router.

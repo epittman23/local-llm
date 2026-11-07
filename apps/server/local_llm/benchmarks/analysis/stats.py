@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 
-from local_llm.env import int_env
+from local_llm.utils.env_numbers import int_env
 
 # ---------------------------------------------------------------------------
 # markdown tables -- output only, never parsed back
