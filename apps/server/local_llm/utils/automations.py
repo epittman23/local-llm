@@ -19,7 +19,6 @@ import asyncio
 import datetime as dt
 import itertools
 import logging
-import os
 import random
 import re
 import time
@@ -32,6 +31,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.datastructures import Headers
 
 from local_llm.constants import ERROR_MESSAGES
+from local_llm.env import int_env
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db
 from local_llm.models.automations import AutomationModel, AutomationRuns, Automations
@@ -48,9 +48,12 @@ from local_llm.utils.terminals import get_terminal_server_url
 
 log = logging.getLogger(__name__)
 
-SCHEDULER_POLL_INTERVAL = int(os.getenv('SCHEDULER_POLL_INTERVAL', os.getenv('AUTOMATION_POLL_INTERVAL', '10')))
-TIMER_POLL_INTERVAL = int(os.getenv('TIMER_POLL_INTERVAL', '1'))
-CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUTES', '10'))
+_scheduler_poll_interval = int_env('SCHEDULER_POLL_INTERVAL', None)
+SCHEDULER_POLL_INTERVAL = (
+    _scheduler_poll_interval if _scheduler_poll_interval is not None else int_env('AUTOMATION_POLL_INTERVAL', 10)
+)
+TIMER_POLL_INTERVAL = int_env('TIMER_POLL_INTERVAL', 1)
+CALENDAR_ALERT_LOOKAHEAD_MINUTES = int_env('CALENDAR_ALERT_LOOKAHEAD_MINUTES', 10)
 
 
 ####################

@@ -62,6 +62,7 @@ from psycopg.types.json import Jsonb
 
 from local_llm.benchmarks.analysis import stats
 from local_llm.benchmarks.serving.gpu import sample_gpu
+from local_llm.env import float_env, int_env
 
 # Consecutive failed port probes before concluding the server is gone. This is
 # the fallback stop condition; the normal one is a SIGTERM from the router.
@@ -569,8 +570,8 @@ def main() -> int:
         help='the llama-server process this run is for; the run opens only once that process holds the port',
     )
     ap.add_argument('--server-log', default=os.environ.get('LLAMA_SERVER_LOG', ''))
-    ap.add_argument('--interval', type=float, default=float(os.environ.get('LLAMA_VRAM_INTERVAL', '5')))
-    ap.add_argument('--wait', type=int, default=int(os.environ.get('LLAMA_VRAM_WAIT', '600')))
+    ap.add_argument('--interval', type=float, default=float_env('LLAMA_VRAM_INTERVAL', 5.0))
+    ap.add_argument('--wait', type=int, default=int_env('LLAMA_VRAM_WAIT', 600))
     ap.add_argument(
         '--database-url',
         default=None,

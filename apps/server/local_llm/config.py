@@ -2430,11 +2430,23 @@ if _oauth_authorize_params:
         log.warning('OAUTH_AUTHORIZE_PARAMS is not valid JSON, ignoring')
 
 
+def _oauth_timeout_kwargs() -> dict:
+    """`OAUTH_TIMEOUT` as a client `timeout`, or nothing when it is empty or not a whole number (#795)."""
+    value = str(OAUTH_TIMEOUT or '').strip()
+    if not value:
+        return {}
+    try:
+        return {'timeout': int(value)}
+    except ValueError:
+        log.warning('OAUTH_TIMEOUT=%r is not a whole number; no timeout is set', value)
+        return {}
+
+
 def oauth_client_kwargs(scope: str, **kwargs):
     client_kwargs = {
         'scope': scope,
         **kwargs,
-        **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
+        **(_oauth_timeout_kwargs()),
     }
 
     if OAUTH_CODE_CHALLENGE_METHOD == 'S256':
@@ -2544,7 +2556,7 @@ def load_oauth_providers():
                 userinfo_endpoint='https://open.feishu.cn/open-apis/authen/v1/user_info',
                 client_kwargs={
                     'scope': FEISHU_OAUTH_SCOPE,
-                    **({'timeout': int(OAUTH_TIMEOUT)} if OAUTH_TIMEOUT else {}),
+                    **(_oauth_timeout_kwargs()),
                 },
                 redirect_uri=FEISHU_REDIRECT_URI,
             )

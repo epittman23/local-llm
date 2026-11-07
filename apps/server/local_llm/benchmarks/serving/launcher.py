@@ -39,6 +39,7 @@ from local_llm.benchmarks.serving.build_info import llama_server_build
 from local_llm.benchmarks.serving.fingerprint import FIT, config_id, config_lines
 from local_llm.benchmarks.serving.model_name import split_model
 from local_llm.benchmarks.serving.profiles import ARCH_DENSE, ResolvedConfig
+from local_llm.env import int_env
 
 log = logging.getLogger(__name__)
 
@@ -342,7 +343,7 @@ class ServeProcess:
     def __post_init__(self) -> None:
         self.llama_bin = self.llama_bin or os.environ.get('LLAMA_BIN') or str(Path.home() / 'llama.cpp/build/bin')
         self.host = self.host or os.environ.get('LLAMA_HOST') or DEFAULT_HOST
-        self.port = self.port or int(os.environ.get('LLAMA_PORT') or DEFAULT_PORT)
+        self.port = self.port or int_env('LLAMA_PORT', DEFAULT_PORT)
 
     async def start(self) -> None:
         binary = Path(self.llama_bin) / 'llama-server'
