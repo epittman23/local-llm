@@ -209,7 +209,10 @@ async def get_async_tool_function_and_apply_extra_params(
             annotation = type_hints.get(name, sig.parameters[name].annotation)
             args = set(get_args(annotation))
             if isinstance(value, str) and (annotation is int or args == {int, type(None)}):
-                kwargs[name] = int(value)
+                try:
+                    kwargs[name] = int(value)
+                except ValueError:
+                    pass  # the tool reports a value it cannot read in its own words
             elif (
                 isinstance(value, (int, float))
                 and not isinstance(value, bool)

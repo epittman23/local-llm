@@ -741,7 +741,7 @@ def _parse_grep_args(args: list[str]) -> tuple[str, str | None, str | None, str 
 
 def _matching_lines(text: str, matches) -> list[tuple[int, str]]:
     """(line number, line) for each line that matches, numbered from 1."""
-    return [(i, line) for i, line in enumerate(text.split('\n'), 1) if matches(line)]
+    return [(i, line) for i, line in enumerate(split_lines(text), 1) if matches(line)]
 
 
 def _grep_piped(piped_input: str, matches, pattern: str, count_only: bool, filenames_only: bool) -> str:
@@ -980,7 +980,7 @@ async def _kb_sed(
             if m:
                 start, end = int(m.group(1)), int(m.group(2))
                 args = args[1:]
-        lines = piped_input.split('\n')
+        lines = split_lines(piped_input)
         selected = lines[max(0, start - 1) : (end or len(lines))]
         return '\n'.join(selected)
 
@@ -1010,7 +1010,7 @@ async def _kb_sed(
     if 'error' in resolved:
         return resolved['error']
 
-    lines = resolved['content'].split('\n')
+    lines = split_lines(resolved['content'])
     total = len(lines)
     selected = lines[max(0, start - 1) : end]
     result = '\n'.join(selected)

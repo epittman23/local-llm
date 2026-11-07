@@ -42,7 +42,7 @@ def serve(monkeypatch):
             return file
 
         async def resolve(*_a, **_k):
-            return {'content': content}
+            return {'content': content, 'filename': 'f.txt'}
 
         monkeypatch.setattr(Files, 'get_file_by_id', get_file)
         monkeypatch.setattr(knowledge_fs, '_resolve_file', resolve)
@@ -125,7 +125,7 @@ def test_a_line_range_given_as_text_reads_as_a_number(tool, serve, end_line):
 
 
 @pytest.mark.parametrize('tool', TOOLS)
-@pytest.mark.parametrize(('start_line', 'end_line'), [('x', None), ('5.0', None), (1, 'x'), (1, '2.5'), (1.5, None)])
+@pytest.mark.parametrize(('start_line', 'end_line'), [('x', None), (1, 'x'), (1, '2.5'), (1.5, None)])
 def test_a_line_that_is_not_an_integer_is_a_friendly_error(tool, serve, start_line, end_line):
     serve('a\nb\nc\n')
     page = _page(tool, start_line=start_line, end_line=end_line)
@@ -168,3 +168,56 @@ def test_head_and_tail_count_a_trailing_newline_as_no_line(serve):
 
 def test_piped_tail_does_not_end_on_a_phantom_line(serve):
     assert asyncio.run(knowledge_fs._kb_tail(['-1'], set(), USER, None, piped_input='a\nb\n')) == 'b'
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize(('value', 'shown'), [(2.0, '2-3'), ('2.0', '2-3'), ('2', '2-3')])
+def test_an_integral_float_or_text_reads_as_that_line(tool, serve, value, shown):
+    serve('a\nb\nc\n')
+
+    assert _page(tool, start_line=value)['showing_lines'] == shown
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('value', ['nan', 'inf', True])
+def test_nan_inf_and_bool_are_not_lines(tool, serve, value):
+    serve('a\nb\nc\n')
+
+    assert 'whole number' in _page(tool, start_line=value)['error']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize(('value', 'error'), [('x', True), ('5.0', False), ('5', False), ('', False), (2.0, False)])
+def test_the_real_call_path_reaches_the_tools_own_validation(tool, serve, value, error):
+    """get_async_tool_function_and_apply_extra_params coerces strings before the tool body runs."""
+    from local_llm.utils.tools import get_async_tool_function_and_apply_extra_params
+
+    serve('a\nb\nc\n' * 4)
+
+    async def call():
+        wrapped = await get_async_tool_function_and_apply_extra_params(tool, {'__request__': REQUEST, '__user__': USER})
+        return json.loads(await wrapped(file_id='f1', start_line=value))
+
+    page = asyncio.run(call())
+    assert ('whole number' in page.get('error', '')) is error
+    assert 'invalid literal' not in str(page)
+
+
+def test_sed_and_grep_do_not_count_a_phantom_line(serve):
+    serve('a\nb\nc\n')
+
+    assert asyncio.run(knowledge_fs._kb_sed(['-n', '1,9p', 'f1'], {'n'}, USER, None)) == 'a\nb\nc\n[lines 1-3 of 3]'
+    assert knowledge_fs._matching_lines('a\n\nb\n', lambda line: True) == [(1, 'a'), (2, ''), (3, 'b')]
+    assert asyncio.run(knowledge_fs._kb_wc(['f1'], {'l'}, USER, None)).split()[0] == '3'
+
+
+def test_a_sed_of_an_empty_file_has_no_lines(serve):
+    serve('')
+
+    assert asyncio.run(knowledge_fs._kb_sed(['-n', '1,2p', 'f1'], {'n'}, USER, None)).endswith('[lines 1-0 of 0]')
+
+
+def test_grep_knowledge_files_does_not_number_a_phantom_line():
+    file = SimpleNamespace(id='f1', filename='f.txt', data={'content': 'a\n\nb\n'}, updated_at=1, created_at=1)
+
+    assert builtin._grep_file_models([file], '.*', False, True).endswith('[3 total matches]')

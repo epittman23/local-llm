@@ -2378,7 +2378,7 @@ def _grep_file_models(
         if not content:
             continue
 
-        lines = content.split('\n')
+        lines = split_lines(content)
         file_matches = 0
 
         for i, line in enumerate(lines, 1):
@@ -2757,13 +2757,17 @@ def _line_arg(value, name: str) -> int | None:
     """A start_line / end_line from a tool call, which may come as text; None when unset. Raises ValueError."""
     if value is None or value == '':
         return None
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            pass
-    elif isinstance(value, int) and not isinstance(value, bool):
+    if isinstance(value, bool):
+        pass
+    elif isinstance(value, int):
         return value
+    else:
+        try:
+            number = float(value)  # '5.0' and 2.0 read as 5 and 2; '1.5', 'x' and 'nan' do not
+        except (TypeError, ValueError):
+            number = None
+        if number is not None and number.is_integer():
+            return int(number)
     raise ValueError(f'{name} must be a whole number, got {value!r}')
 
 
