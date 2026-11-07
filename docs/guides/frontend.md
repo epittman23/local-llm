@@ -71,6 +71,11 @@ not the migration plan's original "new-york".
   chosen its models and loaded the tools (whose defaults a model may turn
   on), then goes with what the box holds; opening another chat meanwhile
   drops it (`useHeldSend`, #373). It used to show "Model not selected".
+  While it waits the box says "Sends when the models load", with a button
+  to call it off. A folder's new chat waits for the folder in the same way,
+  so a send made just after leaving a saved chat no longer goes with that
+  chat's models, and `?q=` sends through the same wait, so it goes with the
+  model's default tools and switches (#659).
 - **Enter while an attachment is still uploading** holds the message
   ("Sends when the upload finishes") and sends it once every upload is
   done and the chat is not reloading (Chat.svelte cleared the box and

@@ -120,6 +120,25 @@ describe('useModelPick (#373)', () => {
 		rerender();
 		expect(result.current).toBe(true);
 	});
+	it("is not ready on a move from a saved chat to a folder until the folder has loaded, so a send doesn't take the chat's models (#659)", () => {
+		lists.loaded = true;
+		route.params = { id: 'c1' };
+		const set = vi.fn();
+		const chat = { id: 'c1', chat: { models: ['qwen'] } };
+		let folder: { isFetched: boolean; data: { data: { model_ids: string[] } } | null } = fetched;
+		const { result, rerender } = renderHook(() => useModelPick(chat, folder, set));
+		expect(result.current).toBe(true);
+
+		route.params = { folderId: 'f1' };
+		folder = { isFetched: false, data: null };
+		rerender();
+		expect(result.current).toBe(false);
+
+		folder = { isFetched: true, data: { data: { model_ids: ['llama'] } } };
+		rerender();
+		expect(set).toHaveBeenLastCalledWith(['llama']);
+		expect(result.current).toBe(true);
+	});
 	it('is ready, with nothing picked, when the model list failed to load', () => {
 		lists.failed = true;
 		const set = vi.fn();
