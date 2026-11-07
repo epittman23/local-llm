@@ -344,21 +344,33 @@ class AutomationTable:
                 tz_result = await db.execute(select(User.id, User.timezone).where(User.id.in_(user_ids)))
                 timezone_by_user_id = {uid: tz for uid, tz in tz_result.all()}
 
+            claimed = []
             for row in rows:
-                row.last_run_at = now_ns
                 # Read from the run's own due time, so a late claim does not move the rule's time (#512).
                 due = typing.cast(int, row.next_run_at)
-                row.next_run_at = next_run_ns(
-                    row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id), anchor_ns=due
-                )
-                if row.next_run_at is None:
-                    # The rule has run its last occurrence. Left active with no
-                    # next run, it was expanded by the calendar from the epoch.
+                failed = False
+                try:
+                    next_run_at = next_run_ns(
+                        row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id), anchor_ns=due
+                    )
+                except Exception:
+                    # One row that raised rolled back the whole batch, and came
+                    # first again on every poll: switch it off, unrun, instead (#670).
+                    log.exception('Automation %s: its next run cannot be computed; switching it off', row.id)
+                    next_run_at, failed = None, True
+                row.next_run_at = next_run_at
+                if next_run_at is None:
+                    # The rule has run its last occurrence (or cannot be read).
+                    # Left active with no next run, it was expanded by the
+                    # calendar from the epoch.
                     row.is_active = False
+                if not failed:
+                    row.last_run_at = now_ns
+                    claimed.append(row)
 
             await db.commit()
 
-            return [AutomationModel.model_validate(r) for r in rows]
+            return [AutomationModel.model_validate(r) for r in claimed]
 
 
 ####################
