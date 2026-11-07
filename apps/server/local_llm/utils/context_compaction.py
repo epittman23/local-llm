@@ -11,12 +11,7 @@ from local_llm.utils.chat_id import is_saved_chat_id
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import get_content_from_message, get_last_user_message, get_message_list
 from local_llm.utils.payload import apply_params_to_form_data
-from local_llm.utils.task import (
-    prompt_template,
-    prompt_variables_template,
-    replace_messages_variable,
-    replace_prompt_variable,
-)
+from local_llm.utils.task import fill_task_template
 
 log = logging.getLogger(__name__)
 
@@ -357,12 +352,14 @@ async def _generate_summary(
 
     summary_prompt_template = summary_prompt_template.strip() or DEFAULT_CONTEXT_COMPACTION_PROMPT
     all_messages = [*compacted_messages, *recent_messages]
-    prompt = replace_prompt_variable(summary_prompt_template, get_last_user_message(all_messages) or '')
-    prompt = replace_messages_variable(prompt, all_messages)
-    prompt = replace_messages_variable(prompt, compacted_messages, 'COMPACTED_MESSAGES')
-    prompt = replace_messages_variable(prompt, recent_messages, 'RECENT_MESSAGES')
-    prompt = prompt_variables_template(prompt, {'{{PREVIOUS_SUMMARY}}': previous_summary or ''})
-    prompt = await prompt_template(prompt, user)
+    prompt = await fill_task_template(
+        summary_prompt_template,
+        user,
+        get_last_user_message(all_messages),
+        all_messages,
+        literals={'{{PREVIOUS_SUMMARY}}': previous_summary or ''},
+        message_variables={'COMPACTED_MESSAGES': compacted_messages, 'RECENT_MESSAGES': recent_messages},
+    )
 
     task_model_params = task_config.get('task.model.params') or {}
     if not isinstance(task_model_params, dict):
