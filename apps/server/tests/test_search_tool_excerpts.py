@@ -110,3 +110,41 @@ def test_find_in_lowered_needle_with_lengthening_characters():
     start, end = find_in_lowered(text, 'İzmir'.lower())
 
     assert text[start:end] == 'İzmir'
+
+
+def test_find_in_lowered_match_at_the_very_end():
+    text = f'{DOTTED}Needle'
+
+    start, end = find_in_lowered(text, 'needle')
+
+    assert (text[start:end], end) == ('Needle', len(text))
+
+
+def test_find_in_lowered_needle_ending_inside_a_lengthened_character_takes_all_of_it():
+    # 'İ' lowers to 'i' + U+0307: a needle ending on the 'i' still covers the whole 'İ'.
+    text = 'abİc'
+
+    assert find_in_lowered(text, 'abi') == (0, 3)
+
+
+def test_find_in_lowered_needle_starting_inside_a_lengthened_character_starts_at_it():
+    text = 'abİc'
+
+    assert find_in_lowered(text, '̇c') == (2, 4)
+
+
+def test_find_in_lowered_empty_needle_and_empty_text():
+    assert find_in_lowered(f'{DOTTED}x', '') == (0, 0)
+    assert find_in_lowered('', '') == (0, 0)
+    assert find_in_lowered('', 'needle') is None
+
+
+def test_search_notes_excerpt_centres_on_a_later_word_when_the_first_is_absent():
+    # The query matches the note by its title; its text holds only the second word.
+    uid, word = _user(), f'zebrafish{uuid.uuid4().hex[:6]}'
+    query = f'nosuchword {word}'
+    _run(Notes.insert_new_note(uid, NoteForm(title=query, data={'content': {'md': _text(word)}})))
+
+    found = json.loads(_run(builtin.search_notes(query, __request__=REQUEST, __user__={'id': uid})))
+
+    assert [word in note['snippet'] for note in found] == [True]
