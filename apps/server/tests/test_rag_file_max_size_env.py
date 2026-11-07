@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from local_llm.env import optional_int_env
+from local_llm.env import int_env
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
 
@@ -27,13 +27,13 @@ SERVER_DIR = Path(__file__).resolve().parents[1]
     ('value', 'expected'),
     [(None, None), ('', None), ('  ', None), ('0.5', None), ('ten', None), ('25', 25), (' 7 ', 7), ('0', 0)],
 )
-def test_optional_int_env(monkeypatch, value, expected):
+def test_int_env_with_no_default(monkeypatch, value, expected):
     if value is None:
         monkeypatch.delenv('LLLM_TEST_INT', raising=False)
     else:
         monkeypatch.setenv('LLLM_TEST_INT', value)
 
-    assert optional_int_env('LLLM_TEST_INT') == expected
+    assert int_env('LLLM_TEST_INT', None) == expected
 
 
 @pytest.mark.parametrize(
@@ -41,11 +41,13 @@ def test_optional_int_env(monkeypatch, value, expected):
     [
         ('', None, None),
         ('0.5', None, None),
-        ('2', None, 2 * 1024 * 1024),
-        # Its own setting wins, a 0 included (a cap of 0, as before), and an empty one falls back.
+        # Unset or empty, the cap is left to the upload size limit, read at use time (#629;
+        # tests/test_metadata_cap_follows_upload_limit.py), not folded in at startup.
+        ('2', None, None),
+        ('2', '', None),
+        # Its own setting is kept, a 0 included (a cap of 0, as before).
         ('2', '0', 0),
         ('2', '500', 500),
-        ('2', '', 2 * 1024 * 1024),
     ],
 )
 def test_the_settings_load_with_the_value(tmp_path, value, cap_setting, cap):

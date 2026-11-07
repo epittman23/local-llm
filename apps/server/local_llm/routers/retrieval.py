@@ -83,7 +83,7 @@ from local_llm.retrieval.utils import (
 )
 from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.retrieval.vector.factory import VECTOR_DB_CLIENT
-from local_llm.retrieval.vector.utils import filter_metadata
+from local_llm.retrieval.vector.utils import drop_oversized_values, filter_metadata, metadata_max_value_chars
 from local_llm.retrieval.web.azure import search_azure
 from local_llm.retrieval.web.bing import search_bing
 from local_llm.retrieval.web.bocha import search_bocha
@@ -1684,6 +1684,16 @@ def save_docs_to_vector_db(
                     log.info('Document with hash %s already exists', metadata['hash'])
                     raise ValueError(ERROR_MESSAGES.DUPLICATE_CONTENT)
 
+    # The cap on a metadata value follows the upload size limit as config holds it now (#629).
+    # It is applied before splitting, which copies every document's metadata into each chunk:
+    # an oversized value would otherwise be copied once per chunk before it was dropped. New
+    # Documents, since a caller may pass the same list again for another collection.
+    max_value_chars = metadata_max_value_chars(getattr(config, 'FILE_MAX_SIZE', None))
+    docs = [
+        Document(page_content=doc.page_content, metadata=drop_oversized_values(doc.metadata, max_value_chars))
+        for doc in docs
+    ]
+
     if split:
         if config.ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER:
             log.info('Using markdown header text splitter')
@@ -1998,11 +2008,12 @@ async def process_file_for(
                     }
                     docs = await loader.aload(file.filename, file.meta.get('content_type'), file_path)
 
+                    max_value_chars = metadata_max_value_chars(config.FILE_MAX_SIZE)
                     docs = [
                         Document(
                             page_content=doc.page_content,
                             metadata={
-                                **filter_metadata(doc.metadata),
+                                **filter_metadata(doc.metadata, max_value_chars=max_value_chars),
                                 'name': file.filename,
                                 'created_by': file.user_id,
                                 'file_id': file.id,
