@@ -2438,7 +2438,8 @@ def _oauth_timeout_kwargs() -> dict:
     try:
         return {'timeout': int(value)}
     except ValueError:
-        log.warning('OAUTH_TIMEOUT=%r is not a whole number; no timeout is set', value)
+        # The value is not logged: it sits among the OAuth settings, which hold secrets.
+        log.warning('OAUTH_TIMEOUT is not a whole number; no timeout is set')
         return {}
 
 
