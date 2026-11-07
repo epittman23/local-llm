@@ -200,7 +200,11 @@ def test_cooling_counts_earlier_pauses_against_the_cooldown_share(monkeypatch):
         return None
 
     sweep = types.SimpleNamespace(
-        sweep_id='sweep', baseline_tps=10.0, budget=types.SimpleNamespace(seconds=10_000), last_pause_at=None
+        sweep_id='sweep',
+        baseline_tps=10.0,
+        budget=types.SimpleNamespace(seconds=10_000),
+        started=0.0,
+        last_pause_at=None,
     )
     cool = tune.Cooldown(sweep, tune.SweepOptions(cooldown_attempts=5, max_cooldown_share=0.5))
     cool.total_seconds = 3000.0  # earlier pauses
@@ -217,6 +221,75 @@ def test_cooling_counts_earlier_pauses_against_the_cooldown_share(monkeypatch):
     assert resolution == 'timeout'
     assert len(waits) == 3
     assert cool.total_seconds == 6000.0
+
+
+def _cool_with_spent_budget(monkeypatch, *, now: float, earlier: float):
+    """A Cooldown on a 10,000 s budget with a 5,000 s cooling share, at `now` seconds in."""
+    clock = [now]
+    calls: list[str] = []
+
+    class FakeTime:
+        @staticmethod
+        def time():
+            return clock[0]
+
+    async def fake_wait(target, window):
+        calls.append('wait')
+        clock[0] += 1000.0
+
+    async def slow_probe():
+        calls.append('probe')
+        return 5.0
+
+    async def open_pause(*args, **kwargs):
+        calls.append('open_pause')
+
+    async def close_pause(*args, **kwargs):
+        calls.append('close_pause')
+
+    async def no_gpu():
+        return None
+
+    sweep = types.SimpleNamespace(
+        sweep_id='sweep',
+        baseline_tps=10.0,
+        budget=types.SimpleNamespace(seconds=10_000),
+        started=0.0,
+        last_pause_at=None,
+    )
+    cool = tune.Cooldown(sweep, tune.SweepOptions(cooldown_attempts=5, max_cooldown_share=0.5))
+    cool.total_seconds = earlier
+    cool.gpu = types.SimpleNamespace(read=no_gpu)
+    cool._wait = fake_wait
+    cool._probe = slow_probe
+    monkeypatch.setattr(tune, 'time', FakeTime)
+    monkeypatch.setattr(tune.BenchmarkTunePauses, 'open_pause', staticmethod(open_pause))
+    monkeypatch.setattr(tune.BenchmarkTunePauses, 'close_pause', staticmethod(close_pause))
+
+    resolution = asyncio.run(cool.run(trigger='drift', rnd=1, visit_id=None, drift_ratio=0.5))
+    return resolution, calls, cool, sweep
+
+
+def test_a_spent_cooling_share_starts_no_cooldown(monkeypatch):
+    """Earlier pauses already used the 5,000 s share: no wait, no probe, no pause row (#511)."""
+    resolution, calls, cool, sweep = _cool_with_spent_budget(monkeypatch, now=1000.0, earlier=6000.0)
+
+    assert resolution == 'timeout'
+    assert calls == []
+    assert cool.count == 0
+    assert cool.total_seconds == 6000.0
+    assert sweep.last_pause_at is None
+
+
+def test_a_spent_wall_clock_budget_starts_no_cooldown(monkeypatch):
+    """The 10,000 s budget has run out with no cooling spent: no wait, no probe, no pause row (#511)."""
+    resolution, calls, cool, sweep = _cool_with_spent_budget(monkeypatch, now=10_000.0, earlier=0.0)
+
+    assert resolution == 'timeout'
+    assert calls == []
+    assert cool.count == 0
+    assert cool.total_seconds == 0.0
+    assert sweep.last_pause_at is None
 
 
 def test_a_cut_the_items_agree_on_is_still_supported(monkeypatch):
