@@ -60,6 +60,9 @@ CALENDAR_ALERT_LOOKAHEAD_MINUTES = int_env('CALENDAR_ALERT_LOOKAHEAD_MINUTES', 1
 # RRULE Helpers
 ####################
 
+# A sub-daily rule without a DTSTART runs on a grid from here (see `_parse_rule`).
+_EPOCH = dt.datetime(2000, 1, 1)
+
 
 def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
     """Safely resolve a timezone string to ZoneInfo.
@@ -91,7 +94,11 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     if 'EXRULE' in upper:
         raise ValueError('EXRULE is not supported in recurrence rules')
 
-    parsed = rrulestr(s, ignoretz=True)
+    # Read from the epoch rather than dateutil's now, so a rule without a
+    # DTSTART is accepted or refused the same at any minute (#801): a
+    # sub-daily one has its grid's phase there, so a BY filter the grid
+    # misses raises whenever it is read. A longer one is read again below.
+    parsed = rrulestr(s, dtstart=_EPOCH, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     if len(rules) > 1:
         raise ValueError('only one RRULE is supported per recurrence rule')
@@ -149,8 +156,7 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
         # remaining run is at the original start, long past.
         return rrulestr(recounted, dtstart=moved if left > 0 else start, ignoretz=True)
 
-    epoch = dt.datetime(2000, 1, 1)
-    dtstart = epoch + ((anchor - epoch) // step) * step
+    dtstart = _EPOCH + ((anchor - _EPOCH) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
 
 
@@ -222,7 +228,7 @@ def _sub_daily(s: str) -> bool:
     frequency is then read from the rule's own text, which dateutil has just
     accepted: its parsed rule keeps it only in a private attribute.
     """
-    rrulestr(s, ignoretz=True)
+    rrulestr(s, dtstart=_EPOCH, ignoretz=True)
     match = _FREQ.search(s.upper())
     return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
 
@@ -345,9 +351,12 @@ def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
     own first `sample` occurrences rather than the next two after now, since a
     COUNT-bounded sub-daily rule's occurrences can all lie before now when it
     is parsed against the clock-aligned epoch start, and a rule such as
-    BYHOUR=9,10 has a short gap that the first pair may not show.
+    BYHOUR=9,10 has a short gap that the first pair may not show. A
+    sub-daily rule without a DTSTART is read from the epoch, as `_parse_rule`
+    reads it, not from dateutil's now, which refused some at an odd minute
+    only (#801); a longer one is sampled from now, as before.
     """
-    parsed = rrulestr(s, ignoretz=True)
+    parsed = rrulestr(s, dtstart=_EPOCH if _sub_daily(s) else None, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     if not rules:
         return None
