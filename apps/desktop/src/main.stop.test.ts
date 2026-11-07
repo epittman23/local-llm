@@ -67,7 +67,9 @@ const h = vi.hoisted(() => {
 		/** Builds the next spawned child; the default is one that started (#433). */
 		spawnChild: null as (() => unknown) | null,
 		/** owned.json operations that fail, as a full disk or a read-only directory would (#649). */
-		ownedFails: { rename: false, rm: false }
+		ownedFails: { rename: false, rm: false },
+		/** How the app page's own load settles; it loads at once by default (#803). */
+		pageLoad: null as (() => Promise<void>) | null
 	};
 	let nextId = 1;
 
@@ -107,7 +109,7 @@ const h = vi.hoisted(() => {
 		}
 		loadURL(u: string) {
 			this.loaded = u;
-			return Promise.resolve();
+			return (u.startsWith('http') && state.pageLoad?.()) || Promise.resolve();
 		}
 		/** A user's close: 'close' listeners may preventDefault; true when the window closed. */
 		userClose(): boolean {
@@ -166,6 +168,7 @@ const h = vi.hoisted(() => {
 		state.devServer = null;
 		state.spawnChild = null;
 		state.ownedFails = { rename: false, rm: false };
+		state.pageLoad = null;
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -495,6 +498,33 @@ test('a page that never finishes unloading is destroyed after 2 s, and the stop 
 	expect(h.state.stops).toEqual([990201]);
 	await tick(700);
 	expect(h.state.exits).toEqual([0]);
+});
+
+test('the app page load the blank page aborts raises no unhandled rejection (#803)', async () => {
+	let abort: () => void = () => {};
+	h.state.pageLoad = () =>
+		new Promise<void>((_resolve, reject) => {
+			abort = () =>
+				reject(Object.assign(new Error('ERR_ABORTED (-3) loading http://127.0.0.1:4000'), { code: 'ERR_ABORTED' }));
+		});
+	const unhandled: unknown[] = [];
+	const record = (reason: unknown) => unhandled.push(reason);
+	process.on('unhandledRejection', record);
+	try {
+		await launch();
+		const win = appWindows()[0];
+		win?.emit('ready-to-show');
+		await tick(10);
+		win?.userClose();
+		abort(); // what loading about:blank does to a load still in flight
+		await tick(50);
+	} finally {
+		process.off('unhandledRejection', record);
+	}
+
+	expect(unhandled).toEqual([]);
+	expect(h.state.stops).toEqual([990201]);
+	await tick(700);
 });
 
 test('a blank-page load that fails still destroys the window and stops (#803)', async () => {

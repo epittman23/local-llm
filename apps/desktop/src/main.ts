@@ -300,7 +300,11 @@ function openApp(url: string): Promise<void> {
 			if (statusView === 'progress') statusWindow?.destroy();
 			resolve();
 		});
-		void win.loadURL(url);
+		// A stop's blank page aborts a load still in flight (#803); that is expected.
+		win.loadURL(url).catch((error: unknown) => {
+			if ((error as { code?: unknown } | null)?.code !== 'ERR_ABORTED')
+				console.error('The app page did not load:', error);
+		});
 	});
 }
 
