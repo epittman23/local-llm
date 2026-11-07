@@ -186,6 +186,7 @@ def test_a_bad_value_loads_as_the_default(loaded, label, module, name):
     default = (ENV_SETTINGS if module == 'env' else CONFIG_SETTINGS)[name][0]
 
     assert loaded[label][module][name] == default
+    assert type(loaded[label][module][name]) is type(default)
 
 
 @pytest.mark.parametrize(
@@ -195,3 +196,59 @@ def test_a_valid_value_is_read(loaded, module, name):
     expected = (ENV_SETTINGS if module == 'env' else CONFIG_SETTINGS)[name][1]
 
     assert loaded['valid'][module][name] == expected
+    assert type(loaded['valid'][module][name]) is type(expected)
+
+
+def _load_one(tmp_path, settings: dict, names: list[str]) -> tuple[dict, str]:
+    """The named config settings as a fresh import reads them with `settings` set, and its stderr."""
+    env = {**os.environ, 'HF_HUB_OFFLINE': '1', 'DATA_DIR': str(tmp_path)}
+    env.pop('DATABASE_URL', None)
+    for name in [*ENV_SETTINGS, *CONFIG_SETTINGS, *FALLBACKS]:
+        env.pop(name, None)
+    env.update(settings)
+    script = (
+        'import json, local_llm.env as e, local_llm.config as c;'
+        f'print("LOADED " + json.dumps({{n: getattr(c, n, getattr(e, n, None)) for n in {names!r}}}))'
+    )
+    result = subprocess.run(
+        [sys.executable, '-c', script], cwd=SERVER_DIR, env=env, capture_output=True, text=True, timeout=600
+    )
+    assert result.returncode == 0, result.stderr[-3000:]
+    line = next(line for line in result.stdout.splitlines() if line.startswith('LOADED '))
+    return json.loads(line.removeprefix('LOADED ')), result.stderr
+
+
+@pytest.mark.parametrize(
+    ('settings', 'name', 'expected'),
+    [
+        # A setting that falls back to another reads the other when it is empty or bad.
+        (
+            {'CODE_INTERPRETER_JUPYTER_TIMEOUT': '', 'CODE_EXECUTION_JUPYTER_TIMEOUT': '7'},
+            'CODE_INTERPRETER_JUPYTER_TIMEOUT',
+            7,
+        ),
+        (
+            {'CODE_INTERPRETER_JUPYTER_TIMEOUT': 'x', 'CODE_EXECUTION_JUPYTER_TIMEOUT': '7'},
+            'CODE_INTERPRETER_JUPYTER_TIMEOUT',
+            7,
+        ),
+        ({'RAG_EMBEDDING_BATCH_SIZE': '', 'RAG_EMBEDDING_OPENAI_BATCH_SIZE': '9'}, 'RAG_EMBEDDING_BATCH_SIZE', 9),
+        ({'RAG_EMBEDDING_BATCH_SIZE': '8', 'RAG_EMBEDDING_OPENAI_BATCH_SIZE': '9'}, 'RAG_EMBEDDING_BATCH_SIZE', 8),
+        # "none", in any case and with spaces, is no limit, as before.
+        ({'OAUTH_TOKEN_EXCHANGE_RATE_LIMIT': ' None '}, 'OAUTH_TOKEN_EXCHANGE_RATE_LIMIT', None),
+        ({'OAUTH_TOKEN_EXCHANGE_RATE_LIMIT': 'none'}, 'OAUTH_TOKEN_EXCHANGE_RATE_LIMIT', None),
+    ],
+)
+def test_a_setting_that_falls_back_to_another(tmp_path, settings, name, expected):
+    values, _ = _load_one(tmp_path, settings, [name])
+
+    assert values[name] == expected
+
+
+def test_a_legacy_value_beside_a_current_one_is_not_read(tmp_path):
+    settings = {'RAG_EMBEDDING_BATCH_SIZE': '8', 'RAG_EMBEDDING_OPENAI_BATCH_SIZE': 'x'}
+
+    values, stderr = _load_one(tmp_path, settings, ['RAG_EMBEDDING_BATCH_SIZE'])
+
+    assert values['RAG_EMBEDDING_BATCH_SIZE'] == 8
+    assert 'RAG_EMBEDDING_OPENAI_BATCH_SIZE' not in stderr

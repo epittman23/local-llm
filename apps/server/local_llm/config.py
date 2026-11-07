@@ -771,7 +771,12 @@ RAG_EMBEDDING_MODEL_AUTO_UPDATE = (
 
 RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = os.getenv('RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE', 'True').lower() == 'true'
 
-RAG_EMBEDDING_BATCH_SIZE = int_env('RAG_EMBEDDING_BATCH_SIZE', int_env('RAG_EMBEDDING_OPENAI_BATCH_SIZE', 1))
+# The legacy name is read only when the current one is unset, as before, so a bad legacy value
+# beside a good current one is not reported.
+RAG_EMBEDDING_BATCH_SIZE = int_env(
+    'RAG_EMBEDDING_BATCH_SIZE',
+    1 if (os.getenv('RAG_EMBEDDING_BATCH_SIZE') or '').strip() else int_env('RAG_EMBEDDING_OPENAI_BATCH_SIZE', 1),
+)
 
 ENABLE_ASYNC_EMBEDDING = os.getenv('ENABLE_ASYNC_EMBEDDING', 'True').lower() == 'true'
 
