@@ -88,7 +88,8 @@ export type UploadOutcome = { ok: true } | { ok: false; reason: string };
  *    edit) is not refused because of the copy it replaces.
  *
  * If removing the old copies fails, the files refused as duplicates are
- * counted as failed and not retried: they would be refused again.
+ * counted as failed and not retried: they would be refused again. So is one
+ * whose old copy `removeFiles` reports kept (the ids it resolves to, #639).
  */
 export async function syncUploads(
 	manifest: DirectoryManifestEntry[],
@@ -110,16 +111,19 @@ export async function syncUploads(
 	}
 
 	let removeError: unknown = null;
+	let kept: string[] = [];
 	const oldCopies = replacedFileIds(diff, [...uploaded, ...refusedAsDuplicate]);
 	if (oldCopies.length > 0) {
 		try {
-			await removeFiles(oldCopies);
+			const result = await removeFiles(oldCopies);
+			if (Array.isArray(result)) kept = result;
 		} catch (error) {
 			removeError = error;
 		}
 	}
 	for (const entry of refusedAsDuplicate) {
-		if (removeError !== null || !(await upload(entry, 'again')).ok) failed++;
+		const oldCopyStays = removeError !== null || replacedFileIds(diff, [entry]).some((id) => kept.includes(id));
+		if (oldCopyStays || !(await upload(entry, 'again')).ok) failed++;
 	}
 
 	for (const entry of added) if (!(await upload(entry, 'first')).ok) failed++;

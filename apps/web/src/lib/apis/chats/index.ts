@@ -7,6 +7,7 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { getTimeRange } from '@/lib/utils/api-helpers';
 import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { keepaliveInit } from '@/lib/apis/keepalive';
 
 export const getChatConfig = async (token: string) => {
 	let error = null;
@@ -1251,9 +1252,19 @@ export const getChatAccessGrants = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateChatById = async (token: string, id: string, chat: object, variables: object | null = null) => {
+export const updateChatById = async (
+	token: string,
+	id: string,
+	chat: object,
+	variables: object | null = null,
+	keepalive = false
+) => {
 	let error = null;
 
+	const body = JSON.stringify({
+		chat: chat,
+		...(variables !== null ? { variables } : {})
+	});
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}`, {
 		method: 'POST',
 		headers: {
@@ -1261,10 +1272,8 @@ export const updateChatById = async (token: string, id: string, chat: object, va
 			'Content-Type': 'application/json',
 			...(token && { authorization: `Bearer ${token}` })
 		},
-		body: JSON.stringify({
-			chat: chat,
-			...(variables !== null ? { variables } : {})
-		})
+		body,
+		...keepaliveInit(body, keepalive)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await errorBody(res);
