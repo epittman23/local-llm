@@ -144,7 +144,13 @@ export default function Personalization() {
 		<SettingsForm title="Personalization" footer={false}>
 			<SettingsSection title="Memory" first>
 				<SettingRow label="Memory" description="Let the model remember things you share across chats.">
-					{(id) => <SettingSwitch labelledBy={id} checked={enabled} onChange={(v) => void update({ memory: v })} />}
+					{(id) => (
+						<SettingSwitch
+							labelledBy={id}
+							checked={enabled}
+							onChange={(v) => void update({ memory: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
+						/>
+					)}
 				</SettingRow>
 			</SettingsSection>
 			<SettingsSection title="Saved Memories">
