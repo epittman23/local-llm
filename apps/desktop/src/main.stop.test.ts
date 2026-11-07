@@ -47,6 +47,8 @@ const h = vi.hoisted(() => {
 		handlers: new Map<string, (...args: unknown[]) => unknown>(),
 		appEvents: new Emitter(),
 		stops: [] as number[],
+		/** Each stop's interrupt option, and owned.json as it was when the stop began (#649). */
+		stopCalls: [] as { pgid: number; interrupt: boolean; owned: unknown }[],
 		spawned: 0,
 		/** What the next /ready probe answers; a promise holds it in flight. */
 		ready: (): Promise<number | null> => Promise.resolve(200),
@@ -150,6 +152,7 @@ const h = vi.hoisted(() => {
 		state.handlers = new Map();
 		state.appEvents = new Emitter();
 		state.stops = [];
+		state.stopCalls = [];
 		state.spawned = 0;
 		state.ready = () => Promise.resolve(200);
 		state.stopResult = { forced: false, llama: [] };
@@ -186,8 +189,15 @@ vi.mock('./stack', async (original) => ({
 		h.state.spawned++;
 		return h.state.spawnChild?.() ?? Object.assign(new h.Emitter(), { pid: 990201 });
 	},
-	stopGroup: async (pgid: number) => {
+	stopGroup: async (pgid: number, _deps: unknown, options?: { interrupt?: boolean }) => {
 		h.state.stops.push(pgid);
+		let owned: unknown = null;
+		try {
+			owned = JSON.parse(readFileSync(join(h.state.userData, 'owned.json'), 'utf8'));
+		} catch {
+			// None recorded.
+		}
+		h.state.stopCalls.push({ pgid, interrupt: options?.interrupt ?? true, owned });
 		await h.state.stopHold;
 		return h.state.stopResult;
 	},
@@ -497,6 +507,57 @@ test('an earlier stack forced to stop cleanly lets the launch go on (#431)', asy
 	await launch();
 
 	expect(h.state.spawned).toBe(1);
+});
+
+// --- A crash during a stop leaves owned.json marked stopping (#649) -----------
+
+test('closing the app marks owned.json stopping before its one SIGINT, and removes it after (#649)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await cleanStop();
+
+	expect(h.state.stopCalls).toEqual([
+		{ pgid: 990201, interrupt: true, owned: expect.objectContaining({ pgid: 990201, stopping: true }) }
+	]);
+	await tick(700);
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
+});
+
+test('a stack an earlier launch was stopping is waited for, never signalled again, and not adopted (#649)', async () => {
+	recordEarlierStack({ origin: HERE.serverUrl, repo: HERE.repoPath, stopping: true }, HERE);
+	await launch();
+
+	expect(h.state.stopCalls.map(({ pgid, interrupt }) => ({ pgid, interrupt }))).toEqual([
+		{ pgid: 4242, interrupt: false }
+	]);
+	expect(h.state.spawned).toBe(1);
+	expect(ownedFile()).toEqual({ pgid: 990201, startTicks: '1', origin: HERE.serverUrl, repo: HERE.repoPath });
+});
+
+test('a launch for a remote server waits for a stack an earlier launch was stopping, never signalling it (#649)', async () => {
+	recordEarlierStack({ origin: HERE.serverUrl, repo: HERE.repoPath, stopping: true }, HERE);
+	vi.stubEnv('LLLM_SERVER_URL', 'https://llm.example.invalid');
+	await launch();
+
+	expect(h.state.stopCalls.map(({ pgid, interrupt }) => ({ pgid, interrupt }))).toEqual([
+		{ pgid: 4242, interrupt: false }
+	]);
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
+});
+
+test('while an earlier stack stops, owned.json names it as stopping, so a crash then cannot signal it twice (#649)', async () => {
+	let release: () => void = () => {};
+	h.state.stopHold = new Promise<void>((resolve) => (release = resolve));
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	await launch();
+
+	expect(h.state.stopCalls).toEqual([
+		{ pgid: 4242, interrupt: true, owned: expect.objectContaining({ pgid: 4242, stopping: true }) }
+	]);
+	expect(ownedFile()).toMatchObject({ pgid: 4242, stopping: true });
+
+	release();
+	await tick(50);
+	expect(ownedFile()).toEqual({ pgid: 990201, startTicks: '1', origin: HERE.serverUrl, repo: HERE.repoPath });
 });
 
 // --- Settings and config.json (#424, #425, #426, #437) --------------------------

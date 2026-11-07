@@ -124,6 +124,11 @@ export interface OwnedRecord {
 	/** The server address and checkout it was started for; absent in a record written before #431. */
 	origin?: string;
 	repo?: string;
+	/**
+	 * Written before its one SIGINT (#649): a launch that finds it after a crash
+	 * waits for the group to go, forcing it past the budget, and never signals it again.
+	 */
+	stopping?: true;
 }
 
 export interface ProcStat {
@@ -170,6 +175,7 @@ export function parseOwned(text: string | null): OwnedRecord | null {
 		const record: OwnedRecord = { pgid: raw.pgid, startTicks: raw.startTicks };
 		if (typeof raw.origin === 'string') record.origin = raw.origin;
 		if (typeof raw.repo === 'string') record.repo = raw.repo;
+		if (raw.stopping === true) record.stopping = true;
 		return record;
 	} catch {
 		return null;
@@ -182,7 +188,11 @@ export function parseOwned(text: string | null): OwnedRecord | null {
  * this server address and checkout. Otherwise it is stopped: adopted, it
  * would be waited on at the wrong address, and a launch that starts nothing
  * (a remote server) would leave it running. A record from before #431 names
- * neither, so its stack is stopped too.
+ * neither, so its stack is stopped too, and so is one already being stopped
+ * (#649): adopted, it would be sent a second SIGINT on close.
+ *
+ * localhost and 127.0.0.1 count as one address (#649); [::1] does not, since
+ * `make backend` listens on 127.0.0.1 only.
  */
 export function ownedAction(
 	record: OwnedRecord | null,
@@ -192,8 +202,25 @@ export function ownedAction(
 	local: boolean
 ): 'adopt' | 'stop' | 'none' {
 	if (!record || !running) return 'none';
-	const same = record.origin === origin && record.repo !== undefined && resolve(record.repo) === resolve(repo);
-	return local && same ? 'adopt' : 'stop';
+	const same =
+		record.origin !== undefined &&
+		sameAddress(record.origin, origin) &&
+		record.repo !== undefined &&
+		resolve(record.repo) === resolve(repo);
+	return local && same && !record.stopping ? 'adopt' : 'stop';
+}
+
+function sameAddress(a: string, b: string): boolean {
+	const loopback = (origin: string) => {
+		const url = new URL(origin);
+		if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
+		return url.origin;
+	};
+	try {
+		return loopback(a) === loopback(b);
+	} catch {
+		return false;
+	}
 }
 
 // --- Commands ----------------------------------------------------------------
@@ -333,7 +360,9 @@ export interface StopResult {
 
 /**
  * Ctrl-C for a process group: one SIGINT, then wait until the whole group is
- * gone (make's EXIT trap runs compose down after uvicorn exits).
+ * gone (make's EXIT trap runs compose down after uvicorn exits). With
+ * `interrupt: false`, for a group an earlier launch already sent its SIGINT
+ * (#649), it only waits.
  *
  * **Never a second SIGINT**: uvicorn takes it as "force exit" and skips its
  * lifespan teardown, which is what stops the served model. Past the budget,
@@ -344,12 +373,14 @@ export interface StopResult {
 export async function stopGroup(
 	pgid: number,
 	deps: StopDeps,
-	{ budgetMs = STOP_BUDGET_MS, pollMs = 250 } = {}
+	{ budgetMs = STOP_BUDGET_MS, pollMs = 250, interrupt = true } = {}
 ): Promise<StopResult> {
-	try {
-		deps.kill(-pgid, 'SIGINT');
-	} catch {
-		// Already gone.
+	if (interrupt) {
+		try {
+			deps.kill(-pgid, 'SIGINT');
+		} catch {
+			// Already gone.
+		}
 	}
 	const started = deps.now();
 	while (groupAlive(pgid, deps.kill)) {
