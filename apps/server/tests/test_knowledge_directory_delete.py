@@ -191,6 +191,22 @@ def test_a_file_whose_chunks_cannot_be_deleted_stays_listed(monkeypatch):
     assert row is not None
 
 
+def test_sync_cleanup_returns_the_files_it_kept(monkeypatch):
+    # The client reports the removals that did not happen (#639).
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        _setup(monkeypatch, VectorRecorder(failing={files['outside'].id, files['in_child'].id}))
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['outside'].id], dir_ids=[top.id])
+        state['result'] = await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return files
+
+    files = _run(scenario())
+
+    assert state['result'] == {'status': True, 'kept': [files['outside'].id, files['in_child'].id]}
+
+
 async def _allowed(*_a, **_k):
     return None
 
