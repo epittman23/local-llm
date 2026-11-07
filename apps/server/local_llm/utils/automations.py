@@ -163,21 +163,32 @@ def _with_count(rule: str, count: int) -> str | None:
 _DTSTART_VALUE = re.compile(r'[0-9]{8}(T[0-9]{6}Z?)?')
 
 
-def _check_dtstart(s: str) -> None:
-    """Raise ValueError for a DTSTART line that is not a whole date or date-time (#642).
+def _check_dates(s: str) -> None:
+    """Raise ValueError for a DTSTART or UNTIL that is not a whole date or date-time, or any RDATE or EXDATE.
 
     dateutil reads `DTSTART:20261201T00` and `DTSTART:20261201T` as midnight,
-    so an incomplete start time would run the automation at 00:00. The
-    forms kept are RFC 5545's `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same with
-    `Z`, with or without parameters such as `;TZID=Europe/Paris`. The rule is
-    read as `rrulestr` reads it: upper-cased (so `DT\ufb06ART` is `DTSTART`
-    too) and split on any whitespace, so a DTSTART after a space on the same
-    line is checked as well.
+    so an incomplete start time would run the automation at 00:00 (#642), and
+    reads `UNTIL=` and the dates of `RDATE` and `EXDATE` as leniently (#789).
+    The forms kept are RFC 5545's `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same
+    with `Z`, with or without parameters such as `;TZID=Europe/Paris`. RDATE
+    and EXDATE are refused, as nothing here writes them. The rule is read as
+    `rrulestr` reads it: upper-cased (so `DT\ufb06ART` is `DTSTART` too) and
+    split on any whitespace, so a part after a space on the same line is
+    checked as well, and a part without a colon is an RRULE.
     """
     for part in s.upper().split():
         head, sep, value = part.partition(':')
-        if re.match(r'DTSTART(;|$)', head) and not (sep and _DTSTART_VALUE.fullmatch(value)):
+        name = head.split(';')[0]
+        if name in ('RDATE', 'EXDATE'):
+            raise ValueError(f'{name} is not supported in recurrence rules')
+        if name == 'DTSTART' and not (sep and _DTSTART_VALUE.fullmatch(value)):
             raise ValueError(f'DTSTART must be YYYYMMDD or YYYYMMDDTHHMMSS, optionally ending in Z; got {value!r}')
+        if name != 'RRULE' and sep:
+            continue
+        for pair in (value if sep else head).split(';'):
+            key, _, until = pair.partition('=')
+            if key == 'UNTIL' and not _DTSTART_VALUE.fullmatch(until):
+                raise ValueError(f'UNTIL must be YYYYMMDD or YYYYMMDDTHHMMSS, optionally ending in Z; got {until!r}')
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
@@ -193,7 +204,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     try:
-        _check_dtstart(s)
+        _check_dates(s)
         rule = _parse_rule(s, now)
     except Exception as e:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_INVALID_RRULE(e))
