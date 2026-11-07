@@ -66,6 +66,7 @@ from local_llm.benchmarks.serving.profiles import (
     resolve,
 )
 from local_llm.benchmarks.tuning.tune_probe import OOM_PATTERN
+from local_llm.env import int_env
 from local_llm.models.benchmarks.prescreen import (
     BenchmarkPrescreenPointModel,
     BenchmarkPrescreenPoints,
@@ -673,7 +674,7 @@ class Prescreen:
             )
 
     async def _load_check(self, point_id: int, config: ResolvedConfig) -> tuple[str, int | None, str | None]:
-        port = int(os.environ.get('LLAMA_PORT') or DEFAULT_PORT)
+        port = int_env('LLAMA_PORT', DEFAULT_PORT)
         if await asyncio.to_thread(_port_open, port):
             return 'skipped', None, f'port {port} is already in use'
         job = ServeProcess(config=config, port=port, record_telemetry=False, profile_version_id=self.version_id)

@@ -37,7 +37,6 @@ import asyncio
 import datetime as dt
 import hashlib
 import json
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -49,6 +48,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 
+from local_llm.env import float_env, int_env
 from local_llm.utils.upstream_trace import tracing
 
 #: The only tool offered to the model (D3).
@@ -205,8 +205,8 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
         'model': model,
         'model_info': model_info,
         'port': port,
-        'max_tokens': int(os.environ.get('LLAMA_TEST_MAX_TOKENS', 2048)),
-        'timeout': float(os.environ.get('LLAMA_TEST_TIMEOUT', 900)),
+        'max_tokens': int_env('LLAMA_TEST_MAX_TOKENS', 2048),
+        'timeout': float_env('LLAMA_TEST_TIMEOUT', 900.0),
     }
 
 
