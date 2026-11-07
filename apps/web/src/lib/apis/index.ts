@@ -818,7 +818,7 @@ export const generateTitle = async (token: string = '', model: string, messages:
 
 		// The reply's JSON block, quotes repaired only if it does not parse (#306).
 		const parsed = parseJsonBlock(response);
-		return parsed?.title ? parsed.title : null;
+		return typeof parsed?.title === 'string' && parsed.title ? parsed.title : null;
 	} catch (e) {
 		console.error('Failed to parse response: ', e);
 		return null;
@@ -863,7 +863,7 @@ export const generateTags = async (token: string = '', model: string, messages: 
 
 		// The reply's JSON block, quotes repaired only if it does not parse (#306).
 		const parsed = parseJsonBlock(response);
-		return Array.isArray(parsed?.tags) ? parsed.tags : [];
+		return Array.isArray(parsed?.tags) ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string') : [];
 	} catch (e) {
 		console.error('Failed to parse response: ', e);
 		return [];
