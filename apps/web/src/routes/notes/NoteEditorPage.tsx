@@ -56,46 +56,59 @@ type Note = {
  * A debounced save of the note's title and body. Every edit restarts the
  * timer; `flush` sends a pending save at once (used when leaving the page, so
  * the last keystrokes are not lost -- the Svelte editor's timer simply died
- * with the component). Only the fields edited here are sent: the server merges
- * `data`, so attachments stay as they are. `access_grants` is deliberately
- * omitted; that leaves sharing untouched only because routers/notes.py was
- * patched to skip grants the client didn't send (docs/history/bug-review-2026-09-27.md
+ * with the component), and so does the page going away (a reload, a closed
+ * tab), with keepalive so the save outlives the page (#675). Only the fields
+ * edited here are sent: the server merges `data`, so attachments stay as they
+ * are. `access_grants` is deliberately omitted; that leaves sharing untouched
+ * only because routers/notes.py was patched to skip grants the client didn't send (docs/history/bug-review-2026-09-27.md
  * H1) -- before that, every autosave cleared them.
  */
-function useNoteSaver(id: string) {
+export function useNoteSaver(id: string) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const queryClient = useQueryClient();
 	const pending = useRef<{ title: string; content: NoteContent | null } | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [saving, setSaving] = useState(false);
 
-	const send = useCallback(async () => {
-		const p = pending.current;
-		pending.current = null;
-		if (timer.current) clearTimeout(timer.current);
-		timer.current = null;
-		if (!p) return;
-		setSaving(true);
-		await updateNoteById(token, id, {
-			title: p.title.trim() || 'Untitled',
-			data: p.content ? { content: p.content } : {}
-		}).catch((e) => toast.error(`${e}`));
-		setSaving(false);
-		queryClient.invalidateQueries({ queryKey: ['notes', 'list'] });
-		queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
-	}, [token, id, queryClient]);
+	const send = useCallback(
+		async (keepalive = false) => {
+			const p = pending.current;
+			pending.current = null;
+			if (timer.current) clearTimeout(timer.current);
+			timer.current = null;
+			if (!p) return;
+			setSaving(true);
+			await updateNoteById(
+				token,
+				id,
+				{ title: p.title.trim() || 'Untitled', data: p.content ? { content: p.content } : {} },
+				keepalive
+			).catch((e) => toast.error(`${e}`));
+			setSaving(false);
+			queryClient.invalidateQueries({ queryKey: ['notes', 'list'] });
+			queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
+		},
+		[token, id, queryClient]
+	);
 
 	const schedule = useCallback(
 		(title: string, content: NoteContent | null) => {
 			pending.current = { title, content: content ?? pending.current?.content ?? null };
 			if (timer.current) clearTimeout(timer.current);
-			timer.current = setTimeout(send, SAVE_DELAY);
+			timer.current = setTimeout(() => void send(), SAVE_DELAY);
 		},
 		[send]
 	);
 
-	useEffect(() => () => void send(), [send]);
-	return { schedule, flush: send, saving };
+	useEffect(() => {
+		const onPageHide = () => void send(true);
+		window.addEventListener('pagehide', onPageHide);
+		return () => {
+			window.removeEventListener('pagehide', onPageHide);
+			void send();
+		};
+	}, [send]);
+	return { schedule, flush: () => send(), saving };
 }
 
 /**
