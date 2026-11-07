@@ -80,6 +80,7 @@ from local_llm.benchmarks.evaluation.suites import (
 )
 from local_llm.benchmarks.paths import PROMPTS_DIR
 from local_llm.benchmarks.serving import env_profile
+from local_llm.env import float_env, int_env
 from local_llm.models.benchmarks.configs import BenchmarkRuns
 from local_llm.models.benchmarks.tests import BenchmarkHarnesses, BenchmarkResults, BenchmarkSuiteExclusions
 
@@ -182,7 +183,7 @@ def build_body(prompt: str, model: str, prof: dict, stream: bool, system: dict |
     body = {
         'model': model,
         'messages': messages,
-        'max_tokens': int(os.environ.get('LLAMA_TEST_MAX_TOKENS', 2048)),
+        'max_tokens': int_env('LLAMA_TEST_MAX_TOKENS', 2048),
         'temperature': 0,
         'cache_prompt': os.environ.get('LLAMA_TEST_CACHE_PROMPT', '0') == '1',
     }
@@ -254,7 +255,7 @@ async def ask(
 ) -> Answer:
     """One chat completion against the serving llama.cpp server. Streams by default."""
     body = build_body(prompt, model, prof, stream, system)
-    timeout = aiohttp.ClientTimeout(total=float(os.environ.get('LLAMA_TEST_TIMEOUT', 900)))
+    timeout = aiohttp.ClientTimeout(total=float_env('LLAMA_TEST_TIMEOUT', 900.0))
     url = f'http://127.0.0.1:{port}/v1/chat/completions'
 
     out = Answer()
