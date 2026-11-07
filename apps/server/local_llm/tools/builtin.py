@@ -68,6 +68,7 @@ from local_llm.tasks import stop_item_tasks
 from local_llm.tools.knowledge_fs import kb_exec, split_lines  # noqa: F401 — re-exported
 from local_llm.utils.chat_id import is_saved_chat_id
 from local_llm.utils.json_codec import JSONCodec
+from local_llm.utils.misc import find_in_lowered
 from local_llm.utils.notifications import notify_target
 from local_llm.utils.sanitize import sanitize_code
 
@@ -1185,22 +1186,16 @@ async def search_notes(
             content_snippet = ''
             if note.data and note.data.get('content', {}).get('md'):
                 md_content = note.data['content']['md']
-                content_lower = md_content.lower()
-
                 # Find the first matching word to center the snippet around.
-                search_words = query.lower().split()
-                match_pos = -1
-                match_len = len(query)
-                for word in search_words:
-                    found_pos = content_lower.find(word)
-                    if found_pos != -1:
-                        match_pos = found_pos
-                        match_len = len(word)
+                match = None
+                for word in query.lower().split():
+                    match = find_in_lowered(md_content, word)
+                    if match:
                         break
 
-                if match_pos != -1:
-                    snippet_start = max(0, match_pos - 50)
-                    snippet_end = min(len(md_content), match_pos + match_len + 100)
+                if match:
+                    snippet_start = max(0, match[0] - 50)
+                    snippet_end = min(len(md_content), match[1] + 100)
                     content_snippet = (
                         ('...' if snippet_start > 0 else '')
                         + md_content[snippet_start:snippet_end]
@@ -1573,10 +1568,10 @@ async def search_chats(
             for needle in needles:
                 for msg in messages.values():
                     content = msg.get('content', '') if isinstance(msg, dict) else ''
-                    if isinstance(content, str) and needle in content.lower():
-                        idx = content.lower().find(needle)
-                        start = max(0, idx - 50)
-                        end = min(len(content), idx + len(needle) + 100)
+                    match = find_in_lowered(content, needle) if isinstance(content, str) else None
+                    if match:
+                        start = max(0, match[0] - 50)
+                        end = min(len(content), match[1] + 100)
                         snippet = (
                             ('...' if start > 0 else '') + content[start:end] + ('...' if end < len(content) else '')
                         )
@@ -1865,11 +1860,10 @@ async def search_channel_messages(
 
             # Extract snippet around the match
             content = msg.content or ''
-            lower_query = query.lower()
-            idx = content.lower().find(lower_query)
-            if idx != -1:
-                start = max(0, idx - 50)
-                end = min(len(content), idx + len(query) + 100)
+            match = find_in_lowered(content, query.lower())
+            if match:
+                start = max(0, match[0] - 50)
+                end = min(len(content), match[1] + 100)
                 snippet = ('...' if start > 0 else '') + content[start:end] + ('...' if end < len(content) else '')
             else:
                 snippet = content[:150] + ('...' if len(content) > 150 else '')
