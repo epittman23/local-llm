@@ -5,6 +5,7 @@ import base64
 import copy
 import inspect
 import logging
+import math
 import re
 from collections.abc import Awaitable, Callable
 from functools import cache, partial, update_wrapper
@@ -209,10 +210,21 @@ async def get_async_tool_function_and_apply_extra_params(
             annotation = type_hints.get(name, sig.parameters[name].annotation)
             args = set(get_args(annotation))
             if isinstance(value, str) and (annotation is int or args == {int, type(None)}):
+                text = value.strip()
+                if not text and type(None) in args:
+                    kwargs[name] = None
+                    continue
                 try:
-                    kwargs[name] = int(value)
+                    kwargs[name] = int(text)
                 except ValueError:
-                    pass  # the tool reports a value it cannot read in its own words
+                    # '5.0' reads as 5; 'nan', 'inf', '1.5' and words do not. A tool body never gets a string here.
+                    try:
+                        number = float(text)
+                    except ValueError:
+                        number = None
+                    if number is None or not math.isfinite(number) or not number.is_integer():
+                        raise ValueError(f'{name} must be a whole number, got {value!r}') from None
+                    kwargs[name] = int(number)
             elif (
                 isinstance(value, (int, float))
                 and not isinstance(value, bool)

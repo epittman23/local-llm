@@ -186,21 +186,76 @@ def test_nan_inf_and_bool_are_not_lines(tool, serve, value):
     assert 'whole number' in _page(tool, start_line=value)['error']
 
 
-@pytest.mark.parametrize('tool', TOOLS)
-@pytest.mark.parametrize(('value', 'error'), [('x', True), ('5.0', False), ('5', False), ('', False), (2.0, False)])
-def test_the_real_call_path_reaches_the_tools_own_validation(tool, serve, value, error):
-    """get_async_tool_function_and_apply_extra_params coerces strings before the tool body runs."""
+async def _wrapped(tool):
     from local_llm.utils.tools import get_async_tool_function_and_apply_extra_params
 
+    return await get_async_tool_function_and_apply_extra_params(tool, {'__request__': REQUEST, '__user__': USER})
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('value', ['5', '5.0', ' 2 ', '', 2.0])
+def test_the_real_call_path_reads_whole_numbers_leniently(tool, serve, value):
     serve('a\nb\nc\n' * 4)
 
     async def call():
-        wrapped = await get_async_tool_function_and_apply_extra_params(tool, {'__request__': REQUEST, '__user__': USER})
-        return json.loads(await wrapped(file_id='f1', start_line=value))
+        return json.loads(await (await _wrapped(tool))(file_id='f1', start_line=value))
 
-    page = asyncio.run(call())
-    assert ('whole number' in page.get('error', '')) is error
-    assert 'invalid literal' not in str(page)
+    assert 'error' not in asyncio.run(call())
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('value', ['x', '1.5', 'nan', 'inf', '2026-10-01'])
+def test_the_real_call_path_refuses_other_text_before_the_tool_runs(tool, serve, value):
+    serve('a\nb\nc\n')
+
+    async def call():
+        return await (await _wrapped(tool))(file_id='f1', start_line=value)
+
+    with pytest.raises(ValueError, match='start_line must be a whole number'):
+        asyncio.run(call())
+
+
+def test_an_empty_string_is_unset_only_where_none_is_allowed():
+    from local_llm.utils.tools import get_async_tool_function_and_apply_extra_params
+
+    seen = []
+
+    async def tool(n: int, m: int | None = 7):
+        seen.append((n, m))
+
+    async def call(**kwargs):
+        await (await get_async_tool_function_and_apply_extra_params(tool, {}))(**kwargs)
+
+    asyncio.run(call(n='3', m=''))
+    assert seen == [(3, None)]
+    with pytest.raises(ValueError, match='n must be a whole number'):
+        asyncio.run(call(n=''))
+
+
+def test_a_user_tool_with_an_int_parameter_never_runs_on_a_word():
+    from local_llm.utils.tools import get_async_tool_function_and_apply_extra_params
+
+    ran = []
+
+    async def repeat(n: int):
+        ran.append(n)
+        return 'four' * n
+
+    async def call():
+        return await (await get_async_tool_function_and_apply_extra_params(repeat, {}))(n='four')
+
+    with pytest.raises(ValueError, match="n must be a whole number, got 'four'"):
+        asyncio.run(call())
+    assert ran == []
+
+
+def test_search_notes_refuses_a_text_timestamp_before_its_body():
+    async def call():
+        wrapped = await _wrapped(builtin.search_notes)
+        return await wrapped(query='q', start_timestamp='x')
+
+    with pytest.raises(ValueError, match='start_timestamp must be a whole number'):
+        asyncio.run(call())
 
 
 def test_sed_and_grep_do_not_count_a_phantom_line(serve):
