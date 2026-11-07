@@ -24,6 +24,7 @@ from local_llm.utils.automations import (
     execute_automation,
     next_n_runs_ns,
     next_run_ns,
+    pin_rule_time,
     rrule_interval_seconds,
     validate_rrule,
 )
@@ -225,6 +226,7 @@ async def create_new_automation(
     await check_automation_limits(request, user, form_data.data.rrule, db, is_create=True)
 
     tz = user.timezone
+    form_data.data.rrule = pin_rule_time(form_data.data.rrule, tz=tz)
     automation = await Automations.insert(user.id, form_data, next_run_ns(form_data.data.rrule, tz=tz), db=db)
     response = await enrich_automation(automation, db, tz=tz)
     await publish_event(
@@ -285,6 +287,7 @@ async def update_automation_by_id(
     await check_automation_limits(request, user, form_data.data.rrule, db, is_create=False)
 
     tz = user.timezone
+    form_data.data.rrule = pin_rule_time(form_data.data.rrule, tz=tz)
     updated = await Automations.update_by_id(id, form_data, next_run_ns(form_data.data.rrule, tz=tz), db=db)
     response = await enrich_automation(updated, db, tz=tz)
     await publish_event(

@@ -7,6 +7,7 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { slugify } from '@/lib/utils';
@@ -47,7 +48,11 @@ export function SkillEditor({
 	const [id, setId] = useState(skill?.id ?? '');
 	const [description, setDescription] = useState(skill?.description ?? '');
 	const [content, setContent] = useState(skill?.content ?? '');
-	const [accessGrants, setAccessGrants] = useState(skill?.access_grants ?? []);
+	const skillId = edit ? skill?.id : undefined;
+	const [accessGrants, changeAccess] = useAccessGrants(
+		skill?.access_grants ?? [],
+		skillId ? (grants) => updateSkillAccessGrants(token, skillId, grants) : null
+	);
 	const [showAccess, setShowAccess] = useState(false);
 	const [loading, setLoading] = useState(false);
 
@@ -97,17 +102,7 @@ export function SkillEditor({
 				share={Boolean(user?.permissions?.sharing?.skills) || isAdmin}
 				sharePublic={Boolean(user?.permissions?.sharing?.public_skills) || isAdmin}
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-				onChange={async (grants) => {
-					setAccessGrants(grants);
-					if (edit && skill?.id) {
-						try {
-							await updateSkillAccessGrants(token, skill.id, grants);
-							toast.success('Saved');
-						} catch (error) {
-							toast.error(`${error}`);
-						}
-					}
-				}}
+				onChange={changeAccess}
 			/>
 
 			<form
