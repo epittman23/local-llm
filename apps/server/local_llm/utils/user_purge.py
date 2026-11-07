@@ -27,7 +27,10 @@ which helper existed:
   conversation other members are part of; they show as a deleted user.
 
 When no other administrator exists, what would be reassigned is deleted
-instead, except files still referenced by something that survives.
+instead, except files still referenced by something that survives. A note or
+channel deleted here takes what its own delete takes: every user's chats with
+the note, and the channel's messages (anyone's), their reactions, its
+memberships, webhooks, files and grants.
 """
 
 from __future__ import annotations
@@ -76,7 +79,7 @@ async def purge_user(user_id: str, db: AsyncSession | None = None) -> bool:
     from local_llm.models.auths import Auth
     from local_llm.models.automations import Automation, AutomationRun
     from local_llm.models.calendar import Calendar, CalendarEvent, CalendarEventAttendee
-    from local_llm.models.channels import Channel, ChannelFile, ChannelMember, ChannelWebhook
+    from local_llm.models.channels import Channel, ChannelFile, ChannelMember, Channels, ChannelWebhook
     from local_llm.models.chats import ChatFile, Chats
     from local_llm.models.feedbacks import Feedback
     from local_llm.models.files import File
@@ -104,6 +107,19 @@ async def purge_user(user_id: str, db: AsyncSession | None = None) -> bool:
             return False
         successor = await _successor_id(user_id, session)
 
+        note_ids = [r[0] for r in (await session.execute(select(Note.id).where(Note.user_id == user_id))).all()]
+        shared_notes = await _shared_ids(session, 'note', note_ids, user_id) if successor else set()
+        private_notes = [i for i in note_ids if i not in shared_notes]
+        # What a deleted note or channel held, as their own deletes remove it
+        # (#713). Before this session writes anything: these commit on their
+        # own sessions, which would wait on its locks.
+        for note_id in private_notes:
+            await Chats.delete_internal_chats_by_note_id(note_id)
+        if not successor:
+            channel_ids = (await session.execute(select(Channel.id).where(Channel.user_id == user_id))).scalars()
+            for channel_id in channel_ids.all():
+                await Channels.delete_channel_by_id(channel_id)
+
         # Private records.
         for table in (ApiKey, OAuthSession, Memory, Feedback, PromptHistory, Tag, PinnedNote, Folder, ChatFile):
             await session.execute(delete(table).where(table.user_id == user_id))
@@ -117,12 +133,10 @@ async def purge_user(user_id: str, db: AsyncSession | None = None) -> bool:
         )
 
         # Notes and calendars: deleted unless shared, then reassigned.
-        note_ids = [r[0] for r in (await session.execute(select(Note.id).where(Note.user_id == user_id))).all()]
-        shared_notes = await _shared_ids(session, 'note', note_ids, user_id) if successor else set()
-        private_notes = [i for i in note_ids if i not in shared_notes]
         if private_notes:
             await session.execute(delete(AccessGrant).where(AccessGrant.resource_type == 'note',
                                                             AccessGrant.resource_id.in_(private_notes)))  # fmt: skip
+            await session.execute(delete(PinnedNote).where(PinnedNote.note_id.in_(private_notes)))
             await session.execute(delete(Note).where(Note.id.in_(private_notes)))
         if shared_notes:
             await session.execute(update(Note).where(Note.id.in_(shared_notes)).values(user_id=successor))

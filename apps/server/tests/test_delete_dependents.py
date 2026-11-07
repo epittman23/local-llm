@@ -3,8 +3,10 @@
 Channel delete removed the channel's grants and its row, and nothing else:
 its messages, their reactions, its memberships and its webhooks stayed in the
 database, unreachable. Note delete left the note's hidden chats (each user's
-chat with the note, `meta.type == 'note'`). Runs against the test run's
-migrated SQLite database.
+chat with the note, `meta.type == 'note'`). Purging a user who leaves no
+administrator to take their channels and notes deletes them the same way, and
+a note delete first stops the replies running in its chats (#713). Runs
+against the test run's migrated SQLite database.
 
 Run from apps/server:
 
@@ -142,3 +144,117 @@ def test_a_failed_chat_cleanup_still_reports_the_note_deleted(monkeypatch):
         return await Notes.delete_note_by_id(note.id), await Notes.get_note_by_id(note.id)
 
     assert _run(go()) == (True, None)
+
+
+def test_purging_a_user_with_no_successor_removes_what_their_channels_and_notes_held(monkeypatch):
+    """Purge deleted the user's channel and note rows alone, leaving what #333 removes (#713)."""
+    from local_llm.models.access_grants import AccessGrant, AccessGrants
+    from local_llm.models.notes import PinnedNote
+    from local_llm.utils import user_purge
+
+    async def nobody(*_a, **_k):
+        return None
+
+    # Other tests leave admins in the shared database: force the path that deletes.
+    monkeypatch.setattr(user_purge, '_successor_id', nobody)
+    monkeypatch.setattr(user_purge, '_remove_stored_data', nobody)
+    tag = uuid.uuid4().hex[:8]
+
+    async def go():
+        gone = await Users.insert_new_user(f'gone{tag}', 'Gone', f'gone{tag}@example.invalid', role='user')
+        ben = await Users.insert_new_user(f'ben{tag}', 'Ben', f'ben{tag}@example.invalid', role='admin')
+        channel = await Channels.insert_new_channel(CreateChannelForm(type='group', name=f'c-{tag}'), gone.id)
+        await Channels.join_channel(channel.id, ben.id)
+        await Channels.insert_webhook(channel.id, ben.id, ChannelWebhookForm(name='Bot'))
+        message = await Messages.insert_new_message(MessageForm(content='hi'), channel.id, ben.id)
+        await Messages.add_reaction_to_message(message.id, ben.id, 'thumbsup')
+        await AccessGrants.grant_access('channel', channel.id, 'user', ben.id, 'read')
+
+        note = await Notes.insert_new_note(gone.id, NoteForm(title='Plan'))
+        await Notes.toggle_note_pinned_by_id(note.id, ben.id)
+        ben_chat = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ben.id,
+            ChatForm(chat={'title': 'note chat'}),
+            internal_meta={'internal': True, 'type': 'note', 'note_id': note.id},
+        )
+        child = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ben.id,
+            ChatForm(chat={'title': 'subagent'}),
+            internal_meta={'internal': True, 'parent_chat_id': ben_chat.id},
+        )
+
+        assert await Users.delete_user_by_id(gone.id)
+
+        return {
+            'messages': await _count(Message, Message.channel_id == channel.id),
+            'reactions': await _count(MessageReaction, MessageReaction.message_id == message.id),
+            'members': await _count(ChannelMember, ChannelMember.channel_id == channel.id),
+            'webhooks': await _count(ChannelWebhook, ChannelWebhook.channel_id == channel.id),
+            'grants': await _count(AccessGrant, AccessGrant.resource_id == channel.id),
+            'pins': await _count(PinnedNote, PinnedNote.note_id == note.id),
+            'note chats': await _count(Chat, Chat.id.in_([ben_chat.id, child.id])),
+        }
+
+    assert _run(go()) == dict.fromkeys(
+        ('messages', 'reactions', 'members', 'webhooks', 'grants', 'pins', 'note chats'), 0
+    )
+
+
+def test_deleting_a_note_stops_the_replies_running_in_its_chats(monkeypatch):
+    """The chat delete route stops a chat's tasks first; the note delete did not (#713)."""
+    from types import SimpleNamespace
+
+    from local_llm.routers import notes as notes_router
+
+    tag = uuid.uuid4().hex[:8]
+    stopped = []
+
+    async def allowed(*_a, **_k):
+        return True
+
+    async def nothing(*_a, **_k):
+        return None
+
+    async def config_get(key, default=None):
+        return default
+
+    async def stop(redis, item_id):
+        # Stopped while the chat is still there, as the chat delete route does.
+        stopped.append((item_id, await Chats.get_chat_by_id(item_id) is not None))
+        return {'status': True}
+
+    monkeypatch.setattr(notes_router, 'has_permission', allowed)
+    monkeypatch.setattr(notes_router.Config, 'get', config_get)
+    monkeypatch.setattr(notes_router, 'publish_event', nothing)
+    monkeypatch.setattr(notes_router, 'close_room', nothing)
+    monkeypatch.setattr(notes_router, 'stop_item_tasks', stop, raising=False)
+
+    async def go():
+        ann = await Users.insert_new_user(f'ann{tag}', 'Ann', f'ann{tag}@example.invalid', role='user')
+        ben = await Users.insert_new_user(f'ben{tag}', 'Ben', f'ben{tag}@example.invalid', role='user')
+        note = await Notes.insert_new_note(ann.id, NoteForm(title='Plan'))
+        chats = []
+        for user_id in (ann.id, ben.id):
+            chats.append(
+                await Chats.insert_new_chat(
+                    str(uuid.uuid4()),
+                    user_id,
+                    ChatForm(chat={'title': 'note chat'}),
+                    internal_meta={'internal': True, 'type': 'note', 'note_id': note.id},
+                )
+            )
+        child = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ben.id,
+            ChatForm(chat={'title': 'subagent'}),
+            internal_meta={'internal': True, 'parent_chat_id': chats[1].id},
+        )
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=None)))
+        user = SimpleNamespace(id=ann.id, role='user')
+        assert await notes_router.delete_note_by_id(request, note.id, user=user, db=None) is True
+        return {(c.id, True) for c in (*chats, child)}
+
+    expected = _run(go())
+    assert set(stopped) == expected and len(stopped) == len(expected)
