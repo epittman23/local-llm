@@ -202,7 +202,7 @@ async def send_request(
 def get_api_key(idx, url, configs):
     parsed_url = urlparse(url)
     base_url = f'{parsed_url.scheme}://{parsed_url.netloc}'
-    return (configs.get(str(idx), configs.get(base_url, {})) or {}).get('key', None)  # Legacy support
+    return resolve_api_config(configs, idx, base_url).get('key', None)  # Legacy support
 
 
 ##########################################
@@ -325,8 +325,10 @@ async def update_config(
 ) -> dict:
     """Persist updated Ollama connection settings."""
     valid_keys = {str(i) for i in range(len(form_data.OLLAMA_BASE_URLS))}
-    # A null entry is stored as {}: the connection's readers call .get on it (#632).
-    api_configs = {k: v or {} for k, v in form_data.OLLAMA_API_CONFIGS.items() if k in valid_keys}
+    # An entry that is not an object is stored as {}: the connection's readers call .get on it (#632).
+    api_configs = {
+        k: v if isinstance(v, dict) else {} for k, v in form_data.OLLAMA_API_CONFIGS.items() if k in valid_keys
+    }
 
     await Config.upsert(
         {
@@ -385,13 +387,22 @@ def merge_models_lists(model_lists) -> list[dict]:
     return list(merged.values())
 
 
-def resolve_api_config(api_configs: dict, idx: int, url: str) -> dict:
+def resolve_api_config(api_configs: dict | None, idx: int, url: str) -> dict:
     """Look up the API config for a backend by numeric index, falling back to URL key (legacy).
 
-    An entry stored as null (an API save or a config import could store one)
-    is read as empty: every caller calls `.get(...)` on the result (#632).
+    Every caller calls `.get(...)` on the result, so anything that is not an
+    object reads as empty (#632): the whole setting stored as null (Config.get
+    returns a stored null, not its default), or an entry stored as null or as
+    another value by an API save or a config import. A null index entry falls
+    back to a legacy URL entry, as the frontend's `normalizeConfigs` does.
     """
-    return api_configs.get(str(idx), api_configs.get(url, {})) or {}
+    if not isinstance(api_configs, dict):
+        return {}
+    for key in (str(idx), url):
+        api_config = api_configs.get(key)
+        if isinstance(api_config, dict):
+            return api_config
+    return {}
 
 
 async def get_ollama_connection_config() -> tuple[list, dict]:

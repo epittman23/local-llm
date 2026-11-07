@@ -338,13 +338,22 @@ async def normalize_openai_api_keys(api_base_urls: list[str], api_keys: list[str
     return api_keys
 
 
-def resolve_api_config(api_configs: dict, idx: int, url: str) -> dict:
+def resolve_api_config(api_configs: dict | None, idx: int, url: str) -> dict:
     """Look up the API config for a connection by numeric index, falling back to URL key (legacy).
 
-    An entry stored as null (an API save or a config import could store one)
-    is read as empty: every caller calls `.get(...)` on the result (#632).
+    Every caller calls `.get(...)` on the result, so anything that is not an
+    object reads as empty (#632): the whole setting stored as null (Config.get
+    returns a stored null, not its default), or an entry stored as null or as
+    another value by an API save or a config import. A null index entry falls
+    back to a legacy URL entry, as the frontend's `normalizeConfigs` does.
     """
-    return api_configs.get(str(idx), api_configs.get(url, {})) or {}
+    if not isinstance(api_configs, dict):
+        return {}
+    for key in (str(idx), url):
+        api_config = api_configs.get(key)
+        if isinstance(api_config, dict):
+            return api_config
+    return {}
 
 
 async def get_openai_connection(idx: int) -> tuple[str, str, dict]:
@@ -575,8 +584,12 @@ async def update_config(request: Request, form_data: OpenAIConfigForm, user=Depe
         api_keys = [*api_keys, *([''] * (len(form_data.OPENAI_API_BASE_URLS) - len(api_keys)))]
 
     valid_keys = set(map(str, range(len(form_data.OPENAI_API_BASE_URLS))))
-    # A null entry is stored as {}: the connection's readers call .get on it (#632).
-    api_configs = {key: value or {} for key, value in form_data.OPENAI_API_CONFIGS.items() if key in valid_keys}
+    # An entry that is not an object is stored as {}: the connection's readers call .get on it (#632).
+    api_configs = {
+        key: value if isinstance(value, dict) else {}
+        for key, value in form_data.OPENAI_API_CONFIGS.items()
+        if key in valid_keys
+    }
 
     await Config.upsert(
         {

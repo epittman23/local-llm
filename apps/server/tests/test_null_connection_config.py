@@ -243,8 +243,9 @@ def test_unloading_from_an_ollama_connection_with_a_null_config_reads_it_as_empt
 # ── The Ollama proxy routes and the OpenAI merged model list ────────────────
 
 
-def _ollama_proxy_client(monkeypatch, sent: list) -> TestClient:
+def _ollama_proxy_client(monkeypatch, sent: list, api_configs=None) -> TestClient:
     """The Ollama router with a null connection config, and a send_request that records the call."""
+    stored = {'0': None} if api_configs is None else api_configs
     from local_llm.utils.auth import get_admin_user, get_verified_user
 
     async def no_models(*_a, **_k):
@@ -263,7 +264,7 @@ def _ollama_proxy_client(monkeypatch, sent: list) -> TestClient:
     monkeypatch.setattr(
         ollama,
         'Config',
-        _Config({'ollama.enable': True, 'ollama.base_urls': ['http://a.invalid'], 'ollama.api_configs': {'0': None}}),
+        _Config({'ollama.enable': True, 'ollama.base_urls': ['http://a.invalid'], 'ollama.api_configs': stored}),
     )
     monkeypatch.setattr(ollama, 'get_all_models', no_models)
     monkeypatch.setattr(ollama.Models, 'get_model_by_id', no_model)
@@ -341,3 +342,73 @@ def test_an_imported_null_connection_config_key_is_stored_as_empty():
     assert imported == {'ollama.api_configs': {}, 'openai.api_configs': {}}
     # A key the import does not carry is not added.
     assert without_null_settings({'openai.enable': True}) == {'openai.enable': True}
+
+
+# ── A whole key stored as null, and entries that are not objects ────────────
+
+
+@pytest.mark.parametrize(
+    ('path', 'body'),
+    [
+        ('/ollama/api/unload', {'model': 'm'}),
+        ('/ollama/api/embed/0', {'model': 'm', 'input': 'x'}),
+        ('/ollama/api/generate/0', {'model': 'm', 'prompt': 'x'}),
+        ('/ollama/v1/responses/0', {'model': 'm', 'input': 'x'}),
+    ],
+)
+@pytest.mark.parametrize('stored', ['whole key null', 'entry not an object'])
+def test_an_ollama_route_forwards_when_the_whole_key_is_null_or_an_entry_is_not_an_object(
+    monkeypatch, path, body, stored
+):
+    # Config.get returns a stored JSON null as None, not its default (#632).
+    sent: list = []
+    api_configs = {'whole key null': {}, 'entry not an object': {'0': 'x'}}[stored]
+    client = _ollama_proxy_client(monkeypatch, sent, api_configs)
+    if stored == 'whole key null':
+        ollama.Config.values['ollama.api_configs'] = None
+
+    r = client.post(path, json=body)
+
+    assert r.status_code == 200, r.text
+    assert [kwargs['key'] for _, kwargs in sent] == [None]
+
+
+def test_resolve_api_config_falls_back_to_a_legacy_url_entry_when_the_index_entry_is_null():
+    # As the frontend's normalizeConfigs does.
+    configs = {'0': None, 'http://a.invalid': {'key': 'k'}}
+
+    assert ollama.resolve_api_config(configs, 0, 'http://a.invalid') == {'key': 'k'}
+    assert openai.resolve_api_config(configs, 0, 'http://a.invalid') == {'key': 'k'}
+    assert ollama.resolve_api_config(None, 0, 'http://a.invalid') == {}
+    assert openai.resolve_api_config({'0': 'x'}, 0, 'http://b.invalid') == {}
+
+
+def test_a_connection_saved_with_an_entry_that_is_not_an_object_stores_an_empty_one(monkeypatch):
+    config = _Config({})
+    r = _admin_client(openai, '/openai', monkeypatch, config).post(
+        '/openai/config/update',
+        json={
+            'ENABLE_OPENAI_API': True,
+            'OPENAI_API_BASE_URLS': ['http://a.invalid/v1'],
+            'OPENAI_API_KEYS': [''],
+            'OPENAI_API_CONFIGS': {'0': 'x'},
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert config.upserted['openai.api_configs'] == {'0': {}}
+
+    config = _Config({})
+    r = _admin_client(ollama, '/ollama', monkeypatch, config).post(
+        '/ollama/config/update',
+        json={'ENABLE_OLLAMA_API': True, 'OLLAMA_BASE_URLS': ['http://a.invalid'], 'OLLAMA_API_CONFIGS': {'0': 7}},
+    )
+    assert r.status_code == 200, r.text
+    assert config.upserted['ollama.api_configs'] == {'0': {}}
+
+
+def test_an_imported_entry_that_is_not_an_object_is_stored_as_empty():
+    from local_llm.routers.configs import without_null_settings
+
+    assert without_null_settings({'openai.api_configs': {'0': 'x', '1': {'enable': False}}}) == {
+        'openai.api_configs': {'0': {}, '1': {'enable': False}}
+    }
