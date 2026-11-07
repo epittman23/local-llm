@@ -5,7 +5,9 @@ user makes, so an admin's password reset for one wrote nothing, and the route
 still said it had (and announced AUTH_PASSWORD_CHANGED). SCIM now creates the
 credentials, with a random password nobody knows, as an OAuth sign-up does;
 setting a password creates them for a user who has none (one SCIM created
-before this); and the route refuses when the write changes nothing.
+before this); and the route refuses when the write changes nothing. A
+migration gives every user who still has no credentials row one, with a
+random password nobody knows (#627).
 
 Runs against the test run's migrated SQLite database.
 
@@ -16,13 +18,20 @@ Run from apps/server:
 
 import asyncio
 import importlib
+import importlib.util
 import uuid
+from functools import partial
+from pathlib import Path
+from types import SimpleNamespace
 
+import bcrypt
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from local_llm.internal.db import get_async_db, get_async_session
+from local_llm.internal.db import engine, get_async_db, get_async_session
 from local_llm.models.auths import Auth, Auths
 from local_llm.models.users import Users
 from local_llm.routers import scim
@@ -100,3 +109,55 @@ def test_a_row_made_meanwhile_by_another_request_gets_the_password(monkeypatch):
     assert _run(Auths.update_user_password_by_id(user.id, 'second-hash')) is True
     monkeypatch.undo()
     assert _run(_credentials(user.id)).password == 'second-hash'
+
+
+MIGRATION = (
+    Path(__file__).resolve().parents[1]
+    / 'local_llm'
+    / 'migrations'
+    / 'versions'
+    / '6d9f8d9d38f6_add_missing_user_credentials.py'
+)
+
+
+def _upgrade_with_the_credentials_migration():
+    """Run the revision's upgrade on the test run's database, already migrated before these users existed."""
+    spec = importlib.util.spec_from_file_location('add_missing_user_credentials', MIGRATION)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    # The run's database holds every user the earlier tests made, many without
+    # credentials, and each gets a hash: the fewest bcrypt rounds keep this quick.
+    migration.bcrypt = SimpleNamespace(hashpw=bcrypt.hashpw, gensalt=partial(bcrypt.gensalt, rounds=4))
+    with engine.begin() as connection, Operations.context(MigrationContext.configure(connection)):
+        migration.upgrade()
+
+
+def test_the_migration_gives_a_user_without_credentials_them_with_a_password_nobody_knows():
+    tag = uuid.uuid4().hex[:8]
+    email = f'scim-pre-296-{tag}@example.invalid'
+    # As SCIM created users before #296 was fixed: a user row only.
+    user = _run(Users.insert_new_user(f'scim-pre-296-{tag}', 'Old', email, role='user'))
+    assert _run(_credentials(user.id)) is None
+
+    _upgrade_with_the_credentials_migration()
+
+    credentials = _run(_credentials(user.id))
+    assert credentials is not None
+    assert credentials.email == email and credentials.active
+    assert credentials.password.startswith('$2')
+    assert _run(Auths.authenticate_user_by_email(email)) is not None
+
+
+def test_the_migration_leaves_existing_credentials_alone_and_changes_nothing_when_run_again():
+    tag = uuid.uuid4().hex[:8]
+    user = _run(Users.insert_new_user(f'has-auth-{tag}', 'Has', f'has-auth-{tag}@example.invalid', role='user'))
+    _run(Auths.update_user_password_by_id(user.id, 'a-known-hash'))
+    bare = _run(Users.insert_new_user(f'bare-{tag}', 'Bare', f'bare-{tag}@example.invalid', role='user'))
+
+    _upgrade_with_the_credentials_migration()
+    made = _run(_credentials(bare.id)).password
+    _upgrade_with_the_credentials_migration()
+
+    assert _run(_credentials(user.id)).password == 'a-known-hash'
+    assert _run(_credentials(bare.id)).password == made
