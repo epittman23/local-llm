@@ -32,12 +32,17 @@ class FakeSocket {
 	fire(event: string, ...args: unknown[]) {
 		for (const h of this.handlers.get(event) ?? []) h(...args);
 	}
+	connects = 0;
 	/** Connected, then the first event the server sends, with nothing in between. */
 	connect() {
+		this.connects++;
+		if (!slowHandshake) this.answer();
+		return this;
+	}
+	answer() {
 		this.connected = true;
 		this.fire('connect');
 		this.fire('events', { data: { type: 'first' } });
-		return this;
 	}
 	disconnect = vi.fn(() => {
 		this.connected = false;
@@ -46,6 +51,8 @@ class FakeSocket {
 }
 
 const made: FakeSocket[] = [];
+/** When set, connect() only starts the handshake; the test answers it with answer(). */
+let slowHandshake = false;
 vi.mock('socket.io-client', () => ({
 	io: (_url: unknown, opts: { autoConnect?: boolean }) => {
 		const s = new FakeSocket();
@@ -85,6 +92,8 @@ describe('SocketProvider', () => {
 	afterEach(() => {
 		useAuthStore.setState({ token: null } as never);
 		made.length = 0;
+		slowHandshake = false;
+		vi.restoreAllMocks();
 	});
 
 	it('gives the socket to its children before it connects, so the first event is not lost (#519)', async () => {
@@ -157,6 +166,39 @@ describe('SocketProvider', () => {
 		expect(made[0].connected).toBe(true);
 		expect(made[0].disconnect).not.toHaveBeenCalled();
 		expect(made[0].emit.mock.calls.filter(([event]) => event === 'user-join')).toHaveLength(1);
+	});
+
+	it('connects once when the shell flickers during the handshake, and keeps one heartbeat', async () => {
+		slowHandshake = true;
+		// The heartbeat timers (30 s) still running.
+		const heartbeats = new Set<unknown>();
+		const realSet = globalThis.setInterval;
+		const realClear = globalThis.clearInterval;
+		vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
+			const id = realSet(fn, ms);
+			if (ms === 30000) heartbeats.add(id);
+			return id;
+		}) as typeof setInterval);
+		vi.spyOn(globalThis, 'clearInterval').mockImplementation(((id?: ReturnType<typeof setInterval>) => {
+			heartbeats.delete(id);
+			realClear(id);
+		}) as typeof clearInterval);
+		const page = (on: boolean) => (
+			<SocketProvider>
+				<Shell on={on} />
+			</SocketProvider>
+		);
+
+		const { rerender } = render(page(true));
+		rerender(page(false));
+		rerender(page(true));
+		await Promise.resolve();
+		expect(made[0].connects).toBe(1);
+
+		made[0].answer();
+		// A second connect ack for the same socket must not start a second heartbeat.
+		made[0].fire('connect');
+		expect(heartbeats.size).toBe(1);
 	});
 
 	it('still joins the user room on connect, with the token', async () => {

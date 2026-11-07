@@ -62,6 +62,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 	const [ready, setReady] = useState(false);
 	// Sockets their own cleanup has closed: never connected after that.
 	const closed = useRef(new WeakSet<Socket>());
+	// Sockets already told to connect: once is enough, even mid-handshake
+	// (socket.connected is still false then), and socket.io reconnects on its own.
+	const started = useRef(new WeakSet<Socket>());
 
 	useEffect(() => {
 		if (!token) return;
@@ -101,6 +104,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
 			socket.emit('user-join', { auth: { token } });
 
+			// One heartbeat per socket, even if a second connect is acknowledged.
+			if (heartbeatInterval) clearInterval(heartbeatInterval);
 			heartbeatInterval = setInterval(() => {
 				if (socket.connected) {
 					socket.emit('heartbeat', {});
@@ -148,7 +153,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 	// `ready` is set from the shell's effect, after its children's effects, so
 	// by this render every listener under the shell has attached to `socket`.
 	useEffect(() => {
-		if (socket && ready && !socket.connected && !closed.current.has(socket)) socket.connect();
+		if (!socket || !ready || started.current.has(socket) || closed.current.has(socket)) return;
+		started.current.add(socket);
+		socket.connect();
 	}, [socket, ready]);
 
 	return <SocketContext.Provider value={{ socket, connected, setReady }}>{children}</SocketContext.Provider>;
