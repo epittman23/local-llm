@@ -2,11 +2,12 @@ import { render, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { SocketProvider, useSocket } from './SocketProvider';
+import { SocketProvider, useSocket, useSocketReady } from './SocketProvider';
 
 // #519: the backend joins the user's room while the socket connects, so an
 // event can arrive in the same moment. A listener that attaches only after
-// that missed it.
+// that missed it. #674: after a sign-in the listeners mount later still, with
+// the app's shell, so the socket waits for the shell to say it is ready.
 
 type Handler = (...args: unknown[]) => void;
 
@@ -31,12 +32,17 @@ class FakeSocket {
 	fire(event: string, ...args: unknown[]) {
 		for (const h of this.handlers.get(event) ?? []) h(...args);
 	}
+	connects = 0;
 	/** Connected, then the first event the server sends, with nothing in between. */
 	connect() {
+		this.connects++;
+		if (!slowHandshake) this.answer();
+		return this;
+	}
+	answer() {
 		this.connected = true;
 		this.fire('connect');
 		this.fire('events', { data: { type: 'first' } });
-		return this;
 	}
 	disconnect = vi.fn(() => {
 		this.connected = false;
@@ -45,6 +51,8 @@ class FakeSocket {
 }
 
 const made: FakeSocket[] = [];
+/** When set, connect() only starts the handshake; the test answers it with answer(). */
+let slowHandshake = false;
 vi.mock('socket.io-client', () => ({
 	io: (_url: unknown, opts: { autoConnect?: boolean }) => {
 		const s = new FakeSocket();
@@ -66,6 +74,12 @@ function Listener({ seen }: { seen: unknown[] }) {
 	return null;
 }
 
+/** Stands in for AppShell: says the socket may connect while `on`. */
+function Shell({ on = true, children }: { on?: boolean; children?: React.ReactNode }) {
+	useSocketReady(on);
+	return <>{children}</>;
+}
+
 /** The socket the provider last gave its children. */
 let current: unknown = 'unset';
 function Probe() {
@@ -78,13 +92,17 @@ describe('SocketProvider', () => {
 	afterEach(() => {
 		useAuthStore.setState({ token: null } as never);
 		made.length = 0;
+		slowHandshake = false;
+		vi.restoreAllMocks();
 	});
 
 	it('gives the socket to its children before it connects, so the first event is not lost (#519)', async () => {
 		const seen: unknown[] = [];
 		render(
 			<SocketProvider>
-				<Listener seen={seen} />
+				<Shell>
+					<Listener seen={seen} />
+				</Shell>
 			</SocketProvider>
 		);
 
@@ -92,10 +110,103 @@ describe('SocketProvider', () => {
 		expect(seen).toEqual([{ data: { type: 'first' } }]);
 	});
 
+	it('waits for the shell before it connects, so an event sent right after a sign-in is not lost (#674)', async () => {
+		const seen: unknown[] = [];
+		// The sign-in page: a token, but no shell and no listeners yet.
+		const { rerender } = render(<SocketProvider>{null}</SocketProvider>);
+		await Promise.resolve();
+		expect(made).toHaveLength(1);
+		expect(made[0].connected).toBe(false);
+
+		rerender(
+			<SocketProvider>
+				<Shell>
+					<Listener seen={seen} />
+				</Shell>
+			</SocketProvider>
+		);
+
+		await waitFor(() => expect(made[0].connected).toBe(true));
+		expect(seen).toEqual([{ data: { type: 'first' } }]);
+	});
+
+	it('connects the new socket when the token changes under the shell', async () => {
+		render(
+			<SocketProvider>
+				<Shell>
+					<Probe />
+				</Shell>
+			</SocketProvider>
+		);
+		await waitFor(() => expect(made[0]?.connected).toBe(true));
+
+		useAuthStore.setState({ token: 't2' } as never);
+
+		await waitFor(() => expect(made[1]?.connected).toBe(true));
+		expect(current).toBe(made[1]);
+		expect(made[0].disconnect).toHaveBeenCalled();
+		expect(made[1].emit).toHaveBeenCalledWith('user-join', { auth: { token: 't2' } });
+	});
+
+	it('keeps the socket connected when the shell goes, and does not connect it twice when it returns', async () => {
+		const page = (on: boolean) => (
+			<SocketProvider>
+				<Shell on={on} />
+			</SocketProvider>
+		);
+		const { rerender } = render(page(true));
+		await waitFor(() => expect(made[0]?.connected).toBe(true));
+
+		// A public page such as /watch, then back into the app.
+		rerender(page(false));
+		rerender(page(true));
+		await Promise.resolve();
+
+		expect(made).toHaveLength(1);
+		expect(made[0].connected).toBe(true);
+		expect(made[0].disconnect).not.toHaveBeenCalled();
+		expect(made[0].emit.mock.calls.filter(([event]) => event === 'user-join')).toHaveLength(1);
+	});
+
+	it('connects once when the shell flickers during the handshake, and keeps one heartbeat', async () => {
+		slowHandshake = true;
+		// The heartbeat timers (30 s) still running.
+		const heartbeats = new Set<unknown>();
+		const realSet = globalThis.setInterval;
+		const realClear = globalThis.clearInterval;
+		vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
+			const id = realSet(fn, ms);
+			if (ms === 30000) heartbeats.add(id);
+			return id;
+		}) as typeof setInterval);
+		vi.spyOn(globalThis, 'clearInterval').mockImplementation(((id?: ReturnType<typeof setInterval>) => {
+			heartbeats.delete(id);
+			realClear(id);
+		}) as typeof clearInterval);
+		const page = (on: boolean) => (
+			<SocketProvider>
+				<Shell on={on} />
+			</SocketProvider>
+		);
+
+		const { rerender } = render(page(true));
+		rerender(page(false));
+		rerender(page(true));
+		await Promise.resolve();
+		expect(made[0].connects).toBe(1);
+
+		made[0].answer();
+		// A second connect ack for the same socket must not start a second heartbeat.
+		made[0].fire('connect');
+		expect(heartbeats.size).toBe(1);
+	});
+
 	it('still joins the user room on connect, with the token', async () => {
 		render(
 			<SocketProvider>
-				<Listener seen={[]} />
+				<Shell>
+					<Listener seen={[]} />
+				</Shell>
 			</SocketProvider>
 		);
 
@@ -106,7 +217,9 @@ describe('SocketProvider', () => {
 	it('disconnects on sign-out and gives its children no socket', async () => {
 		render(
 			<SocketProvider>
-				<Probe />
+				<Shell>
+					<Probe />
+				</Shell>
 			</SocketProvider>
 		);
 		await waitFor(() => expect(made[0]?.connected).toBe(true));

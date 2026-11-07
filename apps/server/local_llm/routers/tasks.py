@@ -639,7 +639,7 @@ async def generate_moa_response(request: Request, form_data: dict, user=Depends(
 
     template = DEFAULT_MOA_GENERATION_PROMPT_TEMPLATE
 
-    content = moa_response_generation_template(
+    content = await moa_response_generation_template(
         template,
         form_data['prompt'],
         form_data['responses'],
