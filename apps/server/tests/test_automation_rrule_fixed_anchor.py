@@ -21,6 +21,8 @@ from typing import Any
 import pytest
 from dateutil import rrule as rrule_module
 
+from local_llm.constants import ERROR_MESSAGES
+from local_llm.models.calendar import CalendarEventForm, CalendarEventUpdateForm
 from local_llm.utils import automations
 
 RULE = 'RRULE:FREQ=MINUTELY;INTERVAL=2;BYMINUTE=2,46'
@@ -45,7 +47,10 @@ def _clock_at(monkeypatch, now: dt.datetime) -> None:
     monkeypatch.setattr(automations, 'dt', SimpleNamespace(datetime=Clock, timedelta=dt.timedelta, UTC=dt.UTC))
 
 
-@pytest.mark.parametrize('now', [dt.datetime(2024, 3, 10, 12, 0, 30), dt.datetime(2024, 3, 10, 12, 1, 30)])
+MINUTES = [dt.datetime(2024, 3, 10, 12, 0, 30), dt.datetime(2024, 3, 10, 12, 1, 30)]
+
+
+@pytest.mark.parametrize('now', MINUTES)
 def test_a_filtered_sub_daily_rule_reads_the_same_at_any_minute(monkeypatch, now):
     _clock_at(monkeypatch, now)
     expected = dt.datetime(2024, 3, 10, 12, 2, 0)
@@ -54,3 +59,21 @@ def test_a_filtered_sub_daily_rule_reads_the_same_at_any_minute(monkeypatch, now
     assert automations.pin_rule_time(RULE) == RULE
     assert automations._parse_rule(RULE, now).after(now) == expected
     assert automations.next_run_ns(RULE, anchor_ns=0) == int(expected.timestamp() * 1_000_000_000)
+
+
+@pytest.mark.parametrize('now', MINUTES)
+def test_its_shortest_gap_is_measured_at_any_minute(monkeypatch, now):
+    # The minimum-interval check on save reads the rule outside validation's try.
+    _clock_at(monkeypatch, now)
+
+    # From :46 to the next hour's :02.
+    assert automations.rrule_interval_seconds(RULE) == 16 * 60
+
+
+@pytest.mark.parametrize('now', MINUTES)
+@pytest.mark.parametrize('form', [CalendarEventForm, CalendarEventUpdateForm])
+def test_a_calendar_event_refuses_it_as_too_frequent_at_any_minute(monkeypatch, now, form):
+    _clock_at(monkeypatch, now)
+
+    with pytest.raises(ValueError, match=ERROR_MESSAGES.CALENDAR_RRULE_TOO_FREQUENT):
+        form(calendar_id='c', title='t', start_at=1, rrule=RULE)

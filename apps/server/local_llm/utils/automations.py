@@ -337,9 +337,12 @@ def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
     own first `sample` occurrences rather than the next two after now, since a
     COUNT-bounded sub-daily rule's occurrences can all lie before now when it
     is parsed against the clock-aligned epoch start, and a rule such as
-    BYHOUR=9,10 has a short gap that the first pair may not show.
+    BYHOUR=9,10 has a short gap that the first pair may not show. A
+    sub-daily rule without a DTSTART is read from the epoch, as `_parse_rule`
+    reads it, not from dateutil's now, which refused some at an odd minute
+    only (#801); a longer one is sampled from now, as before.
     """
-    parsed = rrulestr(s, ignoretz=True)
+    parsed = rrulestr(s, dtstart=_EPOCH if _sub_daily(s) else None, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     if not rules:
         return None
