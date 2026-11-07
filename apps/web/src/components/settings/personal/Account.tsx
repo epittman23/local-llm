@@ -84,6 +84,7 @@ export default function Account() {
 	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 	const [retryingKey, setRetryingKey] = useState(false);
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
+	const [confirmRegenerateKey, setConfirmRegenerateKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const perms = user?.permissions as { features?: { api_keys?: boolean } } | undefined;
 	const canApiKeys =
@@ -430,11 +431,7 @@ export default function Account() {
 										size="icon-sm"
 										variant="ghost"
 										aria-label="Regenerate API key"
-										onClick={() =>
-											void createAPIKey(token)
-												.then((k) => k && setApiKey(k))
-												.catch((e) => toast.error(`${e}`))
-										}
+										onClick={() => setConfirmRegenerateKey(true)}
 									>
 										<RefreshCw className="size-3.5" />
 									</Button>
@@ -472,6 +469,18 @@ export default function Account() {
 					)}
 				</>
 			)}
+			<ConfirmDialog
+				open={confirmRegenerateKey}
+				onOpenChange={setConfirmRegenerateKey}
+				title="Regenerate API Key"
+				onConfirm={() =>
+					void createAPIKey(token)
+						.then((k) => k && setApiKey(k))
+						.catch((e) => toast.error(`${e}`))
+				}
+			>
+				Anything using the current key will stop working.
+			</ConfirmDialog>
 			<ConfirmDialog
 				open={confirmDeleteKey}
 				onOpenChange={setConfirmDeleteKey}
