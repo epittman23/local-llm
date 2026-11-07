@@ -1,7 +1,6 @@
 import { ChevronLeft } from 'lucide-react';
 import { Suspense, lazy, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import type { CodeEditorHandle } from '@/components/common/CodeEditor';
@@ -9,6 +8,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
@@ -54,7 +54,10 @@ export function ToolkitEditor({
 	const [name, setName] = useState(tool?.name ?? '');
 	const [id, setId] = useState(tool?.id ?? '');
 	const [meta, setMeta] = useState(tool?.meta ?? { description: '' });
-	const [accessGrants, setAccessGrants] = useState(tool?.access_grants ?? []);
+	const [accessGrants, changeAccess] = useAccessGrants(
+		tool?.access_grants ?? [],
+		edit && id ? (grants) => updateToolAccessGrants(token, id, grants) : null
+	);
 	// The editor owns the document; this ref tracks its live text so a save reads
 	// the latest even right after an async format.
 	const code = useRef(tool?.content || toolBoilerplate);
@@ -99,17 +102,7 @@ export function ToolkitEditor({
 				share={Boolean(user?.permissions?.sharing?.tools) || isAdmin}
 				sharePublic={Boolean(user?.permissions?.sharing?.public_tools) || isAdmin}
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-				onChange={async (grants) => {
-					setAccessGrants(grants);
-					if (edit && id) {
-						try {
-							await updateToolAccessGrants(token, id, grants);
-							toast.success('Saved');
-						} catch (error) {
-							toast.error(`${error}`);
-						}
-					}
-				}}
+				onChange={changeAccess}
 			/>
 
 			<ConfirmDialog

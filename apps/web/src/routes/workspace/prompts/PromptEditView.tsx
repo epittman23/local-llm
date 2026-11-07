@@ -12,6 +12,7 @@ import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import {
 	deletePromptHistoryVersion,
 	getPromptHistory,
@@ -65,7 +66,9 @@ export function PromptEditView({
 	const [name, setName] = useState(prompt.name);
 	const [command, setCommand] = useState(prompt.command.startsWith('/') ? prompt.command.slice(1) : prompt.command);
 	const [tags, setTags] = useState(prompt.tags.map((n) => ({ name: n })));
-	const [accessGrants, setAccessGrants] = useState(prompt.access_grants);
+	const [accessGrants, changeAccess] = useAccessGrants(prompt.access_grants, (grants) =>
+		updatePromptAccessGrants(token, prompt.id, grants)
+	);
 	const [versionId, setVersionId] = useState(prompt.version_id ?? null);
 	const [showAccess, setShowAccess] = useState(false);
 	const [showEdit, setShowEdit] = useState(false);
@@ -315,15 +318,7 @@ export function PromptEditView({
 				share={Boolean(user?.permissions?.sharing?.prompts) || isAdmin}
 				sharePublic={Boolean(user?.permissions?.sharing?.public_prompts) || isAdmin}
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-				onChange={async (grants) => {
-					setAccessGrants(grants);
-					try {
-						await updatePromptAccessGrants(token, prompt.id, grants);
-						toast.success('Saved');
-					} catch (error) {
-						toast.error(`${error}`);
-					}
-				}}
+				onChange={changeAccess}
 			/>
 
 			<Dialog open={showEdit} onOpenChange={setShowEdit}>

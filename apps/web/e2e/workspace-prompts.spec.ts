@@ -112,7 +112,8 @@ async function mockPromptsApi(page: Page, initial: Prompt[]) {
 			}
 			if (rest === '/update/meta') return json({ ...prompt, ...(body as object) });
 			if (rest === '/update/version') return json(prompt);
-			if (rest === '/access/update') return json(prompt);
+			// Stored and answered with the item, as the backend does: the dialog shows the reply's grants (#676).
+			if (rest === '/access/update') return json(Object.assign(prompt, body as object));
 			if (rest === '/update') {
 				// As the backend does (#221): a save not marked production keeps
 				// the live content and version; name, command and tags apply.
