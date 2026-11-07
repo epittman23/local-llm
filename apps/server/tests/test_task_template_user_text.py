@@ -3,7 +3,9 @@
 Each task template (title, tags, follow-ups, queries, ...) put the user's
 prompt and messages in first, then expanded the whole text, so a message
 mentioning {{USER_EMAIL}} or {{MESSAGES}} (a Jinja question, say) had them
-filled in: the user's email, or the whole conversation again.
+filled in: the user's email, or the whole conversation again. Context
+compaction's summary prompt and the mixture-of-agents prompt did the same
+with their own sections (#648).
 
 Run from apps/server:
 
@@ -100,3 +102,79 @@ def test_prompt_truncation_still_applies():
     prompt = _run(task.emoji_generation_template('{{prompt:start:5}}|{{prompt:end:3}}', 'abcdefghij', USER))
 
     assert prompt == 'abcde|hij'
+
+
+def _summary_prompt(monkeypatch, compacted, recent, previous_summary=None, template=''):
+    from local_llm.utils import chat, context_compaction
+
+    seen = []
+
+    async def get_many(*keys):
+        return {}
+
+    async def generate_chat_completion(request, form_data, user):
+        seen.append(form_data['messages'][0]['content'])
+        return {'choices': [{'message': {'content': 'summary'}}]}
+
+    monkeypatch.setattr(context_compaction, 'Config', SimpleNamespace(get_many=get_many))
+    monkeypatch.setattr(chat, 'generate_chat_completion', generate_chat_completion)
+    request = SimpleNamespace(state=SimpleNamespace())
+    models = {'m': {'id': 'm', 'info': {'params': {}}}}
+
+    _run(
+        context_compaction._generate_summary(request, USER, 'm', models, compacted, recent, previous_summary, template)
+    )
+    return seen[0]
+
+
+def test_a_compaction_prompt_keeps_the_users_placeholders_as_written(monkeypatch):
+    # #648: the summary prompt filled its sections in turn over the whole text.
+    asked = 'Why do {{RECENT_MESSAGES}}, {{PREVIOUS_SUMMARY}} and {{USER_EMAIL}} stay empty?'
+    compacted = [{'role': 'user', 'content': asked}]
+    recent = [{'role': 'assistant', 'content': 'Kept in context.'}]
+
+    prompt = _summary_prompt(monkeypatch, compacted, recent, 'Earlier summary.')
+
+    assert asked in prompt
+    assert prompt.count('Kept in context.') == 1
+    assert prompt.count('Earlier summary.') == 1
+    assert 'ada@example.invalid' not in prompt
+
+
+def test_a_previous_summary_goes_in_as_written(monkeypatch):
+    summary = 'The user asked about {{USER_EMAIL}} and {{COMPACTED_MESSAGES}}.'
+    compacted = [{'role': 'user', 'content': 'Compacted away.'}]
+
+    prompt = _summary_prompt(monkeypatch, compacted, [], summary)
+
+    assert summary in prompt
+    assert prompt.count('Compacted away.') == 1
+    assert 'ada@example.invalid' not in prompt
+
+
+def test_a_compaction_prompt_fills_its_own_variables(monkeypatch):
+    template = 'For {{USER_NAME}}: {{prompt}} | {{PREVIOUS_SUMMARY}} | {{COMPACTED_MESSAGES}} | {{RECENT_MESSAGES}}'
+    compacted = [{'role': 'user', 'content': 'Old.'}]
+    recent = [{'role': 'user', 'content': 'New.'}]
+
+    prompt = _summary_prompt(monkeypatch, compacted, recent, 'Before.', template)
+
+    assert prompt == 'For Ada: New. | Before. | USER: Old. | USER: New.'
+
+
+def test_a_moa_prompt_mentioning_responses_does_not_repeat_them():
+    # #648: the prompt went in first, then {{responses}} was replaced over the whole text.
+    prompt = _run(
+        task.moa_response_generation_template('Q: "{{prompt}}"\nA: {{responses}}', 'What is {{responses}}?', ['one'])
+    )
+
+    assert prompt == 'Q: "What is {{responses}}?"\nA: """one"""'
+
+
+def test_a_moa_response_goes_in_as_written():
+    # Passed before the fix too (the prompt went in before the responses).
+    prompt = _run(
+        task.moa_response_generation_template('Q: {{prompt}}\nA: {{responses}}', 'x', ['{{prompt}} {{USER_NAME}}'])
+    )
+
+    assert prompt == 'Q: x\nA: """{{prompt}} {{USER_NAME}}"""'
