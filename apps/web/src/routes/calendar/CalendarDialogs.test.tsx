@@ -199,3 +199,47 @@ describe('EventDialog on an event whose repeat rule the menu cannot show (#510)'
 		expect([...repeat.options].map((o) => o.value)).not.toContain('custom');
 	});
 });
+
+describe('EventDialog on an event whose menu rule is stored in another form (#707)', () => {
+	const rule = 'DTSTART:20260901T090000\nRRULE:FREQ=DAILY';
+	const daily = {
+		id: 'd1',
+		calendar_id: 'personal',
+		user_id: 'u1',
+		title: 'Standup',
+		start_at: ns(new Date(2026, 8, 1, 9)),
+		end_at: ns(new Date(2026, 8, 1, 9, 15)),
+		all_day: false,
+		rrule: rule,
+		meta: null
+	} as never;
+	beforeEach(() => {
+		vi.mocked(api.updateCalendarEvent).mockResolvedValue(daily);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it('shows it as Daily, and a save keeps the rule as it was stored', async () => {
+		render(
+			<EventDialog
+				open
+				onOpenChange={() => {}}
+				event={daily}
+				calendars={calendars}
+				defaultCalendarId="personal"
+				defaultStartAt={null}
+				onSaved={() => {}}
+			/>
+		);
+		const repeat = (await screen.findByLabelText('Repeat')) as HTMLSelectElement;
+		expect(repeat.value).toBe('daily');
+		expect([...repeat.options].map((o) => o.value)).not.toContain('custom');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalled());
+		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2].rrule).toBe(rule);
+	});
+});
