@@ -157,7 +157,7 @@ def _with_count(rule: str, count: int) -> str | None:
     return replaced if n == 1 else None
 
 
-_DTSTART_VALUE = re.compile(r'\d{8}(T\d{6}Z?)?', re.IGNORECASE)
+_DTSTART_VALUE = re.compile(r'[0-9]{8}(T[0-9]{6}Z?)?')
 
 
 def _check_dtstart(s: str) -> None:
@@ -165,15 +165,16 @@ def _check_dtstart(s: str) -> None:
 
     dateutil reads `DTSTART:20261201T00` and `DTSTART:20261201T` as midnight,
     so an incomplete start time would run the automation at 00:00. The
-    forms kept are `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same with `Z`, with
-    or without parameters such as `;TZID=Europe/Paris`. The rule is split on
-    any whitespace, as `rrulestr` splits it, so a DTSTART after a space on the
-    same line is checked too.
+    forms kept are RFC 5545's `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same with
+    `Z`, with or without parameters such as `;TZID=Europe/Paris`. The rule is
+    read as `rrulestr` reads it: upper-cased (so `DT\ufb06ART` is `DTSTART`
+    too) and split on any whitespace, so a DTSTART after a space on the same
+    line is checked as well.
     """
-    for part in s.split():
+    for part in s.upper().split():
         head, sep, value = part.partition(':')
-        if re.match(r'DTSTART(;|$)', head, re.IGNORECASE) and not (sep and _DTSTART_VALUE.fullmatch(value)):
-            raise ValueError(f'DTSTART must be a whole date or date-time, got {value!r}')
+        if re.match(r'DTSTART(;|$)', head) and not (sep and _DTSTART_VALUE.fullmatch(value)):
+            raise ValueError(f'DTSTART must be YYYYMMDD or YYYYMMDDTHHMMSS, optionally ending in Z; got {value!r}')
 
 
 def validate_rrule(s: str, tz: str = None) -> None:

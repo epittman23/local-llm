@@ -21,6 +21,9 @@ RRULE = 'RRULE:FREQ=DAILY;COUNT=1'
         'DTSTART:20991201T09000',
         'DTSTART:T090000',
         'DTSTART;TZID=Europe/Paris:20991201T00',
+        # dateutil upper-cases the rule before reading it, and U+FB06 / U+FB05 upper-case to 'ST'.
+        'DT\ufb06ART:20991201T00',
+        'DT\ufb05ART:20991201T',
     ],
 )
 def test_an_incomplete_dtstart_is_rejected(dtstart):
@@ -54,6 +57,7 @@ def test_a_whole_dtstart_is_accepted(dtstart):
         'RRULE:FREQ=DAILY;COUNT=1 DTSTART:20991201T00',
         'DTSTART:20991201T00 RRULE:FREQ=DAILY;COUNT=1',
         'RRULE:FREQ=DAILY;COUNT=1\tDTSTART:20991201T',
+        'RRULE:FREQ=DAILY;COUNT=1 DT\ufb06ART:20991201T00',
     ],
 )
 def test_an_incomplete_dtstart_on_one_line_is_rejected(rule):
@@ -68,3 +72,10 @@ def test_a_whole_dtstart_on_one_line_is_accepted():
     from local_llm.utils.automations import validate_rrule
 
     validate_rrule('RRULE:FREQ=DAILY;COUNT=1 DTSTART:20991201T090000')
+
+
+def test_the_refusal_names_the_forms_accepted():
+    from local_llm.utils.automations import validate_rrule
+
+    with pytest.raises(ValueError, match='YYYYMMDDTHHMMSS'):
+        validate_rrule('DTSTART:2099-12-01T09:00:00\nRRULE:FREQ=DAILY;COUNT=1')
