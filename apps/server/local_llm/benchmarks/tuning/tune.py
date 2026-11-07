@@ -536,7 +536,7 @@ class Cooldown:
         # already over it would still wait a full window and probe (#511).
         # Nothing paused, so no pause row: 'timeout' is what the callers
         # already treat as cooling that did not recover.
-        limit = self.sweep.budget.seconds
+        limit = self.sweep.budget.seconds if self.sweep.budget is not None else None
         if self.budget_exhausted() or (limit is not None and time.time() - self.sweep.started >= limit):
             log.warning('not cooling (%s): the time budget or its cooling share is already spent', trigger)
             return 'timeout'
@@ -1311,7 +1311,9 @@ class Sweep:
         if mode == 'cooldown':
             mode = 'halt' if self.budget.mode == 'interactive' else 'segment'
         if mode == 'halt':
-            self.ended_reason = 'drift'
+            # A spent budget, not drift, is why nothing was tried: Cooldown.run()
+            # skips cooling once the budget is gone and reports 'timeout' (#511).
+            self.ended_reason = self.spent() or 'drift'
             log.warning('stopping: the card did not recover and this is an interactive budget')
             return False
         log.warning(

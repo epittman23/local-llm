@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import asyncio
 import math
+import time
 import types
 
 from local_llm.benchmarks.tuning import tune
-from local_llm.benchmarks.tuning.tune_schedule import Candidate
+from local_llm.benchmarks.tuning.tune_schedule import Budget, Candidate
 
 BASE = Candidate('p', {}, stage='explore', baseline=True)
 FAST = Candidate('p', {'LLAMA_THREADS': '4'}, stage='explore')
@@ -290,6 +291,30 @@ def test_a_spent_wall_clock_budget_starts_no_cooldown(monkeypatch):
     assert cool.count == 0
     assert cool.total_seconds == 0.0
     assert sweep.last_pause_at is None
+
+
+def _interactive_sweep(elapsed: float) -> tune.Sweep:
+    """An interactive sweep (fall_back halts it) `elapsed` seconds into its 7,200 s budget."""
+    sweep = tune.Sweep(tune.SweepOptions(), session=None)
+    sweep.budget = Budget('interactive', seconds=7200, visits=None, candidates=6, round_items=6)
+    sweep.started = time.time() - elapsed
+    return sweep
+
+
+def test_a_halt_on_a_spent_budget_ends_for_the_budget():
+    """Cooling was skipped because time ran out, so the sweep ended on its budget, not on drift (#511)."""
+    sweep = _interactive_sweep(elapsed=7200.0)
+
+    assert sweep.fall_back(1) is False
+    assert sweep.ended_reason == 'budget'
+
+
+def test_a_halt_within_the_budget_still_ends_for_drift():
+    """Time is left and the card did not recover: drift is the reason the sweep ended."""
+    sweep = _interactive_sweep(elapsed=60.0)
+
+    assert sweep.fall_back(1) is False
+    assert sweep.ended_reason == 'drift'
 
 
 def test_a_cut_the_items_agree_on_is_still_supported(monkeypatch):
