@@ -70,8 +70,10 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   index).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.claude/settings.json`** — tracked project settings: only Claude Code's
-  attribution setting, which keeps co-author trailers, "Generated with"
-  lines and session links out of commits and pull requests.
+  attribution setting, which keeps Claude Code's co-author trailers,
+  "Generated with" lines and session links out of commits and pull
+  requests (a cloud session's PR-body footer is outside its reach; the PR
+  gate rejects that).
 - **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
   a local code-graph index (binary installed by hand
   from the v0.12.1 release; `.mcp.json` runs whatever is on `PATH`).
