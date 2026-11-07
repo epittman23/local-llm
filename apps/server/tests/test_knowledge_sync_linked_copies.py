@@ -100,6 +100,27 @@ def test_an_extra_copy_with_the_kept_copys_text_is_left_alone(monkeypatch, order
     assert diff.unmodified_count == 1
 
 
+def test_a_file_gone_from_the_folder_holding_text_kept_at_another_path_is_left_alone(monkeypatch):
+    # Removing b.txt deletes chunks by its text hash across the whole base,
+    # which would take a.txt's chunks with it.
+    gone = ('gone', 'b.txt', 'Z', 'text-Y', 1)
+
+    diff = _diff(monkeypatch, [('a.txt', 'Y')], [CURRENT, gone])
+
+    assert diff.deleted == []
+    assert diff.unmodified_count == 1
+
+
+def test_an_extra_copy_holding_text_kept_at_another_path_is_left_alone(monkeypatch):
+    b_current = ('b-current', 'b.txt', 'Q', 'text-Q', 2)
+    b_extra = ('b-extra', 'b.txt', 'Z', 'text-Y', 1)
+
+    diff = _diff(monkeypatch, [('a.txt', 'Y'), ('b.txt', 'Q')], [CURRENT, b_current, b_extra])
+
+    assert diff.deleted == []
+    assert diff.unmodified_count == 2
+
+
 def test_a_copy_of_a_stale_copys_text_is_still_uploaded(monkeypatch):
     # b.txt holds the text of a.txt's stale copy, which this sync deletes, so it
     # is the only copy left and goes up.

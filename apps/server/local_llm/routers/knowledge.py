@@ -2019,10 +2019,11 @@ async def sync_knowledge_diff(
     # ── Diff files ──
     added: list[dict] = []
     modified: list[dict] = []
-    deleted: list[dict] = []
     unmodified_count = 0
     manifest_keys: set[tuple[str, str]] = set()
     kept_checksums: set[str] = set()
+    kept_hashes: set[str] = set()
+    extra_copies: list[dict] = []
 
     for entry in form_data.manifest:
         key = (entry.path, entry.filename)
@@ -2041,19 +2042,26 @@ async def sync_knowledge_diff(
             # The newest old copy stays until the new version is up (#317).
             primary = max(copies, key=lambda c: c['updated_at'])
             modified.append({'filename': entry.filename, 'path': entry.path, 'stale_file_id': primary['file_id']})
-        # Every other copy goes, except one holding the same text as the copy
-        # kept: removing a file also deletes chunks by its text hash, which
-        # would take the kept copy's chunks with it.
-        for copy in copies:
-            if copy is primary or copy['checksum'] == entry.checksum:
-                continue
-            if copy['hash'] and copy['hash'] == primary['hash']:
-                continue
-            deleted.append({'file_id': copy['file_id'], 'filename': entry.filename})
+        if primary['hash']:
+            kept_hashes.add(primary['hash'])
+        extra_copies.extend(
+            {**copy, 'filename': entry.filename}
+            for copy in copies
+            if copy is not primary and copy['checksum'] != entry.checksum
+        )
 
     for key, copies in indexed_files.items():
         if key not in manifest_keys:
-            deleted.extend({'file_id': copy['file_id'], 'filename': key[1]} for copy in copies)
+            extra_copies.extend({**copy, 'filename': key[1]} for copy in copies)
+
+    # Every other copy goes, except one holding text a copy this sync keeps
+    # holds, at any path: removing a file also deletes chunks by its text hash
+    # across the whole base, which would take the kept copy's chunks with it.
+    deleted = [
+        {'file_id': copy['file_id'], 'filename': copy['filename']}
+        for copy in extra_copies
+        if not (copy['hash'] and copy['hash'] in kept_hashes)
+    ]
 
     # A new path whose bytes match a file the base keeps is a copy the base
     # de-duplicates by content: uploading it only failed, every sync, and left
@@ -2172,7 +2180,11 @@ async def sync_knowledge_cleanup(
         else:
             await Knowledges.delete_directory(dir_id, move_files_to_parent=False, db=db)
 
-    # The files left in the base, so the client can say which removals did not happen (#639).
+    # The files left in the base, so the client can say which removals did not
+    # happen (#639). A file in a vanished folder is tried once per pass, from
+    # file_ids and under every directory above it, so it is listed once, and
+    # only if no pass removed it.
+    kept = [file_id for file_id in dict.fromkeys(kept) if await Knowledges.has_file(id, file_id, db=db)]
     return {'status': True, 'kept': kept}
 
 
