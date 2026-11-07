@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 
@@ -166,6 +167,61 @@ def test_a_cancel_that_comes_back_as_an_error_still_stops_the_scheduler(monkeypa
     assert task.cancelled()
     assert len(calls) == 1
     assert 'timer error' not in caplog.text
+
+
+def test_a_cancel_that_comes_back_as_an_error_in_the_automation_claim_stops_the_scheduler(monkeypatch, caplog):
+    # The automation claim checks a connection out the same way (#817).
+    entered = asyncio.Event()
+    after_cancel = []
+
+    async def no_timers(now_ns, limit=10):
+        return []
+
+    async def recover():
+        return None
+
+    async def config_get(key):
+        if key != 'automations.enable':
+            after_cancel.append(key)
+        return True
+
+    async def claim_due(now_ns, limit=10, db=None):
+        entered.set()
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            raise RuntimeError("can't change 'autocommit' now: connection in transaction status ACTIVE") from None
+        return []
+
+    async def calendar_alerts(app):
+        after_cancel.append('calendar alerts')
+
+    @asynccontextmanager
+    async def no_db():
+        yield None
+
+    monkeypatch.setattr(timers, 'claim_due_timers', no_timers)
+    monkeypatch.setattr(automations, '_recover_stale_timers', recover)
+    monkeypatch.setattr(automations.Config, 'get', config_get)
+    monkeypatch.setattr(automations, 'get_async_db', no_db)
+    monkeypatch.setattr(automations.Automations, 'claim_due', claim_due)
+    monkeypatch.setattr(automations, '_check_calendar_alerts', calendar_alerts)
+
+    async def scenario():
+        task = asyncio.create_task(automations.scheduler_worker_loop(None))
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=2)
+        if not done:
+            task.cancel()
+        return task, bool(done)
+
+    task, done = _run(scenario())
+
+    assert done, 'the scheduler kept running after it was cancelled'
+    assert task.cancelled()
+    assert after_cancel == []
+    assert 'automation error' not in caplog.text
 
 
 def test_a_chat_that_only_looks_like_a_running_timer_is_left_alone():

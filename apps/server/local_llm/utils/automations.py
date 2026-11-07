@@ -429,6 +429,7 @@ async def scheduler_worker_loop(app) -> None:
                     for automation in batch:
                         run_in_background(execute_automation(app, automation))
                 except Exception:
+                    raise_if_cancelled()
                     log.exception('Scheduler: automation error')
 
             # ── Calendar Alerts ──
@@ -436,6 +437,7 @@ async def scheduler_worker_loop(app) -> None:
                 try:
                     await _check_calendar_alerts(app)
                 except Exception:
+                    raise_if_cancelled()
                     log.exception('Scheduler: calendar alert error')
 
         except Exception:
