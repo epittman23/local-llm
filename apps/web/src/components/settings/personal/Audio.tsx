@@ -115,7 +115,7 @@ export default function Audio() {
 						<SettingSwitch
 							labelledBy={id}
 							checked={Boolean(s.responseAutoPlayback)}
-							onChange={(v) => void update({ responseAutoPlayback: v })}
+							onChange={(v) => void update({ responseAutoPlayback: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
 						/>
 					)}
 				</SettingRow>

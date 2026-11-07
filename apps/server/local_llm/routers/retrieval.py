@@ -178,7 +178,7 @@ def get_rf(
     # Convert timeout string to int or None (system default)
     timeout_value = int(external_reranker_timeout) if external_reranker_timeout else None
     if reranking_model:
-        if any(model in reranking_model for model in ['jinaai/jina-colbert-v2']):
+        if engine != 'external' and any(model in reranking_model for model in ['jinaai/jina-colbert-v2']):
             try:
                 from local_llm.retrieval.models.colbert import ColBERT
 
