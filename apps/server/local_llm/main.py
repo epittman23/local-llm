@@ -1759,9 +1759,10 @@ async def _process_chat(request: Request, form_data: dict, user, metadata: dict,
         # content-filter, quota exceeded), generate_chat_completion
         # returns a JSONResponse instead of raising.  Detect this and
         # raise so the except-block below emits chat:message:error +
-        # chat:tasks:cancel, unblocking the frontend.
+        # chat:tasks:cancel, unblocking the frontend.  The provider's status
+        # is kept, so the direct API path can pass it on (#364).
         if isinstance(response, JSONResponse) and response.status_code >= 400:
-            raise Exception(get_response_error_detail(response))
+            raise HTTPException(status_code=response.status_code, detail=get_response_error_detail(response))
 
         ctx = await build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
 
@@ -1785,8 +1786,10 @@ async def _process_chat(request: Request, form_data: dict, user, metadata: dict,
             # WebSocket error channel.  We must surface the error as
             # a proper HTTP response; without this the function would
             # return None which FastAPI serializes as null.  #23924
+            # A status the failure carries (the provider's 429, the router's
+            # 404, a 502) is kept; anything else is a bad request (#364).
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=e.status_code if isinstance(e, HTTPException) else status.HTTP_400_BAD_REQUEST,
                 detail=error_detail,
             )
         await _report_chat_error(metadata, error_detail)

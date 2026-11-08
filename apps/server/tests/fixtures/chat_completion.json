@@ -10658,7 +10658,7 @@
  },
  "chat:legacy_pipeline_http_error": {
   "http_error": [
-   400,
+   422,
    "bad payload"
   ],
   "background": [],
