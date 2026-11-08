@@ -81,6 +81,7 @@ timeline
       2026-11-03 : Admin banners shown above a new chat again (lost in the port) : a dismissible one stays dismissed in the browser, others close until reload
       2026-11-06 : The e2e suite runs against the built app, at four workers : 4.9 min to 2.0 min on four cores, the same tests passing : boot smoke checks the production deep-link fallback
       2026-11-08 : The desktop app manages only http://127.0.0.1 and http://localhost : every other address, loopback or remote, is connect-only : a backend that shows no progress for 5 minutes now fails with a message
+      2026-11-08 : Personal direct connections hidden from chat (deliberate gap) : their models are left out of every list, as no browser-side handler answers the server's chat request : Settings > Connections says so
       2026-11-08 : OAuth provider configuration is environment-only : the unused Authentication provider fields removed, sign-out reads the environment, variables documented
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing

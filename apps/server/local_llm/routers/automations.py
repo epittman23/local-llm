@@ -315,6 +315,9 @@ async def toggle_automation_by_id(
     await check_automations_permission(request, user)
     automation = await Automations.get_by_id(id, db=db)
     check_automation_access(automation, user)
+    # Switching off clears next_run_at, so a rule that does not state its own
+    # time (saved before #825, or without BYHOUR/BYMINUTE/DTSTART) is
+    # re-anchored to this moment when switched back on. Intended (#670).
     toggled = await Automations.toggle(id, next_run_ns(automation.data['rrule'], tz=user.timezone), db=db)
     response = await enrich_automation(toggled, db, tz=user.timezone)
     await publish_event(

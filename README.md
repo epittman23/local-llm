@@ -223,6 +223,8 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id |
 | `/folders/<folderId>` | A new chat inside that folder (a missing folder sends you to `/`) |
 
+**Automation schedules:** switching an automation off and on re-anchors a rule that does not state its own time to the moment it is switched back on: rows saved before #825, and rules without `BYHOUR`/`BYMINUTE` or a `DTSTART`, take their time from then (and a weekly rule without `BYDAY` its weekday). A rule that states its time keeps it. The schedule picker always writes `BYHOUR`/`BYMINUTE`, and for a weekly rule with no day chosen, `BYDAY` for the weekday of the save.
+
 A workspace section you lack permission for redirects you to `/`.
 
 **Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
