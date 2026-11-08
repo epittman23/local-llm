@@ -33,10 +33,12 @@ from local_llm.config import DEFAULT_USER_PERMISSIONS
 from local_llm.internal.db import Base, async_engine
 from local_llm.models.channels import ChannelForm, Channels, CreateChannelForm, is_public_group_channel
 from local_llm.models.config import Config
+from local_llm.models.files import FileForm, Files
 from local_llm.models.messages import MessageForm, Messages
 from local_llm.models.users import Users
 from local_llm.routers import channels as channels_router
 from local_llm.socket import main as socket_main
+from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import create_token
 
 for module in pkgutil.iter_modules(models_pkg.__path__):
@@ -285,30 +287,57 @@ def test_live_rooms_hold_only_members(sockets):
     assert w.public.id in after
 
 
-def test_a_public_groups_files_are_readable_by_everyone(sockets):
+@pytest.fixture
+def channel_config(monkeypatch):
+    """Config.get answering from these settings: channels on, users permitted."""
+    settings = {'channels.enable': True, 'user.permissions': copy.deepcopy(DEFAULT_USER_PERMISSIONS)}
+    settings['user.permissions']['features']['channels'] = True
+
+    async def get(key, default=None):
+        return settings.get(key, default)
+
+    monkeypatch.setattr(Config, 'get', get)
+    return settings
+
+
+@pytest.mark.parametrize(
+    ('setting', 'readable'),
+    [(None, True), ('channels disabled', False), ('permission denied', False)],
+)
+def test_a_public_groups_files_are_for_those_who_may_use_channels(sockets, channel_config, setting, readable):
+    if setting == 'channels disabled':
+        channel_config['channels.enable'] = False
+    if setting == 'permission denied':
+        channel_config['user.permissions']['features']['channels'] = False
+
     async def scenario():
         w = await _world()
-        file_id = f'file-{uuid.uuid4().hex[:8]}'
-        private_file_id = f'file-{uuid.uuid4().hex[:8]}'
-        await Channels.add_file_to_channel_by_id(w.public.id, file_id, w.owner.id)
-        await Channels.add_file_to_channel_by_id(w.private.id, private_file_id, w.owner.id)
+
+        async def attached(channel):
+            file = await Files.insert_new_file(
+                w.owner.id, FileForm(id=str(uuid.uuid4()), filename='a.csv', path='/uploads/a.csv')
+            )
+            await Channels.add_file_to_channel_by_id(channel.id, file.id, w.owner.id)
+            return file.id
+
+        public, private = await attached(w.public), await attached(w.private)
         return (
-            [c.id for c in await Channels.get_channels_by_file_id_and_user_id(file_id, w.outsider.id)],
-            [c.id for c in await Channels.get_channels_by_file_id_and_user_id(private_file_id, w.outsider.id)],
+            await has_access_to_file(public, 'read', w.outsider),
+            await has_access_to_file(private, 'read', w.outsider),
+            await has_access_to_file(private, 'read', w.member),
+            # Attaching an upload to a channel stays a member's act.
             await Channels.get_channel_by_id_and_user_id(w.public.id, w.outsider.id),
-            await Channels.get_channel_by_id_and_user_id(w.private.id, w.outsider.id),
-            w,
         )
 
-    public, private, by_id_public, by_id_private, w = _run(scenario)
+    public, private, member, attach = _run(scenario)
 
-    assert public == [w.public.id]
-    assert private == []
-    assert by_id_public is not None
-    assert by_id_private is None
+    assert public is readable
+    assert private is False
+    assert member is True
+    assert attach is None
 
 
-def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, monkeypatch):
+def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, channel_config, monkeypatch):
     """join-channels, with a real token: the outsider's socket is kept out of
     the room of a public group they have not opened, so the in-room check of
     `events:channel` (typing, last read) refuses them there too."""
@@ -317,16 +346,9 @@ def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, monkeypa
     async def enter_room(sid, room, namespace=None):
         entered.setdefault(sid, set()).add(room)
 
-    settings = {'channels.enable': True, 'user.permissions': copy.deepcopy(DEFAULT_USER_PERMISSIONS)}
-    settings['user.permissions']['features']['channels'] = True
-
-    async def get(key, default=None):
-        return settings.get(key, default)
-
     monkeypatch.setattr(socket_main.sio, 'enter_room', enter_room)
     monkeypatch.setattr(socket_main.sio, 'get_environ', lambda sid, namespace=None: {})
     monkeypatch.setattr(socket_main, 'REDIS', None)
-    monkeypatch.setattr(Config, 'get', get)
 
     async def scenario():
         w = await _world()

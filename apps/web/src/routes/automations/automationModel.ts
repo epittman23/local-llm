@@ -233,14 +233,19 @@ export function timeFromInput(value: string): { hour: number; minute: number } |
 // --- destinations --------------------------------------------------------
 
 export type Folder = { id: string; name: string; parent_id?: string | null; shared?: boolean };
-export type Channel = { id: string; name: string; type?: string | null };
+export type Channel = { id: string; name: string; type?: string | null; is_member?: boolean };
 
 /** Folders an automation can post into (not shared ones), by name. */
 export const folderOptions = (folders: Folder[]) =>
 	folders.filter((f) => f?.id && !f.shared).sort((a, b) => a.name.localeCompare(b.name));
-/** Channels an automation can post into (not DMs), by name. */
+/**
+ * Channels an automation can post into (not DMs, and not a public group
+ * channel the user has not joined, which only members post to: #331), by name.
+ */
 export const channelOptions = (channels: Channel[]) =>
-	channels.filter((c) => c?.id && c.type !== 'dm').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+	channels
+		.filter((c) => c?.id && c.type !== 'dm' && c.is_member !== false)
+		.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
 /** "Parent / Child" above a folder; stops at a cycle or a missing parent. */
 export function folderPath(folder: Folder, all: Folder[]): string {

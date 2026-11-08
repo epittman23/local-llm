@@ -741,8 +741,11 @@ class ChannelTable:
             ]
 
     async def get_channels_by_file_id_and_user_id(
-        self, file_id: str, user_id: str, db: AsyncSession | None = None
+        self, file_id: str, user_id: str, include_public: bool = False, db: AsyncSession | None = None
     ) -> list[ChannelModel]:
+        """The channels holding the file that the user may read. A public
+        group channel counts only with `include_public`, which the caller
+        sets when the user may use channels at all (#331)."""
         async with get_async_db_context(db) as db:
             # 1. Determine which channels have this file
             result = await db.execute(select(ChannelFile).filter(ChannelFile.file_id == file_id))
@@ -771,8 +774,9 @@ class ChannelTable:
 
             for channel in channels:
                 # --- Case A: group or dm => user must be an active member,
-                # except that anyone reads a public group channel (#331) ---
-                if is_public_group_channel(channel):
+                # except that anyone who may use channels reads a public
+                # group channel (#331) ---
+                if include_public and is_public_group_channel(channel):
                     allowed_channels.append(await self._to_channel_model(channel, db=db))
                     continue
                 if channel.type in ['group', 'dm']:
@@ -824,11 +828,7 @@ class ChannelTable:
             if not channel:
                 return None
 
-            # Anyone reads a public group channel (#331).
-            if is_public_group_channel(channel):
-                return await self._to_channel_model(channel, db=db)
-
-            # Otherwise, if the channel is a group or dm, read access requires membership (active)
+            # If the channel is a group or dm, read access requires membership (active)
             if channel.type in ['group', 'dm']:
                 result = await db.execute(
                     select(ChannelMember)
