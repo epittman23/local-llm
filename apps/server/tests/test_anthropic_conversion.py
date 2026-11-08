@@ -21,7 +21,11 @@ from pathlib import Path
 
 import pytest
 
-from local_llm.utils.anthropic import convert_anthropic_to_openai_payload, openai_stream_to_anthropic_stream
+from local_llm.utils.anthropic import (
+    anthropic_error_for_openai_response,
+    convert_anthropic_to_openai_payload,
+    openai_stream_to_anthropic_stream,
+)
 
 GOLDEN = Path(__file__).parent / 'fixtures' / 'anthropic_conversion.json'
 RECORD = os.environ.get('ANTHROPIC_GOLDEN_RECORD') == '1'
@@ -782,3 +786,75 @@ def test_record_golden(fixed_uuid, monkeypatch):
         golden['stream'][case_id] = _run_stream(chunks, model, input_tokens)
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(golden, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+
+
+SECRET = 'https://10.0.0.5:8443 key sk-live-secret'
+
+
+def _event_types(events: list[str]) -> list[str]:
+    return [event.split('\n', 1)[0].removeprefix('event: ') for event in events]
+
+
+def _error_of(events: list[str]) -> dict:
+    return json.loads(events[-1].split('data: ', 1)[1])
+
+
+def _assert_ends_with_error(events: list[str], error_type: str) -> None:
+    types = _event_types(events)
+    assert types[-1] == 'error'
+    assert 'message_stop' not in types
+    assert 'message_delta' not in types
+    body = _error_of(events)
+    assert body['type'] == 'error'
+    assert body['error']['type'] == error_type
+    assert SECRET not in json.dumps(events)
+
+
+def test_error_finish_reason_ends_the_stream_with_an_error_event(fixed_uuid):
+    chunks = [
+        _delta(content='half'),
+        _data({'error': {'code': 502, 'message': SECRET}, 'choices': [{'delta': {}, 'finish_reason': 'error'}]}),
+    ]
+    events = _run_stream(chunks, 'm', None)
+    _assert_ends_with_error(events, 'api_error')
+    assert _event_types(events)[-2] == 'content_block_stop'
+
+
+def test_error_chunk_without_choices_ends_the_stream_with_an_error_event(fixed_uuid):
+    events = _run_stream([_data({'error': {'code': 429, 'message': SECRET}})], 'm', None)
+    _assert_ends_with_error(events, 'rate_limit_error')
+
+
+def test_overloaded_error_chunk_maps_to_overloaded_error(fixed_uuid):
+    events = _run_stream([_data({'error': {'code': 529, 'message': SECRET}})], 'm', None)
+    _assert_ends_with_error(events, 'overloaded_error')
+
+
+def test_source_exception_ends_the_stream_with_an_error_event(fixed_uuid):
+    events = _run_stream([_delta(content='half'), {'raise': SECRET}], 'm', None)
+    _assert_ends_with_error(events, 'api_error')
+
+
+def test_non_streaming_error_without_choices_is_an_anthropic_error_response():
+    status_code, body = anthropic_error_for_openai_response({'error': {'code': 429, 'message': SECRET}})
+    assert status_code == 429
+    assert body['type'] == 'error'
+    assert body['error']['type'] == 'rate_limit_error'
+    assert SECRET not in json.dumps(body)
+
+
+def test_non_streaming_error_defaults_to_a_bad_gateway():
+    status_code, body = anthropic_error_for_openai_response({'error': SECRET})
+    assert status_code == 502
+    assert body['error']['type'] == 'api_error'
+    assert SECRET not in json.dumps(body)
+
+
+def test_non_streaming_error_finish_reason_is_an_error_response():
+    response = {'choices': [{'message': {'content': ''}, 'finish_reason': 'error'}]}
+    assert anthropic_error_for_openai_response(response)[0] == 502
+
+
+def test_non_streaming_success_is_not_an_error():
+    response = {'choices': [{'message': {'content': 'hi'}, 'finish_reason': 'stop'}]}
+    assert anthropic_error_for_openai_response(response) is None

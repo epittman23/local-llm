@@ -206,6 +206,7 @@ from local_llm.utils.access_control import has_permission
 from local_llm.utils.access_control.folders import has_folder_write_access
 from local_llm.utils.actions import chat_action as chat_action_handler
 from local_llm.utils.anthropic import (
+    anthropic_error_for_openai_response,
     convert_anthropic_to_openai_payload,
     convert_openai_to_anthropic_response,
     is_anthropic_messages_passthrough,
@@ -2155,6 +2156,9 @@ async def generate_messages(
             },
         )
     elif isinstance(response, dict):
+        upstream_error = anthropic_error_for_openai_response(response)
+        if upstream_error:
+            return JSONResponse(status_code=upstream_error[0], content=upstream_error[1])
         return convert_openai_to_anthropic_response(response, model=requested_model, input_tokens=input_tokens)
     else:
         # Passthrough for error responses (JSONResponse, PlainTextResponse, etc.)
