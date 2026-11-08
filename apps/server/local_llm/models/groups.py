@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.env import DEFAULT_GROUP_SHARE_PERMISSION
 from local_llm.internal.db import Base, get_async_db_context
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -196,7 +197,7 @@ class GroupTable:
 
             if filter:
                 if 'query' in filter:
-                    stmt = stmt.filter(Group.name.ilike(f'%{filter["query"]}%'))
+                    stmt = stmt.filter(Group.name.ilike(like_contains(filter['query']), escape=LIKE_ESCAPE))
 
                 # When share filter is present, member check is handled in the share logic
                 if 'share' in filter:
@@ -258,7 +259,7 @@ class GroupTable:
 
             if filter:
                 if 'query' in filter:
-                    stmt = stmt.filter(Group.name.ilike(f'%{filter["query"]}%'))
+                    stmt = stmt.filter(Group.name.ilike(like_contains(filter['query']), escape=LIKE_ESCAPE))
                 if 'member_id' in filter:
                     stmt = stmt.filter(
                         Group.id.in_(select(GroupMember.group_id).where(GroupMember.user_id == filter['member_id']))

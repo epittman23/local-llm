@@ -13,6 +13,7 @@ from local_llm.internal.db import Base, JSONField, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 from local_llm.utils.validate import validate_profile_image_url
 
 log = logging.getLogger(__name__)
@@ -400,11 +401,11 @@ class ModelsTable:
                 if query_key:
                     stmt = stmt.filter(
                         or_(
-                            Model.name.ilike(f'%{query_key}%'),
-                            Model.base_model_id.ilike(f'%{query_key}%'),
-                            User.name.ilike(f'%{query_key}%'),
-                            User.email.ilike(f'%{query_key}%'),
-                            User.username.ilike(f'%{query_key}%'),
+                            Model.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            Model.base_model_id.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            User.username.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                         )
                     )
 

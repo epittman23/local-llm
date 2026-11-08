@@ -43,6 +43,7 @@ from local_llm.models.chat_messages import ChatMessage, ChatMessages
 from local_llm.models.folders import Folders
 from local_llm.models.tags import TagModel, Tags
 from local_llm.utils.misc import get_output_text, sanitize_data_for_db, sanitize_text_for_db
+from local_llm.utils.sql_like import like_escape
 
 log = logging.getLogger(__name__)
 ACTIVE_CHAT_GAP_SECONDS = 30 * 60
@@ -52,11 +53,6 @@ CHAT_SEARCH_FILTER_PREFIXES = ('tag:', 'folder:', 'pinned:', 'archived:', 'share
 def chat_search_content_query(text: str) -> str:
     words = sanitize_text_for_db(text).lower().strip().split()
     return ' '.join(word for word in words if not word.startswith(CHAT_SEARCH_FILTER_PREFIXES)).strip()
-
-
-def like_escape(text: str) -> str:
-    """Text for a LIKE pattern with `ESCAPE '\\'`: its `\\`, `%` and `_` match themselves (#292)."""
-    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
 def chat_search_terms(text: str) -> list[str]:
