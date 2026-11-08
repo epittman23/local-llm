@@ -101,3 +101,49 @@ def test_an_image_size_the_page_hides_never_blocks_a_save(saved, size):
     _update(ENABLE_IMAGE_GENERATION=False, IMAGE_SIZE=size, IMAGE_GENERATION_MODEL='dall-e-2')
 
     assert len(saved) == 1
+
+
+def _openai_size(requested, configured):
+    form = images.CreateImageForm(prompt='p', size=requested)
+    return images._openai_size(SimpleNamespace(IMAGE_SIZE=configured), form)
+
+
+@pytest.mark.parametrize('configured', ['1024x', 'x512', 'big', '1024X1024', '512x512\n'])
+def test_openai_is_not_sent_a_configured_size_it_cannot_read(configured):
+    assert _openai_size(None, configured) is None
+    assert _openai_size('256x256', configured) == '256x256'
+
+
+def test_openai_is_sent_auto_or_a_size_it_can_read():
+    assert _openai_size(None, '512x768') == '512x768'
+    assert _openai_size('256x256', '512x768') == '256x256'
+    assert _openai_size('auto', '512x768') == 'auto'
+    assert _openai_size(None, 'auto') == 'auto'
+    assert _openai_size('', '') is None
+
+
+def test_the_openai_request_carries_only_a_size_it_can_read(monkeypatch):
+    sent = []
+
+    async def post(_url, _headers, json):
+        sent.append(json)
+        return {}
+
+    async def store(_request, _res, _data, _user):
+        return []
+
+    monkeypatch.setattr(images, '_post_engine_json', post)
+    monkeypatch.setattr(images, '_store_openai_images', lambda r, res, h, d, u: store(r, res, d, u))
+    config = SimpleNamespace(
+        IMAGES_OPENAI_API_KEY='k',
+        IMAGES_OPENAI_API_BASE_URL='https://example.test/v1',
+        IMAGES_OPENAI_API_VERSION='',
+        IMAGES_OPENAI_API_PARAMS=None,
+        IMAGE_GENERATION_MODEL='dall-e-3',
+        IMAGE_SIZE='1024x',
+    )
+    form = images.CreateImageForm(prompt='p')
+
+    asyncio.run(images._generate_openai(None, config, form, 'dall-e-3', (512, 512), {}, None))
+
+    assert 'size' not in sent[0]
