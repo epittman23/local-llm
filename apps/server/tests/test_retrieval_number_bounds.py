@@ -4,7 +4,8 @@ A reranking batch size below 1 made `CrossEncoder.predict` raise, which
 `query_collection` caught and logged at debug level, so every hybrid search
 quietly became a vector search. Documents saved any integer for it. Below 1
 it is now refused on save, before anything changes; a save that leaves it
-unset, or has full context on (where Documents hides it), is not checked.
+unset, or where nothing is reranked (hybrid search off, full context on, or
+retrieval bypassed), is not checked.
 
 An environment variable (`RAG_EMBEDDING_BATCH_SIZE=0`,
 `RAG_RERANKING_BATCH_SIZE=-1`) or a value stored before these checks still
@@ -32,6 +33,7 @@ stored_values.update(
     CHUNK_SIZE=1000,
     CHUNK_OVERLAP=100,
     ENABLE_RAG_HYBRID_SEARCH=False,
+    BYPASS_EMBEDDING_AND_RETRIEVAL=False,
     RAG_FULL_CONTEXT=False,
     RAG_RERANKING_BATCH_SIZE=32,
 )
@@ -62,7 +64,7 @@ def _save(form: retrieval.ConfigForm):
 @pytest.mark.parametrize('batch_size', [0, -5])
 def test_a_reranking_batch_size_below_1_is_refused_and_nothing_is_saved(stored, batch_size):
     with pytest.raises(HTTPException) as refused:
-        _save(retrieval.ConfigForm(RAG_RERANKING_BATCH_SIZE=batch_size, TOP_K=7))
+        _save(retrieval.ConfigForm(RAG_RERANKING_BATCH_SIZE=batch_size, ENABLE_RAG_HYBRID_SEARCH=True, TOP_K=7))
 
     assert refused.value.status_code == 400
     assert refused.value.detail == f'Reranking Batch Size must be a whole number of at least 1 (got {batch_size}).'
@@ -75,12 +77,24 @@ def test_a_reranking_batch_size_of_1_or_more_is_saved(stored):
     assert stored['rag.reranking_batch_size'] == 16
 
 
-@pytest.mark.parametrize('form', [{'RAG_FULL_CONTEXT': True}, {}])
-def test_with_full_context_on_an_unused_reranking_batch_size_does_not_block_the_save(stored, monkeypatch, form):
-    """Documents hides the field under full context and sends the stored value, so
-    refusing it would block every save; it is replaced at use (#638)."""
-    if not form:
-        monkeypatch.setitem(stored_values, 'RAG_FULL_CONTEXT', True)
+@pytest.mark.parametrize(
+    ('form', 'stored_overrides'),
+    [
+        # Each from the form or from storage: what the save leaves unset is read stored.
+        ({'ENABLE_RAG_HYBRID_SEARCH': True, 'RAG_FULL_CONTEXT': True}, {}),
+        ({}, {'ENABLE_RAG_HYBRID_SEARCH': True, 'RAG_FULL_CONTEXT': True}),
+        ({'ENABLE_RAG_HYBRID_SEARCH': False}, {}),
+        ({}, {}),
+        ({'ENABLE_RAG_HYBRID_SEARCH': True, 'BYPASS_EMBEDDING_AND_RETRIEVAL': True}, {}),
+        ({}, {'ENABLE_RAG_HYBRID_SEARCH': True, 'BYPASS_EMBEDDING_AND_RETRIEVAL': True}),
+    ],
+)
+def test_an_unused_reranking_batch_size_does_not_block_the_save(stored, monkeypatch, form, stored_overrides):
+    """With hybrid search off, full context on or retrieval bypassed nothing is
+    reranked, and Documents sends the stored value whether or not it shows the
+    field, so refusing it there would block saves; it is replaced at use (#638)."""
+    for key, value in stored_overrides.items():
+        monkeypatch.setitem(stored_values, key, value)
     _save(retrieval.ConfigForm(RAG_RERANKING_BATCH_SIZE=0, TOP_K=7, **form))
 
     assert stored['rag.top_k'] == 7

@@ -282,12 +282,17 @@ describe('chunkSettingsError', () => {
 describe('reranking batch size', () => {
 	it('refuses one below 1, and accepts 1 or more or a cleared box (#638)', () => {
 		for (const size of [0, -5, 1.5])
-			expect(ragFormError({ RAG_RERANKING_BATCH_SIZE: size })).toBe(
+			expect(ragFormError({ ENABLE_RAG_HYBRID_SEARCH: true, RAG_RERANKING_BATCH_SIZE: size })).toBe(
 				'Reranking Batch Size must be a whole number of at least 1.'
 			);
-		for (const size of [1, 32, null, undefined]) expect(ragFormError({ RAG_RERANKING_BATCH_SIZE: size })).toBeNull();
-		// Full context does not rerank, and the field is hidden then.
-		expect(ragFormError({ RAG_RERANKING_BATCH_SIZE: 0, RAG_FULL_CONTEXT: true })).toBeNull();
+		for (const size of [1, 32, null, undefined])
+			expect(ragFormError({ ENABLE_RAG_HYBRID_SEARCH: true, RAG_RERANKING_BATCH_SIZE: size })).toBeNull();
+	});
+	it('does not check it where nothing is reranked: hybrid off, full context on, or retrieval bypassed', () => {
+		const hybrid = { ENABLE_RAG_HYBRID_SEARCH: true, RAG_RERANKING_BATCH_SIZE: 0 };
+		expect(ragFormError({ ...hybrid, ENABLE_RAG_HYBRID_SEARCH: false })).toBeNull();
+		expect(ragFormError({ ...hybrid, RAG_FULL_CONTEXT: true })).toBeNull();
+		expect(ragFormError({ ...hybrid, BYPASS_EMBEDDING_AND_RETRIEVAL: true })).toBeNull();
 	});
 });
 
