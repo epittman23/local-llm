@@ -316,3 +316,22 @@ def test_a_folder_delegates_only_what_its_owner_can_still_read(file_world, monke
     assert _run(file_access.get_owner_accessible_folder_files(SimpleNamespace(user_id='alice', data={}))) == []
     gone = SimpleNamespace(user_id='deleted', data={'files': [{'type': 'file', 'id': 'f1'}]})
     assert _run(file_access.get_owner_accessible_folder_files(gone)) == []
+
+
+def test_a_folder_passes_on_a_knowledge_base_only_if_its_owner_may_write_it(file_world, monkeypatch):
+    async def get_user(user_id, db=None):
+        return SimpleNamespace(id=user_id, role='user') if user_id == 'alice' else None
+
+    monkeypatch.setattr(file_access.Users, 'get_user_by_id', get_user)
+    folder = SimpleNamespace(user_id='alice', data={'files': [{'type': 'collection', 'id': 'kb'}]})
+    file_world.knowledge_grants.add(('alice', 'kb', 'read'))
+    assert _run(file_access.get_owner_accessible_folder_files(folder)) == []
+    file_world.knowledge_grants.add(('alice', 'kb', 'write'))
+    assert _run(file_access.get_owner_accessible_folder_files(folder)) == [{'type': 'collection', 'id': 'kb'}]
+
+
+def test_can_read_all_folder_files_checks_the_knowledge_permission_asked_for(file_world):
+    entries = [{'type': 'collection', 'id': 'kb'}]
+    file_world.knowledge_grants.add(('alice', 'kb', 'read'))
+    assert _run(file_access.can_read_all_folder_files(entries, ALICE))
+    assert not _run(file_access.can_read_all_folder_files(entries, ALICE, collection_permission='write'))

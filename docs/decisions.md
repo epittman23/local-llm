@@ -33,6 +33,26 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **Why not runtime-editable.** That would rebuild and re-register the
     authlib clients after every save. OAuth is unused today, and the owner
     wants it available later without a second configuration path.
+
+- **2026-11-08**: **The desktop app manages only `http://127.0.0.1` and
+  `http://localhost`; every other address is connect-only.** The app decided
+  "local" by hostname alone, so `http://[::1]:P` and `https://127.0.0.1:P`
+  made it start `make backend`, which listens on plain http at `127.0.0.1`.
+  The backend never answered there, and the start waited forever (#420,
+  #797).
+
+  **What.** Managed mode (the app starts the stack and stops it on close)
+  needs `http:` and hostname `127.0.0.1` or `localhost`. Any other form, even
+  on this machine, is connect-only: the app probes it, opens it, and never
+  runs `make backend` for it. Settings does not refuse such an address, so a
+  server you run yourself behind a local TLS proxy still works. The
+  preload-bridge origin check (`https:` or loopback) is unchanged. A started
+  backend that shows no progress (its log not growing) for 5 minutes, or an
+  attached one not ready within 5 minutes, now fails with a message; the
+  start's own wait is not flat, as a first start's image pulls and `uv sync`
+  can take longer. The alternative, passing a host to `make backend` and
+  serving TLS so those forms stay managed, would change the Makefile and was
+  not chosen.
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min
