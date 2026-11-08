@@ -80,6 +80,7 @@ timeline
       2026-10-28 : llama-bench pre-screen of offload and batch flags, one process per point, as an Optuna study : an OOM prunes every point needing more VRAM : the leaders re-measured and load-checked at the profile's context : studies in their own optuna schema, a loopback optuna-dashboard
       2026-11-03 : Admin banners shown above a new chat again (lost in the port) : a dismissible one stays dismissed in the browser, others close until reload
       2026-11-06 : The e2e suite runs against the built app, at four workers : 4.9 min to 2.0 min on four cores, the same tests passing : boot smoke checks the production deep-link fallback
+      2026-11-08 : OAuth provider configuration is environment-only : the unused Authentication provider fields removed, sign-out reads the environment, variables documented
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

@@ -115,7 +115,8 @@ Start here for "how do I run/use this."
   build, rough edges), `model-downloads.md` (`hf download` commands for the
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
-  SearXNG web search, and the retrieval models).
+  SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
+  sign-in on through environment variables).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
