@@ -20,6 +20,7 @@ from local_llm.models.channels import (
     ChannelWebhookForm,
     ChannelWebhookModel,
     CreateChannelForm,
+    is_public_group_channel,
 )
 from local_llm.models.config import Config
 from local_llm.models.groups import Groups
@@ -79,6 +80,27 @@ async def channel_has_access(
         return True
 
     return False
+
+
+async def may_read_member_channel(channel: ChannelModel, user_id: str, db: AsyncSession | None = None) -> bool:
+    """Read access to a group or DM channel: its active members, and for a
+    public group channel anyone who may use channels (#331). Posting,
+    reacting and pinning still need membership, which opening a public
+    group channel (GET /{id}) gives."""
+    return is_public_group_channel(channel) or await Channels.is_user_channel_member(channel.id, user_id, db=db)
+
+
+async def join_public_group_channel(channel: ChannelModel, user_id: str, db: AsyncSession | None = None) -> None:
+    """Make the user an active member of a public group channel they open
+    (#331): a new membership, or an earlier inactive one reactivated. Their
+    sockets enter the channel's room, so live events start at once, and
+    their other tabs refetch the channel list, where it now shows as joined."""
+    if not is_public_group_channel(channel) or await Channels.is_user_channel_member(channel.id, user_id, db=db):
+        return
+    await Channels.join_channel(channel.id, user_id, db=db)
+    await Channels.update_member_active_status(channel.id, user_id, True, db=db)
+    await enter_room_for_users(f'channel:{channel.id}', [user_id])
+    await emit_to_users('events:channel', {'data': {'type': 'channel:created'}}, [user_id])
 
 
 async def get_channel_users_with_access(
@@ -179,6 +201,10 @@ class ChannelListItemResponse(ChannelModel):
     user_ids: list[str] | None = None  # 'dm' channels only
     users: list[UserIdNameStatusResponse] | None = None  # 'dm' channels only
 
+    # False for a public group channel the user has not joined (#331);
+    # opening it joins it.
+    is_member: bool = True
+
     last_message_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
@@ -192,8 +218,10 @@ async def get_channels(
     await check_channels_access(request, user)
 
     channels = await Channels.get_channels_by_user_id(user.id, db=db)
+    not_joined = await Channels.get_public_group_channels_not_joined(user.id, db=db)
+    not_joined_ids = {c.id for c in not_joined}
     channel_list = []
-    for channel in channels:
+    for channel in [*channels, *not_joined]:
         last_message = await Messages.get_last_message_by_channel_id(channel.id, db=db)
         last_message_at = last_message.created_at if last_message else None
 
@@ -226,6 +254,7 @@ async def get_channels(
                 users=users,
                 last_message_at=last_message_at,
                 unread_count=unread_count,
+                is_member=channel.id not in not_joined_ids,
             )
         )
 
@@ -241,7 +270,10 @@ async def get_all_channels(
     await check_channels_access(request, user)
     if user.role == 'admin':
         return await Channels.get_channels(db=db)
-    return await Channels.get_channels_by_user_id(user.id, db=db)
+    return [
+        *await Channels.get_channels_by_user_id(user.id, db=db),
+        *await Channels.get_public_group_channels_not_joined(user.id, db=db),
+    ]
 
 
 ############################
@@ -411,6 +443,8 @@ async def get_channel_by_id(
     users = None
 
     if channel.type in ['group', 'dm']:
+        # Opening a public group channel joins it (#331).
+        await join_public_group_channel(channel, user.id, db=db)
         if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
@@ -547,7 +581,7 @@ async def get_channel_members_by_id(
     skip = (page - 1) * limit
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -832,7 +866,7 @@ async def get_channel_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -899,7 +933,7 @@ async def get_pinned_channel_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1413,7 +1447,7 @@ async def get_channel_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1449,7 +1483,7 @@ async def get_channel_message_data(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1561,7 +1595,7 @@ async def get_channel_thread_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):

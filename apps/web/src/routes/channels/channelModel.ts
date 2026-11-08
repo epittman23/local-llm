@@ -50,6 +50,8 @@ export type Channel = {
 	is_manager?: boolean;
 	unread_count?: number;
 	last_message_at?: number | null;
+	/** The list's: false for a public group channel the viewer has not joined (#331). */
+	is_member?: boolean;
 };
 export type ChannelEvent = {
 	channel_id: string;

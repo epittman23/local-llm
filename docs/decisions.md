@@ -7,6 +7,36 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08**: **A group channel saved as Public is public (#331).**
+  The channel dialog offered "Visible to all users" for a group channel and
+  the server stored `is_private`, but nothing read it, so a public group
+  channel was as closed as a private one. The owner chose to implement the
+  setting rather than remove it.
+
+  **Who sees one.** Everyone who may use channels (channels enabled, and the
+  `channels` permission, as for every channel route) finds a group channel
+  saved with `is_private` false in their channel list, marked as not
+  joined, and may read its history, threads, pins and members. Opening it
+  (`GET /api/v1/channels/{id}`) joins them, reactivating an earlier inactive
+  membership. Posting, reacting and pinning need that membership.
+  - **Unchanged:** private group channels and DMs stay members-only. So do
+    group channels saved before this entry: the column was added nullable
+    and unset, so only an explicit false is public and a null stays private.
+  - **Live events go to members only.** A socket enters a public channel's
+    room when its user joins, not before, so channels nobody opened raise no
+    unread badge or notification. The assistant's channel tools likewise
+    search joined channels only.
+  - **No bans.** Removing a member deletes the membership, so a removed
+    member can rejoin a public channel by opening it. Making a channel
+    private keeps everyone who joined it.
+  - **No extra permission.** Anyone who may create a group channel may make
+    it public. `sharing.public_channels` still gates only a standard
+    channel's public grant.
+
+  **Why.** The dialog already promised it, and the owner preferred making
+  the promise true to removing the option. Membership stays the line for
+  writing, so a public channel cannot be posted to by someone who has not
+  opened it. Private stays the dialog's default.
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min

@@ -253,6 +253,14 @@ class ChannelWebhookForm(BaseModel):
         return validate_profile_image_url(v)
 
 
+def is_public_group_channel(channel) -> bool:
+    """A group channel saved as visible to all users (#331): listed to and
+    readable by everyone who may use channels, and joined by opening it.
+    Only an explicit false counts: rows from before the setting was read
+    hold null, and they stay members-only, as do DMs."""
+    return channel.type == 'group' and channel.is_private is False
+
+
 class ChannelTable:
     async def _get_access_grants(self, channel_id: str, db: AsyncSession | None = None) -> list[AccessGrantModel]:
         return await AccessGrants.get_grants_by_resource('channel', channel_id, db=db)
@@ -425,6 +433,31 @@ class ChannelTable:
             return [
                 await self._to_channel_model(c, access_grants=grants_map.get(c.id, []), db=db) for c in all_channels
             ]
+
+    async def get_public_group_channels_not_joined(
+        self, user_id: str, db: AsyncSession | None = None
+    ) -> list[ChannelModel]:
+        """Public group channels (is_public_group_channel) the user is not an
+        active member of: listed to them so they can open, and so join, one."""
+        async with get_async_db_context(db) as db:
+            joined = select(ChannelMember.channel_id).filter(
+                ChannelMember.user_id == user_id,
+                ChannelMember.is_active.is_(True),
+            )
+            result = await db.execute(
+                select(Channel).filter(
+                    Channel.deleted_at.is_(None),
+                    Channel.archived_at.is_(None),
+                    Channel.type == 'group',
+                    Channel.is_private.is_(False),
+                    Channel.id.not_in(joined),
+                )
+            )
+            channels = [ChannelModel.model_validate(c) for c in result.scalars().all()]
+            grants_map = await AccessGrants.get_grants_by_resources('channel', [c.id for c in channels], db=db)
+            for channel in channels:
+                channel.access_grants = grants_map.get(channel.id, [])
+            return channels
 
     async def get_dm_channel_by_user_ids(
         self, user_ids: list[str], db: AsyncSession | None = None
@@ -737,7 +770,11 @@ class ChannelTable:
             allowed_channels = []
 
             for channel in channels:
-                # --- Case A: group or dm => user must be an active member ---
+                # --- Case A: group or dm => user must be an active member,
+                # except that anyone reads a public group channel (#331) ---
+                if is_public_group_channel(channel):
+                    allowed_channels.append(await self._to_channel_model(channel, db=db))
+                    continue
                 if channel.type in ['group', 'dm']:
                     result = await db.execute(
                         select(ChannelMember)
@@ -787,7 +824,11 @@ class ChannelTable:
             if not channel:
                 return None
 
-            # If the channel is a group or dm, read access requires membership (active)
+            # Anyone reads a public group channel (#331).
+            if is_public_group_channel(channel):
+                return await self._to_channel_model(channel, db=db)
+
+            # Otherwise, if the channel is a group or dm, read access requires membership (active)
             if channel.type in ['group', 'dm']:
                 result = await db.execute(
                     select(ChannelMember)
