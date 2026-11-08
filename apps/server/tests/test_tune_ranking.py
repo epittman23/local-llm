@@ -358,3 +358,36 @@ def test_a_resumed_sweep_keeps_the_cooling_it_spent(monkeypatch):
     assert resumed.total_seconds == 4000.0
     assert not resumed.budget_exhausted(999.0)
     assert resumed.budget_exhausted(1_001.0)
+
+
+def _visit(start, end, status='done', reason=''):
+    return types.SimpleNamespace(started_at=start, ended_at=end, status=status, reason=reason)
+
+
+def test_running_seconds_counts_overlap_once_and_skips_gaps():
+    """A pause inside a visit is not counted twice, and a day's gap is not counted (#511)."""
+    opts = tune.SweepOptions()
+    visits = [_visit(1000, 1600), _visit(1600 + 86_400, 1900 + 86_400)]
+    pauses = [{'started_at': 1500, 'seconds': 300}]  # 1500-1800: 200 s beyond the first visit
+    assert tune.running_seconds(visits, pauses, opts) == 600 + 200 + 300
+    assert tune.running_seconds([], [], opts) == 0.0
+
+
+def test_running_seconds_counts_a_crashed_visit_as_no_time():
+    """A visit closed at reclaim time says nothing about when the tuner died (#511)."""
+    opts = tune.SweepOptions()
+    visits = [_visit(1000, 1100), _visit(1100, 999_999, status='aborted', reason='tuner gone'), _visit(1200, None)]
+    assert tune.running_seconds(visits, [], opts) == 100.0
+
+
+def test_a_resumed_sweep_keeps_only_the_remaining_wall_clock(monkeypatch):
+    """After 7,000 of 10,000 s a resume has 3,000 s, however long it sat; a fresh sweep has all 10,000 s (#511)."""
+    now = 5_000_000.0
+    monkeypatch.setattr(tune.time, 'time', lambda: now)
+    spent = tune.running_seconds([_visit(1000, 8000)], [], tune.SweepOptions())
+    assert spent == 7000.0
+    budget = Budget('interactive', seconds=10_000, visits=None, candidates=6, round_items=6)
+    assert budget.remaining(now - spent) == 3000.0
+    assert budget.spent(now - spent, 0) is None
+    assert budget.remaining(now) == 10_000.0
+    assert budget.spent(now - 10_000, 0) == 'budget'
