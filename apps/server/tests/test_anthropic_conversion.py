@@ -765,6 +765,25 @@ def test_payload_conversion_matches_golden(case_id, payload, passthrough):
     assert result == _golden()['payload'][case_id]
 
 
+def test_tool_choice_none_keeps_tools_and_forbids_calling_them():
+    tool = {'name': 'f', 'description': 'd', 'input_schema': {'type': 'object'}}
+    result = convert_anthropic_to_openai_payload({'tools': [tool], 'tool_choice': {'type': 'none'}}, None)
+    assert result['tool_choice'] == 'none'
+    assert [t['function']['name'] for t in result['tools']] == ['f']
+
+
+@pytest.mark.parametrize(
+    ('choice', 'expected'),
+    [
+        ({'type': 'auto'}, 'auto'),
+        ({'type': 'any'}, 'required'),
+        ({'type': 'tool', 'name': 'f'}, {'type': 'function', 'function': {'name': 'f'}}),
+    ],
+)
+def test_other_tool_choices_are_unchanged(choice, expected):
+    assert convert_anthropic_to_openai_payload({'tool_choice': choice}, None)['tool_choice'] == expected
+
+
 @pytest.mark.parametrize(('case_id', 'chunks', 'model', 'input_tokens'), STREAM_CASES, ids=[c[0] for c in STREAM_CASES])
 def test_stream_conversion_matches_golden(fixed_uuid, case_id, chunks, model, input_tokens):
     events = _run_stream(chunks, model, input_tokens)

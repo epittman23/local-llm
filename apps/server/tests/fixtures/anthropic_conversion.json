@@ -655,7 +655,8 @@
   },
   "tool_choice_none_type": {
    "model": "",
-   "messages": []
+   "messages": [],
+   "tool_choice": "none"
   },
   "tool_choice_non_dict": {
    "model": "",
