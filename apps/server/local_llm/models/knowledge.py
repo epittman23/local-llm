@@ -31,6 +31,7 @@ from local_llm.models.files import (
 )
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -276,11 +277,11 @@ class KnowledgeTable:
                     if query_key:
                         stmt = stmt.filter(
                             or_(
-                                Knowledge.name.ilike(f'%{query_key}%'),
-                                Knowledge.description.ilike(f'%{query_key}%'),
-                                User.name.ilike(f'%{query_key}%'),
-                                User.email.ilike(f'%{query_key}%'),
-                                User.username.ilike(f'%{query_key}%'),
+                                Knowledge.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                Knowledge.description.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.username.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                             )
                         )
 
@@ -402,11 +403,11 @@ class KnowledgeTable:
                             content_text = File.data['content'].as_string()
                             content_text = func.substr(content_text, 1, RAG_FILE_CONTENT_SEARCH_MAX_CHARS)
                             search_filter = or_(
-                                File.filename.ilike(f'%{q}%'),
-                                content_text.ilike(f'%{q}%'),
+                                File.filename.ilike(like_contains(q), escape=LIKE_ESCAPE),
+                                content_text.ilike(like_contains(q), escape=LIKE_ESCAPE),
                             )
                         else:
-                            search_filter = File.filename.ilike(f'%{q}%')
+                            search_filter = File.filename.ilike(like_contains(q), escape=LIKE_ESCAPE)
                         stmt = stmt.filter(search_filter)
 
                 # Order by file changes
@@ -569,12 +570,12 @@ class KnowledgeTable:
                             content_text = func.substr(content_text, 1, RAG_FILE_CONTENT_SEARCH_MAX_CHARS)
                             stmt = stmt.filter(
                                 or_(
-                                    File.filename.ilike(f'%{query_key}%'),
-                                    content_text.ilike(f'%{query_key}%'),
+                                    File.filename.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                    content_text.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                                 )
                             )
                         else:
-                            stmt = stmt.filter(File.filename.ilike(f'%{query_key}%'))
+                            stmt = stmt.filter(File.filename.ilike(like_contains(query_key), escape=LIKE_ESCAPE))
 
                     view_option = filter.get('view_option')
                     if view_option == 'created':

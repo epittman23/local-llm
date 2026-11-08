@@ -8,6 +8,7 @@ from sqlalchemy import JSON, BigInteger, Column, ForeignKey, Text, delete, selec
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ class SharedChatsTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(SharedChat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(SharedChat.title.ilike(like_contains(query_key), escape=LIKE_ESCAPE))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')

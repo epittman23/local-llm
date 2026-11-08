@@ -11,9 +11,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Index,
-    String,
     Text,
-    cast,
     delete,
     false,
     func,
@@ -25,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.misc import json_text_variants
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -208,12 +206,13 @@ class AutomationTable:
                 stmt = stmt.filter(Automation.folder_id == folder_id)
 
             if query:
-                # Search the name column and the prompt inside the JSON data.
-                data_text = cast(Automation.data, String)
+                # Search the name column and the prompt inside the JSON data: the
+                # prompt's own value, not the serialised data, whose keys ("model_id")
+                # and other fields matched any search for a word they hold (#625).
                 stmt = stmt.filter(
                     or_(
-                        Automation.name.ilike(f'%{query}%'),
-                        *(data_text.ilike(f'%{variant}%') for variant in json_text_variants(query)),
+                        Automation.name.ilike(like_contains(query), escape=LIKE_ESCAPE),
+                        Automation.data['prompt'].as_string().ilike(like_contains(query), escape=LIKE_ESCAPE),
                     )
                 )
 
