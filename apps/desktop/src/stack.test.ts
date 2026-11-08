@@ -26,7 +26,8 @@ import {
 	shellQuote,
 	stopGroup,
 	UI_SOURCES,
-	uiBuildIsStale
+	uiBuildIsStale,
+	waitUntilReady
 } from './stack';
 
 const base: StartInput = {
@@ -448,5 +449,56 @@ describe('fetchText (#432)', () => {
 		const { url, close } = await serve(200, '');
 		await close();
 		expect(await fetchText(url)).toBeNull();
+	});
+});
+
+describe('waitUntilReady', () => {
+	function clock(ready: () => boolean, overrides: Partial<Parameters<typeof waitUntilReady>[0]> = {}) {
+		let t = 0;
+		return {
+			ready: async () => ready(),
+			cancelled: () => false,
+			stopped: () => null,
+			sleep: async (ms: number) => {
+				t += ms;
+			},
+			now: () => t,
+			timeoutMs: 2000,
+			...overrides
+		};
+	}
+
+	it('gives true once ready', async () => {
+		let polls = 0;
+		expect(
+			await waitUntilReady(
+				clock(() => ++polls === 3),
+				'http://127.0.0.1:4000'
+			)
+		).toBe(true);
+	});
+
+	it('throws a clear error when the backend never answers (#797)', async () => {
+		await expect(
+			waitUntilReady(
+				clock(() => false),
+				'https://127.0.0.1:4000'
+			)
+		).rejects.toThrow('Nothing was ready at https://127.0.0.1:4000 after 2 s. The log shows why.');
+	});
+
+	it('gives the reason a stopped backend gave, and false when cancelled', async () => {
+		await expect(
+			waitUntilReady(
+				clock(() => false, { stopped: () => 'it stopped' }),
+				'o'
+			)
+		).rejects.toThrow('it stopped');
+		expect(
+			await waitUntilReady(
+				clock(() => false, { cancelled: () => true }),
+				'o'
+			)
+		).toBe(false);
 	});
 });

@@ -33,10 +33,13 @@ describe('normalizeServerUrl', () => {
 });
 
 describe('isLocalOrigin', () => {
-	it('is loopback only', () => {
+	it('is plain http at 127.0.0.1 or localhost only', () => {
 		expect(isLocalOrigin('http://127.0.0.1:4000')).toBe(true);
 		expect(isLocalOrigin('http://localhost:4000')).toBe(true);
-		expect(isLocalOrigin('http://[::1]:4000')).toBe(true);
+		expect(isLocalOrigin('http://[::1]:4000')).toBe(false);
+		expect(isLocalOrigin('https://127.0.0.1:4000')).toBe(false);
+		expect(isLocalOrigin('https://localhost:4000')).toBe(false);
+		expect(isLocalOrigin('https://[::1]:4000')).toBe(false);
 		expect(isLocalOrigin('http://192.168.1.20:4000')).toBe(false);
 		expect(isLocalOrigin('https://llm.example.ts.net')).toBe(false);
 	});

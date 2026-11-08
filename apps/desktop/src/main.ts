@@ -75,7 +75,8 @@ import {
 	runningServices,
 	type StopResult,
 	spawnInGroup,
-	stopGroup
+	stopGroup,
+	waitUntilReady
 } from './stack';
 
 const STATUS_HTML = join(__dirname, '..', 'static', 'status.html');
@@ -316,13 +317,17 @@ function fail(message: string): void {
 }
 
 async function waitReady(origin: string, signal: AbortSignal, stopped: () => string | null): Promise<void> {
-	for (;;) {
-		if (signal.aborted) throw new Cancelled();
-		const reason = stopped();
-		if (reason) throw new Error(reason);
-		if ((await probe(`${origin}/ready`)) === 200) return;
-		await sleep(500);
-	}
+	const done = await waitUntilReady(
+		{
+			ready: async () => (await probe(`${origin}/ready`)) === 200,
+			cancelled: () => signal.aborted,
+			stopped,
+			sleep,
+			now: Date.now
+		},
+		origin
+	);
+	if (!done) throw new Cancelled();
 }
 
 /** Written whole or not at all (#649): a kill or a full disk mid-write must not leave half a record. */

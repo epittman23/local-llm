@@ -43,6 +43,40 @@ export interface StartPlan {
 	buildUi: boolean;
 }
 
+/** How long a started or attached backend gets to answer `/ready` (#797). */
+export const READY_TIMEOUT_MS = 300_000;
+
+export interface ReadyWait {
+	ready: () => Promise<boolean>;
+	/** True once the launch was cancelled; the wait then gives up quietly. */
+	cancelled: () => boolean;
+	/** Why the backend will never be ready, or null while it still may be. */
+	stopped: () => string | null;
+	sleep: (ms: number) => Promise<void>;
+	now: () => number;
+	timeoutMs?: number;
+}
+
+/**
+ * Polls until the backend is ready. Gives false when cancelled, true when
+ * ready, and throws with the reason when it stopped or the time ran out.
+ */
+export async function waitUntilReady(wait: ReadyWait, origin: string): Promise<boolean> {
+	const deadline = wait.now() + (wait.timeoutMs ?? READY_TIMEOUT_MS);
+	for (;;) {
+		if (wait.cancelled()) return false;
+		const reason = wait.stopped();
+		if (reason) throw new Error(reason);
+		if (await wait.ready()) return true;
+		if (wait.now() >= deadline) {
+			throw new Error(
+				`Nothing was ready at ${origin} after ${Math.round((wait.timeoutMs ?? READY_TIMEOUT_MS) / 1000)} s. The log shows why.`
+			);
+		}
+		await wait.sleep(500);
+	}
+}
+
 export interface StartInput {
 	origin: string;
 	local: boolean;
