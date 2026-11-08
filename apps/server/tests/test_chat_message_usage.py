@@ -132,3 +132,18 @@ def test_a_non_streaming_continue_adds_its_usage_to_the_stored_usage(monkeypatch
 
     final = [s for s in saved if s.get('done') is True][-1]
     assert final['usage']['total_tokens'] == 200
+
+
+def test_a_merged_usage_holds_one_version_of_each_count():
+    """#840: the OpenAI-style names mirror the summed counts, from either stored shape."""
+    from local_llm.utils.response import merge_usage
+
+    for stored in (
+        {'prompt_tokens': 11, 'completion_tokens': 5},
+        {'input_tokens': 11, 'output_tokens': 5},
+        {'prompt_tokens': 11, 'completion_tokens': 5, 'input_tokens': 11, 'output_tokens': 5},
+    ):
+        merged = merge_usage(stored, {'prompt_tokens': 11, 'completion_tokens': 5})
+        assert (merged['input_tokens'], merged['output_tokens']) == (22, 10)
+        assert (merged['prompt_tokens'], merged['completion_tokens']) == (22, 10)
+        assert merged['total_tokens'] == 32

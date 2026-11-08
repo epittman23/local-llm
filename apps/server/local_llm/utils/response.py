@@ -101,7 +101,7 @@ def merge_usage(current: dict | None, incoming: dict | None) -> dict:
     """
     Merge usage payloads from multiple model calls into one cumulative usage dict.
 
-    Canonical token fields are additive; provider aliases keep the latest value.
+    Canonical token fields are additive; the OpenAI-style aliases mirror their sums.
     """
     current_usage = normalize_usage(current or {}) if current else {}
     incoming_usage = normalize_usage(incoming or {}) if incoming else {}
@@ -129,16 +129,10 @@ def merge_usage(current: dict | None, incoming: dict | None) -> dict:
                 incoming_usage.get(key) if isinstance(incoming_usage.get(key), dict) else {},
             )
 
-    result['prompt_tokens'] = (
-        incoming_usage.get('prompt_tokens')
-        or incoming_usage.get('input_tokens')
-        or current_usage.get('prompt_tokens', 0)
-    )
-    result['completion_tokens'] = (
-        incoming_usage.get('completion_tokens')
-        or incoming_usage.get('output_tokens')
-        or current_usage.get('completion_tokens', 0)
-    )
+    # The OpenAI-style names are aliases of the summed canonical counts, so a
+    # row never holds two versions of its usage.
+    result['prompt_tokens'] = result.get('input_tokens', 0)
+    result['completion_tokens'] = result.get('output_tokens', 0)
 
     return result
 
