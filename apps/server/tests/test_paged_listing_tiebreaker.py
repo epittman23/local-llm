@@ -54,6 +54,7 @@ def world():
             await db.execute(
                 update(User).filter(User.id.in_(user_ids)).values(created_at=100, updated_at=100, last_active_at=100)
             )
+            await db.execute(update(User).filter(User.id.in_(user_ids)).values(scim={'okta': {'external_id': 'x'}}))
             await db.execute(update(Model).filter(Model.id.in_(model_ids)).values(created_at=100, updated_at=100))
             await db.commit()
         return user_ids, model_ids
@@ -116,3 +117,36 @@ def test_model_ties_break_on_id_in_the_sort_direction(world, order, direction):
     seen = _model_pages(user_ids[0], model_ids, direction=direction, **order)
     expected = sorted(model_ids) if direction == 'asc' and order else sorted(model_ids, reverse=True)
     assert seen == expected
+
+
+def _scim_pages(ids, sort):
+    seen = []
+    skip, total = 0, 1
+    while skip < total:
+        result = _run(Users.get_scim_users(sort=sort, skip=skip, limit=2))
+        total = result['total']
+        seen += [u.id for u in result['users'] if u.id in ids]
+        skip += 2
+    return seen
+
+
+def test_scim_user_pages_end_in_the_id(world):
+    user_ids, _ = world
+    asc = _scim_pages(user_ids, {'order_by': 'created_at', 'direction': 'asc'})
+    desc = _scim_pages(user_ids, {'order_by': 'created_at', 'direction': 'desc'})
+    unsorted = _scim_pages(user_ids, None)
+    assert asc == sorted(user_ids)
+    assert desc == sorted(user_ids, reverse=True)
+    assert unsorted == sorted(user_ids)
+
+
+def test_model_search_without_a_filter_pages_newest_first_then_id(world):
+    _, model_ids = world
+    seen = []
+    skip, total = 0, 1
+    while skip < total:
+        result = _run(Models.search_models('anyone', skip=skip, limit=2))
+        total = result.total
+        seen += [m.id for m in result.items if m.id in model_ids]
+        skip += 2
+    assert seen == sorted(model_ids, reverse=True)
