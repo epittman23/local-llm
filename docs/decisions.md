@@ -7,6 +7,22 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08**: **After a forced stop, the desktop app offers to stop only
+  the `llama-server` its own stack served.** It offered, and then stopped,
+  every `llama-server` the user ran (`pgrep -x llama-server`), against the
+  2026-10-23 decision that the app stops only what it started (#434).
+
+  **What.** While it owns the stack, the app asks the backend's `/check` for
+  the served model's port, finds the process listening there, and records its
+  pid and start time in `owned.json`. A forced stop offers that process, and
+  "Stop llama-server" signals it, only while it is still the same process.
+  With nothing recorded, or the record stale, there is no offer. **Why this
+  way:** the owner chose the app recording it over the backend reporting it
+  (no API change, nothing touching `routers/benchmarks/serve.py`) and over
+  matching by port and command line (which still matches a user's own server
+  on 8090). The cost: `/check` is admin-only, so the app reads the signed-in
+  admin's cookie from its own window; with nobody signed in, nothing is
+  recorded and nothing is offered.
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min

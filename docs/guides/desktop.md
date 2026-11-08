@@ -104,10 +104,17 @@ and runs `docker compose down` itself. Either way it then asks Compose
 are left. If some are, or Compose cannot be asked, the step fails and the
 dialog stays open with the log and Quit, since `docker compose down` did not
 work or could not be confirmed. Otherwise, past the budget, it offers to stop
-any `llama-server` still running. That server runs in its own session,
-outside the group, so it is offered rather than killed unasked: "Stop
-llama-server" stops it and quits, while "Leave it", closing the dialog or
-quitting leaves it running and quits.
+the `llama-server` this stack served, if it is still running. That server runs
+in its own session, outside the group, so it is offered rather than killed
+unasked: "Stop llama-server" stops it and quits, while "Leave it", closing the
+dialog or quitting leaves it running and quits. While the stack runs, the app
+asks the backend's `/check` (as the admin signed in in its window, every 10 s
+and once more just before the stop) for the served model's port, and records
+the process listening there, by pid and start time, in `owned.json`. Only
+that process is ever offered or signalled, and only while it is still the same
+one (a reused pid is not); any other `llama-server` you run is left alone.
+With none recorded (no admin signed in, or nothing served), nothing is
+offered.
 
 A Cancel in the startup dialog (or closing it) runs the same stop. Once a stop
 has begun, the app window does not open, even if the backend answers just
@@ -148,7 +155,8 @@ Everything lives in `~/.config/Local LLM/`, the same for the packaged app and
   quitting;
 - `owned.json`: the process group of the stack it started, and the server
   address and checkout it was started for, while it runs; `"stopping": true`
-  from just before its one SIGINT, until it is gone. While a launch stops a
+  from just before its one SIGINT, until it is gone; `llama`, the pid and start
+  time of the `llama-server` the stack served (#434). While a launch stops a
   stack an earlier launch started, it names that earlier stack. It is written
   to `owned.json.tmp` and renamed into place, so it is never left half
   written;

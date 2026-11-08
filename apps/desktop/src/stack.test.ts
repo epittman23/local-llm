@@ -20,9 +20,12 @@ import {
 	makeBackendCommand,
 	newestMtime,
 	ownedAction,
+	parseListenerPid,
 	parseOwned,
 	parseProcStat,
+	recordedLlamaPids,
 	type StartInput,
+	servedLlama,
 	shellQuote,
 	stopGroup,
 	UI_SOURCES,
@@ -448,5 +451,67 @@ describe('fetchText (#432)', () => {
 		const { url, close } = await serve(200, '');
 		await close();
 		expect(await fetchText(url)).toBeNull();
+	});
+});
+
+describe('the served llama-server (#434)', () => {
+	const llama = { comm: 'llama-server', startTicks: '9' };
+
+	it('parseOwned keeps a well-formed llama record and drops a malformed one', () => {
+		const record = { pgid: 4242, startTicks: '1', llama: { pid: 555, startTicks: '9' } };
+		expect(parseOwned(JSON.stringify(record))?.llama).toEqual({ pid: 555, startTicks: '9' });
+		expect(parseOwned(JSON.stringify({ ...record, llama: { pid: 'x', startTicks: 9 } }))?.llama).toBeUndefined();
+		expect(parseOwned(JSON.stringify({ pgid: 4242, startTicks: '1' }))?.llama).toBeUndefined();
+	});
+
+	it('parseListenerPid reads the pid from ss output', () => {
+		expect(parseListenerPid('LISTEN 0 1 127.0.0.1:8090 0.0.0.0:* users:(("llama-server",pid=555,fd=3))\n')).toBe(555);
+		expect(parseListenerPid('')).toBeNull();
+	});
+
+	it('servedLlama records the process listening on the port /check names, with its start time', async () => {
+		const seen: number[] = [];
+		const found = await servedLlama({
+			check: async () => ({ running: true, port: 8090 }),
+			listener: async (port) => {
+				seen.push(port);
+				return 555;
+			},
+			stat: () => llama
+		});
+		expect(seen).toEqual([8090]);
+		expect(found).toEqual({ pid: 555, startTicks: '9' });
+	});
+
+	it('servedLlama records nothing when none is served, /check cannot be asked, or the listener is not a llama-server', async () => {
+		const listener = async () => 555;
+		expect(
+			await servedLlama({ check: async () => ({ running: false, port: 0 }), listener, stat: () => llama })
+		).toBeNull();
+		expect(await servedLlama({ check: async () => null, listener, stat: () => llama })).toBeNull();
+		expect(
+			await servedLlama({
+				check: async () => ({ running: true, port: 8090 }),
+				listener,
+				stat: () => ({ comm: 'nginx', startTicks: '9' })
+			})
+		).toBeNull();
+		expect(
+			await servedLlama({
+				check: async () => ({ running: true, port: 8090 }),
+				listener: async () => null,
+				stat: () => llama
+			})
+		).toBeNull();
+	});
+
+	it('recordedLlamaPids names only the recorded process, while it is still the same one', () => {
+		const stat = (pid: number) =>
+			pid === 555 ? llama : pid === 777 ? { comm: 'llama-server', startTicks: '4' } : null;
+		expect(recordedLlamaPids({ pid: 555, startTicks: '9' }, stat)).toEqual([555]); // 777, another, is never listed
+		expect(recordedLlamaPids({ pid: 555, startTicks: '8' }, stat)).toEqual([]); // pid reused
+		expect(recordedLlamaPids({ pid: 556, startTicks: '9' }, stat)).toEqual([]); // gone
+		expect(recordedLlamaPids({ pid: 555, startTicks: '9' }, () => ({ comm: 'bash', startTicks: '9' }))).toEqual([]);
+		expect(recordedLlamaPids(undefined, stat)).toEqual([]);
 	});
 });
