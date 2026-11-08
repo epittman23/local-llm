@@ -140,12 +140,14 @@ async def get_accessible_folder_files(
     db: AsyncSession | None = None,
     user_group_ids: set[str] | None = None,
     note_permission: str = 'read',
+    collection_permission: str = 'read',
 ) -> list[dict]:
     """Filter folder.data['files'] entries to those the caller can read.
 
     Entries carry a 'type' ('file', 'collection' or 'note') and 'id'. Entries of any other
     shape are dropped because they cannot be access-checked. A note needs
-    `note_permission` on it, unless the caller owns it.
+    `note_permission` on it, unless the caller owns it, and a knowledge base
+    needs `collection_permission`.
     """
     if not isinstance(entries, list):
         return []
@@ -169,7 +171,7 @@ async def get_accessible_folder_files(
                 accessible.append(entry)
         elif entry_type == 'collection':
             if await Knowledges.check_access_by_user_id(
-                entry_id, user.id, 'read', db=db, user_group_ids=user_group_ids
+                entry_id, user.id, collection_permission, db=db, user_group_ids=user_group_ids
             ):
                 accessible.append(entry)
         elif entry_type == 'note':
@@ -197,6 +199,7 @@ async def can_read_all_folder_files(
     user: UserModel,
     db: AsyncSession | None = None,
     note_permission: str = 'read',
+    collection_permission: str = 'read',
 ) -> bool:
     if entries is None:
         return True
@@ -205,14 +208,18 @@ async def can_read_all_folder_files(
     if not entries:
         return True
 
-    return len(await get_accessible_folder_files(entries, user, db=db, note_permission=note_permission)) == len(entries)
+    accessible = await get_accessible_folder_files(
+        entries, user, db=db, note_permission=note_permission, collection_permission=collection_permission
+    )
+    return len(accessible) == len(entries)
 
 
 async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSession | None = None) -> list[dict]:
     """Return the folder entries its owner can still delegate.
 
-    A note is passed on only if its owner could share it on directly: they own
-    it or may write it, as changing a note's own sharing requires (#358).
+    A note or knowledge base is passed on only if its owner could share it on
+    directly: they own it or may write it, as changing its own sharing
+    requires (#358).
     """
     files = (folder.data or {}).get('files') or []
     if not files:
@@ -222,7 +229,9 @@ async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSessio
     if not owner:
         return []
 
-    return await get_accessible_folder_files(files, owner, db=db, note_permission='write')
+    return await get_accessible_folder_files(
+        files, owner, db=db, note_permission='write', collection_permission='write'
+    )
 
 
 def is_folder_entry(model_knowledge: list[dict] | None, item_type: str, item_id: str) -> bool:
