@@ -150,35 +150,49 @@ async def _embed_texts(request: Request, user, texts: list[str]) -> dict[str, li
     return dict(zip(unique, vectors, strict=True))
 
 
+class MemoryReadError(RuntimeError):
+    """The memory rows could not be read, so there is nothing to rebuild from."""
+
+
 async def reindex_memory_vectors_for_user(
     request: Request,
     user_id: str,
     memories: list[MemoryModel] | None = None,
     user=None,
 ) -> int:
-    """Rebuild the user's memory collection from their rows.
+    """Rebuild the user's memory collection from their rows, swapping at the end.
 
-    Every memory is embedded before the old collection is deleted, so a failed
-    embedding (a missing model, say) raises with the old vectors still in place
-    rather than leaving the user with none (#303).
+    The new vectors are built first and written over the old ones by id (one
+    transaction in pgvector); only then are the vectors of memories that no
+    longer exist removed. A failure at any step before that leaves the old
+    vectors in place and searchable, and a failed read of the memory rows
+    aborts before anything is touched (#303).
     """
     collection_name = f'user-memory-{user_id}'
     memories = memories if memories is not None else await Memories.get_memories_by_user_id(user_id)
-    memories = memories or []
+    if memories is None:
+        log.error('Could not read the memories of user %s; leaving their vectors untouched.', user_id)
+        raise MemoryReadError(f'Could not read the memories of user {user_id}')
     vectors = await _embed_texts(request, user, [_vector_text(memory) for memory in memories])
 
-    try:
-        await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name)
-    except Exception as e:
-        log.debug(e)
-
     if not memories:
+        try:
+            await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name)
+        except Exception as e:
+            log.debug(e)
         return 0
 
     await ASYNC_VECTOR_DB_CLIENT.upsert(
         collection_name=collection_name,
         items=[_vector_item(memory, vectors[_vector_text(memory)]) for memory in memories],
     )
+
+    current_ids = {memory.id for memory in memories}
+    existing = await ASYNC_VECTOR_DB_CLIENT.get(collection_name)
+    existing_ids = existing.ids[0] if existing and existing.ids else []
+    stale_ids = [vector_id for vector_id in existing_ids if vector_id not in current_ids]
+    if stale_ids:
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name, ids=stale_ids)
     return len(memories)
 
 
@@ -465,7 +479,12 @@ async def reindex_memories_from_vector_db(
     user=Depends(get_admin_user),
 ):
     memories = await Memories.get_memories()
-    memories = memories or []
+    if memories is None:
+        log.error('Could not read the memories; leaving every memory vector untouched.')
+        raise HTTPException(
+            status_code=500,
+            detail='The memories could not be read, so no vectors were rebuilt. See the server log.',
+        )
     memories_by_user_id = {}
     for memory in memories:
         memories_by_user_id.setdefault(memory.user_id, []).append(memory)
@@ -476,7 +495,7 @@ async def reindex_memories_from_vector_db(
     failed_users = 0
 
     # One user's failure does not stop the others; a failed user keeps the
-    # vectors they had, since a reindex embeds before it deletes.
+    # vectors they had, since a reindex builds the new ones before it replaces them.
     for memory_user in users:
         try:
             total_memories += await reindex_memory_vectors_for_user(
@@ -523,7 +542,13 @@ async def reset_memory_from_vector_db(
     """
     await check_memories_permission(user)
 
-    count = await reindex_memory_vectors_for_user(request, user.id, user=user)
+    try:
+        count = await reindex_memory_vectors_for_user(request, user.id, user=user)
+    except MemoryReadError:
+        raise HTTPException(
+            status_code=500,
+            detail='Your memories could not be read, so no vectors were rebuilt. See the server log.',
+        )
 
     await publish_event(
         request,

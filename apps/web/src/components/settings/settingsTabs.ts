@@ -113,18 +113,40 @@ export const personalTabs: SettingsTab[] = [
 
 type Perms = { features?: Record<string, boolean>; settings?: Record<string, boolean> };
 
+/**
+ * The tabs that save through POST /users/user/settings/update, which the
+ * backend refuses without "Interface Settings Access" (settings.interface).
+ * The other personal tabs (data, archived chats, account, about) use other
+ * endpoints and stay visible.
+ */
+const guardedSettingsTabs = new Set([
+	'general',
+	'interface',
+	'notifications',
+	'shortcuts',
+	'connections',
+	'tools',
+	'personalization',
+	'audio'
+]);
+
+/** True for a non-admin whose "Interface Settings Access" permission is off: the guarded personal tabs are hidden. */
+export function personalSettingsRestricted(user: SessionUser | null): boolean {
+	if (!user || user.role === 'admin') return false;
+	return !(((user.permissions ?? {}) as Perms).settings?.interface ?? true);
+}
+
 /** SettingsModal.svelte's rules for who sees which personal tab. */
 function personalTabVisible(id: string, user: SessionUser, config: BackendConfig | null): boolean {
 	const admin = user.role === 'admin';
 	const perms = (user.permissions ?? {}) as Perms;
+	if (guardedSettingsTabs.has(id) && personalSettingsRestricted(user)) return false;
 	const features = (config?.features ?? {}) as Record<string, unknown>;
 	switch (id) {
 		case 'connections':
 			return Boolean(features.enable_direct_connections);
 		case 'tools':
 			return admin || Boolean(perms.features?.direct_tool_servers);
-		case 'interface':
-			return admin || (perms.settings?.interface ?? true);
 		case 'personalization':
 			return Boolean(features.enable_memories) && (admin || (perms.features?.memories ?? true));
 		default:
