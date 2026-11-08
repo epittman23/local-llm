@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '@/lib/stores/authStore';
-import { adminTabs, availableTabs, filterTabs, personalTabs, resolveTab, startsGroup } from './settingsTabs';
+import {
+	adminTabs,
+	availableTabs,
+	filterTabs,
+	personalSettingsRestricted,
+	personalTabs,
+	resolveTab,
+	startsGroup
+} from './settingsTabs';
 
 const user = (role: string, permissions: Record<string, unknown> = {}) =>
 	({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '', permissions }) as SessionUser;
@@ -32,21 +40,28 @@ describe('availableTabs', () => {
 				enable_direct_connections: true,
 				enable_memories: true
 			})
-		).toEqual([
-			'general',
-			'notifications',
-			'shortcuts',
-			'connections',
-			'tools',
-			'personalization',
-			'audio',
+		).toEqual(['data_controls', 'archived_chats', 'account', 'about']);
+		expect(ids(user('admin'))[0]).toBe('general');
+		expect(ids(user('admin'))).toContain('admin:general');
+	});
+	it('hides every personal tab that saves through the guarded endpoint without Interface Settings Access, and keeps the rest', () => {
+		const off = user('user', {
+			features: { direct_tool_servers: true, memories: true },
+			settings: { interface: false }
+		});
+		const f = { enable_direct_connections: true, enable_memories: true };
+		expect(availableTabs(off, cfg(f), all).map((t) => t.id)).toEqual([
 			'data_controls',
 			'archived_chats',
 			'account',
 			'about'
 		]);
-		expect(ids(user('admin'))[0]).toBe('general');
-		expect(ids(user('admin'))).toContain('admin:general');
+		expect(personalSettingsRestricted(off)).toBe(true);
+		const adminOff = user('admin', { settings: { interface: false } });
+		expect(personalSettingsRestricted(adminOff)).toBe(false);
+		expect(availableTabs(adminOff, cfg(f), all).map((t) => t.id)).toContain('audio');
+		expect(personalSettingsRestricted(user('user', { settings: { interface: true } }))).toBe(false);
+		expect(personalSettingsRestricted(user('user'))).toBe(false);
 	});
 	it('lists only tabs that have a component', () => {
 		expect(availableTabs(user('admin'), cfg(), new Set(['admin:db'])).map((t) => t.id)).toEqual(['admin:db']);
