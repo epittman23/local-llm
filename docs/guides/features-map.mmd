@@ -1,0 +1,67 @@
+flowchart LR
+  user(["Signed-in user"])
+  admin(["Admin"])
+
+  subgraph CHAT["Chat: / and /c/id and /folders/id"]
+    direction TB
+    chatPick["Model picker and @ mention: one Workspace model entry per task"]
+    chatAttach["Attach files, knowledge bases, a URL or a YouTube video"]
+    chatTools["Per-chat toggles: web search, image generation, code interpreter"]
+    chatOrg["Folders, pins, archive, temporary chat"]
+    chatShare["Share links: read-only /s/share-id"]
+  end
+
+  subgraph WORK["Workspace: /workspace"]
+    direction TB
+    wsModels["Models: entry = base model + system prompt + params + tools + knowledge"]
+    wsKnow["Knowledge: file trees on pgvector, hybrid search + reranker"]
+    wsPrompts["Prompts: saved prompts with version history"]
+    wsSkills["Skills: instructions a model can load"]
+    wsTools["Tools: Python tool code (plugins on only)"]
+  end
+
+  subgraph PERSONAL["Productivity, each behind a feature flag"]
+    direction TB
+    notes["Notes /notes: TipTap editor, autosave"]
+    cal["Calendar /calendar: month, week, day"]
+    auto["Automations /automations: scheduled prompts and their runs"]
+    chan["Channels /channels/id: live messages, threads, members"]
+  end
+
+  subgraph SETTINGS["Settings modal: ?settings=tab"]
+    direction TB
+    setUser["Personal: interface, audio, connections, personalization, data, account"]
+    setAdmin["Admin tabs: connections, models, documents, web, code execution, images, subagents"]
+  end
+
+  subgraph ADMIN["Admin pages: /admin"]
+    direction TB
+    users["Users and groups, permissions"]
+    evals["Evaluations: leaderboard and feedback"]
+    funcs["Functions: filters and pipes (plugins on only)"]
+    play["Playground: chat, completions, images"]
+  end
+
+  subgraph BENCH["Benchmarks: /benchmarks, admin + enable_benchmarks"]
+    direction TB
+    bServe["Serve: start llama-server from a profile"]
+    bLive["Live: GPU telemetry"]
+    bTests["Tests: graded coding items, bare, or through the harness (API only)"]
+    bCompare["Compare, Answers, Report"]
+    bTune["Tune and Pre-screen: search serving flags"]
+  end
+
+  user --> CHAT
+  user --> WORK
+  user --> PERSONAL
+  user --> SETTINGS
+  admin --> ADMIN
+  admin --> BENCH
+  admin --> setAdmin
+
+  wsModels -. "picked in" .-> chatPick
+  wsKnow -. "attached with #" .-> chatAttach
+  wsPrompts -. "inserted with /" .-> chatPick
+  wsSkills -. "set on an entry" .-> wsModels
+  bServe -. "same OpenAI API on :8090" .-> setAdmin
+  wsModels -. "harness_model" .-> bTests

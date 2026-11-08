@@ -1,0 +1,48 @@
+flowchart TB
+  page["Browser or desktop app: chat page"]
+  api["POST /api/chat/completions: main.py chat_completion"]
+  entry["Workspace model entry: base model id, system prompt, params, tools, skills, knowledge"]
+
+  subgraph PAYLOAD["utils/middleware.py process_chat_payload"]
+    direction TB
+    p1["Arena pick, params, system prompt, history compaction"]
+    p2["Folder context, inlet filters (plugins)"]
+    p3["Features: voice prompt, memory context, code interpreter prompt"]
+    p4["Skills applied, mention tags stripped"]
+    p5["Tools resolved: builtin + workspace tools + MCP + terminal"]
+    p6["File and knowledge context (RAG) put into the messages"]
+    p1 --> p2 --> p3 --> p4 --> p5 --> p6
+  end
+
+  gen["utils/chat.py generate_chat_completion"]
+
+  subgraph CONN["OpenAI-compatible connection, set in Admin Settings > Connections"]
+    direction LR
+    orr["OpenRouter: the default"]
+    llama["llama-server on :8090: evaluation only"]
+  end
+
+  resp["process_chat_response: stream deltas to the page over the socket"]
+  toolCall{"Structured tool call in the reply?"}
+
+  subgraph TOOLS["Builtin tools, run on the server"]
+    direction TB
+    tCode["execute_code: Jupyter kernel, chat files copied in"]
+    tWeb["search_web, fetch_url: SearXNG"]
+    tKnow["knowledge and chat-file search: pgvector + reranker"]
+    tMem["memory, notes, chats, channels, calendar, automations"]
+    tImg["generate_image, edit_image"]
+  end
+
+  done["Final message saved to the chat, citations and files attached"]
+
+  page --> api
+  entry --> api
+  api --> PAYLOAD
+  PAYLOAD --> gen
+  gen --> CONN
+  CONN --> resp
+  resp --> toolCall
+  toolCall -- "yes, up to the tool-round cap" --> TOOLS
+  TOOLS -- "tool result appended, next round" --> gen
+  toolCall -- "no" --> done
