@@ -868,10 +868,22 @@ function applyPolicy(): void {
 	});
 
 	session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
-		callback(isAllowedPermission(permission, details.requestingUrl, appOrigin))
+		callback(
+			isAllowedPermission(
+				permission,
+				details.requestingUrl,
+				appOrigin,
+				'mediaTypes' in details ? (details.mediaTypes ?? []) : []
+			)
+		)
 	);
-	session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-		isAllowedPermission(permission, requestingOrigin, appOrigin)
+	session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
+		isAllowedPermission(
+			permission,
+			requestingOrigin,
+			appOrigin,
+			'mediaType' in details && details.mediaType ? [details.mediaType] : []
+		)
 	);
 }
 
