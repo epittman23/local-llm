@@ -1552,8 +1552,9 @@ def test_a_continued_reply_adds_its_usage_to_what_was_stored(monkeypatch):
 
     final = [s for s in _saved(observed) if s.get('done') is True][-1]
     assert final['usage']['total_tokens'] == 200
-    # The canonical counts are summed (prompt_tokens is an alias that keeps the latest value).
+    # The canonical counts are summed, and the OpenAI-style aliases agree with them (#840).
     assert (final['usage']['input_tokens'], final['usage']['output_tokens']) == (130, 70)
+    assert (final['usage']['prompt_tokens'], final['usage']['completion_tokens']) == (130, 70)
 
 
 def _usage_chunk(text, **usage):

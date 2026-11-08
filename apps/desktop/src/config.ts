@@ -34,12 +34,14 @@ export function normalizeServerUrl(input: string): string | null {
 }
 
 /**
- * Whether the server is on this machine, which is what makes the app start
- * and stop it. Anything else (the future remote server) is only connected to.
+ * Whether the app manages this server, starting and stopping it. Only plain
+ * `http:` at `127.0.0.1` or `localhost`, which is what `make backend` serves
+ * (#420). Any other form, even on this machine (`http://[::1]`, `https://`
+ * at loopback), and any remote server, is only connected to.
  */
 export function isLocalOrigin(origin: string): boolean {
-	const { hostname } = new URL(origin);
-	return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
+	const { protocol, hostname } = new URL(origin);
+	return protocol === 'http:' && (hostname === '127.0.0.1' || hostname === 'localhost');
 }
 
 /** The port `make backend` should listen on for a local origin. */
