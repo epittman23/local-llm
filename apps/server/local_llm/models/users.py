@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.env import DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.utils.misc import throttle
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 from local_llm.utils.validate import validate_profile_image_url
 
 ####################
@@ -284,7 +285,12 @@ def _filter_users(stmt, filter: dict):
 
     query_key = filter.get('query')
     if query_key:
-        stmt = stmt.filter(or_(User.name.ilike(f'%{query_key}%'), User.email.ilike(f'%{query_key}%')))
+        stmt = stmt.filter(
+            or_(
+                User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+            )
+        )
 
     channel_id = filter.get('channel_id')
     if channel_id:

@@ -9,6 +9,7 @@ from local_llm.internal.db import Base, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -234,11 +235,11 @@ class SkillsTable:
                     if query_key:
                         stmt = stmt.filter(
                             or_(
-                                Skill.name.ilike(f'%{query_key}%'),
-                                Skill.description.ilike(f'%{query_key}%'),
-                                Skill.id.ilike(f'%{query_key}%'),
-                                User.name.ilike(f'%{query_key}%'),
-                                User.email.ilike(f'%{query_key}%'),
+                                Skill.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                Skill.description.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                Skill.id.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                             )
                         )
 

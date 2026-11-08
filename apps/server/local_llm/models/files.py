@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # local imports
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.utils.misc import sanitize_metadata
+from local_llm.utils.sql_like import like_escape
 
 log = logging.getLogger(__name__)
 
@@ -293,9 +294,7 @@ class FilesTable:
             A SQL LIKE compatible pattern with proper escaping.
         """
         # Escape SQL special characters first, then convert glob wildcards
-        pattern = glob.replace('\\', '\\\\')
-        pattern = pattern.replace('%', '\\%')
-        pattern = pattern.replace('_', '\\_')
+        pattern = like_escape(glob)
         pattern = pattern.replace('*', '%')
         pattern = pattern.replace('?', '_')
         return pattern
