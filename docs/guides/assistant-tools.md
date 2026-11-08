@@ -114,9 +114,23 @@ the CPU build) and load from the Hugging Face cache, since `make backend`
 runs offline; see [dependencies.md](dependencies.md#offline-model-cache) for
 downloading them.
 
-Hybrid search is on, so each query is answered by BM25 keyword search
-and vector search together. The top 5 candidates go to the reranker, and
+Hybrid search is on, so each query is answered by keyword search and
+vector search together. The top 5 candidates go to the reranker, and
 the best 3 are kept (`TOP_K` 5, `TOP_K_RERANKER` 3).
+
+On pgvector the keyword half is Postgres full-text search, run natively
+(`retrieval/vector/dbs/pgvector.py`'s `hybrid_search`), not BM25. Since
+2026-11-08 (#347) it matches a chunk holding **any** of the question's
+words, under the `english` text-search config: stop words are dropped
+and words stemmed ("Settings" matches "set"), so "How do I rotate the API
+key?" searches for `rotat | api | key`. It ranks with `ts_rank_cd` and
+merges with the vector results by reciprocal rank at the BM25 weight
+(`rag.hybrid_bm25_weight`, default 0.5). English rules apply to every
+language, though `bge-m3` is multilingual. A question of only stop words
+matches nothing; at weight 1, where vector search is otherwise skipped,
+an empty keyword result falls back to vector search. The index behind it,
+`idx_document_chunk_text_search_english`, is built at startup if missing,
+so the first start after an upgrade indexes every existing chunk.
 
 The vector column stays `vector(1536)`: the app pads shorter embeddings
 with zeros, which leaves cosine similarity unchanged, so a 1024-dimension
