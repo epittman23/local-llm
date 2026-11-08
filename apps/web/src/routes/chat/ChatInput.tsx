@@ -97,6 +97,9 @@ export const ChatInput = forwardRef<
 		onPasteText?: (file: File) => void;
 		/** Nothing can be typed or sent (the chat is still loading). */
 		disabled?: boolean;
+		/** A send waits for the page to choose its models (useHeldSend): the box says so, and `onCancelWaiting` calls it off. */
+		waiting?: boolean;
+		onCancelWaiting?: () => void;
 	}
 >(function ChatInput(
 	{
@@ -117,7 +120,9 @@ export const ChatInput = forwardRef<
 		onAtModel,
 		wide = false,
 		onPasteText,
-		disabled = false
+		disabled = false,
+		waiting = false,
+		onCancelWaiting
 	},
 	ref
 ) {
@@ -311,6 +316,11 @@ export const ChatInput = forwardRef<
 	useEffect(() => {
 		if (held && (text !== held.text || !keeps(held))) setHeld(null);
 	});
+	const status = held
+		? { text: 'when the upload finishes', cancel: () => setHeld(null) }
+		: waiting
+			? { text: 'when the models load', cancel: () => onCancelWaiting?.() }
+			: null;
 
 	return (
 		<div className={cn('mx-auto w-full px-2.5 pb-3', wide ? 'max-w-none' : 'max-w-3xl')}>
@@ -332,15 +342,10 @@ export const ChatInput = forwardRef<
 					))}
 				</ul>
 			)}
-			{held && (
+			{status && (
 				<div role="status" className="bg-muted/50 mb-1.5 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
-					<span className="text-muted-foreground">Sends when the upload finishes</span>
-					<button
-						type="button"
-						aria-label="Don't send when the upload finishes"
-						className="ml-auto"
-						onClick={() => setHeld(null)}
-					>
+					<span className="text-muted-foreground">Sends {status.text}</span>
+					<button type="button" aria-label={`Don't send ${status.text}`} className="ml-auto" onClick={status.cancel}>
 						<X className="size-3" />
 					</button>
 				</div>

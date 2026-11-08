@@ -320,6 +320,9 @@ test('a message sent the moment the box appears waits for the model list, then g
 	await page.keyboard.type('Hello there');
 	await page.keyboard.press('Enter');
 	await expect(box).toHaveValue('Hello there');
+	// The box says the send is waiting (#659).
+	const waiting = page.getByRole('status').filter({ hasText: 'Sends when the models load' });
+	await expect(waiting).toBeVisible();
 	// Typed after Enter while it waits: it goes too, as the box is what is sent.
 	await page.keyboard.type(', and more');
 	expect(chat.seen.completions).toHaveLength(0);
@@ -331,7 +334,54 @@ test('a message sent the moment the box appears waits for the model list, then g
 		user_message: { content: 'Hello there, and more' }
 	});
 	await expect(box).toHaveValue('');
+	await expect(waiting).toHaveCount(0);
 	await expect(page.getByText('Model not selected')).toHaveCount(0);
+});
+
+test('a send waiting for the model list can be called off (#659)', async ({ page }) => {
+	const chat = await mockChat(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => (release = resolve));
+	await page.route('**/api/models*', async (route) => {
+		await held;
+		return json(route, { data: MODELS });
+	});
+	await page.goto('/?models=llama');
+	await chat.socket.connected;
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await page.keyboard.type('not yet');
+	await page.keyboard.press('Enter');
+
+	await page.getByRole('button', { name: "Don't send when the models load" }).click();
+	await expect(page.getByText('Sends when the models load')).toHaveCount(0);
+	release();
+	await expect(page.getByRole('heading', { name: 'Llama' })).toBeVisible();
+	await expect(box).toHaveValue('not yet');
+	// Sent now, the box goes whole and as the only request: had the called-off
+	// send gone once the models loaded, it would have gone first, without " now".
+	await box.press('End');
+	await page.keyboard.type(' now');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', user_message: { content: 'not yet now' } });
+	await expect(box).toHaveValue('');
+	expect(chat.seen.completions).toHaveLength(1);
+});
+
+test("`?q=` goes with the model's default tools (#659)", async ({ page }) => {
+	const chat = await mockChat(page);
+	const withTool = MODELS.map((m) => (m.id === 'llama' ? { ...m, info: { meta: { toolIds: ['calc'] } } } : m));
+	await page.route('**/api/models*', (route) => json(route, { data: withTool }));
+	await page.route(/\/api\/v1\/tools\/(\?|$)/, (route) => json(route, [{ id: 'calc', name: 'Calculator', meta: {} }]));
+	await page.goto('/?models=llama&q=What%20is%202%2B2%3F');
+
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({
+		model: 'llama',
+		tool_ids: ['calc'],
+		user_message: { content: 'What is 2+2?' }
+	});
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('');
 });
 
 test('a send waiting for the model list is dropped when another chat is opened (#373)', async ({ page }) => {
