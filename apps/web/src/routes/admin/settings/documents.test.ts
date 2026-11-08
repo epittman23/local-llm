@@ -205,6 +205,16 @@ describe('embedding', () => {
 		for (const batchSize of [1, 64, null])
 			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBeNull();
 	});
+	it('refuses negative concurrent requests, and accepts 0 or more or a cleared box (#638)', () => {
+		for (const concurrent of [-1, -5, 1.5])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', concurrent })).toBe(
+				'Embedding Concurrent Requests must be a whole number of at least 0.'
+			);
+		for (const concurrent of [0, 4, null])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', concurrent })).toBeNull();
+		// The local engine does not use it, and the field is hidden then.
+		expect(embeddingError({ ...e, engine: '', model: 'm', concurrent: -1 })).toBeNull();
+	});
 	it('offers a model per engine', () => {
 		expect(embeddingModelFor('')).toBe('sentence-transformers/all-MiniLM-L6-v2');
 		expect(embeddingModelFor('ollama')).toBe('');
@@ -266,6 +276,23 @@ describe('chunkSettingsError', () => {
 		expect(ragFormError({ CHUNK_SIZE: 100, CHUNK_OVERLAP: 200 })).toBe(
 			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
 		);
+	});
+});
+
+describe('reranking batch size', () => {
+	it('refuses one below 1, and accepts 1 or more or a cleared box (#638)', () => {
+		// Hybrid search off too: the field is shown then.
+		for (const hybrid of [true, false])
+			for (const size of [0, -5, 1.5])
+				expect(ragFormError({ ENABLE_RAG_HYBRID_SEARCH: hybrid, RAG_RERANKING_BATCH_SIZE: size })).toBe(
+					'Reranking Batch Size must be a whole number of at least 1.'
+				);
+		for (const size of [1, 32, null, undefined]) expect(ragFormError({ RAG_RERANKING_BATCH_SIZE: size })).toBeNull();
+	});
+	it('does not check it where the field is hidden: full context on, or retrieval bypassed', () => {
+		const shown = { RAG_RERANKING_BATCH_SIZE: 0 };
+		expect(ragFormError({ ...shown, RAG_FULL_CONTEXT: true })).toBeNull();
+		expect(ragFormError({ ...shown, BYPASS_EMBEDDING_AND_RETRIEVAL: true })).toBeNull();
 	});
 });
 

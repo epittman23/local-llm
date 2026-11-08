@@ -56,7 +56,13 @@ from local_llm.retrieval.web.utils import get_web_loader
 from local_llm.utils.access_control.files import get_owner_accessible_folder_files, has_access_to_file
 from local_llm.utils.access_control.folders import has_folder_access
 from local_llm.utils.headers import get_json_bearer_headers, include_user_info_headers
-from local_llm.utils.misc import get_content_from_message, get_message_list
+from local_llm.utils.misc import (
+    embedding_batch_size_error,
+    embedding_concurrency_error,
+    get_content_from_message,
+    get_message_list,
+    reranking_batch_size_error,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1217,6 +1223,14 @@ def get_embedding_function(
     enable_async=True,
     concurrent_requests=0,
 ) -> Awaitable:
+    # An environment variable or a value stored before Documents checked them
+    # can still be unusable, and would fail every embedding: use the default (#638).
+    if error := embedding_batch_size_error(embedding_batch_size):
+        log.warning('%s Using 1 instead.', error)
+        embedding_batch_size = 1
+    if error := embedding_concurrency_error(concurrent_requests):
+        log.warning('%s Using no limit instead.', error)
+        concurrent_requests = 0
     if embedding_engine == '':
         # Sentence transformers: CPU-bound sync operation
         async def async_embedding_function(query, prefix=None, user=None):
@@ -1358,6 +1372,11 @@ async def generate_embeddings(
 def get_reranking_function(reranking_engine, reranking_model, reranking_function, reranking_batch_size=32):
     if reranking_function is None:
         return None
+    # As for embedding: an unusable size from the environment or storage would
+    # turn every hybrid search into a vector search (#638).
+    if error := reranking_batch_size_error(reranking_batch_size):
+        log.warning('%s Using 32 instead.', error)
+        reranking_batch_size = 32
     if reranking_engine == 'external':
         return lambda query, documents, user=None: reranking_function.predict(
             [(query, doc.page_content) for doc in documents], user=user
