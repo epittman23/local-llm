@@ -7,6 +7,19 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08**: **Personal direct connections stay unwired in chat (deliberate
+  gap).** Settings > Connections still saves a user's own OpenAI-compatible
+  endpoints, but their models (`direct: true`) are now left out of every model
+  list (`useModels`). Chat to one made the backend send `request:chat:completion`
+  over the socket and wait for a browser-side handler that was never ported
+  from the SvelteKit app (`useChatSession` drops the event), so every send
+  timed out ("Event call timed out"). The tab says so, as Integrations does
+  for personal tool and terminal servers. Making them work (a handler in the
+  app shell that calls the provider from the browser, which also needs the
+  provider to allow cross-origin requests) is a separate feature, not
+  started. A chat saved with such a model reports "Model not selected" (or
+  "Model not found" for a regenerate) instead of timing out. Issue #764.
+
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min
