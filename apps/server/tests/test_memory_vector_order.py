@@ -9,9 +9,11 @@ left behind:
   `add`, no changed row from `/{id}/update` or a batch `replace`;
 - a vector write that fails after `/add` removes the row it just inserted;
 - a batch's vector deletes are applied even when its upsert fails;
-- a reindex embeds every memory before it deletes the collection, so a
-  failed embedding keeps the vectors that were there, and `/reindex`
-  carries on past a user that fails, then reports the failures;
+- a reindex builds every new vector before it replaces the old ones, so a
+  failed embedding or vector write keeps the vectors that were there (still
+  searchable), a failed read of the memory rows leaves them untouched, a
+  successful one leaves exactly the current memories with no duplicates, and
+  `/reindex` carries on past a user that fails, then reports the failures;
 - chat context labels a vector hit from the memory's database row, not
   from the text stored with the vector;
 - a vector-dimension mismatch (the embedding model changed) still reindexes
@@ -55,6 +57,8 @@ class FakeVectorStore:
         self.fail_upsert = False
         # Errors the next upserts raise, in order, before fail_upsert applies.
         self.upsert_errors: list[Exception] = []
+        # What is stored: collection -> vector id -> text.
+        self.vectors: dict[str, dict[str, str]] = {}
 
     async def upsert(self, collection_name, items):
         self.calls.append(('upsert', collection_name, sorted(item['text'] for item in items)))
@@ -62,12 +66,22 @@ class FakeVectorStore:
             raise self.upsert_errors.pop(0)
         if self.fail_upsert:
             raise VectorStoreDown('vector store down')
+        self.vectors.setdefault(collection_name, {}).update({item['id']: item['text'] for item in items})
+
+    async def get(self, collection_name):
+        stored = self.vectors.get(collection_name)
+        if not stored:
+            return None
+        return SimpleNamespace(ids=[list(stored)], documents=[list(stored.values())])
 
     async def delete(self, collection_name, ids):
         self.calls.append(('delete', collection_name, list(ids)))
+        for vector_id in ids:
+            self.vectors.get(collection_name, {}).pop(vector_id, None)
 
     async def delete_collection(self, collection_name):
         self.calls.append(('delete_collection', collection_name))
+        self.vectors.pop(collection_name, None)
 
 
 @pytest.fixture
@@ -183,7 +197,6 @@ def test_add_reindexes_on_a_dimension_mismatch_with_the_new_memory(harness):
     assert _stored(harness.user.id) == [('New fact', None), ('Older fact', None)]
     assert harness.store.calls == [
         ('upsert', collection, ['New fact']),
-        ('delete_collection', collection),
         ('upsert', collection, ['New fact', 'Older fact']),
     ]
 
@@ -406,6 +419,74 @@ def test_reset_of_a_user_without_memories_drops_the_collection(harness):
     assert harness.store.calls == [('delete_collection', f'user-memory-{harness.user.id}')]
 
 
+def _seed_vectors(harness, **texts_by_id):
+    collection = f'user-memory-{harness.user.id}'
+    harness.store.vectors[collection] = dict(texts_by_id)
+    return collection
+
+
+def test_reset_keeps_the_old_vectors_searchable_when_building_fails(harness):
+    kept = _insert(harness.user.id, 'Deadline is Friday')
+    collection = _seed_vectors(harness, **{kept.id: 'Deadline is Friday', 'gone': 'Removed memory'})
+    harness.store.fail_upsert = True
+
+    with pytest.raises(VectorStoreDown):
+        asyncio.run(memories_router.reset_memory_from_vector_db(harness.request, harness.user))
+
+    assert harness.store.vectors[collection] == {kept.id: 'Deadline is Friday', 'gone': 'Removed memory'}
+    assert not any(call[0] in ('delete', 'delete_collection') for call in harness.store.calls)
+
+
+def test_reset_leaves_the_vectors_untouched_when_the_database_read_fails(harness, monkeypatch):
+    kept = _insert(harness.user.id, 'Deadline is Friday')
+    collection = _seed_vectors(harness, **{kept.id: 'Deadline is Friday'})
+
+    async def unreadable(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(memories_router.Memories, 'get_memories_by_user_id', unreadable)
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(memories_router.reset_memory_from_vector_db(harness.request, harness.user))
+
+    assert raised.value.status_code == 500
+    assert harness.store.vectors[collection] == {kept.id: 'Deadline is Friday'}
+    assert harness.store.calls == []
+    assert harness.state.embedded == []
+
+
+def test_reindex_leaves_every_vector_untouched_when_the_database_read_fails(harness, monkeypatch):
+    kept = _insert(harness.user.id, 'Deadline is Friday')
+    collection = _seed_vectors(harness, **{kept.id: 'Deadline is Friday'})
+
+    async def unreadable(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(memories_router.Memories, 'get_memories', unreadable)
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(memories_router.reindex_memories_from_vector_db(harness.request, harness.user))
+
+    assert raised.value.status_code == 500
+    assert harness.store.vectors[collection] == {kept.id: 'Deadline is Friday'}
+    assert harness.store.calls == []
+
+
+def test_reset_replaces_the_vectors_without_duplicates_and_drops_removed_memories(harness):
+    first = _insert(harness.user.id, 'Deadline is Friday')
+    second = _insert(harness.user.id, 'Likes jazz')
+    collection = _seed_vectors(
+        harness, **{first.id: 'old text', 'removed-memory': 'Removed memory', 'also-removed': 'Another'}
+    )
+
+    count = asyncio.run(memories_router.reset_memory_from_vector_db(harness.request, harness.user))
+
+    assert count is True
+    assert harness.store.vectors[collection] == {first.id: 'Deadline is Friday', second.id: 'Likes jazz'}
+    assert ('delete', collection, ['removed-memory', 'also-removed']) in harness.store.calls
+    assert ('delete_collection', collection) not in harness.store.calls
+
+
 def test_reindex_carries_on_past_a_failing_user_and_reports_it(harness, monkeypatch):
     failing, working = _new_user(), _new_user()
     _insert(failing.id, 'Embeds badly')
@@ -422,10 +503,7 @@ def test_reindex_carries_on_past_a_failing_user_and_reports_it(harness, monkeypa
 
     assert raised.value.status_code == 500
     assert 'rebuilt for 1 of 2 users' in raised.value.detail
-    assert harness.store.calls == [
-        ('delete_collection', f'user-memory-{working.id}'),
-        ('upsert', f'user-memory-{working.id}', ['Embeds fine']),
-    ]
+    assert harness.store.calls == [('upsert', f'user-memory-{working.id}', ['Embeds fine'])]
 
 
 def test_reindex_of_every_user_reports_the_totals(harness, monkeypatch):

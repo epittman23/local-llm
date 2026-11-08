@@ -1474,6 +1474,7 @@ class _SourceContext:
     bypass_embedding_and_retrieval: bool
     folder_items: set = field(default_factory=set)
     extracted_collections: list = field(default_factory=list)
+    external_bases: set = field(default_factory=set)
 
 
 def _single_document(content, metadata) -> dict:
@@ -1487,10 +1488,23 @@ def _file_data_document(item: dict) -> dict:
     )
 
 
-async def _expand_folders(items: list, user) -> set:
+def _failure_label(item: dict, ctx: _SourceContext) -> str:
+    """What a chat status may say about a failed item: its name, never its id, url or the error.
+
+    An external knowledge base is only ever 'external knowledge base', since its
+    configured name can say where it lives.
+    """
+    if item.get('id') in ctx.external_bases:
+        return 'external knowledge base'
+    return str(item.get('name') or item.get('type') or 'source')
+
+
+async def _expand_folders(items: list, user, failed: list | None = None, labels: list | None = None) -> set:
     """Appends each readable folder's files to items (each folder once); returns their (type, id) pairs.
 
     Those pairs count as readable later, since access was checked on the folder.
+    A folder that cannot be read is skipped, and recorded in failed (with its
+    label in labels) like an item that fails.
     """
     folder_items = set()
     expanded_folders = set()
@@ -1502,11 +1516,20 @@ async def _expand_folders(items: list, user) -> set:
             continue
         expanded_folders.add(folder_id)
 
-        folder = await Folders.get_folder_by_id(folder_id)
-        if folder and (user.role == 'admin' or await has_folder_access(user.id, folder, 'read', db=None)):
-            files = await get_owner_accessible_folder_files(folder)
-            folder_items.update((entry.get('type'), entry.get('id')) for entry in files if isinstance(entry, dict))
-            items.extend(files)
+        try:
+            folder = await Folders.get_folder_by_id(folder_id)
+            if folder and (user.role == 'admin' or await has_folder_access(user.id, folder, 'read', db=None)):
+                files = await get_owner_accessible_folder_files(folder)
+                folder_items.update((entry.get('type'), entry.get('id')) for entry in files if isinstance(entry, dict))
+                items.extend(files)
+        except Exception as e:
+            if failed is None:
+                raise
+            label = str(item.get('name') or 'folder')
+            log.warning('get_sources_from_items: folder %s failed: %s', label, e)
+            failed.append(f'{label}: {e}')
+            if labels is not None:
+                labels.append(label)
     return folder_items
 
 
@@ -1669,6 +1692,7 @@ async def _collection_item(item: dict, ctx: _SourceContext):
         return None, []
 
     if (knowledge_base.meta or {}).get('source') == 'external':
+        ctx.external_bases.add(item.get('id'))
         query_result = await retrieve_external_knowledge(
             ctx.request,
             knowledge_base,
@@ -1803,7 +1827,14 @@ async def get_sources_from_items(
     hybrid_search,
     full_context=False,
     user: UserModel | None = None,
+    failures: list | None = None,
 ):
+    """The sources for the chat's items.
+
+    failures, when given, is filled with a status-safe label for each item (or
+    folder) that failed, also when the call then raises. Search and embedding
+    errors inside _search_collections are not counted.
+    """
     log.debug('items: %s %s %s %s %s', items, queries, embedding_function, reranking_function, full_context)
 
     ctx = _SourceContext(
@@ -1814,10 +1845,11 @@ async def get_sources_from_items(
         bypass_embedding_and_retrieval=await Config.get('rag.bypass_embedding_and_retrieval'),
     )
     items = list(items)
-    ctx.folder_items = await _expand_folders(items, user)
-
     query_results = []
     failed = []
+    labels = failures if failures is not None else []
+    ctx.folder_items = await _expand_folders(items, user, failed, labels)
+
     for item in items:
         # One attachment or knowledge base that fails (an external base
         # disabled or unreachable) must not lose every other's context (#351).
@@ -1833,6 +1865,7 @@ async def get_sources_from_items(
             label = item.get('name') or item.get('id') or item.get('url') or item.get('type')
             log.warning('get_sources_from_items: %s %s failed: %s', item.get('type'), label, e)
             failed.append(f'{label}: {e}')
+            labels.append(_failure_label(item, ctx))
             continue
 
         if query_result:
