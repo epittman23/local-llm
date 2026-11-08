@@ -216,6 +216,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
 | `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
 | `/automations/<id>` | Detail and runs |
+| (automation schedules) | Switching an automation off and on re-anchors a rule that does not state its own time to the moment it is switched back on: rows saved before #825, and rules without `BYHOUR`/`BYMINUTE` or a `DTSTART`, take their time from then (and a weekly rule without `BYDAY` its weekday). A rule that states its time keeps it. The schedule picker always writes `BYHOUR`/`BYMINUTE`, and for a weekly rule with no day chosen, `BYDAY` for the weekday of the save |
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
 | `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
 | `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
