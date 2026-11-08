@@ -35,6 +35,7 @@ from local_llm.env import int_env
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db
 from local_llm.models.automations import AutomationModel, AutomationRuns, Automations
+from local_llm.models.channels import Channels
 from local_llm.models.chats import ChatForm, Chats
 from local_llm.models.config import Config
 from local_llm.models.folders import Folders
@@ -80,7 +81,27 @@ def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
         return None
 
 
-def _parse_rule(s: str, now: dt.datetime | None = None):
+_UTC_DATE_TIME = re.compile(r'((?:^|[\s;])(?:DTSTART:|UNTIL=))([0-9]{8})T([0-9]{6})Z', re.IGNORECASE)
+
+
+def _utc_to_local(s: str, zi: ZoneInfo | None) -> str:
+    """The rule with each DTSTART and UNTIL ending in Z moved to the user's wall-clock time.
+
+    Every other part of the rule is read as the user's local time, and
+    `ignoretz` drops a Z, so a UTC start was read as local time and ran hours
+    off (#837). The instant is converted in the user's zone (the server's, when
+    there is none) and written without the Z. A date without a time, and a
+    time without Z, are kept as they are.
+    """
+
+    def convert(m: re.Match) -> str:
+        utc = dt.datetime.strptime(m.group(2) + m.group(3), '%Y%m%d%H%M%S').replace(tzinfo=dt.UTC)
+        return m.group(1) + utc.astimezone(zi).strftime('%Y%m%dT%H%M%S')
+
+    return _UTC_DATE_TIME.sub(convert, s)
+
+
+def _parse_rule(s: str, now: dt.datetime | None = None, zi: ZoneInfo | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
     A SECONDLY/MINUTELY/HOURLY rule without a DTSTART starts from a fixed epoch
@@ -93,6 +114,7 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     upper = s.upper()
     if 'EXRULE' in upper:
         raise ValueError('EXRULE is not supported in recurrence rules')
+    s = _utc_to_local(s, zi)
 
     # Read from the epoch rather than dateutil's now, so a rule without a
     # DTSTART is accepted or refused the same at any minute (#801): a
@@ -211,7 +233,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     try:
         _check_dates(s)
-        rule = _parse_rule(s, now)
+        rule = _parse_rule(s, now, zi)
     except Exception as e:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_INVALID_RRULE(e))
     if rule.after(now) is None:
@@ -271,7 +293,7 @@ def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> 
     # to now longer.
     if anchor_ns is not None and not _sub_daily(s):
         anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
-    when = _parse_rule(s, anchor).after(now_naive)
+    when = _parse_rule(s, anchor, zi).after(now_naive)
     if when is None:
         return None
     if zi:
@@ -288,7 +310,7 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     zi = _resolve_tz(tz)
     result = []
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
-    rule = _parse_rule(s, now)
+    rule = _parse_rule(s, now, zi)
     # One walk for all n, rather than n walks from DTSTART (#267).
     for when in rule.xafter(now, count=n):
         if zi:
@@ -328,7 +350,7 @@ def runs_between_ns(
         # `_parse_rule` moves a start more than 100,000 steps before the anchor
         # forward by whole steps, keeping its phase and what is left of its COUNT (#267).
         anchor = max(anchor, scan_start)
-    rule = _parse_rule(s, anchor)
+    rule = _parse_rule(s, anchor, zi)
     runs: list[int] = []
     for when in rule.xafter(scan_start, inc=True):
         when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
@@ -617,6 +639,12 @@ async def _announce_run(app, user, automation: AutomationModel, chat_id: str) ->
     )
 
 
+CHANNEL_GONE_ERROR = (
+    'Paused: the channel this automation posts to was deleted. '
+    'Edit the automation to choose another channel, then turn it back on.'
+)
+
+
 async def _execute_channel_automation(
     app,
     automation: AutomationModel,
@@ -629,6 +657,22 @@ async def _execute_channel_automation(
     channel_id = target.get('channel_id')
     if not channel_id or not await Config.get('channels.enable'):
         raise ValueError('Channel not found')
+
+    # A channel can disappear by its deletion or a user's purge. Every run after
+    # that would fail the same way, so the first one switches the automation off
+    # and says why; the owner picks another channel and turns it back on (#713).
+    if not await Channels.get_channel_by_id(channel_id):
+        error = CHANNEL_GONE_ERROR
+        await Automations.pause(automation.id)
+        await _record_run(automation.id, 'error', error=error)
+        await publish_event(
+            app,
+            EVENTS.AUTOMATION_RUN_FAILED,
+            actor=user,
+            subject_id=automation.id,
+            data={'name': automation.name, 'error': error},
+        )
+        return
 
     # First, so the model list is loaded before the model's name is read.
     tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id, user=user, token=token)
@@ -947,6 +991,18 @@ def already_alerted(meta: dict | None, start_at: int) -> bool:
     )
 
 
+async def _mark_alerted(event, now_ns: int) -> None:
+    from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
+
+    try:
+        await CalendarEvents.update_event_by_id(
+            event.id,
+            CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
+        )
+    except Exception:
+        log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
+
+
 async def _check_calendar_alerts(app) -> None:
     """Check for upcoming calendar events and send alert notifications.
 
@@ -954,9 +1010,16 @@ async def _check_calendar_alerts(app) -> None:
     occurrence last alerted, so it survives restarts and works across
     instances. A moved event, and each occurrence of a recurring one, has a
     start it was not alerted for, so it alerts again (#183).
+
+    A reminder nobody can receive is held, not marked: when none of the
+    user's sockets is connected and no notification target takes it, it stays
+    unmarked and goes out at the first check a session is connected, for as
+    long as the event has not ended. Once the event has ended it is dropped
+    and marked so it is not retried (#520).
     """
-    from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
-    from local_llm.socket.main import sio
+    from local_llm.models.calendar import CalendarEvents, event_end_ns
+    from local_llm.socket.main import get_session_ids_by_user_id, sio
+    from local_llm.utils.notifications import has_notification_target
 
     now_ns = int(time.time_ns())
     default_lookahead_ns = CALENDAR_ALERT_LOOKAHEAD_MINUTES * 60 * 1_000_000_000
@@ -972,6 +1035,15 @@ async def _check_calendar_alerts(app) -> None:
 
     for event, _user_tz in upcoming:
         if already_alerted(event.meta, event.start_at):
+            continue
+
+        if not get_session_ids_by_user_id(event.user_id) and not await has_notification_target(
+            event.user_id, EVENTS.CALENDAR_ALERT.name
+        ):
+            if event_end_ns(event) > now_ns:
+                continue  # held until a session connects
+            log.info('Dropped the reminder for calendar event %s: it ended unseen', event.id)
+            await _mark_alerted(event, now_ns)
             continue
 
         # Compute minutes until event starts
@@ -999,13 +1071,7 @@ async def _check_calendar_alerts(app) -> None:
         )
 
         # Mark as alerted in DB so it survives restarts / multi-instance
-        try:
-            await CalendarEvents.update_event_by_id(
-                event.id,
-                CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
-            )
-        except Exception:
-            log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
+        await _mark_alerted(event, now_ns)
 
         # Send target notification if user has one configured
         try:
