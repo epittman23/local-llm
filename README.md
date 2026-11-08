@@ -299,6 +299,7 @@ OpenAI-compatible endpoint.
 |---|---|
 | Conventions, maintenance policy, commit policy | [AGENTS.md](AGENTS.md) |
 | Repository layout | [MAP.md](MAP.md) |
+| Every user feature, the chat pipeline and the benchmark harness, as diagrams | [docs/guides/features.md](docs/guides/features.md) |
 | Building llama.cpp, serving profiles, measurements | [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md) |
 | Downloading model weights | [docs/guides/model-downloads.md](docs/guides/model-downloads.md) |
 | GPU telemetry and throughput records | [docs/guides/telemetry.md](docs/guides/telemetry.md) |

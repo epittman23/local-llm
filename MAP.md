@@ -107,6 +107,8 @@ Start here for "how do I run/use this."
   embeds a copy of it (GitHub can't transclude external files), so the two
   are kept byte-identical in their diagram content.
 - **`guides/`** — long-form operational docs, one per topic:
+  `features.md` (every user feature and the model harness, as Mermaid
+  diagrams whose sources are the `features-*.mmd` files beside it),
   `llama-cpp.md` (building llama.cpp, serving profiles, measurements),
   `telemetry.md` (the recorded GPU/throughput tables and how to read them),
   `benchmarks.md` (the Benchmarks section: tests, grading, compare, report),
