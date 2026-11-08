@@ -59,6 +59,7 @@ import {
 	modelsConfigBody,
 	moveItem,
 	nextAccessGrants,
+	privacyOutcome,
 	nonBlankSuggestions,
 	orderIds,
 	savedParams,
@@ -248,9 +249,10 @@ export default function AdminModels() {
 		try {
 			const res = await updateModelAccessGrants(token, model.id, model.name ?? model.id, grants);
 			if (!res) return;
-			patchModel(model.id, { access_grants: res.access_grants ?? grants });
+			const outcome = privacyOutcome(grants, res);
+			patchModel(model.id, { access_grants: outcome.grants });
 			await refreshApp();
-			toast.success(grants.length > 0 ? 'Model is now public' : 'Model is now private');
+			toast[outcome.kind](outcome.text);
 		} catch (error) {
 			toast.error(getErrorMessage(error));
 		}

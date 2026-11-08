@@ -90,6 +90,19 @@ async def _linked_elsewhere(file_id: str, knowledge_id: str, db: AsyncSession) -
     return any(other != knowledge_id for other in linked)
 
 
+async def delete_file_chunks(knowledge_id: str, file: FileModel, db: AsyncSession) -> None:
+    """Delete a file's chunks from a knowledge base's collection.
+
+    By file id, which a file's chunks carry, and by text hash for any of that
+    text stored without one, unless another file linked to the base has the
+    same hash: the delete would take that file's chunks too, leaving it listed
+    but never found (#792).
+    """
+    await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file.id})
+    if file.hash and not await Knowledges.has_other_file_with_hash(knowledge_id, file.id, file.hash, db=db):
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
+
+
 ############################
 # Knowledge Base Embedding
 ############################
@@ -1754,13 +1767,7 @@ async def remove_file_from_knowledge_by_id(
 
     # Remove content from the vector database
     try:
-        await ASYNC_VECTOR_DB_CLIENT.delete(
-            collection_name=knowledge.id, filter={'file_id': form_data.file_id}
-        )  # Remove by file_id first
-
-        await ASYNC_VECTOR_DB_CLIENT.delete(
-            collection_name=knowledge.id, filter={'hash': file.hash}
-        )  # Remove by hash as well in case of duplicates
+        await delete_file_chunks(knowledge.id, file, db)
     except Exception as e:
         log.debug('This was most likely caused by bypassing embedding processing')
         log.debug(e)
@@ -2000,43 +2007,56 @@ async def sync_knowledge_diff(
         directory_path_by_id[directory.id] = full_path
         directory_id_by_path[full_path] = directory.id
 
-    # Index existing files by (path, filename) → {file_id, checksum}
-    indexed_files: dict[tuple[str, str], dict] = {}
+    # Index existing files by (path, filename) → every copy linked there. A base
+    # can hold two copies at one path, say a modified file's old copy whose
+    # removal failed; keeping only one of them hid the other from every later
+    # sync (#639).
+    indexed_files: dict[tuple[str, str], list[dict]] = {}
     for file_model, directory_id in knowledge_files:
         file_path = directory_path_by_id.get(directory_id, '') if directory_id else ''
-        stored_checksum = (file_model.meta or {}).get('file_hash')
-        indexed_files[(file_path, file_model.filename)] = {
-            'file_id': file_model.id,
-            'checksum': stored_checksum,
-        }
+        indexed_files.setdefault((file_path, file_model.filename), []).append(
+            {
+                'file_id': file_model.id,
+                'checksum': (file_model.meta or {}).get('file_hash'),
+                'updated_at': file_model.updated_at or 0,
+            }
+        )
 
     # ── Diff files ──
     added: list[dict] = []
     modified: list[dict] = []
-    deleted: list[dict] = []
     unmodified_count = 0
     manifest_keys: set[tuple[str, str]] = set()
+    kept_checksums: set[str] = set()
+    extra_copies: list[dict] = []
 
     for entry in form_data.manifest:
         key = (entry.path, entry.filename)
         manifest_keys.add(key)
+        copies = indexed_files.get(key)
 
-        if key not in indexed_files:
+        if not copies:
             added.append({'filename': entry.filename, 'path': entry.path})
-        elif indexed_files[key]['checksum'] != entry.checksum:
-            modified.append(
-                {
-                    'filename': entry.filename,
-                    'path': entry.path,
-                    'stale_file_id': indexed_files[key]['file_id'],
-                }
-            )
-        else:
+            continue
+        current = next((c for c in copies if c['checksum'] == entry.checksum), None)
+        if current:
             unmodified_count += 1
+            kept_checksums.add(entry.checksum)
+            primary = current
+        else:
+            # The newest old copy stays until the new version is up (#317).
+            primary = max(copies, key=lambda c: c['updated_at'])
+            modified.append({'filename': entry.filename, 'path': entry.path, 'stale_file_id': primary['file_id']})
+        extra_copies.extend({**copy, 'filename': entry.filename} for copy in copies if copy is not primary)
 
-    for key, file_info in indexed_files.items():
+    for key, copies in indexed_files.items():
         if key not in manifest_keys:
-            deleted.append({'file_id': file_info['file_id'], 'filename': key[1]})
+            extra_copies.extend({**copy, 'filename': key[1]} for copy in copies)
+
+    # Every other copy goes, one holding the text of a copy this sync keeps
+    # included: removing a file deletes chunks by its text hash only when no
+    # other linked file has that hash (#792), so the kept copy's chunks stay (#813).
+    deleted = [{'file_id': copy['file_id'], 'filename': copy['filename']} for copy in extra_copies]
 
     # A new path whose bytes match a file the base keeps is a copy the base
     # de-duplicates by content: uploading it only failed, every sync, and left
@@ -2044,13 +2064,8 @@ async def sync_knowledge_diff(
     # file this sync deletes or replaces is still uploaded, so the content stays.
     # Only paths this sync leaves as they are: a modified path's stored copy
     # goes as stale here, so it is not kept.
-    checksum_by_key = {(entry.path, entry.filename): entry.checksum for entry in form_data.manifest}
-    kept_checksums = {
-        info['checksum']
-        for key, info in indexed_files.items()
-        if info['checksum'] and checksum_by_key.get(key) == info['checksum']
-    }
     if kept_checksums:
+        checksum_by_key = {(entry.path, entry.filename): entry.checksum for entry in form_data.manifest}
         copies = [a for a in added if checksum_by_key.get((a['path'], a['filename'])) in kept_checksums]
         added = [a for a in added if a not in copies]
         unmodified_count += len(copies)
@@ -2112,8 +2127,7 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
         # Chunks first: if they cannot be deleted, the link stays, so the file
         # is still listed and the removal can be retried (#195).
         try:
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
+            await delete_file_chunks(knowledge_id, file, db)
         except Exception as e:
             log.warning('Kept file %s in knowledge %s: deleting its chunks failed: %s', file_id, knowledge_id, e)
             kept.append(file_id)
@@ -2145,7 +2159,7 @@ async def sync_knowledge_cleanup(
     await _verify_knowledge_write_access(id, user, db)
 
     # ── Remove deleted files ──
-    await _remove_files_from_knowledge(id, form_data.file_ids, user, db)
+    kept = await _remove_files_from_knowledge(id, form_data.file_ids, user, db)
 
     # ── Remove orphaned directories (children before parents) ──
     for dir_id in reversed(form_data.dir_ids):
@@ -2155,10 +2169,17 @@ async def sync_knowledge_cleanup(
             continue
         subtree = await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db)
         # A directory still holding a file whose chunks stayed is left for the next sync.
-        if not await _remove_files_from_knowledge(id, subtree, user, db):
+        if subtree_kept := await _remove_files_from_knowledge(id, subtree, user, db):
+            kept.extend(subtree_kept)
+        else:
             await Knowledges.delete_directory(dir_id, move_files_to_parent=False, db=db)
 
-    return {'status': True}
+    # The files left in the base, so the client can say which removals did not
+    # happen (#639). A file in a vanished folder is tried once per pass, from
+    # file_ids and under every directory above it, so it is listed once, and
+    # only if no pass removed it.
+    kept = [file_id for file_id in dict.fromkeys(kept) if await Knowledges.has_file(id, file_id, db=db)]
+    return {'status': True, 'kept': kept}
 
 
 ############################

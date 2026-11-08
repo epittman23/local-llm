@@ -504,9 +504,9 @@
   ]
  },
  "gen:invalid_form_size": {
-  "raised": [
-   "ValueError",
-   "invalid literal for int() with base 10: 'big'"
+  "http_error": [
+   400,
+   "The image size must be WidthxHeight, such as 512x512, auto, or empty."
   ],
   "calls": []
  },

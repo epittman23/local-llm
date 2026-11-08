@@ -16,7 +16,9 @@ type FolderQuery = { isFetched: boolean; data?: { data?: { model_ids?: string[] 
  * model list failed to load. Until then a send is held (useHeldSend): sent the
  * moment the box appeared, it was refused with "Model not selected", as no
  * model was chosen yet (#373). It stays true after: a chat started here moves
- * to its own route mid-reply, and another chat's loading holds the input.
+ * to its own route mid-reply, and another chat's loading holds the input. A
+ * folder still loading is the exception: the models on screen are then the
+ * previous chat's, and a send would go with them (#659).
  */
 export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedModels: (ids: string[]) => void) {
 	const { id = null, folderId = null } = useParams();
@@ -55,7 +57,9 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 			setChosen(true);
 			return;
 		}
-		if (folderId && !folder.isFetched) return;
+		// Not ready again until the folder's models are picked: counted ready as it
+		// lands, a send went before their default tools and switches were set.
+		if (folderId && !folder.isFetched) return setChosen(false);
 		const key = `new:${folderId ?? ''}`;
 		if (pickedFor.current !== key) {
 			pickedFor.current = key;
@@ -71,5 +75,5 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 		}
 		setChosen(true);
 	}, [loaded, failed, id, folderId, folder.isFetched, chat]);
-	return chosen;
+	return chosen && !(folderId && !folder.isFetched);
 }

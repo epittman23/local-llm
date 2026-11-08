@@ -5,8 +5,9 @@ directory delete only dropped the knowledge_file links. The chunks stayed
 in the knowledge base's vector collection, which retrieval searches whole,
 so chat kept answering from the deleted files, and with the link gone they
 could no longer be removed from the UI (#195). It now removes each file as
-the single-file remove and the sync cleanup do: vectors by file_id and
-hash, and the File row unless another knowledge base still links it.
+the single-file remove and the sync cleanup do: vectors by file_id, and by
+hash unless another file in the base has it (#792), and the File row unless
+another knowledge base still links it.
 
 Runs against the suite's temporary SQLite database (tests/conftest.py points
 DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it, migrated on import),
@@ -189,6 +190,54 @@ def test_a_file_whose_chunks_cannot_be_deleted_stays_listed(monkeypatch):
 
     assert linked == {files['in_top'].id, files['outside'].id}
     assert row is not None
+
+
+def test_sync_cleanup_returns_the_files_it_kept(monkeypatch):
+    # The client reports the removals that did not happen (#639).
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        _setup(monkeypatch, VectorRecorder(failing={files['outside'].id, files['in_child'].id}))
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['outside'].id], dir_ids=[top.id])
+        state['result'] = await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return files
+
+    files = _run(scenario())
+
+    assert state['result'] == {'status': True, 'kept': [files['outside'].id, files['in_child'].id]}
+
+
+class FailOnce(VectorRecorder):
+    """Fails the first chunk delete of each listed file, then succeeds."""
+
+    async def delete(self, collection_name, ids=None, filter=None):
+        file_id = (filter or {}).get('file_id')
+        if file_id in self.failing:
+            self.failing = self.failing - {file_id}
+            raise RuntimeError('vector store unavailable')
+        self.deleted.append((collection_name, filter))
+
+
+@pytest.mark.parametrize(
+    ('recorder', 'still_kept'), [(VectorRecorder, True), (FailOnce, False)], ids=['always-fails', 'fails-once']
+)
+def test_sync_cleanup_lists_a_kept_file_once_and_only_while_it_stays(monkeypatch, recorder, still_kept):
+    # A file in a vanished folder is in file_ids and under every dir_id up to the
+    # top, so each pass tries it again (#639).
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        child = next(d for d in await Knowledges.get_all_directories(kb.id) if d.name == 'child')
+        _setup(monkeypatch, recorder(failing={files['in_child'].id}))
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['in_child'].id], dir_ids=[top.id, child.id])
+        state['result'] = await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return files
+
+    files = _run(scenario())
+
+    assert state['result'] == {'status': True, 'kept': [files['in_child'].id] if still_kept else []}
 
 
 async def _allowed(*_a, **_k):

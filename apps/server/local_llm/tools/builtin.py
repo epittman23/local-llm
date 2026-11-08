@@ -3878,7 +3878,7 @@ async def create_automation(
         from local_llm.models.automations import AutomationData, AutomationForm, Automations, AutomationTarget
         from local_llm.models.users import Users
         from local_llm.routers.automations import check_automation_limits
-        from local_llm.utils.automations import next_n_runs_ns, next_run_ns, validate_rrule
+        from local_llm.utils.automations import next_n_runs_ns, next_run_ns, pin_rule_time, validate_rrule
 
         user_id = __user__.get('id')
         user = await Users.get_user_by_id(user_id)
@@ -3910,6 +3910,7 @@ async def create_automation(
             return JSONCodec.dumps({'error': e.detail})
 
         tz = user.timezone
+        rrule = pin_rule_time(rrule, tz=tz)
         form = AutomationForm(
             name=name,
             folder_id=folder_id,
@@ -3977,7 +3978,7 @@ async def update_automation(
         from local_llm.models.automations import AutomationData, AutomationForm, Automations, AutomationTarget
         from local_llm.models.users import Users
         from local_llm.routers.automations import check_automation_limits
-        from local_llm.utils.automations import next_n_runs_ns, next_run_ns, validate_rrule
+        from local_llm.utils.automations import next_n_runs_ns, next_run_ns, pin_rule_time, validate_rrule
 
         user_id = __user__.get('id')
         user = await Users.get_user_by_id(user_id)
@@ -4018,6 +4019,7 @@ async def update_automation(
             return JSONCodec.dumps({'error': e.detail})
 
         tz = user.timezone
+        new_rrule = pin_rule_time(new_rrule, tz=tz)
         form = AutomationForm(
             name=new_name,
             folder_id=new_folder_id,

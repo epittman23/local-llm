@@ -127,6 +127,8 @@ from local_llm.utils.misc import (
     calculate_sha256_string,
     chunk_settings_error,
     embedding_batch_size_error,
+    embedding_concurrency_error,
+    reranking_batch_size_error,
     sanitize_text_for_db,
 )
 
@@ -178,7 +180,7 @@ def get_rf(
     # Convert timeout string to int or None (system default)
     timeout_value = int(external_reranker_timeout) if external_reranker_timeout else None
     if reranking_model:
-        if any(model in reranking_model for model in ['jinaai/jina-colbert-v2']):
+        if engine != 'external' and any(model in reranking_model for model in ['jinaai/jina-colbert-v2']):
             try:
                 from local_llm.retrieval.models.colbert import ColBERT
 
@@ -536,8 +538,15 @@ def free_replaced_embedding_model() -> None:
 async def update_embedding_config(request: Request, form_data: EmbeddingModelUpdateForm, user=Depends(get_admin_user)):
     # Checked before anything changes: a batch size below 1, or none, fails
     # every embedding once saved (#353).
-    if batch_size_error := embedding_batch_size_error(form_data.RAG_EMBEDDING_BATCH_SIZE):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=batch_size_error)
+    # So is a negative number of concurrent requests for an external engine,
+    # which fails its every list embedding (#638). The local engine does not
+    # use it, and Documents hides it then and sends the stored value, which
+    # get_embedding_function replaces if unusable.
+    if number_error := embedding_batch_size_error(form_data.RAG_EMBEDDING_BATCH_SIZE) or (
+        form_data.RAG_EMBEDDING_ENGINE != ''
+        and embedding_concurrency_error(form_data.RAG_EMBEDDING_CONCURRENT_REQUESTS)
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=number_error)
     config = await get_retrieval_config()
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
     # The new model is loaded before the old one is let go, and nothing is saved
@@ -1011,6 +1020,23 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
         )
         if chunk_error:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=chunk_error)
+
+    # A reranking batch size below 1 turns every hybrid search into a vector
+    # search (#638); left unset, the stored one is kept. Checked only where
+    # Documents shows it: it hides the field with full context on or retrieval
+    # bypassed but sends the stored value, which get_reranking_function
+    # replaces at use if unusable.
+    def effective(field):
+        value = getattr(form_data, field)
+        return value if value is not None else getattr(config, field)
+
+    shown = not effective('RAG_FULL_CONTEXT') and not effective('BYPASS_EMBEDDING_AND_RETRIEVAL')
+    if (
+        form_data.RAG_RERANKING_BATCH_SIZE is not None
+        and shown
+        and (batch_size_error := reranking_batch_size_error(form_data.RAG_RERANKING_BATCH_SIZE))
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=batch_size_error)
     config.RAG_TEMPLATE = form_data.RAG_TEMPLATE if form_data.RAG_TEMPLATE is not None else config.RAG_TEMPLATE
     config.TOP_K = form_data.TOP_K if form_data.TOP_K is not None else config.TOP_K
     config.BYPASS_EMBEDDING_AND_RETRIEVAL = (

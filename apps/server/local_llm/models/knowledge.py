@@ -31,6 +31,7 @@ from local_llm.models.files import (
 )
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -276,11 +277,11 @@ class KnowledgeTable:
                     if query_key:
                         stmt = stmt.filter(
                             or_(
-                                Knowledge.name.ilike(f'%{query_key}%'),
-                                Knowledge.description.ilike(f'%{query_key}%'),
-                                User.name.ilike(f'%{query_key}%'),
-                                User.email.ilike(f'%{query_key}%'),
-                                User.username.ilike(f'%{query_key}%'),
+                                Knowledge.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                Knowledge.description.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                User.username.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                             )
                         )
 
@@ -402,11 +403,11 @@ class KnowledgeTable:
                             content_text = File.data['content'].as_string()
                             content_text = func.substr(content_text, 1, RAG_FILE_CONTENT_SEARCH_MAX_CHARS)
                             search_filter = or_(
-                                File.filename.ilike(f'%{q}%'),
-                                content_text.ilike(f'%{q}%'),
+                                File.filename.ilike(like_contains(q), escape=LIKE_ESCAPE),
+                                content_text.ilike(like_contains(q), escape=LIKE_ESCAPE),
                             )
                         else:
-                            search_filter = File.filename.ilike(f'%{q}%')
+                            search_filter = File.filename.ilike(like_contains(q), escape=LIKE_ESCAPE)
                         stmt = stmt.filter(search_filter)
 
                 # Order by file changes
@@ -569,12 +570,12 @@ class KnowledgeTable:
                             content_text = func.substr(content_text, 1, RAG_FILE_CONTENT_SEARCH_MAX_CHARS)
                             stmt = stmt.filter(
                                 or_(
-                                    File.filename.ilike(f'%{query_key}%'),
-                                    content_text.ilike(f'%{query_key}%'),
+                                    File.filename.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                                    content_text.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                                 )
                             )
                         else:
-                            stmt = stmt.filter(File.filename.ilike(f'%{query_key}%'))
+                            stmt = stmt.filter(File.filename.ilike(like_contains(query_key), escape=LIKE_ESCAPE))
 
                     view_option = filter.get('view_option')
                     if view_option == 'created':
@@ -757,6 +758,23 @@ class KnowledgeTable:
                 return result.scalars().first() is not None
         except Exception:
             return False
+
+    async def has_other_file_with_hash(
+        self, knowledge_id: str, file_id: str, hash: str, db: AsyncSession | None = None
+    ) -> bool:
+        """Whether a file other than file_id linked to the base has this text hash.
+
+        An error is raised, not read as "no": the answer decides whether chunks
+        are deleted by hash, which would take that other file's too.
+        """
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(KnowledgeFile.file_id)
+                .join(File, File.id == KnowledgeFile.file_id)
+                .filter(KnowledgeFile.knowledge_id == knowledge_id, KnowledgeFile.file_id != file_id, File.hash == hash)
+                .limit(1)
+            )
+            return result.scalars().first() is not None
 
     async def remove_file_from_knowledge_by_id(
         self, knowledge_id: str, file_id: str, db: AsyncSession | None = None

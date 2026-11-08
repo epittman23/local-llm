@@ -60,6 +60,9 @@ not the migration plan's original "new-york".
   server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
   stray one is left running, `cd apps/web && bunx astro dev stop`.
+- **The socket connects only once AppShell is mounted** (`useSocketReady`,
+  #674), so a socket consumer outside the shell, on a public page, never
+  gets a connected socket.
 - **`package.json` pins `@emnapi/core` and `@emnapi/runtime` to one
   version** (`overrides`). `@astrojs/astro2tsx` (under `@astrojs/check`)
   depends on the core but not the runtime, so it gets whichever runtime is
@@ -71,6 +74,14 @@ not the migration plan's original "new-york".
   chosen its models and loaded the tools (whose defaults a model may turn
   on), then goes with what the box holds; opening another chat meanwhile
   drops it (`useHeldSend`, #373). It used to show "Model not selected".
+  While it waits the box says "Sends when the models load", with a button
+  to call it off. A folder's new chat waits for the folder in the same way,
+  so a send made just after leaving a saved chat no longer goes with that
+  chat's models, and `?q=` sends through the same wait, so it goes with the
+  model's default tools and switches (#659). `?q=` is sent from the box, so
+  with `?load-url=` it also waits for that page to upload and goes with it;
+  if the page fails while the send waits for it, the page is dropped and
+  `q` stays in the box, unsent.
 - **Enter while an attachment is still uploading** holds the message
   ("Sends when the upload finishes") and sends it once every upload is
   done and the chat is not reloading (Chat.svelte cleared the box and

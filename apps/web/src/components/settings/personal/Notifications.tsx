@@ -106,7 +106,7 @@ export default function Notifications() {
 						<SettingSwitch
 							labelledBy={id}
 							checked={s.notificationSound ?? true}
-							onChange={(v) => void update({ notificationSound: v })}
+							onChange={(v) => void update({ notificationSound: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
 						/>
 					)}
 				</SettingRow>

@@ -183,6 +183,23 @@ describe('ChatInput: Enter while an attachment is uploading', () => {
 	});
 });
 
+describe('ChatInput: a send waiting for the models (#659)', () => {
+	afterEach(cleanup);
+
+	it('says so, and can call it off', () => {
+		const onCancelWaiting = vi.fn();
+		show({ waiting: true, onCancelWaiting });
+		expect(screen.getByRole('status').textContent).toBe('Sends when the models load');
+		fireEvent.click(screen.getByRole('button', { name: "Don't send when the models load" }));
+		expect(onCancelWaiting).toHaveBeenCalledTimes(1);
+	});
+
+	it('says nothing when no send is waiting', () => {
+		show();
+		expect(screen.queryByRole('status')).toBeNull();
+	});
+});
+
 describe('ChatInput: a suggestion list that shrinks under the selection (#623)', () => {
 	afterEach(cleanup);
 

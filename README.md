@@ -219,7 +219,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
 | `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
 | `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
-| `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent at once unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
+| `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent once the models load, with any `?load-url=` page attached, unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
 | `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id |
 | `/folders/<folderId>` | A new chat inside that folder (a missing folder sends you to `/`) |
 

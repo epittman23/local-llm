@@ -12,8 +12,9 @@ for the Report page's markdown output -- nothing here reads their output back.
 
 from __future__ import annotations
 
-import os
 import re
+
+from local_llm.utils.env_numbers import int_env
 
 # ---------------------------------------------------------------------------
 # markdown tables -- output only, never parsed back
@@ -156,7 +157,7 @@ def vram_headroom(samples: list[dict]) -> int | None:
 # MiB of VRAM that must stay free at a run's peak before a report says so. The
 # cliff is one layer wide on this hardware: the run below the threshold still
 # completed, and the next -ngl will not.
-HEADROOM_WARN_MIB = int(os.environ.get('LLAMA_VRAM_HEADROOM_MIB', '300') or 300)
+HEADROOM_WARN_MIB = int_env('LLAMA_VRAM_HEADROOM_MIB', 300)
 
 
 def gpu_stats(samples: list[dict]) -> dict:

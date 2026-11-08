@@ -16,6 +16,7 @@ from local_llm.models.groups import Groups
 from local_llm.models.prompt_history import PromptHistories
 from local_llm.models.users import User, UserModel, UserResponse, Users
 from local_llm.utils.misc import json_text_variants
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains, like_escape
 
 log = logging.getLogger(__name__)
 
@@ -304,11 +305,11 @@ class PromptsTable:
                 if query_key:
                     query = query.filter(
                         or_(
-                            Prompt.name.ilike(f'%{query_key}%'),
-                            Prompt.command.ilike(f'%{query_key}%'),
-                            Prompt.content.ilike(f'%{query_key}%'),
-                            User.name.ilike(f'%{query_key}%'),
-                            User.email.ilike(f'%{query_key}%'),
+                            Prompt.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            Prompt.command.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            Prompt.content.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            User.name.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
+                            User.email.ilike(like_contains(query_key), escape=LIKE_ESCAPE),
                         )
                     )
 
@@ -335,7 +336,7 @@ class PromptsTable:
                     tag_lower = tag.lower()
 
                     if dialect_name == 'sqlite':
-                        tag_lower = tag.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+                        tag_lower = like_escape(tag)
                         tag_clause = text(
                             "EXISTS (SELECT 1 FROM json_each(prompt.tags) t WHERE t.value LIKE :tag_val ESCAPE '\\')"
                         )
@@ -347,7 +348,10 @@ class PromptsTable:
                         # Fallback for dialects with no JSON array function: LIKE on the text.
                         tags_text = func.lower(cast(Prompt.tags, String))
                         tag_clause = or_(
-                            *(tags_text.like(f'%"{variant}"%') for variant in json_text_variants(tag_lower))
+                            *(
+                                tags_text.like(f'%"{like_escape(variant)}"%', escape=LIKE_ESCAPE)
+                                for variant in json_text_variants(tag_lower)
+                            )
                         )
                         tag_lower = None
 

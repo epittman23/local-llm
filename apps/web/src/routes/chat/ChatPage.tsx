@@ -247,7 +247,7 @@ export function ChatPage() {
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
 	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
 	// A send before the page has chosen its models waits for them, and for the tools
-	// whose defaults they may turn on, in the box (#373).
+	// whose defaults they may turn on, in the box, which says so (#373, #659).
 	const heldSend = useHeldSend(
 		modelsChosen && (tools.isSuccess || tools.isError),
 		id ?? `new:${folderId ?? ''}`,
@@ -264,19 +264,22 @@ export function ChatPage() {
 		setSearch(next, { replace: true });
 	}, [search, id, temporaryAllowed, setSearch]);
 
-	// `?q=` fills the input and (unless `submit=false`) sends it, once models are chosen.
+	// `?q=` fills the input and (unless `submit=false`) sends it, once models are
+	// chosen. The send waits like an early one, so it goes with the models'
+	// default tools and switches, set in this same commit (#659).
 	const consumed = useRef(false);
+	const holdSend = heldSend.hold;
 	useEffect(() => {
 		const q = search.get('q');
 		if (!q || consumed.current || id || !selectedModels.length || !selectedModels[0]) return;
 		consumed.current = true;
-		if ((search.get('submit') ?? 'true') === 'true') requestSend(q);
-		else input.current?.setText(q);
+		input.current?.setText(q);
+		if ((search.get('submit') ?? 'true') === 'true') holdSend();
 		const next = new URLSearchParams(search);
 		next.delete('q');
 		next.delete('submit');
 		setSearch(next, { replace: true });
-	}, [search, id, selectedModels, session, setSearch]);
+	}, [search, id, selectedModels, holdSend, setSearch]);
 
 	// Stay pinned to the newest message while it streams, unless the reader
 	// scrolled up or turned "Response Auto-Scroll" off; the reader's own
@@ -473,7 +476,9 @@ export function ChatPage() {
 							/>
 						</>
 					}
-					onSubmit={heldSend}
+					onSubmit={heldSend.send}
+					waiting={heldSend.waiting}
+					onCancelWaiting={heldSend.cancel}
 					wide={prefs.widescreen}
 					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
 					disabled={session.loading}

@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,25 @@ export default function Shortcuts() {
 	const [recording, setRecording] = useState<Shortcut | null>(null);
 	const enabled = (settings as { keyboardShortcuts?: boolean } | null)?.keyboardShortcuts ?? true;
 
-	const save = async (next: KeybindingsMap) => {
-		queryClient.setQueryData(KEYBINDINGS_KEY, next);
-		await updateUserSettings(token, { keybindings: next }).catch((e) => toast.error(`${e}`));
-	};
+	// Optimistic, as useUserSettings's save is: the keys show at once and the
+	// cache goes back to what it held if the save is refused.
+	const saveBindings = useMutation({
+		mutationFn: (next: KeybindingsMap) => updateUserSettings(token, { keybindings: next }),
+		onMutate: async (next) => {
+			await queryClient.cancelQueries({ queryKey: KEYBINDINGS_KEY });
+			const previous = queryClient.getQueryData(KEYBINDINGS_KEY);
+			queryClient.setQueryData(KEYBINDINGS_KEY, next);
+			return { previous };
+		},
+		onError: (e, _next, ctx) => {
+			queryClient.setQueryData(KEYBINDINGS_KEY, ctx?.previous);
+			toast.error(`${e}`);
+		},
+		// Several saves can overlap, and a rollback to an older snapshot would
+		// undo a later save that went through; the server's keys settle it.
+		onSettled: () => queryClient.invalidateQueries({ queryKey: KEYBINDINGS_KEY })
+	});
+	const save = (next: KeybindingsMap) => saveBindings.mutate(next);
 
 	const byCategory = Object.entries(shortcuts)
 		.filter(
@@ -61,7 +76,11 @@ export default function Shortcuts() {
 			<SettingsSection first>
 				<SettingRow label="Keyboard Shortcuts" description="Use keyboard shortcuts across the app.">
 					{(id) => (
-						<SettingSwitch labelledBy={id} checked={enabled} onChange={(v) => void update({ keyboardShortcuts: v })} />
+						<SettingSwitch
+							labelledBy={id}
+							checked={enabled}
+							onChange={(v) => void update({ keyboardShortcuts: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
+						/>
 					)}
 				</SettingRow>
 			</SettingsSection>
@@ -95,12 +114,12 @@ export default function Shortcuts() {
 											if (e.key === 'Escape') return setRecording(null);
 											if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
 												setRecording(null);
-												return void save({ ...bindings, [id]: '' });
+												return save({ ...bindings, [id]: '' });
 											}
 											const next = eventToChord(e.nativeEvent);
 											if (!next) return;
 											setRecording(null);
-											void save({ ...bindings, [id]: next });
+											save({ ...bindings, [id]: next });
 										}}
 									>
 										{recording === id ? 'Press keys...' : chord ? formatChord(chord) : 'Not set'}
@@ -114,7 +133,7 @@ export default function Shortcuts() {
 				</SettingsSection>
 			))}
 			<div className="mt-4">
-				<Button type="button" size="sm" variant="outline" onClick={() => void save({ ...DEFAULT_KEYBINDINGS })}>
+				<Button type="button" size="sm" variant="outline" onClick={() => save({ ...DEFAULT_KEYBINDINGS })}>
 					Reset to defaults
 				</Button>
 			</div>

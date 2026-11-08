@@ -11,9 +11,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Index,
-    String,
     Text,
-    cast,
     delete,
     false,
     func,
@@ -25,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.misc import json_text_variants
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -208,12 +206,13 @@ class AutomationTable:
                 stmt = stmt.filter(Automation.folder_id == folder_id)
 
             if query:
-                # Search the name column and the prompt inside the JSON data.
-                data_text = cast(Automation.data, String)
+                # Search the name column and the prompt inside the JSON data: the
+                # prompt's own value, not the serialised data, whose keys ("model_id")
+                # and other fields matched any search for a word they hold (#625).
                 stmt = stmt.filter(
                     or_(
-                        Automation.name.ilike(f'%{query}%'),
-                        *(data_text.ilike(f'%{variant}%') for variant in json_text_variants(query)),
+                        Automation.name.ilike(like_contains(query), escape=LIKE_ESCAPE),
+                        Automation.data['prompt'].as_string().ilike(like_contains(query), escape=LIKE_ESCAPE),
                     )
                 )
 
@@ -344,21 +343,45 @@ class AutomationTable:
                 tz_result = await db.execute(select(User.id, User.timezone).where(User.id.in_(user_ids)))
                 timezone_by_user_id = {uid: tz for uid, tz in tz_result.all()}
 
+            claimed = []
             for row in rows:
-                row.last_run_at = now_ns
                 # Read from the run's own due time, so a late claim does not move the rule's time (#512).
                 due = typing.cast(int, row.next_run_at)
-                row.next_run_at = next_run_ns(
-                    row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id), anchor_ns=due
-                )
-                if row.next_run_at is None:
-                    # The rule has run its last occurrence. Left active with no
-                    # next run, it was expanded by the calendar from the epoch.
+                failed = False
+                rule = ''
+                try:
+                    rule = row.data.get('rrule', '')
+                    next_run_at = next_run_ns(rule, tz=timezone_by_user_id.get(row.user_id), anchor_ns=due)
+                except Exception as e:
+                    # One row that raised rolled back the whole batch, and came
+                    # first again on every poll: switch it off, unrun, instead,
+                    # with a failed run that tells the user why (#670). The run
+                    # is added to this transaction: committing on its own would
+                    # unlock the batch's other rows before they are advanced.
+                    log.exception('Automation %s: its next run cannot be computed; switching it off', row.id)
+                    next_run_at, failed = None, True
+                    db.add(
+                        AutomationRun(
+                            id=str(uuid4()),
+                            automation_id=row.id,
+                            status='error',
+                            error=f'Switched off: its schedule {rule!r} cannot be read ({e})',
+                            created_at=int(time.time_ns()),
+                        )
+                    )
+                row.next_run_at = next_run_at
+                if next_run_at is None:
+                    # The rule has run its last occurrence (or cannot be read).
+                    # Left active with no next run, it was expanded by the
+                    # calendar from the epoch.
                     row.is_active = False
+                if not failed:
+                    row.last_run_at = now_ns
+                    claimed.append(row)
 
             await db.commit()
 
-            return [AutomationModel.model_validate(r) for r in rows]
+            return [AutomationModel.model_validate(r) for r in claimed]
 
 
 ####################

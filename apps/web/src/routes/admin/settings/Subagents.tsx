@@ -31,7 +31,8 @@ type Form = ReturnType<typeof toForm>;
 
 /**
  * A limit field: -1 means no limit, as the server reads it (#602); any other
- * value keeps the field's own bounds. The browser's `min` is -1, so the lower
+ * value keeps the field's own lower bound; there is no upper bound, as the
+ * server takes any count (#760). The browser's `min` is -1, so the lower
  * bound is checked here instead, and there is no `step`, whose base would be -1.
  */
 function NumberField({
@@ -40,8 +41,7 @@ function NumberField({
 	unit,
 	value,
 	onChange,
-	min,
-	max
+	min
 }: {
 	id: string;
 	label: string;
@@ -49,7 +49,6 @@ function NumberField({
 	value: number;
 	onChange: (n: number) => void;
 	min?: number;
-	max?: number;
 }) {
 	const input = useRef<HTMLInputElement>(null);
 	const below = min !== undefined && value !== -1 && value < min;
@@ -67,7 +66,6 @@ function NumberField({
 					value={value}
 					onChange={(e) => onChange(Number(e.target.value))}
 					min={-1}
-					max={max}
 				/>
 				<span className="text-muted-foreground text-xs">{unit}</span>
 			</div>
@@ -150,7 +148,6 @@ export default function Subagents() {
 							value={form.maxIterations}
 							onChange={(maxIterations) => set({ maxIterations })}
 							min={1}
-							max={100}
 						/>
 						<NumberField
 							id="sa-output"
@@ -159,7 +156,6 @@ export default function Subagents() {
 							value={form.maxOutput}
 							onChange={(maxOutput) => set({ maxOutput })}
 							min={1000}
-							max={100000}
 						/>
 						<SettingField label="System prompt" htmlFor="sa-prompt" description="Leave empty for the built-in default.">
 							<SettingTextarea

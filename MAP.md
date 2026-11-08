@@ -70,8 +70,10 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   index).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.claude/settings.json`** — tracked project settings: only Claude Code's
-  attribution setting, which keeps co-author trailers, "Generated with"
-  lines and session links out of commits and pull requests.
+  attribution setting, which keeps Claude Code's co-author trailers,
+  "Generated with" lines and session links out of commits and pull
+  requests (a cloud session's PR-body footer is outside its reach; the PR
+  gate rejects that).
 - **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
   a local code-graph index (binary installed by hand
   from the v0.12.1 release; `.mcp.json` runs whatever is on `PATH`).
@@ -393,7 +395,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
   `utils/index.ts` that ported pages actually use, plus small React hooks: `useDebouncedValue`, `useDebouncedCallback`, `useShiftKey`),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
-  `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
+  `AccessControl`; `useAccessGrants`, the save-on-change state of the skill,
+  prompt and tool access dialogs, which shows the grants the server stored), and **`settings/`** (`userSettings.ts`: the user's saved
   UI settings through TanStack Query, for model pinning; `useConfigDraft`
   and `useAdminSaved`, the load-edit-save pattern of the admin tabs;
   `useSettingsUrl`, the `?settings=` param).
@@ -426,10 +429,12 @@ structural summary.
 - **`src/stack.ts`**:
   - the start decision and the UI-staleness check;
   - crash adoption (`owned.json` against `/proc/<pid>/stat`, and the address
-    and checkout it records), or stopping a mismatched stack;
+    and checkout it records), or stopping a mismatched stack, or waiting for
+    one a crashed launch was stopping;
   - the `make backend` / build / `compose down` commands, run in a login
     shell;
-  - `stopGroup()`, one SIGINT and a bounded wait;
+  - `stopGroup()`, one SIGINT (none for a stack already sent it) and a
+    bounded wait;
   - `probe()`, `fetchText()` and `LogTail`;
   - `isOwnDevServer()`, whether `:5174` is this checkout's `make frontend`.
 - **`src/progress.ts`**: the progress dialog's step reducer, driven by the

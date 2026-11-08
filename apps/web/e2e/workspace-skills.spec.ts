@@ -68,7 +68,8 @@ async function mockSkillsApi(page: Page, initial: Skill[]) {
 				return json(true);
 			}
 			if (rest === '/update') return json({ ...found, ...body });
-			if (rest === '/access/update') return json(found);
+			// Stored and answered with the item, as the backend does: the dialog shows the reply's grants (#676).
+			if (rest === '/access/update') return json(Object.assign(found, body));
 		}
 		return json({});
 	});

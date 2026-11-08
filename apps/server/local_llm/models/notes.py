@@ -12,6 +12,7 @@ from local_llm.models.chats import Chats
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 from local_llm.utils.json_codec import JSONCodec
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -224,12 +225,14 @@ class NoteTable:
                     for word in normalized_words:
                         stmt = stmt.filter(
                             or_(
-                                func.replace(func.replace(Note.title, '-', ''), ' ', '').ilike(f'%{word}%'),
+                                func.replace(func.replace(Note.title, '-', ''), ' ', '').ilike(
+                                    like_contains(word), escape=LIKE_ESCAPE
+                                ),
                                 func.replace(
                                     func.replace(Note.data['content']['md'].as_string(), '-', ''),
                                     ' ',
                                     '',
-                                ).ilike(f'%{word}%'),
+                                ).ilike(like_contains(word), escape=LIKE_ESCAPE),
                             )
                         )
 
