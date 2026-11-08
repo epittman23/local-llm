@@ -7,7 +7,7 @@
 // whole picture.
 
 import type { ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -316,12 +316,18 @@ function fail(message: string): void {
 	dispatch({ type: 'fail', message, at: Date.now() });
 }
 
-async function waitReady(origin: string, signal: AbortSignal, stopped: () => string | null): Promise<void> {
+async function waitReady(
+	origin: string,
+	signal: AbortSignal,
+	stopped: () => string | null,
+	watchLog = false
+): Promise<void> {
 	const done = await waitUntilReady(
 		{
 			ready: async () => (await probe(`${origin}/ready`)) === 200,
 			cancelled: () => signal.aborted,
 			stopped,
+			activity: watchLog ? () => statSync(LOG_FILE, { throwIfNoEntry: false })?.size : undefined,
 			sleep,
 			now: Date.now
 		},
@@ -516,10 +522,14 @@ async function startup(): Promise<void> {
 			started.exitCode = code;
 		});
 
-		await waitReady(origin, abort.signal, () =>
-			started.exitCode === undefined
-				? null
-				: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`
+		await waitReady(
+			origin,
+			abort.signal,
+			() =>
+				started.exitCode === undefined
+					? null
+					: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`,
+			true
 		);
 		dispatch({ type: 'finish', step: 'backend', at: now() });
 		await openApp(plan.loadUrl);

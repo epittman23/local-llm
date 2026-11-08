@@ -20,8 +20,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   runs `make backend` for it. Settings does not refuse such an address, so a
   server you run yourself behind a local TLS proxy still works. The
   preload-bridge origin check (`https:` or loopback) is unchanged. A started
-  or attached backend that does not answer `/ready` within 5 minutes now
-  fails with a message. The alternative, passing a host to `make backend` and
+  backend that shows no progress (its log not growing) for 5 minutes, or an
+  attached one not ready within 5 minutes, now fails with a message; the
+  start's own wait is not flat, as a first start's image pulls and `uv sync`
+  can take longer. The alternative, passing a host to `make backend` and
   serving TLS so those forms stay managed, would change the Makefile and was
   not chosen.
 

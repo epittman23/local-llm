@@ -43,7 +43,7 @@ export interface StartPlan {
 	buildUi: boolean;
 }
 
-/** How long a started or attached backend gets to answer `/ready` (#797). */
+/** How long a backend may go without progress before the wait gives up (#797). */
 export const READY_TIMEOUT_MS = 300_000;
 
 export interface ReadyWait {
@@ -54,23 +54,39 @@ export interface ReadyWait {
 	stopped: () => string | null;
 	sleep: (ms: number) => Promise<void>;
 	now: () => number;
+	/**
+	 * A value that changes whenever the stack shows progress (the log grows).
+	 * Each change restarts the deadline; without it the deadline is flat.
+	 */
+	activity?: () => unknown;
 	timeoutMs?: number;
 }
 
 /**
  * Polls until the backend is ready. Gives false when cancelled, true when
- * ready, and throws with the reason when it stopped or the time ran out.
+ * ready, and throws with the reason when it stopped or `timeoutMs` passed
+ * without progress.
  */
 export async function waitUntilReady(wait: ReadyWait, origin: string): Promise<boolean> {
-	const deadline = wait.now() + (wait.timeoutMs ?? READY_TIMEOUT_MS);
+	const limit = wait.timeoutMs ?? READY_TIMEOUT_MS;
+	let deadline = wait.now() + limit;
+	let seen = wait.activity?.();
 	for (;;) {
 		if (wait.cancelled()) return false;
 		const reason = wait.stopped();
 		if (reason) throw new Error(reason);
 		if (await wait.ready()) return true;
+		const current = wait.activity?.();
+		if (current !== seen) {
+			seen = current;
+			deadline = wait.now() + limit;
+		}
 		if (wait.now() >= deadline) {
+			const minutes = limit / 60_000;
 			throw new Error(
-				`Nothing was ready at ${origin} after ${Math.round((wait.timeoutMs ?? READY_TIMEOUT_MS) / 1000)} s. The log shows why.`
+				wait.activity
+					? `Nothing has happened for ${minutes} minutes at ${origin}. The log shows why.`
+					: `Nothing was ready at ${origin} after ${minutes} minutes.`
 			);
 		}
 		await wait.sleep(500);

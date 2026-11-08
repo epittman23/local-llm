@@ -478,13 +478,45 @@ describe('waitUntilReady', () => {
 		).toBe(true);
 	});
 
-	it('throws a clear error when the backend never answers (#797)', async () => {
+	it('throws a clear error when a flat wait passes (attach mode)', async () => {
 		await expect(
 			waitUntilReady(
-				clock(() => false),
-				'https://127.0.0.1:4000'
+				clock(() => false, { timeoutMs: 60_000 }),
+				'http://h:1'
 			)
-		).rejects.toThrow('Nothing was ready at https://127.0.0.1:4000 after 2 s. The log shows why.');
+		).rejects.toThrow('Nothing was ready at http://h:1 after 1 minutes.');
+	});
+
+	it('restarts the deadline on progress, and throws after silence (#797)', async () => {
+		let t = 0;
+		let size = 0;
+		const wait = {
+			ready: async () => t >= 5000,
+			cancelled: () => false,
+			stopped: () => null,
+			sleep: async (ms: number) => {
+				t += ms;
+				if (t < 5000) size += 1;
+			},
+			now: () => t,
+			activity: () => size,
+			timeoutMs: 2000
+		};
+		expect(await waitUntilReady(wait, 'o')).toBe(true);
+		t = 0;
+		size = 0;
+		await expect(
+			waitUntilReady(
+				{
+					...wait,
+					ready: async () => false,
+					sleep: async (ms) => {
+						t += ms;
+					}
+				},
+				'http://h:1'
+			)
+		).rejects.toThrow('Nothing has happened for 0.03333333333333333 minutes at http://h:1.');
 	});
 
 	it('gives the reason a stopped backend gave, and false when cancelled', async () => {

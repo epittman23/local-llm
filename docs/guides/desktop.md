@@ -125,8 +125,9 @@ together with `src/progress.ts`.
   `make backend` serves. At any other address, it only connects and never
   runs `make backend`: that includes `http://[::1]` and `https://` at
   `127.0.0.1`, `localhost` or `[::1]`. Such an address is for a server you
-  started yourself. A managed start that never answers `/ready` fails after
-  5 minutes with a message, rather than waiting forever.
+  started yourself. A managed start fails with a message after 5 minutes
+  without progress (the backend log not growing), rather than waiting forever;
+  attaching to a running backend waits 5 minutes in all for `/ready`.
 - **Repository folder.** The checkout whose `make backend` it runs.
 
 Moving to the dedicated server means setting the server URL to its
