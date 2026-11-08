@@ -1498,8 +1498,33 @@ def embedding_batch_size_error(batch_size) -> str | None:
     one returns no vectors (and an IndexError later), and none fails as soon
     as it is read; for every engine, internal or external.
     """
-    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
-        return f'Embedding Batch Size must be a whole number of at least 1 (got {batch_size!r}).'
+    return _whole_number_error('Embedding Batch Size', batch_size, 1)
+
+
+def reranking_batch_size_error(batch_size) -> str | None:
+    """Why the reranker could not use this batch size, or None (#638).
+
+    `CrossEncoder.predict` raises on a size below 1, and `query_collection`
+    catches that at debug level, so every hybrid search quietly became a
+    vector search.
+    """
+    return _whole_number_error('Reranking Batch Size', batch_size, 1)
+
+
+def embedding_concurrency_error(concurrent_requests) -> str | None:
+    """Why embedding could not use this many concurrent requests, or None (#638).
+
+    0, or none, means no limit. A negative number made `asyncio.Semaphore`
+    raise on every list embedding through an external engine.
+    """
+    if concurrent_requests is None:
+        return None
+    return _whole_number_error('Embedding Concurrent Requests', concurrent_requests, 0)
+
+
+def _whole_number_error(name: str, value, minimum: int) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        return f'{name} must be a whole number of at least {minimum} (got {value!r}).'
     return None
 
 
