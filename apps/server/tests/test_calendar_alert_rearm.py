@@ -52,8 +52,14 @@ def _event(uid: str, calendar_id: str, start_at: int, **extra):
     return _run(CalendarEvents.insert_new_event(uid, form))
 
 
-def _poll(monkeypatch) -> list[dict]:
+def _sessions(monkeypatch, connected: bool = True) -> None:
+    """Whether the user has a socket session; the alerts are held when not (#520)."""
+    monkeypatch.setattr(socket_main, 'get_session_ids_by_user_id', lambda user_id: ['sid'] if connected else [])
+
+
+def _poll(monkeypatch, connected: bool = True) -> list[dict]:
     sent: list[dict] = []
+    _sessions(monkeypatch, connected)
 
     async def emit(name, payload, room=None):
         sent.append(payload['data']['data'])
@@ -202,6 +208,7 @@ def _alerts_at(monkeypatch, event, times: list[int]) -> list[int]:
     monkeypatch.setattr(socket_main.sio, 'emit', emit)
     monkeypatch.setattr(automations, 'publish_event', nothing)
     monkeypatch.setattr(time, 'time_ns', lambda: clock[0])
+    _sessions(monkeypatch)
     for t in times:
         clock[0] = t
         _run(automations._check_calendar_alerts(None))
@@ -230,3 +237,90 @@ def test_a_daily_series_over_the_spring_forward_night_alerts_once(monkeypatch):
     starts = _alerts_at(monkeypatch, event, polls)
 
     assert len(starts) == len(set(starts))
+
+
+def _event_at(uid: str, calendar_id: str, start_at: int, end_at: int | None, **extra):
+    form = CalendarEventForm(
+        calendar_id=calendar_id, title='Talk', start_at=start_at, end_at=end_at, meta={'alert_minutes': 10}, **extra
+    )
+    return _run(CalendarEvents.insert_new_event(uid, form))
+
+
+def test_a_reminder_with_no_session_is_held_and_delivered_when_one_connects(monkeypatch):
+    """#520: it was marked sent though nobody received it."""
+    uid, cal = _user_calendar()
+    event = _event_at(uid, cal, time.time_ns() + 5 * MIN, time.time_ns() + 65 * MIN)
+
+    assert _poll(monkeypatch, connected=False) == []
+    assert _poll(monkeypatch, connected=False) == []  # still held
+    assert [a['event_id'] for a in _poll(monkeypatch)].count(event.id) == 1
+    assert [a['event_id'] for a in _poll(monkeypatch)].count(event.id) == 0  # once
+
+
+def test_a_held_reminder_is_still_delivered_after_the_event_has_started(monkeypatch):
+    uid, cal = _user_calendar()
+    event = _event_at(uid, cal, time.time_ns() - 20 * MIN, time.time_ns() + 40 * MIN)
+
+    assert _poll(monkeypatch, connected=False) == []
+    assert [a['event_id'] for a in _poll(monkeypatch)].count(event.id) == 1
+
+
+def test_a_reminder_is_dropped_once_the_event_has_ended_and_not_retried(monkeypatch):
+    uid, cal = _user_calendar()
+    start = time.time_ns() - 2 * MIN
+    event = _event_at(uid, cal, start, time.time_ns() - 1_000_000_000)
+
+    # Ended a second ago: still fetched (inside the poll's grace), so dropped and marked.
+    assert _poll(monkeypatch, connected=False) == []
+    stored = _run(CalendarEvents.get_event_by_id(event.id))
+    assert automations.already_alerted(stored.meta, stored.start_at)
+    # A session connecting afterwards gets nothing.
+    assert _poll(monkeypatch) == []
+
+
+def test_a_moment_event_with_no_session_is_dropped_after_its_start(monkeypatch):
+    uid, cal = _user_calendar()
+    event = _event_at(uid, cal, time.time_ns() + 1_000_000_000, None)
+    assert _poll(monkeypatch, connected=False) == []  # not ended yet: held
+
+    clock = time.time_ns() + 2_000_000_000
+    monkeypatch.setattr(time, 'time_ns', lambda: clock)
+    assert _poll(monkeypatch, connected=False) == []  # ended: dropped
+    stored = _run(CalendarEvents.get_event_by_id(event.id))
+    assert automations.already_alerted(stored.meta, stored.start_at)
+
+
+def test_an_all_day_event_with_no_end_is_held_through_its_day(monkeypatch):
+    uid, cal = _user_calendar()
+    event = _event_at(uid, cal, time.time_ns() - 3 * HOUR, None, all_day=True)
+
+    assert _poll(monkeypatch, connected=False) == []
+    assert [a['event_id'] for a in _poll(monkeypatch)].count(event.id) == 1
+
+
+def test_a_notification_target_counts_as_delivery(monkeypatch):
+    from local_llm.utils import notifications
+
+    uid, cal = _user_calendar()
+    event = _event_at(uid, cal, time.time_ns() + 5 * MIN, time.time_ns() + 65 * MIN)
+
+    async def target(user_id, event_name):
+        return True
+
+    monkeypatch.setattr(notifications, 'has_notification_target', target)
+    published: list[str] = []
+
+    async def record(app, name, **kwargs):
+        published.append(kwargs['subject_id'])
+
+    monkeypatch.setattr(automations, 'publish_event', record)
+    _sessions(monkeypatch, connected=False)
+
+    async def emit(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(socket_main.sio, 'emit', emit)
+    _run(automations._check_calendar_alerts(None))
+    _run(automations._check_calendar_alerts(None))
+
+    assert published == [event.id]
