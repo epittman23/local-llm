@@ -27,6 +27,7 @@ from local_llm.internal.db import Base, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
+from local_llm.utils.sql_like import LIKE_ESCAPE, like_contains
 
 log = logging.getLogger(__name__)
 
@@ -662,12 +663,12 @@ class CalendarEventTable:
             )
 
             if query:
-                search = f'%{query}%'
+                search = like_contains(query)
                 stmt = stmt.filter(
                     or_(
-                        CalendarEvent.title.ilike(search),
-                        CalendarEvent.description.ilike(search),
-                        CalendarEvent.location.ilike(search),
+                        CalendarEvent.title.ilike(search, escape=LIKE_ESCAPE),
+                        CalendarEvent.description.ilike(search, escape=LIKE_ESCAPE),
+                        CalendarEvent.location.ilike(search, escape=LIKE_ESCAPE),
                     )
                 )
 

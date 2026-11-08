@@ -123,8 +123,9 @@ are kept out of this file).
 - Chat history `merge_history` unions stored and incoming history so stale
   writers do not drop messages; as a consequence a deleted message can return.
 - Several list queries and LIKE searches across models (prompts, models,
-  automations, messages, notes, knowledge) do not escape `%`/`_` and lack an
-  id tiebreaker; the filed issues cover the user-visible cases.
+  automations, messages, notes, knowledge) lack an id tiebreaker; the filed
+  issues cover the user-visible cases. Their LIKE searches escape `%`/`_`
+  since #625.
 - Prompt history picks the latest entry by `created_at` with one-second
   resolution.
 - Leaderboard: Elo ignores draws although the Feedback table shows them; the
