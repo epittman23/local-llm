@@ -118,7 +118,8 @@ Hybrid search is on, so each query is answered by keyword search and
 vector search together. The top 5 candidates go to the reranker, and
 the best 3 are kept (`TOP_K` 5, `TOP_K_RERANKER` 3).
 
-On pgvector the keyword half is Postgres full-text search, run natively
+On pgvector, with enriched texts off (the default), the keyword half is
+Postgres full-text search, run natively
 (`retrieval/vector/dbs/pgvector.py`'s `hybrid_search`), not BM25. Since
 2026-11-08 (#347) it matches a chunk holding **any** of the question's
 words, under the `english` text-search config: stop words are dropped
