@@ -35,7 +35,10 @@ export function fromDirect(d: Direct | undefined | null): Connection[] {
 /**
  * Ports Settings/Connections.svelte: the user's own OpenAI-compatible
  * endpoints ("direct connections"), whose models are listed beside the
- * server's. Each change is saved at once.
+ * server's. Each change is saved at once. Chat does not use them yet: the
+ * models are left out of the lists (useModels), as no browser-side handler
+ * answers the server's `request:chat:completion` (#764; a deliberate gap in
+ * docs/decisions.md).
  */
 export default function Connections() {
 	const { settings, update } = useUserSettings();
@@ -51,6 +54,13 @@ export default function Connections() {
 
 	return (
 		<SettingsForm title="Connections" footer={false} loading={!settings}>
+			<p
+				role="note"
+				className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400"
+			>
+				Not yet available in chat: connections added here are saved, but their models are not listed and chat with them
+				does not work in this version.
+			</p>
 			<SettingsSection title="Manage Direct Connections" first>
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAI compatible API endpoints.</p>
