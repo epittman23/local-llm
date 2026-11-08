@@ -140,7 +140,12 @@ export const permissionSections: PermissionSection[] = [
 	},
 	{
 		title: 'Settings Permissions',
-		rows: [row('settings', 'interface', 'Interface Settings Access')]
+		rows: [
+			row('settings', 'interface', 'Interface Settings Access', {
+				warning:
+					"Covers all of a user's personal settings that save to their account (General, Interface, Notifications, Keyboard, Connections, Integrations, Personalization, Audio). Without it those tabs are hidden and the server refuses the saves. Account, Data Controls, Archived Chats and About are not affected."
+			})
+		]
 	}
 ];
 

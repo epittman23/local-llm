@@ -384,6 +384,30 @@ async def notify_target(
     return {'ok': True, 'target_id': item.get('id')}
 
 
+async def _matching_targets(user_id: str, event_name: str) -> list[dict]:
+    """The user's notification targets that take `event_name` right now."""
+    notifications = await _load_notifications(user_id)
+    is_active = False if event_name == CHANNEL_MESSAGE_EVENT else await Users.is_user_active(user_id)
+    return [
+        target
+        for target in notifications.get('targets') or []
+        if target.get('enabled', True)
+        and event_name in target.get('events', [])
+        and not (target.get('delivery', 'away') == 'away' and is_active)
+    ]
+
+
+async def has_notification_target(user_id: str, event_name: str) -> bool:
+    """Whether publishing `event_name` for the user would reach one of their targets (#520)."""
+    if event_name not in VALID_EVENTS or not await Config.get('ui.enable_user_webhooks'):
+        return False
+    try:
+        return bool(await _matching_targets(user_id, event_name))
+    except Exception:
+        log.exception('Notification targets could not be read for user %s', user_id)
+        return False
+
+
 async def dispatch_notification_event(app: Any, event: Any) -> None:
     if event.event not in VALID_EVENTS or not await Config.get('ui.enable_user_webhooks'):
         return
@@ -393,17 +417,7 @@ async def dispatch_notification_event(app: Any, event: Any) -> None:
     app_name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'Local LLM')
     for user_id in event_user_ids(event):
         try:
-            notifications = await _load_notifications(user_id)
-            is_active = False if event.event == CHANNEL_MESSAGE_EVENT else await Users.is_user_active(user_id)
-
-            for target in notifications.get('targets') or []:
-                if not target.get('enabled', True):
-                    continue
-                if event.event not in target.get('events', []):
-                    continue
-                if target.get('delivery', 'away') == 'away' and is_active:
-                    continue
-
+            for target in await _matching_targets(user_id, event.event):
                 title, message, data, description = _notification_webhook_content(event)
                 # One dead or hanging target must not stop delivery to the rest (#170).
                 try:

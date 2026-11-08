@@ -80,6 +80,7 @@ timeline
       2026-10-28 : llama-bench pre-screen of offload and batch flags, one process per point, as an Optuna study : an OOM prunes every point needing more VRAM : the leaders re-measured and load-checked at the profile's context : studies in their own optuna schema, a loopback optuna-dashboard
       2026-11-03 : Admin banners shown above a new chat again (lost in the port) : a dismissible one stays dismissed in the browser, others close until reload
       2026-11-06 : The e2e suite runs against the built app, at four workers : 4.9 min to 2.0 min on four cores, the same tests passing : boot smoke checks the production deep-link fallback
+      2026-11-08 : The desktop app manages only http://127.0.0.1 and http://localhost : every other address, loopback or remote, is connect-only : a backend that shows no progress for 5 minutes now fails with a message
       2026-11-08 : A group channel saved as Public is public : listed to everyone who may use channels, readable by them, joined with an explicit POST from its page : making one public takes sharing.public_channels : posting needs membership, private groups and DMs unchanged
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing

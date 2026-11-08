@@ -368,3 +368,27 @@ describe('importing each automation on its own (#323)', () => {
 		});
 	});
 });
+
+describe('weekly rule states its day (#670)', () => {
+	const ready = {
+		...automationFields(null, { now }),
+		name: 'n',
+		prompt: 'p',
+		modelId: 'm'
+	};
+	const rruleOf = (days: string[]) => {
+		const out = automationPayload(
+			{ ...ready, schedule: { ...ready.schedule, frequency: 'WEEKLY', hour: 8, minute: 15, days } },
+			now
+		);
+		return 'form' in out ? out.form.data.rrule : out.error;
+	};
+	it('writes the weekday of the save when no day is chosen', () => {
+		// 2026-09-27 is a Sunday.
+		expect(rruleOf([])).toBe('RRULE:FREQ=WEEKLY;BYDAY=SU;BYHOUR=8;BYMINUTE=15');
+		expect(rruleOf([])).toBe(buildRrule({ ...ready.schedule, frequency: 'WEEKLY', hour: 8, minute: 15, days: ['SU'] }));
+	});
+	it('keeps the chosen days', () => {
+		expect(rruleOf(['MO', 'WE'])).toBe('RRULE:FREQ=WEEKLY;BYDAY=MO,WE;BYHOUR=8;BYMINUTE=15');
+	});
+});

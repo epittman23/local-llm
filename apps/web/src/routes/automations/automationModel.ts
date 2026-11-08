@@ -352,6 +352,12 @@ export function automationPayload(f: AutomationFields, now = new Date()): { erro
 	if (onceIncomplete(f.schedule)) return { error: 'Pick a date and time for the one-time run' };
 	if (oncePassed(f.schedule, now)) return { error: 'Scheduled time must be in the future' };
 	const channel = f.targetType === 'channel';
+	// A weekly rule with no day chosen would take its weekday from the moment
+	// it is switched back on, so it states the weekday of this save (#670).
+	const schedule: Schedule =
+		f.schedule.frequency === 'WEEKLY' && !f.schedule.days.length
+			? { ...f.schedule, days: [WEEKDAYS[(now.getDay() + 6) % 7]] }
+			: f.schedule;
 	return {
 		form: {
 			name: f.name.trim(),
@@ -359,7 +365,7 @@ export function automationPayload(f: AutomationFields, now = new Date()): { erro
 			data: {
 				prompt: f.prompt.trim(),
 				model_id: f.modelId.trim(),
-				rrule: buildRrule(f.schedule),
+				rrule: buildRrule(schedule),
 				target: channel ? { type: 'channel', channel_id: f.channelId } : { type: 'chat' }
 			},
 			is_active: f.isActive
