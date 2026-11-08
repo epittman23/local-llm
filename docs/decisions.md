@@ -50,6 +50,33 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   resources take. Membership stays the line for writing. Private stays the
   dialog's default.
 
+- **2026-11-08**: **OAuth provider configuration is environment-only.**
+  Admin Settings > Authentication offered the provider's name, discovery URL,
+  client ID and secret, redirect URI, scopes, timeouts, code-challenge and
+  token-endpoint methods and logout address, and saved them to the database
+  (#286). Nothing read them back: `load_oauth_providers()` builds the
+  providers once at import from the environment, and only sign-out read two
+  of the stored values. A saved change therefore did nothing until the
+  environment matched it, and the form implied otherwise.
+
+  **What.** Those eleven fields are gone from the page, which now says the
+  provider is configured through environment variables, and from
+  `/auths/admin/config/oauth`, which neither returns nor saves them (an old
+  client that still sends them is ignored). Sign-out reads
+  `OPENID_PROVIDER_URL` and `OPENID_END_SESSION_ENDPOINT` from the
+  environment. The environment-driven registration is untouched, so OAuth
+  configured that way works as before.
+  [docs/guides/oauth.md](guides/oauth.md) lists the variables.
+  - **Kept:** the settings the backend does read for each sign-in (claims,
+    allowed domains, role and group mapping, account merging, profile
+    updates, signup, the master switch), editable while
+    `ENABLE_OAUTH_PERSISTENT_CONFIG` is on.
+  - **Not done:** no migration and no deleted rows; values the form saved stay
+    in the `config` table and are simply never offered or read.
+  - **Why not runtime-editable.** That would rebuild and re-register the
+    authlib clients after every save. OAuth is unused today, and the owner
+    wants it available later without a second configuration path.
+
 - **2026-11-08**: **Personal direct connections stay unwired in chat (deliberate
   gap).** Settings > Connections still saves a user's own OpenAI-compatible
   endpoints, but their models (`direct: true`) are now left out of every model
@@ -82,7 +109,6 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   can take longer. The alternative, passing a host to `make backend` and
   serving TLS so those forms stay managed, would change the Makefile and was
   not chosen.
-
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min

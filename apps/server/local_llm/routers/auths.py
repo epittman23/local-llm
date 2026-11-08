@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.config import (
     ENABLE_PASSWORD_AUTH,
     OAUTH_PROVIDERS,
+    OPENID_END_SESSION_ENDPOINT,
+    OPENID_PROVIDER_URL,
 )
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import (
@@ -698,8 +700,9 @@ async def signout(request: Request, response: Response, db: AsyncSession = Depen
         response.delete_cookie('oauth_session_id')
 
         # If a custom end_session_endpoint is configured (e.g. AWS Cognito), redirect
-        # there directly instead of attempting OIDC discovery.
-        openid_end_session_endpoint = await Config.get('oauth.end_session_endpoint')
+        # there directly instead of attempting OIDC discovery. This and the provider
+        # URL below come from the environment, like the provider itself.
+        openid_end_session_endpoint = OPENID_END_SESSION_ENDPOINT
         if openid_end_session_endpoint:
             return JSONResponse(
                 status_code=200,
@@ -710,10 +713,9 @@ async def signout(request: Request, response: Response, db: AsyncSession = Depen
                 headers=response.headers,
             )
 
-        openid_provider_url = await Config.get('oauth.provider_url')
         oauth_server_metadata_url = (
             request.app.state.oauth_manager.get_server_metadata_url(session.provider) if session else None
-        ) or openid_provider_url
+        ) or OPENID_PROVIDER_URL
 
         if session and oauth_server_metadata_url:
             oauth_id_token = session.token.get('id_token')
@@ -994,19 +996,6 @@ class OAuthConfigForm(BaseModel):
     OAUTH_GROUP_CLAIM: str | None = None
     OAUTH_GROUP_DEFAULT_SHARE: bool | str | None = None
 
-    # OIDC provider settings
-    OAUTH_PROVIDER_NAME: str | None = None
-    OPENID_PROVIDER_URL: str | None = None
-    OAUTH_CLIENT_ID: str | None = None
-    OAUTH_CLIENT_SECRET: str | None = None
-    OPENID_REDIRECT_URI: str | None = None
-    OAUTH_SCOPES: str | None = None
-    OAUTH_CODE_CHALLENGE_METHOD: str | None = None
-    OAUTH_TOKEN_ENDPOINT_AUTH_METHOD: str | None = None
-    OPENID_END_SESSION_ENDPOINT: str | None = None
-    OAUTH_TIMEOUT: int | str | None = None
-    OAUTH_CLIENT_TIMEOUT: int | str | None = None
-
     # Claims
     OAUTH_EMAIL_CLAIM: str | None = None
     OAUTH_USERNAME_CLAIM: str | None = None
@@ -1045,17 +1034,6 @@ OAUTH_CONFIG_KEYS = {
     'ENABLE_OAUTH_GROUP_CREATION': 'oauth.enable_group_creation',
     'OAUTH_GROUP_CLAIM': 'oauth.group_claim',
     'OAUTH_GROUP_DEFAULT_SHARE': 'oauth.group_default_share',
-    'OAUTH_PROVIDER_NAME': 'oauth.provider_name',
-    'OPENID_PROVIDER_URL': 'oauth.provider_url',
-    'OAUTH_CLIENT_ID': 'oauth.client_id',
-    'OAUTH_CLIENT_SECRET': 'oauth.client_secret',
-    'OPENID_REDIRECT_URI': 'oauth.redirect_uri',
-    'OAUTH_SCOPES': 'oauth.scopes',
-    'OAUTH_CODE_CHALLENGE_METHOD': 'oauth.code_challenge_method',
-    'OAUTH_TOKEN_ENDPOINT_AUTH_METHOD': 'oauth.token_endpoint_auth_method',
-    'OPENID_END_SESSION_ENDPOINT': 'oauth.end_session_endpoint',
-    'OAUTH_TIMEOUT': 'oauth.timeout',
-    'OAUTH_CLIENT_TIMEOUT': 'oauth.client.timeout',
     'OAUTH_EMAIL_CLAIM': 'oauth.email_claim',
     'OAUTH_USERNAME_CLAIM': 'oauth.username_claim',
     'OAUTH_PICTURE_CLAIM': 'oauth.picture_claim',
@@ -1077,8 +1055,6 @@ def _format_oauth_form_value(field: str, value):
 def _parse_oauth_update_value(field: str, value):
     if field in OAUTH_COMMA_LIST_FIELDS and isinstance(value, str):
         return [item.strip() for item in value.split(',') if item.strip()]
-    if field in {'OAUTH_TIMEOUT', 'OAUTH_CLIENT_TIMEOUT'} and value == '':
-        return ''
     return value
 
 

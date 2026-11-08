@@ -14,7 +14,10 @@ Redis and config writes kept in memory. Pinned:
 - a password change needs the current password, and revokes every token
   issued before it; sign-out revokes the token it is given;
 - adding users, the admin config and API keys are gated on the admin role or
-  the matching permission.
+  the matching permission;
+- the OAuth provider is configured by the environment only: the admin OAuth
+  config route neither returns nor saves it, and sign-out reads the provider's
+  logout address from the environment.
 
 Run from apps/server:
 
@@ -343,6 +346,47 @@ def test_only_an_admin_reads_or_changes_the_auth_config(client):
         ('post', '/auths/admin/config/oauth'),
     ]:
         assert client.request(method, path, json={}, headers=user.headers).status_code == 401, path
+
+
+PROVIDER_FIELDS = {
+    'OAUTH_PROVIDER_NAME': 'oauth.provider_name',
+    'OPENID_PROVIDER_URL': 'oauth.provider_url',
+    'OAUTH_CLIENT_ID': 'oauth.client_id',
+    'OAUTH_CLIENT_SECRET': 'oauth.client_secret',
+    'OPENID_REDIRECT_URI': 'oauth.redirect_uri',
+    'OAUTH_SCOPES': 'oauth.scopes',
+    'OAUTH_CODE_CHALLENGE_METHOD': 'oauth.code_challenge_method',
+    'OAUTH_TOKEN_ENDPOINT_AUTH_METHOD': 'oauth.token_endpoint_auth_method',
+    'OPENID_END_SESSION_ENDPOINT': 'oauth.end_session_endpoint',
+    'OAUTH_TIMEOUT': 'oauth.timeout',
+    'OAUTH_CLIENT_TIMEOUT': 'oauth.client.timeout',
+}
+
+
+def test_the_oauth_config_route_does_not_save_the_provider(client, config):
+    admin = _account('admin')
+    form = {name: 'x' for name in PROVIDER_FIELDS} | {'ENABLE_OAUTH_SIGNUP': True}
+    r = client.post('/auths/admin/config/oauth', json=form, headers=admin.headers)
+    assert r.status_code == 200
+    assert config['oauth.enable_signup'] is True
+    assert not set(PROVIDER_FIELDS.values()) & set(config)
+    assert not set(PROVIDER_FIELDS) & set(r.json())
+    assert not set(PROVIDER_FIELDS) & set(client.get('/auths/admin/config/oauth', headers=admin.headers).json())
+
+
+def test_signout_sends_an_oauth_session_to_the_environments_logout_address(client, config, monkeypatch):
+    account = _account('user')
+    config['oauth.end_session_endpoint'] = 'https://stale.example.com/logout'
+
+    async def session(*_a, **_k):
+        return SimpleNamespace(provider='oidc', token={})
+
+    monkeypatch.setattr(auths_router.OAuthSessions, 'get_session_by_id', session)
+    monkeypatch.setattr(auths_router, 'OPENID_END_SESSION_ENDPOINT', 'https://idp.example.com/logout')
+    client.cookies.set('oauth_session_id', 'some-session')
+    r = client.post('/auths/signout', headers=account.headers)
+    assert r.status_code == 200
+    assert r.json() == {'status': True, 'redirect_url': 'https://idp.example.com/logout'}
 
 
 def test_admin_details_are_hidden_unless_enabled(client, config):
