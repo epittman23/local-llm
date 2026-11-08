@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addResponses, addUserMessage, emptyHistory } from './history';
+import { addResponses, addUserMessage, emptyHistory, messagesList } from './history';
 import {
 	completionBody,
 	initialModels,
 	isTemporaryChatId,
 	needsWebSearchConfirm,
 	newChatTemporary,
+	pathFiles,
 	promptVariables,
 	requestFeatures,
 	stopTokens,
-	turnFiles,
 	webSearchConfirmText
 } from './request';
 
@@ -53,7 +53,33 @@ describe('request pieces', () => {
 	it('sends documents but not images as files, once', () => {
 		const doc = { type: 'file', id: 'd', content_type: 'application/pdf' };
 		const img = { type: 'image', url: 'data:x' };
-		expect(turnFiles([doc], { files: [doc, img] } as any)).toEqual([doc]);
+		expect(
+			pathFiles([
+				{ role: 'user', files: [doc] },
+				{ role: 'user', files: [doc, img] }
+			] as never)
+		).toEqual([doc]);
+	});
+	it("reads a branch's documents from its user messages only, one copy of each (#160)", () => {
+		const doc = { type: 'file', id: 'd', content_type: 'application/pdf', status: 'uploaded' };
+		const kb = { type: 'collection', id: 'kb', name: 'KB' };
+		const page = { type: 'text', name: 'Page', content: 'a' };
+		const path = [
+			{ role: 'user', files: [doc, kb, page] },
+			// A model's own file (an image tool's output) is never context.
+			{ role: 'assistant', files: [{ type: 'file', id: 'out', content_type: 'text/csv' }] },
+			// The same file and base attached again, their stored copies differing in a field.
+			{
+				role: 'user',
+				files: [
+					{ ...doc, status: 'processed' },
+					{ ...kb, files: [] },
+					{ ...page, content: 'b' }
+				]
+			}
+		];
+		// A web page has no id: two different ones are two documents.
+		expect(pathFiles(path as never)).toEqual([doc, kb, page, { ...page, content: 'b' }]);
 	});
 	it('recognises temporary chat ids', () => {
 		expect(isTemporaryChatId('temporary:s1')).toBe(true);
@@ -72,10 +98,39 @@ describe('completionBody', () => {
 		sessionId: 's1',
 		params: {},
 		settings: {},
-		chatFiles: [],
 		features: {},
 		variables: {}
 	};
+
+	it("sends the documents of the branch being answered, and none of a sibling branch's (#160)", () => {
+		const doc = { type: 'file', id: 'd1', content_type: 'application/pdf' };
+		// q0 -> a0 -> q1 (attaches d1) -> a1, then a0 regenerated as a sibling, a0'.
+		const q0 = addUserMessage(emptyHistory(), null, { content: 'hi' });
+		const a0 = addResponses(q0.history, q0.id, [{ id: 'a' }]);
+		const q1 = addUserMessage(a0.history, a0.targets[0].message_id, { content: 'read this', files: [doc] });
+		const a1 = addResponses(q1.history, q1.id, [{ id: 'a' }]);
+		const regen = addResponses(a1.history, q0.id, [{ id: 'a' }]);
+		const h = regen.history;
+		const files = (responseId: string, messages?: Parameters<typeof completionBody>[0]['messages']) =>
+			completionBody({ ...base, history: h, responseId, chatId: 'c1', temporary: false, messages }).files;
+
+		expect(files(regen.targets[0].message_id)).toBeUndefined();
+		// Back on the first branch, a follow-up or a continue still reads d1.
+		const q2 = addUserMessage(h, a1.targets[0].message_id, { content: 'and?' });
+		const a2 = addResponses(q2.history, q2.id, [{ id: 'a' }]);
+		expect(
+			completionBody({
+				...base,
+				history: a2.history,
+				responseId: a2.targets[0].message_id,
+				chatId: 'c1',
+				temporary: false
+			}).files
+		).toEqual([doc]);
+		expect(files(a1.targets[0].message_id)).toEqual([doc]);
+		// A regeneration with a suggestion reads the path it was given.
+		expect(files(regen.targets[0].message_id, messagesList(h, a1.targets[0].message_id))).toEqual([doc]);
+	});
 
 	it('a number cleared in chat controls means Default, not an empty value sent upstream (#200)', () => {
 		const body = completionBody({

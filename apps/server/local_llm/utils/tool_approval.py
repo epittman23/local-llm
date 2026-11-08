@@ -222,12 +222,17 @@ async def build_tool_approval_resume_payload(chat_id: str, message_id: str, chat
     if params.get('system'):
         messages.append({'role': 'system', 'content': params.get('system')})
 
+    # The documents the paused turn was sent with, none included: the chat's
+    # stored list is the last turn's, perhaps another branch's (#160). Only a
+    # message paused before its files were recorded falls back to it.
+    files = message_meta['files'] if 'files' in message_meta else chat_data.get('files')
+
     return {
         'stream': params.get('stream_response', True),
         'model': model_id,
         'messages': messages,
         'params': params,
-        'files': message_meta.get('files') or chat_data.get('files') or None,
+        'files': files or None,
         'filter_ids': message_meta.get('filter_ids') or None,
         'tool_ids': message_meta.get('tool_ids') or None,
         'skill_ids': message_meta.get('skill_ids') or None,
