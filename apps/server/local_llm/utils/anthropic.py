@@ -387,6 +387,8 @@ def _openai_tool_choice(tool_choice):
         return 'auto'
     if tool_choice_type == 'any':
         return 'required'
+    if tool_choice_type == 'none':
+        return 'none'
     if tool_choice_type == 'tool':
         return {'type': 'function', 'function': {'name': tool_choice.get('name', '')}}
     return None
