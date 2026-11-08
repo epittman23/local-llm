@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.folders import FolderForm, Folders
+from local_llm.models.knowledge import KnowledgeForm, Knowledges
 from local_llm.models.notes import NoteForm, Notes
 from local_llm.models.users import Users
 from local_llm.retrieval import utils as retrieval
@@ -61,6 +62,16 @@ def _note(owner, *readers, writers=()) -> str:
     for writer in writers:
         _run(AccessGrants.grant_access('note', note.id, 'user', writer.id, 'write'))
     return note.id
+
+
+def _kb(owner, *readers, writers=()) -> str:
+    kb = _run(Knowledges.insert_new_knowledge(owner.id, KnowledgeForm(name='kb', description='')))
+    assert kb is not None
+    for reader in readers:
+        _run(AccessGrants.grant_access('knowledge', kb.id, 'user', reader.id, 'read'))
+    for writer in writers:
+        _run(AccessGrants.grant_access('knowledge', kb.id, 'user', writer.id, 'write'))
+    return kb.id
 
 
 @pytest.fixture
@@ -148,17 +159,53 @@ def test_an_editor_cannot_create_a_subfolder_holding_a_note_only_the_owner_can_r
     assert _run(Folders.get_children_folders_by_id_and_user_id(folder.id, people.owner.id)) in (None, [])
 
 
+def test_an_editor_cannot_add_a_knowledge_base_they_may_only_read(client, people, folder):
+    kb = _kb(people.third, people.owner, people.editor)
+
+    r = _save(client, people.editor, folder.id, [{'type': 'collection', 'id': kb}])
+
+    assert r.status_code == 403
+    assert _files(folder.id) == []
+
+
+def test_an_editor_adds_a_knowledge_base_they_may_write_and_the_owner_can_read(client, people, folder):
+    kb = _kb(people.third, people.owner, people.editor, writers=(people.editor,))
+
+    r = _save(client, people.editor, folder.id, [{'type': 'collection', 'id': kb}])
+
+    assert r.status_code == 200, r.text
+    assert _files(folder.id) == [{'type': 'collection', 'id': kb}]
+
+
+def test_the_owner_adds_a_knowledge_base_they_may_only_read(client, people, folder):
+    kb = _kb(people.third, people.owner)
+
+    assert _save(client, people.owner, folder.id, [{'type': 'collection', 'id': kb}]).status_code == 200
+
+
+def test_an_editor_cannot_create_a_subfolder_holding_a_knowledge_base_they_may_only_read(client, people, folder):
+    kb = _kb(people.third, people.owner, people.editor)
+
+    r = client.post(
+        '/folders/',
+        json={'name': 'sub', 'parent_id': folder.id, 'data': {'files': [{'type': 'collection', 'id': kb}]}},
+        headers=people.editor.headers,
+    )
+
+    assert r.status_code == 403
+
+
 # --- The owner passes on a note only as they could share it directly ------------------
 
 
-def _delegated(owner, note_id) -> list:
+def _delegated(owner, entry_id, entry_type='note') -> list:
     stored = _run(Folders.insert_new_folder(owner.id, FolderForm(name=f'd-{uuid.uuid4().hex[:6]}')))
     assert stored is not None
     updated = _run(
         Folders.update_folder_by_id_and_user_id(
             stored.id,
             owner.id,
-            folders_router.FolderUpdateForm(data={'files': [{'type': 'note', 'id': note_id}]}),
+            folders_router.FolderUpdateForm(data={'files': [{'type': entry_type, 'id': entry_id}]}),
         )
     )
     assert updated is not None
@@ -182,6 +229,16 @@ def test_a_folder_does_not_pass_on_a_note_its_owner_may_only_read(people):
     note = _note(people.third, people.owner)
 
     assert _delegated(people.owner, note) == []
+
+
+def test_a_folder_passes_on_a_knowledge_base_only_if_its_owner_may_write_it(people):
+    read_only = _kb(people.third, people.owner)
+    writable = _kb(people.third, writers=(people.owner,))
+    own = _kb(people.owner)
+
+    assert _delegated(people.owner, read_only, 'collection') == []
+    assert _delegated(people.owner, writable, 'collection') == [{'type': 'collection', 'id': writable}]
+    assert _delegated(people.owner, own, 'collection') == [{'type': 'collection', 'id': own}]
 
 
 # --- End to end: what a folder's reader gets in a chat's context ---------------------
