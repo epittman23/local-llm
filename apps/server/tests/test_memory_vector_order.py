@@ -456,8 +456,22 @@ def test_context_labels_a_vector_hit_from_its_database_row():
 
     sections = memory_utils._memory_sections([row], 'anything', stale_hit)
 
-    # A hit with no row is still shown from the vector's text, as the
-    # recorded add_memory_context cases expect; dropping it is left to the
-    # owner, since it changes that golden file (#303).
+    # The hit whose memory row is gone is dropped, not shown from the vector's text.
+    assert sections['context'] == ['work: Deadline is Monday']
 
-    assert sections['context'] == ['work: Deadline is Monday', 'unknown memory']
+
+def test_context_drops_orphan_hits_and_keeps_existing_rows_in_order():
+    rows = [
+        SimpleNamespace(id='a', content='Alpha', path=None, type='context', updated_at=1),
+        SimpleNamespace(id='b', content='Bravo', path='x', type='context', updated_at=2),
+        SimpleNamespace(id='c', content='Charlie', path=None, type='user', updated_at=3),
+    ]
+    hits = SimpleNamespace(
+        documents=[['stale one', 'Bravo', 'stale two', 'Alpha', 'Charlie']],
+        metadatas=[[{}, {}, {}, {}, {}]],
+        ids=[['gone1', 'b', 'gone2', 'a', 'c']],
+    )
+
+    labels = memory_utils._vector_hit_labels(hits, set(), {row.id: row for row in rows})
+
+    assert labels == [('context', 'x: Bravo'), ('context', 'Alpha'), ('user', 'Charlie')]
