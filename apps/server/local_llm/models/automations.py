@@ -297,6 +297,19 @@ class AutomationTable:
             await db.commit()
             return AutomationModel.model_validate(row)
 
+    async def pause(self, id: str, db: AsyncSession | None = None) -> bool:
+        """Switch an automation off with no next run, as a spent rule is (#713)."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                update(Automation)
+                .where(Automation.id == id)
+                .values(is_active=False, next_run_at=None, updated_at=int(time.time_ns()))
+                .returning(Automation.id)
+            )
+            paused = result.scalar_one_or_none() is not None
+            await db.commit()
+            return paused
+
     async def delete(self, id: str, db: AsyncSession | None = None) -> bool:
         async with get_async_db_context(db) as db:
             row = await db.get(Automation, id)

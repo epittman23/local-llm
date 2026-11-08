@@ -35,6 +35,7 @@ from local_llm.env import int_env
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db
 from local_llm.models.automations import AutomationModel, AutomationRuns, Automations
+from local_llm.models.channels import Channels
 from local_llm.models.chats import ChatForm, Chats
 from local_llm.models.config import Config
 from local_llm.models.folders import Folders
@@ -638,6 +639,12 @@ async def _announce_run(app, user, automation: AutomationModel, chat_id: str) ->
     )
 
 
+CHANNEL_GONE_ERROR = (
+    'Paused: the channel this automation posts to was deleted. '
+    'Edit the automation to choose another channel, then turn it back on.'
+)
+
+
 async def _execute_channel_automation(
     app,
     automation: AutomationModel,
@@ -650,6 +657,22 @@ async def _execute_channel_automation(
     channel_id = target.get('channel_id')
     if not channel_id or not await Config.get('channels.enable'):
         raise ValueError('Channel not found')
+
+    # A channel can disappear by its deletion or a user's purge. Every run after
+    # that would fail the same way, so the first one switches the automation off
+    # and says why; the owner picks another channel and turns it back on (#713).
+    if not await Channels.get_channel_by_id(channel_id):
+        error = CHANNEL_GONE_ERROR
+        await Automations.pause(automation.id)
+        await _record_run(automation.id, 'error', error=error)
+        await publish_event(
+            app,
+            EVENTS.AUTOMATION_RUN_FAILED,
+            actor=user,
+            subject_id=automation.id,
+            data={'name': automation.name, 'error': error},
+        )
+        return
 
     # First, so the model list is loaded before the model's name is read.
     tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id, user=user, token=token)
