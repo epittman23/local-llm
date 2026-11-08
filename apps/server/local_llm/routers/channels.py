@@ -85,22 +85,45 @@ async def channel_has_access(
 async def may_read_member_channel(channel: ChannelModel, user_id: str, db: AsyncSession | None = None) -> bool:
     """Read access to a group or DM channel: its active members, and for a
     public group channel anyone who may use channels (#331). Posting,
-    reacting and pinning still need membership, which opening a public
-    group channel (GET /{id}) gives."""
+    reacting and pinning still need membership, which joining a public
+    group channel (POST /{id}/join) gives."""
     return is_public_group_channel(channel) or await Channels.is_user_channel_member(channel.id, user_id, db=db)
 
 
-async def join_public_group_channel(channel: ChannelModel, user_id: str, db: AsyncSession | None = None) -> None:
-    """Make the user an active member of a public group channel they open
-    (#331): a new membership, or an earlier inactive one reactivated. Their
-    sockets enter the channel's room, so live events start at once, and
-    their other tabs refetch the channel list, where it now shows as joined."""
-    if not is_public_group_channel(channel) or await Channels.is_user_channel_member(channel.id, user_id, db=db):
+async def may_make_group_channel_public(user: UserModel) -> bool:
+    """`sharing.public_channels`, as every public_* sharing key: admins
+    always, others when their permissions grant it (#331)."""
+    return user.role == 'admin' or await has_permission(
+        user.id, 'sharing.public_channels', await Config.get('user.permissions')
+    )
+
+
+async def join_public_group_channel(request: Request, channel: ChannelModel, user, db: AsyncSession | None = None):
+    """Make the user an active member of a public group channel (#331): a
+    new membership (CHANNEL_MEMBER_ADDED), or an earlier inactive one
+    reactivated (CHANNEL_MEMBER_ACTIVE_UPDATED, as a DM's reopening
+    publishes). Their sockets enter the channel's room, so live events start
+    at once, and their other tabs refetch the channel list, where it now
+    shows as joined. Does nothing for a member."""
+    if await Channels.is_user_channel_member(channel.id, user.id, db=db):
         return
-    await Channels.join_channel(channel.id, user_id, db=db)
-    await Channels.update_member_active_status(channel.id, user_id, True, db=db)
-    await enter_room_for_users(f'channel:{channel.id}', [user_id])
-    await emit_to_users('events:channel', {'data': {'type': 'channel:created'}}, [user_id])
+    existing = await Channels.get_member_by_channel_and_user_id(channel.id, user.id, db=db)
+    await Channels.join_channel(channel.id, user.id, db=db)
+    await Channels.update_member_active_status(channel.id, user.id, True, db=db)
+    await enter_room_for_users(f'channel:{channel.id}', [user.id])
+    await emit_to_users('events:channel', {'data': {'type': 'channel:created'}}, [user.id])
+    if existing:
+        await publish_event(
+            request, EVENTS.CHANNEL_MEMBER_ACTIVE_UPDATED, actor=user, subject_id=channel.id, data={'is_active': True}
+        )
+    else:
+        await publish_event(
+            request,
+            EVENTS.CHANNEL_MEMBER_ADDED,
+            actor=user,
+            subject_id=channel.id,
+            data={'user_ids': [user.id], 'group_ids': []},
+        )
 
 
 async def get_channel_users_with_access(
@@ -202,7 +225,7 @@ class ChannelListItemResponse(ChannelModel):
     users: list[UserIdNameStatusResponse] | None = None  # 'dm' channels only
 
     # False for a public group channel the user has not joined (#331);
-    # opening it joins it.
+    # the channel page joins it when opened (POST /{id}/join).
     is_member: bool = True
 
     last_message_at: int | None = None  # timestamp in epoch (time_ns)
@@ -362,6 +385,10 @@ async def create_new_channel(
         form_data.access_grants,
         'sharing.public_channels',
     )
+    # A public group channel needs the permission a public grant needs; like
+    # a disallowed public grant, the request is kept and made private (#331).
+    if form_data.is_private is False and not await may_make_group_channel_public(user):
+        form_data.is_private = True
 
     try:
         if form_data.type == 'dm':
@@ -423,6 +450,9 @@ class ChannelFullResponse(ChannelResponse):
     user_ids: list[str] | None = None  # 'group'/'dm' channels only
     users: list[UserIdNameStatusResponse] | None = None  # 'group'/'dm' channels only
 
+    # False for a public group channel the user reads without having joined (#331).
+    is_member: bool = True
+
     last_read_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
@@ -443,9 +473,10 @@ async def get_channel_by_id(
     users = None
 
     if channel.type in ['group', 'dm']:
-        # Opening a public group channel joins it (#331).
-        await join_public_group_channel(channel, user.id, db=db)
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        # A non-member reads a public group channel without joining it; the
+        # page joins through POST /{id}/join (#331).
+        is_member = await Channels.is_user_channel_member(channel.id, user.id, db=db)
+        if not is_member and not is_public_group_channel(channel):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
         member_user_ids = [member.user_id for member in await Channels.get_members_by_channel_id(channel.id, db=db)]
@@ -472,7 +503,8 @@ async def get_channel_by_id(
                 'user_ids': user_ids,
                 'users': users,
                 'is_manager': await Channels.is_user_channel_manager(channel.id, user.id, db=db),
-                'write_access': True,
+                'write_access': is_member,
+                'is_member': is_member,
                 'user_count': len(users),
                 'last_read_at': channel_member.last_read_at if channel_member else None,
                 'unread_count': unread_count,
@@ -515,6 +547,33 @@ async def get_channel_by_id(
                 'unread_count': unread_count,
             }
         )
+
+
+############################
+# JoinChannelById
+############################
+
+
+@router.post('/{id}/join', response_model=bool)
+async def join_channel_by_id(
+    request: Request,
+    id: str,
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Join a public group channel (#331), which the channel page does when a
+    non-member opens one. A POST, so a link from another site cannot join
+    anyone. A member gets true and nothing changes; other channels refuse."""
+    await check_channels_access(request, user)
+    channel = await Channels.get_channel_by_id(id, db=db)
+    if not channel or channel.deleted_at or channel.archived_at:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    if not is_public_group_channel(channel):
+        if await Channels.is_user_channel_member(channel.id, user.id, db=db):
+            return True
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
+    await join_public_group_channel(request, channel, user, db=db)
+    return True
 
 
 ############################
@@ -779,6 +838,9 @@ async def update_channel_by_id(
         form_data.access_grants,
         'sharing.public_channels',
     )
+    # As on create: without sharing.public_channels a group channel is saved private (#331).
+    if form_data.is_private is False and not await may_make_group_channel_public(user):
+        form_data.is_private = True
 
     try:
         channel = await Channels.update_channel_by_id(id, form_data, db=db)

@@ -255,7 +255,7 @@ class ChannelWebhookForm(BaseModel):
 
 def is_public_group_channel(channel) -> bool:
     """A group channel saved as visible to all users (#331): listed to and
-    readable by everyone who may use channels, and joined by opening it.
+    readable by everyone who may use channels, and joinable (POST /{id}/join).
     Only an explicit false counts: rows from before the setting was read
     hold null, and they stay members-only, as do DMs."""
     return channel.type == 'group' and channel.is_private is False

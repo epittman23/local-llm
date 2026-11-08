@@ -540,7 +540,10 @@ const TYPE_LABEL: Record<ChannelFormValue['type'], string> = {
  * Ports layout/Sidebar/ChannelModal.svelte: create a channel (an admin may
  * also create a standard, permission-based one; everyone may create a group
  * channel or a DM), or edit one, with its webhooks and delete. `onSubmit` gets
- * the payload the API takes and returns whether it saved.
+ * the payload the API takes and returns whether it saved. A group channel can
+ * be made Public only with `sharing.public_channels` (admins always), and
+ * turning a private one public asks first, since its whole history becomes
+ * readable to everyone who may use channels (#331).
  */
 export function ChannelFormDialog({
 	open,
@@ -555,6 +558,8 @@ export function ChannelFormDialog({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+	const sharePublic = useAuthStore((s) => Boolean(s.user?.permissions?.sharing?.public_channels));
+	const canMakePublic = isAdmin || sharePublic;
 	const navigate = useNavigate();
 	const location = useLocation();
 	const edit = Boolean(channel);
@@ -568,6 +573,7 @@ export function ChannelFormDialog({
 	});
 	const [saving, setSaving] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [confirmPublic, setConfirmPublic] = useState(false);
 	const [showWebhooks, setShowWebhooks] = useState(false);
 
 	useEffect(() => {
@@ -583,8 +589,7 @@ export function ChannelFormDialog({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open, channel]);
 
-	const submit = async (e: React.FormEvent) => {
-		e.preventDefault();
+	const save = async () => {
 		const result = channelPayload(value);
 		if ('error' in result) {
 			toast.error(result.error);
@@ -594,6 +599,20 @@ export function ChannelFormDialog({
 		const ok = await onSubmit(result.payload);
 		setSaving(false);
 		if (ok) onOpenChange(false);
+	};
+
+	const submit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		const result = channelPayload(value);
+		if ('error' in result) {
+			toast.error(result.error);
+			return;
+		}
+		if (edit && value.type === 'group' && !value.isPrivate && channel?.is_private !== false) {
+			setConfirmPublic(true);
+			return;
+		}
+		await save();
 	};
 
 	const remove = async () => {
@@ -667,11 +686,20 @@ export function ChannelFormDialog({
 								onChange={(e) => setValue((v) => ({ ...v, isPrivate: e.target.value === 'private' }))}
 							>
 								<option value="private">Private</option>
-								<option value="public">Public</option>
+								<option value="public" disabled={!canMakePublic}>
+									Public
+								</option>
 							</select>
 							<p className="text-muted-foreground text-xs">
 								{value.isPrivate ? 'Only invited users can access' : 'Visible to all users'}
 							</p>
+							{!canMakePublic && (
+								<p className="text-muted-foreground text-xs">
+									{value.isPrivate
+										? 'Making a channel public needs a permission from an admin.'
+										: 'You may not keep this channel public: saving makes it private.'}
+								</p>
+							)}
 						</div>
 					)}
 					{value.type === 'dm' && (
@@ -705,6 +733,15 @@ export function ChannelFormDialog({
 						</Button>
 					</DialogFooter>
 				</form>
+				<ConfirmDialog
+					open={confirmPublic}
+					onOpenChange={setConfirmPublic}
+					title="Make channel public?"
+					confirmLabel="Make public"
+					onConfirm={save}
+				>
+					Everyone who may use channels will be able to find this channel and read its whole history, and join it.
+				</ConfirmDialog>
 				<ConfirmDialog
 					open={confirmDelete}
 					onOpenChange={setConfirmDelete}

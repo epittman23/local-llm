@@ -15,6 +15,7 @@ import {
 	encodeMention,
 	encodeMentions,
 	isPublicChannel,
+	joinsOnOpen,
 	markRead,
 	mentionQuery,
 	mentionsToText,
@@ -349,6 +350,14 @@ describe('the channel list', () => {
 			'g',
 			'd'
 		]);
+	});
+	it('joins on open only a public group channel the viewer is not a member of (#331)', () => {
+		expect(joinsOnOpen({ type: 'group', is_private: false, is_member: false })).toBe(true);
+		expect(joinsOnOpen({ type: 'group', is_private: false, is_member: true })).toBe(false);
+		expect(joinsOnOpen({ type: 'group', is_private: true, is_member: false })).toBe(false);
+		expect(joinsOnOpen({ type: 'group', is_private: null, is_member: false })).toBe(false);
+		expect(joinsOnOpen({ type: 'dm', is_private: false, is_member: false })).toBe(false);
+		expect(joinsOnOpen(null)).toBe(false);
 	});
 	it('reads public from a group flag, else from a public read grant', () => {
 		expect(isPublicChannel({ type: 'group', is_private: false })).toBe(true);

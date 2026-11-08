@@ -4,9 +4,12 @@ The channel dialog offered "Visible to all users" and the server stored
 `is_private`, but nothing read it: a group channel was listed to and readable
 by its members only. Now a group channel saved with `is_private` false is
 listed to everyone who may use channels (marked as not joined), its history
-is readable by them, and opening it (GET /channels/{id}) joins them. Posting,
-reacting and pinning still need membership. Private group channels, DMs and
-group channels saved before (`is_private` null) keep members-only access.
+is readable by them without joining, and POST /channels/{id}/join (which the
+channel page sends when a non-member opens one) joins them. Posting, reacting
+and pinning still need membership. Making a group channel public takes
+`sharing.public_channels`, as every public_* sharing key does. Private group
+channels, DMs and group channels saved before (`is_private` null) keep
+members-only access.
 
 Runs against the suite's temporary SQLite database, calling the route
 functions directly, with the channels feature check, events and socket calls
@@ -48,10 +51,13 @@ for module in pkgutil.iter_modules(models_pkg.__path__):
 @pytest.fixture
 def sockets(monkeypatch):
     """Records the rooms users are put in and the events sent to users."""
-    recorded = SimpleNamespace(rooms=[], to_users=[])
+    recorded = SimpleNamespace(rooms=[], to_users=[], events=[])
 
     async def nothing(*_a, **_k):
         return None
+
+    async def publish_event(request, event, **kwargs):
+        recorded.events.append((event, kwargs.get('actor').id if kwargs.get('actor') else None, kwargs))
 
     async def enter_room_for_users(room, user_ids):
         recorded.rooms.append((room, list(user_ids)))
@@ -60,7 +66,7 @@ def sockets(monkeypatch):
         recorded.to_users.append((data, list(user_ids)))
 
     monkeypatch.setattr(channels_router, 'check_channels_access', nothing)
-    monkeypatch.setattr(channels_router, 'publish_event', nothing)
+    monkeypatch.setattr(channels_router, 'publish_event', publish_event)
     monkeypatch.setattr(channels_router, 'prune_channel_room', nothing)
     monkeypatch.setattr(channels_router.sio, 'emit', nothing)
     monkeypatch.setattr(channels_router, 'enter_room_for_users', enter_room_for_users)
@@ -194,54 +200,95 @@ def test_reading_a_public_group_does_not_make_a_member(sockets):
     assert _run(scenario) is False
 
 
-def test_posting_needs_a_join_which_opening_does(sockets):
+async def _open(channel, user):
+    return await channels_router.get_channel_by_id(None, channel.id, user=user, db=None)
+
+
+async def _join(channel, user):
+    return await _status(channels_router.join_channel_by_id(None, channel.id, user=user, db=None))
+
+
+def test_opening_a_public_group_reads_it_without_joining(sockets):
+    async def scenario():
+        w = await _world()
+        opened = await _open(w.public, w.outsider)
+        return w, opened, await Channels.is_user_channel_member(w.public.id, w.outsider.id)
+
+    w, opened, member = _run(scenario)
+
+    assert opened.is_member is False
+    assert opened.write_access is False
+    assert w.outsider.id not in opened.user_ids
+    assert member is False
+    assert sockets.rooms == []
+    assert sockets.events == []
+
+
+def test_posting_needs_a_join_which_the_join_route_does(sockets):
     async def scenario():
         w = await _world()
         before = (await _post(w.public, w.outsider), await _react(w.public, w.outsider))
-        opened = await channels_router.get_channel_by_id(None, w.public.id, user=w.outsider, db=None)
+        joined = await _join(w.public, w.outsider)
+        opened = await _open(w.public, w.outsider)
         after = (await _post(w.public, w.outsider), await _react(w.public, w.outsider))
         listed = _listed(await channels_router.get_channels(None, user=w.outsider, db=None))
-        return w, before, opened, after, listed
+        again = await _join(w.public, w.outsider)
+        return w, before, joined, opened, after, listed, again
 
-    w, before, opened, after, listed = _run(scenario)
+    w, before, joined, opened, after, listed, again = _run(scenario)
 
     assert before == (403, 403)
-    assert opened.write_access is True
+    assert joined == 200
+    assert (opened.is_member, opened.write_access) == (True, True)
     assert w.outsider.id in opened.user_ids
     assert after == (200, 200)
     assert listed[w.public.id] is True
     # Live events start at once, and the viewer's other tabs refresh their list.
     assert (f'channel:{w.public.id}', [w.outsider.id]) in sockets.rooms
     assert any(ids == [w.outsider.id] for _data, ids in sockets.to_users)
+    # The member event add-members publishes, once: joining again changes nothing.
+    added = [e for e in sockets.events if e[0] == channels_router.EVENTS.CHANNEL_MEMBER_ADDED]
+    assert [(actor, kw['subject_id'], kw['data']) for _e, actor, kw in added] == [
+        (w.outsider.id, w.public.id, {'user_ids': [w.outsider.id], 'group_ids': []})
+    ]
+    assert again == 200
 
 
-def test_opening_a_channel_that_is_not_public_joins_no_one(sockets):
+def test_joining_a_channel_that_is_not_public_is_refused(sockets):
     async def scenario():
         w = await _world()
-        statuses = [
-            await _status(channels_router.get_channel_by_id(None, c.id, user=w.outsider, db=None))
-            for c in (w.private, w.legacy, w.dm)
-        ]
+        statuses = [await _status(_open(c, w.outsider)) for c in (w.private, w.legacy, w.dm)]
+        joins = [await _join(c, w.outsider) for c in (w.private, w.legacy, w.dm)]
         members = [await Channels.is_user_channel_member(c.id, w.outsider.id) for c in (w.private, w.legacy, w.dm)]
         posts = [await _post(c, w.outsider) for c in (w.private, w.legacy, w.dm)]
-        return statuses, members, posts
+        # A member of a private channel "joining" it is a no-op.
+        return statuses, joins, members, posts, await _join(w.private, w.member)
 
-    statuses, members, posts = _run(scenario)
+    statuses, joins, members, posts, member_join = _run(scenario)
 
     assert statuses == [403, 403, 403]
+    assert joins == [403, 403, 403]
     assert members == [False, False, False]
     assert posts == [403, 403, 403]
+    assert member_join == 200
+    assert sockets.events == []
 
 
-def test_opening_reactivates_an_inactive_member(sockets):
+def test_joining_reactivates_an_inactive_member(sockets):
     async def scenario():
         w = await _world()
         await Channels.update_member_active_status(w.public.id, w.member.id, False)
         before = await _post(w.public, w.member)
-        await channels_router.get_channel_by_id(None, w.public.id, user=w.member, db=None)
-        return before, await _post(w.public, w.member)
+        await _join(w.public, w.member)
+        return w, before, await _post(w.public, w.member)
 
-    assert _run(scenario) == (403, 200)
+    w, before, after = _run(scenario)
+
+    assert (before, after) == (403, 200)
+    # As a DM's reopening publishes it.
+    assert [(e, actor, kw['data']) for e, actor, kw in sockets.events] == [
+        (channels_router.EVENTS.CHANNEL_MEMBER_ACTIVE_UPDATED, w.member.id, {'is_active': True})
+    ]
 
 
 def test_a_removed_member_can_rejoin_a_public_group_but_not_a_private_one(sockets):
@@ -249,41 +296,31 @@ def test_a_removed_member_can_rejoin_a_public_group_but_not_a_private_one(socket
         w = await _world()
         for c in (w.public, w.private):
             await Channels.remove_members_from_channel(c.id, [w.member.id])
-        public = await _status(channels_router.get_channel_by_id(None, w.public.id, user=w.member, db=None))
-        private = await _status(channels_router.get_channel_by_id(None, w.private.id, user=w.member, db=None))
+        public = await _join(w.public, w.member)
+        private = await _join(w.private, w.member)
         return public, await _post(w.public, w.member), private, await _post(w.private, w.member)
 
     assert _run(scenario) == (200, 200, 403, 403)
 
 
-def test_making_a_group_private_hides_it_from_those_who_never_joined(sockets):
-    async def scenario():
-        w = await _world()
-        listed = []
-        for is_private in (True, False):
-            form = ChannelForm(name=f'renamed-{is_private}', is_private=is_private)
-            await channels_router.update_channel_by_id(None, w.public.id, form, user=w.owner, db=None)
-            listed.append(w.public.id in _listed(await channels_router.get_channels(None, user=w.outsider, db=None)))
-        return listed
-
-    assert _run(scenario) == [False, True]
-
-
 def test_live_rooms_hold_only_members(sockets):
     """The rooms a socket joins at connect come from get_channels_by_user_id:
     an unjoined public group is not among them, so its messages raise no
-    unread badge or notification for someone who never opened it."""
+    unread badge or notification for someone who never joined it."""
 
     async def scenario():
         w = await _world()
         before = {c.id for c in await Channels.get_channels_by_user_id(w.outsider.id)}
-        await channels_router.get_channel_by_id(None, w.public.id, user=w.outsider, db=None)
+        await _open(w.public, w.outsider)
+        opened = {c.id for c in await Channels.get_channels_by_user_id(w.outsider.id)}
+        await _join(w.public, w.outsider)
         after = {c.id for c in await Channels.get_channels_by_user_id(w.outsider.id)}
-        return w, before, after
+        return w, before, opened, after
 
-    w, before, after = _run(scenario)
+    w, before, opened, after = _run(scenario)
 
     assert w.public.id not in before
+    assert w.public.id not in opened
     assert w.public.id in after
 
 
@@ -339,7 +376,7 @@ def test_a_public_groups_files_are_for_those_who_may_use_channels(sockets, chann
 
 def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, channel_config, monkeypatch):
     """join-channels, with a real token: the outsider's socket is kept out of
-    the room of a public group they have not opened, so the in-room check of
+    the room of a public group they have not joined, so the in-room check of
     `events:channel` (typing, last read) refuses them there too."""
     entered: dict[str, set[str]] = {}
 
@@ -354,7 +391,9 @@ def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, channel_
         w = await _world()
         token = create_token({'id': w.outsider.id}, dt.timedelta(minutes=30))
         await socket_main.join_channel('before', {'auth': {'token': token}})
-        await channels_router.get_channel_by_id(None, w.public.id, user=w.outsider, db=None)
+        await _open(w.public, w.outsider)
+        await socket_main.join_channel('opened', {'auth': {'token': token}})
+        await _join(w.public, w.outsider)
         await socket_main.join_channel('after', {'auth': {'token': token}})
         return w
 
@@ -362,6 +401,61 @@ def test_a_socket_enters_a_public_groups_room_only_once_joined(sockets, channel_
 
     room = f'channel:{w.public.id}'
     assert room not in entered.get('before', set())
+    assert room not in entered.get('opened', set())
     assert room in entered['after']
     for hidden in (w.private, w.legacy, w.dm):
         assert f'channel:{hidden.id}' not in entered['after']
+
+
+@pytest.mark.parametrize(
+    ('who', 'public'),
+    [('permitted user', True), ('user without the permission', False), ('admin', True)],
+)
+def test_making_a_group_public_takes_the_sharing_permission(sockets, channel_config, who, public):
+    """Create and update alike: without sharing.public_channels the channel is
+    saved private, as a disallowed public grant is dropped from a note."""
+    channel_config['user.permissions']['sharing']['public_channels'] = who == 'permitted user'
+
+    async def scenario():
+        w = await _world()
+        user = w.owner
+        if who == 'admin':
+            user = await Users.insert_new_user(
+                f'admin{uuid.uuid4().hex[:8]}', 'Admin', f'a{uuid.uuid4().hex[:8]}@example.invalid', role='admin'
+            )
+        created = await channels_router.create_new_channel(
+            None, CreateChannelForm(type='group', name='lobby', is_private=False), user=user, db=None
+        )
+        updated = await channels_router.update_channel_by_id(
+            None, w.private.id, ChannelForm(name='renamed', is_private=False), user=user, db=None
+        )
+        listed = _listed(await channels_router.get_channels(None, user=w.outsider, db=None))
+        return created, updated, listed
+
+    created, updated, listed = _run(scenario)
+
+    assert created.is_private is (not public)
+    assert updated.is_private is (not public)
+    assert (created.id in listed, updated.id in listed) == (public, public)
+
+
+def test_making_a_group_private_hides_it_from_those_who_never_joined(sockets, channel_config):
+    channel_config['user.permissions']['sharing']['public_channels'] = True
+
+    async def scenario():
+        w = await _world()
+        listed = []
+        for is_private in (True, False):
+            form = ChannelForm(name=f'renamed-{is_private}', is_private=is_private)
+            await channels_router.update_channel_by_id(None, w.public.id, form, user=w.owner, db=None)
+            listed.append(w.public.id in _listed(await channels_router.get_channels(None, user=w.outsider, db=None)))
+        return listed
+
+    assert _run(scenario) == [False, True]
+
+
+def test_the_permission_is_registered_and_off_by_default():
+    from local_llm.routers.users import SharingPermissions
+
+    assert DEFAULT_USER_PERMISSIONS['sharing']['public_channels'] is False
+    assert SharingPermissions().public_channels is False

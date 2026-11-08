@@ -41,6 +41,12 @@ describe('visibleRows', () => {
 		expect(rows({ chat: { share: true } })).toContain('sharing.open_chats');
 		expect(rows({ features: { calendar: false } })).not.toContain('sharing.public_calendars');
 	});
+	it('ties public group channels to the Channels feature (#331)', () => {
+		const rows = (p: Record<string, unknown>) =>
+			keys(visibleRows(section('Sharing Permissions'), withDefaults(p), ctx));
+		expect(rows({ features: { channels: false } })).not.toContain('sharing.public_channels');
+		expect(rows({ features: { channels: true } })).toContain('sharing.public_channels');
+	});
 	it('hides chat valves/system prompt/params without Chat Controls, and Enforce without Temporary', () => {
 		const rows = (p: Record<string, unknown>) => keys(visibleRows(section('Chat Permissions'), withDefaults(p), ctx));
 		expect(rows({ chat: { controls: false } })).not.toContain('chat.valves');

@@ -7,22 +7,27 @@ import type { Channel } from './channelModel';
 import { SidebarChannels } from './SidebarChannels';
 
 // A group channel saved as Public is listed to everyone who may use
-// channels, marked as not joined, and opening it joins it (#331). The
-// server's side (listing, reading, the join, who may post) is in
+// channels, marked as not joined, and the channel page joins it when opened
+// (#331). Making one public takes sharing.public_channels, and turning a
+// private one public asks first. The server's side (listing, reading, the
+// join, who may post, the permission) is in
 // apps/server/tests/test_channel_public_groups.py.
 
-const { createNewChannel, list } = vi.hoisted(() => ({
+const { createNewChannel, updateChannelById, list, me } = vi.hoisted(() => ({
 	createNewChannel: vi.fn(async () => ({ id: 'new' })),
-	list: { current: [] as Channel[] }
+	updateChannelById: vi.fn(async () => ({ id: 'team' })),
+	list: { current: [] as Channel[] },
+	me: { current: { id: 'me', name: 'Me', role: 'user', permissions: {} } as Record<string, unknown> }
 }));
 
 vi.mock('@/lib/stores/authStore', () => ({
-	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'me', name: 'Me', role: 'user' } })
+	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: me.current })
 }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket: null }) }));
 vi.mock('@/lib/apis/channels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	createNewChannel
+	createNewChannel,
+	updateChannelById
 }));
 vi.mock('./useChannels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -51,9 +56,14 @@ const show = () =>
 		</QueryClientProvider>
 	);
 
+const permitted = (allowed: boolean) => {
+	me.current = { id: 'me', name: 'Me', role: 'user', permissions: { sharing: { public_channels: allowed } } };
+};
+
 afterEach(() => {
 	cleanup();
 	createNewChannel.mockClear();
+	updateChannelById.mockClear();
 });
 
 describe('public group channels in the sidebar', () => {
@@ -80,8 +90,9 @@ describe('public group channels in the sidebar', () => {
 		expect(screen.getByRole('link', { name: /lobby/ }).textContent).not.toContain('Join');
 	});
 
-	it('creates a group channel as Public when that is chosen', async () => {
+	it('creates a group channel as Public when that is chosen and permitted', async () => {
 		list.current = [];
+		permitted(true);
 		show();
 		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
 
@@ -97,5 +108,43 @@ describe('public group channels in the sidebar', () => {
 			't',
 			expect.objectContaining({ type: 'group', name: 'lobby', is_private: false })
 		]);
+	});
+
+	it('offers Public only to those with sharing.public_channels', async () => {
+		list.current = [];
+		permitted(false);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
+		await screen.findByLabelText(/Channel Name/);
+		const option = screen.getByRole('option', { name: 'Public' }) as HTMLOptionElement;
+		expect(option.disabled).toBe(true);
+		expect(screen.getByText('Making a channel public needs a permission from an admin.')).toBeTruthy();
+	});
+
+	it('asks before turning a private channel public, and saves only once confirmed', async () => {
+		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
+		fireEvent.change(await screen.findByLabelText('Visibility'), { target: { value: 'public' } });
+		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+
+		expect(await screen.findByText(/read its whole history/)).toBeTruthy();
+		expect(updateChannelById).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Make public' }));
+
+		await waitFor(() => expect(updateChannelById).toHaveBeenCalled());
+		expect(updateChannelById.mock.calls[0]).toEqual(['t', 'team', expect.objectContaining({ is_private: false })]);
+	});
+
+	it('does not ask again when a public channel stays public', async () => {
+		list.current = [group('lobby', { is_private: false, is_member: true, user_id: 'me' })];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
+		await screen.findByLabelText('Visibility');
+		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+		await waitFor(() => expect(updateChannelById).toHaveBeenCalled());
+		expect(screen.queryByText(/read its whole history/)).toBeNull();
 	});
 });

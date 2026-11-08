@@ -50,7 +50,7 @@ export type Channel = {
 	is_manager?: boolean;
 	unread_count?: number;
 	last_message_at?: number | null;
-	/** The list's: false for a public group channel the viewer has not joined (#331). */
+	/** False for a public group channel the viewer reads without having joined (#331). */
 	is_member?: boolean;
 };
 export type ChannelEvent = {
@@ -402,6 +402,10 @@ export function isPublicChannel(
 	if (channel?.type === 'group' && typeof channel.is_private === 'boolean') return !channel.is_private;
 	return publicReadGrant(channel?.access_grants);
 }
+
+/** A public group channel the viewer has opened without being a member: the page joins it (#331). */
+export const joinsOnOpen = (channel: Pick<Channel, 'type' | 'is_private' | 'is_member'> | null | undefined) =>
+	channel?.type === 'group' && channel.is_private === false && channel.is_member === false;
 
 /**
  * The channel list after a socket event, for the sidebar's unread counts
