@@ -12,7 +12,8 @@ loaded model it did not change, and loads one that differs from the model
 loaded, and that a blank local model is refused (#532).
 
 A batch size below 1, or none, is refused before anything changes too:
-once saved it failed every embedding (#353).
+once saved it failed every embedding (#353). So is a negative number of
+concurrent requests, which failed every external list embedding (#638).
 """
 
 import asyncio
@@ -299,3 +300,53 @@ def test_a_batch_size_of_1_or_more_is_saved(stored, monkeypatch):
 
     _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=64)
     assert stored['rag.embedding_batch_size'] == 64
+
+
+def _external(**form):
+    return {
+        'RAG_EMBEDDING_ENGINE': 'openai',
+        'RAG_EMBEDDING_MODEL': 'text-embedding-3-small',
+        'openai_config': {'url': 'https://api.openai.com/v1', 'key': 'k'},
+        **form,
+    }
+
+
+@pytest.mark.parametrize('concurrent', [-1, -5])
+def test_negative_concurrent_requests_for_an_external_engine_are_refused_and_nothing_changes(
+    stored, monkeypatch, concurrent
+):
+    """A saved -1 made asyncio.Semaphore raise on every external list embedding (#638)."""
+    _loader(monkeypatch, fails=False)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, **_external(RAG_EMBEDDING_CONCURRENT_REQUESTS=concurrent))
+
+    assert raised.value.status_code == 400
+    assert 'Embedding Concurrent Requests must be a whole number of at least 0' in raised.value.detail
+    assert stored == {}
+    assert request.app.state.ef is OLD_EF
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+@pytest.mark.parametrize('concurrent', [0, 4])
+def test_concurrent_requests_of_0_or_more_are_saved(stored, monkeypatch, concurrent):
+    _loader(monkeypatch, fails=False)
+
+    _update(_request(), **_external(RAG_EMBEDDING_CONCURRENT_REQUESTS=concurrent))
+    assert stored['rag.embedding_concurrent_requests'] == concurrent
+
+
+def test_the_local_engine_saves_despite_negative_concurrent_requests_it_does_not_use(stored, monkeypatch):
+    """Documents hides the field for the local engine and sends the stored value (an
+    environment -1, say), so refusing it would block every save; it is replaced at use (#638)."""
+    _loader(monkeypatch, fails=False)
+
+    _update(
+        _request(),
+        RAG_EMBEDDING_ENGINE='',
+        RAG_EMBEDDING_MODEL='new/model',
+        RAG_EMBEDDING_BATCH_SIZE=1,
+        RAG_EMBEDDING_CONCURRENT_REQUESTS=-1,
+    )
+    assert stored['rag.embedding_model'] == 'new/model'
