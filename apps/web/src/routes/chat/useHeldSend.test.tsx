@@ -1,5 +1,7 @@
 // A send made before the page can send waits in the box, then the box is
 // submitted again, with what it holds then; another chat drops it (#373).
+// Meanwhile the box says so, and it can be called off; `?q=` goes through the
+// same wait (#659).
 import { act, renderHook } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,7 +19,7 @@ describe('useHeldSend (#373)', () => {
 	it('sends at once when the page can send', () => {
 		const { send, resubmit, result } = setup(true);
 
-		expect(result.current('hi', [])).toBe(true);
+		expect(result.current.send('hi', [])).toBe(true);
 		expect(send).toHaveBeenCalledWith('hi', []);
 		expect(resubmit).not.toHaveBeenCalled();
 	});
@@ -26,7 +28,7 @@ describe('useHeldSend (#373)', () => {
 		const { send, resubmit, props, result, rerender } = setup();
 		let kept: boolean | undefined;
 		act(() => {
-			kept = result.current('typed early', []);
+			kept = result.current.send('typed early', []);
 		});
 		expect(kept).toBe(false);
 		expect(send).not.toHaveBeenCalled();
@@ -54,7 +56,7 @@ describe('useHeldSend (#373)', () => {
 					'new:',
 					() => true,
 					() => seen.push(defaultsIn)
-				);
+				).send;
 			},
 			{ initialProps: { ready: false } }
 		);
@@ -69,7 +71,7 @@ describe('useHeldSend (#373)', () => {
 	it('drops a held send when the route moves to another chat', () => {
 		const { resubmit, props, result, rerender } = setup();
 		act(() => {
-			result.current('meant for a new chat', []);
+			result.current.send('meant for a new chat', []);
 		});
 
 		props.route = 'c2';
@@ -82,12 +84,76 @@ describe('useHeldSend (#373)', () => {
 	it('holds one send however often Enter is pressed', () => {
 		const { resubmit, props, result, rerender } = setup();
 		act(() => {
-			result.current('one', []);
-			result.current('one', []);
+			result.current.send('one', []);
+			result.current.send('one', []);
 		});
 
 		props.ready = true;
 		rerender();
 		expect(resubmit).toHaveBeenCalledTimes(1);
+	});
+
+	it('says a send is waiting while the page cannot send yet, and not once it can', () => {
+		const { props, result, rerender } = setup();
+		expect(result.current.waiting).toBe(false);
+		act(() => {
+			result.current.send('typed early', []);
+		});
+		expect(result.current.waiting).toBe(true);
+
+		props.ready = true;
+		rerender();
+		expect(result.current.waiting).toBe(false);
+	});
+
+	it('can be called off', () => {
+		const { resubmit, props, result, rerender } = setup();
+		act(() => {
+			result.current.send('typed early', []);
+		});
+		act(() => result.current.cancel());
+		expect(result.current.waiting).toBe(false);
+
+		props.ready = true;
+		rerender();
+		expect(resubmit).not.toHaveBeenCalled();
+	});
+
+	it('no longer says a send is waiting once the route moves to another chat', () => {
+		const { props, result, rerender } = setup();
+		act(() => {
+			result.current.send('meant for a new chat', []);
+		});
+		props.route = 'c2';
+		rerender();
+		expect(result.current.waiting).toBe(false);
+	});
+
+	it('holds a send made as the models land, so their default tools are in (`?q=`)', () => {
+		const seen: boolean[] = [];
+		const { rerender } = renderHook(
+			({ ready }) => {
+				// The defaults effect and the `?q=` effect both run in the commit the pick lands in.
+				const [defaultsIn, setDefaultsIn] = useState(false);
+				useEffect(() => {
+					if (ready) setDefaultsIn(true);
+				}, [ready]);
+				const held = useHeldSend(
+					ready,
+					'new:',
+					() => true,
+					() => seen.push(defaultsIn)
+				);
+				const { hold } = held;
+				useEffect(() => {
+					if (ready) hold();
+				}, [ready, hold]);
+				return held;
+			},
+			{ initialProps: { ready: false } }
+		);
+
+		rerender({ ready: true });
+		expect(seen).toEqual([true]);
 	});
 });

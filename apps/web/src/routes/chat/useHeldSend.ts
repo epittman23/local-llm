@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatFile } from '@/lib/chat/history';
 
 type Send = (text: string, files: ChatFile[]) => boolean;
@@ -12,8 +12,13 @@ type Send = (text: string, files: ChatFile[]) => boolean;
  * `route` it was made in: moving to another chat drops it. If a file is still
  * uploading at that moment, the box holds the send in turn and sends it once
  * the upload is done (ChatInput).
+ *
+ * `waiting` says a send is held while the page cannot send yet, for the box to
+ * show, and `cancel` calls it off (#659). `hold` holds a send whatever `ready`
+ * is: `?q=` sends in the commit the models land in, before their default tools
+ * and switches are set, so it goes through the same wait.
  */
-export function useHeldSend(ready: boolean, route: string, send: Send, resubmit: () => void): Send {
+export function useHeldSend(ready: boolean, route: string, send: Send, resubmit: () => void) {
 	const [held, setHeld] = useState<{ route: string; go: boolean } | null>(null);
 	const latest = useRef(resubmit);
 	latest.current = resubmit;
@@ -26,9 +31,16 @@ export function useHeldSend(ready: boolean, route: string, send: Send, resubmit:
 		setHeld(null);
 		latest.current();
 	}, [ready, route, held]);
-	return (text, files) => {
-		if (ready) return send(text, files);
-		setHeld({ route, go: false });
-		return false;
+	const hold = useCallback(() => setHeld({ route, go: false }), [route]);
+	const cancel = useCallback(() => setHeld(null), []);
+	return {
+		send: (text: string, files: ChatFile[]) => {
+			if (ready) return send(text, files);
+			hold();
+			return false;
+		},
+		hold,
+		cancel,
+		waiting: held?.route === route && !ready
 	};
 }
