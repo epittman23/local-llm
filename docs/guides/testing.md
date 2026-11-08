@@ -19,7 +19,7 @@ The root Makefile mirrors CI job for job, with the same commands:
 | Target | CI job | What it runs |
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
-| `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
+| `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history); from a linked git worktree it also mounts the common git dir, so the scan sees the full history |
 | `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check` (through `.github/scripts/astro_check.py`, which also fails a run that printed no summary: `astro check` exits 0 when it cannot load its checker), `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
