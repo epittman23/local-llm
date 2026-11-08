@@ -32,9 +32,22 @@ describe('classifyOpen', () => {
 describe('isAllowedPermission', () => {
 	it('grants the app’s few permissions to its own origin only', () => {
 		expect(isAllowedPermission('notifications', 'http://127.0.0.1:4000/c/1', app)).toBe(true);
-		expect(isAllowedPermission('media', app, app)).toBe(true);
+		expect(isAllowedPermission('media', app, app, ['audio'])).toBe(true);
 		expect(isAllowedPermission('clipboard-sanitized-write', app, app)).toBe(true);
 		expect(isAllowedPermission('notifications', 'https://evil.example', app)).toBe(false);
+	});
+
+	it('grants media for audio only, never the camera', () => {
+		expect(isAllowedPermission('media', app, app, ['audio'])).toBe(true);
+		expect(isAllowedPermission('media', app, app, ['video'])).toBe(false);
+		expect(isAllowedPermission('media', app, app, ['audio', 'video'])).toBe(false);
+		expect(isAllowedPermission('media', app, app, ['unknown'])).toBe(false);
+		expect(isAllowedPermission('media', app, app)).toBe(false);
+		expect(isAllowedPermission('media', app, app, [])).toBe(false);
+	});
+
+	it('refuses media to other origins even for audio', () => {
+		expect(isAllowedPermission('media', 'https://evil.example', app, ['audio'])).toBe(false);
 	});
 
 	it('refuses the rest even to the app', () => {

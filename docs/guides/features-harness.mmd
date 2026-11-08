@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  participant T as Tests run (API only)
+  participant R as runner.py
+  participant H as harness.py
+  participant P as Chat pipeline
+  participant G as upstream_trace guard
+  participant L as llama-server :8090
+  participant J as Jupyter :8888
+  participant DB as Postgres
+
+  T->>R: tier run or one item, with harness_model
+  alt no harness_model (bare mode)
+    R->>L: item straight to /v1/chat/completions
+    L-->>R: answer and llama.cpp timings
+  else harness_model set
+    R->>H: prepare(model entry, port)
+    H->>J: liveness check
+    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or Jupyter down
+    R->>H: ask(item prompt)
+    H->>P: process_chat_payload with a temporary chat id and native calling
+    P-->>H: tools offered
+    H->>P: tools cut to execute_code only, then generate_chat_completion
+    loop at most 8 tool rounds, driven by process_chat_response
+      P->>G: upstream request
+      G->>L: sent only if its host is 127.0.0.1 on the served port
+      L-->>P: streamed reply, maybe an execute_code call
+      P->>J: execute_code runs the block in a fresh kernel
+      J-->>P: stdout, stderr, result
+    end
+    P-->>H: assistant message
+    H-->>R: text after the last code run, full output, harness_stats
+    R->>R: spec read from the first upstream request, its sha is harness_sha
+    R-->>T: run stops if the spec changes between items
+  end
+  R->>R: grade with the dataset's own tests
+  R->>DB: benchmark_result and benchmark_answer, plus benchmark_harness for the sha

@@ -35,7 +35,7 @@ EXTERNAL = {
 }
 
 
-def _run(monkeypatch, items):
+def _run(monkeypatch, items, failures=None):
     async def config_get(key, default=None):
         return False
 
@@ -64,6 +64,7 @@ def _run(monkeypatch, items):
             hybrid_bm25_weight=0.5,
             hybrid_search=False,
             user=USER,
+            failures=failures,
         )
     )
 
@@ -82,3 +83,41 @@ def test_when_every_source_fails_the_error_is_raised(monkeypatch):
     """An empty list would read as nothing relevant, when the base could not be reached."""
     with pytest.raises(RuntimeError, match='down: External knowledge connection is disabled'):
         _run(monkeypatch, [{'type': 'collection', 'id': 'down'}])
+
+
+def test_failures_are_labelled_without_the_error_and_an_external_base_generically(monkeypatch):
+    failures = []
+    _run(
+        monkeypatch,
+        [INLINE_FILE, {'type': 'collection', 'id': 'down', 'name': 'secret-host KB'}],
+        failures,
+    )
+
+    assert failures == ['external knowledge base']
+
+
+def test_no_failure_is_recorded_when_nothing_fails(monkeypatch):
+    failures = []
+    _run(monkeypatch, [INLINE_FILE, {'type': 'collection', 'id': 'up'}], failures)
+
+    assert failures == []
+
+
+def test_failures_are_filled_when_every_source_fails_too(monkeypatch):
+    failures = []
+    with pytest.raises(RuntimeError):
+        _run(monkeypatch, [{'type': 'collection', 'id': 'down'}], failures)
+
+    assert failures == ['external knowledge base']
+
+
+def test_an_unreadable_folder_is_skipped_and_named(monkeypatch):
+    async def broken(folder_id):
+        raise RuntimeError('database down at db.internal')
+
+    monkeypatch.setattr(retrieval.Folders, 'get_folder_by_id', broken)
+    failures = []
+    sources = _run(monkeypatch, [INLINE_FILE, {'type': 'folder', 'id': 'fo1', 'name': 'Taxes'}], failures)
+
+    assert [s['document'] for s in sources] == [['file content']]
+    assert failures == ['Taxes']
