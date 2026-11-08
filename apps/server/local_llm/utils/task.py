@@ -275,6 +275,7 @@ async def fill_task_template(
     messages: list[dict] | None = None,
     fill_messages: bool = True,
     literals: dict[str, str] | None = None,
+    message_variables: dict[str, list[dict]] | None = None,
 ) -> str:
     """A task prompt: the user's text, and the template's own variables, each filled in once.
 
@@ -288,6 +289,8 @@ async def fill_task_template(
     swapped back last, in one pass. So the user's text is never read for
     placeholders, a value filled in (a bio, say) is never read for the
     prompt or messages ones, and the tokens carry a nonce no text can guess.
+    `message_variables` fills more messages placeholders the same way, such
+    as context compaction's {{COMPACTED_MESSAGES}} (#648).
     """
     nonce = uuid.uuid4().hex
     pieces: list[str] = []
@@ -302,6 +305,8 @@ async def fill_task_template(
     template = replace_prompt_variable(template, prompt or '', wrap=keep)
     if fill_messages:
         template = replace_messages_variable(template, messages, wrap=keep)
+    for variable_name, variable_messages in (message_variables or {}).items():
+        template = replace_messages_variable(template, variable_messages, variable_name, wrap=keep)
     template = await prompt_template(template, user)
     return re.sub(f'\x00{nonce}:(\\d+)\x00', lambda m: pieces[int(m.group(1))], template)
 
@@ -384,39 +389,9 @@ async def query_generation_template(template: str, messages: list[dict], user: A
     return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
-def moa_response_generation_template(template: str, prompt: str, responses: list[str]) -> str:
-    def replacement_function(match):
-        full_match = match.group(0)
-        start_length = match.group(1)
-        end_length = match.group(2)
-        middle_length = match.group(3)
-
-        if full_match == '{{prompt}}':
-            return prompt
-        elif start_length is not None:
-            return prompt[: int(start_length)]
-        elif end_length is not None:
-            return prompt[-int(end_length) :]
-        elif middle_length is not None:
-            middle_length = int(middle_length)
-            if len(prompt) <= middle_length:
-                return prompt
-            start = prompt[: math.ceil(middle_length / 2)]
-            end = prompt[-math.floor(middle_length / 2) :]
-            return f'{start}...{end}'
-        return ''
-
-    template = re.sub(
-        r'{{prompt}}|{{prompt:start:(\d+)}}|{{prompt:end:(\d+)}}|{{prompt:middletruncate:(\d+)}}',
-        replacement_function,
-        template,
-    )
-
-    responses = [f'"""{response}"""' for response in responses]
-    responses = '\n\n'.join(responses)
-
-    template = template.replace('{{responses}}', responses)
-    return template
+async def moa_response_generation_template(template: str, prompt: str, responses: list[str]) -> str:
+    joined = '\n\n'.join(f'"""{response}"""' for response in responses)
+    return await fill_task_template(template, None, prompt, fill_messages=False, literals={'{{responses}}': joined})
 
 
 def tools_function_calling_generation_template(template: str, tools_specs: str) -> str:

@@ -150,7 +150,8 @@ def _diff(monkeypatch, manifest, linked):
 
     async def files_with_dirs(id, db=None):
         return [
-            (SimpleNamespace(id=f'id-{name}', filename=name, meta={'file_hash': sha}), None) for name, sha in linked
+            (SimpleNamespace(id=f'id-{name}', filename=name, hash=None, meta={'file_hash': sha}, updated_at=None), None)
+            for name, sha in linked
         ]
 
     async def no_dirs(id, db=None):

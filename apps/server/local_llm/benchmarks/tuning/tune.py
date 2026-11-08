@@ -532,6 +532,14 @@ class Cooldown:
 
     async def run(self, *, trigger: str, rnd: int | None, visit_id: int | None, drift_ratio: float | None) -> str:
         """Cool until the baseline probes clean. Returns the resolution word."""
+        # The loop below checks the budget only after an attempt, so a sweep
+        # already over it would still wait a full window and probe (#511).
+        # Nothing paused, so no pause row: 'timeout' is what the callers
+        # already treat as cooling that did not recover.
+        limit = self.sweep.budget.seconds if self.sweep.budget is not None else None
+        if self.budget_exhausted() or (limit is not None and time.time() - self.sweep.started >= limit):
+            log.warning('not cooling (%s): the time budget or its cooling share is already spent', trigger)
+            return 'timeout'
         before = await self.gpu.read()
         pause_id = await BenchmarkTunePauses.open_pause(
             self.sweep.sweep_id,
@@ -1303,7 +1311,9 @@ class Sweep:
         if mode == 'cooldown':
             mode = 'halt' if self.budget.mode == 'interactive' else 'segment'
         if mode == 'halt':
-            self.ended_reason = 'drift'
+            # A spent budget, not drift, is why nothing was tried: Cooldown.run()
+            # skips cooling once the budget is gone and reports 'timeout' (#511).
+            self.ended_reason = self.spent() or 'drift'
             log.warning('stopping: the card did not recover and this is an interactive budget')
             return False
         log.warning(
