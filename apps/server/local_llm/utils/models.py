@@ -2,6 +2,7 @@ import asyncio
 import copy
 import logging
 import sys
+from types import SimpleNamespace
 from typing import NamedTuple
 
 from fastapi import Request
@@ -536,7 +537,19 @@ async def get_filtered_models(models, user, db=None):
                     or user.id == model_info.get('user_id')
                     or model['id'] in accessible_model_ids
                 ):
-                    filtered_models.append(model)
+                    # List only what the chat check will let this user run: a
+                    # preset whose base chain they cannot use is refused there
+                    # (#835). Only presets pay for the walk.
+                    if (user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL) or not model_info.get('base_model_id'):
+                        filtered_models.append(model)
+                    elif await has_base_model_access(
+                        user.id,
+                        SimpleNamespace(id=model_info['id'], base_model_id=model_info['base_model_id']),
+                        user_role=user.role,
+                        user_group_ids=user_group_ids,
+                        db=db,
+                    ):
+                        filtered_models.append(model)
             elif user.role == 'admin':
                 # No DB entry means no access control configured yet;
                 # only admins can see unconfigured models.
