@@ -15,6 +15,7 @@ from sqlalchemy import (
     func,
     or_,
     select,
+    text,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +75,15 @@ class KnowledgeDirectory(Base):
 
     __table_args__ = (
         UniqueConstraint('knowledge_id', 'parent_id', 'name', name='uq_knowledge_directory_knowledge_parent_name'),
+        # The constraint above treats NULL parents as distinct, so the root needs its own (#634).
+        Index(
+            'uq_knowledge_directory_root_name',
+            'knowledge_id',
+            'name',
+            unique=True,
+            postgresql_where=text('parent_id IS NULL'),
+            sqlite_where=text('parent_id IS NULL'),
+        ),
         Index('ix_knowledge_directory_knowledge_id', 'knowledge_id'),
         Index('ix_knowledge_directory_parent_id', 'parent_id'),
     )
@@ -889,7 +899,8 @@ class KnowledgeTable:
         The unique constraint on (knowledge_id, parent_id, name) does not cover
         the root, since databases treat NULL parents as distinct: two root
         directories named "docs" were accepted, and the sync could only ever
-        use one of them (#312).
+        use one of them (#312). A unique index over root directories now
+        refuses the one that loses a race past this check (#634).
         """
         stmt = select(KnowledgeDirectory.id).filter(
             KnowledgeDirectory.knowledge_id == knowledge_id,
