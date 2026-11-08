@@ -291,6 +291,48 @@ def latest_pause_abandoned(pauses: list[dict]) -> bool:
     return bool(pauses) and pauses[-1]['resolution'] == 'abandoned'
 
 
+def cooling_spent(pauses: list[dict], opts: SweepOptions) -> float:
+    """Seconds of cooling a sweep's stored pauses already used (#511).
+
+    A resume rebuilds the cooling total from these rows, so it keeps what it
+    spent instead of starting a fresh share. A crashed tuner's pause is
+    closed at the moment it was reclaimed, which counts the dead time too,
+    so each pause is capped at the longest one `Cooldown.run()` can run: the
+    window doubling through every attempt.
+    """
+    longest = opts.cooldown_max * (2 ** max(1, opts.cooldown_attempts) - 1)
+    return sum(min(p['seconds'], longest) for p in pauses)
+
+
+def running_seconds(visits: list, pauses: list[dict], opts: SweepOptions) -> float:
+    """Seconds a sweep spent running before it stopped, from its stored rows (#511).
+
+    The union of its visit and pause intervals, so a gap between a stop and
+    a resume, or between two resumes, is not counted, and a pause inside a
+    visit is not counted twice. It is a lower bound: time between rows
+    (planning, round bookkeeping, port guarding) is not stored. A visit a
+    crashed tuner left open is closed at reclaim time, so its end says
+    nothing and it counts as no time; a pause is capped as in
+    `cooling_spent()`.
+    """
+    longest = opts.cooldown_max * (2 ** max(1, opts.cooldown_attempts) - 1)
+    spans = [(p['started_at'], p['started_at'] + min(p['seconds'], longest)) for p in pauses]
+    for v in visits:
+        if v.ended_at is None or (v.status == 'aborted' and v.reason in ('tuner gone', 'orphaned by a crash')):
+            continue
+        spans.append((v.started_at, v.ended_at))
+    total = 0.0
+    end = None
+    for lo, hi in sorted(spans):
+        if end is None or lo > end:
+            total += hi - lo
+            end = hi
+        elif hi > end:
+            total += hi - end
+            end = hi
+    return total
+
+
 async def reclaim_stale_runs(limit: int = 10_000) -> int:
     """Close serving runs whose recorder is gone.
 
@@ -1867,9 +1909,10 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     Only the parameters that define the search space itself are restored
     from the stored sweep row; everything operational (cooldown timing,
     drift tolerance, load timeout, the assume-*-seconds estimates, ...) has
-    no column and a resumed sweep runs it at `defaults`' values instead --
-    the same stance budget_seconds already takes (resuming does not hand
-    back the time already spent).
+    no column and a resumed sweep runs it at `defaults`' values instead.
+    The budget already spent is the exception: the cooling total is rebuilt
+    from the stored pauses and the running time from the stored visits and
+    pauses, so a resume continues against the original budget (#511).
     """
     await reclaim_stale_sweeps()
     await reclaim_stale_runs()
@@ -1923,7 +1966,11 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
         # the budget is None for that mode rather than large.
         sweep.budget.seconds = row.budget_seconds
 
-    sweep.started = time.time()
+    pauses = await BenchmarkTunePauses.sweep_pauses(sweep_id)
+    # `started` is set back by the time the sweep already ran, so the
+    # remaining budget is what is left of it, not of calendar time (#511).
+    sweep.started = time.time() - running_seconds(await BenchmarkTuneVisits.sweep_visits(sweep_id), pauses, merged)
+    sweep.cool.total_seconds = cooling_spent(pauses, merged)
     for c in await BenchmarkTuneCandidates.sweep_candidates(sweep_id):
         cand = Candidate(row.profile, c.overrides or {}, stage=c.stage, baseline=bool(c.is_baseline))
         cand.config_id = c.config_id
@@ -1941,7 +1988,7 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     # pause and no evidence about the card: the sweep was waiting on it
     # precisely because it could not be trusted, and nothing was watching in
     # between.
-    if latest_pause_abandoned(await BenchmarkTunePauses.sweep_pauses(sweep_id)):
+    if latest_pause_abandoned(pauses):
         log.warning('the last pause was abandoned (a crash or a stop); re-probing before measuring anything')
         await sweep.cool.run(trigger='drift', rnd=(len(done) or 1), visit_id=None, drift_ratio=None)
 

@@ -7,7 +7,7 @@
 // whole picture.
 
 import type { ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -78,7 +78,8 @@ import {
 	type StopResult,
 	servedLlama,
 	spawnInGroup,
-	stopGroup
+	stopGroup,
+	waitUntilReady
 } from './stack';
 
 const STATUS_HTML = join(__dirname, '..', 'static', 'status.html');
@@ -319,14 +320,24 @@ function fail(message: string): void {
 	dispatch({ type: 'fail', message, at: Date.now() });
 }
 
-async function waitReady(origin: string, signal: AbortSignal, stopped: () => string | null): Promise<void> {
-	for (;;) {
-		if (signal.aborted) throw new Cancelled();
-		const reason = stopped();
-		if (reason) throw new Error(reason);
-		if ((await probe(`${origin}/ready`)) === 200) return;
-		await sleep(500);
-	}
+async function waitReady(
+	origin: string,
+	signal: AbortSignal,
+	stopped: () => string | null,
+	watchLog = false
+): Promise<void> {
+	const done = await waitUntilReady(
+		{
+			ready: async () => (await probe(`${origin}/ready`)) === 200,
+			cancelled: () => signal.aborted,
+			stopped,
+			activity: watchLog ? () => statSync(LOG_FILE, { throwIfNoEntry: false })?.size : undefined,
+			sleep,
+			now: Date.now
+		},
+		origin
+	);
+	if (!done) throw new Cancelled();
 }
 
 /** Written whole or not at all (#649): a kill or a full disk mid-write must not leave half a record. */
@@ -579,10 +590,14 @@ async function startup(): Promise<void> {
 			started.exitCode = code;
 		});
 
-		await waitReady(origin, abort.signal, () =>
-			started.exitCode === undefined
-				? null
-				: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`
+		await waitReady(
+			origin,
+			abort.signal,
+			() =>
+				started.exitCode === undefined
+					? null
+					: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`,
+			true
 		);
 		dispatch({ type: 'finish', step: 'backend', at: now() });
 		await openApp(plan.loadUrl);
@@ -930,10 +945,22 @@ function applyPolicy(): void {
 	});
 
 	session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) =>
-		callback(isAllowedPermission(permission, details.requestingUrl, appOrigin))
+		callback(
+			isAllowedPermission(
+				permission,
+				details.requestingUrl,
+				appOrigin,
+				'mediaTypes' in details ? (details.mediaTypes ?? []) : []
+			)
+		)
 	);
-	session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-		isAllowedPermission(permission, requestingOrigin, appOrigin)
+	session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) =>
+		isAllowedPermission(
+			permission,
+			requestingOrigin,
+			appOrigin,
+			'mediaType' in details && details.mediaType ? [details.mediaType] : []
+		)
 	);
 }
 
