@@ -322,6 +322,7 @@ async def _get_accessible_kb_ids(
     from local_llm.models.access_grants import AccessGrants
     from local_llm.models.groups import Groups
     from local_llm.models.knowledge import Knowledges
+    from local_llm.utils.access_control.files import is_folder_entry
 
     user_id = user.get('id')
     user_role = user.get('role', 'user')
@@ -338,6 +339,7 @@ async def _get_accessible_kb_ids(
                 permission='read',
                 user_group_ids=set(user_group_ids),
             )
+            or is_folder_entry(model_knowledge, 'collection', kb.id)
         )
 
     result = []
