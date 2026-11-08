@@ -80,7 +80,27 @@ def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
         return None
 
 
-def _parse_rule(s: str, now: dt.datetime | None = None):
+_UTC_DATE_TIME = re.compile(r'((?:^|[\s;])(?:DTSTART:|UNTIL=))([0-9]{8})T([0-9]{6})Z', re.IGNORECASE)
+
+
+def _utc_to_local(s: str, zi: ZoneInfo | None) -> str:
+    """The rule with each DTSTART and UNTIL ending in Z moved to the user's wall-clock time.
+
+    Every other part of the rule is read as the user's local time, and
+    `ignoretz` drops a Z, so a UTC start was read as local time and ran hours
+    off (#837). The instant is converted in the user's zone (the server's, when
+    there is none) and written without the Z. A date without a time, and a
+    time without Z, are kept as they are.
+    """
+
+    def convert(m: re.Match) -> str:
+        utc = dt.datetime.strptime(m.group(2) + m.group(3), '%Y%m%d%H%M%S').replace(tzinfo=dt.UTC)
+        return m.group(1) + utc.astimezone(zi).strftime('%Y%m%dT%H%M%S')
+
+    return _UTC_DATE_TIME.sub(convert, s)
+
+
+def _parse_rule(s: str, now: dt.datetime | None = None, zi: ZoneInfo | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
     A SECONDLY/MINUTELY/HOURLY rule without a DTSTART starts from a fixed epoch
@@ -93,6 +113,7 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     upper = s.upper()
     if 'EXRULE' in upper:
         raise ValueError('EXRULE is not supported in recurrence rules')
+    s = _utc_to_local(s, zi)
 
     # Read from the epoch rather than dateutil's now, so a rule without a
     # DTSTART is accepted or refused the same at any minute (#801): a
@@ -211,7 +232,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     try:
         _check_dates(s)
-        rule = _parse_rule(s, now)
+        rule = _parse_rule(s, now, zi)
     except Exception as e:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_INVALID_RRULE(e))
     if rule.after(now) is None:
@@ -271,7 +292,7 @@ def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> 
     # to now longer.
     if anchor_ns is not None and not _sub_daily(s):
         anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
-    when = _parse_rule(s, anchor).after(now_naive)
+    when = _parse_rule(s, anchor, zi).after(now_naive)
     if when is None:
         return None
     if zi:
@@ -288,7 +309,7 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     zi = _resolve_tz(tz)
     result = []
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
-    rule = _parse_rule(s, now)
+    rule = _parse_rule(s, now, zi)
     # One walk for all n, rather than n walks from DTSTART (#267).
     for when in rule.xafter(now, count=n):
         if zi:
@@ -328,7 +349,7 @@ def runs_between_ns(
         # `_parse_rule` moves a start more than 100,000 steps before the anchor
         # forward by whole steps, keeping its phase and what is left of its COUNT (#267).
         anchor = max(anchor, scan_start)
-    rule = _parse_rule(s, anchor)
+    rule = _parse_rule(s, anchor, zi)
     runs: list[int] = []
     for when in rule.xafter(scan_start, inc=True):
         when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
