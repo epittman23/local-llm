@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08**: **Saving an access list filters only the grants it
+  changes (#523, #335).** Editors send the whole grant list on every save,
+  and the server filtered all of it against the saver's sharing
+  permissions, so a write-collaborator without `sharing.public_notes`
+  silently made a public note private, and one without `sharing.notes`
+  wiped its named shares; models, prompts and skills lost admin-set grants
+  the same way. Now, against the grants stored: a grant the saver adds
+  still needs the sharing permission it always did; a collaborator cannot
+  remove a stored grant they could not have added (asked as question 1b on
+  #523, answered no), so a routine save no longer undoes an admin's
+  sharing; the resource's owner may remove any grant on their own
+  resource, as before, so an admin cannot pin a share on someone's own
+  note or model that its owner cannot take back. Admins are unaffected.
+  The rule lives in `filter_allowed_access_grants`, which every update
+  route now passes the stored grants and the owner. Known limit: a
+  collaborator's save that overlaps an admin's removal can restore the
+  removed grant from the copy read before the write.
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min

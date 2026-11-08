@@ -745,6 +745,7 @@ async def update_channel_by_id(
         form_data.access_grants,
         'sharing.public_channels',
         stored_grants=channel.access_grants,
+        owner_id=channel.user_id,
     )
 
     try:

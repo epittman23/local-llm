@@ -5,8 +5,9 @@ Editors send the whole grant list on every save, and the routes used to run
 `sharing.public_<x>` stripped a stored `user:*` grant, and one without
 `sharing.<x>` wiped every named grant, on a routine save. Given the stored
 grants, a non-admin now keeps a grant they add only if they may set it, may
-keep or remove a stored grant they may set, and cannot remove a stored grant
-they could not have set. Admins are unaffected.
+keep or remove a stored grant they may set, and a collaborator cannot remove
+a stored grant they could not have set; the resource's owner may remove any
+grant on it, though what they add is still filtered. Admins are unaffected.
 
 The helper is tested directly, then the note, model, prompt and skill routes
 through the real router and auth dependency, against the test run's migrated
@@ -132,9 +133,11 @@ def _stored(resource_type, resource_id):
 # --- the helper ---------------------------------------------------------------
 
 
-def _filter(perms, grants, stored, role='user'):
+def _filter(perms, grants, stored, role='user', owner_id='someone-else'):
     return _run(
-        filter_allowed_access_grants(perms, 'u-helper', role, grants, 'sharing.public_notes', stored_grants=stored)
+        filter_allowed_access_grants(
+            perms, 'u-helper', role, grants, 'sharing.public_notes', stored_grants=stored, owner_id=owner_id
+        )
     )
 
 
@@ -163,6 +166,16 @@ def test_a_disallowed_stored_grant_survives_being_left_out():
 def test_an_allowed_stored_grant_can_be_removed():
     out = _filter(_perms(share=True, public=False), [], [BOB_READ, PUBLIC_READ])
     assert _keys(out) == _keys([PUBLIC_READ])
+
+
+def test_an_owner_may_remove_a_stored_grant_they_could_not_have_set():
+    out = _filter(_perms(share=False, public=False), [BOB_READ], [PUBLIC_READ, BOB_READ], owner_id='u-helper')
+    assert _keys(out) == _keys([BOB_READ])
+
+
+def test_an_owner_still_cannot_add_a_grant_they_may_not_set():
+    out = _filter(_perms(share=False, public=False), [PUBLIC_READ, GROUP_READ], [], owner_id='u-helper')
+    assert out == []
 
 
 def test_changing_a_disallowed_grants_permission_keeps_the_stored_one():
@@ -241,6 +254,28 @@ def test_a_collaborator_may_remove_a_grant_they_may_set(client, permissions, own
     assert _stored('note', note_id) == _keys([PUBLIC_READ, _write(collaborator)])
 
 
+def test_an_owner_without_sharing_may_remove_an_admin_set_grant(client, owner):
+    note_id = _note(owner, [PUBLIC_READ, BOB_READ])
+
+    r = client.post(f'/notes/{note_id}/access/update', json={'access_grants': []}, headers=owner.headers)
+
+    assert r.status_code == 200, r.text
+    assert _stored('note', note_id) == []
+
+
+def test_an_owner_without_sharing_cannot_add_a_grant(client, owner):
+    note_id = _note(owner, [BOB_READ])
+
+    r = client.post(
+        f'/notes/{note_id}/access/update',
+        json={'access_grants': [BOB_READ, PUBLIC_READ, GROUP_READ]},
+        headers=owner.headers,
+    )
+
+    assert r.status_code == 200, r.text
+    assert _stored('note', note_id) == _keys([BOB_READ])
+
+
 def test_an_admin_save_replaces_the_grants_as_sent(client, owner, admin):
     note_id = _note(owner, [PUBLIC_READ, BOB_READ])
 
@@ -280,6 +315,20 @@ def test_a_model_save_keeps_grants_the_editor_could_not_set(client, owner, colla
 
     assert r.status_code == 200, r.text
     assert _stored('model', model_id) == _keys([PUBLIC_READ, BOB_READ, _write(collaborator)])
+
+
+def test_a_model_owner_without_sharing_may_remove_an_admin_set_grant(client, owner):
+    model_id = f'm-{uuid.uuid4().hex[:10]}'
+    form = ModelForm(
+        id=model_id, base_model_id='llama3', name='Shared', meta={}, params={}, access_grants=[PUBLIC_READ, GROUP_READ]
+    )
+    assert _run(Models.insert_new_model(form, owner.id))
+    body = {'id': model_id, 'base_model_id': 'llama3', 'name': 'Shared', 'meta': {}, 'params': {}}
+
+    r = client.post('/models/model/update', json={**body, 'access_grants': [BOB_READ]}, headers=owner.headers)
+
+    assert r.status_code == 200, r.text
+    assert _stored('model', model_id) == []
 
 
 def test_a_prompt_save_keeps_grants_the_editor_could_not_set(client, owner, collaborator):

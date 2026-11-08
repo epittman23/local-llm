@@ -294,6 +294,7 @@ async def update_prompt_by_id(
         form_data.access_grants,
         'sharing.public_prompts',
         stored_grants=prompt.access_grants,
+        owner_id=prompt.user_id,
     )
 
     # Use the ID from the found prompt
@@ -475,6 +476,7 @@ async def update_prompt_access_by_id(
         form_data.access_grants,
         'sharing.public_prompts',
         stored_grants=prompt.access_grants,
+        owner_id=prompt.user_id,
     )
 
     await AccessGrants.set_access_grants('prompt', prompt_id, form_data.access_grants, db=db)

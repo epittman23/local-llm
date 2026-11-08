@@ -252,6 +252,7 @@ async def filter_allowed_access_grants(
     sharing_permission_key: str | None = None,
     *,
     stored_grants: list | None = None,
+    owner_id: str | None = None,
 ) -> list:
     """
     Checks if the user has the required permissions to grant access to a resource.
@@ -269,8 +270,10 @@ async def filter_allowed_access_grants(
     on what changes (#523, #335): a grant they add is kept only if they may
     set it, a stored grant they may set is kept or removed as submitted, and
     a stored grant they could not have set stays, even when the submitted list
-    leaves it out. Grants are matched by principal and permission. A None
-    submission means "not sent" and is returned as is.
+    leaves it out. The resource's owner (`owner_id`) may remove any stored
+    grant on it; what they add is still filtered. Grants are matched by
+    principal and permission. A None submission means "not sent" and is
+    returned as is.
     """
     if stored_grants is not None and user_role != 'admin' and access_grants is not None:
 
@@ -295,7 +298,7 @@ async def filter_allowed_access_grants(
         added = [grant for grant in access_grants if key(grant) not in stored_keys]
         removed = [grant for grant in stored_grants if key(grant) not in submitted_keys]
         addable = await allowed_keys(added)
-        removable = await allowed_keys(removed)
+        removable = {key(grant) for grant in removed} if user_id == owner_id else await allowed_keys(removed)
         kept = [grant for grant in access_grants if key(grant) in stored_keys or key(grant) in addable]
         kept_back = [
             dict(zip(('principal_type', 'principal_id', 'permission'), key(grant), strict=True))
