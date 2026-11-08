@@ -161,7 +161,11 @@ def test_a_channel_run_is_announced_before_its_reply_is_dispatched(monkeypatch):
     from local_llm.routers import channels
     from local_llm.socket import main as socket_main
 
+    async def get_channel(channel_id, db=None):
+        return SimpleNamespace(id=channel_id)
+
     monkeypatch.setattr(automations.Config, 'get', config_get)
+    monkeypatch.setattr(automations.Channels, 'get_channel_by_id', get_channel)
     monkeypatch.setattr(automations, '_resolve_model_defaults', model_defaults)
     monkeypatch.setattr(automations, '_build_request', lambda app, token=None: None)
     monkeypatch.setattr(automations, 'get_async_db', _Db)
