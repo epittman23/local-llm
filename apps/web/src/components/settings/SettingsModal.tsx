@@ -8,7 +8,15 @@ import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
 import { AdminTabIcon } from './AdminTabIcon';
 import { adminTabComponents, implementedTabIds } from './adminTabComponents';
-import { adminTabSegment, availableTabs, filterTabs, isAdminTab, resolveTab, startsGroup } from './settingsTabs';
+import {
+	adminTabSegment,
+	availableTabs,
+	filterTabs,
+	isAdminTab,
+	personalSettingsRestricted,
+	resolveTab,
+	startsGroup
+} from './settingsTabs';
 
 const tabButtonClass = (active: boolean) =>
 	cn(
@@ -128,6 +136,12 @@ export function SettingsModal() {
 							</div>
 						))}
 						{filtered.length === 0 && <div className="text-muted-foreground px-2 py-1 text-xs">No matches</div>}
+						{personalSettingsRestricted(user) && (
+							<p className="text-muted-foreground px-2 py-1 text-xs md:mt-2">
+								Your administrator has turned off access to your personal settings (General, Interface, Notifications,
+								Keyboard, Integrations, Personalization and Audio), so they are hidden.
+							</p>
+						)}
 					</div>
 				</nav>
 
