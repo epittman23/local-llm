@@ -970,6 +970,18 @@ def already_alerted(meta: dict | None, start_at: int) -> bool:
     )
 
 
+async def _mark_alerted(event, now_ns: int) -> None:
+    from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
+
+    try:
+        await CalendarEvents.update_event_by_id(
+            event.id,
+            CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
+        )
+    except Exception:
+        log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
+
+
 async def _check_calendar_alerts(app) -> None:
     """Check for upcoming calendar events and send alert notifications.
 
@@ -977,9 +989,16 @@ async def _check_calendar_alerts(app) -> None:
     occurrence last alerted, so it survives restarts and works across
     instances. A moved event, and each occurrence of a recurring one, has a
     start it was not alerted for, so it alerts again (#183).
+
+    A reminder nobody can receive is held, not marked: when none of the
+    user's sockets is connected and no notification target takes it, it stays
+    unmarked and goes out at the first check a session is connected, for as
+    long as the event has not ended. Once the event has ended it is dropped
+    and marked so it is not retried (#520).
     """
-    from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
-    from local_llm.socket.main import sio
+    from local_llm.models.calendar import CalendarEvents, event_end_ns
+    from local_llm.socket.main import get_session_ids_by_user_id, sio
+    from local_llm.utils.notifications import has_notification_target
 
     now_ns = int(time.time_ns())
     default_lookahead_ns = CALENDAR_ALERT_LOOKAHEAD_MINUTES * 60 * 1_000_000_000
@@ -995,6 +1014,15 @@ async def _check_calendar_alerts(app) -> None:
 
     for event, _user_tz in upcoming:
         if already_alerted(event.meta, event.start_at):
+            continue
+
+        if not get_session_ids_by_user_id(event.user_id) and not await has_notification_target(
+            event.user_id, EVENTS.CALENDAR_ALERT.name
+        ):
+            if event_end_ns(event) > now_ns:
+                continue  # held until a session connects
+            log.info('Dropped the reminder for calendar event %s: it ended unseen', event.id)
+            await _mark_alerted(event, now_ns)
             continue
 
         # Compute minutes until event starts
@@ -1022,13 +1050,7 @@ async def _check_calendar_alerts(app) -> None:
         )
 
         # Mark as alerted in DB so it survives restarts / multi-instance
-        try:
-            await CalendarEvents.update_event_by_id(
-                event.id,
-                CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
-            )
-        except Exception:
-            log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
+        await _mark_alerted(event, now_ns)
 
         # Send target notification if user has one configured
         try:
