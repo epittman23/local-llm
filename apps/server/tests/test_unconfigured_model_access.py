@@ -119,7 +119,8 @@ def test_rows_built_the_way_the_model_list_builds_them(visible):
         return [model['id'] for model in await models_util.get_filtered_models(models, user)]
 
     assert asyncio.run(run(ADMIN)) == ['provider-model', 'shared']
-    assert asyncio.run(run(USER)) == ['mine', 'shared']
+    # 'shared' is a preset on 'provider-model', which has no row: a user is refused it (#835).
+    assert asyncio.run(run(USER)) == ['mine']
 
 
 @pytest.fixture
