@@ -6,14 +6,16 @@ its files and knowledge bases do, the entries a folder carries are checked
 on both sides:
 
 - someone with write access to another user's folder may add only entries
-  they can read themselves, not ones only the owner can read; a note, only
-  one they own or may write, as sharing a note on requires (an admin's
-  folder would otherwise pass on any note its editor could merely read);
-- a note reaches the folder's chats only if the owner could share it on
-  directly: they own it or may write it, as the note's own sharing requires.
+  they can read themselves, not ones only the owner can read; a note or
+  knowledge base, only one they own or may write, as sharing it on requires
+  (an admin's folder would otherwise pass on any entry its editor could
+  merely read);
+- a note or knowledge base reaches the folder's chats only if the owner
+  could share it on directly: they own it or may write it, as its own
+  sharing requires.
 
 Requests carry real tokens through the real auth dependency, against users,
-folders, notes and grants in the test run's migrated SQLite database, and
+folders, notes, knowledge bases and grants in the test run's migrated SQLite database, and
 the end-to-end cases read what a folder's reader gets in a chat's context.
 
 Run from apps/server:
@@ -195,7 +197,7 @@ def test_an_editor_cannot_create_a_subfolder_holding_a_knowledge_base_they_may_o
     assert r.status_code == 403
 
 
-# --- The owner passes on a note only as they could share it directly ------------------
+# --- The owner passes on a note or knowledge base only as they could share it ---------
 
 
 def _delegated(owner, entry_id, entry_type='note') -> list:
