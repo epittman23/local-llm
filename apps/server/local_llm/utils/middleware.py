@@ -1940,6 +1940,8 @@ async def chat_completion_files_handler(
         if len(queries) == 0:
             queries = [get_last_user_message(body['messages']) or '']
 
+        failures = []
+        every_source_failed = False
         try:
             # One batched SELECT instead of six sequential round trips.
             rag_config = await Config.get_many(
@@ -1970,9 +1972,11 @@ async def chat_completion_files_handler(
                 hybrid_search=rag_config.get('rag.enable_hybrid_search'),
                 full_context=all_full_context or rag_config.get('rag.full_context'),
                 user=user,
+                failures=failures,
             )
         except Exception as e:
             log.exception(e)
+            every_source_failed = bool(failures)
 
         log.debug('rag_contexts:sources: %s', sources)
 
@@ -2001,6 +2005,24 @@ async def chat_completion_files_handler(
                 },
             }
         )
+        if failures:
+            # Labels only: the raw error of an external base can carry connection details.
+            names = ', '.join(dict.fromkeys(failures))
+            if every_source_failed:
+                description = f'Could not search any source ({names}). Answering without them.'
+            else:
+                description = f'Could not search: {names}. Answering from the other sources.'
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {
+                        'action': 'sources_failed',
+                        'description': description,
+                        'failed': list(dict.fromkeys(failures)),
+                        'done': True,
+                    },
+                }
+            )
 
     return body, {'sources': sources}
 

@@ -40,6 +40,20 @@ log = logging.getLogger(__name__)
 MAX_ALERT_LEAD_MINUTES = 22 * 60
 MAX_ALERT_LEAD_NS = MAX_ALERT_LEAD_MINUTES * 60 * 1_000_000_000
 DAY_NS = 24 * 60 * 60 * 1_000_000_000
+
+
+def event_end_ns(model) -> int:
+    """When an event or occurrence ends (#520).
+
+    Its end when it has one after its start. Otherwise the calendar draws it
+    as a moment at its start (calendarModel.ts), so that is its end; an
+    all-day event with no end lasts its day.
+    """
+    if model.end_at and model.end_at > model.start_at:
+        return model.end_at
+    return model.start_at + DAY_NS if model.all_day else model.start_at
+
+
 MIN_CALENDAR_RRULE_INTERVAL_SECONDS = 24 * 60 * 60
 
 
@@ -755,7 +769,7 @@ class CalendarEventTable:
         grace_ns: int = 0,
         db: AsyncSession | None = None,
     ) -> list[tuple[CalendarEventModel, str | None]]:
-        """Events starting between now and now + lookahead, for alert processing.
+        """Events starting between now and now + lookahead, or still running, for alert processing.
 
         Per-event lookahead is read from meta.alert_minutes (falls back to
         default_lookahead_ns).  Returns (event, user_timezone) pairs.
@@ -784,6 +798,9 @@ class CalendarEventTable:
                     CalendarEvent.start_at <= upper,
                     or_(
                         CalendarEvent.start_at >= now_ns - grace_ns,
+                        # Still running: its reminder may have been held (#520).
+                        CalendarEvent.end_at >= now_ns - grace_ns,
+                        CalendarEvent.all_day & (CalendarEvent.start_at >= now_ns - grace_ns - DAY_NS),
                         CalendarEvent.rrule.isnot(None) & (CalendarEvent.rrule != ''),
                     ),
                 )
@@ -815,7 +832,7 @@ class CalendarEventTable:
         (EXRULE) is left out too, rather than warned about on every poll.
         """
         if not model.rrule:
-            return [model] if start_ns <= model.start_at <= end_ns else []
+            return [model] if model.start_at <= end_ns and event_end_ns(model) >= start_ns else []
         if model.all_day or 'EXRULE' in model.rrule.upper():
             return []
         from local_llm.utils.calendar import expand_recurring_event
@@ -825,10 +842,9 @@ class CalendarEventTable:
         # back the repeated hour can fall outside a one-hour range; expand a
         # day further and filter exactly below.
         for instance in expand_recurring_event(model.model_dump(), start_ns, end_ns + DAY_NS, tz):
-            if start_ns <= instance['start_at'] <= end_ns:
-                occurrences.append(
-                    model.model_copy(update={'start_at': instance['start_at'], 'end_at': instance.get('end_at')})
-                )
+            occurrence = model.model_copy(update={'start_at': instance['start_at'], 'end_at': instance.get('end_at')})
+            if occurrence.start_at <= end_ns and event_end_ns(occurrence) >= start_ns:
+                occurrences.append(occurrence)
         return occurrences
 
     @staticmethod
