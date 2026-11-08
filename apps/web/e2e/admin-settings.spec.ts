@@ -1231,9 +1231,7 @@ test.describe('settings: Authentication', () => {
 	const oauthCfg = (over: Rec = {}) => ({
 		ENABLE_OAUTH_PERSISTENT_CONFIG: true,
 		ENABLE_OAUTH: false,
-		OAUTH_PROVIDER_NAME: 'SSO',
-		OAUTH_CLIENT_ID: 'cid',
-		OAUTH_CLIENT_SECRET: 's3cret',
+		OAUTH_EMAIL_CLAIM: 'email',
 		...over
 	});
 	async function mockAuth(page: Page, opts: { oauth?: Rec | null } = {}) {
@@ -1302,19 +1300,21 @@ test.describe('settings: Authentication', () => {
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
 		await expect(m.getByText(/read from environment variables/)).toBeVisible();
-		await expect(m.getByLabel('Provider Name')).toBeDisabled();
+		await expect(m.getByLabel('Email Claim')).toBeDisabled();
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config')).toBeTruthy();
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
 		expect(posted(calls, '/api/v1/auths/admin/config/oauth')).toBeUndefined();
 	});
 
-	test('OAuth on reveals the provider fields; role and group mapping reveal theirs', async ({ page }) => {
+	test('OAuth on reveals the claim fields; role and group mapping reveal theirs', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
-		await expect(m.getByLabel('Client ID')).toHaveValue('cid');
+		await expect(m.getByLabel('Email Claim')).toHaveValue('email');
+		await expect(m.getByTestId('oauth-env-note')).toContainText('environment variables');
+		await expect(m.getByLabel('Client ID')).toHaveCount(0);
 		await expect(m.getByLabel('Roles Claim')).toHaveCount(0);
 		await expect(m.getByLabel('Group Claim')).toHaveCount(0);
 		await m.getByRole('switch', { name: 'Role Mapping' }).click();
