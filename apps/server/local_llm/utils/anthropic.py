@@ -563,6 +563,8 @@ def convert_openai_to_anthropic_response(
 
 def _upstream_error_code(error) -> int | None:
     code = error.get('code') or error.get('status') if isinstance(error, dict) else None
+    if code is None:
+        return None
     try:
         return int(code)
     except (TypeError, ValueError):
