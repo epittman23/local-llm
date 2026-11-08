@@ -20,6 +20,11 @@ describe('statusText', () => {
 		expect(statusText({ action: 'sources_retrieved', count: 4 })).toBe('Retrieved 4 sources');
 	});
 
+	it('shows the sentence naming the knowledge sources that failed (#528)', () => {
+		const description = 'Could not search: Taxes. Answering from the other sources.';
+		expect(statusText({ action: 'sources_failed', description, failed: ['Taxes'], done: true })).toBe(description);
+	});
+
 	it('fills a description that is a template', () => {
 		expect(
 			statusText({ action: 'web_search', description: 'Searched {{count}} sites', urls: ['u1', 'u2', 'u3'] })
