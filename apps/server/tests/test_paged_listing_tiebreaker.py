@@ -62,18 +62,25 @@ def world():
 
 
 def _user_pages(ids, **kwargs):
+    # Page through every user: a shared database (Postgres) also holds other tests' users.
     seen = []
-    for skip in range(0, len(ids), 2):
+    skip, total = 0, 1
+    while skip < total:
         result = _run(Users.get_users(skip=skip, limit=2, **kwargs))
+        total = result['total']
         seen += [u.id for u in result['users'] if u.id in ids]
+        skip += 2
     return seen
 
 
 def _model_pages(user_id, ids, **filter):
     seen = []
-    for skip in range(0, 10, 2):
+    skip, total = 0, 1
+    while skip < total:
         result = _run(Models.search_models(user_id, filter={'view_option': 'created', **filter}, skip=skip, limit=2))
+        total = result.total
         seen += [m.id for m in result.items if m.id in ids]
+        skip += 2
     return seen
 
 
