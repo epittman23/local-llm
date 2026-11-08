@@ -690,6 +690,17 @@ def _sampling_params(image_config, form_data: CreateImageForm) -> dict:
     return params
 
 
+def _openai_size(image_config, form_data: CreateImageForm) -> str | None:
+    # OpenAI refuses a size it cannot read with a 400 (#798). Send the requested size, else
+    # the configured one, when it is 'auto' or WidthxHeight; a configured one that is neither
+    # (from the environment, say) is left out, as _generation_size skips it. A requested one
+    # that is neither was already refused by _generation_size.
+    for size in (form_data.size, image_config.IMAGE_SIZE):
+        if size and (size == 'auto' or _parse_size(size)):
+            return size
+    return None
+
+
 async def _generate_openai(request, image_config, form_data, model, size, metadata, user) -> list[dict]:
     headers = {
         'Authorization': f'Bearer {image_config.IMAGES_OPENAI_API_KEY}',
@@ -702,7 +713,7 @@ async def _generate_openai(request, image_config, form_data, model, size, metada
     if image_config.IMAGES_OPENAI_API_VERSION:
         url = f'{url}?api-version={image_config.IMAGES_OPENAI_API_VERSION}'
 
-    requested_size = form_data.size or image_config.IMAGE_SIZE
+    requested_size = _openai_size(image_config, form_data)
     data = {
         'model': model,
         'prompt': form_data.prompt,
