@@ -59,6 +59,9 @@ def group(owner):
 @pytest.fixture
 def client(monkeypatch):
     permissions = copy.deepcopy(DEFAULT_USER_PERMISSIONS)
+    # The owner may share the model with groups, so may also take that share
+    # back: a stored grant they could not have set is kept on any save (#523).
+    permissions['sharing']['models'] = True
     real_get = Config.get
 
     async def get(key, default=None):

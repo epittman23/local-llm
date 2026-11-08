@@ -35,7 +35,7 @@ def captured(monkeypatch):
     seen: dict = {}
 
     async def get_note_by_id(id, db=None):
-        return _Note(id=id, user_id='owner', data={}, title='t')
+        return _Note(id=id, user_id='owner', data={}, title='t', access_grants=[])
 
     async def update_note_by_id(id, form_data, db=None):
         seen['fields_set'] = set(form_data.model_fields_set)
