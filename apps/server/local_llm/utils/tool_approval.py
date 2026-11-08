@@ -202,7 +202,8 @@ async def build_tool_approval_resume_payload(chat_id: str, message_id: str, chat
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Tool call parent message is missing.')
 
     chat_data = chat.chat or {}
-    message_meta = assistant_message.get('meta') if isinstance(assistant_message.get('meta'), dict) else {}
+    raw_meta = assistant_message.get('meta')
+    message_meta = raw_meta if isinstance(raw_meta, dict) else {}
     chat_params = chat_data.get('params') if isinstance(chat_data.get('params'), dict) else {}
     params = {
         **chat_params,
