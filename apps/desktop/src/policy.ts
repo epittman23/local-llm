@@ -28,6 +28,8 @@ export function classifyOpen(url: string, appOrigin: string): OpenDecision {
 
 // Notifications (chat and channel alerts), the clipboard (copy buttons and
 // pasting), the microphone (voice input), and fullscreen (video, artifacts).
+// `media` is granted for audio only: the camera is never granted, and a media
+// request that names no type is refused.
 const ALLOWED_PERMISSIONS = new Set([
 	'notifications',
 	'clipboard-read',
@@ -36,6 +38,13 @@ const ALLOWED_PERMISSIONS = new Set([
 	'fullscreen'
 ]);
 
-export function isAllowedPermission(permission: string, requestingUrl: string, appOrigin: string): boolean {
-	return ALLOWED_PERMISSIONS.has(permission) && isAppUrl(requestingUrl, appOrigin);
+export function isAllowedPermission(
+	permission: string,
+	requestingUrl: string,
+	appOrigin: string,
+	mediaTypes: readonly string[] = []
+): boolean {
+	if (!ALLOWED_PERMISSIONS.has(permission) || !isAppUrl(requestingUrl, appOrigin)) return false;
+	if (permission === 'media') return mediaTypes.length > 0 && mediaTypes.every((type) => type === 'audio');
+	return true;
 }
