@@ -1,10 +1,12 @@
 // The chat page's model pick, and whether it has been made (#373): until it
 // has, a send waits (useHeldSend), as one made then was refused with
 // "Model not selected".
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
+import { useEffect, useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { useHeldSend } from './useHeldSend';
 import { useModelPick } from './useModelPick';
 
 const route = vi.hoisted(() => ({ params: {} as Record<string, string>, search: '' }));
@@ -119,6 +121,70 @@ describe('useModelPick (#373)', () => {
 		route.params = { id: 'new1' };
 		rerender();
 		expect(result.current).toBe(true);
+	});
+	it("is not ready on a move from a saved chat to a folder until the folder has loaded, so a send doesn't take the chat's models (#659)", () => {
+		lists.loaded = true;
+		route.params = { id: 'c1' };
+		const set = vi.fn();
+		const chat = { id: 'c1', chat: { models: ['qwen'] } };
+		let folder: { isFetched: boolean; data: { data: { model_ids: string[] } } | null } = fetched;
+		const { result, rerender } = renderHook(() => useModelPick(chat, folder, set));
+		expect(result.current).toBe(true);
+
+		route.params = { folderId: 'f1' };
+		folder = { isFetched: false, data: null };
+		rerender();
+		expect(result.current).toBe(false);
+
+		folder = { isFetched: true, data: { data: { model_ids: ['llama'] } } };
+		rerender();
+		expect(set).toHaveBeenLastCalledWith(['llama']);
+		expect(result.current).toBe(true);
+	});
+	it("sends a send held while a folder loads with the folder's models and their default tools (#659)", () => {
+		const defaultTools: Record<string, string[]> = { qwen: ['web'], llama: ['calc'] };
+		const sent: { text: string; models: string[]; tools: string[] }[] = [];
+		lists.loaded = true;
+		route.params = { id: 'c1' };
+		const chat = { id: 'c1', chat: { models: ['qwen'] } };
+		let folder: { isFetched: boolean; data: { data: { model_ids: string[] } } | null } = fetched;
+		// ChatPage in small: the pick, the defaults effect, and the held send resubmitting the box.
+		const { result, rerender } = renderHook(() => {
+			const [models, setModels] = useState<string[]>([]);
+			const [tools, setTools] = useState<string[]>([]);
+			const defaultsFor = useRef<string | null>(null);
+			useEffect(() => {
+				if (models.length !== 1 || defaultsFor.current === models[0]) return;
+				defaultsFor.current = models[0];
+				setTools(defaultTools[models[0]]);
+			}, [models]);
+			const chosen = useModelPick(chat, folder, setModels);
+			const box = useRef<(text: string) => boolean>(() => false);
+			const held = useHeldSend(
+				chosen,
+				route.params.id ?? `new:${route.params.folderId ?? ''}`,
+				(text) => {
+					sent.push({ text, models, tools });
+					return true;
+				},
+				() => box.current('hi')
+			);
+			box.current = (text) => held.send(text, []);
+			return held;
+		});
+		expect(sent).toEqual([]);
+
+		route.params = { folderId: 'f1' };
+		folder = { isFetched: false, data: null };
+		rerender();
+		act(() => {
+			result.current.send('hi', []);
+		});
+		expect(sent).toEqual([]);
+
+		folder = { isFetched: true, data: { data: { model_ids: ['llama'] } } };
+		rerender();
+		expect(sent).toEqual([{ text: 'hi', models: ['llama'], tools: ['calc'] }]);
 	});
 	it('is ready, with nothing picked, when the model list failed to load', () => {
 		lists.failed = true;
