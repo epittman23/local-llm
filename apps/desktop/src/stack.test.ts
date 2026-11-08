@@ -467,6 +467,10 @@ describe('the served llama-server (#434)', () => {
 	it('parseListenerPid reads the pid from ss output', () => {
 		expect(parseListenerPid('LISTEN 0 1 127.0.0.1:8090 0.0.0.0:* users:(("llama-server",pid=555,fd=3))\n')).toBe(555);
 		expect(parseListenerPid('')).toBeNull();
+		const two =
+			'LISTEN 0 1 127.0.0.1:8090 0.0.0.0:* users:(("llama-server",pid=555,fd=3))\nLISTEN 0 1 [::1]:8090 [::]:* users:(("llama-server",pid=777,fd=4))\n';
+		expect(parseListenerPid(two)).toBeNull(); // another listener: record nothing
+		expect(parseListenerPid(`${two.split('\n')[0]}\n${two.split('\n')[0]}`)).toBe(555); // one process, two sockets
 	});
 
 	it('servedLlama records the process listening on the port /check names, with its start time', async () => {

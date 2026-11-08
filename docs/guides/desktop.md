@@ -113,8 +113,9 @@ and once more just before the stop) for the served model's port, and records
 the process listening there, by pid and start time, in `owned.json`. Only
 that process is ever offered or signalled, and only while it is still the same
 one (a reused pid is not); any other `llama-server` you run is left alone.
-With none recorded (no admin signed in, or nothing served), nothing is
-offered.
+With none recorded (no admin signed in, nothing served, or another process
+also listening on that port), nothing is offered. The sign-in cookie is looked
+up for the page actually loaded, so dev-server mode (`localhost:5174`) works too.
 
 A Cancel in the startup dialog (or closing it) runs the same stop. Once a stop
 has begun, the app window does not open, even if the backend answers just

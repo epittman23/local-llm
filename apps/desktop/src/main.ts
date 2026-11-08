@@ -347,10 +347,16 @@ function readOwned(): OwnedRecord | null {
 /** What the backend's `/check` says is served, asked as the signed-in admin whose cookie the app window holds (#434). */
 async function checkServe(origin: string): Promise<{ running: boolean; port: number } | null> {
 	try {
-		const [cookie] = await session.defaultSession.cookies.get({ url: origin, name: 'token' });
+		// The cookie lives under the page actually loaded: the dev server's origin in dev-server mode.
+		let cookie: Electron.Cookie | undefined;
+		for (const url of appOrigin && appOrigin !== origin ? [appOrigin, origin] : [origin]) {
+			[cookie] = await session.defaultSession.cookies.get({ url, name: 'token' });
+			if (cookie) break;
+		}
 		if (!cookie) return null;
 		const response = await fetch(`${origin}/api/v1/benchmarks/serve/check`, {
 			headers: { Authorization: `Bearer ${cookie.value}` },
+			redirect: 'error',
 			signal: AbortSignal.timeout(1500)
 		});
 		if (!response.ok) return null;

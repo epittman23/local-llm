@@ -328,10 +328,14 @@ export function runInShell(command: string, env: NodeJS.ProcessEnv, timeoutMs: n
 	});
 }
 
-/** The pid after `pid=` in `ss -ltnp` output; null when no process is listed. */
+/**
+ * The one pid in `ss -ltnp` output; null when none is listed, or when several
+ * processes listen on the port (the served server and another, say), so that
+ * nothing unrelated is ever recorded.
+ */
 export function parseListenerPid(output: string): number | null {
-	const match = /pid=(\d+)/.exec(output);
-	return match ? Number(match[1]) : null;
+	const pids = new Set([...output.matchAll(/pid=(\d+)/g)].map((m) => Number(m[1])));
+	return pids.size === 1 ? ([...pids][0] ?? null) : null;
 }
 
 /** The pid of the process listening on a TCP port, or null when none can be seen. */
