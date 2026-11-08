@@ -4682,14 +4682,8 @@
       "variables": {},
       "chat_variables": {},
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
@@ -7360,14 +7354,8 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
@@ -12344,14 +12332,8 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
@@ -13584,14 +13566,8 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
@@ -14097,14 +14073,8 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {

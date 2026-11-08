@@ -1811,7 +1811,8 @@ async def _model_request(
 
     chat_completion merged the model it was asked for already; any other model
     merges its own workspace params, stream settings and capabilities onto the
-    request's own, so params set on the chat apply to every model as before.
+    request's own, so params set on the chat apply to every model as before,
+    and its metadata names that model.
     """
     # Copies, so a model's pipeline changing them (it pops params' system and
     # custom_params) leaves the others alone; the model object is the app's.
@@ -1832,6 +1833,7 @@ async def _model_request(
     chat_params = _chat_stream_params(own_form_data, model_info_params, capabilities)
     tool_approval_mode = await _tool_approval_mode(own_form_data, metadata['chat_id'], metadata.get('automation_id'))
     own_metadata['params'] = _metadata_params(own_form_data, model_info_params, chat_params, tool_approval_mode)
+    own_metadata['model'] = resolved_model
     return own_form_data, own_metadata
 
 

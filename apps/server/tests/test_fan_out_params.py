@@ -91,6 +91,13 @@ def test_each_column_streams_by_its_own_model(monkeypatch):
     assert payloads['m2']['metadata']['params']['function_calling'] == 'legacy'
 
 
+def test_each_columns_metadata_names_its_own_model(monkeypatch):
+    payloads = _payloads(_run(TWO_MODELS, WORKSPACE, monkeypatch))
+
+    assert payloads['m1']['metadata']['model']['id'] == 'm1'
+    assert payloads['m2']['metadata']['model']['id'] == 'm2'
+
+
 def test_chat_level_params_apply_to_every_column_over_each_models_own(monkeypatch):
     form = {**TWO_MODELS, 'params': {'temperature': 1.1, 'seed': 7}}
 
