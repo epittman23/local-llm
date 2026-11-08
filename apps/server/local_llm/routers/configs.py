@@ -14,7 +14,13 @@ from local_llm.models.config import API_CONFIG_KEYS, Config
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
-from local_llm.utils.misc import chunk_settings_error, embedding_batch_size_error, jwt_expiry_error
+from local_llm.utils.misc import (
+    chunk_settings_error,
+    embedding_batch_size_error,
+    embedding_concurrency_error,
+    jwt_expiry_error,
+    reranking_batch_size_error,
+)
 from local_llm.utils.oauth import (
     OAuthClientInformationFull,
     apply_connection_oauth_options,
@@ -138,10 +144,15 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
         if error:
             raise HTTPException(status_code=400, detail=error)
     # And its embedding batch size: one below 1 fails every embedding (#353).
-    if 'rag.embedding_batch_size' in form_data.config and (
-        error := embedding_batch_size_error(form_data.config['rag.embedding_batch_size'])
+    # Its reranking batch size and embedding concurrency too: one below 1
+    # breaks every hybrid search, a negative one every external embedding (#638).
+    for key, check in (
+        ('rag.embedding_batch_size', embedding_batch_size_error),
+        ('rag.reranking_batch_size', reranking_batch_size_error),
+        ('rag.embedding_concurrent_requests', embedding_concurrency_error),
     ):
-        raise HTTPException(status_code=400, detail=error)
+        if key in form_data.config and (error := check(form_data.config[key])):
+            raise HTTPException(status_code=400, detail=error)
     await Config.upsert(without_null_settings(form_data.config))
     await publish_event(
         request,

@@ -65,7 +65,8 @@ export function chunkSettingsError(size: unknown, overlap: unknown): string | nu
 
 /**
  * What the chosen extraction engine cannot run without, a malformed JSON box,
- * or a chunk setting the splitters cannot use; null when the form is fine.
+ * a chunk setting the splitters cannot use, or a reranking batch size the
+ * reranker cannot use; null when the form is fine.
  */
 export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
@@ -89,6 +90,11 @@ export function ragFormError(c: Rec): string | null {
 		return 'MinerU API Key required for Cloud API mode.';
 	const chunk = chunkSettingsError(c.CHUNK_SIZE, c.CHUNK_OVERLAP);
 	if (chunk) return chunk;
+	// A cleared box (null) keeps the stored size. Below 1 turns every hybrid search into a vector search (#638);
+	// full context does not rerank, and the field is hidden then.
+	const rerankBatch = c.RAG_RERANKING_BATCH_SIZE;
+	if (!c.RAG_FULL_CONTEXT && rerankBatch != null && (!Number.isInteger(rerankBatch) || rerankBatch < 1))
+		return 'Reranking Batch Size must be a whole number of at least 1.';
 	// The server takes only an object here, so other JSON (`[]`) is refused too (#234).
 	for (const [key, name] of [
 		['DOCLING_PARAMS', 'Docling Parameters'],
@@ -190,6 +196,10 @@ export function embeddingError(e: EmbeddingForm): string | null {
 	// A cleared box is sent as 1. Below 1 fails every embedding once saved (#353).
 	if (e.batchSize !== null && (!Number.isInteger(e.batchSize) || e.batchSize < 1))
 		return 'Embedding Batch Size must be a whole number of at least 1.';
+	// A cleared box is sent as 0, no limit. A negative one fails every external embedding (#638);
+	// the local engine does not use it, and the field is hidden then.
+	if (e.engine !== '' && e.concurrent !== null && (!Number.isInteger(e.concurrent) || e.concurrent < 0))
+		return 'Embedding Concurrent Requests must be a whole number of at least 0.';
 	if (e.engine === '' && e.model.split('/').length - 1 > 1)
 		return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
 	// The local engine too: saved without a model, nothing would be loaded to embed with (#532).
