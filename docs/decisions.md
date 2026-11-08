@@ -57,6 +57,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   can take longer. The alternative, passing a host to `make backend` and
   serving TLS so those forms stay managed, would change the Makefile and was
   not chosen.
+
 - **2026-11-06**: **The e2e suite runs against the built app, at four
   workers.** It ran against `astro dev` at two. On four cores (CI's
   runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min
