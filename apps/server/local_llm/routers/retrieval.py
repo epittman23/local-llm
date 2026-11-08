@@ -1022,21 +1022,18 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=chunk_error)
 
     # A reranking batch size below 1 turns every hybrid search into a vector
-    # search (#638); left unset, the stored one is kept. Checked only when the
-    # reranker runs: Documents always sends the stored value, and
-    # get_reranking_function replaces an unusable one at use.
+    # search (#638); left unset, the stored one is kept. Checked only where
+    # Documents shows it: it hides the field with full context on or retrieval
+    # bypassed but sends the stored value, which get_reranking_function
+    # replaces at use if unusable.
     def effective(field):
         value = getattr(form_data, field)
         return value if value is not None else getattr(config, field)
 
-    reranks = (
-        effective('ENABLE_RAG_HYBRID_SEARCH') is True
-        and not effective('RAG_FULL_CONTEXT')
-        and not effective('BYPASS_EMBEDDING_AND_RETRIEVAL')
-    )
+    shown = not effective('RAG_FULL_CONTEXT') and not effective('BYPASS_EMBEDDING_AND_RETRIEVAL')
     if (
         form_data.RAG_RERANKING_BATCH_SIZE is not None
-        and reranks
+        and shown
         and (batch_size_error := reranking_batch_size_error(form_data.RAG_RERANKING_BATCH_SIZE))
     ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=batch_size_error)

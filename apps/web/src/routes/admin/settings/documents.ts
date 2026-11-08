@@ -91,10 +91,10 @@ export function ragFormError(c: Rec): string | null {
 	const chunk = chunkSettingsError(c.CHUNK_SIZE, c.CHUNK_OVERLAP);
 	if (chunk) return chunk;
 	// A cleared box (null) keeps the stored size. Below 1 turns every hybrid search into a vector search (#638);
-	// checked only when the reranker runs, since the stored value is sent either way.
-	const reranks = c.ENABLE_RAG_HYBRID_SEARCH === true && !c.RAG_FULL_CONTEXT && !c.BYPASS_EMBEDDING_AND_RETRIEVAL;
+	// checked only where the field is shown, since the stored value is sent either way.
+	const shown = !c.RAG_FULL_CONTEXT && !c.BYPASS_EMBEDDING_AND_RETRIEVAL;
 	const rerankBatch = c.RAG_RERANKING_BATCH_SIZE;
-	if (reranks && rerankBatch != null && (!Number.isInteger(rerankBatch) || rerankBatch < 1))
+	if (shown && rerankBatch != null && (!Number.isInteger(rerankBatch) || rerankBatch < 1))
 		return 'Reranking Batch Size must be a whole number of at least 1.';
 	// The server takes only an object here, so other JSON (`[]`) is refused too (#234).
 	for (const [key, name] of [
