@@ -248,16 +248,20 @@ async def get_async_tool_function_and_apply_extra_params(
 
     new_sig = inspect.Signature(parameters=parameters, return_annotation=sig.return_annotation)
 
+    def call_kwargs(kwargs):
+        # Bound context parameters take precedence over call-time arguments of the same name.
+        return coerce_kwargs({k: v for k, v in kwargs.items() if k not in extra_params})
+
     if inspect.iscoroutinefunction(function):
         # wrap the functools.partial as python-genai has trouble with it
         # https://github.com/googleapis/python-genai/issues/907
         async def new_function(*args, **kwargs):
-            return await partial_func(*args, **coerce_kwargs(kwargs))
+            return await partial_func(*args, **call_kwargs(kwargs))
 
     else:
         # Make it a coroutine function when it is not already
         async def new_function(*args, **kwargs):
-            return partial_func(*args, **coerce_kwargs(kwargs))
+            return partial_func(*args, **call_kwargs(kwargs))
 
     update_wrapper(new_function, function)
     new_function.__signature__ = new_sig
@@ -540,7 +544,7 @@ async def get_tools(request: Request, tool_ids: list[str], user: UserModel, extr
 def get_attached_knowledge(model: dict, metadata: dict) -> list[dict]:
     model_meta = model.get('info', {}).get('meta', {})
     knowledge = []
-    seen = set()
+    seen = {}
 
     for source, items in (
         ('model', model_meta.get('knowledge') or []),
@@ -550,10 +554,15 @@ def get_attached_knowledge(model: dict, metadata: dict) -> list[dict]:
             if not isinstance(item, dict):
                 continue
             key = (item.get('type'), item.get('id'))
-            if not all(key) or key in seen:
+            if not all(key):
                 continue
-            knowledge.append({**item, 'source': source})
-            seen.add(key)
+            if key in seen:
+                # An entry the model and the folder both list is tagged as the folder's (#755).
+                if source == 'folder':
+                    seen[key]['source'] = 'folder'
+                continue
+            seen[key] = {**item, 'source': source}
+            knowledge.append(seen[key])
 
     file_context_enabled = (model_meta.get('capabilities') or {}).get('file_context', True)
     if not file_context_enabled:
@@ -571,7 +580,7 @@ def get_attached_knowledge(model: dict, metadata: dict) -> list[dict]:
                     'source': 'chat',
                 }
             )
-            seen.add(key)
+            seen[key] = knowledge[-1]
 
     return knowledge
 

@@ -32,7 +32,8 @@ export function useModels() {
 		(useConfigStore((s) => s.config?.features) as Record<string, unknown> | undefined)?.enable_direct_connections
 	);
 	const { settings } = useUserSettings();
-	// The user's own OpenAI-compatible endpoints (Settings > Connections) are listed with the server's models.
+	// The user's own OpenAI-compatible endpoints (Settings > Connections) come back with the server's models, but
+	// are dropped below: chat to them needs a browser-side handler this app lacks (#764).
 	const direct = directEnabled
 		? ((settings as { directConnections?: object } | null)?.directConnections ?? null)
 		: null;
@@ -42,7 +43,7 @@ export function useModels() {
 		staleTime: 60_000,
 		queryFn: async () => {
 			const res = await getModels(token, direct);
-			return (Array.isArray(res) ? res : []) as ChatModel[];
+			return ((Array.isArray(res) ? res : []) as ChatModel[]).filter((m) => !m.direct);
 		}
 	});
 	return { models: q.data ?? [], loaded: q.isSuccess, failed: q.isError };

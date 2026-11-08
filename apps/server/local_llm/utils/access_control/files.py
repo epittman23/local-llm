@@ -242,3 +242,16 @@ async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSessio
     return await get_accessible_folder_files(
         files, owner, db=db, note_permission='write', collection_permission='write'
     )
+
+
+def is_folder_entry(model_knowledge: list[dict] | None, item_type: str, item_id: str) -> bool:
+    """Whether a chat's attached knowledge holds this entry from the chat's folder.
+
+    Such an entry counts as readable, as on the legacy path (#358, #755): the
+    folder was checked readable, and its entries limited to what its owner may
+    pass on, before they were attached (`_apply_folder`).
+    """
+    return any(
+        item.get('source') == 'folder' and item.get('type') == item_type and item.get('id') == item_id
+        for item in model_knowledge or []
+    )
