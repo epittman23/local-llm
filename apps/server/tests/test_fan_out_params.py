@@ -118,7 +118,7 @@ def test_a_column_does_not_change_what_the_next_one_runs_with(monkeypatch):
         return {'status': True}
 
     monkeypatch.setattr(main, '_process_chat', process_chat)
-    form = {**TWO_MODELS, 'params': {'custom_params': {'top_a': 1}}}
+    form = {**TWO_MODELS, 'params': {'custom_params': {'top_a': 1}}, 'files': [{'id': 'f1'}], 'tool_ids': ['t1']}
 
     _run(form, WORKSPACE, monkeypatch)
 
@@ -129,3 +129,8 @@ def test_a_column_does_not_change_what_the_next_one_runs_with(monkeypatch):
     assert second_params['system'] == 'You are B.'
     assert second_params['custom_params'] == {'top_a': 1}
     assert second_metadata_params['function_calling'] == 'legacy'
+    assert first['files'] is not second['files']
+    # Within one model's request, what its form data and metadata share stays shared.
+    for form_data, metadata, _, _ in received:
+        assert form_data['files'] is metadata['files']
+        assert form_data['tool_ids'] is metadata['tool_ids']

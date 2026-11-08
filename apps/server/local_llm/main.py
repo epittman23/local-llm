@@ -1815,8 +1815,12 @@ async def _model_request(
     """
     # Copies, so a model's pipeline changing them (it pops params' system and
     # custom_params) leaves the others alone; the model object is the app's.
-    own_form_data = {key: value if key == 'metadata' else copy.deepcopy(value) for key, value in form_data.items()}
-    own_metadata = {key: value if key == 'model' else copy.deepcopy(value) for key, value in metadata.items()}
+    # One memo keeps what form_data and metadata share (files, tool_ids) shared.
+    memo = {}
+    own_form_data = {
+        key: value if key == 'metadata' else copy.deepcopy(value, memo) for key, value in form_data.items()
+    }
+    own_metadata = {key: value if key == 'model' else copy.deepcopy(value, memo) for key, value in metadata.items()}
     if target_model_id == model['id']:
         return own_form_data, own_metadata
 
