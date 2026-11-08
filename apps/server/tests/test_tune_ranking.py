@@ -329,3 +329,32 @@ def test_a_cut_the_items_agree_on_is_still_supported(monkeypatch):
 
     assert decision == 'kept 2 of 4'
     assert survivors == [BASE, FAST]
+
+
+def test_cooling_spent_sums_the_stored_pauses():
+    """A resume rebuilds the cooling total from the sweep's pauses (#511)."""
+    opts = tune.SweepOptions()
+    assert tune.cooling_spent([], opts) == 0.0
+    assert tune.cooling_spent([{'seconds': 120}, {'seconds': 300}], opts) == 420.0
+
+
+def test_cooling_spent_caps_a_pause_a_crash_left_open():
+    """A crashed tuner's pause closes at reclaim time; it counts at most the longest cooldown (#511)."""
+    opts = tune.SweepOptions(cooldown_max=900.0, cooldown_attempts=4)
+    assert tune.cooling_spent([{'seconds': 86_400}], opts) == 900.0 * 15
+
+
+def test_a_resumed_sweep_keeps_the_cooling_it_spent(monkeypatch):
+    """Resuming after 4,000 of a 5,000 s share leaves 1,000 s; a fresh sweep has all 5,000 s (#511)."""
+    opts = tune.SweepOptions(max_cooldown_share=0.5)
+    sweep = types.SimpleNamespace(budget=types.SimpleNamespace(seconds=10_000), started=0.0)
+
+    fresh = tune.Cooldown(sweep, opts)
+    assert not fresh.budget_exhausted(4_999.0)
+    assert fresh.budget_exhausted(5_001.0)
+
+    resumed = tune.Cooldown(sweep, opts)
+    resumed.total_seconds = tune.cooling_spent([{'seconds': 1500}, {'seconds': 2500}], opts)
+    assert resumed.total_seconds == 4000.0
+    assert not resumed.budget_exhausted(999.0)
+    assert resumed.budget_exhausted(1_001.0)
