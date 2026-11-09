@@ -1180,6 +1180,10 @@ async def _resolve_chat_model(request: Request, model_id: str, model_item: dict,
     return model, model_info, fallback_model, missing_base_model
 
 
+# The request fields a model's own settings change (_merge_chat_params, _chat_stream_params).
+_MODEL_SET_FIELDS = ('params', 'stream', 'stream_options')
+
+
 async def _merge_chat_params(form_data: dict, model_info) -> dict:
     """Merge global defaults, the model's own params and the request's into form_data; return the model's."""
     # Model params: global defaults as base, per-model overrides win
@@ -1220,6 +1224,17 @@ def _chat_stream_params(form_data: dict, model_info_params: dict, model_capabili
         if model_info_params.get(key) is not None:
             chat_params[key] = model_info_params.get(key)
     return chat_params
+
+
+def _metadata_params(form_data: dict, model_info_params: dict, chat_params: dict, tool_approval_mode: str) -> dict:
+    """The params one model's reply carries in its metadata."""
+    return {
+        **chat_params,
+        'function_calling': (
+            form_data.get('params', {}).get('function_calling') or model_info_params.get('function_calling') or 'native'
+        ),
+        'tool_approval_mode': tool_approval_mode,
+    }
 
 
 def _pop_message_ids(form_data: dict, model_id: str) -> list[dict]:
@@ -1793,35 +1808,76 @@ def _tasks_for_model(tasks, idx: int):
     return {k: v for k, v in (tasks or {}).items() if k not in (TASKS.TITLE_GENERATION, TASKS.TAGS_GENERATION)} or None
 
 
-async def _fan_out_chat(request: Request, form_data: dict, user, metadata: dict, model: dict, message_ids, tasks):
+async def _model_request(
+    form_data: dict, metadata: dict, model: dict, target_model_id: str, resolved_model: dict, request_fields: dict
+) -> tuple[dict, dict]:
+    """One answering model's own copy of form_data and metadata, set by that model's own params (#359).
+
+    chat_completion merged the model it was asked for already; any other model
+    merges its own workspace params, stream settings and capabilities onto the
+    request's own, so params set on the chat apply to every model as before,
+    and its metadata names that model.
+    """
+    # Copies, so a model's pipeline changing them (it pops params' system and
+    # custom_params) leaves the others alone; the model object is the app's.
+    # One memo keeps what form_data and metadata share (files, tool_ids) shared.
+    memo = {}
+    own_form_data = {
+        key: value if key == 'metadata' else copy.deepcopy(value, memo) for key, value in form_data.items()
+    }
+    own_metadata = {key: value if key == 'model' else copy.deepcopy(value, memo) for key, value in metadata.items()}
+    if target_model_id == model['id']:
+        return own_form_data, own_metadata
+
+    for key in _MODEL_SET_FIELDS:
+        own_form_data.pop(key, None)
+    own_form_data.update(copy.deepcopy(request_fields))
+    model_info_params = await _merge_chat_params(own_form_data, await Models.get_model_by_id(target_model_id))
+    capabilities = ((resolved_model.get('info') or {}).get('meta') or {}).get('capabilities') or {}
+    chat_params = _chat_stream_params(own_form_data, model_info_params, capabilities)
+    tool_approval_mode = await _tool_approval_mode(own_form_data, metadata['chat_id'], metadata.get('automation_id'))
+    own_metadata['params'] = _metadata_params(own_form_data, model_info_params, chat_params, tool_approval_mode)
+    own_metadata['model'] = resolved_model
+    return own_form_data, own_metadata
+
+
+async def _fan_out_chat(
+    request: Request, form_data: dict, user, metadata: dict, model: dict, message_ids, tasks, request_fields: dict
+):
     """Start one task per answering model (or, for an internal request, run them in turn) and mark the chat active."""
     task_ids = []
     subagent_results = []
     is_internal = getattr(request.state, 'internal', False) is True
     chat_id = metadata['chat_id']
 
+    # Every model's request is built before any starts, so a failed lookup starts none.
+    columns = []
     for idx, entry in enumerate(message_ids):
-        target_model_id = entry['model_id']
-        assistant_message_id = entry['message_id']
-        if not assistant_message_id:
+        if not entry['message_id']:
             continue
+        # Resolve the model object for this specific model
+        resolved_model = request.app.state.MODELS.get(entry['model_id'], model)
+        own_form_data, own_metadata = await _model_request(
+            form_data, metadata, model, entry['model_id'], resolved_model, request_fields
+        )
+        columns.append((idx, entry, resolved_model, own_form_data, own_metadata))
+
+    for idx, entry, resolved_model, own_form_data, own_metadata in columns:
+        target_model_id = entry['model_id']
 
         # Per-model metadata: own message_id + model
         per_model_metadata = {
-            **metadata,
-            'message_id': assistant_message_id,
+            **own_metadata,
+            'message_id': entry['message_id'],
             'task_id': str(uuid4()),
         }
 
         # Per-model form_data: own model
         model_form_data = {
-            **form_data,
+            **own_form_data,
             'model': target_model_id,
             'metadata': per_model_metadata,
         }
-
-        # Resolve the model object for this specific model
-        resolved_model = request.app.state.MODELS.get(target_model_id, model)
 
         process = _process_chat(
             request, model_form_data, user, per_model_metadata, resolved_model, _tasks_for_model(tasks, idx)
@@ -1885,6 +1941,9 @@ async def chat_completion(
 
         # Read before the fallback below can rebind model to a different one.
         model_capabilities = ((model.get('info') or {}).get('meta') or {}).get('capabilities') or {}
+        # The request's own settings, before this model's are merged in: each
+        # other model in a multi-model chat merges its own onto these (#359).
+        request_fields = {key: copy.deepcopy(form_data[key]) for key in _MODEL_SET_FIELDS if key in form_data}
         model_info_params = await _merge_chat_params(form_data, model_info)
 
         # Check base model existence for custom models
@@ -1935,15 +1994,7 @@ async def chat_completion(
             'chat_variables': chat_variables,
             'model': model,
             'direct': model_item.get('direct', False),
-            'params': {
-                **chat_params,
-                'function_calling': (
-                    form_data.get('params', {}).get('function_calling')
-                    or model_info_params.get('function_calling')
-                    or 'native'
-                ),
-                'tool_approval_mode': tool_approval_mode,
-            },
+            'params': _metadata_params(form_data, model_info_params, chat_params, tool_approval_mode),
         }
 
         if is_new_chat:
@@ -1980,7 +2031,7 @@ async def chat_completion(
                 {**entry, 'model_id': model['id']} if entry.get('model_id') == model_id else entry
                 for entry in message_ids
             ]
-        return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks)
+        return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks, request_fields)
 
     # Legacy/direct: single model, synchronous. Without a chat, its client waits
     # on the answer in this request, so leaving before the upstream answers
