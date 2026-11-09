@@ -2605,6 +2605,8 @@ async def query_chat_files(
 
         chunks = []
         pinned = set()  # ids of chunks from a file attached in full
+        ranked = []  # each searched file's hits, best first
+        scales = set()  # what scored each searched file: None, or the search it fell back to
         for source in sources or []:
             documents = source.get('document') or []
             metadatas = source.get('metadata') or []
@@ -2612,6 +2614,7 @@ async def query_chat_files(
             source_info = source.get('source') or {}
             whole_file = source_info.get('context') == 'full'
 
+            hits = []
             for idx, doc in enumerate(documents):
                 metadata = metadatas[idx] if idx < len(metadatas) and isinstance(metadatas[idx], dict) else {}
                 chunk = {
@@ -2623,14 +2626,25 @@ async def query_chat_files(
                     chunk['distance'] = distances[idx]
                 if whole_file:
                     pinned.add(id(chunk))
+                else:
+                    hits.append(chunk)
                 chunks.append(chunk)
+            if hits:
+                ranked.append(hits)
+                scales.add(source.get('fallback'))
 
         # Each file was searched on its own and comes back in attachment
         # order, so rank every file's hits together before keeping `count`
         # (higher scores are better, as everywhere in retrieval) (#177). A
         # file attached in full is a whole document, not a hit: it goes
         # first, in attachment order, as it did before. The sort is stable.
-        if not full_context:
+        # A file whose search fell back (hybrid to vector, or a failed
+        # reranker to embedding similarity) scored on another scale, so then
+        # the files take turns by rank instead, as knowledge files do (#477,
+        # #503).
+        if not full_context and len(scales) > 1:
+            chunks = [c for c in chunks if id(c) in pinned] + _take_turns(ranked)
+        elif not full_context:
             chunks.sort(
                 key=lambda c: (id(c) in pinned, c.get('distance') is not None, c.get('distance') or 0.0),
                 reverse=True,

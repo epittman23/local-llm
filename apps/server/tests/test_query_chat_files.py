@@ -6,6 +6,12 @@ the chunks of every file together before it keeps the best `count`. It once
 concatenated them in attachment order and cut, so when the first file had
 `count` weak hits the strong hits in the others were never returned (#177).
 
+Scores are only comparable on one scale. A file whose hybrid search failed
+(answered by vector search) or whose reranker failed (scored by embedding
+similarity) is marked with `fallback`; when the files' scores are on
+different scales, the files take turns by rank instead, as knowledge files
+do (#477, #503).
+
 Run from apps/server:
 
     python -m pytest tests/test_query_chat_files.py
@@ -26,13 +32,16 @@ FILES = [{'type': 'file', 'id': 'fa'}, {'type': 'file', 'id': 'fb'}]
 REQUEST = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(EMBEDDING_FUNCTION=lambda *a, **k: None)))
 
 
-def _source(file_id: str, scores: list[float]) -> dict:
-    return {
+def _source(file_id: str, scores: list[float], fallback: str | None = None) -> dict:
+    source = {
         'source': {'id': file_id, 'name': f'{file_id}.txt'},
         'document': [f'{file_id} chunk {i}' for i in range(len(scores))],
         'metadata': [{'file_id': file_id, 'name': f'{file_id}.txt'} for _ in scores],
         'distances': scores,
     }
+    if fallback:
+        source['fallback'] = fallback
+    return source
 
 
 def _run(monkeypatch, sources: list[dict], *, count=5, full_context=False, context=None) -> list[dict]:
@@ -98,3 +107,36 @@ def test_unscored_hits_go_after_scored_ones(monkeypatch):
     got = _run(monkeypatch, [unscored, _source('fb', [0.4])], count=2)
 
     assert [c['file_id'] for c in got] == ['fb', 'fa']
+
+
+def test_a_file_that_fell_back_takes_turns_by_rank(monkeypatch):
+    """Vector-search cosines beside reranker scores: neither file's scores outrank the other's (#503)."""
+    reranked = _source('fa', [0.5, 0.4])
+    fell_back = _source('fb', [0.95, 0.9, 0.85], fallback='vector')
+
+    got = _run(monkeypatch, [reranked, fell_back], count=4)
+
+    assert [(c['file_id'], c['distance']) for c in got] == [('fa', 0.5), ('fb', 0.95), ('fa', 0.4), ('fb', 0.9)]
+
+
+def test_a_failed_reranker_is_another_scale_too(monkeypatch):
+    got = _run(monkeypatch, [_source('fa', [0.2, 0.1]), _source('fb', [0.9, 0.8], fallback='embedding')], count=3)
+
+    assert [(c['file_id'], c['distance']) for c in got] == [('fa', 0.2), ('fb', 0.9), ('fa', 0.1)]
+
+
+def test_files_that_all_fell_back_the_same_way_still_sort_by_score(monkeypatch):
+    sources = [_source('fa', [0.5, 0.4], fallback='vector'), _source('fb', [0.95, 0.9], fallback='vector')]
+
+    got = _run(monkeypatch, sources, count=3)
+
+    assert [(c['file_id'], c['distance']) for c in got] == [('fb', 0.95), ('fb', 0.9), ('fa', 0.5)]
+
+
+def test_a_file_attached_in_full_stays_first_when_files_take_turns(monkeypatch):
+    whole = {'source': {'id': 'fw', 'name': 'fw.txt', 'context': 'full'}, 'document': ['all of fw'], 'metadata': [{}]}
+    sources = [_source('fa', [0.5, 0.4]), whole, _source('fb', [0.95, 0.9], fallback='vector')]
+
+    got = _run(monkeypatch, sources, count=4)
+
+    assert [(c['file_id'], c.get('distance')) for c in got] == [('fw', None), ('fa', 0.5), ('fb', 0.95), ('fa', 0.4)]
