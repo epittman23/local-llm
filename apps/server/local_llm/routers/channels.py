@@ -837,6 +837,8 @@ async def update_channel_by_id(
         user.role,
         form_data.access_grants,
         'sharing.public_channels',
+        stored_grants=channel.access_grants,
+        owner_id=channel.user_id,
     )
     # As on create: without sharing.public_channels a group channel is saved private (#331).
     if form_data.is_private is False and not await may_make_group_channel_public(user):

@@ -250,6 +250,9 @@ async def filter_allowed_access_grants(
     anyone_permission_key: str | None = None,
     db: AsyncSession | None = None,
     sharing_permission_key: str | None = None,
+    *,
+    stored_grants: list | None = None,
+    owner_id: str | None = None,
 ) -> list:
     """
     Checks if the user has the required permissions to grant access to a resource.
@@ -261,7 +264,49 @@ async def filter_allowed_access_grants(
     when given, else derived from `sharing.public_<x>` as `sharing.<x>` when
     that permission exists. Until this was enforced server-side, the switch
     only hid the UI, and the access/update routes stored such grants anyway.
+
+    `stored_grants` is the resource's current grant list, for a save that
+    replaces it; leave it None when creating. A non-admin is then judged only
+    on what changes (#523, #335): a grant they add is kept only if they may
+    set it, a stored grant they may set is kept or removed as submitted, and
+    a stored grant they could not have set stays, even when the submitted list
+    leaves it out. The resource's owner (`owner_id`) may remove any stored
+    grant on it; what they add is still filtered. Grants are matched by
+    principal and permission. A None submission means "not sent" and is
+    returned as is.
     """
+    if stored_grants is not None and user_role != 'admin' and access_grants is not None:
+
+        def key(grant) -> tuple:
+            return tuple(_grant_field(grant, name) for name in ('principal_type', 'principal_id', 'permission'))
+
+        async def allowed_keys(grants: list) -> set[tuple]:
+            filtered = await filter_allowed_access_grants(
+                default_permissions,
+                user_id,
+                user_role,
+                grants,
+                public_permission_key,
+                anyone_permission_key,
+                db=db,
+                sharing_permission_key=sharing_permission_key,
+            )
+            return {key(grant) for grant in filtered}
+
+        stored_keys = {key(grant) for grant in stored_grants}
+        submitted_keys = {key(grant) for grant in access_grants}
+        added = [grant for grant in access_grants if key(grant) not in stored_keys]
+        removed = [grant for grant in stored_grants if key(grant) not in submitted_keys]
+        addable = await allowed_keys(added)
+        removable = {key(grant) for grant in removed} if user_id == owner_id else await allowed_keys(removed)
+        kept = [grant for grant in access_grants if key(grant) in stored_keys or key(grant) in addable]
+        kept_back = [
+            dict(zip(('principal_type', 'principal_id', 'permission'), key(grant), strict=True))
+            for grant in removed
+            if key(grant) not in removable
+        ]
+        return kept + kept_back
+
     if not access_grants:
         return access_grants
 

@@ -50,6 +50,41 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   resources take. Membership stays the line for writing. Private stays the
   dialog's default.
 
+- **2026-11-08**: **Saving an access list filters only the grants it
+  changes (#523, #335).** Editors send the whole grant list on every save,
+  and the server filtered all of it against the saver's sharing
+  permissions, so a write-collaborator without `sharing.public_notes`
+  silently made a public note private, and one without `sharing.notes`
+  wiped its named shares; models, prompts and skills lost admin-set grants
+  the same way. Now, against the grants stored: a grant the saver adds
+  still needs the sharing permission it always did; a collaborator cannot
+  remove a stored grant they could not have added (asked as question 1b on
+  #523, answered no), so a routine save no longer undoes an admin's
+  sharing; the resource's owner may remove any grant on their own
+  resource, as before, so an admin cannot pin a share on someone's own
+  note or model that its owner cannot take back. Admins are unaffected.
+  The rule lives in `filter_allowed_access_grants`, which every update
+  route now passes the stored grants and the owner. Known limit: a
+  collaborator's save that overlaps an admin's removal can restore the
+  removed grant from the copy read before the write.
+
+- **2026-11-08**: **After a forced stop, the desktop app offers to stop only
+  the `llama-server` its own stack served.** It offered, and then stopped,
+  every `llama-server` the user ran (`pgrep -x llama-server`), against the
+  2026-10-23 decision that the app stops only what it started (#434).
+
+  **What.** While it owns the stack, the app asks the backend's `/check` for
+  the served model's port, finds the process listening there, and records its
+  pid and start time in `owned.json`. A forced stop offers that process, and
+  "Stop llama-server" signals it, only while it is still the same process.
+  With nothing recorded, or the record stale, there is no offer. **Why this
+  way:** the owner chose the app recording it over the backend reporting it
+  (no API change, nothing touching `routers/benchmarks/serve.py`) and over
+  matching by port and command line (which still matches a user's own server
+  on 8090). The cost: `/check` is admin-only, so the app reads the signed-in
+  admin's cookie from its own window; with nobody signed in, nothing is
+  recorded and nothing is offered.
+
 - **2026-11-08**: **OAuth provider configuration is environment-only.**
   Admin Settings > Authentication offered the provider's name, discovery URL,
   client ID and secret, redirect URI, scopes, timeouts, code-challenge and
