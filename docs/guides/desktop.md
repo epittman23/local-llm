@@ -67,8 +67,11 @@ to answer, and during a `--reload` restart) and, if that is refused, asks
 Compose for the services' running containers (`docker compose ps -q`, up to
 5 s). Compose that cannot be asked does not stop a start; `make backend`
 then says what is wrong with Docker. A `make backend` process is not looked
-for directly: it brings the services up within its first second, before
-anything slow.
+for directly, so one that has not started a container yet (still pulling
+images on a first run or after an update) is not seen: the app starts its
+own beside it, and whichever of the two exits first brings the services down, as
+before. Wait for a terminal `make backend` to get past its image pulls
+before opening the app.
 
 The sources it compares with `dist/` are `apps/web`'s `src/` and `public/`
 (every file and folder in them, so a renamed or deleted file counts),

@@ -25,9 +25,12 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   for the services, the `docker compose ... down` that stops them). The
   owner chose refusing (question 1, option b) over waiting and attaching,
   which would attach to whatever else held the port. A `make backend`
-  process is not looked for directly: it brings the services up in its first
-  second, so the Compose check covers it. Compose that cannot be asked does
-  not block a start. Separately (question 2, yes), the Makefile's
+  process is not looked for directly (scanning processes was judged not
+  cheap enough for this change), so one that has not started a container
+  yet, still pulling images on a first run or after an update, is not seen:
+  there both recipes find nothing running, and either one's exit brings the
+  services down under the other, as before. Compose that cannot be asked
+  does not block a start. Separately (question 2, yes), the Makefile's
   `backend` trap records which services already ran before its `compose up`
   and brings down only the ones it started: `docker compose down` as before
   when none ran, `docker compose rm -s -f` of its own when some did, and
