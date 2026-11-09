@@ -620,8 +620,12 @@ def anthropic_error_for_openai_response(openai_response: dict) -> tuple[int, dic
     elif first.get('finish_reason') != 'error':
         return None
     error = openai_response.get('error') or first and first.get('error')
-    log.error('Upstream failure on a non-streaming Anthropic request: %r', error)
     status_code, error_type = upstream_error_status_and_type(error)
+    log.error(
+        'Upstream failure on a non-streaming Anthropic request (status=%s, type=%s).',
+        status_code,
+        error_type,
+    )
     return status_code, anthropic_error_payload(error_type)
 
 
