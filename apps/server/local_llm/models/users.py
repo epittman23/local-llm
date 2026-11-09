@@ -337,7 +337,9 @@ def _filter_user_roles(stmt, roles):
 def _order_users(stmt, sort: dict | None, filter: dict | None):
     """Sort by a field or by membership in a group (members first unless ascending), descending unless 'asc'.
 
-    With no recognised sort, an unfiltered listing is newest first and a filtered one is left unordered.
+    With no recognised sort, an unfiltered listing is newest first and a filtered one is by id. Every
+    ordering ends with the id (in the sort's direction), so OFFSET paging neither repeats nor skips users
+    that share a sort value.
     """
     from local_llm.models.groups import GroupMember
 
@@ -351,13 +353,17 @@ def _order_users(stmt, sort: dict | None, filter: dict | None):
         )
         # CASE: user in group → 1, user not in group → 0
         group_sort = case((membership_exists, 1), else_=0)
-        return stmt.order_by(group_sort.asc() if direction == 'asc' else group_sort.desc(), User.name.asc())
+        return stmt.order_by(
+            group_sort.asc() if direction == 'asc' else group_sort.desc(), User.name.asc(), User.id.asc()
+        )
     if order_by in _USER_SORT_FIELDS:
         column = getattr(User, order_by)
-        return stmt.order_by(column.asc() if direction == 'asc' else column.desc())
+        if direction == 'asc':
+            return stmt.order_by(column.asc(), User.id.asc())
+        return stmt.order_by(column.desc(), User.id.desc())
     if not filter:
-        return stmt.order_by(User.created_at.desc())
-    return stmt
+        return stmt.order_by(User.created_at.desc(), User.id.desc())
+    return stmt.order_by(User.id.asc())
 
 
 class UsersTable:
@@ -497,7 +503,12 @@ class UsersTable:
             direction = sort.get('direction') if sort else None
 
             if order_by == 'created_at':
-                stmt = stmt.order_by(User.created_at.asc() if direction == 'asc' else User.created_at.desc())
+                if direction == 'asc':
+                    stmt = stmt.order_by(User.created_at.asc(), User.id.asc())
+                else:
+                    stmt = stmt.order_by(User.created_at.desc(), User.id.desc())
+            else:
+                stmt = stmt.order_by(User.id.asc())
 
             count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
             total = count_result.scalar()

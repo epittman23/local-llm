@@ -42,7 +42,8 @@ These were checked on 2026-10-24: from inside the container, every service
 name failed to resolve and the gateway's ports 4000, 5432, 6379, 8080 and
 8090 refused connections, while `https://pypi.org` answered.
 
-**Chat files.** Each code block gets the files uploaded to its chat. For
+**Chat files.** Each code block gets the files uploaded to messages on the
+branch of the chat being answered (another branch's files are left out). For
 every block, the backend (`utils/code_interpreter.py`):
 
 1. makes a fresh `lllm-uploads/<run>/` directory on the Jupyter server and

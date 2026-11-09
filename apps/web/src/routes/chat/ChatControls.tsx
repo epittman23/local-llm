@@ -6,7 +6,8 @@ type ChatFile = { id?: string | null; name?: string; type?: string; file?: { fil
 
 /**
  * A reduced port of chat/ChatControls.svelte + Controls.svelte: the files
- * attached to this chat (removable), its system prompt and its advanced
+ * attached to messages on the branch shown (read from those messages, so not
+ * removable here; #160), its system prompt and its advanced
  * parameters. What is edited here is the chat's own `params` -- sent with
  * every request and saved with the chat -- layered over the user's defaults
  * from Settings > General. Function valves are not ported.
@@ -15,14 +16,12 @@ export function ChatControls({
 	params,
 	onParams,
 	files,
-	onRemoveFile,
 	onClose,
 	admin
 }: {
 	params: Params;
 	onParams: (p: Params) => void;
 	files: ChatFile[];
-	onRemoveFile: (index: number) => void;
 	onClose: () => void;
 	admin: boolean;
 }) {
@@ -48,14 +47,6 @@ export function ChatControls({
 								<li key={f.id ?? i} className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs">
 									<FileText className="text-muted-foreground size-3.5 shrink-0" />
 									<span className="truncate">{f.name ?? f.file?.filename ?? f.id}</span>
-									<button
-										type="button"
-										aria-label={`Remove ${f.name ?? 'file'}`}
-										className="text-muted-foreground hover:text-foreground ml-auto"
-										onClick={() => onRemoveFile(i)}
-									>
-										<X className="size-3" />
-									</button>
 								</li>
 							))}
 						</ul>
