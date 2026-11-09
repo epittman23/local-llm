@@ -60,6 +60,7 @@ import {
 	decideStart,
 	fetchText,
 	groupAlive,
+	type Held,
 	isAdoptable,
 	isOwnDevServer,
 	isUiStale,
@@ -70,13 +71,16 @@ import {
 	type OwnedRecord,
 	ownedAction,
 	parseOwned,
+	portState,
 	probe,
 	readProcStat,
 	recordedLlamaPids,
+	refuseMessage,
 	runInShell,
 	runningServices,
 	type StopResult,
 	servedLlama,
+	servicesUp,
 	spawnInGroup,
 	stopGroup,
 	waitUntilReady
@@ -515,6 +519,15 @@ async function startup(): Promise<void> {
 			probe(`${origin}/health`),
 			fetchText(`${DEV_SERVER_URL}${DEV_SERVER_IDENTITY_PATH}`)
 		]);
+		// No answer is not nothing running (#422): a backend starting, reloading
+		// or too busy to answer still holds the port, and a `make backend` brings
+		// the services up before its backend listens. A managed origin is
+		// 127.0.0.1 or localhost, and `make backend` listens on 127.0.0.1.
+		let held: Held | undefined;
+		if (health === null && !adoptable) {
+			if ((await portState('127.0.0.1', port)) === 'held') held = 'port';
+			else if (((await servicesUp(repo, childEnv(process.env))) ?? 0) > 0) held = 'services';
+		}
 		const plan = decideStart({
 			origin,
 			local: true,
@@ -523,9 +536,17 @@ async function startup(): Promise<void> {
 			devServerUp: isOwnDevServer(dev, webDir),
 			adoptable,
 			// Only worth walking apps/web for when the stack is about to be started.
-			uiStale: health === null && !adoptable && existsSync(webDir) ? await isUiStale(webDir) : false,
-			port
+			uiStale: health === null && !adoptable && !held && existsSync(webDir) ? await isUiStale(webDir) : false,
+			port,
+			held
 		});
+
+		if (plan.mode === 'refuse' && plan.held) {
+			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
+			openStatus('progress');
+			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
+			return fail(refuseMessage(plan.held, origin, port, repo));
+		}
 
 		if (plan.mode === 'attach' || plan.mode === 'adopt') {
 			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_ATTACH, now()));

@@ -163,7 +163,7 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
 - `make backend`: Postgres, Redis, Jupyter and SearXNG plus the backend (`uvicorn --reload` on
   `127.0.0.1:4000`), which also serves the last build of `apps/web` at `/`.
   It owns their lifecycle: up before uvicorn, down on exit, Ctrl-C
-  included. The backend refuses to start without Redis (`REDIS_URL`), which
+  included; services already running before it started are left up. The backend refuses to start without Redis (`REDIS_URL`), which
   holds session revocation. `make backend LLLM_BACKEND_HOST=0.0.0.0` exposes it to the LAN;
   the chat socket accepts the page's own origin, so a LAN page needs no
   `CORS_ALLOW_ORIGIN` entry. `LLLM_UVICORN_FLAGS` (default `--reload`)

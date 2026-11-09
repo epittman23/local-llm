@@ -49,7 +49,8 @@ running:
 
 | Found | It does | On close |
 |---|---|---|
-| Nothing answering on `:4000` | builds `apps/web` if any source is newer than `dist/`, then runs `make backend` | stops everything it started |
+| Nothing on `:4000`: `/health` does not answer, a connection to the port is refused, and none of the Compose services runs | builds `apps/web` if any source is newer than `dist/`, then runs `make backend` | stops everything it started |
+| Something holds `:4000` but `/health` does not answer (a terminal `make backend` starting, reloading or busy, or another program on the port), or the Compose services run with nothing on the port yet (a `make backend` still bringing them up or syncing, or services an earlier run left up) | starts nothing and says what it found: wait for it and Retry, or stop it first; for the services it names the `docker compose ... down` that stops them. It never runs a second `make backend` beside one, whose exit would take the services down under the first | nothing to stop |
 | A backend already up (from a terminal) | connects to it: nothing is restarted or rebuilt | leaves it running |
 | The stack it started before it crashed, for the same server address and checkout (`http://localhost` and `http://127.0.0.1` count as one address; `[::1]` and `https://` forms are never managed, so there is nothing to adopt) | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
 | That stack, started for another address or checkout, recorded by an earlier version of the app (which named neither), or found by a launch for a remote server | stops it first, as closing the app would, then goes on as if it had not been found; if the stop had to be forced and left containers or a `llama-server` running, it says so and waits for Retry | as the row that then applies |
@@ -58,6 +59,19 @@ running:
 | A server address that isn't plain `http:` at `127.0.0.1` or `localhost` | connects only (after stopping an earlier stack, above) | nothing to stop |
 
 `:5174` and `:4000` are different origins, so each keeps its own login.
+
+A `/health` that does not answer in 1.5 s is not taken for nothing running
+(#422). The app then connects to the port on `127.0.0.1` (only a refused
+connection means nothing listens; the kernel accepts for a backend too busy
+to answer, and during a `--reload` restart) and, if that is refused, asks
+Compose for the services' running containers (`docker compose ps -q`, up to
+5 s). Compose that cannot be asked does not stop a start; `make backend`
+then says what is wrong with Docker. A `make backend` process is not looked
+for directly, so one that has not started a container yet (still pulling
+images on a first run or after an update) is not seen: the app starts its
+own beside it, and whichever of the two exits first brings the services down, as
+before. Wait for a terminal `make backend` to get past its image pulls
+before opening the app.
 
 The sources it compares with `dist/` are `apps/web`'s `src/` and `public/`
 (every file and folder in them, so a renamed or deleted file counts),
@@ -95,7 +109,9 @@ If it started the stack, the dialog shows the shutdown:
    chat reply still being written, saving what arrived (up to 10 s more), then
    benchmark jobs and the served model.
 4. **The Makefile's trap brings the Compose services down** (Postgres,
-   Redis, Jupyter and SearXNG).
+   Redis, Jupyter and SearXNG). It brings down only what its own run
+   started: any already running when `make backend` began are left up. The
+   app starts its stack only with none running, so this is all of them.
 
 The app waits until the whole group has exited, with a budget of 90 s. Past
 that, it kills the group, marks the steps it never reached as "not reached"

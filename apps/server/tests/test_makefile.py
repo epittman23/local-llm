@@ -214,8 +214,70 @@ def test_backend_keeps_a_spaced_or_quoted_checkout_path_whole(tmp_path, name):
     compose_file = str(root / 'infra' / 'docker-compose.yml')
     compose = [c['argv'] for c in calls if c['tool'] == 'docker' and c['argv'][:1] == ['compose']]
     assert [argv[argv.index('-f') + 1] for argv in compose] == [compose_file] * len(compose)
-    assert 'up' in compose[0]
+    # The first asks what already runs (#422), the next brings the services up.
+    assert compose[0][-4:] == ['ps', '--services', '--status', 'running']
+    assert 'up' in compose[1]
     assert compose[-1][-1] == 'down'
+    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+
+
+# --- make backend stops only what it started (#422) ---------------------------
+
+
+def _compose_after_uvicorn(calls: list[dict]) -> list[list[str]]:
+    """The compose calls the EXIT trap made: everything after uvicorn ran."""
+    uvicorn = next(i for i, c in enumerate(calls) if c['tool'] == 'python' and 'uvicorn' in c['argv'])
+    return [c['argv'][c['argv'].index('-f') + 2 :] for c in calls[uvicorn:] if c['tool'] == 'docker']
+
+
+def test_backend_asks_what_runs_before_bringing_the_services_up(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
+    assert result.returncode == 0, result.stderr
+    docker = [c['argv'] for c in calls if c['tool'] == 'docker']
+    ps = next(i for i, argv in enumerate(docker) if argv[-4:] == ['ps', '--services', '--status', 'running'])
+    up = next(i for i, argv in enumerate(docker) if 'up' in argv)
+    assert ps < up
+
+
+def test_backend_brings_everything_down_when_nothing_ran_before(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
+    assert result.returncode == 0, result.stderr
+    assert _compose_after_uvicorn(calls) == [['down']]
+    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+
+
+def test_backend_leaves_services_that_ran_before_it_up(tmp_path):
+    """Another `make backend` (starting, reloading) owns them: this run's exit must not take them down."""
+    root = _checkout(tmp_path)
+    every = 'postgres\nredis\njupyter\nsearxng'
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER=every)
+    assert result.returncode == 0, result.stderr
+    assert _compose_after_uvicorn(calls) == []
+    assert '==> Stopping Postgres' not in result.stdout
+    assert 'leaving Postgres, Redis, Jupyter and SearXNG running' in result.stdout
+
+
+def test_backend_stops_only_the_services_it_started(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(
+        root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER='redis\npostgres'
+    )
+    assert result.returncode == 0, result.stderr
+    assert _compose_after_uvicorn(calls) == [['rm', '-f', '-s', 'jupyter', 'searxng']]
+    assert '==> Stopping Postgres' not in result.stdout
+
+
+def test_backend_that_cannot_ask_compose_goes_on_and_brings_everything_down(tmp_path):
+    """A failed `ps` counts as nothing running: the recipe goes on to `up`, and its trap runs `down`."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_EXIT_DOCKER_COMPOSE='1')
+    assert result.returncode != 0
+    compose = [c['argv'][c['argv'].index('-f') + 2 :] for c in calls if c['tool'] == 'docker']
+    assert compose[0] == ['ps', '--services', '--status', 'running']
+    assert compose[1][:1] == ['up']
+    assert compose[-1] == ['down']
     assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
 
 
