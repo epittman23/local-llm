@@ -321,7 +321,10 @@ def _vector_hit_labels(results, seen_ids: set, rows_by_id: dict | None = None) -
 
     A hit whose memory is in ``rows_by_id`` is labelled from that row, so an
     edit whose vector write failed is shown as stored, not as the vector's
-    older text (#303).
+    older text (#303). A hit whose memory row no longer exists (a deleted memory
+    whose vector delete failed) is dropped, not shown from the vector's text and
+    not backfilled: the search asks for a fixed ``k`` candidates, so a stale one
+    just leaves fewer. A hit with no id cannot be checked and is kept.
     """
     rows_by_id = rows_by_id or {}
     if not (results and hasattr(results, 'documents') and results.documents):
@@ -338,9 +341,11 @@ def _vector_hit_labels(results, seen_ids: set, rows_by_id: dict | None = None) -
             memory_id = results.ids[0][doc_idx]
         if memory_id and memory_id in seen_ids:
             continue
+        row = rows_by_id.get(memory_id) if memory_id else None
+        if memory_id and row is None:
+            continue
         if memory_id:
             seen_ids.add(memory_id)
-        row = rows_by_id.get(memory_id) if memory_id else None
         if row is not None:
             labels.append((Memories.normalize_memory_type(row.type), memory_label(row)))
             continue

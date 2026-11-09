@@ -309,6 +309,7 @@ OpenAI-compatible endpoint.
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
 | The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
 | The code interpreter (Jupyter), web search (SearXNG), retrieval models | [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md) |
+| Turning OAuth sign-in on (environment variables only) | [docs/guides/oauth.md](docs/guides/oauth.md) |
 | Agent skills, the reviewer agent, codebase-memory-mcp | [docs/guides/agent-tooling.md](docs/guides/agent-tooling.md) |
 | Why things are the way they are | [docs/decisions.md](docs/decisions.md) |
 | History and planned direction | [docs/ROADMAP.md](docs/ROADMAP.md) |
