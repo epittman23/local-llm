@@ -214,12 +214,16 @@ async def can_read_all_folder_files(
     return len(accessible) == len(entries)
 
 
-async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSession | None = None) -> list[dict]:
-    """Return the folder entries its owner can still delegate.
+async def get_owner_accessible_folder_files(
+    folder: FolderModel, db: AsyncSession | None = None, *, reader: UserModel | None = None
+) -> list[dict]:
+    """Return the folder entries a chat in it may use.
 
-    A note or knowledge base is passed on only if its owner could share it on
-    directly: they own it or may write it, as changing its own sharing
-    requires (#358).
+    A note or knowledge base is passed on only if the folder's owner could
+    share it on directly: they own it or may write it, as changing its own
+    sharing requires (#358, #844). With `reader`, the user chatting in the
+    folder, an entry they may read themselves is kept too, since they could
+    attach it directly (#846). Entries keep the folder's order.
     """
     files = (folder.data or {}).get('files') or []
     if not files:
@@ -229,9 +233,19 @@ async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSessio
     if not owner:
         return []
 
-    return await get_accessible_folder_files(
+    if reader is not None and reader.id == owner.id:
+        # The owner reads all they may write, so one check covers both.
+        return await get_accessible_folder_files(files, reader, db=db)
+
+    passed_on = await get_accessible_folder_files(
         files, owner, db=db, note_permission='write', collection_permission='write'
     )
+    if reader is None:
+        return passed_on
+
+    readable = await get_accessible_folder_files(files, reader, db=db)
+    kept = {(entry['type'], entry['id']) for entry in [*passed_on, *readable]}
+    return [entry for entry in files if isinstance(entry, dict) and (entry.get('type'), entry.get('id')) in kept]
 
 
 def is_folder_entry(model_knowledge: list[dict] | None, item_type: str, item_id: str) -> bool:
@@ -239,7 +253,8 @@ def is_folder_entry(model_knowledge: list[dict] | None, item_type: str, item_id:
 
     Such an entry counts as readable, as on the legacy path (#358, #755): the
     folder was checked readable, and its entries limited to what its owner may
-    pass on, before they were attached (`_apply_folder`).
+    pass on or the chatting user may read themselves (#846), before they were
+    attached (`_apply_folder`).
     """
     return any(
         item.get('source') == 'folder' and item.get('type') == item_type and item.get('id') == item_id

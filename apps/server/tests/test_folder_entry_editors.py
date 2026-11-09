@@ -12,7 +12,7 @@ on both sides:
   merely read);
 - a note or knowledge base reaches the folder's chats only if the owner
   could share it on directly: they own it or may write it, as its own
-  sharing requires.
+  sharing requires, or if the chatting user may read it themselves (#846).
 
 Requests carry real tokens through the real auth dependency, against users,
 folders, notes, knowledge bases and grants in the test run's migrated SQLite database, and
@@ -303,8 +303,8 @@ def test_a_note_an_editor_may_write_reaches_the_folders_reader(client, people, f
 
 def test_a_note_the_owner_may_only_read_is_kept_but_not_passed_on(client, people, folder, monkeypatch):
     # Stored, as the owner may read it, but passed on through the folder to no
-    # one, the owner included, since the owner may not share it on; attaching
-    # the note itself still works for the owner.
+    # one else, since the owner may not share it on. The owner's own chats in
+    # the folder use it, as attaching the note itself would (#846).
     reader = _user()
     _run(AccessGrants.grant_access('folder', folder.id, 'user', reader.id, 'read'))
     note = _note(people.third, people.owner)
@@ -312,7 +312,7 @@ def test_a_note_the_owner_may_only_read_is_kept_but_not_passed_on(client, people
     assert _save(client, people.owner, folder.id, [{'type': 'note', 'id': note}]).status_code == 200
     assert _files(folder.id) == [{'type': 'note', 'id': note}]
     assert _context(reader, folder.id, monkeypatch) == []
-    assert _context(people.owner, folder.id, monkeypatch) == []
+    assert _context(people.owner, folder.id, monkeypatch) == [_note_text(note)]
 
 
 def test_an_editor_of_an_admins_folder_creates_a_subfolder_only_with_notes_they_may_write(client, monkeypatch):

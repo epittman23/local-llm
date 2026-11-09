@@ -28,6 +28,7 @@ FOLDERS = {
     'other': SimpleNamespace(id='other', user_id='owner', data={}),
 }
 READABLE_FOLDERS = {'shared'}
+READERS = []
 FOLDER_ENTRIES = {'shared': [{'type': 'note', 'id': 'n_folder'}], 'other': [{'type': 'note', 'id': 'n_private'}]}
 
 
@@ -44,7 +45,8 @@ def _sources(monkeypatch, items):
     async def folder_access(user_id, folder, permission, db=None):
         return folder.id in READABLE_FOLDERS
 
-    async def entries(folder, db=None):
+    async def entries(folder, db=None, reader=None):
+        READERS.append(reader)
         return [dict(e) for e in FOLDER_ENTRIES[folder.id]]
 
     async def config_get(key, default=None):
@@ -85,3 +87,10 @@ def test_a_note_in_a_folder_the_user_cannot_read_does_not(monkeypatch):
 
 def test_a_note_attached_on_its_own_still_needs_its_own_access(monkeypatch):
     assert _sources(monkeypatch, [{'type': 'note', 'id': 'n_folder'}]) == []
+
+
+def test_the_folders_entries_are_judged_for_the_chatting_user_too(monkeypatch):
+    """The folder keeps what the user may read themselves, so it is asked about them (#846)."""
+    READERS.clear()
+    _sources(monkeypatch, [{'type': 'folder', 'id': 'shared'}])
+    assert READERS == [USER]

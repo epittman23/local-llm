@@ -239,7 +239,7 @@ def _run(spec: dict, monkeypatch) -> dict:
         log.append(['folder_access', user_id, folder.id, permission])
         return folder.id in FOLDER_ACCESS
 
-    async def owner_accessible_folder_files(folder):
+    async def owner_accessible_folder_files(folder, reader=None):
         return copy.deepcopy(FOLDERS[folder.id]['files'])
 
     async def get_note_by_id(note_id):

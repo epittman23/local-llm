@@ -2462,7 +2462,7 @@ async def _apply_folder(form_data: dict, metadata: dict, user) -> dict:
             else:
                 # Native FC: skip RAG injection, builtin tools
                 # will read folder knowledge from metadata.
-                metadata['folder_knowledge'] = await get_owner_accessible_folder_files(folder)
+                metadata['folder_knowledge'] = await get_owner_accessible_folder_files(folder, reader=user)
     return form_data
 
 
