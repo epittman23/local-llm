@@ -3,6 +3,7 @@ import {
 	automationFields,
 	automationPayload,
 	buildRrule,
+	channelOptions,
 	defaultSchedule,
 	destinationLabel,
 	folderOptions,
@@ -151,6 +152,15 @@ describe('destinations', () => {
 		expect(folderPath(folders[0], folders)).toBe('Alpha');
 		// loop1 -> loop2 -> loop1: each parent is visited once, then it stops.
 		expect(folderPath(folders[3], folders)).toBe('L1 / L2');
+	});
+	it('offers channels by name, leaving out DMs and public groups not joined (#331)', () => {
+		const channels = [
+			{ id: 'z', name: 'zeta', type: 'group', is_member: true },
+			{ id: 'd', name: '', type: 'dm' },
+			{ id: 'l', name: 'lobby', type: 'group', is_member: false },
+			{ id: 'a', name: 'alpha', type: '' }
+		];
+		expect(channelOptions(channels).map((c) => c.id)).toEqual(['a', 'z']);
 	});
 	it('labels the destination', () => {
 		const a = (x: object) => ({ folder_id: null, data: { prompt: '', model_id: '', rrule: '' }, ...x }) as any;

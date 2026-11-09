@@ -202,7 +202,8 @@ async def build_tool_approval_resume_payload(chat_id: str, message_id: str, chat
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Tool call parent message is missing.')
 
     chat_data = chat.chat or {}
-    message_meta = assistant_message.get('meta') if isinstance(assistant_message.get('meta'), dict) else {}
+    raw_meta = assistant_message.get('meta')
+    message_meta = raw_meta if isinstance(raw_meta, dict) else {}
     chat_params = chat_data.get('params') if isinstance(chat_data.get('params'), dict) else {}
     params = {
         **chat_params,
@@ -222,12 +223,17 @@ async def build_tool_approval_resume_payload(chat_id: str, message_id: str, chat
     if params.get('system'):
         messages.append({'role': 'system', 'content': params.get('system')})
 
+    # The documents the paused turn was sent with, none included: the chat's
+    # stored list is the last turn's, perhaps another branch's (#160). Only a
+    # message paused before its files were recorded falls back to it.
+    files = message_meta['files'] if 'files' in message_meta else chat_data.get('files')
+
     return {
         'stream': params.get('stream_response', True),
         'model': model_id,
         'messages': messages,
         'params': params,
-        'files': message_meta.get('files') or chat_data.get('files') or None,
+        'files': files or None,
         'filter_ids': message_meta.get('filter_ids') or None,
         'tool_ids': message_meta.get('tool_ids') or None,
         'skill_ids': message_meta.get('skill_ids') or None,

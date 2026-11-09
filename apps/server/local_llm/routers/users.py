@@ -238,6 +238,7 @@ class SharingPermissions(BaseModel):
     public_chats: bool = False
     open_chats: bool = False
     public_calendars: bool = False
+    public_channels: bool = False
 
 
 class AccessGrantsPermissions(BaseModel):

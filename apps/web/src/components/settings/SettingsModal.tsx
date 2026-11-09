@@ -1,5 +1,15 @@
 import { ChevronLeft, Search } from 'lucide-react';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import {
+	Component,
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	type ReactNode,
+	Suspense,
+	useEffect,
+	useMemo,
+	useState
+} from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -7,7 +17,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
 import { AdminTabIcon } from './AdminTabIcon';
-import { adminTabComponents, implementedTabIds } from './adminTabComponents';
+import { implementedTabIds, tabLoaders } from './adminTabComponents';
 import {
 	adminTabSegment,
 	availableTabs,
@@ -23,6 +33,44 @@ const tabButtonClass = (active: boolean) =>
 		'flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-left text-xs transition-colors duration-75 md:w-full',
 		active ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
 	);
+
+const lazyTabs = new Map<string, LazyExoticComponent<ComponentType>>();
+
+/** The lazy component for a tab; a higher `attempt` makes a fresh one, so a failed import is retried. */
+function lazyTab(id: string, attempt: number) {
+	const key = `${id}:${attempt}`;
+	let tab = lazyTabs.get(key);
+	if (!tab) {
+		tab = lazy(tabLoaders[id]);
+		lazyTabs.set(key, tab);
+	}
+	return tab;
+}
+
+/** Keeps a tab that fails to load (server down, stale build) from taking the page down with it. */
+class TabErrorBoundary extends Component<{ onRetry: () => void; children: ReactNode }, { failed: boolean }> {
+	state = { failed: false };
+
+	static getDerivedStateFromError() {
+		return { failed: true };
+	}
+
+	render() {
+		if (!this.state.failed) return this.props.children;
+		return (
+			<div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm">
+				<p className="text-muted-foreground">This tab could not be loaded. Check your connection to the server.</p>
+				<button
+					type="button"
+					className="bg-muted hover:bg-muted/70 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
+					onClick={this.props.onRetry}
+				>
+					Retry
+				</button>
+			</div>
+		);
+	}
+}
 
 /**
  * Ports chat/SettingsModal.svelte: a searchable, grouped tab list beside the
@@ -43,6 +91,7 @@ export function SettingsModal() {
 	const config = useConfigStore((s) => s.config);
 	const [search, setSearch] = useState('');
 	const [selected, setSelected] = useState<string | null>(null);
+	const [attempts, setAttempts] = useState<Record<string, number>>({});
 
 	const tabs = useMemo(() => availableTabs(user, config, implementedTabIds), [user, config]);
 	const filtered = useMemo(() => filterTabs(tabs, search), [tabs, search]);
@@ -61,7 +110,8 @@ export function SettingsModal() {
 	}, [filtered]);
 
 	if (tabs.length === 0) return null;
-	const Active = selected ? adminTabComponents[selected] : null;
+	const attempt = selected ? (attempts[selected] ?? 0) : 0;
+	const Active = selected && tabLoaders[selected] ? lazyTab(selected, attempt) : null;
 
 	return (
 		<Dialog open={open} onOpenChange={(o) => !o && closeSettings()}>
@@ -152,15 +202,20 @@ export function SettingsModal() {
 						className="min-h-0 flex-1 overflow-hidden"
 					>
 						{Active && (
-							<Suspense
-								fallback={
-									<div className="flex h-full items-center justify-center">
-										<Spinner className="size-6" />
-									</div>
-								}
+							<TabErrorBoundary
+								key={`${selected}:${attempt}`}
+								onRetry={() => selected && setAttempts((a) => ({ ...a, [selected]: (a[selected] ?? 0) + 1 }))}
 							>
-								<Active key={selected} />
-							</Suspense>
+								<Suspense
+									fallback={
+										<div className="flex h-full items-center justify-center">
+											<Spinner className="size-6" />
+										</div>
+									}
+								>
+									<Active key={selected} />
+								</Suspense>
+							</TabErrorBoundary>
 						)}
 					</div>
 				</div>

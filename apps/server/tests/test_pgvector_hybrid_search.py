@@ -1,12 +1,12 @@
 """Keyword-only hybrid search falls back to vector search when no chunk matches (#347).
 
 With the BM25 weight at 1.0, native pgvector hybrid search skips vector
-search, and its full-text query ANDs every word, so a natural-language
+search, and its full-text query ANDed every word, so a natural-language
 question usually matched no chunk and chat got no context at all. The
 caller now embeds the query and asks for vector results when the keyword
-search came back empty. Whether the full-text query should match any word
-rather than every word is a retrieval-design question left to the owner
-(see #347).
+search came back empty. The full-text query now matches any English-stemmed
+word (test_pgvector_keyword_query.py), and a question of only stop words
+still matches nothing, so this fallback answers it.
 """
 
 import asyncio

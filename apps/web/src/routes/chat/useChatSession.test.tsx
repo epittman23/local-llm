@@ -750,3 +750,106 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 });
+
+describe('useChatSession chat documents (#160)', () => {
+	const DOC = { type: 'file', id: 'd1', name: 'paper.pdf', content_type: 'application/pdf' };
+	/**
+	 * q1 attached DOC and a1 answered it; q2, a sibling with no files, was
+	 * answered by a2, the branch shown. The chat's stored list, saved before
+	 * documents were read from the branch, still names DOC.
+	 */
+	const branched = {
+		id: 'F',
+		chat: {
+			title: 'F',
+			models: ['m'],
+			files: [DOC],
+			history: {
+				currentId: 'a2',
+				messages: {
+					q1: { id: 'q1', parentId: null, childrenIds: ['a1'], role: 'user', content: 'read', files: [DOC] },
+					a1: { id: 'a1', parentId: 'q1', childrenIds: [], role: 'assistant', content: 'ok', done: true },
+					q2: { id: 'q2', parentId: null, childrenIds: ['a2'], role: 'user', content: 'other' },
+					a2: { id: 'a2', parentId: 'q2', childrenIds: [], role: 'assistant', content: 'x', done: true }
+				}
+			}
+		}
+	};
+
+	beforeEach(() => {
+		useAuthStore.setState({
+			status: 'authenticated',
+			token: 't',
+			user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' }
+		});
+		probeModels = [{ id: 'm' }];
+	});
+	afterEach(() => {
+		probeModels = [];
+		useAuthStore.setState({ status: 'pending', token: null, user: null });
+		for (const k of Object.keys(pending)) delete pending[k];
+	});
+
+	async function openBranched() {
+		vi.mocked(chatsApi.getChatById).mockImplementationOnce(async () => structuredClone(branched) as never);
+		renderAt('F');
+		await waitFor(() => expect(pending.F).toBeDefined());
+		await act(async () => pending.F({ task_ids: [] }));
+		await waitFor(() => expect(session.chat?.id).toBe('F'));
+	}
+
+	/** Sends a prompt and returns the files its completion request carried. */
+	async function filesSent(prompt: string) {
+		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+		send.mockClear();
+		act(() => void session.submit(prompt, [], 'm'));
+		await waitFor(() => expect(send).toHaveBeenCalled());
+		const body = send.mock.calls.at(-1)?.[1] as { files?: unknown } | undefined;
+		expect(body).toBeDefined();
+		// The reply finishes, so the next prompt is sent rather than queued.
+		act(() => session.setHistory((h) => updateMessage(h, h.currentId ?? '', { done: true, content: 'done' })));
+		return body?.files;
+	}
+
+	const showBranch = (leaf: string) => act(() => session.setHistory((h) => ({ ...h, currentId: leaf })));
+
+	it('switching branches switches the documents Chat Controls lists and the next turn sends', async () => {
+		await openBranched();
+		// Not the stored list: only what the branch shown carries.
+		expect(session.chatFiles).toEqual([]);
+		expect(await filesSent('on q2')).toBeUndefined();
+		const q2Leaf = session.history.currentId ?? '';
+
+		showBranch('a1');
+		expect(session.chatFiles).toEqual([DOC]);
+		expect(await filesSent('on q1')).toEqual([DOC]);
+
+		showBranch(q2Leaf);
+		expect(session.chatFiles).toEqual([]);
+		expect(await filesSent('on q2 again')).toBeUndefined();
+		// Left out, not deleted: the document stays on its own message.
+		expect(session.history.messages.q1.files).toEqual([DOC]);
+	});
+
+	it('saving a branch switch saves the documents of the branch saved', async () => {
+		await openBranched();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		const saved = () =>
+			(vi.mocked(chatsApi.updateChatById).mock.calls.at(-1)?.[2] as { files?: unknown } | undefined)?.files;
+
+		// As ChatPage's onBranch does: saved in the same tick, before a render.
+		await act(async () => {
+			const h = { ...session.history, currentId: 'a1' };
+			session.setHistory(h);
+			await session.save(h);
+		});
+		expect(saved()).toEqual([DOC]);
+
+		await act(async () => {
+			const h = { ...session.history, currentId: 'a2' };
+			session.setHistory(h);
+			await session.save(h);
+		});
+		expect(saved()).toEqual([]);
+	});
+});
