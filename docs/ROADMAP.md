@@ -84,6 +84,7 @@ timeline
       2026-11-08 : Personal direct connections hidden from chat (deliberate gap) : their models are left out of every list, as no browser-side handler answers the server's chat request : Settings > Connections says so
       2026-11-08 : OAuth provider configuration is environment-only : the unused Authentication provider fields removed, sign-out reads the environment, variables documented
       2026-11-08 : Desktop app offers to stop only the llama-server its stack served : recorded by pid and start time from the backend's /check : no offer when none is recorded
+      2026-11-08 : Saving an access list filters only the grants it changes : a collaborator cannot remove a grant they could not add, an owner may remove any grant on their own resource : additions still need the sharing permission
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs
