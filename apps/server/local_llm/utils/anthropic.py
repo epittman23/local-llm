@@ -563,6 +563,72 @@ def convert_openai_to_anthropic_response(
     }
 
 
+def _upstream_error_code(error) -> int | None:
+    code = error.get('code') or error.get('status') if isinstance(error, dict) else None
+    if code is None:
+        return None
+    try:
+        return int(code)
+    except (TypeError, ValueError):
+        return None
+
+
+def upstream_error_status_and_type(error) -> tuple[int, str]:
+    """The HTTP status and Anthropic error type that stand for an upstream failure.
+
+    An upstream 4xx other than 429 is not the caller's mistake in this
+    request, and its text may carry connection details, so it is reported as
+    a gateway failure rather than echoed.
+    """
+    code = _upstream_error_code(error)
+    if code == 429:
+        return 429, 'rate_limit_error'
+    if code in (503, 529):
+        return 529, 'overloaded_error'
+    return 502, 'api_error'
+
+
+_UPSTREAM_ERROR_MESSAGES = {
+    'rate_limit_error': 'The upstream model provider rate-limited the request.',
+    'overloaded_error': 'The upstream model provider is overloaded.',
+    'api_error': 'The upstream model request failed.',
+}
+
+
+def anthropic_error_payload(error_type: str = 'api_error') -> dict:
+    """Anthropic's error body; the message is fixed text, never the upstream's own."""
+    return {
+        'type': 'error',
+        'error': {
+            'type': error_type,
+            'message': _UPSTREAM_ERROR_MESSAGES.get(error_type, _UPSTREAM_ERROR_MESSAGES['api_error']),
+        },
+    }
+
+
+def anthropic_error_for_openai_response(openai_response: dict) -> tuple[int, dict] | None:
+    """The (HTTP status, Anthropic error body) for a non-streaming upstream failure, else None.
+
+    A failure is an `error` with no choices, or a first choice that finished
+    with `error`.
+    """
+    choices = openai_response.get('choices')
+    first = choices[0] if choices and isinstance(choices[0], dict) else None
+    if first is None:
+        if not openai_response.get('error'):
+            return None
+    elif first.get('finish_reason') != 'error':
+        return None
+    error = openai_response.get('error') or first and first.get('error')
+    status_code, error_type = upstream_error_status_and_type(error)
+    log.error(
+        'Upstream failure on a non-streaming Anthropic request (status=%s, type=%s).',
+        status_code,
+        error_type,
+    )
+    return status_code, anthropic_error_payload(error_type)
+
+
 _STREAM_STOP_REASONS = {
     'stop': 'end_turn',
     'length': 'max_tokens',
@@ -645,6 +711,8 @@ class _AnthropicStreamConverter:
         self.server_tool_use = None
         self.service_tier = None
         self.stop_reason = 'end_turn'
+        # The Anthropic error type once the upstream has failed; the stream then ends with an error event.
+        self.error_type = None
 
         self.current_block_index = 0
         self.thinking_block_open = False
@@ -677,6 +745,8 @@ class _AnthropicStreamConverter:
 
         choices = data.get('choices', [])
         if not choices:
+            if data.get('error'):
+                self.fail(data['error'])
             return
         delta = choices[0].get('delta', {})
         finish_reason = choices[0].get('finish_reason')
@@ -696,8 +766,15 @@ class _AnthropicStreamConverter:
             for tool_call in tool_calls:
                 yield from self._tool_call(tool_call)
 
-        if finish_reason is not None:
+        if finish_reason == 'error':
+            self.fail(data.get('error') or choices[0].get('error'))
+        elif finish_reason is not None:
             self.stop_reason = _STREAM_STOP_REASONS.get(finish_reason, 'end_turn')
+
+    def fail(self, error=None) -> None:
+        """Records an upstream failure; close() then ends the stream with an error event."""
+        log.error('Upstream failure in the Anthropic stream conversion: %r', error)
+        self.error_type = upstream_error_status_and_type(error)[1]
 
     def _update_usage(self, usage_data) -> None:
         if not isinstance(usage_data, dict):
@@ -867,7 +944,7 @@ class _AnthropicStreamConverter:
         yield _block_stop(tool['block_index'])
 
     def close(self):
-        """Closes whatever is still open, then ends the message."""
+        """Closes whatever is still open, then ends the message (after a failure, with an error event)."""
         if self.thinking_block_open:
             yield _block_stop(self.current_block_index)
             self.current_block_index += 1
@@ -876,6 +953,10 @@ class _AnthropicStreamConverter:
         for tool in self.tracked_tool_calls.values():
             if tool['started'] and not tool['stopped']:
                 yield _block_stop(tool['block_index'])
+
+        if self.error_type:
+            yield _sse(anthropic_error_payload(self.error_type))
+            return
 
         usage = {'output_tokens': self.output_tokens}
         optional_usage = {
@@ -914,7 +995,11 @@ async def openai_stream_to_anthropic_stream(openai_stream_generator, model: str 
     conversion carries on with the next one. An error from the source stream
     itself ends the conversion there. Either way, whatever is open is closed
     and the message ended, so the client still receives a well-formed
-    stream. That close runs after the try, not in a finally, so a client
+    stream: an upstream failure (an error chunk, a choice that finished with
+    `error`, or an exception from the source) closes what is open and ends
+    with Anthropic's `error` event instead of a message_delta and
+    message_stop, so a client never reads a failure as a finished message.
+    That close runs after the try, not in a finally, so a client
     disconnect (GeneratorExit, not an Exception) is not answered with more
     events.
     """
@@ -931,6 +1016,7 @@ async def openai_stream_to_anthropic_stream(openai_stream_generator, model: str 
                     log.warning('Skipping a chunk the Anthropic stream conversion could not read: %s', e)
     except Exception as e:
         log.error(f'Error in Anthropic stream conversion: {e}')
+        converter.fail(e)
 
     for event in converter.close():
         yield event
