@@ -90,7 +90,8 @@ make backend
 
 which brings up Postgres, Redis, Jupyter and SearXNG (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears them back down when the
-backend stops (Ctrl-C included). It waits for Postgres's healthcheck before
+backend stops (Ctrl-C included); services that were already running when it
+started (another `make backend`'s) are left up. It waits for Postgres's healthcheck before
 starting the backend, which runs its migrations at startup. Each stage prints a `==> ` line as it
 starts. uvicorn runs with `--reload` unless `LLLM_UVICORN_FLAGS` replaces it:
 `make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'` gives a
@@ -123,7 +124,9 @@ hot reload, proxying API/WebSocket calls to the backend (see
 of their own and needs no terminal. Opened from the app launcher, it starts the
 stack above when nothing is running, showing each step, and stops it again
 when it closes. With a stack already started from a terminal, it just
-connects and leaves that stack running. Build and install it once:
+connects and leaves that stack running; one still starting or reloading is
+not taken for nothing, and the app asks you to wait for it rather than start
+a second one. Build and install it once:
 
 ```bash
 sudo dnf install rpm-build libxcrypt-compat

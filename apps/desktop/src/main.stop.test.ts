@@ -61,6 +61,10 @@ const h = vi.hoisted(() => {
 		procs: new Map<number, { comm: string; startTicks: string }>(),
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
+		/** Whether the backend's port refuses a connection or something holds it, before a start (#422). */
+		port: 'refused' as 'refused' | 'held',
+		/** Containers compose lists as running before a start; null when it can't be asked (#422). */
+		servicesUp: 0 as number | null,
 		/** The args of each app.relaunch (#424). */
 		relaunches: [] as unknown[],
 		/** The application menu's template, so a test can click an item. */
@@ -167,6 +171,8 @@ const h = vi.hoisted(() => {
 		state.served = null;
 		state.procs = new Map();
 		state.servicesLeft = 0;
+		state.port = 'refused';
+		state.servicesUp = 0;
 		state.relaunches = [];
 		state.menu = [];
 		state.devServer = null;
@@ -229,7 +235,9 @@ vi.mock('./stack', async (original) => ({
 		await h.state.stopHold;
 		return h.state.stopResult;
 	},
-	runningServices: async () => h.state.servicesLeft
+	runningServices: async () => h.state.servicesLeft,
+	portState: async () => h.state.port,
+	servicesUp: async () => h.state.servicesUp
 }));
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -986,4 +994,52 @@ test('a login shell that cannot be spawned fails the start, saying why, with no 
 	expect(shown.progress.error).toContain('Could not start make backend');
 	expect(shown.progress.error).toContain('spawn /nonexistent/shell ENOENT');
 	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
+});
+
+// --- A port held, or the services up, with no answer on /health (#422) ----------
+
+test('a port that accepts connections but does not answer starts no second backend, and says why (#422)', async () => {
+	h.state.port = 'held';
+	await launch();
+
+	expect(h.state.spawned).toBe(0);
+	expect(appWindows()).toHaveLength(0);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'check')?.state).toBe('failed');
+	expect(shown.progress.error).toContain('Port 4000 is in use');
+	expect(shown.progress.error).toContain('does not start a second backend');
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
+});
+
+test('services already running with nothing on the port start no second backend, and name the stop command (#422)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	h.state.servicesUp = 4;
+	await launch();
+
+	expect(h.state.spawned).toBe(0);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.error).toContain('are already running');
+	expect(shown.progress.error).toContain(`docker compose -f ${HERE.repoPath}/infra/docker-compose.yml down`);
+});
+
+test('a refused connection with the services down starts the stack as before (#422)', async () => {
+	await launch();
+	expect(h.state.spawned).toBe(1);
+});
+
+test('compose that cannot be asked does not stop a start; make backend then says why (#422)', async () => {
+	h.state.servicesUp = null;
+	await launch();
+	expect(h.state.spawned).toBe(1);
+});
+
+test('the stack this app started before a crash is adopted even while it holds the port without answering (#422)', async () => {
+	recordEarlierStack({ origin: HERE.serverUrl, repo: HERE.repoPath }, HERE);
+	h.state.port = 'held';
+	h.state.servicesUp = 4;
+	await launch();
+
+	expect(h.state.spawned).toBe(0);
+	expect(h.state.stops).toEqual([]);
+	expect(appWindows()).toHaveLength(1);
 });

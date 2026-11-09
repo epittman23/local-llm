@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { type AddressInfo, createServer as createTcpServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	childEnv,
 	composeRunningCommand,
+	composeUpCommand,
 	countRunning,
 	DEV_SERVER_IDENTITY_PATH,
 	DEV_SERVER_URL,
@@ -23,7 +24,10 @@ import {
 	parseListenerPid,
 	parseOwned,
 	parseProcStat,
+	portState,
+	probe,
 	recordedLlamaPids,
+	refuseMessage,
 	type StartInput,
 	servedLlama,
 	shellQuote,
@@ -86,6 +90,86 @@ describe('decideStart', () => {
 			loadUrl: 'https://llm.example.ts.net',
 			buildUi: false
 		});
+	});
+});
+
+describe('a port held without an answer (#422)', () => {
+	it('starts the stack only when nothing holds the port and the services are down', () => {
+		expect(decideStart(base).mode).toBe('own');
+		expect(decideStart({ ...base, held: 'port', uiStale: true })).toEqual({
+			mode: 'refuse',
+			loadUrl: 'http://127.0.0.1:4000',
+			buildUi: false,
+			held: 'port'
+		});
+		expect(decideStart({ ...base, held: 'services' })).toMatchObject({ mode: 'refuse', held: 'services' });
+	});
+
+	it('still attaches to a backend that answers, and adopts its own stack', () => {
+		expect(decideStart({ ...base, backendUp: true }).mode).toBe('attach');
+		expect(decideStart({ ...base, adoptable: true, held: 'port' }).mode).toBe('adopt');
+	});
+
+	it('says what holds it, and how to stop the services', () => {
+		const port = refuseMessage('port', 'http://127.0.0.1:4000', 4000, '/home/me/local llm');
+		expect(port).toContain('Port 4000 is in use, but nothing answered at http://127.0.0.1:4000/health.');
+		expect(port).toContain('does not start a second backend');
+		expect(port).toContain('wait for it and retry, or stop it first');
+		const services = refuseMessage('services', 'http://127.0.0.1:4000', 4000, '/home/me/local llm');
+		expect(services).toContain('are already running');
+		expect(services).toContain('`docker compose -f /home/me/local llm/infra/docker-compose.yml down`');
+	});
+
+	it('asks compose for the running containers only', () => {
+		expect(composeUpCommand('/home/me/local llm')).toBe(
+			"docker compose -f '/home/me/local llm/infra/docker-compose.yml' ps -q"
+		);
+	});
+
+	async function listen(server: Server | ReturnType<typeof createServer>): Promise<number> {
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+		return (server.address() as AddressInfo).port;
+	}
+
+	/** What startup decides from a real `/health` probe and port check at this port. */
+	async function decide(port: number) {
+		const origin = `http://127.0.0.1:${port}`;
+		const health = await probe(`${origin}/health`, 300);
+		const held = health === null && (await portState('127.0.0.1', port, 300)) === 'held' ? 'port' : undefined;
+		return decideStart({ ...base, origin, port, backendUp: health !== null, held });
+	}
+
+	it('starts its own when the connection is refused', async () => {
+		const server = createTcpServer();
+		const port = await listen(server);
+		await new Promise((resolve) => server.close(resolve));
+		expect(await portState('127.0.0.1', port)).toBe('refused');
+		expect((await decide(port)).mode).toBe('own');
+	});
+
+	it('refuses when the connection is accepted but nothing answers in time', async () => {
+		// Accepts and never answers, as a backend reloading or stalled does.
+		const sockets: { destroy: () => void }[] = [];
+		const server = createTcpServer((socket) => sockets.push(socket));
+		const port = await listen(server);
+		try {
+			expect(await probe(`http://127.0.0.1:${port}/health`, 300)).toBeNull();
+			expect(await portState('127.0.0.1', port)).toBe('held');
+			expect(await decide(port)).toMatchObject({ mode: 'refuse', held: 'port' });
+		} finally {
+			for (const socket of sockets) socket.destroy();
+			await new Promise((resolve) => server.close(resolve));
+		}
+	});
+
+	it('attaches when the backend answers', async () => {
+		const server = createServer((_request, response) => response.end('ok'));
+		const port = await listen(server);
+		try {
+			expect((await decide(port)).mode).toBe('attach');
+		} finally {
+			await new Promise((resolve) => server.close(resolve));
+		}
 	});
 });
 

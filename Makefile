@@ -102,6 +102,13 @@ help:
 # included. uvicorn is never exec'd for the same reason: exec would replace
 # this shell -- and its trap -- with uvicorn's process image.
 #
+# The EXIT trap brings down only what this run started (#422). Services
+# already running when it began belong to someone else (another
+# `make backend`, still starting or reloading, or a `docker compose up` of
+# your own) and are left up. With none running before, it runs
+# `docker compose down` as always; with some, it removes only the ones it
+# started (`rm -s`, which, unlike `down`, leaves the shared network alone).
+#
 # The backend runs its migrations when it is imported, so the recipe waits
 # for Postgres's healthcheck (infra/docker-compose.yml) before starting it;
 # on a fresh volume the first start takes several seconds. The other
@@ -137,7 +144,21 @@ backend:
 		fi; \
 	done; \
 	set -a; source "$$envfile"; set +a; \
-	stop_services() { echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down; }; \
+	already="$$($(COMPOSE) ps --services --status running 2>/dev/null || true)"; \
+	started=""; \
+	for svc in postgres redis jupyter searxng; do \
+		case " $$(echo $$already) " in *" $$svc "*) ;; *) started="$$started $$svc" ;; esac; \
+	done; \
+	stop_services() { \
+		if [ -z "$$already" ]; then \
+			echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down; \
+		elif [ -n "$$started" ]; then \
+			echo "make backend: stopping only the services this run started:$$started"; \
+			$(COMPOSE) rm -f -s $$started; \
+		else \
+			echo "make backend: leaving Postgres, Redis, Jupyter and SearXNG running; they were running before this run"; \
+		fi; \
+	}; \
 	trap stop_services EXIT; \
 	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
 	$(COMPOSE) up -d postgres redis jupyter searxng; \

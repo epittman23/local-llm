@@ -7,6 +7,33 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08** (later): **A backend that holds the port without answering is no
+  longer taken for nothing running, and `make backend` brings down only the
+  services it started (#422).** The desktop app chose between attaching and
+  starting its own stack from one 1.5 s `/health` probe, so a terminal
+  `make backend` still in `compose up`, `uv sync` or its lifespan startup,
+  restarting under `--reload`, or too busy to answer, read as nothing. The
+  app then ran a second `make backend` in the same checkout; one of the two
+  uvicorns lost the bind, and its Makefile EXIT trap ran `docker compose
+  down` on the shared `local-llm` project, under the other backend.
+
+  **What.** When `/health` does not answer, the app now connects to the port
+  on `127.0.0.1`: only a refused connection means nothing is there. If it is
+  refused, it asks Compose whether any of the services run
+  (`docker compose ps -q`). With the port held or the services up, it starts
+  nothing and says what it found (wait for it and Retry, or stop it first;
+  for the services, the `docker compose ... down` that stops them). The
+  owner chose refusing (question 1, option b) over waiting and attaching,
+  which would attach to whatever else held the port. A `make backend`
+  process is not looked for directly: it brings the services up in its first
+  second, so the Compose check covers it. Compose that cannot be asked does
+  not block a start. Separately (question 2, yes), the Makefile's
+  `backend` trap records which services already ran before its `compose up`
+  and brings down only the ones it started: `docker compose down` as before
+  when none ran, `docker compose rm -s -f` of its own when some did, and
+  nothing when all did. Its `==> ` markers are unchanged. The attach, adopt
+  and own rules of 2026-10-23 otherwise stand.
+
 - **2026-11-08**: **Saving an access list filters only the grants it
   changes (#523, #335).** Editors send the whole grant list on every save,
   and the server filtered all of it against the saver's sharing

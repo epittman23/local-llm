@@ -85,6 +85,7 @@ timeline
       2026-11-08 : OAuth provider configuration is environment-only : the unused Authentication provider fields removed, sign-out reads the environment, variables documented
       2026-11-08 : Desktop app offers to stop only the llama-server its stack served : recorded by pid and start time from the backend's /check : no offer when none is recorded
       2026-11-08 : Saving an access list filters only the grants it changes : a collaborator cannot remove a grant they could not add, an owner may remove any grant on their own resource : additions still need the sharing permission
+      2026-11-08 : The desktop app refuses to start a second make backend beside one that holds the port or the services without answering : make backend's exit brings down only the services it started : a refused connection with the services down still starts the stack
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

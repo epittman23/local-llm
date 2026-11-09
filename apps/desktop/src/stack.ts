@@ -8,6 +8,7 @@
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { closeSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
+import { connect } from 'node:net';
 import { join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
@@ -33,7 +34,10 @@ export const GRACEFUL_SHUTDOWN_SECONDS = 10;
 // sweep and a Tests job, compose down, margin.
 export const STOP_BUDGET_MS = 90_000;
 
-export type Mode = 'remote' | 'attach' | 'adopt' | 'own';
+export type Mode = 'remote' | 'attach' | 'adopt' | 'own' | 'refuse';
+
+/** What holds the stack's place although nothing answers `/health` (#422). */
+export type Held = 'port' | 'services';
 
 export interface StartPlan {
 	mode: Mode;
@@ -41,6 +45,8 @@ export interface StartPlan {
 	loadUrl: string;
 	/** Build apps/web before starting the backend. */
 	buildUi: boolean;
+	/** Why it refuses to start a backend; set only with mode 'refuse'. */
+	held?: Held;
 }
 
 /** How long a backend may go without progress before the wait gives up (#797). */
@@ -102,13 +108,21 @@ export interface StartInput {
 	adoptable: boolean;
 	uiStale: boolean;
 	port: number;
+	/**
+	 * Something accepts connections on the port, or the compose project runs,
+	 * though `/health` did not answer (#422); absent when nothing does.
+	 */
+	held?: Held;
 }
 
 /**
  * - **remote**: connect only, start nothing.
  * - **adopt**: a stack this app started before it crashed; stop it on close.
  * - **attach**: started elsewhere (a terminal); never restarted, rebuilt or stopped.
- * - **own**: nothing running; start it, and stop it on close.
+ * - **refuse**: something holds the port or runs the services but does not
+ *   answer (a `make backend` starting or reloading, say); start nothing
+ *   beside it, and say so (#422).
+ * - **own**: nothing running (the connection refused, the services down); start it, and stop it on close.
  *
  * A running dev server is used in place of the built UI, and makes a build pointless.
  */
@@ -118,7 +132,23 @@ export function decideStart(input: StartInput): StartPlan {
 	const loadUrl = useDevServer ? DEV_SERVER_URL : input.origin;
 	if (input.adoptable) return { mode: 'adopt', loadUrl, buildUi: false };
 	if (input.backendUp) return { mode: 'attach', loadUrl, buildUi: false };
+	if (input.held) return { mode: 'refuse', loadUrl, buildUi: false, held: input.held };
 	return { mode: 'own', loadUrl, buildUi: input.uiStale && !useDevServer };
+}
+
+/** What a launch that refuses to start a second backend says (#422). */
+export function refuseMessage(held: Held, origin: string, port: number, repo: string): string {
+	const found =
+		held === 'port'
+			? `Port ${port} is in use, but nothing answered at ${origin}/health. ` +
+				'A make backend may still be starting or reloading there, or another program holds the port.'
+			: `The local-llm services (Postgres, Redis, Jupyter and SearXNG) are already running, but nothing answers at ${origin}. ` +
+				'A make backend may still be starting in a terminal, or an earlier one left them running.';
+	const stop =
+		held === 'services'
+			? ` \`docker compose -f ${join(repo, 'infra', 'docker-compose.yml')} down\` stops the services.`
+			: '';
+	return `${found} The app does not start a second backend beside it: wait for it and retry, or stop it first and retry.${stop}`;
 }
 
 /** apps/web inputs whose change means `dist/` is out of date; tsconfig.json holds the path aliases (#429). */
@@ -359,16 +389,55 @@ export function countRunning(output: string | null): number | null {
 	return output.split('\n').filter((line) => /^[0-9a-f]{12,64}$/.test(line.trim())).length;
 }
 
+function countContainers(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<number | null> {
+	return new Promise((resolve) => {
+		execFile(loginShell(env), ['-lc', command], { env, timeout: timeoutMs }, (error, stdout) =>
+			resolve(countRunning(error ? null : String(stdout)))
+		);
+	});
+}
+
 /**
  * How many of the stack's containers still run after a stop (#435). make's EXIT
  * trap runs compose down, but make's own exit status cannot say whether that
  * worked (it was interrupted either way), so compose is asked directly.
  */
 export function runningServices(repo: string, env: NodeJS.ProcessEnv, timeoutMs = 15_000): Promise<number | null> {
+	return countContainers(composeRunningCommand(repo), env, timeoutMs);
+}
+
+/** This checkout's compose containers that are running (no `-a`: a stopped one is not), one id a line. */
+export function composeUpCommand(repo: string): string {
+	return `docker compose -f ${shellQuote(join(repo, 'infra', 'docker-compose.yml'))} ps -q`;
+}
+
+/**
+ * How many of the stack's containers run before a launch starts one (#422): a
+ * `make backend` brings them up before its backend listens. Null when compose
+ * could not be asked, which does not stop a launch; `make backend` then says why.
+ */
+export function servicesUp(repo: string, env: NodeJS.ProcessEnv, timeoutMs = 5000): Promise<number | null> {
+	return countContainers(composeUpCommand(repo), env, timeoutMs);
+}
+
+/**
+ * Whether anything holds a TCP port (#422): 'refused' when the connection is
+ * refused, so nothing listens there; 'held' when it is accepted (a backend
+ * starting, reloading or too busy to answer, or another program) or does not
+ * settle in time. The kernel accepts on a listening socket even while the
+ * process behind it does not answer, which a `/health` probe cannot tell
+ * from nothing.
+ */
+export function portState(host: string, port: number, timeoutMs = 1500): Promise<'refused' | 'held'> {
 	return new Promise((resolve) => {
-		execFile(loginShell(env), ['-lc', composeRunningCommand(repo)], { env, timeout: timeoutMs }, (error, stdout) =>
-			resolve(countRunning(error ? null : String(stdout)))
-		);
+		const socket = connect({ host, port });
+		const settle = (state: 'refused' | 'held') => {
+			socket.destroy();
+			resolve(state);
+		};
+		socket.setTimeout(timeoutMs, () => settle('held'));
+		socket.once('connect', () => settle('held'));
+		socket.once('error', (error: NodeJS.ErrnoException) => settle(error.code === 'ECONNREFUSED' ? 'refused' : 'held'));
 	});
 }
 
