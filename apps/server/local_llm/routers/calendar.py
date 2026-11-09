@@ -439,6 +439,8 @@ async def update_calendar(
             user.role,
             form_data.access_grants,
             'sharing.public_calendars',
+            stored_grants=cal.access_grants,
+            owner_id=cal.user_id,
         )
 
     updated = await Calendars.update_calendar_by_id(calendar_id, form_data)
