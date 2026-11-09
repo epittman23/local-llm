@@ -139,7 +139,7 @@ def file_world(monkeypatch):
     async def no_groups(user_id, db=None):
         return []
 
-    async def get_channels(file_id, user_id, db=None):
+    async def get_channels(file_id, user_id, include_public=False, db=None):
         return world.channels
 
     async def get_shared_chat_ids(file_id, db=None):

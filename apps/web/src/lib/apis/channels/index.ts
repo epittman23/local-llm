@@ -191,6 +191,35 @@ export const getChannelMembersById = async (
 	return res;
 };
 
+/** Join a public group channel (#331); a member gets true and nothing changes. */
+export const joinChannelById = async (token: string = '', channel_id: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/channels/${channel_id}/join`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const updateChannelMemberActiveStatusById = async (
 	token: string = '',
 	channel_id: string,

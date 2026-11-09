@@ -37,7 +37,8 @@ export const DEFAULT_PERMISSIONS: Record<PermissionGroupName, PermissionGroup> =
 		folders: false,
 		public_chats: false,
 		open_chats: false,
-		public_calendars: false
+		public_calendars: false,
+		public_channels: false
 	},
 	access_grants: { allow_users: true, allow_groups: true },
 	chat: {

@@ -7,6 +7,49 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-08**: **A group channel saved as Public is public (#331).**
+  The channel dialog offered "Visible to all users" for a group channel and
+  the server stored `is_private`, but nothing read it, so a public group
+  channel was as closed as a private one. The owner chose to implement the
+  setting rather than remove it.
+
+  **Who sees one.** Everyone who may use channels (channels enabled, and the
+  `channels` permission, as for every channel route) finds a group channel
+  saved with `is_private` false in their channel list, marked as not
+  joined. They may read its history, threads, pins, members and attached
+  files without joining. Joining is an explicit `POST
+  /api/v1/channels/{id}/join`, which the channel page sends when a
+  non-member opens one; reading never joins, so a link from another site
+  cannot join anyone. The join publishes the usual member event
+  (`CHANNEL_MEMBER_ADDED`, or `CHANNEL_MEMBER_ACTIVE_UPDATED` when it
+  reactivates an inactive membership). Posting, reacting and pinning need
+  membership.
+  - **Who may make one.** `sharing.public_channels`, registered like every
+    other `public_*` sharing key: off by default
+    (`USER_PERMISSIONS_CHANNELS_ALLOW_PUBLIC_SHARING`), granted per group in
+    the admin permissions, always allowed to admins. Without it, create and
+    update save the channel private, as a disallowed public grant is dropped
+    from a note or a model. The dialog disables Public for such users, and
+    asks before turning a private channel public, since its whole history
+    becomes readable.
+  - **Unchanged:** private group channels and DMs stay members-only. So do
+    group channels saved before this entry: the column was added nullable
+    and unset, so only an explicit false is public and a null stays private.
+  - **Live events go to members only.** A socket enters a public channel's
+    room when its user joins, not before, so channels a user never joined
+    raise no unread badge or notification. The assistant's channel tools
+    and the Automations destination list likewise cover joined channels
+    only.
+  - **No bans.** Removing a member deletes the membership, so a removed
+    member can rejoin a public channel. Making a channel private keeps
+    everyone who joined it.
+
+  **Why.** The dialog already promised it, and the owner preferred making
+  the promise true to removing the option. Exposing a channel's history to
+  every user is sharing, so it takes the sharing permission other public
+  resources take. Membership stays the line for writing. Private stays the
+  dialog's default.
+
 - **2026-11-08**: **Native hybrid search's keyword half matches any
   English-stemmed query word (#347).** With pgvector, the keyword half of
   hybrid search used `plainto_tsquery('simple', query)`, which ANDs every

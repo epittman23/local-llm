@@ -2,21 +2,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Hash, Lock, Pin, User, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { getChannelById } from '@/lib/apis/channels';
+import { getChannelById, joinChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { ChannelInfoDialog, PinnedMessagesDialog } from './ChannelDialogs';
-import { type Channel, type ChannelMessage, channelTitle, isPublicChannel } from './channelModel';
+import { type Channel, type ChannelMessage, channelTitle, isPublicChannel, joinsOnOpen } from './channelModel';
 import { type ComposerHandle, MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
 import { ThreadPanel } from './ThreadPanel';
-import { useMarkChannelRead, useOpenChannelStore } from './useChannels';
+import { CHANNELS_KEY, useMarkChannelRead, useOpenChannelStore } from './useChannels';
 import { useMessageFeed } from './useMessageFeed';
 
 const headerButton =
@@ -50,7 +51,9 @@ export function ChannelPage() {
  * pinned messages, members), the live message list, the composer, and a
  * thread beside the list on a wide screen or in a sheet on a narrow one.
  * Opening a channel marks it read, on the server (a `last_read_at` socket
- * event) and in the sidebar; so does typing in it, and leaving it.
+ * event) and in the sidebar; so does typing in it, and leaving it. Opening
+ * a public group channel the viewer is not a member of joins it, with a POST
+ * (never as a side effect of reading it), and then reloads it (#331).
  *
  * The thread panel is a fixed 420px, where the Svelte one could be dragged
  * wider; nothing else about the layout depends on its width.
@@ -88,6 +91,18 @@ function ChannelView({ id }: { id: string }) {
 	useEffect(() => {
 		if (channelQuery.isError || (channelQuery.isSuccess && !channel)) navigate('/', { replace: true });
 	}, [channelQuery.isError, channelQuery.isSuccess, channel, navigate]);
+
+	const joining = useRef(false);
+	useEffect(() => {
+		if (!joinsOnOpen(channel) || joining.current) return;
+		joining.current = true;
+		joinChannelById(token, id)
+			.then(() => {
+				queryClient.invalidateQueries({ queryKey: ['channel', id] });
+				queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
+			})
+			.catch((e) => toast.error(`${e}`));
+	}, [channel, token, id, queryClient]);
 
 	const readRef = useRef<() => void>(() => {});
 	readRef.current = () => {

@@ -84,7 +84,8 @@ export const permissionSections: PermissionSection[] = [
 			row('sharing', 'folders', 'Folders Sharing'),
 			row('sharing', 'public_chats', 'Chats Public Sharing', { showIf: (p) => p.chat.share }),
 			row('sharing', 'open_chats', 'Chats Open Sharing', { showIf: (p) => p.chat.share }),
-			row('sharing', 'public_calendars', 'Calendars Public Sharing', { showIf: (p) => p.features.calendar })
+			row('sharing', 'public_calendars', 'Calendars Public Sharing', { showIf: (p) => p.features.calendar }),
+			row('sharing', 'public_channels', 'Channels Public Sharing', { showIf: (p) => p.features.channels })
 		]
 	},
 	{

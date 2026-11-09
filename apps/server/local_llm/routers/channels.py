@@ -20,6 +20,7 @@ from local_llm.models.channels import (
     ChannelWebhookForm,
     ChannelWebhookModel,
     CreateChannelForm,
+    is_public_group_channel,
 )
 from local_llm.models.config import Config
 from local_llm.models.groups import Groups
@@ -79,6 +80,50 @@ async def channel_has_access(
         return True
 
     return False
+
+
+async def may_read_member_channel(channel: ChannelModel, user_id: str, db: AsyncSession | None = None) -> bool:
+    """Read access to a group or DM channel: its active members, and for a
+    public group channel anyone who may use channels (#331). Posting,
+    reacting and pinning still need membership, which joining a public
+    group channel (POST /{id}/join) gives."""
+    return is_public_group_channel(channel) or await Channels.is_user_channel_member(channel.id, user_id, db=db)
+
+
+async def may_make_group_channel_public(user: UserModel) -> bool:
+    """`sharing.public_channels`, as every public_* sharing key: admins
+    always, others when their permissions grant it (#331)."""
+    return user.role == 'admin' or await has_permission(
+        user.id, 'sharing.public_channels', await Config.get('user.permissions')
+    )
+
+
+async def join_public_group_channel(request: Request, channel: ChannelModel, user, db: AsyncSession | None = None):
+    """Make the user an active member of a public group channel (#331): a
+    new membership (CHANNEL_MEMBER_ADDED), or an earlier inactive one
+    reactivated (CHANNEL_MEMBER_ACTIVE_UPDATED, as a DM's reopening
+    publishes). Their sockets enter the channel's room, so live events start
+    at once, and their other tabs refetch the channel list, where it now
+    shows as joined. Does nothing for a member."""
+    if await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        return
+    existing = await Channels.get_member_by_channel_and_user_id(channel.id, user.id, db=db)
+    await Channels.join_channel(channel.id, user.id, db=db)
+    await Channels.update_member_active_status(channel.id, user.id, True, db=db)
+    await enter_room_for_users(f'channel:{channel.id}', [user.id])
+    await emit_to_users('events:channel', {'data': {'type': 'channel:created'}}, [user.id])
+    if existing:
+        await publish_event(
+            request, EVENTS.CHANNEL_MEMBER_ACTIVE_UPDATED, actor=user, subject_id=channel.id, data={'is_active': True}
+        )
+    else:
+        await publish_event(
+            request,
+            EVENTS.CHANNEL_MEMBER_ADDED,
+            actor=user,
+            subject_id=channel.id,
+            data={'user_ids': [user.id], 'group_ids': []},
+        )
 
 
 async def get_channel_users_with_access(
@@ -179,6 +224,10 @@ class ChannelListItemResponse(ChannelModel):
     user_ids: list[str] | None = None  # 'dm' channels only
     users: list[UserIdNameStatusResponse] | None = None  # 'dm' channels only
 
+    # False for a public group channel the user has not joined (#331);
+    # the channel page joins it when opened (POST /{id}/join).
+    is_member: bool = True
+
     last_message_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
@@ -192,8 +241,10 @@ async def get_channels(
     await check_channels_access(request, user)
 
     channels = await Channels.get_channels_by_user_id(user.id, db=db)
+    not_joined = await Channels.get_public_group_channels_not_joined(user.id, db=db)
+    not_joined_ids = {c.id for c in not_joined}
     channel_list = []
-    for channel in channels:
+    for channel in [*channels, *not_joined]:
         last_message = await Messages.get_last_message_by_channel_id(channel.id, db=db)
         last_message_at = last_message.created_at if last_message else None
 
@@ -226,6 +277,7 @@ async def get_channels(
                 users=users,
                 last_message_at=last_message_at,
                 unread_count=unread_count,
+                is_member=channel.id not in not_joined_ids,
             )
         )
 
@@ -241,7 +293,10 @@ async def get_all_channels(
     await check_channels_access(request, user)
     if user.role == 'admin':
         return await Channels.get_channels(db=db)
-    return await Channels.get_channels_by_user_id(user.id, db=db)
+    return [
+        *await Channels.get_channels_by_user_id(user.id, db=db),
+        *await Channels.get_public_group_channels_not_joined(user.id, db=db),
+    ]
 
 
 ############################
@@ -330,6 +385,10 @@ async def create_new_channel(
         form_data.access_grants,
         'sharing.public_channels',
     )
+    # A public group channel needs the permission a public grant needs; like
+    # a disallowed public grant, the request is kept and made private (#331).
+    if form_data.is_private is False and not await may_make_group_channel_public(user):
+        form_data.is_private = True
 
     try:
         if form_data.type == 'dm':
@@ -391,6 +450,9 @@ class ChannelFullResponse(ChannelResponse):
     user_ids: list[str] | None = None  # 'group'/'dm' channels only
     users: list[UserIdNameStatusResponse] | None = None  # 'group'/'dm' channels only
 
+    # False for a public group channel the user reads without having joined (#331).
+    is_member: bool = True
+
     last_read_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
@@ -411,7 +473,10 @@ async def get_channel_by_id(
     users = None
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        # A non-member reads a public group channel without joining it; the
+        # page joins through POST /{id}/join (#331).
+        is_member = await Channels.is_user_channel_member(channel.id, user.id, db=db)
+        if not is_member and not is_public_group_channel(channel):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
         member_user_ids = [member.user_id for member in await Channels.get_members_by_channel_id(channel.id, db=db)]
@@ -438,7 +503,8 @@ async def get_channel_by_id(
                 'user_ids': user_ids,
                 'users': users,
                 'is_manager': await Channels.is_user_channel_manager(channel.id, user.id, db=db),
-                'write_access': True,
+                'write_access': is_member,
+                'is_member': is_member,
                 'user_count': len(users),
                 'last_read_at': channel_member.last_read_at if channel_member else None,
                 'unread_count': unread_count,
@@ -481,6 +547,33 @@ async def get_channel_by_id(
                 'unread_count': unread_count,
             }
         )
+
+
+############################
+# JoinChannelById
+############################
+
+
+@router.post('/{id}/join', response_model=bool)
+async def join_channel_by_id(
+    request: Request,
+    id: str,
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Join a public group channel (#331), which the channel page does when a
+    non-member opens one. A POST, so a link from another site cannot join
+    anyone. A member gets true and nothing changes; other channels refuse."""
+    await check_channels_access(request, user)
+    channel = await Channels.get_channel_by_id(id, db=db)
+    if not channel or channel.deleted_at or channel.archived_at:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    if not is_public_group_channel(channel):
+        if await Channels.is_user_channel_member(channel.id, user.id, db=db):
+            return True
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
+    await join_public_group_channel(request, channel, user, db=db)
+    return True
 
 
 ############################
@@ -547,7 +640,7 @@ async def get_channel_members_by_id(
     skip = (page - 1) * limit
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -747,6 +840,9 @@ async def update_channel_by_id(
         stored_grants=channel.access_grants,
         owner_id=channel.user_id,
     )
+    # As on create: without sharing.public_channels a group channel is saved private (#331).
+    if form_data.is_private is False and not await may_make_group_channel_public(user):
+        form_data.is_private = True
 
     try:
         channel = await Channels.update_channel_by_id(id, form_data, db=db)
@@ -834,7 +930,7 @@ async def get_channel_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -901,7 +997,7 @@ async def get_pinned_channel_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1415,7 +1511,7 @@ async def get_channel_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1451,7 +1547,7 @@ async def get_channel_message_data(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
@@ -1563,7 +1659,7 @@ async def get_channel_thread_messages(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     if channel.type in ['group', 'dm']:
-        if not await Channels.is_user_channel_member(channel.id, user.id, db=db):
+        if not await may_read_member_channel(channel, user.id, db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
     else:
         if user.role != 'admin' and not await channel_has_access(user.id, channel, permission='read', db=db):
