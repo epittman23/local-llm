@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { BoundSecret as Secret, BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
+import { BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
 import {
 	SettingField,
 	SettingRow,
@@ -26,6 +26,7 @@ type Draft = {
 const linkClass = 'text-muted-foreground/70 hover:text-foreground mt-1 block text-[0.6875rem] underline';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
 const grid = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
+const noteClass = 'text-muted-foreground block text-[0.75rem]';
 const warnClass =
 	'mt-1 block rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[0.6875rem] text-yellow-700 dark:text-yellow-200';
 
@@ -182,6 +183,11 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 
 	return (
 		<SettingsSection title="OAuth / OIDC">
+			<div className={noteClass} data-testid="oauth-env-note">
+				The OAuth / OIDC provider (its name, discovery URL, client ID and secret, redirect URI, scopes, timeouts and
+				logout address) is configured through environment variables, not here. See docs/guides/oauth.md for the
+				variables. The settings below apply once a provider is configured that way.
+			</div>
 			{!editable && (
 				<div className={warnClass}>
 					These settings are read from environment variables and cannot be edited here while
@@ -196,35 +202,6 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 
 				{oauth.ENABLE_OAUTH && (
 					<>
-						<div className={grid}>
-							{text('OAUTH_PROVIDER_NAME', 'Provider Name', 'Display name shown for the OAuth provider.', 'SSO')}
-							{text(
-								'OPENID_PROVIDER_URL',
-								'Provider URL',
-								'OpenID discovery URL for this provider.',
-								'https://accounts.google.com/.well-known/openid-configuration'
-							)}
-						</div>
-						<div className={grid}>
-							{text('OAUTH_CLIENT_ID', 'Client ID', 'OAuth client identifier from the provider.', 'Enter Client ID')}
-							<Secret
-								config={oauth}
-								set={set}
-								name="OAUTH_CLIENT_SECRET"
-								label="Client Secret"
-								description="OAuth client secret from the provider."
-								placeholder="Enter Client Secret"
-							/>
-						</div>
-						<div className={grid}>
-							{text(
-								'OPENID_REDIRECT_URI',
-								'Redirect URI',
-								'Callback URI registered with the provider.',
-								'Enter Redirect URI'
-							)}
-							{text('OAUTH_SCOPES', 'Scopes', 'OAuth scopes requested during sign-in.', 'openid email profile')}
-						</div>
 						<div className={grid}>
 							{text('OAUTH_EMAIL_CLAIM', 'Email Claim', 'Claim used as the user email address.', 'email')}
 							{text('OAUTH_USERNAME_CLAIM', 'Username Claim', 'Claim used as the display name.', 'name')}
