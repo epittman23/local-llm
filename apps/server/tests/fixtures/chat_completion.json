@@ -4423,6 +4423,18 @@
     "run_initial_title_generation"
    ],
    [
+    "model_info",
+    "m2"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
     "create_task",
     "<redis>",
     "uuid-1",
@@ -4629,11 +4641,6 @@
        "id": "f1"
       }
      ],
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -4675,21 +4682,15 @@
       "variables": {},
       "chat_variables": {},
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a2",
@@ -7108,6 +7109,18 @@
     }
    ],
    [
+    "model_info",
+    "m2"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
     "create_task",
     "<redis>",
     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
@@ -7305,11 +7318,6 @@
     "process_chat_payload",
     {
      "model": "m2",
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -7346,21 +7354,15 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a2",
@@ -10656,7 +10658,7 @@
  },
  "chat:legacy_pipeline_http_error": {
   "http_error": [
-   400,
+   422,
    "bad payload"
   ],
   "background": [],
@@ -12106,6 +12108,30 @@
     }
    ],
    [
+    "model_info",
+    "m2"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
+    "model_info",
+    "gone"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
     "create_task",
     "<redis>",
     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
@@ -12279,11 +12305,6 @@
     "process_chat_payload",
     {
      "model": "m2",
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -12311,21 +12332,15 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a2",
@@ -12429,11 +12444,6 @@
     "process_chat_payload",
     {
      "model": "gone",
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -12472,10 +12482,10 @@
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a3",
@@ -13327,6 +13337,18 @@
     }
    ],
    [
+    "model_info",
+    "m2"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
     "create_task",
     "<redis>",
     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
@@ -13517,11 +13539,6 @@
     "process_chat_payload",
     {
      "model": "m2",
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -13549,21 +13566,15 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a2",
@@ -13893,6 +13904,18 @@
     }
    ],
    [
+    "model_info",
+    "m2"
+   ],
+   [
+    "config_get",
+    "models.default_params"
+   ],
+   [
+    "config_get",
+    "chat.tool_permissions.enable"
+   ],
+   [
     "process_chat_payload",
     {
      "model": "m1",
@@ -14023,11 +14046,6 @@
     "process_chat_payload",
     {
      "model": "m2",
-     "params": {
-      "temperature": 0.2,
-      "stream_delta_chunk_size": 4,
-      "function_calling": "default"
-     },
      "metadata": {
       "user_id": "u1",
       "user_agent": "pytest-agent",
@@ -14055,21 +14073,15 @@
        "saved": "yes"
       },
       "model": {
-       "id": "m1",
-       "info": {
-        "meta": {
-         "capabilities": {
-          "usage": true
-         }
-        }
-       }
+       "id": "m2",
+       "info": null
       },
       "direct": false,
       "params": {
-       "stream_delta_chunk_size": 4,
+       "stream_delta_chunk_size": null,
        "reasoning_tags": null,
        "compact_token_threshold": null,
-       "function_calling": "default",
+       "function_calling": "native",
        "tool_approval_mode": "full"
       },
       "message_id": "a2",
