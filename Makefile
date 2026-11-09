@@ -213,9 +213,17 @@ lint:
 
 # CI's "Secrets (gitleaks)". CI scans a pull request's own commits and main's
 # whole history; this scans the whole history, a superset of either, in
-# about 20 s. Known non-secrets are in .gitleaksignore.
+# about 20 s. Known non-secrets are in .gitleaksignore. In a linked worktree
+# `.git` is a file pointing at the common git dir, which lies outside the
+# checkout; unmounted, gitleaks would scan 0 commits and pass, so that dir is
+# also mounted, read-only, at its own path. In the main checkout it is inside
+# the mount already and nothing is added.
 secrets:
-	docker run --rm -v "$(REPO_ROOT):/repo:ro" -w /repo $(GITLEAKS_IMAGE) git --no-banner --redact --verbose /repo
+	root="$$(cd "$(REPO_ROOT)" && pwd -P)"; \
+	common="$$(cd "$(REPO_ROOT)" && git rev-parse --path-format=absolute --git-common-dir)"; \
+	extra=(); \
+	case "$$common/" in "$$root"/*) ;; *) extra=(-v "$$common:$$common:ro");; esac; \
+	docker run --rm -v "$(REPO_ROOT):/repo:ro" "$${extra[@]}" -w /repo $(GITLEAKS_IMAGE) git --no-banner --redact --verbose /repo
 
 # The PR gate workflow (.github/workflows/pr-gate.yml) on one pull request,
 # read-only: it never removes a label. It reads the PR through the API, so it

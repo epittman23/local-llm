@@ -217,3 +217,40 @@ def test_backend_keeps_a_spaced_or_quoted_checkout_path_whole(tmp_path, name):
     assert 'up' in compose[0]
     assert compose[-1][-1] == 'down'
     assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+
+
+# --- make secrets (#518) ----------------------------------------------------
+
+
+def _git(cwd: Path, *args: str) -> None:
+    ident = {'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@t', 'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@t'}
+    subprocess.run(['git', *args], cwd=cwd, env={**os.environ, **ident}, check=True, capture_output=True)
+
+
+def _gitleaks_mounts(calls: list[dict]) -> list[str]:
+    (run,) = [c for c in calls if c['tool'] == 'docker' and c['argv'][:1] == ['run']]
+    argv = run['argv']
+    return [argv[i + 1] for i, arg in enumerate(argv) if arg == '-v']
+
+
+def test_secrets_mounts_only_the_checkout_in_the_main_checkout(tmp_path):
+    """The common git dir is inside the checkout, so no second mount is added."""
+    root = _checkout(tmp_path)
+    _git(root, 'init', '-q')
+    result, calls = _make(root, tmp_path, 'secrets')
+    assert result.returncode == 0, result.stderr
+    assert _gitleaks_mounts(calls) == [f'{root}:/repo:ro']
+
+
+def test_secrets_mounts_the_common_git_dir_from_a_linked_worktree(tmp_path):
+    """In a linked worktree `.git` is a file; the history lives in the main checkout's .git."""
+    main = _checkout(tmp_path, 'main')
+    _git(main, 'init', '-q')
+    _git(main, 'commit', '-q', '--allow-empty', '-m', 'init')
+    linked = tmp_path / 'wt'
+    _git(main, 'worktree', 'add', '-q', '--detach', str(linked))
+    shutil.copy(main / 'Makefile', linked / 'Makefile')
+    result, calls = _make(linked, tmp_path, 'secrets')
+    assert result.returncode == 0, result.stderr
+    common = str((main / '.git').resolve())
+    assert _gitleaks_mounts(calls) == [f'{linked}:/repo:ro', f'{common}:{common}:ro']
