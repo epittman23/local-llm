@@ -13,7 +13,8 @@ import { SidebarChannels } from './SidebarChannels';
 // join, who may post, the permission) is in
 // apps/server/tests/test_channel_public_groups.py.
 
-const { createNewChannel, updateChannelById, list, me } = vi.hoisted(() => ({
+const { createNewChannel, updateChannelById, toast, list, me } = vi.hoisted(() => ({
+	toast: { error: vi.fn(), success: vi.fn() },
 	createNewChannel: vi.fn(async () => ({ id: 'new' })),
 	updateChannelById: vi.fn(async () => ({ id: 'team' })),
 	list: { current: [] as Channel[] },
@@ -23,6 +24,7 @@ const { createNewChannel, updateChannelById, list, me } = vi.hoisted(() => ({
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: me.current })
 }));
+vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket: null }) }));
 vi.mock('@/lib/apis/channels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -64,6 +66,7 @@ afterEach(() => {
 	cleanup();
 	createNewChannel.mockClear();
 	updateChannelById.mockClear();
+	toast.error.mockClear();
 });
 
 describe('public group channels in the sidebar', () => {
@@ -146,5 +149,41 @@ describe('public group channels in the sidebar', () => {
 		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
 		await waitFor(() => expect(updateChannelById).toHaveBeenCalled());
 		expect(screen.queryByText(/read its whole history/)).toBeNull();
+	});
+
+	it('cancelling the confirmation keeps the channel private and saves nothing', async () => {
+		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
+		fireEvent.change(await screen.findByLabelText('Visibility'), { target: { value: 'public' } });
+		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+
+		await screen.findByText(/read its whole history/);
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByText(/read its whole history/)).toBeNull());
+		expect(updateChannelById).not.toHaveBeenCalled();
+	});
+
+	it('refuses a direct message with nobody in it', async () => {
+		list.current = [];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
+		fireEvent.change(await screen.findByLabelText('Channel Type'), { target: { value: 'dm' } });
+		fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith('Please select at least one user for Direct Message channel.')
+		);
+		expect(createNewChannel).not.toHaveBeenCalled();
+	});
+
+	it('warns that saving makes a public channel private for someone without the permission', async () => {
+		list.current = [group('lobby', { is_private: false, is_member: true, user_id: 'me' })];
+		permitted(false);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
+		await screen.findByLabelText('Visibility');
+		expect(screen.getByText('You may not keep this channel public: saving makes it private.')).toBeTruthy();
 	});
 });
