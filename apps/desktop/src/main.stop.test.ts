@@ -55,7 +55,10 @@ const h = vi.hoisted(() => {
 		stopResult: { forced: false, llama: [] as number[] },
 		/** Holds every stop in flight until it resolves. */
 		stopHold: Promise.resolve() as Promise<void>,
-		llama: [] as number[],
+		/** What /check and the port's listener give for the served llama-server (#434). */
+		served: null as { pid: number; startTicks: string } | null,
+		/** Processes as /proc shows them, by pid; any other is a `make`. */
+		procs: new Map<number, { comm: string; startTicks: string }>(),
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
 		/** The args of each app.relaunch (#424). */
@@ -161,7 +164,8 @@ const h = vi.hoisted(() => {
 		state.ready = () => Promise.resolve(200);
 		state.stopResult = { forced: false, llama: [] };
 		state.stopHold = Promise.resolve();
-		state.llama = [];
+		state.served = null;
+		state.procs = new Map();
 		state.servicesLeft = 0;
 		state.relaunches = [];
 		state.menu = [];
@@ -199,7 +203,8 @@ vi.mock('./config', async (original) => ({ ...(await original<typeof import('./c
 vi.mock('./stack', async (original) => ({
 	...(await original<typeof import('./stack')>()),
 	isUiStale: async () => false,
-	readProcStat: () => ({ comm: 'make', startTicks: '1' }),
+	readProcStat: (pid: number) => h.state.procs.get(pid) ?? { comm: 'make', startTicks: '1' },
+	servedLlama: async () => h.state.served,
 	// Nothing answers before the stack starts, so the app starts its own.
 	probe: async (url: string) =>
 		url.endsWith('/ready')
@@ -224,7 +229,6 @@ vi.mock('./stack', async (original) => ({
 		await h.state.stopHold;
 		return h.state.stopResult;
 	},
-	llamaServerPids: async () => h.state.llama,
 	runningServices: async () => h.state.servicesLeft
 }));
 
@@ -347,7 +351,6 @@ test('Retry during a stop does not start the stack again', async () => {
 
 test('after a forced stop that left a llama-server, "Leave it" quits and leaves it running (#421)', async () => {
 	h.state.stopResult = { forced: true, llama: [777] };
-	h.state.llama = [777];
 	await launch();
 	const win = appWindows()[0];
 	win?.emit('ready-to-show');
@@ -362,9 +365,64 @@ test('after a forced stop that left a llama-server, "Leave it" quits and leaves 
 	expect(vi.mocked(process.kill).mock.calls.filter(([pid]) => pid === 777)).toEqual([]);
 });
 
+/** A launch that runs, then a forced stop that leaves what /proc lists, offering what `stopResult` says. */
+async function forcedStopOffering(llama: number[]) {
+	h.state.stopResult = { forced: true, llama };
+	await launch();
+	const win = appWindows()[0];
+	win?.emit('ready-to-show');
+	await tick(10);
+	win?.userClose();
+	await tick(50);
+}
+
+const llamaKills = () =>
+	vi
+		.mocked(process.kill)
+		.mock.calls.filter(([, signal]) => signal === 'SIGTERM')
+		.map(([pid]) => pid);
+
+test('"Stop llama-server" stops the llama-server this stack served and no other (#434)', async () => {
+	h.state.served = { pid: 555, startTicks: '9' };
+	h.state.procs.set(555, { comm: 'llama-server', startTicks: '9' });
+	h.state.procs.set(777, { comm: 'llama-server', startTicks: '4' }); // the user's own
+	await forcedStopOffering([555]);
+
+	await statusCall('status:action', 'stop-llama');
+	expect(llamaKills()).toEqual([555]);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('the recorded llama-server is written into owned.json while the stack runs (#434)', async () => {
+	h.state.served = { pid: 555, startTicks: '9' };
+	await launch();
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(20);
+	expect(JSON.parse(readFileSync(join(h.state.userData, 'owned.json'), 'utf8')).llama).toEqual({
+		pid: 555,
+		startTicks: '9'
+	});
+});
+
+test('with nothing recorded, "Stop llama-server" signals no llama-server (#434)', async () => {
+	h.state.procs.set(777, { comm: 'llama-server', startTicks: '4' }); // the user's own
+	await forcedStopOffering([777]);
+
+	await statusCall('status:action', 'stop-llama');
+	expect(llamaKills()).toEqual([]);
+});
+
+test('a recorded llama-server whose pid was reused is not signalled (#434)', async () => {
+	h.state.served = { pid: 555, startTicks: '9' };
+	h.state.procs.set(555, { comm: 'llama-server', startTicks: '10' }); // same pid, started later
+	await forcedStopOffering([555]);
+
+	await statusCall('status:action', 'stop-llama');
+	expect(llamaKills()).toEqual([]);
+});
+
 test('after a forced stop that left a llama-server, closing the dialog quits too (#421)', async () => {
 	h.state.stopResult = { forced: true, llama: [777] };
-	h.state.llama = [777];
 	await launch();
 	appWindows()[0]?.emit('ready-to-show');
 	await tick(10);
@@ -380,7 +438,6 @@ test('after a forced stop that left a llama-server, closing the dialog quits too
 
 test('after a forced stop that left a llama-server, a signal quits too (#421)', async () => {
 	h.state.stopResult = { forced: true, llama: [777] };
-	h.state.llama = [777];
 	await launch();
 	appWindows()[0]?.emit('ready-to-show');
 	await tick(10);
@@ -438,7 +495,6 @@ test('a stop it cannot check says so and waits, rather than calling it clean (#4
 
 test('a forced stop that left the services fails the force step, and mentions a llama-server left (#435)', async () => {
 	h.state.stopResult = { forced: true, llama: [777] };
-	h.state.llama = [777];
 	h.state.servicesLeft = 1;
 	await cleanStop();
 

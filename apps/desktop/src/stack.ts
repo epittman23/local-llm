@@ -179,6 +179,17 @@ export interface OwnedRecord {
 	 * waits for the group to go, forcing it past the budget, and never signals it again.
 	 */
 	stopping?: true;
+	/**
+	 * The llama-server this stack's backend served, learned from its own
+	 * `/check` while the stack ran (#434); the one a forced stop may offer to stop.
+	 */
+	llama?: LlamaRecord;
+}
+
+/** A process by pid and start time, so a reused pid is not mistaken for it. */
+export interface LlamaRecord {
+	pid: number;
+	startTicks: string;
 }
 
 export interface ProcStat {
@@ -226,6 +237,9 @@ export function parseOwned(text: string | null): OwnedRecord | null {
 		if (typeof raw.origin === 'string') record.origin = raw.origin;
 		if (typeof raw.repo === 'string') record.repo = raw.repo;
 		if (raw.stopping === true) record.stopping = true;
+		if (Number.isInteger(raw.llama?.pid) && raw.llama.pid > 1 && typeof raw.llama.startTicks === 'string') {
+			record.llama = { pid: raw.llama.pid, startTicks: raw.llama.startTicks };
+		}
 		return record;
 	} catch {
 		return null;
@@ -364,18 +378,51 @@ export function runInShell(command: string, env: NodeJS.ProcessEnv, timeoutMs: n
 	});
 }
 
-/** pids of running llama-server processes (none when pgrep finds nothing). */
-export function llamaServerPids(): Promise<number[]> {
+/**
+ * The one pid in `ss -ltnp` output; null when none is listed, or when several
+ * processes listen on the port (the served server and another, say), so that
+ * nothing unrelated is ever recorded.
+ */
+export function parseListenerPid(output: string): number | null {
+	const pids = new Set([...output.matchAll(/pid=(\d+)/g)].map((m) => Number(m[1])));
+	return pids.size === 1 ? ([...pids][0] ?? null) : null;
+}
+
+/** The pid of the process listening on a TCP port, or null when none can be seen. */
+export function listenerPid(port: number): Promise<number | null> {
 	return new Promise((resolve) => {
-		execFile('pgrep', ['-x', 'llama-server'], (_error, stdout) => {
-			resolve(
-				String(stdout ?? '')
-					.split(/\s+/)
-					.filter(Boolean)
-					.map(Number)
-			);
-		});
+		execFile('ss', ['-H', '-ltnp', `sport = :${port}`], { timeout: 3000 }, (_error, stdout) =>
+			resolve(parseListenerPid(String(stdout ?? '')))
+		);
 	});
+}
+
+export interface ServedLlamaDeps {
+	/** The backend's `/check`: the served server's port when one runs, else null. */
+	check: () => Promise<{ running: boolean; port: number } | null>;
+	listener: (port: number) => Promise<number | null>;
+	stat: (pid: number) => ProcStat | null;
+}
+
+/**
+ * The llama-server this stack's backend serves (#434): `/check` names its port
+ * while it runs, and the process listening there, if it is a llama-server, is
+ * recorded with its start time. Null when none runs or it cannot be told.
+ */
+export async function servedLlama(deps: ServedLlamaDeps): Promise<LlamaRecord | null> {
+	const served = await deps.check();
+	if (!served?.running) return null;
+	const pid = await deps.listener(served.port);
+	if (pid === null) return null;
+	const now = deps.stat(pid);
+	return now?.comm === 'llama-server' ? { pid, startTicks: now.startTicks } : null;
+}
+
+/** The recorded llama-server's pid while it is still that same process (same start time); none otherwise. */
+export function recordedLlamaPids(llama: LlamaRecord | undefined, stat_: (pid: number) => ProcStat | null): number[] {
+	if (!llama) return [];
+	const now = stat_(llama.pid);
+	return now?.comm === 'llama-server' && now.startTicks === llama.startTicks ? [llama.pid] : [];
 }
 
 // --- Stopping ----------------------------------------------------------------
@@ -418,7 +465,8 @@ export interface StopResult {
  * lifespan teardown, which is what stops the served model. Past the budget,
  * the group is killed outright, compose is brought down directly, and any
  * llama-server left (it runs in its own session, outside the group) is
- * reported rather than killed unasked.
+ * reported rather than killed unasked: only the one this stack served, as its
+ * record names it (#434), never another the user runs.
  */
 export async function stopGroup(
 	pgid: number,
