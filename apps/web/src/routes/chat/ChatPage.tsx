@@ -517,7 +517,6 @@ export function ChatPage() {
 							saveParams(p);
 						}}
 						files={session.chatFiles}
-						onRemoveFile={(i) => session.setChatFiles(session.chatFiles.filter((_, j) => j !== i))}
 						onClose={() => setControlsOpen(false)}
 						admin={admin}
 					/>

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { chatAction, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
@@ -37,6 +37,7 @@ import {
 	type FeatureToggles,
 	completionBody,
 	isTemporaryChatId,
+	pathFiles,
 	promptVariables,
 	requestFeatures,
 	temporaryChatId
@@ -117,7 +118,6 @@ export function useChatSession({
 	const [chat, setChat] = useState<ChatRecord | null>(null);
 	const [title, setTitle] = useState('');
 	const [params, setParams] = useState<Record<string, any>>({});
-	const [chatFiles, setChatFiles] = useState<ChatFile[]>([]);
 	const [loading, setLoading] = useState(Boolean(routeChatId));
 	const [taskIds, setTaskIds] = useState<string[] | null>(null);
 	const [queue, setQueue] = useState<Queued[]>([]);
@@ -133,6 +133,8 @@ export function useChatSession({
 	}, []);
 
 	const historyRef = useRef(history);
+	/** The documents on the branch shown, which Chat Controls lists and a reply on it reads (#160). */
+	const chatFiles = useMemo(() => pathFiles(messagesList(history, history.currentId)), [history]);
 	const chatIdRef = useRef<string | null>(routeChatId);
 	/** The chat this hook created and then moved the URL to: its route change must not reload it. */
 	const adoptedRef = useRef<string | null>(null);
@@ -220,7 +222,6 @@ export function useChatSession({
 			const p = { ...(content.params ?? {}) };
 			delete p.note_id;
 			setParams(p);
-			setChatFiles(content.files ?? []);
 			setHistory(h);
 			setLoading(false);
 		},
@@ -263,7 +264,6 @@ export function useChatSession({
 			setChat(null);
 			setTitle('');
 			setParams({});
-			setChatFiles([]);
 			setHistory(emptyHistory());
 			setLoading(false);
 		}
@@ -493,7 +493,6 @@ export function useChatSession({
 					folderId: l.folderId,
 					params: l.params,
 					settings: l.settings,
-					chatFiles: l.chatFiles,
 					features: requestFeatures(l.toggles, user, config, l.settings),
 					toolIds: l.toolIds,
 					variables: promptVariables(user, await userLocation()),
@@ -557,16 +556,6 @@ export function useChatSession({
 				toast.error('Oops! There was an error in the previous response.');
 				return;
 			}
-			const docs = files.filter(
-				(f) =>
-					['doc', 'text', 'note', 'chat', 'folder', 'collection'].includes(f.type ?? '') ||
-					(f.type === 'file' && !(f.content_type ?? '').startsWith('image/'))
-			);
-			if (docs.length)
-				setChatFiles((cf) =>
-					[...cf, ...docs].filter((f, i, a) => a.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i)
-				);
-			latest.current.chatFiles = [...latest.current.chatFiles, ...docs];
 			const { history: next, id } = addUserMessage(h, h.currentId, {
 				content: prompt,
 				files,
@@ -675,7 +664,8 @@ export function useChatSession({
 				history: h,
 				messages: messagesList(h, h.currentId),
 				params: latest.current.params,
-				files: latest.current.chatFiles
+				// The branch being saved, not the one rendered last: a branch switch saves before it renders.
+				files: pathFiles(messagesList(h, h.currentId))
 			}).catch((e) => {
 				toast.error(`${e}`);
 				return null;
@@ -709,7 +699,6 @@ export function useChatSession({
 					folderId: l.folderId,
 					params: l.params,
 					settings: l.settings,
-					chatFiles: l.chatFiles,
 					features: requestFeatures(l.toggles, user, config, l.settings),
 					toolIds: l.toolIds,
 					variables: promptVariables(user, await userLocation()),
@@ -915,7 +904,6 @@ export function useChatSession({
 		params,
 		setParams,
 		chatFiles,
-		setChatFiles,
 		loading,
 		generating,
 		taskIds,

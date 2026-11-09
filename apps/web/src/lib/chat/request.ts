@@ -136,13 +136,22 @@ export function initialModels(opts: {
 	return selected;
 }
 
-/** Files the server should read for this turn: the chat's documents plus the new message's non-image files, deduplicated. */
-export function turnFiles(chatFiles: ChatFile[], userMessage: Message | undefined): ChatFile[] {
+/**
+ * The chat's documents for the conversation `path`: every non-image file
+ * attached to a user message on it, once each. Derived from the path on
+ * every turn rather than kept in a list, so switching branches switches the
+ * documents, and one on a deleted message or another branch is neither sent
+ * nor shown, while staying on its own message (#160). Chat.svelte kept a list
+ * that only grew, and pruned it to the path before each send.
+ */
+export function pathFiles(path: Message[]): ChatFile[] {
 	const docTypes = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
 	const isDoc = (f: ChatFile) =>
 		docTypes.includes(f.type ?? '') || (f.type === 'file' && !(f.content_type ?? '').startsWith('image/'));
-	const all = [...chatFiles, ...(userMessage?.files ?? []).filter(isDoc)];
-	return all.filter((f, i) => all.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i);
+	// The same file on two messages may differ in incidental fields; one without an id (a web page) is matched whole.
+	const key = (f: ChatFile) => (f.id ? `${f.type}:${f.id}` : JSON.stringify(f));
+	const docs = path.filter((m) => m.role === 'user').flatMap((m) => (m.files ?? []).filter(isDoc));
+	return docs.filter((f, i) => docs.findIndex((g) => key(g) === key(f)) === i);
 }
 
 export type CompletionContext = {
@@ -156,7 +165,6 @@ export type CompletionContext = {
 	folderId?: string | null;
 	params: Record<string, any>;
 	settings: Record<string, any> | null;
-	chatFiles: ChatFile[];
 	features: Record<string, boolean>;
 	toolIds?: string[];
 	filterIds?: string[];
@@ -187,7 +195,7 @@ export function completionBody(c: CompletionContext) {
 	let messages: Record<string, unknown>[] = system ? [{ role: 'system', content: String(system) }] : [];
 	// Saved chats are read from the database; a temporary one has to carry its conversation.
 	if (c.temporary) messages = [...messages, ...toApiMessages(c.messages ?? messagesList(c.history, c.responseId))];
-	const files = turnFiles(c.chatFiles, user);
+	const files = pathFiles(c.messages ?? messagesList(c.history, c.responseId));
 	const newChat = !c.chatId;
 	const stream =
 		(c.model as { info?: { params?: { stream_response?: boolean } } }).info?.params?.stream_response ??
