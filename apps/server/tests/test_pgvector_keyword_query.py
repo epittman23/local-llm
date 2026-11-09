@@ -154,6 +154,8 @@ def test_the_query_uses_the_english_index_on_postgres(client):
 
 def test_a_question_of_only_stop_words_falls_back_to_vector_search_on_postgres(client, monkeypatch):
     class _Compressor:
+        fallback = None
+
         def __init__(self, **kwargs):
             pass
 

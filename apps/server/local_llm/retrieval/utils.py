@@ -524,11 +524,14 @@ async def query_doc_with_native_hybrid_search(
             else:
                 distances, documents, metadatas = [], [], []
 
-        return {
+        result = {
             'distances': [distances],
             'documents': [documents],
             'metadatas': [metadatas],
         }
+        if compressor.fallback:
+            result['fallback'] = compressor.fallback
+        return result
     except Exception as e:
         log.debug('Native hybrid search failed for %s, falling back to legacy hybrid search: %s', collection_name, e)
         return None
@@ -662,6 +665,8 @@ async def query_doc_with_hybrid_search(
             'documents': [documents],
             'metadatas': [metadatas],
         }
+        if compressor.fallback:
+            result['fallback'] = compressor.fallback
 
         log.info('query_doc_with_hybrid_search:result %s %s', result['metadatas'], result['distances'])
         return result
@@ -727,11 +732,16 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
     sorted_distances, sorted_documents, sorted_metadatas = zip(*combined[:k], strict=True) if combined else ([], [], [])
 
     # Create and return the output dictionary
-    return {
+    merged = {
         'distances': [list(sorted_distances)],
         'documents': [list(sorted_documents)],
         'metadatas': [list(sorted_metadatas)],
     }
+    # A search that fell back scored on another scale; the merge says so (#503).
+    fallback = next((data['fallback'] for data in query_results if data.get('fallback')), None)
+    if fallback:
+        merged['fallback'] = fallback
+    return merged
 
 
 CHUNK_INDEX_KEY = 'chunk_index'
@@ -824,6 +834,7 @@ async def query_collection(
         'rag.enable_hybrid_search_enriched_texts',
     )
     # When request is provided, try hybrid search + reranking if enabled
+    hybrid_failed = False
     if request and allow_hybrid and config.get('rag.enable_hybrid_search'):
         try:
             reranking_function = (
@@ -844,6 +855,7 @@ async def query_collection(
             )
         except Exception as e:
             log.debug('Hybrid search failed, falling back to vector search: %s', e)
+            hybrid_failed = True
 
     results = []
     error = False
@@ -891,7 +903,11 @@ async def query_collection(
     if error and not results:
         log.warning('All collection queries failed. No results returned.')
 
-    return merge_and_sort_query_results(results, k=k)
+    merged = merge_and_sort_query_results(results, k=k)
+    if hybrid_failed:
+        # Vector scores, not the hybrid search's: another scale (#503).
+        merged['fallback'] = 'vector'
+    return merged
 
 
 async def query_collection_with_hybrid_search(
@@ -1811,6 +1827,8 @@ def _sources_from_results(query_results: list) -> list:
                 }
                 if 'distances' in query_result and query_result['distances']:
                     source['distances'] = query_result['distances'][0]
+                if query_result.get('fallback'):
+                    source['fallback'] = query_result['fallback']
                 sources.append(source)
         except Exception as e:
             log.exception(e)
@@ -1929,6 +1947,10 @@ class RerankCompressor(BaseDocumentCompressor):
     top_n: int
     reranking_function: Any
     r_score: float
+    # Set when a configured reranker failed, to what scored instead: 'embedding'
+    # (embedding similarity) or 'fused' (the retrievers' own order and scores).
+    # Either is another scale from the reranker's (#503).
+    fallback: str | None = None
 
     class Config:
         extra = 'forbid'
@@ -1977,6 +1999,7 @@ class RerankCompressor(BaseDocumentCompressor):
                 # Score by embedding similarity instead, as when no reranker is configured, so a
                 # failed rerank still gets top-k and the relevance threshold.
                 log.warning('Reranking failed; ranking %d documents by embedding similarity instead', len(documents))
+                self.fallback = 'embedding'
         if scores is None:
             from sentence_transformers import util as st_util
 
@@ -1991,6 +2014,7 @@ class RerankCompressor(BaseDocumentCompressor):
                 log.warning(
                     'Embedding similarity failed after a failed rerank; keeping the first %d documents', self.top_n
                 )
+                self.fallback = 'fused'
                 return documents[: self.top_n]
 
         docs_with_scores = list(

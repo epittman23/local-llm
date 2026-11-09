@@ -88,6 +88,7 @@ timeline
       2026-11-08 : Native hybrid search's keyword half matches any English-stemmed query word, not every word : stop words dropped, ranked by ts_rank_cd as before : a second GIN index on the english tsvector : a question of only stop words falls back to vector search
       2026-11-08 : A group channel saved as Public is public : listed to everyone who may use channels, readable by them, joined with an explicit POST from its page : making one public takes sharing.public_channels : posting needs membership, private groups and DMs unchanged
       2026-11-08 : The desktop app refuses to start a second make backend beside one that holds the port or the services without answering : make backend's exit brings down only the services it started : a refused connection with the services down still starts the stack
+      2026-11-09 : Attached chat files merged by rank when one file's search fell back (hybrid to vector, or a failed reranker) : sorted by score across files otherwise, as before : the fallback is marked on the search result
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

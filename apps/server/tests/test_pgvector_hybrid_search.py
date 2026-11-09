@@ -35,6 +35,8 @@ def world(monkeypatch):
         return [0.1, 0.2]
 
     class _Compressor:
+        fallback = None
+
         def __init__(self, **kwargs):
             pass
 
