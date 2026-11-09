@@ -7,6 +7,38 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-09**: **Attached chat files are merged by rank when a file's
+  search fell back, and by score otherwise (#503).** `query_chat_files`
+  searches each attached file on its own and, since #177, sorts every
+  file's chunks together by score before keeping `count`. That holds only
+  while the scores share a scale. When hybrid search fails for a file, it
+  is answered by vector search, and when the reranker fails, embedding
+  similarity (or, if that fails too, the fusion's own order) scores it
+  instead; either file's scores then sorted beside the other files'
+  reranker or hybrid scores, which are on another scale. #735 had already
+  made `distance` mean the same thing for every source; this was the part
+  left open. The owner chose "rank only on fallback" over keeping the score
+  sort (#177's choice) or always merging by rank (#477's choice for
+  knowledge files).
+
+  **What.** A search that fell back now says so: the query result, and the
+  source `get_sources_from_items` makes from it, carry `fallback`, set to
+  `vector` by `query_collection` when hybrid search raised, or to
+  `embedding` or `fused` by `RerankCompressor` when a configured reranker
+  failed. A search that did not fall back carries no such key, so nothing
+  changes in the common case. `query_chat_files` collects each searched
+  file's `fallback` (none for most): with one value, every file's scores
+  are on one scale and they are sorted together as before; with more than
+  one, the files take turns by rank, best hit first, as `_take_turns` does
+  for knowledge files. A file attached in full stays first, in attachment
+  order, either way. Files that all fell back the same way are still sorted
+  by score.
+  - **Not changed:** the middleware's RAG path, which keeps each source's
+    chunks in its own order and never sorts across files by score. Within
+    one search of several collections (a knowledge base's files, several
+    queries), `merge_and_sort_query_results` still sorts by score, and
+    marks the merged result when any part of it fell back.
+
 - **2026-11-08** (later): **A backend that holds the port without answering is no
   longer taken for nothing running, and `make backend` brings down only the
   services it started (#422).** The desktop app chose between attaching and
