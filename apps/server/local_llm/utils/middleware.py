@@ -3375,10 +3375,11 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
             if event_emitter:
                 await event_emitter({'type': 'chat:completion', 'data': {'done': False, 'output': output}})
             return True
-        if metadata.get('resume_output_deferred'):
+        if metadata.get('resume_output_deferred') and message:
             # The calls were resolved between building the request and now:
             # the output the request left out still has to be sent.
             _append_resumed_output(form_data, message, model)
+            await convert_url_images_to_base64(form_data, user=user)
         return False
 
     event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
@@ -3493,6 +3494,9 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
             assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, message_id)
             if assistant_message:
                 _append_resumed_output(form_data, assistant_message, model)
+                # Tool images are data URLs already; anything else is resolved
+                # as the rebuild below resolves it.
+                await convert_url_images_to_base64(form_data, user=user)
         elif db_messages := await load_messages_from_db(chat_id, metadata.get('user_message_id')):
             # A request built without leaving the output out already holds a
             # stale copy of it, so the conversation is rebuilt from the stored

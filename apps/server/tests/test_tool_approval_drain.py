@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from types import SimpleNamespace
+from typing import Any, cast
 
 from local_llm.utils import middleware
 
@@ -259,8 +260,9 @@ def test_the_resume_keeps_what_the_payload_put_on_the_users_message(monkeypatch)
         form_data['messages'] = await middleware.add_file_context(form_data['messages'], 'c', SimpleNamespace(id='u'))
         middleware.strip_skill_mentions(form_data['messages'])
         prompt = middleware.get_last_user_message(form_data['messages'])
+        assert prompt
         form_data['messages'] = await middleware.apply_source_context_to_messages(
-            SimpleNamespace(), form_data['messages'], SOURCES, prompt
+            cast(Any, SimpleNamespace()), form_data['messages'], SOURCES, prompt
         )
 
     paused, messages, _ = _resume(monkeypatch, [copy.deepcopy(TURN)], decorate=decorate)
