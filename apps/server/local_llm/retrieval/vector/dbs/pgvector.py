@@ -57,6 +57,9 @@ USE_HALFVEC = PGVECTOR_USE_HALFVEC
 
 VECTOR_TYPE_FACTORY = HALFVEC if USE_HALFVEC else Vector
 VECTOR_OPCLASS = 'halfvec_cosine_ops' if USE_HALFVEC else 'vector_cosine_ops'
+# The keyword half of hybrid search (#347). Its index and its query share this exact
+# expression, or the planner cannot use the index. 'english' drops stop words and stems.
+TEXT_SEARCH_VECTOR = "to_tsvector('english', coalesce(text, ''))"
 Base = declarative_base()
 
 log = logging.getLogger(__name__)
@@ -248,6 +251,7 @@ class PgvectorClient(VectorDBBase):
         if PGVECTOR_PGCRYPTO:
             return
 
+        # The 'simple' index served the keyword query until 2026-11-08 (#347); nothing reads it now.
         self.session.execute(
             text("""
                 CREATE INDEX IF NOT EXISTS idx_document_chunk_text_search
@@ -255,7 +259,13 @@ class PgvectorClient(VectorDBBase):
                 USING GIN (to_tsvector('simple', coalesce(text, '')));
                 """)
         )
-        log.info("Ensured text search index 'idx_document_chunk_text_search'.")
+        self.session.execute(
+            text(
+                'CREATE INDEX IF NOT EXISTS idx_document_chunk_text_search_english '
+                f'ON document_chunk USING GIN ({TEXT_SEARCH_VECTOR});'
+            )
+        )
+        log.info('Ensured the text search indexes on document_chunk.')
 
     def check_vector_length(self) -> None:
         """
@@ -568,22 +578,27 @@ class PgvectorClient(VectorDBBase):
 
             fts_results = []
             if bm25_weight > 0 and query and query.strip():
+                # Any query word matches, not every one (#347): the query's English lexemes
+                # (stop words dropped and stemmed, as plainto_tsquery makes them), each quoted
+                # and joined with OR. A query of only stop words aggregates to NULL, which
+                # matches nothing.
                 fts_rows = self.session.execute(
-                    text("""
+                    text(rf"""
                         WITH fts_query AS (
-                            SELECT plainto_tsquery('simple', :query) AS query
+                            SELECT string_agg(
+                                '''' || replace(replace(lexeme, '\', '\\'), '''', '''''') || '''',
+                                ' | '
+                            )::tsquery AS query
+                            FROM unnest(tsvector_to_array(to_tsvector('english', :query))) AS lexeme
                         )
                         SELECT
                             document_chunk.id AS id,
                             document_chunk.text AS text,
                             document_chunk.vmetadata AS vmetadata,
-                            ts_rank_cd(
-                                to_tsvector('simple', coalesce(document_chunk.text, '')),
-                                fts_query.query
-                            ) AS rank
+                            ts_rank_cd({TEXT_SEARCH_VECTOR}, fts_query.query) AS rank
                         FROM document_chunk, fts_query
                         WHERE document_chunk.collection_name = :collection_name
-                          AND to_tsvector('simple', coalesce(document_chunk.text, '')) @@ fts_query.query
+                          AND {TEXT_SEARCH_VECTOR} @@ fts_query.query
                         ORDER BY rank DESC
                         LIMIT :limit
                     """),

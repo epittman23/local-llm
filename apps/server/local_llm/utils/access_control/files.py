@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
 from local_llm.models.chats import Chats
+from local_llm.models.config import Config
 from local_llm.models.files import Files
 from local_llm.models.folders import FolderModel
 from local_llm.models.groups import Groups
 from local_llm.models.knowledge import Knowledges
 from local_llm.models.models import Models
 from local_llm.models.users import UserModel, Users
+from local_llm.utils.access_control import has_permission
 
 log = logging.getLogger(__name__)
 
@@ -86,8 +88,16 @@ async def has_access_to_file(
         ):
             return True
 
-    # Check if the file is associated with any channels the user has access to
-    channels = await Channels.get_channels_by_file_id_and_user_id(file_id, user.id, db=db)
+    # Check if the file is associated with any channels the user has access to.
+    # A public group channel's files are for those who may use channels: the
+    # rule of the channel routes' check_channels_access (#331).
+    may_use_channels = await Config.get('channels.enable') and (
+        user.role == 'admin'
+        or await has_permission(user.id, 'features.channels', await Config.get('user.permissions'), db=db)
+    )
+    channels = await Channels.get_channels_by_file_id_and_user_id(
+        file_id, user.id, include_public=bool(may_use_channels), db=db
+    )
     if access_type == 'read' and channels:
         return True
 

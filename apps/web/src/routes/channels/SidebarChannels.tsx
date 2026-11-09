@@ -18,7 +18,9 @@ import { CHANNELS_KEY, hideConversation, useChannelList, useChannelsEnabled, use
  * Sidebar/ChannelItem.svelte and the create flow: the channel list (standard,
  * then group, then DMs, with a rule between types), unread badges, a DM's
  * members and whether its one other member is active, and per item either
- * "hide this DM" or, for its creator or an admin, the edit dialog.
+ * "hide this DM" or, for its creator or an admin, the edit dialog. A public
+ * group channel the viewer has not joined is listed with a "Join" mark in
+ * place of the unread badge; opening it joins it (#331).
  */
 export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 	const enabled = useChannelsEnabled();
@@ -102,6 +104,7 @@ function ChannelItem({
 	const [editing, setEditing] = useState(false);
 	const members = (channel.users ?? []).filter((u) => u.id !== me?.id);
 	const unread = channel.unread_count ?? 0;
+	const joined = channel.is_member !== false;
 	const canEdit = me?.role === 'admin' || channel.user_id === me?.id;
 
 	const hideDm = () => hideConversation(queryClient, token, channel.id);
@@ -169,7 +172,15 @@ function ChannelItem({
 					<Lock className="size-3.5 shrink-0" />
 				)}
 				<span className="truncate">{channelTitle(channel, me?.id)}</span>
-				{unread > 0 && (
+				{!joined && (
+					<span
+						className="ml-auto rounded border px-1 text-[0.625rem] font-medium"
+						title="Not joined: opening it joins it"
+					>
+						Join
+					</span>
+				)}
+				{joined && unread > 0 && (
 					<span
 						className="bg-foreground text-background ml-auto rounded-full px-1.5 text-[0.625rem] font-medium"
 						title="Unread"

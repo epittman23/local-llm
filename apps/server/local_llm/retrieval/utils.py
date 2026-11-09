@@ -489,8 +489,9 @@ async def query_doc_with_native_hybrid_search(
 
         documents = _search_result_to_documents(result)
         if not documents and hybrid_bm25_weight >= 1:
-            # Keywords only, and no chunk had them all: vector search answers,
-            # rather than chat getting no context at all (#347).
+            # Keywords only, and no chunk had any of them (or the query was only
+            # stop words): vector search answers, rather than chat getting no
+            # context at all (#347).
             vector_result = await ASYNC_VECTOR_DB_CLIENT.hybrid_search(
                 collection_name=collection_name,
                 query=query,
