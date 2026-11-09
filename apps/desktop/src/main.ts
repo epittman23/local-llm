@@ -63,17 +63,20 @@ import {
 	isAdoptable,
 	isOwnDevServer,
 	isUiStale,
+	type LlamaRecord,
 	LogTail,
-	llamaServerPids,
+	listenerPid,
 	makeBackendCommand,
 	type OwnedRecord,
 	ownedAction,
 	parseOwned,
 	probe,
 	readProcStat,
+	recordedLlamaPids,
 	runInShell,
 	runningServices,
 	type StopResult,
+	servedLlama,
 	spawnInGroup,
 	stopGroup,
 	waitUntilReady
@@ -298,6 +301,7 @@ function openApp(url: string): Promise<void> {
 			win.show();
 			dispatch({ type: 'complete', at: Date.now() });
 			phase = 'running';
+			if (owned) pollLlama();
 			if (statusView === 'progress') statusWindow?.destroy();
 			resolve();
 		});
@@ -349,6 +353,70 @@ function readOwned(): OwnedRecord | null {
 	} catch {
 		return null;
 	}
+}
+
+/** What the backend's `/check` says is served, asked as the signed-in admin whose cookie the app window holds (#434). */
+async function checkServe(origin: string): Promise<{ running: boolean; port: number } | null> {
+	try {
+		// The cookie lives under the page actually loaded: the dev server's origin in dev-server mode.
+		let cookie: Electron.Cookie | undefined;
+		for (const url of appOrigin && appOrigin !== origin ? [appOrigin, origin] : [origin]) {
+			[cookie] = await session.defaultSession.cookies.get({ url, name: 'token' });
+			if (cookie) break;
+		}
+		if (!cookie) return null;
+		const response = await fetch(`${origin}/api/v1/benchmarks/serve/check`, {
+			headers: { Authorization: `Bearer ${cookie.value}` },
+			redirect: 'error',
+			signal: AbortSignal.timeout(1500)
+		});
+		if (!response.ok) return null;
+		const body = (await response.json()) as { running?: unknown; port?: unknown };
+		return body.running === true && Number.isInteger(body.port)
+			? { running: true, port: body.port as number }
+			: { running: false, port: 0 };
+	} catch {
+		return null;
+	}
+}
+
+let learning: Promise<void> | null = null;
+let llamaPoll: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Records, in owned.json, the llama-server the owned backend serves, so a
+ * forced stop offers that one and no other llama-server the user runs (#434).
+ * Learned only while the stack runs; a server that cannot be told keeps the
+ * earlier record, and with none recorded nothing is offered.
+ */
+function learnLlama(): Promise<void> {
+	if (!owned) return Promise.resolve();
+	learning ??= (async () => {
+		try {
+			const found = await servedLlama({
+				check: () => checkServe(new URL(config.serverUrl).origin),
+				listener: listenerPid,
+				stat: readProcStat
+			});
+			const record = readOwned();
+			if (!found || !record || !owned || record.pgid !== owned.pgid) return;
+			if (record.llama?.pid === found.pid && record.llama.startTicks === found.startTicks) return;
+			writeOwned({ ...record, llama: found });
+		} catch {
+			// Not learned this time; the next poll tries again.
+		} finally {
+			learning = null;
+		}
+	})();
+	return learning;
+}
+
+/** The stack runs, so its served llama-server may appear at any time; ask now and every 10 s. */
+function pollLlama(): void {
+	if (llamaPoll) return;
+	void learnLlama();
+	llamaPoll = setInterval(() => void learnLlama(), 10_000);
+	llamaPoll.unref();
 }
 
 /**
@@ -572,7 +640,7 @@ async function stopEarlier(record: OwnedRecord): Promise<string | null> {
 			sleep,
 			now: Date.now,
 			composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
-			leftoverLlama: llamaServerPids,
+			leftoverLlama: async () => recordedLlamaPids(readOwned()?.llama, readProcStat),
 			onTimeout: () => {
 				dispatch({ type: 'timeout', step: 'earlier', at: Date.now() });
 				dispatch({
@@ -664,14 +732,20 @@ async function shutdown(): Promise<void> {
 
 	const repo = config.repoPath;
 	const env = childEnv(process.env);
+	// While the backend still answers, so a model served since the last poll is recorded too (#434).
+	if (llamaPoll) clearInterval(llamaPoll);
+	llamaPoll = null;
+	await learnLlama();
 	const record = readOwned();
+	// What a forced stop may offer, kept past forgetOwned() (#434).
+	offerableLlama = record?.llama;
 	if (record?.pgid === owned.pgid) markStopping(record);
 	const result = await stopGroup(owned.pgid, {
 		kill: process.kill,
 		sleep,
 		now: Date.now,
 		composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
-		leftoverLlama: llamaServerPids,
+		leftoverLlama: async () => recordedLlamaPids(offerableLlama, readProcStat),
 		onTimeout: () => {
 			const running = progress.steps.find((s) => s.state === 'running');
 			if (running) dispatch({ type: 'timeout', step: running.id, at: Date.now() });
@@ -716,8 +790,11 @@ async function shutdown(): Promise<void> {
 	app.exit(0);
 }
 
+let offerableLlama: LlamaRecord | undefined;
+
+/** Stops the llama-server this stack served, if it is still that same process (#434); no other. */
 async function stopLlama(): Promise<void> {
-	for (const pid of await llamaServerPids()) {
+	for (const pid of recordedLlamaPids(offerableLlama, readProcStat)) {
 		try {
 			process.kill(pid, 'SIGTERM');
 		} catch {
