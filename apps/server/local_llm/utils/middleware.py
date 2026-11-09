@@ -2355,7 +2355,13 @@ async def _replay_history_from_db(form_data: dict, metadata: dict, chat_id: str,
     assistant_message_id = metadata.get('assistant_message_id')
     if assistant_message_id:
         assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, assistant_message_id)
-        if assistant_message and (assistant_message.get('content') or assistant_message.get('output')):
+        if assistant_message and _approved_unrun_calls(assistant_message.get('output')):
+            # drain_approved_tool_calls runs these calls and then appends the
+            # whole output itself. Leaving it out here keeps the turn's user
+            # message last, so the context, file tags and skill stripping
+            # below land on it, and the drain has a clean point to splice at.
+            metadata['resume_output_deferred'] = True
+        elif assistant_message and (assistant_message.get('content') or assistant_message.get('output')):
             db_messages.append({k: v for k, v in assistant_message.items() if k in MESSAGE_REPLAY_KEYS})
 
     system_message = get_system_message(form_data.get('messages', []))
@@ -3303,6 +3309,40 @@ async def execute_tool_call_for_output(request, form_data, user, metadata, event
     }
 
 
+def _approved_unrun_calls(output) -> list[dict]:
+    """The function calls the user approved that have no result yet: what a resume runs."""
+    if not isinstance(output, list):
+        return []
+    result_call_ids = {
+        item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
+    }
+    return [
+        item
+        for item in output
+        if item.get('type') == 'function_call'
+        and item.get('call_id')
+        and item.get('status') == 'queued'
+        and item.get('approved') is True
+        and item.get('call_id') not in result_call_ids
+    ]
+
+
+def _append_resumed_output(form_data: dict, message: dict, model: dict) -> None:
+    """Append a resumed message's output to the request process_chat_payload built, converted as the replay does."""
+    replayed = {k: v for k, v in message.items() if k in MESSAGE_REPLAY_KEYS}
+    output = replayed.get('output')
+    # reasoning_details can be model/provider-bound, so only replay them
+    # for output produced by the same model.
+    if replayed.get('model') != model['id'] and isinstance(output, list):
+        replayed['output'] = strip_reasoning_details(output)
+    form_data['messages'] = sanitize_tool_pairs(
+        [
+            *form_data.get('messages', []),
+            *process_messages_with_output([replayed], reasoning_format=get_reasoning_format(model)),
+        ]
+    )
+
+
 async def drain_approved_tool_calls(request, form_data, user, model, metadata) -> bool:
     chat_id = metadata.get('chat_id')
     assistant_message_id = metadata.get('assistant_message_id')
@@ -3319,15 +3359,7 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
     result_call_ids = {
         item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
     }
-    approved_calls = [
-        item
-        for item in output
-        if item.get('type') == 'function_call'
-        and item.get('call_id')
-        and item.get('status') == 'queued'
-        and item.get('approved') is True
-        and item.get('call_id') not in result_call_ids
-    ]
+    approved_calls = _approved_unrun_calls(output)
     if not approved_calls:
         if metadata.get('params', {}).get('tool_approval_mode', 'full') == 'ask' and any(
             item.get('type') == 'function_call'
@@ -3343,6 +3375,11 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
             if event_emitter:
                 await event_emitter({'type': 'chat:completion', 'data': {'done': False, 'output': output}})
             return True
+        if metadata.get('resume_output_deferred') and message:
+            # The calls were resolved between building the request and now:
+            # the output the request left out still has to be sent.
+            _append_resumed_output(form_data, message, model)
+            await convert_url_images_to_base64(form_data, user=user)
         return False
 
     event_emitter, event_caller = await get_event_emitter_and_caller(metadata)
@@ -3448,8 +3485,22 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
                 }
             )
 
-        db_messages = await load_messages_from_db(chat_id, metadata.get('user_message_id'))
-        if db_messages:
+        if metadata.get('resume_output_deferred'):
+            # Splice (#164): keep the request process_chat_payload built, which
+            # ends at the turn's user message (its retrieved context, file tags,
+            # stripped skill mentions and images included, and the compacted
+            # history with its summary), and append the output with the results
+            # just saved, as _continuation_form_data extends the built list.
+            assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, message_id)
+            if assistant_message:
+                _append_resumed_output(form_data, assistant_message, model)
+                # Tool images are data URLs already; anything else is resolved
+                # as the rebuild below resolves it.
+                await convert_url_images_to_base64(form_data, user=user)
+        elif db_messages := await load_messages_from_db(chat_id, metadata.get('user_message_id')):
+            # A request built without leaving the output out already holds a
+            # stale copy of it, so the conversation is rebuilt from the stored
+            # history instead.
             assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, message_id)
             if assistant_message:
                 db_messages.append({k: v for k, v in assistant_message.items() if k in MESSAGE_REPLAY_KEYS})
@@ -3469,9 +3520,7 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
             # context when RAG_SYSTEM_CONTEXT is on) and send the user's
             # images again, resolved as the normal path resolves them: the
             # stored history alone has neither (#164). What the normal path
-            # adds to the user message itself (retrieved context by default,
-            # file tags, stripped skill mentions) is still missing: the user
-            # message is rebuilt from the stored history alone.
+            # adds to the user message itself is lost on this path only.
             system_message = get_system_message(form_data.get('messages', []))
             _inline_message_images(db_messages)
             replayed = process_messages_with_output(
