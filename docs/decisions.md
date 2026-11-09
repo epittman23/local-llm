@@ -50,6 +50,35 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   resources take. Membership stays the line for writing. Private stays the
   dialog's default.
 
+- **2026-11-08**: **Native hybrid search's keyword half matches any
+  English-stemmed query word (#347).** With pgvector, the keyword half of
+  hybrid search used `plainto_tsquery('simple', query)`, which ANDs every
+  word, so a natural-language question rarely matched a chunk and hybrid
+  search was in effect vector-only (at BM25 weight 1.0 it returned
+  nothing until the vector fallback of #566). A plain OR over the `simple`
+  config was checked on Postgres 16 and rejected: with no stop words,
+  "the", "how" and "do" match almost every chunk, and `ts_rank_cd` put a
+  long chunk of common words above the relevant one.
+
+  **What.** The query's lexemes under the `english` config (stop words
+  dropped, words stemmed, as `plainto_tsquery('english', ...)` makes them)
+  are joined with OR and matched against `to_tsvector('english', text)`,
+  ranked with `ts_rank_cd` as before. A question of only stop words
+  matches nothing, and the #566 fallback answers it with vector search.
+  - **Trade-off:** Snowball English stemming and the English stop-word
+    list apply to all text, while `bge-m3` was chosen as multilingual.
+    Non-English words still match, since chunks and questions go through
+    the same rules, but they are stemmed by English rules, and any that
+    spell an English stop word are dropped.
+    A custom config (the `simple` dictionary plus English stop words, no
+    stemming) was the alternative; it is DDL and would need a migration.
+  - **Index:** a second GIN index, `idx_document_chunk_text_search_english`,
+    is ensured at startup like the first (`_ensure_text_search_index`;
+    `document_chunk` is created at runtime, not by Alembic). The first
+    start after this change builds it over every existing chunk. The
+    `simple` index, `idx_document_chunk_text_search`, is still created but
+    nothing reads it any more.
+
 - **2026-11-08**: **Saving an access list filters only the grants it
   changes (#523, #335).** Editors send the whole grant list on every save,
   and the server filtered all of it against the saver's sharing
