@@ -432,22 +432,24 @@ class ModelsTable:
 
                 if order_by == 'name':
                     if direction == 'asc':
-                        stmt = stmt.order_by(Model.name.asc())
+                        stmt = stmt.order_by(Model.name.asc(), Model.id.asc())
                     else:
-                        stmt = stmt.order_by(Model.name.desc())
+                        stmt = stmt.order_by(Model.name.desc(), Model.id.desc())
                 elif order_by == 'created_at':
                     if direction == 'asc':
-                        stmt = stmt.order_by(Model.created_at.asc())
+                        stmt = stmt.order_by(Model.created_at.asc(), Model.id.asc())
                     else:
-                        stmt = stmt.order_by(Model.created_at.desc())
+                        stmt = stmt.order_by(Model.created_at.desc(), Model.id.desc())
                 elif order_by == 'updated_at':
                     if direction == 'asc':
-                        stmt = stmt.order_by(Model.updated_at.asc())
+                        stmt = stmt.order_by(Model.updated_at.asc(), Model.id.asc())
                     else:
-                        stmt = stmt.order_by(Model.updated_at.desc())
+                        stmt = stmt.order_by(Model.updated_at.desc(), Model.id.desc())
+                else:
+                    stmt = stmt.order_by(Model.created_at.desc(), Model.id.desc())
 
             else:
-                stmt = stmt.order_by(Model.created_at.desc())
+                stmt = stmt.order_by(Model.created_at.desc(), Model.id.desc())
 
             # Count BEFORE pagination
             count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
