@@ -1503,7 +1503,9 @@ def _failure_label(item: dict, ctx: _SourceContext) -> str:
 async def _expand_folders(items: list, user, failed: list | None = None, labels: list | None = None) -> set:
     """Appends each readable folder's files to items (each folder once); returns their (type, id) pairs.
 
-    Those pairs count as readable later, since access was checked on the folder.
+    Those pairs count as readable later, since access was checked on the folder
+    and its files are limited to what its owner may pass on or the user may
+    read themselves.
     A folder that cannot be read is skipped, and recorded in failed (with its
     label in labels) like an item that fails.
     """
@@ -1520,7 +1522,7 @@ async def _expand_folders(items: list, user, failed: list | None = None, labels:
         try:
             folder = await Folders.get_folder_by_id(folder_id)
             if folder and (user.role == 'admin' or await has_folder_access(user.id, folder, 'read', db=None)):
-                files = await get_owner_accessible_folder_files(folder)
+                files = await get_owner_accessible_folder_files(folder, reader=user)
                 folder_items.update((entry.get('type'), entry.get('id')) for entry in files if isinstance(entry, dict))
                 items.extend(files)
         except Exception as e:

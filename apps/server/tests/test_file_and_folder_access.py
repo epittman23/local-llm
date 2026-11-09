@@ -330,6 +330,72 @@ def test_a_folder_passes_on_a_knowledge_base_only_if_its_owner_may_write_it(file
     assert _run(file_access.get_owner_accessible_folder_files(folder)) == [{'type': 'collection', 'id': 'kb'}]
 
 
+@pytest.fixture
+def alices_folder(file_world, monkeypatch):
+    """Alice's folder holds carol's knowledge base and note; note grants are (user, note, permission)."""
+    users = {'alice': ALICE, 'admin': ADMIN}
+
+    async def get_user(user_id, db=None):
+        return users.get(user_id)
+
+    async def note_grant(user_id, resource_type, resource_id, permission='read', user_group_ids=None, db=None):
+        assert resource_type == 'note'
+        return (user_id, resource_id, permission) in file_world.note_grants
+
+    monkeypatch.setattr(file_access.Users, 'get_user_by_id', get_user)
+    monkeypatch.setattr(file_access.AccessGrants, 'has_access', note_grant)
+    file_world.notes = {'n': SimpleNamespace(id='n', user_id='carol')}
+    entries = [{'type': 'collection', 'id': 'kb'}, {'type': 'note', 'id': 'n'}]
+    return SimpleNamespace(user_id='alice', data={'files': entries}), entries
+
+
+def _kept(folder, reader=None):
+    return _run(file_access.get_owner_accessible_folder_files(folder, reader=reader))
+
+
+def test_the_owners_own_chats_keep_what_they_may_only_read(file_world, alices_folder):
+    folder, entries = alices_folder
+    file_world.knowledge_grants.add(('alice', 'kb', 'read'))
+    file_world.note_grants.add(('alice', 'n', 'read'))
+    # Alice may not pass them on, but her own chats in the folder use them (#846).
+    assert _kept(folder) == []
+    assert _kept(folder, reader=ALICE) == entries
+
+
+def test_another_member_gets_an_owner_read_only_entry_only_if_they_may_read_it(file_world, alices_folder):
+    folder, entries = alices_folder
+    bob = SimpleNamespace(id='bob', role='user')
+    file_world.knowledge_grants.add(('alice', 'kb', 'read'))
+    file_world.note_grants.add(('alice', 'n', 'read'))
+    assert _kept(folder, reader=bob) == []
+    file_world.knowledge_grants.add(('bob', 'kb', 'read'))
+    assert _kept(folder, reader=bob) == [{'type': 'collection', 'id': 'kb'}]
+    file_world.note_grants.add(('bob', 'n', 'read'))
+    assert _kept(folder, reader=bob) == entries
+
+
+def test_a_member_still_gets_what_the_owner_may_pass_on(file_world, alices_folder):
+    folder, entries = alices_folder
+    bob = SimpleNamespace(id='bob', role='user')
+    file_world.knowledge_grants.add(('alice', 'kb', 'write'))
+    file_world.note_grants.add(('alice', 'n', 'write'))
+    assert _kept(folder, reader=bob) == entries
+
+
+def test_an_admins_folder_passes_on_every_entry_as_before(file_world, alices_folder):
+    _, entries = alices_folder
+    folder = SimpleNamespace(user_id='admin', data={'files': entries})
+    assert _kept(folder) == entries
+    assert _kept(folder, reader=ADMIN) == entries
+    assert _kept(folder, reader=SimpleNamespace(id='bob', role='user')) == entries
+
+
+def test_an_admin_chatting_in_a_members_folder_keeps_every_entry_they_may_read(file_world, alices_folder):
+    folder, entries = alices_folder
+    assert _kept(folder) == []
+    assert _kept(folder, reader=ADMIN) == entries
+
+
 def test_can_read_all_folder_files_checks_the_knowledge_permission_asked_for(file_world):
     entries = [{'type': 'collection', 'id': 'kb'}]
     file_world.knowledge_grants.add(('alice', 'kb', 'read'))
