@@ -537,6 +537,8 @@ async def import_models(
                             user.role,
                             updated_model.access_grants,
                             'sharing.public_models',
+                            stored_grants=existing_model.access_grants,
+                            owner_id=existing_model.user_id,
                         )
                     if await Models.update_model_by_id(model_id, updated_model, db=db) is None:
                         # A shared session is left failed by the error: free it for the next entry.
@@ -875,6 +877,8 @@ async def update_model_by_id(
         user.role,
         form_data.access_grants,
         'sharing.public_models',
+        stored_grants=model.access_grants,
+        owner_id=model.user_id,
     )
 
     model = await Models.update_model_by_id(form_data.id, ModelForm(**form_data.model_dump()), db=db)
@@ -955,6 +959,8 @@ async def update_model_access_by_id(
         user.role,
         form_data.access_grants,
         'sharing.public_models',
+        stored_grants=model.access_grants,
+        owner_id=model.user_id,
     )
 
     await AccessGrants.set_access_grants('model', form_data.id, form_data.access_grants, db=db)

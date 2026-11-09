@@ -568,6 +568,8 @@ async def update_note_by_id(
             form_data.access_grants,
             'sharing.public_notes',
             db=db,
+            stored_grants=note.access_grants,
+            owner_id=note.user_id,
         )
 
     try:
@@ -662,6 +664,8 @@ async def update_note_access_by_id(
         user.role,
         form_data.access_grants,
         'sharing.public_notes',
+        stored_grants=note.access_grants,
+        owner_id=note.user_id,
     )
 
     await AccessGrants.set_access_grants('note', id, form_data.access_grants, db=db)
