@@ -127,7 +127,12 @@ Start here for "how do I run/use this."
   routing guard and a harness grouping key; approved 2026-10-24);
   `local-model-recommendations.md` (the Artificial Analysis shortlist checked
   against this machine: fit, tool calls, uncensored variants, the exact
-  Hugging Face file for each; analysis for the owner's decision).
+  Hugging Face file for each; analysis for the owner's decision);
+  `sandbox-implementation.md` (the task-by-task build of the sandbox
+  proposal, with the committed ledger every session resumes from), and the
+  two session procedures that drive it: `sandbox-sessions-local.md` (the
+  owner's laptop, with the oh-my-claudecode plugin) and
+  `sandbox-sessions-cloud.md` (a hosted session from a fresh clone).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
   server. `sandbox-code-interpreter.md`, the design for replacing

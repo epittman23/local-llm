@@ -34,9 +34,17 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   or `<img>`. At most 4 microVMs run at once on the laptop, each with the
   Jupyter service's 4 GB and 512 PIDs.
   - **Not changed yet:** the Jupyter engine stays the code interpreter, and
-    the 2026-10-24 (night) entry still describes what runs. The proposal's three PRs
+    the 2026-10-24 (night) entry still describes what runs. The
+    implementation is one large pull request, opened as a draft when the
+    work starts so it cannot auto-merge half built, and taken in three steps
     (add the sandbox engine, move the harness and re-run its baseline,
-    remove Jupyter and Pyodide) each add their own entry here.
+    remove Jupyter and Pyodide). It is marked ready only after every
+    acceptance test in the proposal has passed, and adds its own entry here.
+    It is built from [docs/plans/sandbox-implementation.md](plans/sandbox-implementation.md),
+    whose committed ledger is how sessions on the laptop
+    ([sandbox-sessions-local.md](plans/sandbox-sessions-local.md)) and in
+    the cloud ([sandbox-sessions-cloud.md](plans/sandbox-sessions-cloud.md))
+    resume the work.
 
 - **2026-11-09**: **Attached chat files are merged by rank when a file's
   search fell back, and by score otherwise (#503).** `query_chat_files`

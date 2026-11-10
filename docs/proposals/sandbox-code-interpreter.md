@@ -202,13 +202,17 @@ Kernel state between calls is not on this list: the current engine already disca
 
 ## Migration plan
 
-Three PRs, so the harness can be measured on the new engine before the old one is deleted. Jupyter stays available only between PR 1 and PR 3.
+The task-by-task build, with the ledger that sessions resume from, is [docs/plans/sandbox-implementation.md](../plans/sandbox-implementation.md); it also records where the code at `7709a6b1` differs from what this proposal assumed.
 
-1. **Add the sandbox engine.** New `sandbox/` package (manager, the `SandboxBackend` protocol with `KataDockerBackend` and `FakeBackend`, tools), the images under `infra/sandbox/`, the engine value `sandbox` in all three call sites, the four tools registered in `tools/builtin.py`, a sandbox prompt beside `CODE_INTERPRETER_JUPYTER_PROMPT`, settings in Admin > Code Execution, and a Kata setup guide in `docs/guides/` (install from Fedora's packages or the upstream static release, register `kata-clh` in `/etc/docker/daemon.json`, run `kata-runtime check`). Config defaults arrive in a new Alembic revision (the schema is append-only). Also: the wheelhouse mirror (`allowlist.in`, `requirements.lock`, `make wheelhouse`, the `sandbox-mirror` service and network), `sitecustomize.py` telemetry, output rendering (sandboxed frames, the injected policy, attachment-only raw downloads), and the append-only `sandbox_package_events` table. Tests for every acceptance test below that can run in CI.
+One large pull request, opened as a draft when implementation starts, built up in the three steps below, in order, so the harness can be measured on the new engine before the old one is deleted. A draft never auto-merges, so `main` never carries a half-built sandbox: Jupyter stays the engine on `main` until the PR merges, and Jupyter and the sandbox exist side by side only on the branch, between steps 1 and 3. The PR is marked ready for review only when every step is done and every [acceptance test](#acceptance-tests) has passed; marking it ready lets it auto-merge once its checks pass.
+
+1. **Add the sandbox engine.** New `sandbox/` package (manager, the `SandboxBackend` protocol with `KataDockerBackend` and `FakeBackend`, tools), the images under `infra/sandbox/`, the engine value `sandbox` in all three call sites, the four tools registered in `tools/builtin.py`, a sandbox prompt beside `CODE_INTERPRETER_JUPYTER_PROMPT`, settings in Admin > Code Execution, and a Kata setup guide in `docs/guides/` (install from Fedora's packages or the upstream static release, register `kata-clh` in `/etc/docker/daemon.json`, run `kata-runtime check`). New config keys go in `DEFAULT_CONFIG`, which the backend seeds at startup; only changing existing rows needs an Alembic revision (the schema is append-only). Also: the wheelhouse mirror (`allowlist.in`, `requirements.lock`, `make wheelhouse`, the `sandbox-mirror` service and network), `sitecustomize.py` telemetry, output rendering (sandboxed frames, the injected policy, attachment-only raw downloads), and the append-only `sandbox_package_events` table. Tests for every acceptance test below that can run in CI.
 2. **Move the harness.** Accept `sandbox` in `harness.py` and record it in the run spec; check with the owner whether the changed spec needs a `benchmark_schema_note` row. Re-run the harness baseline on the current serving profiles and record numbers with hardware, model file, llama.cpp build and flags.
-3. **Remove Jupyter and Pyodide.** Delete `JupyterCodeExecuter`, the `jupyter` Compose service, network and volume, `JUPYTER_TOKEN` generation, the desktop progress stage, the Jupyter settings UI, and the Jupyter tests; remove Pyodide everywhere it appears: the `pyodide` branches in `tools/builtin.py`, `utils/middleware.py` and `utils/subagents.py`, `CODE_INTERPRETER_PYODIDE_PROMPT`, `ENABLE_PYODIDE_FILE_PERSISTENCE` in `env.py` and `main.py`, the engine choice in `CodeExecution.tsx` and its e2e test, the `config.py` defaults (changed to `sandbox`), and the harness comments and test fixtures that mention it. Migrate existing `code_interpreter.engine` and `code_execution.engine` rows set to `jupyter` or `pyodide` to `sandbox` in a new revision. Removing tests trips the CI gate, so this PR needs the `gate-change-approved` label with a written "## Gate changes" justification from the owner.
+3. **Remove Jupyter and Pyodide.** Delete `JupyterCodeExecuter`, the `jupyter` Compose service, network and volume, `JUPYTER_TOKEN` generation, the desktop progress stage, the Jupyter settings UI, and the Jupyter tests; remove Pyodide everywhere it appears: the `pyodide` branches in `tools/builtin.py`, `utils/middleware.py` and `utils/subagents.py`, `CODE_INTERPRETER_PYODIDE_PROMPT`, `ENABLE_PYODIDE_FILE_PERSISTENCE` in `env.py` and `main.py`, the engine choice in `CodeExecution.tsx` and its e2e test, the `config.py` defaults (changed to `sandbox`), and the harness comments and test fixtures that mention it. Migrate existing `code_interpreter.engine` and `code_execution.engine` rows set to `jupyter` or `pyodide` to `sandbox` in a new revision.
 
-**Docs, in the same commits.** A new dated entry at the top of `docs/decisions.md` for each PR (the 2026-10-24 entry stays as written); `docs/guides/assistant-tools.md` rewritten for the sandbox; `features-chat-pipeline.mmd`, `features-harness.mmd`, MAP, README, AGENTS, and the roadmap updated; `docs/plans/benchmarks-through-the-app.md` amended where it names the Jupyter engine. Files under `docs/history/` and `docs/audit/` that mention Jupyter or Pyodide are records and stay as written.
+**The CI gate.** The PR trips the gate: step 1 changes the Makefile (`make wheelhouse`) and step 3 deletes tests. Its body keeps a "## Gate changes" section that lists every finding with its justification and grows as the steps land. A push removes the `gate-change-approved` label, so the owner adds it once, after the last commit, when the PR is ready.
+
+**Docs, in the same commits.** One new dated entry at the top of `docs/decisions.md` for the PR, kept current on the branch as the steps land (the 2026-10-24 (night) entry stays as written); `docs/guides/assistant-tools.md` rewritten for the sandbox; `features-chat-pipeline.mmd`, `features-harness.mmd`, MAP, README, AGENTS, and the roadmap updated; `docs/plans/benchmarks-through-the-app.md` amended where it names the Jupyter engine. Files under `docs/history/` and `docs/audit/` that mention Jupyter or Pyodide are records and stay as written.
 
 ## Alternatives considered
 
@@ -216,7 +220,7 @@ Kata Containers with Cloud Hypervisor is recommended: it is a true microVM bound
 
 | Option | Isolation | Effort on Fedora 44 | Verdict |
 | --- | --- | --- | --- |
-| **Kata + Cloud Hypervisor under Docker** | microVM, own guest kernel; virtio-fs file sharing | Low to medium: install Kata, one `daemon.json` entry | **Chosen for PR 1** |
+| **Kata + Cloud Hypervisor under Docker** | microVM, own guest kernel; virtio-fs file sharing | Low to medium: install Kata, one `daemon.json` entry | **Chosen** |
 | Raw Firecracker (what Claude uses) | microVM, minimal device model, jailer | High: guest agent over vsock, rootfs build from the Dockerfile, block-device workspaces, TAP networking, jailer | **Contingent second backend**: snapshot restore gives the fastest warm starts at home-server scale |
 | Kata + Firecracker | microVM | High: containerd devmapper snapshotter; no virtio-fs, so volumes and bind mounts break | Rejected: the costs of raw Firecracker without its control |
 | Docker with gVisor (runsc) | User-space kernel, not a VM | Low | Superseded on 2026-11-09: the owner wants a VM boundary for parallel multi-session use |
@@ -231,7 +235,7 @@ A microVM costs a guest kernel and VMM process per sandbox, so start-up is slowe
 
 ## Acceptance tests
 
-All must pass on the laptop before PR 3 merges; each records its date and commit, as the 2026-10-24 Jupyter checks did.
+All must pass on the laptop before the PR is marked ready for review; each records its date and commit, as the 2026-10-24 Jupyter checks did.
 
 - [ ] **Network fence:** from inside a sandbox, service names other than `sandbox-mirror` fail to resolve, ports 4000, 5432, 6379, 8080 and 8090 are unreachable, and `https://pypi.org` is unreachable; from inside the mirror container, `https://pypi.org` is unreachable too.
 - [ ] **VM boundary:** `uname -r` inside the sandbox reports Kata's guest kernel, not the host's, and the host shows one `cloud-hypervisor` process per running sandbox.
@@ -267,7 +271,7 @@ Every question the proposal raised was decided by the owner.
 | Package source | Static wheelhouse, with package telemetry (over devpi) | 2026-11-09 |
 | Images | `sandbox-data` (default) and `sandbox-web`, chosen per chat by the model, switching on the same volume | 2026-11-09 |
 | Languages beyond Python | R, the web suite (TypeScript, JavaScript, CSS, HTML) and LaTeX | 2026-11-09 |
-| Pyodide | Removed completely in PR 3, with Jupyter | 2026-11-10 |
+| Pyodide | Removed completely, with Jupyter, in Migration step 3 | 2026-11-10 |
 | Concurrency cap | 4 microVMs on the laptop for now; revisit on the R730 | 2026-11-10 |
 | Workspace retention | 7 days after last use | 2026-11-10 |
 | Idle reaper | 30 minutes | 2026-11-10 |
@@ -276,6 +280,13 @@ Every question the proposal raised was decided by the owner.
 | R packages | tidyverse, data.table, broom, lme4, survival | 2026-11-10 |
 | Playwright in `sandbox-web` | Included; screenshots are the only way the model sees its own page | 2026-11-10 |
 | TeX Live collections | The six listed under [LaTeX](#latex); `listings` replaces `minted` | 2026-11-10 |
+| Development flow | One large PR, opened as a draft when implementation starts and marked ready only after every acceptance test passes | 2026-11-10 |
+| Harness schema note | Add a `benchmark_schema_note` row when the harness spec gains the sandbox engine and image digest | 2026-11-10 |
+| Run button | Wired up in the chat (it is not shown today), running in the chat's own sandbox | 2026-11-10 |
+| Kata tests in CI | Skipped unless `LLLM_TEST_KATA=1`, never failed on `CI`; the new skip is justified under the PR's `## Gate changes` | 2026-11-10 |
+| Frame navigation | The desktop app denies sub-frame navigation away from `about:srcdoc`; the browser limitation is documented | 2026-11-10 |
+| Unsaved chats | Ephemeral sandboxes (temporary chats, harness items), never retained; harness items release theirs when done | 2026-11-10 |
+| Sub-agents | Use the parent chat's sandbox | 2026-11-10 |
 
 ## Sources
 
