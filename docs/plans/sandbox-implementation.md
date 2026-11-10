@@ -62,7 +62,7 @@ The same for every session:
 | ID | Task | Author | Verify | Depends | Status | Commit | Evidence / next |
 |---|---|---|---|---|---|---|---|
 | T00 | Open the branch and the draft PR | local | local | none | done | | 2026-11-10: branch from `main` `64c977f1`; PR #884 opened as a draft; `gh pr view 884 --json isDraft,autoMergeRequest` gave `isDraft: true`, `autoMergeRequest: null`; `make pr-gate PR=884`: title, attribution and tripwire pass |
-| T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | todo | | |
+| T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | done | | 2026-11-10, branch head `523e2b30` + this commit: Fedora 44 `kata-containers` 3.26.0 is QEMU-only, so upstream 4.3.1 runtime-rs (Q7), sha256 verified, under `/opt/kata`; `kata-clh` registered in `/etc/docker/daemon.json` with the runtime-rs shim and `ConfigPath` = `configuration-clh-runtime-rs.toml` (a `KATA_CONF_FILE` wrapper failed: "only shipped Kata configuration files are accepted"); `kata-ctl check no-network-checks` exit 0; `docker run --rm --runtime kata-clh alpine uname -r` = `6.18.56` vs host `7.2.8-200.fc44.x86_64`, 1.3 s; one `cloud-hypervisor` + two `virtiofsd` per running container, none after; no AVC denials; Kata 4.3.1, Cloud Hypervisor v54.0, virtiofsd 1.14.0, Docker 29.8.2, containerd 2.3.6. Details in `docs/guides/sandbox.md`, "Host setup" |
 | T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | todo | | |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | todo | | |
 | T11 | `SandboxManager` lifecycle | any | any | T10 | todo | | |
@@ -180,6 +180,19 @@ to the decision.
   serializes their commands). Recommended: (b), since a delegated task
   usually continues the parent's work on the parent's files, and it does
   not double the slot use; T20 records whichever is chosen.
+- **Q7 (found in T01, 2026-11-10). Answered 2026-11-10: upstream 4.3.1
+  with runtime-rs.** Fedora 44's `kata-containers` 3.26.0 is QEMU-only
+  (it requires `qemu-kvm-core`, ships one QEMU `configuration.toml`, and
+  has no Cloud Hypervisor binary or `kata-clh` shim; Fedora has no
+  `cloud-hypervisor` package), so it cannot run the proposal's design.
+  Upstream had moved to 4.x: in 4.0.0 the runtime was rewritten in Rust
+  (runtime-rs, the default) and the Go runtime deprecated (critical and
+  CVE fixes only), and the 4.0.0 notes list Docker with runtime-rs as
+  "only tested with QEMU". Options: (a) `kata-static-4.3.1` (runtime-rs);
+  (b) `kata-go-static-4.3.1` (deprecated Go runtime); (c) 3.32.0, the
+  last 3.x. Recommended and chosen: (a), so the home server is not built
+  on a deprecated runtime; T02 proves Docker with Cloud Hypervisor on it,
+  and if that fails the fallback is (b), recorded with the reason.
 
 ### Session log
 
@@ -289,6 +302,13 @@ and goes into this PR's decisions entry.
 11. **`_gated_tools` cannot select by engine** (`utils/tools.py:629-651`):
     it gates on config, capability, feature and permission only. T12
     replaces the code interpreter's entry with a custom selector.
+12. **Kata is 4.3.1 with runtime-rs, from upstream** (Q7, found in T01).
+    The proposal's Migration step 1 offers Fedora's packages and
+    `kata-runtime check`; Fedora 44's package is QEMU-only, the check is
+    `kata-ctl check` under runtime-rs, and Cloud Hypervisor is selected
+    with the `ConfigPath` runtime option in `daemon.json`, since 4.3's
+    runtime-rs rejects a non-default `KATA_CONF_FILE`
+    (`docs/guides/sandbox.md`, "Host setup").
 
 ## Expected PR gate findings
 
@@ -343,27 +363,36 @@ scripts, no `.gitignore` edits (the wheelhouse lives under the ignored
 
 *Author: owner, kvm. Verify: owner, kvm. Depends: T00.*
 
-The owner runs the `sudo` steps; the agent prepares the commands and
-records the results.
+The owner runs the root steps; the agent prepares the commands, shows
+them, asks, and records the results. On the laptop root commands go
+through `pkexec`, not `sudo`, which has no TTY in an agent session.
+
+Corrected 2026-11-10 from what worked (Q7); the first version of this
+task assumed Fedora's package or a 3.x release, the Go runtime's
+`kata-runtime check`, and a `runtimeType` naming a per-hypervisor shim.
 
 1. Check virtualization: `grep -cE 'vmx|svm' /proc/cpuinfo` (non-zero),
    `ls -l /dev/kvm`.
-2. Install Kata Containers. First choice: Fedora's packages (`dnf info
-   kata-containers`); if absent or older than the upstream 3.x line, the
-   upstream static release tarball, checksum-verified, under
-   `/opt/kata`. Record which, and the version.
+2. Install Kata Containers: the upstream static release 4.3.1 with
+   runtime-rs (`kata-static-4.3.1-amd64.tar.zst` and
+   `kata-tools-static-4.3.1-amd64.tar.zst`), checksum-verified, unpacked
+   under `/opt/kata` by extracting only `./opt/kata` (the tarballs' `./`
+   entry would change the mode of `/`). Fedora 44's package is QEMU-only.
 3. Register the runtime in `/etc/docker/daemon.json` (merge with what is
-   there; show the owner the diff first):
+   there; show the owner the diff first), selecting Cloud Hypervisor
+   with the `ConfigPath` runtime option:
    ```json
-   {"runtimes": {"kata-clh": {"runtimeType": "io.containerd.kata-clh.v2"}}}
+   {"runtimes": {"kata-clh": {
+     "runtimeType": "/opt/kata/runtime-rs/bin/containerd-shim-kata-v2",
+     "options": {"ConfigPath": "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-clh-runtime-rs.toml"}}}}
    ```
-   For the static release, the shim path must be on `dockerd`'s `PATH` or
-   given as `"runtimeType": "/opt/kata/bin/containerd-shim-kata-clh-v2"`
-   (check the release's own docs for the exact name; record what worked).
-   Restart Docker.
-4. `kata-runtime check` (or `kata-runtime kata-check`) passes.
+   A wrapper shim setting `KATA_CONF_FILE` does not work on 4.3: runtime-rs
+   rejects any value that is not a default configuration path. Restart
+   Docker.
+4. `sudo /opt/kata/bin/kata-ctl check no-network-checks` exits 0.
 5. Smoke: `docker run --rm --runtime kata-clh alpine uname -r` prints a
-   kernel different from `uname -r` on the host.
+   kernel different from `uname -r` on the host, and a `cloud-hypervisor`
+   process runs on the host while such a container does.
 
 **Docs:** start `docs/guides/sandbox.md` with a "Host setup" section:
 the commands that worked, the versions, and how to check them. Link it

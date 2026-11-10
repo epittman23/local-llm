@@ -118,7 +118,8 @@ Start here for "how do I run/use this."
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
-  sign-in on through environment variables).
+  sign-in on through environment variables), `sandbox.md` (the per-chat
+  microVM sandbox under construction; so far its Kata host setup).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
