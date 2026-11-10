@@ -427,6 +427,6 @@ Code" footer, a Claude Code session link, or
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
 | [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling, assistant tools, features and the model harness |
-| [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
+| [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server, the microVM sandbox that replaces the Jupyter code interpreter) |
 | [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

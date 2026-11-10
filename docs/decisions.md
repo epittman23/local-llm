@@ -7,6 +7,45 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-10**: **The Jupyter and Pyodide code interpreters are to be
+  replaced by a per-chat microVM shell sandbox; proposed, nothing built
+  ([docs/proposals/sandbox-code-interpreter.md](proposals/sandbox-code-interpreter.md)).**
+  The Jupyter engine gives each code block a fresh kernel and directory and
+  deletes both afterwards, so nothing a model computes or writes survives to
+  its next call; it runs only Python; and every chat's code shares one
+  container. Pyodide cannot run at all, since the Astro frontend has no
+  Pyodide executor. The owner decided, on 2026-11-09 and 2026-11-10, every
+  question the proposal raised.
+
+  **What.** One disposable microVM per chat, driven by four tools (`bash`,
+  `view`, `write_file`, `str_replace`) over a `/workspace` volume that
+  persists for the chat (removed 7 days after last use; the VM itself after
+  30 minutes idle), with read-only uploads and an outputs directory the chat
+  displays. The isolation is Kata Containers with Cloud Hypervisor under the
+  existing Docker Engine, chosen over gVisor so the boundary already fits a
+  future home server running many sessions in parallel; raw Firecracker is
+  built only if measured Kata start latency or per-sandbox memory is too
+  poor. Sandboxes have no internet route; Python packages beyond the image
+  come only from a static, hash-pinned wheelhouse on an internal network
+  (over devpi), with package telemetry. Two images, `sandbox-data` (the
+  current scipy-notebook image plus R and TeX Live; the default) and
+  `sandbox-web` (Node.js, TypeScript, Playwright), are chosen per chat by
+  the model. Model-written HTML and SVG render only in opaque-origin frames
+  or `<img>`. At most 4 microVMs run at once on the laptop, each with the
+  Jupyter service's 4 GB and 512 PIDs.
+  - **Not changed yet:** the Jupyter engine stays the code interpreter, and
+    the 2026-10-24 (night) entry still describes what runs. The
+    implementation is one large pull request, opened as a draft when the
+    work starts so it cannot auto-merge half built, and taken in three steps
+    (add the sandbox engine, move the harness and re-run its baseline,
+    remove Jupyter and Pyodide). It is marked ready only after every
+    acceptance test in the proposal has passed, and adds its own entry here.
+    It is built from [docs/plans/sandbox-implementation.md](plans/sandbox-implementation.md),
+    whose committed ledger is how sessions on the laptop
+    ([sandbox-sessions-local.md](plans/sandbox-sessions-local.md)) and in
+    the cloud ([sandbox-sessions-cloud.md](plans/sandbox-sessions-cloud.md))
+    resume the work.
+
 - **2026-11-09**: **Attached chat files are merged by rank when a file's
   search fell back, and by score otherwise (#503).** `query_chat_files`
   searches each attached file on its own and, since #177, sorts every
