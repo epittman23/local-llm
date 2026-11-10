@@ -63,14 +63,14 @@ The same for every session:
 |---|---|---|---|---|---|---|---|
 | T00 | Open the branch and the draft PR | local | local | none | done | | 2026-11-10: branch from `main` `64c977f1`; PR #884 opened as a draft; `gh pr view 884 --json isDraft,autoMergeRequest` gave `isDraft: true`, `autoMergeRequest: null`; `make pr-gate PR=884`: title, attribution and tripwire pass |
 | T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | done | | 2026-11-10, branch head `523e2b30` + this commit: Fedora 44 `kata-containers` 3.26.0 is QEMU-only, so upstream 4.3.1 runtime-rs (Q7), sha256 verified, under `/opt/kata`; `kata-clh` registered in `/etc/docker/daemon.json` with the runtime-rs shim and `ConfigPath` = `configuration-clh-runtime-rs.toml` (a `KATA_CONF_FILE` wrapper failed: "only shipped Kata configuration files are accepted"); `kata-ctl check no-network-checks` exit 0; `docker run --rm --runtime kata-clh alpine uname -r` = `6.18.56` vs host `7.2.8-200.fc44.x86_64`, 1.3 s; one `cloud-hypervisor` + two `virtiofsd` per running container, none after; no AVC denials; Kata 4.3.1, Cloud Hypervisor v54.0, virtiofsd 1.14.0, Docker 29.8.2, containerd 2.3.6. Details in `docs/guides/sandbox.md`, "Host setup" |
-| T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | in-progress | | Stopped at 4 of 11 on 2026-11-10 for Q9, after Q8 (owner's rule: stop when an assumption fails). **1 yes:** named volume at `/workspace` mounts as `virtiofs`, keeps `persist.txt` across container removal, and an empty volume takes the image's `1000:1000` `/workspace` (host view `1000:1000 755`). **2 yes:** `--read-only` root (`virtiofs ro`) refuses writes to `/` and `/etc`; `--tmpfs /tmp:size=256m` is a 256 MiB `tmpfs`, `nosuid,nodev,noexec`; `/workspace` stays writable. **3 partly no:** `--user 1000:1000` (uid 1000), `--cap-drop ALL` (CapPrm/CapEff/CapBnd all 0), `no-new-privileges` (`NoNewPrivs: 1`), `--memory 4g` (`memory.max` 4294967296, guest 3966 MiB total) and `--cpus 2` (`cpu.max` 200000 100000; guest has 3 vCPUs) are honoured; `--pids-limit 512` is **not** (Q8, answered: add `--ulimit nproc=512:512`, which caps a fork bomb at 516 guest processes). A single 6 GB `bytearray` fails at once with `MemoryError` (guest overcommit refuses it); touching 256 MiB chunks is OOM-killed in the guest at 3840 MiB (exec rc 137, container `memory.events` `oom_kill 1`), the container keeps running and host load stays 0.68; the `cloud-hypervisor` process keeps 4.2 GB RSS afterwards (the guest does not return freed memory to the host). **4 partly no:** an `--internal` network attaches under `kata-clh` (only route `172.18.0.0/16 dev eth0`); host LAN IP, `docker0` and a public IP are "Network unreachable", `postgres` and `pypi.org` do not resolve; but a peer on the same network does not resolve by name either (Q9); it is reachable by IP, and by name with `--add-host`. For T14: after `timeout` fired, the bomb's backgrounded children survived (15,852 processes left), and root in the container cannot kill them (`--cap-drop ALL` removes `CAP_KILL`), so stopping a timed-out command must kill UID 1000's processes, not only `timeout`'s child. Next: Q9's answer, then items 5-11 |
+| T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | done | | 2026-11-10 on the laptop (Kata 4.3.1 runtime-rs, Cloud Hypervisor v54.0, Docker 29.8.2, docker-py 7.2.0), throwaway scripts, every option set as T14 will: **1 yes:** a named volume at `/workspace` mounts as `virtiofs`, keeps files across container removal, and an empty volume takes the image's `1000:1000` `/workspace`. **2 yes:** `--read-only` root (`virtiofs ro`) refuses writes; `--tmpfs /tmp:size=256m` is a 256 MiB `tmpfs` (`nosuid,nodev,noexec`). **3 yes after Q8:** uid 1000, CapPrm/CapEff/CapBnd 0, `NoNewPrivs: 1`, `memory.max` 4 GiB (guest 3966 MiB), `cpu.max` 2 CPUs (guest 3 vCPUs) honoured; `--pids-limit 512` is not (fork bomb reached 15,849), `--ulimit nproc=512:512` is (bomb stopped at 516, host load 0.46); 256 MiB chunks are OOM-killed in the guest at 3840 MiB (rc 137, `oom_kill 1`), container and host unaffected; one 6 GB `bytearray` fails at once with `MemoryError`; `cloud-hypervisor` keeps 4.2 GB RSS after the kill. **4 yes after Q9:** an `internal` network attaches; host LAN IP, `docker0` and a public IP are "Network unreachable", no outside name resolves; a peer is reachable by IP and by name only with `--add-host` (Docker's DNS does not answer in the guest). **5 yes:** `put_archive` into the volume writes root-owned files with the tar's modes (`0:0 555` dir, `0:0 444` file; uid 1000 cannot write, delete, chmod or add); `put_archive` into the read-only root is refused ("container rootfs is marked read-only"); `get_archive` works. **6 yes:** `exec_create` with a list argv and `user='1000:1000'`, `exec_start(stream=True, demux=True)` streams stdout and stderr as written (1 s apart). **7 yes:** scipy-notebook's `/opt/conda/bin/python` 3.13.16 has `ENABLE_USER_SITE` True and no `PYTHONNOUSERSITE`; with `PYTHONUSERBASE=/workspace/.local` and `PIP_USER=1`, an offline `pip install` from a find-links directory lands in `/workspace/.local` (read-only home is fine) and imports in the next exec and in a new container; no `.venv` fallback. **8:** `docker run -d` to the first exec's output 0.99-1.03 s (scipy-notebook, 5 runs) and 0.99-1.06 s (alpine); idle host RSS (`cloud-hypervisor` + `virtiofsd`) 381-395 MiB (scipy-notebook) and 290-295 MiB (alpine); i9-12900H, 62 GiB. **9 yes, as expected:** uid 1000 can `mv` the root-owned `0555` `uploads` aside and create its own; a root exec (no caps) can `chmod` and empty the moved copy but not remove it from the 1000-owned `/workspace`; uid 1000 can then `rmdir` it. **10 yes:** one exec with `stdin=True` via `exec_start(socket=True)`: 900,000 bytes sent then `shutdown(SHUT_WR)`, 8-byte-header frames demultiplexed to stdout `900000` and stderr, exit code 3 from `exec_inspect`. **11:** `docker compose down` with a sandbox attached exits 0 but leaves the network ("Resource is still in use"); the next `up` reuses the same network id, and the running sandbox reaches the restarted peer; so T16 keeps the network in Compose (no external network, no stop-first). Findings for T13-T16 are in their sections ("From T02") and `docs/guides/sandbox.md` |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | todo | | |
 | T11 | `SandboxManager` lifecycle | any | any | T10 | todo | | |
 | T12 | The four tools and path confinement | any | any | T11 | todo | | |
 | T13 | Chat uploads into `/workspace/uploads` | any | any; docker, kvm | T11 | todo | | |
-| T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Q8 answered: pass `--ulimit nproc=512:512` with `--pids-limit 512`; waits on Q9 (`extra_hosts`) |
+| T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Q8 answered: pass `--ulimit nproc=512:512` with `--pids-limit 512`; Q9 answered: pass `extra_hosts={'sandbox-mirror': <fixed address>}` |
 | T15 | Sandbox images | any | docker, host-internet | T02 | todo | | |
-| T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | todo | | Waits on Q9 (mirror address) |
+| T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | todo | | Q9 answered: fixed subnet and mirror address in Compose |
 | T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | todo | | |
 | T18 | Outputs: frontend rendering | any | any | T17 | todo | | |
 | T19 | Engine value, settings, prompt, admin page | any | any | T10 | todo | | |
@@ -100,30 +100,7 @@ goes into the proposal's Decisions table, with the date, and the question
 moves to "Answered" with its answer in bold, so the reasoning stays next
 to the decision.
 
-**Open:**
-
-- **Q9 (found in T02, 2026-11-10). Container names do not resolve inside
-  a Kata guest.** Blocks T16 (the mirror's address and `PIP_FIND_LINKS`)
-  and T14 (the container options), and the acceptance tests "Network
-  fence" and "Mirror installs". Docker's embedded DNS answers on
-  `127.0.0.11` only through iptables rules in the container's network
-  namespace on the host; the guest's `/etc/resolv.conf` names
-  `127.0.0.11`, but nothing in the VM answers there. On an
-  `internal: true` network, a runc client resolves a peer by name and
-  fetches from it; a `kata-clh` client cannot resolve it (`getent hosts`
-  fails), but reaches it by IP, and with `--add-host <name>:<ip>`
-  resolves it from `/etc/hosts` (which UID 1000 cannot change); no other
-  name resolves. The fence itself holds: the host's LAN address,
-  `docker0` and a public IP are "Network unreachable", and the guest's
-  only route is the internal subnet. Options: (a) Compose gives the
-  sandbox network a fixed subnet and `sandbox-mirror` a fixed address,
-  and the manager passes `extra_hosts={'sandbox-mirror': <that address>}`
-  from a constant, so the image's `PIP_FIND_LINKS=http://sandbox-mirror:8000/`
-  keeps working; (b) the manager reads the mirror's current address with
-  `docker inspect` when it creates each sandbox and passes it the same
-  way (no fixed subnet, but a sandbox created before a mirror restart
-  keeps a stale address); (c) run a DNS server on the sandbox network.
-  Recommended: (a).
+**Open:** none.
 
 **Answered:**
 
@@ -235,6 +212,28 @@ to the decision.
   processes for UID 1000; (b) accept the VM-bounded guest default (about
   15,800) and drop the 512 figure; (c) try the Go runtime (Q7's
   fallback) to see whether it enforces `--pids-limit`. Recommended: (a).
+- **Q9 (found in T02, 2026-11-10). Answered 2026-11-10: (a), a fixed
+  mirror address passed as `extra_hosts`.** Container names do not
+  resolve inside a Kata guest. T16 fixes the subnet and the mirror's
+  address in Compose; T14 passes the address as `extra_hosts`. Docker's embedded DNS answers on
+  `127.0.0.11` only through iptables rules in the container's network
+  namespace on the host; the guest's `/etc/resolv.conf` names
+  `127.0.0.11`, but nothing in the VM answers there. On an
+  `internal: true` network, a runc client resolves a peer by name and
+  fetches from it; a `kata-clh` client cannot resolve it (`getent hosts`
+  fails), but reaches it by IP, and with `--add-host <name>:<ip>`
+  resolves it from `/etc/hosts` (which UID 1000 cannot change); no other
+  name resolves. The fence itself holds: the host's LAN address,
+  `docker0` and a public IP are "Network unreachable", and the guest's
+  only route is the internal subnet. Options: (a) Compose gives the
+  sandbox network a fixed subnet and `sandbox-mirror` a fixed address,
+  and the manager passes `extra_hosts={'sandbox-mirror': <that address>}`
+  from a constant, so the image's `PIP_FIND_LINKS=http://sandbox-mirror:8000/`
+  keeps working; (b) the manager reads the mirror's current address with
+  `docker inspect` when it creates each sandbox and passes it the same
+  way (no fixed subnet, but a sandbox created before a mirror restart
+  keeps a stale address); (c) run a DNS server on the sandbox network.
+  Recommended: (a).
 
 ### Session log
 
@@ -351,6 +350,12 @@ and goes into this PR's decisions entry.
     with the `ConfigPath` runtime option in `daemon.json`, since 4.3's
     runtime-rs rejects a non-default `KATA_CONF_FILE`
     (`docs/guides/sandbox.md`, "Host setup").
+13. **`--pids-limit` is not enforced under Kata 4.3.1** (Q8, found in
+    T02); the process limit is `--ulimit nproc=512:512`, which caps UID
+    1000 at 512 processes in the guest.
+14. **No container name resolves inside a Kata guest** (Q9, found in
+    T02), including `sandbox-mirror`; the mirror has a fixed address,
+    passed to each sandbox as `extra_hosts`.
 
 ## Expected PR gate findings
 
@@ -702,6 +707,15 @@ fake enforces read-only to UID 1000.
 T15 done, writing, deleting and `chmod` on an upload fail inside a real
 sandbox. Record it; it is acceptance test "Read-only uploads".
 
+**From T02 (2026-11-10):** UID 1000 can rename the root-owned
+`/workspace/uploads` aside and create its own in its place (item 9), so
+before every sync check the directory's owner (0) and mode (`0555`) and
+re-create it when they differ; the acceptance test "Read-only uploads"
+gains the rename case. The moved-aside copy cannot be removed by either
+side alone: a root exec (capabilities dropped) can `chmod u+w` and empty
+it, but only UID 1000 can `rmdir` it from the 1000-owned `/workspace`.
+`put_archive` keeps the tar headers' mtime, so set it (zero shows as 1970).
+
 ### T14: `KataDockerBackend` **security**
 
 *Author: any. Verify: docker, kvm. Depends: T10, T02.*
@@ -717,13 +731,17 @@ sandbox. Record it; it is acceptance test "Read-only uploads".
   user='1000:1000', cap_drop=['ALL'], security_opt=['no-new-privileges'],
   read_only=True, tmpfs={'/tmp': 'size=256m'}, mem_limit='4g', nano_cpus=2e9,
   pids_limit=512, ulimits=[Ulimit(name='nproc', soft=512, hard=512)],
-  network='local-llm_sandbox',
+  network='local-llm_sandbox', extra_hosts={'sandbox-mirror': SANDBOX_MIRROR_ADDRESS},
   volumes={'lllm-sandbox-<chat id>': {'bind': '/workspace', 'mode': 'rw'}},
   working_dir='/workspace', detach=True, auto_remove=False,
   command=['sleep', 'infinity'] (under the image's tini)
   ```
   `ulimits` is the process limit that Kata 4.3.1 enforces; it does not
   enforce `pids_limit`, which stays in case a later release does (Q8).
+  `extra_hosts` is how the guest finds the mirror: Docker's embedded DNS
+  does not answer inside a Kata VM (Q9), so `SANDBOX_MIRROR_ADDRESS` is a
+  constant in `sandbox/kata.py` that matches the address T16 fixes in
+  Compose, with a test that reads the Compose file and checks they agree.
   The key is the manager's UUID (T11), validated as a UUID again here
   before it is put in a name, a label or a volume name.
   `exec` uses the low-level API (`exec_create` + `exec_start(stream=True,
@@ -760,6 +778,22 @@ feeds both caps, maps return codes and enforces the host-side deadline;
 --frozen python -m pytest tests/test_sandbox_kata.py -v`, output in the
 ledger with the date and commit; the always-on unit test in `make
 test-backend`; a security review.
+
+**From T02 (2026-11-10):** `pids_limit` is not enforced and `ulimits`
+nproc is (Q8); container names do not resolve in the guest, hence
+`extra_hosts` (Q9). When `timeout` fires, backgrounded children survive
+it (a fork bomb's 15,852 processes stayed), and a root exec cannot kill
+them because `cap_drop` removes `CAP_KILL`; ending a timed-out command
+must therefore kill UID 1000's processes (for example an exec as
+`1000:1000` running `kill -9 -1`), not only `timeout`'s child, and the
+acceptance test "Timeout" should include a backgrounded child. For
+`write_file`, `exec_start(socket=True)`, writing stdin, then
+`shutdown(SHUT_WR)` and reading the 8-byte-header frames works in one call
+(item 10); close the SDK response object, not only the raw socket, or
+urllib3 logs an error on close. Measured cold start to the first exec's
+output is about 1.0 s and idle host memory about 390 MiB per sandbox
+(item 8); after an OOM kill, `cloud-hypervisor` keeps the guest's memory
+(4.2 GB RSS), so a busy sandbox holds up to its limit until it stops.
 
 ### T15: sandbox images
 
@@ -806,6 +840,14 @@ rebuild, how the tag is bumped, the image sizes measured.
 `npx playwright --version` and a headless screenshot of a local HTML file.
 Record sizes.
 
+**From T02 (2026-11-10):** the scipy-notebook Python honours
+`PYTHONUSERBASE` (item 7; no `.venv` fallback needed). The image must
+create `/workspace` owned by `1000:1000` itself: an empty named volume
+takes the ownership of the image's directory (item 1), while a missing
+one would be created root-owned. Put `/workspace/.local/bin` on `PATH`
+(pip warns otherwise), and give GID 1000 a group name, or `id` prints
+"cannot find name for group ID 1000" (the image's `jovyan` is in group 100).
+
 ### T16: wheelhouse and `sandbox-mirror` **security**
 
 *Author: any. Verify: docker, host-internet, kvm. Depends: T15.*
@@ -829,8 +871,12 @@ Record sizes.
     `--find-links` reads the listing), JSON access log to stdout,
     `read_only: true` with a tmpfs for nginx's cache, `cap_drop: [ALL]`
     plus only what nginx needs, `no-new-privileges`, small `mem_limit` and
-    `pids_limit`, no published port, `networks: [sandbox]` only;
-  - a `sandbox` network with `internal: true` (Compose names it
+    `pids_limit`, no published port, `networks: [sandbox]` only, with a
+    fixed `ipv4_address` (Q9: sandboxes reach it by that address through
+    `extra_hosts`, since names do not resolve in a Kata guest);
+  - a `sandbox` network with `internal: true` and a fixed IPv4 subnet
+    (`ipam.config`; pick a private range no other Compose network here
+    uses) (Compose names it
     `local-llm_sandbox`, which T14 uses), unless T02 item 11 showed
     Compose cannot remove it with sandboxes attached, in which case follow
     the alternative recorded there;
@@ -850,6 +896,13 @@ and imports in the next call, an unlisted one fails with "no matching
 distribution", an sdist-only one is refused; from the mirror container,
 `wget https://pypi.org` fails. These are acceptance tests "Mirror
 installs" and part of "Network fence".
+
+**From T02 (2026-11-10):** the sandbox network stays in Compose
+(item 11): `docker compose down` with sandboxes attached exits 0 and
+leaves the network ("Resource is still in use"), and the next `up` reuses
+it, so `make backend`'s exit needs no change; expect that line in its
+output. Names do not resolve in a Kata guest, so the network has a fixed
+subnet and the mirror a fixed address (Q9).
 
 ### T17: outputs, backend **security**
 

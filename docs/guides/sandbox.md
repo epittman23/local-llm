@@ -114,6 +114,46 @@ container's limits (`static_sandbox_resource_mgmt = true`), shares files
 over virtio-fs, and defaults to 1 vCPU and 2048 MiB when a container sets
 no limits.
 
+### What Kata changes
+
+Proved on the laptop on 2026-11-10 (task T02 of the implementation plan)
+with throwaway containers carrying the options the sandbox will use:
+`--runtime kata-clh --user 1000:1000 --cap-drop ALL --security-opt
+no-new-privileges --memory 4g --cpus 2 --pids-limit 512 --ulimit
+nproc=512:512 --read-only --tmpfs /tmp:size=256m`, a named volume at
+`/workspace`, on an `internal` network. Most options behave as under
+runc; these do not:
+
+- **`--pids-limit` is ignored.** Inside the guest the container's
+  `pids.max` is `max`, and a fork bomb run as UID 1000 reached 15,849
+  processes, stopped only by the guest kernel's own default limit. The
+  per-UID `--ulimit nproc=512:512` is enforced, `docker exec` processes
+  included (the same bomb stopped at 516 processes in the guest), so the
+  sandbox passes both. The host stayed responsive either way: the VM has
+  3 vCPUs and 4 GiB.
+- **Container names do not resolve.** The guest's `/etc/resolv.conf`
+  names Docker's embedded DNS server, `127.0.0.11`, which answers only
+  through iptables rules in the container's network namespace on the
+  host, not inside the VM. Peers on the network are reachable by IP, and
+  by name through `--add-host` (`/etc/hosts`, which UID 1000 cannot
+  change), which is how a sandbox finds `sandbox-mirror`.
+- **A VM keeps memory it has touched.** After a process was OOM-killed
+  in the guest at about 3.8 GiB, `cloud-hypervisor` still held 4.2 GB of
+  host memory; it is returned only when the sandbox stops.
+- **The root file system is shared over virtio-fs**, read-only with
+  `--read-only`, like the `/workspace` volume. Writes through the Docker
+  archive API (`put_archive`) into a read-only root are refused; into
+  the volume they keep the tar headers' owners and modes.
+
+Measured the same day on the laptop (Intel Core i9-12900H, 62 GiB,
+Fedora 44 kernel `7.2.8-200.fc44.x86_64`; Kata 4.3.1 runtime-rs, Cloud
+Hypervisor v54.0, Docker 29.8.2), five runs each, with the options above:
+
+| Image | `docker run -d` to the first `docker exec` output | Idle host RSS, `cloud-hypervisor` + `virtiofsd` |
+|---|---|---|
+| `quay.io/jupyter/scipy-notebook:2026-10-12` | 0.99-1.03 s | 381-395 MiB |
+| `alpine:latest` | 0.99-1.06 s | 290-295 MiB |
+
 ### Undo
 
 ```sh
