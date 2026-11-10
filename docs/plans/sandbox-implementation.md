@@ -63,12 +63,12 @@ The same for every session:
 |---|---|---|---|---|---|---|---|
 | T00 | Open the branch and the draft PR | local | local | none | done | | 2026-11-10: branch from `main` `64c977f1`; PR #884 opened as a draft; `gh pr view 884 --json isDraft,autoMergeRequest` gave `isDraft: true`, `autoMergeRequest: null`; `make pr-gate PR=884`: title, attribution and tripwire pass |
 | T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | done | | 2026-11-10, branch head `523e2b30` + this commit: Fedora 44 `kata-containers` 3.26.0 is QEMU-only, so upstream 4.3.1 runtime-rs (Q7), sha256 verified, under `/opt/kata`; `kata-clh` registered in `/etc/docker/daemon.json` with the runtime-rs shim and `ConfigPath` = `configuration-clh-runtime-rs.toml` (a `KATA_CONF_FILE` wrapper failed: "only shipped Kata configuration files are accepted"); `kata-ctl check no-network-checks` exit 0; `docker run --rm --runtime kata-clh alpine uname -r` = `6.18.56` vs host `7.2.8-200.fc44.x86_64`, 1.3 s; one `cloud-hypervisor` + two `virtiofsd` per running container, none after; no AVC denials; Kata 4.3.1, Cloud Hypervisor v54.0, virtiofsd 1.14.0, Docker 29.8.2, containerd 2.3.6. Details in `docs/guides/sandbox.md`, "Host setup" |
-| T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | todo | | |
+| T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | in-progress | | Stopped at 3 of 11 on 2026-11-10 for Q8 (owner's rule: stop when an assumption fails). **1 yes:** named volume at `/workspace` mounts as `virtiofs`, keeps `persist.txt` across container removal, and an empty volume takes the image's `1000:1000` `/workspace` (host view `1000:1000 755`). **2 yes:** `--read-only` root (`virtiofs ro`) refuses writes to `/` and `/etc`; `--tmpfs /tmp:size=256m` is a 256 MiB `tmpfs`, `nosuid,nodev,noexec`; `/workspace` stays writable. **3 partly no:** `--user 1000:1000` (uid 1000), `--cap-drop ALL` (CapPrm/CapEff/CapBnd all 0), `no-new-privileges` (`NoNewPrivs: 1`), `--memory 4g` (`memory.max` 4294967296, guest 3966 MiB total) and `--cpus 2` (`cpu.max` 200000 100000; guest has 3 vCPUs) are honoured; `--pids-limit 512` is **not** (Q8); `--ulimit nproc=512:512` caps a fork bomb at 516 guest processes. 6 GB OOM check not yet run. For T14: after `timeout` fired, the bomb's backgrounded children survived (15,852 processes left), and root in the container cannot kill them (`--cap-drop ALL` removes `CAP_KILL`), so stopping a timed-out command must kill UID 1000's processes, not only `timeout`'s child. Next: Q8's answer, then items 3 (OOM) and 4-11 |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | todo | | |
 | T11 | `SandboxManager` lifecycle | any | any | T10 | todo | | |
 | T12 | The four tools and path confinement | any | any | T11 | todo | | |
 | T13 | Chat uploads into `/workspace/uploads` | any | any; docker, kvm | T11 | todo | | |
-| T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | |
+| T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Waits on Q8 (process limit option) |
 | T15 | Sandbox images | any | docker, host-internet | T02 | todo | | |
 | T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | todo | | |
 | T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | todo | | |
@@ -100,7 +100,26 @@ goes into the proposal's Decisions table, with the date, and the question
 moves to "Answered" with its answer in bold, so the reasoning stays next
 to the decision.
 
-**Open:** none.
+**Open:**
+
+- **Q8 (found in T02, 2026-11-10). `--pids-limit 512` is not enforced
+  under Kata 4.3.1 runtime-rs.** Blocks T14 (the container options) and
+  the acceptance test "Fork bomb". With `--pids-limit 512`, the
+  container's `pids.max` in the guest is `max`, and the sandbox's host
+  cgroup has the host default (`pids.max` 76551). A fork bomb run with
+  `docker exec` as UID 1000 reached 15,849 processes, stopped only by the
+  guest kernel's own per-UID `RLIMIT_NPROC` (15,848, derived from the
+  guest's 4 GiB); the host stayed responsive (load average 0.67) because
+  the VM has 3 vCPUs and 4 GiB. Adding `--ulimit nproc=512:512` is
+  honoured, including for `docker exec` processes: the same bomb stopped
+  at 516 processes in the guest (512 for UID 1000 plus root and the
+  agent), host load 0.46. Since every sandbox process runs as UID 1000 in
+  its own VM, the per-UID limit acts as a per-sandbox limit. Options:
+  (a) pass `--ulimit nproc=512:512` as well as `--pids-limit 512` (kept
+  in case a later Kata enforces it), and the acceptance test checks 512
+  processes for UID 1000; (b) accept the VM-bounded guest default (about
+  15,800) and drop the 512 figure; (c) try the Go runtime (Q7's
+  fallback) to see whether it enforces `--pids-limit`. Recommended: (a).
 
 **Answered:**
 
