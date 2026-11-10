@@ -288,6 +288,7 @@ Every question the proposal raised was decided by the owner.
 | Unsaved chats | Ephemeral sandboxes (temporary chats, harness items), never retained; harness items release theirs when done | 2026-11-10 |
 | Sub-agents | Use the parent chat's sandbox | 2026-11-10 |
 | Kata release and runtime | Upstream static release 4.3.1 with the Rust runtime (runtime-rs, the default since 4.0), not Fedora's QEMU-only 3.26.0 package or the deprecated Go runtime; fall back to the Go runtime only if the T02 spike shows Docker with Cloud Hypervisor failing on runtime-rs | 2026-11-10 |
+| Process limit under Kata | `--ulimit nproc=512:512` as well as `--pids-limit 512`: runtime-rs does not enforce the PID cgroup limit, while the per-UID limit caps a fork bomb at 512 for UID 1000, which every sandbox process runs as | 2026-11-10 |
 
 ## Sources
 
