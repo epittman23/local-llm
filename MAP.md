@@ -130,7 +130,11 @@ Start here for "how do I run/use this."
   Hugging Face file for each; analysis for the owner's decision).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
-  server.
+  server. `sandbox-code-interpreter.md`, the design for replacing
+  the Jupyter and Pyodide code interpreters with a per-chat microVM shell
+  sandbox (Kata Containers with Cloud Hypervisor), its images, package
+  mirror, telemetry and output rendering; every design question decided,
+  nothing built.
 - **`history/`** — completed records, kept because code comments cite them
   and not updated any more: `migration-plan.md` (the monorepo /
   shell-removal / Astro-frontend migration, complete 2026-09-27),
