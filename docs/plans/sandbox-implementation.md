@@ -30,7 +30,7 @@ records. It is the only record of progress: the oh-my-claudecode state on
 the laptop is a local working copy and loses to this section when they
 disagree.
 
-**Pull request:** not yet opened (T00 records the number here)
+**Pull request:** #884 (draft)
 **Feature branch:** `feat/sandbox-code-interpreter`
 **Active session:** local, 2026-11-10T22:00Z, T00 T01 T02
 **`main` last merged in at:** `64c977f1` (branch created from it by T00)
@@ -61,7 +61,7 @@ The same for every session:
 
 | ID | Task | Author | Verify | Depends | Status | Commit | Evidence / next |
 |---|---|---|---|---|---|---|---|
-| T00 | Open the branch and the draft PR | local | local | none | in-progress | | |
+| T00 | Open the branch and the draft PR | local | local | none | done | | 2026-11-10: branch from `main` `64c977f1`; PR #884 opened as a draft; `gh pr view 884 --json isDraft,autoMergeRequest` gave `isDraft: true`, `autoMergeRequest: null`; `make pr-gate PR=884`: title, attribution and tripwire pass |
 | T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | todo | | |
 | T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | todo | | |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | todo | | |
