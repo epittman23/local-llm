@@ -1,0 +1,8 @@
+% Local TeX Live settings for the sandbox (see the proposal's LaTeX section).
+% A document cannot run commands through \write18, and cannot write outside
+% the directory it is built in (or its subdirectories).
+shell_escape = f
+openout_any = p
+% Caches for fonts generated on the fly; the home directory is read-only.
+TEXMFVAR = /tmp/texmf-var
+TEXMFCONFIG = /tmp/texmf-config

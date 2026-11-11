@@ -316,3 +316,71 @@ def test_secrets_mounts_the_common_git_dir_from_a_linked_worktree(tmp_path):
     assert result.returncode == 0, result.stderr
     common = str((main / '.git').resolve())
     assert _gitleaks_mounts(calls) == [f'{linked}:/repo:ro', f'{common}:{common}:ro']
+
+
+# --- make sandbox-images ----------------------------------------------------
+
+
+def _sandbox_checkout(tmp_path: Path) -> tuple[Path, Path]:
+    root = _checkout(tmp_path)
+    sandbox = root / 'infra' / 'sandbox'
+    sandbox.mkdir()
+    (sandbox / 'TAG').write_text('2030-01-01.1\n')
+    return root, sandbox
+
+
+def test_sandbox_images_builds_both_images_at_the_tag_and_records_the_freezes(tmp_path):
+    """One TAG file names both images; the data image's Python and R packages are committed."""
+    root, sandbox = _sandbox_checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_OUT_DOCKER='pandas==9.9.9')
+    assert result.returncode == 0, result.stderr
+    image = 'local-llm/sandbox-data:2030-01-01.1'
+    docker = [c['argv'] for c in calls if c['tool'] == 'docker']
+    assert docker[:2] == [
+        ['build', '-f', f'{sandbox}/Dockerfile.data', '-t', image, str(sandbox)],
+        ['build', '-f', f'{sandbox}/Dockerfile.web', '-t', 'local-llm/sandbox-web:2030-01-01.1', str(sandbox)],
+    ]
+    assert docker[2] == [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        image,
+        'pip',
+        'list',
+        '--format=freeze',
+        '--disable-pip-version-check',
+    ]
+    assert docker[3][:6] == ['run', '--rm', '--network', 'none', image, 'Rscript']
+    assert len(docker) == 4
+    # The stub prints its canned output for every docker call, so each freeze
+    # file holds its run's output (the builds' go to the terminal, not to it).
+    assert (sandbox / 'image-freeze.txt').read_text() == 'pandas==9.9.9\n'
+    assert (sandbox / 'image-freeze-r.txt').read_text() == 'pandas==9.9.9\n'
+    assert not list(sandbox.glob('*.tmp'))
+
+
+def test_sandbox_images_refuses_without_a_tag(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'sandbox-images')
+    assert result.returncode != 0
+    assert 'infra/sandbox/TAG' in result.stderr
+    assert calls == []
+
+
+def test_sandbox_images_stops_at_a_failed_build_and_keeps_the_committed_freezes(tmp_path):
+    root, sandbox = _sandbox_checkout(tmp_path)
+    (sandbox / 'image-freeze.txt').write_text('committed==1\n')
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_EXIT_DOCKER_BUILD='1')
+    assert result.returncode != 0
+    assert [c['argv'][0] for c in calls if c['tool'] == 'docker'] == ['build']
+    assert (sandbox / 'image-freeze.txt').read_text() == 'committed==1\n'
+
+
+def test_sandbox_images_keeps_the_committed_freeze_when_recording_it_fails(tmp_path):
+    root, sandbox = _sandbox_checkout(tmp_path)
+    (sandbox / 'image-freeze.txt').write_text('committed==1\n')
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_EXIT_DOCKER_RUN='1')
+    assert result.returncode != 0
+    assert (sandbox / 'image-freeze.txt').read_text() == 'committed==1\n'
+    assert not list(sandbox.glob('*.tmp'))

@@ -1,0 +1,14 @@
+{
+  "name": "sandbox-web",
+  "private": true,
+  "description": "Tools baked into the local-llm sandbox-web image; installed globally from package-lock.json",
+  "dependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "playwright": "1.65.0",
+    "prettier": "3.10.0",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2"
+  }
+}

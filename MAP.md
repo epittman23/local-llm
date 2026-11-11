@@ -183,6 +183,11 @@ Infrastructure this repo runs but does not write.
 - **`searxng/settings.yml`** — SearXNG's settings: only what differs from
   its defaults (JSON output on, limiter off). Its secret comes from
   `infra/.env`.
+- **`sandbox/`** — the code sandbox's two images (`Dockerfile.data`,
+  `Dockerfile.web`), the files they share (`common/`), per-image inputs
+  (`data/`, `web/`), the image tag (`TAG`) and the data image's package
+  list (`image-freeze.txt`, `image-freeze-r.txt`). Built by `make sandbox-images`;
+  `docs/guides/sandbox.md` "Images".
 - **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the

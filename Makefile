@@ -43,6 +43,10 @@ SERVER_DIR := $(REPO_ROOT)/apps/server
 DATA_DIR ?= $(REPO_ROOT)/apps/server/data
 WEB_DIR := $(REPO_ROOT)/apps/web
 DESKTOP_DIR := $(REPO_ROOT)/apps/desktop
+# The code sandbox's images (docs/guides/sandbox.md "Images"). TAG is the one
+# place the image tag lives; the backend's constant must agree with it.
+SANDBOX_DIR := $(REPO_ROOT)/infra/sandbox
+SANDBOX_TAG := $(strip $(shell head -n 1 "$(SANDBOX_DIR)/TAG" 2>/dev/null))
 # Quoted, so a checkout path with a space stays one argument. Recipes use it
 # inside double quotes only (never in a single-quoted trap string), so a path
 # with a ' works too. That holds for `make -C <path>` (as the desktop app runs
@@ -78,12 +82,13 @@ LLLM_TEST_PG_PORT ?= 55432
 LLLM_BOOT_PG_PORT ?= 55433
 LLLM_BOOT_REDIS_PORT ?= 56379
 
-.PHONY: help backend frontend astro desktop lint secrets pr-gate baselines test test-backend test-types test-boot test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop sandbox-images lint secrets pr-gate baselines test test-backend test-types test-boot test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 	@echo "make desktop   the desktop app from this checkout (it starts and stops the stack itself)"
+	@echo "make sandbox-images  build the code sandbox's two images and write infra/sandbox/image-freeze.txt and image-freeze-r.txt"
 	@echo "make lint      pre-commit over every file, as CI runs it"
 	@echo "make secrets   gitleaks over the whole git history"
 	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
@@ -219,6 +224,25 @@ desktop:
 	bun run build && \
 	electron="$$(node -p "require('electron')")" && \
 	exec env -u ELECTRON_RUN_AS_NODE "$$electron" .
+
+# The code sandbox's images: data (Python, R, TeX Live) and web (Node.js,
+# Playwright), tagged from infra/sandbox/TAG. Also records the data image's
+# Python packages (image-freeze.txt; the wheelhouse lock is compiled against
+# it) and R packages (image-freeze-r.txt), committed. `pip list
+# --format=freeze` because conda's `pip freeze` prints file:// paths, not
+# versions. Each is written to a temporary file first, so a failed run leaves
+# the committed one alone. A lifecycle target, not a check.
+sandbox-images:
+	@test -n "$(SANDBOX_TAG)" || { echo "infra/sandbox/TAG is missing or empty" >&2; exit 1; }
+	@for key in data web; do \
+		docker build -f "$(SANDBOX_DIR)/Dockerfile.$$key" -t "local-llm/sandbox-$$key:$(SANDBOX_TAG)" "$(SANDBOX_DIR)"; \
+	done
+	@docker run --rm --network none "local-llm/sandbox-data:$(SANDBOX_TAG)" pip list --format=freeze --disable-pip-version-check > "$(SANDBOX_DIR)/image-freeze.txt.tmp" \
+		&& mv "$(SANDBOX_DIR)/image-freeze.txt.tmp" "$(SANDBOX_DIR)/image-freeze.txt" \
+		|| { rm -f "$(SANDBOX_DIR)/image-freeze.txt.tmp"; exit 1; }
+	@docker run --rm --network none "local-llm/sandbox-data:$(SANDBOX_TAG)" Rscript -e 'ip <- installed.packages(); ip <- ip[order(ip[, "Package"]), ]; cat(sprintf("%s==%s\n", ip[, "Package"], ip[, "Version"]), sep = "")' > "$(SANDBOX_DIR)/image-freeze-r.txt.tmp" \
+		&& mv "$(SANDBOX_DIR)/image-freeze-r.txt.tmp" "$(SANDBOX_DIR)/image-freeze-r.txt" \
+		|| { rm -f "$(SANDBOX_DIR)/image-freeze-r.txt.tmp"; exit 1; }
 
 # --- Checks: the same commands as .github/workflows/ci.yml, job for job, so a
 # green `make check` predicts a green `CI passed`. If you change a CI job,

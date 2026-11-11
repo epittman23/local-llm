@@ -1,0 +1,11 @@
+#!/bin/sh
+# biber is a PAR-packed binary: it unpacks itself and runs from the unpacked
+# copy. The sandbox's /tmp is a noexec tmpfs, so point it at the workspace.
+# PAR does not create a missing directory, so create it first.
+dir=/workspace/.cache/par
+if ! mkdir -p "$dir"; then
+    echo "biber: cannot create $dir (workspace full?)" >&2
+    exit 1
+fi
+export PAR_GLOBAL_TMPDIR="$dir"
+exec /opt/texlive/2025/bin/x86_64-linux/biber "$@"
