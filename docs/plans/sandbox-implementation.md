@@ -356,6 +356,14 @@ to the decision.
   `lllm-sandbox` and a udev rule (`/etc/udev/rules.d/90-local-llm-sandbox.rules`,
   a root step) disables IPv6 on it whenever Docker creates it. Chosen:
   (b), installed on the laptop 2026-11-11 by `pkexec`.
+- **Q21 (found at the T13/T14/T16 push, 2026-11-11). Answered
+  2026-11-11: list it and decide at T49.** `make pr-gate` reported that
+  GitHub returned no diff for seven files ("too large"), so the tripwire
+  could not inspect them; it fails closed on that, and it did not count
+  the Q3 skip in `test_sandbox_uploads_kata.py`. Options: (a) list each
+  such file under `## Gate changes` with a local grep of its added lines
+  for every suppression the gate looks for, and the owner reviews them
+  at T49; (b) stop and split the PR. Chosen: (a).
 
 ### Session log
 
@@ -517,6 +525,7 @@ The PR will trip the gate; the local session lists every finding under
 | Edited golden files `tests/fixtures/chat_payload.json`, `streaming_response.json`, `subagent_delegate.json` | T40, T42 | Their Jupyter and Pyodide cases describe engines that no longer exist; the replacement cases record the sandbox engine's payloads |
 | Fewer tests in `test_makefile.py`, `progress.test.ts` (if a Jupyter-only case goes) | T41 | Same reason; the service-list assertions are rewritten, not dropped |
 | Fewer tests in `CodeExecution.test.tsx` and `e2e/admin-settings.spec.ts` (`:187-222`) | T42 | The Jupyter and Pyodide engine choices are removed; the sandbox cases from T19 remain |
+| A file whose diff GitHub did not return ("too large"), so the gate could not inspect it | T12-T19 (Q21) | The PR outgrew GitHub's per-file diff limit in its API; the gate fails closed on such files. Each is listed under `## Gate changes`, with a local grep of its added lines for skip, xfail, `.only`, `noqa`, `type: ignore`, `biome-ignore`, `@ts-expect-error` and `pragma` (none but the Q3 Kata skips), and the owner reviews them at T49 |
 | Edited golden file `tests/fixtures/tool_loading.json` | T12 | It records the `Config.get_many` key list in `get_builtin_tools` and the offered tools (around `:1910-1925`); adding the engine key and the sandbox tools changes it. The test still checks the same thing, against the new list |
 
 If a task produces a finding not listed here, add a row in the same commit
