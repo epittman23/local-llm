@@ -52,6 +52,13 @@ COPY --chown=root:root --chmod=0755 data/biber /usr/local/bin/biber
 # container with: the base leaves /opt/conda (first on PATH) owned by UID 1000.
 ENV PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/texlive/2025/bin/x86_64-linux:/workspace/.local/bin
 
+# `pip install` reaches only the sandbox mirror (infra/docker-compose.yml,
+# `sandbox-mirror`, port 8000; the backend passes its address as `extra_hosts`):
+# no index, wheels only, into /workspace/.local (T02 item 7). `make wheelhouse`
+# unsets these.
+# PIP_TRUSTED_HOST: pip ignores a plain-http link source otherwise.
+ENV PIP_NO_INDEX=1 PIP_FIND_LINKS=http://sandbox-mirror:8000/ PIP_TRUSTED_HOST=sandbox-mirror PIP_ONLY_BINARY=:all: PIP_USER=1 PYTHONUSERBASE=/workspace/.local
+
 # The root is read-only and /tmp is a tmpfs: send matplotlib's and fontconfig's
 # caches there, so a read-only HOME produces no warnings.
 ENV MPLCONFIGDIR=/tmp/matplotlib XDG_CACHE_HOME=/tmp/.cache

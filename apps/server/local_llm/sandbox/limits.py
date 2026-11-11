@@ -5,9 +5,9 @@ around model-written code, and a limit the admin page could loosen would be a
 limit a compromised or careless configuration could remove. Changing one is a
 code change, reviewed like any other change to the boundary.
 
-The Kata backend, planned in T14, is to pass the container limits and the
-fixed container options below to Docker as they are, so the whole set is
-reviewed in this one file; the command limits are applied by sandbox/exec.py.
+The Kata backend (sandbox/kata.py) passes the container limits and the fixed
+container options below to Docker as they are, so the whole set is reviewed
+in this one file; the command limits are applied by sandbox/exec.py.
 """
 
 from typing import Final
@@ -25,7 +25,7 @@ NPROC_LIMIT: Final = 512
 # Size of the `/tmp` tmpfs (`--tmpfs /tmp:size=256m`) on the otherwise read-only root.
 TMP_SIZE: Final = '256m'
 # Each `/workspace` volume is a fixed-size loop-backed filesystem of this size, so a runaway write cannot fill the
-# host's disk; the planned Kata backend (T14) is to build it.
+# host's disk; the Kata backend builds it (sandbox/kata.py, an ext4 image on a loop device).
 WORKSPACE_SIZE: Final = '10g'
 # The unprivileged UID (and GID) every command runs as.
 SANDBOX_UID: Final = 1000

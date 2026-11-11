@@ -299,6 +299,8 @@ Every question the proposal raised was decided by the owner.
 | The sandbox's first process | Runs as `nobody` (65534:65534) under tini, while every command runs as UID 1000, so the per-call kill of UID 1000's processes cannot stop the sandbox and tini reaps what it kills | 2026-11-11 |
 | First mirror packages | `polars`, `duckdb`, `pingouin` and `lifelines`, as binary wheels constrained to the data image's versions | 2026-11-11 |
 | How the workspace size is enforced | Each workspace is an ext4 image file attached as a loop device through udisks2, with a polkit rule (a root step at host setup) letting the backend's user do that without a login session; Docker's own volume driver cannot loop-mount | 2026-11-11 |
+| Seccomp inside the guest | On: `disable_guest_seccomp = false` in the Kata Cloud Hypervisor configuration, so Docker's default profile applies inside the VM (blocks user namespaces and similar), as defense in depth behind the VM | 2026-11-11 |
+| The sandbox network's host fence | `internal: true`, plus `inhibit_ipv4` (no IPv4 on the bridge), plus no IPv6: disabled in each guest by sysctl, and on the bridge (named `lllm-sandbox`) by a udev rule at host setup, since an internal network alone leaves the host reachable through the bridge's own addresses | 2026-11-11 |
 
 ## Sources
 

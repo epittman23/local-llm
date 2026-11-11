@@ -768,7 +768,18 @@ def test_an_unrelated_object_does_not_satisfy_the_sandbox_backend_protocol():
     assert not isinstance(object(), SandboxBackend)
 
 
-_BACKEND_METHODS = ['create', 'destroy', 'exec', 'get_files', 'list_sandboxes', 'put_files', 'ready', 'stat', 'stop']
+_BACKEND_METHODS = [
+    'create',
+    'destroy',
+    'exec',
+    'get_files',
+    'list_sandboxes',
+    'put_files',
+    'put_uploads',
+    'ready',
+    'stat',
+    'stop',
+]
 
 
 def test_sandbox_backend_declares_exactly_the_documented_methods():
@@ -1872,8 +1883,9 @@ def test_ls_of_a_directory_lists_its_entries_sorted():
         return await _sh(backend, 'ls /workspace'), await _sh(backend, 'ls')
 
     explicit, implicit = asyncio.run(go())
-    assert (explicit.returncode, explicit.stdout) == (0, 'a.txt\nb.txt\nc.txt\n')
-    assert implicit.stdout == 'a.txt\nb.txt\nc.txt\n'
+    # uploads is the read-only uploads mount every sandbox has (T13).
+    assert (explicit.returncode, explicit.stdout) == (0, 'a.txt\nb.txt\nc.txt\nuploads\n')
+    assert implicit.stdout == 'a.txt\nb.txt\nc.txt\nuploads\n'
 
 
 def test_ls_of_a_file_prints_the_path_given():

@@ -2,10 +2,10 @@
 
 The manager (T11) is the only caller and the only code that decides what to
 run; a backend carries out its calls and enforces the boundary's fixed
-options (sandbox/limits.py). The one implementation so far is the in-memory
-FakeBackend (sandbox/fake.py) that CI uses, since hosted runners have no
-`/dev/kvm`; the Kata backend that runs each chat in its own microVM is
-planned (T14). The contract below is what every backend must honour, so
+options (sandbox/limits.py). There are two: the Kata backend
+(sandbox/kata.py), which runs each chat in its own microVM, and the
+in-memory FakeBackend (sandbox/fake.py) that CI uses, since hosted runners
+have no `/dev/kvm`. The contract below is what every backend must honour, so
 tests against the fake mean something for the real one.
 
 Every method checks its chat id with types.validate_chat_id, and the
@@ -73,6 +73,27 @@ def validate_put_files(dir: str, files: list[tuple[str, bytes, int]]) -> None:
         # No write bit for anyone, so UID 1000 cannot change an uploaded file, and no setuid, setgid or sticky bit.
         if mode & ~0o555:
             raise ValueError(f'put_files: mode {mode:#o} of {name!r} has bits outside 0o555')
+
+
+def validate_put_uploads(files: list[tuple[str, bytes]]) -> None:
+    """Check `put_uploads` arguments against the contract, before anything is written.
+
+    Raises:
+        ValueError: A name is not a single path component (empty, `.`, `..`,
+            containing `/` or NUL, over 255 bytes of UTF-8), or is given twice.
+        TypeError: `files` is not a list, a name is not a str, or a content
+            not bytes.
+    """
+    if not isinstance(files, list):
+        raise TypeError(f'put_uploads: files must be a list, not {type(files).__name__}')
+    seen: set[str] = set()
+    for name, content in files:
+        _check_component(name, 'put_uploads: file name')
+        if name in seen:
+            raise ValueError(f'put_uploads: file name {name!r} is given twice')
+        seen.add(name)
+        if not isinstance(content, bytes):
+            raise TypeError(f'put_uploads: content of {name!r} must be bytes, not {type(content).__name__}')
 
 
 def validate_get_files(paths: list[str], max_bytes: int) -> None:
@@ -191,11 +212,20 @@ class SandboxBackend(Protocol):
         between), so (T12's security review, B1 and S2):
 
         - The kill waits until no UID 1000 process remains (`kill -9 -1`
-          returns once the signals are queued, so it polls `kill -0 -1`
-          until that fails), and fails closed: when it cannot confirm that
-          (the kill exec cannot be created or start, as under a fork bomb
-          holding UID 1000 at its nproc limit, exits non-zero, or times
-          out), the backend stops the sandbox and raises SandboxNotRunning,
+          returns once the signals are queued, so it checks that no
+          `/proc/<pid>/status` names UID 1000, zombies included; `kill -0
+          -1` cannot tell, since it succeeds whenever any process is
+          visible, even one it may not signal). That check is a separate
+          command run as a user UID 1000 can neither trace nor signal
+          (`nobody`), since a surviving UID 1000 process can trace the
+          kill and fake its exit status, and it must hold against a
+          process that keeps changing its PID (fork, parent exits), which
+          a snapshot of /proc never lists: the Kata backend counts a pass
+          only when no PID was allocated while it ran. It fails closed: when it cannot
+          confirm that (a kill or check cannot be created or start, as
+          under a fork bomb holding UID 1000 at its nproc limit, the check
+          finds a process left, or either times out), the backend stops
+          the sandbox and raises SandboxNotRunning,
           whose message is fixed text free of host details. The manager
           then treats the sandbox as stopped behind its back and cleans it
           up.
@@ -240,10 +270,11 @@ class SandboxBackend(Protocol):
         `(name, content, mode)`, written owned by root with `mode` and the
         time of the put as its mtime.
 
-        The Kata backend (T14) must guarantee this with Docker's untar: it
-        replaces an existing file or symlink, but merges a directory entry
-        into an existing directory, so the archive has to remove the old
-        entry first (T14 is to verify how).
+        The Kata backend does this with Docker's untar, which replaces an
+        existing file or symlink but merges a directory entry into an
+        existing directory: its archive names the directory first as an
+        empty regular file, which removes whatever was there, then as the
+        directory, then the files (kata.put_archive_bytes).
 
         Raises:
             ValueError, TypeError: The arguments break validate_put_files's
@@ -251,6 +282,32 @@ class SandboxBackend(Protocol):
                 component, a name given twice, a mode with bits outside
                 0o555).
             SandboxNotRunning: The chat has no running sandbox.
+        """
+        ...
+
+    async def put_uploads(self, chat_id: str, files: list[tuple[str, bytes]]) -> None:
+        """Make the chat's uploads, `/workspace/uploads` in the guest, hold exactly `files`, read-only to the guest.
+
+        `/workspace/uploads` is a read-only mount of a directory the backend
+        keeps outside the workspace volume, made when the sandbox is created,
+        so nothing in the guest can write, rename, remove or chmod it or its
+        files, whatever the user and whatever is mounted over the workspace
+        (the put_files design let UID 1000 rename `uploads` aside without
+        end, each rename forcing a re-put and leaving a copy it could not
+        delete, until the workspace was full; T13's security review). Each
+        file is `(name, content)`, a single path component, and is written
+        mode 0o444; files already there with the same content are kept as
+        they are, others replaced one by one (each atomically, so a command
+        never sees half a file), and files not in `files` removed. It
+        returns once the guest sees exactly that set.
+
+        Raises:
+            ValueError, TypeError: The arguments break validate_put_uploads's
+                rules (`files` not a list, a name not a single component or
+                given twice, a content not bytes).
+            SandboxNotRunning: The chat has no running sandbox.
+            SandboxError: The files could not be written, or the guest did
+                not come to see them in time.
         """
         ...
 
@@ -262,9 +319,9 @@ class SandboxBackend(Protocol):
         not negative. Only regular files are returned: a directory, a
         symlink (a final-component symlink included), a missing path or a
         file over `max_bytes` bytes is omitted, never truncated, so the
-        caller tells them by their absence. The Kata backend (T14) must
-        check the daemon's stat of the path before it reads the body, so an
-        omitted file is never streamed.
+        caller tells them by their absence. The Kata backend checks the
+        daemon's stat of the path before it reads the body, so an omitted
+        file is never streamed.
 
         Raises:
             ValueError, TypeError: The arguments break validate_get_files's
@@ -276,11 +333,10 @@ class SandboxBackend(Protocol):
     async def stat(self, chat_id: str, path: str) -> FileStat | None:
         """The daemon's view of one path, which sandboxed code cannot forge; None when it does not exist.
 
-        For checks that must not trust the guest, such as the owner and
-        mode of `/workspace/uploads` before each upload sync (T13) and the
-        outputs (T17). A symlink is reported as a symlink, not followed,
-        and a FIFO, a socket or a device as `other`, never `file`: the file
-        tools read only `file`, and opening a FIFO would block.
+        For checks that must not trust the guest, such as the outputs
+        (T17). A symlink is reported as a symlink, not followed, and a FIFO,
+        a socket or a device as `other`, never `file`: the file tools read
+        only `file`, and opening a FIFO would block.
         `path` must pass validate_sandbox_path with `/workspace` itself
         allowed.
 

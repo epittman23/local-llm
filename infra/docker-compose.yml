@@ -125,11 +125,88 @@ services:
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
     security_opt: ["no-new-privileges:true"]
 
+  # The code sandbox's package mirror (docs/guides/sandbox.md "Mirror and
+  # wheelhouse"). A sandbox has no route to the internet; its `pip install`
+  # reads this one file index (PIP_FIND_LINKS=http://sandbox-mirror:8000/),
+  # which lists only the wheels `make wheelhouse` downloaded for the allowlist
+  # (infra/sandbox/allowlist.in), by hash. The mirror is on the internal
+  # `sandbox` network only: it cannot reach PyPI or anything else, so a wheel
+  # arrives only through `make wheelhouse`, which runs on the host. Nothing
+  # but sandboxes reaches it: no published port, the wheelhouse mounted
+  # read-only, a read-only root, UID 101 on port 8000 (so no capability, not
+  # even NET_BIND_SERVICE), no privilege escalation, and memory and process
+  # caps. Names do not resolve inside a Kata guest, so the address is fixed
+  # and the backend passes it as `extra_hosts` (the subnet, range and address
+  # are constants in apps/server/local_llm/sandbox/kata.py; a test checks they
+  # agree with this file). `make backend` creates the wheelhouse directory and
+  # sets LLLM_SANDBOX_WHEELHOUSE from DATA_DIR (a hand-run `docker compose up`
+  # without it serves apps/server/data/sandbox/wheelhouse, and Docker makes a
+  # missing directory root-owned: run `make wheelhouse` first, or `mkdir`).
+  sandbox-mirror:
+    image: nginx:1.30.0-alpine@sha256:0272e4604ed93c1792f03695a033a6e8546840f86e0de20a884bb17d2c924883
+    container_name: local-llm-sandbox-mirror
+    restart: unless-stopped
+    user: "101:101"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    volumes:
+      - ./sandbox/mirror/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${LLLM_SANDBOX_WHEELHOUSE:-../apps/server/data/sandbox/wheelhouse}:/usr/share/nginx/html:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    networks:
+      sandbox:
+        ipv4_address: 10.231.0.2
+    mem_limit: 64m
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Every request is logged, and a sandbox chooses its URI and user agent:
+    # without a cap it could fill the host's disk through this log.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
 # Postgres and Redis share the default network. Jupyter and SearXNG get one
 # each, so neither can reach anything else by service name.
+#
+# The sandboxes' network (Compose names it local-llm_sandbox) is `internal`:
+# no route out of it to the internet, the LAN or any other Docker network. The
+# only peer on it is the mirror, at a fixed address in the lower half of the
+# subnet; Docker hands sandboxes addresses from the upper half only
+# (`ip_range`), so none can take the mirror's address before it starts. The
+# range is outside Docker's default address pools.
+#
+# The host is the part `internal` does not close. The bridge gets no IPv4
+# address (`inhibit_ipv4`, and no `gateway:`), because an address on the
+# host's side would let a sandbox reach host listeners bound to 0.0.0.0 (the
+# backend in LAN mode, llama-server). The kernel still gives the bridge an
+# IPv6 link-local address, which a guest with IPv6 enabled reaches, together
+# with host listeners on `::`. Two layers close that: the backend starts every
+# sandbox with IPv6 disabled (a sysctl in the guest; sandbox/kata.py), and the
+# bridge has a fixed name (`lllm-sandbox`) so a host-side rule can name it
+# (a udev rule disables IPv6 on it; docs/guides/sandbox.md "Host setup",
+# "No IPv6 on the sandbox bridge"). `docker compose down` with sandboxes attached leaves
+# this network ("Resource is still in use"); the next `up` reuses it.
 networks:
   jupyter:
   searxng:
+  sandbox:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.inhibit_ipv4: "true"
+      com.docker.network.bridge.name: lllm-sandbox
+    ipam:
+      config:
+        - subnet: 10.231.0.0/24
+          ip_range: 10.231.0.128/25
 
 volumes:
   postgres-data:
