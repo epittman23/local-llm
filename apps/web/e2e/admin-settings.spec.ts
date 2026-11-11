@@ -231,6 +231,42 @@ test.describe('settings: Code Execution', () => {
 		await m.getByRole('switch', { name: 'Enable Code Interpreter' }).click();
 		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
 	});
+
+	test('the sandbox engine shows its settings and status, and saves them', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockConfigApi(page, '/configs', {
+			'/configs/code_execution': {
+				...cfg,
+				CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'data',
+				CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
+				CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
+				CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
+				CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7
+			}
+		});
+		await page.route('**/api/v1/sandbox/status', (route) =>
+			json(route, { ready: false, reason: 'the kata-clh runtime is not registered with Docker' })
+		);
+		await page.goto('/?settings=admin:code-execution');
+		const m = modal(page);
+		await expect(m.getByLabel('Sandbox Maximum Running')).toHaveCount(0);
+		await m.getByLabel('Code Interpreter Engine').selectOption('sandbox');
+		await expect(m.getByRole('status')).toHaveText(
+			'The sandbox is unavailable: the kata-clh runtime is not registered with Docker'
+		);
+		await expect(m.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeVisible();
+		await m.getByLabel('Sandbox Default Image').selectOption('web');
+		await m.getByLabel('Sandbox Maximum Running').fill('8');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
+			.toMatchObject({
+				CODE_INTERPRETER_ENGINE: 'sandbox',
+				CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'web',
+				CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
+				CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 8
+			});
+	});
 });
 
 test.describe('settings: Database', () => {

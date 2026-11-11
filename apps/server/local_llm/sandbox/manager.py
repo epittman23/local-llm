@@ -68,6 +68,7 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Final, Protocol, get_args
 
 from local_llm.sandbox.backend import SandboxBackend
+from local_llm.sandbox.limits import TIMEOUT_MAX_S, TIMEOUT_MIN_S
 from local_llm.sandbox.types import (
     ExecResult,
     FileStat,
@@ -88,6 +89,9 @@ _BOUNDS: Final[dict[str, tuple[int, int | None]]] = {
     'idle_minutes': (1, None),
     'retention_days': (1, None),
 }
+
+#: Seconds ready() waits for the backend, so a hung Docker daemon cannot leave the admin page waiting.
+READY_TIMEOUT_S: Final = 5.0
 
 _SECONDS_PER_DAY: Final = 86_400
 
@@ -142,6 +146,9 @@ class SandboxSettings:
                 raise ValueError(f'SandboxSettings.{f.name}: {error}')
 
 
+#: The command timeout's config key: bounded by limits.TIMEOUT_MIN_S..TIMEOUT_MAX_S, not a SandboxSettings field.
+TIMEOUT_KEY: Final = 'code_interpreter.sandbox.timeout'
+
 #: Config key -> SandboxSettings field, the keys T19 registers.
 SETTING_KEYS: Final = {
     'code_interpreter.sandbox.default_image': 'default_image',
@@ -149,6 +156,21 @@ SETTING_KEYS: Final = {
     'code_interpreter.sandbox.idle_minutes': 'idle_minutes',
     'code_interpreter.sandbox.retention_days': 'retention_days',
 }
+
+
+def sandbox_setting_error(key: str, value: object) -> str | None:
+    """Why `value` cannot be the config setting `key`, or None when it can; None (unset) is always fine.
+
+    Covers every `code_interpreter.sandbox.*` key: the ones in SETTING_KEYS by the manager's own rules, and the
+    command timeout by the limits' bounds. The admin form and the config import both use it.
+    """
+    if value is None:
+        return None
+    if key == TIMEOUT_KEY:
+        if type(value) is int and TIMEOUT_MIN_S <= value <= TIMEOUT_MAX_S:
+            return None
+        return f'{value!r} is not an int from {TIMEOUT_MIN_S} to {TIMEOUT_MAX_S}'
+    return _setting_error(SETTING_KEYS[key], value)
 
 
 async def settings_from_config() -> SandboxSettings:
@@ -399,6 +421,16 @@ class SandboxManager:
         self._tasks: set[asyncio.Future[Any]] = set()
         # Set by shutdown(stop_running=True), after which no sandbox starts.
         self._stopped_all = False
+
+    async def ready(self) -> str | None:
+        """Why the backend cannot run sandboxes, or None when it can; never raises; waits READY_TIMEOUT_S at most."""
+        try:
+            return await asyncio.wait_for(self._backend.ready(), READY_TIMEOUT_S)
+        except TimeoutError:
+            return f'The sandbox backend did not answer within {READY_TIMEOUT_S:g} seconds'
+        except Exception as e:
+            log.exception('the sandbox backend could not report whether it is ready')
+            return f'The sandbox backend could not report its state ({type(e).__name__})'
 
     # Sessions.
 

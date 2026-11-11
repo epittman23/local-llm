@@ -73,7 +73,7 @@ The same for every session:
 | T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | todo | | Q9 answered: fixed subnet and mirror address in Compose |
 | T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | todo | | |
 | T18 | Outputs: frontend rendering | any | any | T17 | todo | | |
-| T19 | Engine value, settings, prompt, admin page | any | any | T10 | todo | | |
+| T19 | Engine value, settings, prompt, admin page | any | any | T10 | done | | 2026-11-11: `code_interpreter.sandbox.*` defaults in `DEFAULT_CONFIG` (engine values are free strings, so `sandbox` needed no server change), `CODE_INTERPRETER_SANDBOX_PROMPT` (used from T20), the five keys in the Code Execution form and the config import, both checked by one `sandbox_setting_error` in `manager.py` (GET serves stored values through a check-free response model, so a bad stored value cannot 500 the page), `GET /api/v1/sandbox/status` (admin; `SandboxManager.ready()`, 5 s bound, "not running" before T14 wires the manager), the admin page's sandbox fields, status line and 4 GiB/2 CPU note; `tests/test_sandbox_settings.py` (42), 10 Vitest cases, one Playwright case; code review (1 high, 4 medium) applied, re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (5,460 passed, 21 skipped, diff coverage 100%), `make test-types` no new findings, `make test-web` exit 0 (1,299 passed), `make test-e2e` exit 0 (392 passed). For T20: nothing reads `code_interpreter.sandbox.timeout` yet |
 | T20 | Call sites: native tool, tag path, Run endpoint, sub-agents | any | any; docker, kvm | T12, T19 | todo | | |
 | T21 | Package telemetry | any | any; docker, kvm | T15, T16, T20 | todo | | |
 | T22 | Run button in chat code blocks | any | any | T20 | todo | | |
@@ -300,6 +300,23 @@ to the decision.
   silently. The cap is hard: at the cap, the user either picks another
   workspace to remove, or the new workspace is not created and the model
   gets an error saying what happened. Built as T24.
+- **Q16 (found while starting T14, 2026-11-11). Answered 2026-11-11:
+  PID 1 as `nobody`, commands as UID 1000.** Q10's kill (`kill -9 -1` as
+  UID 1000 after every call) stops a container whose PID 1 runs as UID
+  1000 under tini, and without tini the killed processes stay as zombies
+  against the 512-process limit (T14's notes). The proposal had PID 1 run
+  as `1000:1000`. Options: (a) the container's user is `65534:65534`
+  (`nobody`) with `init=True`, and every exec passes `user='1000:1000'`
+  (checked on Kata with alpine: 150 calls, each leaving two background
+  children, left the container up with 0 zombies); (b) PID 1 as root with
+  every capability dropped; (c) PID 1 as UID 1000 running a reaper of our
+  own that ignores the kill. Recommended and chosen: (a). T14 re-proves
+  it on the real image.
+- **Q17 (T16's first allowlist, 2026-11-11). Answered 2026-11-11:
+  `polars`, `duckdb`, `pingouin`, `lifelines`.** The plan left the first
+  packages to the owner, and with none T16's "Mirror installs" check
+  cannot pass. Options: that data and statistics set; `tabulate` alone to
+  prove the path; none. Chosen: the data and statistics set.
 
 ### Session log
 
@@ -804,7 +821,13 @@ the image (`/usr/local/bin/lllm-path`, T15), run as UID 1000, does
 `realpath -m` and refuses anything outside `/workspace`. The backend side
 also rejects, before any exec, absolute paths outside `/workspace`, `..`
 segments that leave it, NUL bytes and paths over 4,096 bytes. With the
-`FakeBackend`, the helper is emulated.
+`FakeBackend`, the helper is emulated. The script itself has one source,
+`infra/sandbox/common/lllm-path`, written here and copied into the images
+by T15; a test runs the real script with bash against a temporary
+directory through the same cases as the emulation, so the two cannot
+drift. The tools find the manager at `request.app.state.sandbox` (set by
+T14's lifespan wiring); when it is missing, they return a tool error
+saying the sandbox is not available, never an `AttributeError`.
 
 **Registration.** Import the four in `utils/tools.py` (beside
 `execute_code`, about line 63). `_gated_tools` (`utils/tools.py:629-651`)
@@ -894,13 +917,14 @@ controls. File modes may not carry write bits (`mode & ~0o555`).
   ```text
   image=<resolved from the image key>, runtime='kata-clh',
   name='lllm-sandbox-<chat id>', labels={'lllm.chat': <chat id>, 'lllm.image': <key>},
-  user='1000:1000', cap_drop=['ALL'], security_opt=['no-new-privileges'],
+  user='65534:65534' (Q16; every exec passes user='1000:1000'), init=True,
+  cap_drop=['ALL'], security_opt=['no-new-privileges'],
   read_only=True, tmpfs={'/tmp': 'size=256m'}, mem_limit='4g', nano_cpus=2e9,
   pids_limit=512, ulimits=[Ulimit(name='nproc', soft=512, hard=512)],
   network='local-llm_sandbox', extra_hosts={'sandbox-mirror': SANDBOX_MIRROR_ADDRESS},
   volumes={'lllm-sandbox-<chat id>': {'bind': '/workspace', 'mode': 'rw'}},
   working_dir='/workspace', detach=True, auto_remove=False,
-  command=['sleep', 'infinity'] (under the image's tini)
+  command=['sleep', 'infinity'] (under tini, as `nobody`; see Q16)
   ```
   `ulimits` is the process limit that Kata 4.3.1 enforces; it does not
   enforce `pids_limit`, which stays in case a later release does (Q8).
@@ -1007,6 +1031,24 @@ calls, each leaving a background child, and checks the process count
 stays flat; if it changes the proposal's `--user 1000:1000` for PID 1,
 ask the owner.
 
+**Checked on Kata, 2026-11-11 (alpine, `kata-clh`):** with `init=True` and
+`user='65534:65534'` for the container (PID 1 `docker-init` and its
+`sleep` run as `nobody`), and every exec passing `user='1000:1000'`, 150
+calls that each left two background `sleep 300` children, each followed by
+`kill -9 -1` as UID 1000, left the container running with 7 processes and
+0 zombies (9.9 s for the 300 execs); UID 1000 cannot signal `nobody`'s
+processes, and tini reaps the orphans. Re-prove it on the real image
+(scipy-notebook's entrypoint is already tini, so `init=True` may stack two
+inits). **A background child holds the exec's stream open:** the first
+run, whose background children inherited the exec's stdout, did not
+return until the children exited (300 s each). So `exec` must not wait
+for the stream's EOF: watch the main process with `exec_inspect` (check on
+Kata that it reports `Running: false` while a child still holds the
+stream), then run Q10's kill, which closes the pipes, then drain;
+`elapsed_s` runs to that exit, and the case is not a `deadline_hit` (or
+every `cmd &` would be reported as a timeout). The acceptance test
+"Timeout" and the mocked-SDK unit tests both cover it.
+
 **Lifespan wiring (moved here from T11, 2026-11-10):** create the
 `SandboxManager` with this backend on `app.state.sandbox` in `main.py`'s
 `lifespan` (near the other `app.state` tasks), run its startup sweep and
@@ -1023,10 +1065,12 @@ refuses calls with that reason.
 Under `infra/sandbox/`:
 
 - `common/`: `install-common.sh` (bash, git, sqlite3, DuckDB CLI pinned
-  by version and checksum, poppler-utils, tini if the base lacks it),
-  `lllm-path` (T12's confinement helper), `sitecustomize.py` (T21),
-  `pip.conf`-equivalent environment (T16), `bash.bashrc` additions for
-  the command-miss hook (T21).
+  by version and checksum, poppler-utils, tini if the base lacks it) and
+  `lllm-path` (T12's confinement helper, written and tested by T12; T15
+  only copies it in). T16 adds the `pip` environment, and T21 adds
+  `sitecustomize.py`, `Rprofile.site` and the `bash.bashrc` command-miss
+  hook, each bumping the image tag; T15 ships none of them as an empty
+  placeholder.
 - `Dockerfile.data`: `FROM quay.io/jupyter/scipy-notebook:2026-10-12`,
   then `COPY` the common files and run `install-common.sh`; R from
   conda-forge (`r-base`, `r-tidyverse`, `r-data.table`, `r-broom`,
@@ -1338,6 +1382,27 @@ sites here, move the rule into one public helper in
 `main.py`, `routers/chats.py`'s `can_access_chat` and
 `DatabaseChats.usable`, and update the patch targets in
 `tests/test_admin_chat_access.py`.
+
+**From T12 (2026-11-11):** `write_file` is also an Open Terminal tool's
+name. `utils/middleware.py`'s `terminal_event_handler` emits
+`terminal:write_file` for any tool of that name (three call sites), so the
+sandbox tool sends it too (nothing in `apps/web` consumes it today); and
+`_add_builtin_tools` skips a builtin whose name a tool server already
+offers, so with a terminal server attached the model gets the terminal's
+`write_file` beside the sandbox's `bash`, `view` and `str_replace`. Gate
+`terminal_event_handler` on the tool being a terminal tool
+(`tool_type == 'terminal'`), and test the mixed case: either offer the
+sandbox's `write_file` under the sandbox engine or document which wins.
+
+**From T19 (2026-11-11):** `code_interpreter.sandbox.timeout` (the
+admin's default command timeout) is stored and validated but nothing
+reads it yet: the `bash` tool's `timeout_s` defaults to 60 in its
+signature, and `SandboxSettings` has no timeout. Make the tool's default
+`None` meaning "the configured timeout", clamped by `clamp_timeout`, and
+use the same default on the tag path and the Run endpoint. The admin page
+saves a cleared field as null, and `Config.get(key, default)` returns that
+null (not the default) when the row exists, so a stored null means
+`limits.TIMEOUT_DEFAULT_S`.
 
 ### T21: package telemetry
 

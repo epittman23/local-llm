@@ -165,6 +165,7 @@ from local_llm.routers import (
     pipelines,
     prompts,
     retrieval,
+    sandbox,
     scim,
     skills,
     tasks,
@@ -914,6 +915,7 @@ if ENABLE_ADMIN_ANALYTICS:
 app.include_router(utils.router, prefix='/api/v1/utils', tags=['utils'])
 app.include_router(terminals.router, prefix='/api/v1/terminals', tags=['terminals'])
 app.include_router(automations.router, prefix='/api/v1/automations', tags=['automations'])
+app.include_router(sandbox.router, prefix='/api/v1/sandbox', tags=['sandbox'])
 app.include_router(benchmarks.router, prefix='/api/v1/benchmarks', tags=['benchmarks'])
 app.include_router(calendar.router, prefix='/api/v1/calendars', tags=['calendars'])
 

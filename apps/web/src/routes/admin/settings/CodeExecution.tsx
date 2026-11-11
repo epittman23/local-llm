@@ -1,7 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
-import { BoundNumber } from '@/components/settings/boundFields';
+import { BoundNumber, BoundSelect } from '@/components/settings/boundFields';
 import {
 	SettingField,
 	SettingInput,
@@ -13,14 +14,89 @@ import {
 	SettingsSection
 } from '@/components/settings/controls';
 import { getCodeExecutionConfig, setCodeExecutionConfig } from '@/lib/apis/configs';
+import { getSandboxStatus } from '@/lib/apis/sandbox';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 type Config = Record<string, any>;
-const ENGINES = ['pyodide', 'jupyter'];
+const ENGINES = ['pyodide', 'jupyter', 'sandbox'];
 const JUPYTER_WARNING =
 	'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.';
+
+/** The sandbox settings live under the code interpreter's keys; the code execution engine shares them. */
+function SandboxFields({ config, set }: { config: Config; set: (patch: Config) => void }) {
+	const token = useAuthStore((s) => s.token) ?? '';
+	const status = useQuery({
+		queryKey: ['admin', 'sandbox-status'],
+		queryFn: () => getSandboxStatus(token),
+		retry: false
+	});
+	const text = status.isPending
+		? 'Checking the sandbox...'
+		: status.isError
+			? 'Could not check the sandbox.'
+			: status.data.ready
+				? 'The sandbox is ready.'
+				: `The sandbox is unavailable: ${status.data.reason ?? 'no reason given'}`;
+	const name = (suffix: string) => `CODE_INTERPRETER_SANDBOX_${suffix}`;
+	return (
+		<>
+			<p role="status" className="text-muted-foreground/70 text-[0.6875rem]">
+				{text}
+			</p>
+			<BoundSelect
+				config={{ ...config, [name('DEFAULT_IMAGE')]: config[name('DEFAULT_IMAGE')] ?? 'data' }}
+				set={set}
+				name={name('DEFAULT_IMAGE')}
+				label="Sandbox Default Image"
+				description="The image a chat's sandbox starts with: data (Python, R, LaTeX) or web (Node, Playwright)."
+				options={[
+					['data', 'data'],
+					['web', 'web']
+				]}
+			/>
+			<BoundNumber
+				config={config}
+				set={set}
+				name={name('TIMEOUT')}
+				label="Sandbox Command Timeout"
+				description="Seconds a command may run before it is stopped, from 1 to 300. Empty uses 60."
+				placeholder="e.g. 60"
+				min={1}
+				max={300}
+			/>
+			<BoundNumber
+				config={config}
+				set={set}
+				name={name('MAX_RUNNING')}
+				label="Sandbox Maximum Running"
+				description="Sandboxes running at once, from 1 to 16. Each running sandbox can hold 4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB. Empty uses 4."
+				placeholder="e.g. 4"
+				min={1}
+				max={16}
+			/>
+			<BoundNumber
+				config={config}
+				set={set}
+				name={name('IDLE_MINUTES')}
+				label="Sandbox Idle Minutes"
+				description="Minutes without a command after which a sandbox is stopped; its files stay. Empty uses 30."
+				placeholder="e.g. 30"
+				min={1}
+			/>
+			<BoundNumber
+				config={config}
+				set={set}
+				name={name('RETENTION_DAYS')}
+				label="Sandbox Retention Days"
+				description="Days a stopped chat's files are kept before they are deleted. Empty uses 7."
+				placeholder="e.g. 7"
+				min={1}
+			/>
+		</>
+	);
+}
 
 /**
  * The engine / Jupyter block that "Code Execution" and "Code Interpreter" each
@@ -45,6 +121,9 @@ function EngineFields({
 	const engine = config[`${prefix}_ENGINE`];
 	const auth = config[`${prefix}_JUPYTER_AUTH`];
 	const key = (suffix: string) => `${prefix}_${suffix}`;
+	// One set of sandbox fields: under the interpreter's engine when that is the sandbox, else under this one.
+	const interpreterShowsSandbox = config.ENABLE_CODE_INTERPRETER && config.CODE_INTERPRETER_ENGINE === 'sandbox';
+	const showSandbox = engine === 'sandbox' && (prefix === 'CODE_INTERPRETER' || !interpreterShowsSandbox);
 	return (
 		<>
 			<SettingRow label={engineLabel} description={engine === 'jupyter' ? JUPYTER_WARNING : engineHint}>
@@ -65,6 +144,7 @@ function EngineFields({
 					))}
 				</SettingSelect>
 			</SettingRow>
+			{showSandbox && <SandboxFields config={config} set={set} />}
 			{engine === 'jupyter' && (
 				<>
 					<SettingField label="Jupyter URL" description={urlHint}>
