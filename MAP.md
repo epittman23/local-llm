@@ -238,8 +238,12 @@ fork's pre-import history is kept read-only at
   `bash`, `view`, `write_file` and `str_replace` in `tools/builtin.py`, are
   offered under the `sandbox` engine; `kata.py`, `KataDockerBackend`, the
   backend that runs each chat in a Kata microVM through Docker, with its
-  fixed-size workspace volumes; and `lifespan.py`, which `main.py`'s
-  lifespan uses to start and stop the manager), and **`benchmarks/`** (see below).
+  fixed-size workspace volumes; `lifespan.py`, which `main.py`'s
+  lifespan uses to start and stop the manager; and `outputs.py`, which
+  attaches the files a `bash` call leaves in `/workspace/outputs` to the
+  message, renders PDF previews, and puts the policy in front of an HTML
+  output for `routers/sandbox.py`'s `/outputs/{id}/html`), and
+  **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
@@ -421,6 +425,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   chat list, folders, search). Its pure rules are in `src/lib/chat/`
   (history tree, request body, sources, attachments, import) and its
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
+  `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
+  (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

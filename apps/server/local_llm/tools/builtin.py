@@ -75,8 +75,10 @@ from local_llm.sandbox import (
     clamp_timeout,
     wrap_command,
 )
+from local_llm.sandbox import outputs as sandbox_outputs
 from local_llm.sandbox import workspace as sandbox_files
-from local_llm.sandbox.limits import TIMEOUT_DEFAULT_S
+from local_llm.sandbox.limits import OUTPUT_CHAT_CAP_BYTES, TIMEOUT_DEFAULT_S
+from local_llm.sandbox.manager import OutputsMemory
 from local_llm.sandbox.uploads import chat_owner, sync_uploads
 from local_llm.sandbox.workspace import WorkspaceError
 from local_llm.socket.main import sio
@@ -979,6 +981,151 @@ def _flag(value: object, name: str) -> bool:
     raise WorkspaceError(f'{name} must be true or false, not {value!r}')
 
 
+#: Told to the model when /workspace/outputs could not be compared before and after its command.
+OUTPUTS_NOT_LISTED = '/workspace/outputs could not be listed, so no files from it were attached to the reply'
+#: Told to the model when either listing was cut short.
+OUTPUTS_CUT = (
+    '/workspace/outputs holds too many files to list them all, so only the newest were checked for new or '
+    'changed files; move finished files out of it'
+)
+
+
+async def _outputs_before(session: SandboxSession) -> sandbox_outputs.Listing | None:
+    """What to compare /workspace/outputs with after the command: the listing the last call took after its command,
+    else one taken now; None when it cannot be listed, which never stops the command.
+
+    Comparing with the last call's listing counts a file `write_file` or `str_replace` put there in between as new.
+    The manager keeps that listing per sandbox while it runs (SandboxSession.outputs_memory), so a sandbox started
+    again lists afresh. It is forgotten until this call ends well (_bash_outputs), so a call cut short while it
+    attaches (a Stop, an error) leaves the next one to list before its own command rather than attach this call's
+    files twice; a call stopped during its command, before anything was attached, puts it back (bash).
+    """
+    memory = session.outputs_memory
+    before, memory.listing = memory.listing, None
+    if before is not None:
+        return before
+    try:
+        return await sandbox_outputs.list_outputs(session)
+    except SandboxError:
+        log.warning('bash: the sandbox failed while listing /workspace/outputs', exc_info=True)
+        return None
+
+
+async def _keep_outputs_listing(session: SandboxSession) -> None:
+    """Before `write_file` or `str_replace` writes, keep a listing of /workspace/outputs when none is kept yet.
+
+    The next `bash` call compares with the kept listing (_outputs_before), so a file written into
+    /workspace/outputs now counts as new there even when no `bash` call has run in this sandbox yet. A listing that
+    fails is left out, and the write goes ahead.
+    """
+    memory = session.outputs_memory
+    if memory.listing is not None:
+        return
+    try:
+        memory.listing = await sandbox_outputs.list_outputs(session)
+    except SandboxError:
+        log.warning('the sandbox failed while listing /workspace/outputs before a write', exc_info=True)
+
+
+async def _chat_left(memory: OutputsMemory, chat_id: str | None, account: UserModel | None) -> int:
+    """What the chat's cap on sandbox outputs (OUTPUT_CHAT_CAP_BYTES, owner decision Q22) has left.
+
+    It counts the File rows the server marked as this chat's (sandbox_outputs.chat_usage), previews included, whether
+    or not they are linked to a message, so the count outlives the sandbox and the server. An unsaved chat's id is
+    not a UUID the database checks, so its rows count only when they are also the caller's, as its sandbox is
+    (Q12). The same query's last row per path joins the sandbox's own record for content de-duplication.
+    """
+    saved = bool(chat_id and is_saved_chat_id(chat_id))
+    owner = None if saved else (account.id if account is not None else '')
+    used, latest = await sandbox_outputs.chat_usage(chat_id or '', owner)
+    for path, record in latest.items():
+        memory.stored.setdefault(path, record)
+    return max(0, OUTPUT_CHAT_CAP_BYTES - used)
+
+
+async def _bash_outputs(
+    session: SandboxSession,
+    before: sandbox_outputs.Listing | None,
+    request: Request | None,
+    user: dict | None,
+    chat_id: str | None,
+    message_id: str | None,
+    *,
+    upload: bool,
+) -> tuple[list[dict], list[str], list[dict]]:
+    """The files new or changed in /workspace/outputs since `before`, attached (sandbox/outputs.py).
+
+    Returns the tool result's `outputs`, notes for the model, and the new
+    message files for the `files` event: whatever was stored, even when a
+    later step failed. It never raises but for a cancellation: the command's
+    own result is kept whatever happens here, and a sandbox that stopped
+    meanwhile is a note, not a failed call. The listing taken after the
+    command is kept for the next call only when everything here went well.
+    """
+    notes: list[str] = []
+    try:
+        after = await sandbox_outputs.list_outputs(session)
+    except SandboxError:
+        log.warning('bash: the sandbox failed while listing /workspace/outputs', exc_info=True)
+        after = None
+    if before is None or after is None:
+        # A listing taken now still serves the next call.
+        session.outputs_memory.listing = after
+        return [], [OUTPUTS_NOT_LISTED], []
+    if not before.complete or not after.complete:
+        notes.append(OUTPUTS_CUT)
+    entries = sandbox_outputs.changed_entries(before, after)
+    collected = sandbox_outputs.Collected()
+    memory = session.outputs_memory
+    if entries:
+        try:
+            from local_llm.models.users import Users
+
+            account = await Users.get_user_by_id(user['id']) if user and user.get('id') else None
+            await sandbox_outputs.collect(
+                session,
+                entries,
+                request=request,
+                user=account,
+                chat_id=chat_id,
+                message_id=message_id,
+                upload=upload,
+                chat_left=await _chat_left(memory, chat_id, account) if upload else None,
+                stored=memory.stored,
+                into=collected,
+            )
+        except Exception:
+            log.exception('bash: attaching the files in /workspace/outputs failed')
+            notes.append('some new files in /workspace/outputs could not be attached because of a server error')
+            done = {item['path'] for item in collected.outputs}
+            for entry in entries:
+                if f'outputs/{entry.name}' not in done:
+                    collected.outputs.append({**sandbox_outputs.describe(entry), 'reason': 'a server error came first'})
+            return collected.outputs, notes, collected.files
+    if collected.error is not None:
+        log.warning('bash: the sandbox failed while reading /workspace/outputs: %s', collected.error)
+        notes.append('the sandbox stopped while the new files in /workspace/outputs were read; see each reason')
+    else:
+        session.outputs_memory.listing = after
+    return collected.outputs, notes, collected.files
+
+
+async def _emit_output_files(event_emitter: Callable[[dict], Awaitable[None]] | None, files: list[dict]) -> None:
+    """Send the `files` event with the message's new files.
+
+    Only the new ones: both readers merge the event into what the message
+    already has rather than replace it, the chat page by id, then url, then
+    whole entry (lib/chat/history.ts `mergeFiles`), and socket/main.py into
+    the saved list (`merge_message_files`). A failure is logged, never raised.
+    """
+    if not files or event_emitter is None:
+        return
+    try:
+        await event_emitter({'type': 'files', 'data': {'files': files}})
+    except Exception:
+        log.exception('bash: the files event for the outputs failed')
+
+
 async def bash(
     command: str,
     timeout_s: int = TIMEOUT_DEFAULT_S,
@@ -1005,8 +1152,14 @@ async def bash(
         scikit-learn and matplotlib; R with the tidyverse, data.table, lme4 and survival; TeX Live with latexmk;
         git, sqlite3, DuckDB and poppler-utils) or 'web' (Node.js with TypeScript, tsx, ESLint, Prettier and
         Playwright with Chromium). Leave it out to use the one already running ('data' when none is)
-    :return: JSON with returncode, stdout, stderr, timed_out and truncated
+    :return: JSON with returncode, stdout, stderr, timed_out, truncated, and outputs: the files the command
+        made or changed in /workspace/outputs, which are attached to your reply for the user to see (a file
+        not attached says why)
     """
+    chat_id = __chat_id__ or (__metadata__ or {}).get('chat_id')
+    message_id = __message_id__ or (__metadata__ or {}).get('message_id')
+    # A benchmark run (benchmarks/evaluation/harness.py) lists the outputs but stores none in the owner's Files.
+    upload = getattr(getattr(__request__, 'state', None), 'benchmark_harness', False) is not True
     try:
         with _model_input():
             requested = _line_arg(timeout_s, 'timeout_s')
@@ -1016,20 +1169,35 @@ async def bash(
         async with _sandbox_session(
             __request__, __user__, __chat_id__, __metadata__, __event_emitter__, image, upload_notes=notes
         ) as session:
-            result = await session.exec(argv, timeout)
+            # Every listing runs in a session, which holds the chat's lock, so nothing else touches
+            # /workspace/outputs during a call; what other tools write there between calls is caught by comparing
+            # with the last call's listing (_outputs_before).
+            before = await _outputs_before(session)
+            try:
+                result = await session.exec(argv, timeout)
+            except BaseException:
+                # Nothing was attached yet, so the listing from before the command still holds: the next call
+                # compares with it and attaches what a stopped or failed command left.
+                session.outputs_memory.listing = before
+                raise
+            found, output_notes, files = await _bash_outputs(
+                session, before, __request__, __user__, chat_id, message_id, upload=upload
+            )
     except Exception as exc:
         return _sandbox_error('bash', exc)
-    return JSONCodec.dumps(
-        {
-            'returncode': result.returncode,
-            'stdout': result.stdout,
-            # As the Jupyter engine does: the model sees why an attached file is missing.
-            'stderr': '\n'.join(filter(None, [result.stderr, *notes])),
-            'timed_out': result.timed_out,
-            'truncated': result.truncated,
-        },
-        ensure_ascii=False,
-    )
+    await _emit_output_files(__event_emitter__, files)
+    response: dict = {
+        'returncode': result.returncode,
+        'stdout': result.stdout,
+        # As the Jupyter engine does: the model sees why an attached file is missing.
+        'stderr': '\n'.join(filter(None, [result.stderr, *notes])),
+        'timed_out': result.timed_out,
+        'truncated': result.truncated,
+        'outputs': found,
+    }
+    if output_notes:
+        response['outputs_note'] = '; '.join(output_notes)
+    return JSONCodec.dumps(response, ensure_ascii=False)
 
 
 async def view(
@@ -1107,6 +1275,7 @@ async def write_file(
             replace = _flag(overwrite, 'overwrite')
             data = content.encode('utf-8')
         async with _sandbox_session(__request__, __user__, __chat_id__, __metadata__, __event_emitter__) as session:
+            await _keep_outputs_listing(session)
             written = await sandbox_files.write(session, path, data, overwrite=replace)
     except Exception as exc:
         return _sandbox_error('write_file', exc)
@@ -1139,6 +1308,7 @@ async def str_replace(
             sandbox_files.confine(path)
             sandbox_files.check_replacement(old_str, new_str)
         async with _sandbox_session(__request__, __user__, __chat_id__, __metadata__, __event_emitter__) as session:
+            await _keep_outputs_listing(session)
             edited = await sandbox_files.str_replace(session, path, old_str, new_str)
     except Exception as exc:
         return _sandbox_error('str_replace', exc)

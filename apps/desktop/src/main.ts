@@ -39,7 +39,7 @@ import {
 	serverOverride,
 	updateConfig
 } from './config';
-import { classifyOpen, isAllowedPermission } from './policy';
+import { classifyOpen, isAllowedFrameNavigation, isAllowedPermission } from './policy';
 import {
 	createProgress,
 	type Progress,
@@ -961,6 +961,18 @@ function applyPolicy(): void {
 			}
 			if (decision === 'external') void shell.openExternal(url);
 			return { action: 'deny' };
+		});
+		// Sub-frames: a sandbox output's HTML frame may not navigate itself away (policy.ts). If reading the
+		// frames throws (one already disposed, say), the navigation is refused: this check fails closed.
+		contents.on('will-frame-navigate', (details) => {
+			try {
+				if (details.isMainFrame) return;
+				const frameUrl = details.frame?.url ?? '';
+				if (!isAllowedFrameNavigation(frameUrl, details.url, details.initiator?.origin ?? null, appOrigin))
+					details.preventDefault();
+			} catch {
+				details.preventDefault();
+			}
 		});
 		contents.on('will-attach-webview', (event) => event.preventDefault());
 	});

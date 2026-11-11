@@ -48,6 +48,28 @@ HOST_DEADLINE_SLACK_S: Final = 10
 MAX_COMMAND_BYTES: Final = 100_000
 # Largest output file read back from a sandbox, in bytes (50 MiB).
 OUTPUT_FILE_CAP_BYTES: Final = 50 * 1024 * 1024
+# Most bytes one `bash` call attaches from /workspace/outputs, over all its files (200 MiB; sandbox/outputs.py).
+OUTPUT_CALL_CAP_BYTES: Final = 200 * 1024 * 1024
+# Most bytes of sandbox outputs a chat holds, over all its calls, previews included (1 GiB; owner decision Q22): the
+# sum of the File rows marked `sandbox_output` linked to the chat, or, for an unsaved chat, of those its running
+# sandbox stored. A file that would pass it is not attached.
+OUTPUT_CHAT_CAP_BYTES: Final = 1024 * 1024 * 1024
+# Most files one `bash` call attaches; each becomes a File row on the message.
+OUTPUT_MAX_FILES: Final = 20
+# Most PDFs one `bash` call renders previews for; each render is a helper exec of up to HELPER_TIMEOUT_S.
+PREVIEW_MAX_PDFS: Final = 3
+# Pages previewed per PDF, from the first (`pdftoppm -l`).
+PREVIEW_MAX_PAGES: Final = 10
+# Resolution of a preview, in dots per inch (`pdftoppm -r`).
+PREVIEW_DPI: Final = 80
+# Widest and tallest preview, in pixels (`pdftoppm -W -H`): a larger page is cropped to its top-left corner rather
+# than scaled, so a normal page keeps PREVIEW_DPI and a huge one is never rasterised whole (a 200-inch page at
+# 80 dpi would be 16,000 pixels a side, about 1 GB of memory).
+PREVIEW_MAX_SIDE: Final = 1600
+# Largest preview PNG kept, in bytes.
+PREVIEW_MAX_BYTES: Final = 8 * 1024 * 1024
+# Largest HTML output GET /api/v1/sandbox/outputs/{id}/html returns, in bytes (5 MiB).
+HTML_MAX_BYTES: Final = 5 * 1024 * 1024
 # Most seconds a session waits for a cancelled backend call to end (the post-exec kill, or a put, read or stat
 # already under way) before it gives the sandbox up as in doubt, which stops it before the chat's lock is released.
 CANCEL_WAIT_S: Final = 30

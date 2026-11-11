@@ -41,6 +41,7 @@ from local_llm.sandbox import (
 from local_llm.sandbox import workspace as ws
 from local_llm.sandbox.fake import FakeFile
 from local_llm.sandbox.limits import STREAM_CAP_CHARS
+from local_llm.sandbox.manager import OutputsMemory
 from local_llm.tools import builtin
 from tests.test_sandbox_tools import CHAT, _Rig
 
@@ -71,6 +72,8 @@ class _Script:
         self.files = files if files is not None else {}
         self.argvs: list[list[str]] = []
         self.stdins: list[bytes | None] = []
+        # As SandboxSession's: what the bash tool keeps about /workspace/outputs between calls (sandbox/outputs.py).
+        self.outputs_memory = OutputsMemory()
 
     async def exec(self, argv: list[str], timeout_s: int, stdin: bytes | None = None) -> ExecResult:
         self.argvs.append(argv)

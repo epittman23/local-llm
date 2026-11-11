@@ -579,7 +579,14 @@ class _Rig:
 def test_bash_runs_the_command_and_returns_exactly_its_result(monkeypatch):
     rig = _Rig(monkeypatch)
     result = asyncio.run(rig.call(builtin.bash, command='printf hi'))
-    assert result == {'returncode': 0, 'stdout': 'hi', 'stderr': '', 'timed_out': False, 'truncated': False}
+    assert result == {
+        'returncode': 0,
+        'stdout': 'hi',
+        'stderr': '',
+        'timed_out': False,
+        'truncated': False,
+        'outputs': [],
+    }
     assert rig.execs() == [wrap_command('printf hi', 60)]
 
 
@@ -707,7 +714,9 @@ def test_view_write_and_edit_never_reach_outside_workspace(monkeypatch, setup, p
         assert isinstance(result, dict)
         assert 'error' in result
         assert 'root:' not in json.dumps(result)
-    assert not any(name in ('get_files', 'stat') for name, _ in rig.backend.calls)
+    # The only daemon call is the bash tool's own check of /workspace/outputs (sandbox/outputs.py), a fixed path.
+    reads = [(name, args) for name, args in rig.backend.calls if name in ('get_files', 'stat')]
+    assert all(name == 'stat' and cast(dict, args)['path'] == '/workspace/outputs' for name, args in reads)
     # Neither the guest's files nor the fake's emulation of them were changed.
     box = rig.backend.sandboxes.get(next(iter(rig.backend.sandboxes), ''))
     assert box is None or box.rootfs['/etc/passwd'].content == b'root:x:0:0:root:/root:/bin/bash\n'

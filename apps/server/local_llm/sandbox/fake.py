@@ -30,7 +30,9 @@ symlink to it, fails for the right reason: the file is there and readable.
 bash for `cat`, `ls`, `printf`, `sleep`, `ln -s`, `chmod`, `mkdir`, `mv`,
 `rm` and `rmdir` that honours the timeout without sleeping, and that runs the guest
 helpers the file tools use (sandbox/workspace.py: lllm-path, the listing and
-the write) with their guest semantics. It is test support, not a shell.
+the write) and the `bash` tool's listing of `/workspace/outputs`
+(sandbox/outputs.py) with their guest semantics; the PDF preview helpers are
+not emulated, so they exit 127 and no previews are made. It is test support, not a shell.
 Every call is recorded in `FakeBackend.calls`, so a test can assert what the
 manager asked for, including the `('kill_uid_1000', ...)` entry that stands
 for the kill every backend runs after every exec.
@@ -49,6 +51,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from typing import NoReturn
 
+from local_llm.sandbox import outputs
 from local_llm.sandbox import workspace as guest
 from local_llm.sandbox.backend import (
     validate_create,
@@ -1084,6 +1087,35 @@ def _list_helper(workspace: FakeWorkspace, path: str) -> FakeRun:
     return FakeRun(0, ''.join(records).encode()[: guest.LIST_CAP_BYTES], ''.join(errors).encode())
 
 
+def _outputs_helper(workspace: FakeWorkspace) -> FakeRun:
+    # outputs.LIST_SCRIPT: `find -P /workspace/outputs -xdev -type f -readable` as NUL-ended `<mtime>\t<size>\t<path>`
+    # records, its complaints dropped, `sort -z -r -n` (newest first; a tie by the whole record, also reversed), then
+    # `END`, cut to LISTING_CAP_BYTES by `head -c`. Nothing is followed through a symlink, the start included; a
+    # directory UID 1000 cannot read and search is skipped, and a file it cannot read is left out. Only a directory
+    # is walked: a start that is anything else lists nothing (list_outputs never runs it then).
+    records: list[tuple[float, str]] = []
+
+    def walk(directory: str, relative: str) -> None:
+        entry = workspace._get(directory)
+        assert entry is not None, 'walk only enters a directory it found'
+        if not _allowed(entry, SANDBOX_UID, 0o5):
+            return
+        for name in workspace.listdir(directory):
+            child = workspace._get(f'{directory}/{name}')
+            assert child is not None, 'listdir only names existing entries'
+            shown = f'{relative}/{name}' if relative else name
+            if child.is_dir:
+                walk(f'{directory}/{name}', shown)
+            elif child.content is not None and not child.fifo and _allowed(child, SANDBOX_UID, 0o4):
+                records.append((child.mtime, f'{child.mtime:.10f}\t{len(child.content)}\t{shown}\0'))
+
+    top = workspace._get(outputs.OUTPUTS_DIR)
+    if top is not None and top.is_dir:
+        walk(outputs.OUTPUTS_DIR, '')
+    listing = ''.join(record for _, record in sorted(records, reverse=True)) + 'END\0'
+    return FakeRun(0, listing.encode()[: outputs.LISTING_CAP_BYTES])
+
+
 def _write_helper(workspace: FakeWorkspace, path: str, mode: str, stdin: bytes | None) -> FakeRun:
     # WRITE_SCRIPT: lllm-path; refuse a directory, then anything else not a regular file; exit EXISTS_EXIT for
     # an existing file unless `overwrite`; refuse a file UID 1000 may not write; `mkdir -p` the parent; write stdin
@@ -1154,6 +1186,8 @@ def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
             return _list_helper(request.workspace, path)
         case ['-c', guest.WRITE_SCRIPT, 'lllm-write', path, mode]:
             return _write_helper(request.workspace, path, mode, request.stdin)
+        case ['-c', outputs.LIST_SCRIPT, 'lllm-outputs']:
+            return _outputs_helper(request.workspace)
         case _:
             return _not_found(shlex.join(args))
 

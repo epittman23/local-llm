@@ -308,8 +308,11 @@ def test_files_already_copied_are_not_copied_again(stored_files, monkeypatch):
 
     asyncio.run(go())
     assert len(rig.puts()) == 1
-    # Nothing to check in the guest: the mount cannot be changed from there.
-    assert 'stat' not in [name for name, _ in rig.backend.calls]
+    # Nothing to check in the guest: the mount cannot be changed from there. The only stats are the bash tool's
+    # checks of /workspace/outputs: before and after the first command, then after each one, since a call compares
+    # with the listing the last one took (sandbox/outputs.py).
+    stats = [cast(dict, args)['path'] for name, args in rig.backend.calls if name == 'stat']
+    assert stats == ['/workspace/outputs'] * 4
 
 
 def test_a_new_attachment_puts_the_whole_set(stored_files, monkeypatch):
@@ -526,7 +529,8 @@ def test_the_sync_runs_inside_the_session_before_the_command(stored_files, monke
     stored_files('f1', 'a.csv')
     asyncio.run(rig.bash('printf hi', _items('f1')))
     names = [name for name, _ in rig.backend.calls]
-    assert names[names.index('create') :] == ['create', 'put_uploads', 'exec', 'kill_uid_1000']
+    # The stats either side of the command are the bash tool's checks of /workspace/outputs, which does not exist.
+    assert names[names.index('create') :] == ['create', 'put_uploads', 'stat', 'exec', 'kill_uid_1000', 'stat']
 
 
 def test_view_syncs_too_so_the_files_are_there_from_the_first_call(stored_files, monkeypatch):

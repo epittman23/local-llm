@@ -496,7 +496,9 @@ CODE_INTERPRETER_SANDBOX_PROMPT = """
   the next. Only running processes do not: each command ends every process it started.
 - Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.
 - Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with
-  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`.
+  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or
+  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one
+  (`ls outputs` will do) if no other command follows.
 - Print what you want returned: a command's stdout and stderr come back to you, shortened when long.
 - The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers "no matching
   distribution", tell the user the package is not available instead of working around it.
