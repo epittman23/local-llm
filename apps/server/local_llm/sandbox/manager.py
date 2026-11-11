@@ -68,7 +68,7 @@ from dataclasses import dataclass, field, fields
 from typing import Any, Final, Protocol, get_args
 
 from local_llm.sandbox.backend import SandboxBackend
-from local_llm.sandbox.limits import TIMEOUT_MAX_S, TIMEOUT_MIN_S
+from local_llm.sandbox.limits import CANCEL_WAIT_S, TIMEOUT_MAX_S, TIMEOUT_MIN_S
 from local_llm.sandbox.types import (
     ExecResult,
     FileStat,
@@ -94,6 +94,9 @@ _BOUNDS: Final[dict[str, tuple[int, int | None]]] = {
 READY_TIMEOUT_S: Final = 5.0
 
 _SECONDS_PER_DAY: Final = 86_400
+
+# What the model is told when a session meets a manager that has shut down.
+_SHUT_DOWN: Final = 'the sandbox service is shutting down; try again once the server has restarted'
 
 #: Seconds a running sandbox must have been idle before a session that finds no free slot may stop it (Q13).
 EVICT_IDLE_S: Final = 60.0
@@ -298,10 +301,11 @@ class SandboxSession:
         key: The UUID the backend knows the sandbox by.
     """
 
-    def __init__(self, backend: SandboxBackend, key: str) -> None:
+    def __init__(self, backend: SandboxBackend, key: str, *, cancel_wait_s: float = CANCEL_WAIT_S) -> None:
         """Open a session on `key`; only the manager makes one."""
         self.key = key
         self._backend = backend
+        self._cancel_wait_s = cancel_wait_s
         self._open = True
         self._died = False
 
@@ -318,30 +322,109 @@ class SandboxSession:
             self._died = True
             raise
 
+    async def _complete[T](self, call: Awaitable[T], *, cancel_once: bool = False) -> T:
+        """Await a backend call to its end, cancellation included; the block, and the lock, wait for it.
+
+        The file tools resolve a path in one call and use it in the next,
+        trusting that nothing changes the files in between (T12's security
+        review, B1 and R1), so a session cannot end while a backend call it
+        started may still be acting on the sandbox: a command or its kill, a
+        put still untarring, a read. When the caller is cancelled (the user's
+        Stop), an exec is cancelled once (`cancel_once`), which by the
+        backend's contract runs the post-exec kill at once; other calls are
+        left to finish. Either way this waits, through any further
+        cancellations, for the call to end, then raises CancelledError.
+
+        The wait after a cancellation is bounded by `cancel_wait_s` (R2): a
+        call that has not ended by then is given up as in doubt, so the
+        manager stops the sandbox when the block exits, still under its
+        lock, before anything else may use it. The call is kept referenced
+        until it ends.
+
+        Raises:
+            asyncio.CancelledError: The caller was cancelled; raised only
+                once the call has ended or been given up.
+            SandboxError: The call ended cancelled without the caller being
+                cancelled (R5), so it neither escapes as a cancellation nor
+                passes for a result.
+        """
+        task = asyncio.ensure_future(call)
+        loop = asyncio.get_running_loop()
+        deadline: float | None = None
+        while not task.done():
+            if deadline is not None and loop.time() >= deadline:
+                _ABANDONED.add(task)
+                task.add_done_callback(_settle_abandoned)
+                self._died = True
+                log.error(
+                    'a cancelled call on sandbox %s did not end within %g s; stopping the sandbox',
+                    self.key,
+                    self._cancel_wait_s,
+                )
+                raise asyncio.CancelledError
+            try:
+                # Unlike awaiting the task, asyncio.wait leaves it running when this coroutine is cancelled.
+                await asyncio.wait([task], timeout=None if deadline is None else deadline - loop.time())
+            except asyncio.CancelledError:
+                if deadline is None:
+                    deadline = loop.time() + self._cancel_wait_s
+                    if cancel_once:
+                        task.cancel()
+        if deadline is not None:
+            # Retrieved, so asyncio does not log it as never retrieved.
+            error = None if task.cancelled() else task.exception()
+            if isinstance(error, SandboxNotRunning):
+                self._died = True
+            elif error is not None:
+                log.debug('a sandbox call failed after its caller was cancelled', exc_info=error)
+            raise asyncio.CancelledError
+        if task.cancelled():
+            raise SandboxError(
+                f'a backend call on sandbox {self.key} ended cancelled though its caller was not',
+                public='the sandbox call was interrupted; try again',
+            )
+        return await self._watch(task)
+
     def _close(self) -> bool:
         """End the session; True when the backend reported the sandbox not running during it."""
         self._open = False
         return self._died
 
     async def exec(self, argv: list[str], timeout_s: int, stdin: bytes | None = None) -> ExecResult:
-        """Run one wrapped command (SandboxBackend.exec)."""
+        """Run one wrapped command (SandboxBackend.exec), returning or raising only once it and its kill are over.
+
+        A cancelled caller cancels the backend's exec once, whose contract
+        then runs the post-exec kill at once, and waits for it (_complete).
+        """
         self._check()
-        return await self._watch(self._backend.exec(self.key, argv, timeout_s, stdin))
+        return await self._complete(self._backend.exec(self.key, argv, timeout_s, stdin), cancel_once=True)
 
     async def put_files(self, dir: str, files: list[tuple[str, bytes, int]]) -> None:
-        """Replace `/workspace/<dir>` with exactly `files`, root-owned (SandboxBackend.put_files)."""
+        """Replace `/workspace/<dir>` with exactly `files`, root-owned (SandboxBackend.put_files), to its end."""
         self._check()
-        await self._watch(self._backend.put_files(self.key, dir, files))
+        await self._complete(self._backend.put_files(self.key, dir, files))
 
     async def get_files(self, paths: list[str], max_bytes: int) -> dict[str, bytes]:
-        """Read regular files of at most `max_bytes` (SandboxBackend.get_files)."""
+        """Read regular files of at most `max_bytes` (SandboxBackend.get_files), to its end."""
         self._check()
-        return await self._watch(self._backend.get_files(self.key, paths, max_bytes))
+        return await self._complete(self._backend.get_files(self.key, paths, max_bytes))
 
     async def stat(self, path: str) -> FileStat | None:
-        """The daemon's view of one path (SandboxBackend.stat)."""
+        """The daemon's view of one path (SandboxBackend.stat), to its end."""
         self._check()
-        return await self._watch(self._backend.stat(self.key, path))
+        return await self._complete(self._backend.stat(self.key, path))
+
+
+# Backend calls a session gave up on after its caller was cancelled (_complete), kept here until they end, so a
+# running one is never garbage-collected.
+_ABANDONED: set[asyncio.Future[Any]] = set()
+
+
+def _settle_abandoned(task: asyncio.Future[Any]) -> None:
+    _ABANDONED.discard(task)
+    if not task.cancelled():
+        # Retrieved, so asyncio does not log it as never retrieved.
+        task.exception()
 
 
 @dataclass
@@ -385,6 +468,7 @@ class SandboxManager:
         wait_notice_s: float = 1.0,
         evict_idle_s: float = EVICT_IDLE_S,
         slot_wait_timeout_s: float = SLOT_WAIT_TIMEOUT_S,
+        cancel_wait_s: float = CANCEL_WAIT_S,
     ) -> None:
         """Make a manager with no sandboxes; run `startup_sweep()` before the first session.
 
@@ -399,6 +483,8 @@ class SandboxManager:
                 slot may stop it and take its slot (Q13).
             slot_wait_timeout_s: Seconds, by the event loop's clock, a session waits for a slot before it
                 raises SandboxError.
+            cancel_wait_s: Seconds a session waits for a backend call to end after its caller was cancelled,
+                before it gives the sandbox up as in doubt and stops it (SandboxSession._complete).
         """
         self._backend = backend
         self._settings = settings
@@ -408,6 +494,7 @@ class SandboxManager:
         self._wait_notice_s = wait_notice_s
         self._evict_idle_s = evict_idle_s
         self._slot_wait_timeout_s = slot_wait_timeout_s
+        self._cancel_wait_s = cancel_wait_s
         self._locks: dict[str, _KeyLock] = {}
         # Every sandbox that holds a slot, by key; the slots taken are its length.
         self._tracked: dict[str, _Tracked] = {}
@@ -488,7 +575,7 @@ class SandboxManager:
                     await self._start(
                         key, image, ephemeral=owner is not None, user=user, settings=settings, on_wait=on_wait
                     )
-                    handle = SandboxSession(self._backend, key)
+                    handle = SandboxSession(self._backend, key, cancel_wait_s=self._cancel_wait_s)
                     try:
                         yield handle
                     finally:
@@ -560,7 +647,7 @@ class SandboxManager:
             try:
                 if self._stopped_all:
                     # shutdown(stop_running=True) freed the slot this session waited for: start nothing behind it.
-                    raise SandboxError('the sandbox manager has shut down')
+                    raise SandboxError('the sandbox manager has shut down', public=_SHUT_DOWN)
                 # Asked again: access may have been revoked while this session waited.
                 if not ephemeral and not await self._chats.usable(key, user):
                     raise SandboxRefused(f'chat {key} does not exist or this user may not run code in it')
@@ -573,7 +660,7 @@ class SandboxManager:
             # The manager shut down, forgetting every key, while the backend created it: nothing may run behind
             # the shutdown.
             await self._clean_up(key, ephemeral)
-            raise SandboxError('the sandbox manager has shut down')
+            raise SandboxError('the sandbox manager has shut down', public=_SHUT_DOWN)
         # Still tracked: only a stop or destroy under its lock, which this session holds, or a shutdown forgets it.
         tracked = self._tracked[key]
         tracked.image = want
@@ -675,7 +762,11 @@ class SandboxManager:
                 raise SandboxError(
                     f'no free sandbox: all {limit} slots are taken, and none could be freed (each sandbox is in '
                     f'use, idle for less than {self._evict_idle_s:g} s, in doubt, or failed to stop); '
-                    f'waited {self._slot_wait_timeout_s:g} s'
+                    f'waited {self._slot_wait_timeout_s:g} s',
+                    public=(
+                        f'no sandbox came free within {self._slot_wait_timeout_s:g} seconds: all {limit} are in '
+                        'use; try again in a few minutes'
+                    ),
                 )
             if on_wait is not None and now >= notice_at:
                 callback, on_wait = on_wait, None

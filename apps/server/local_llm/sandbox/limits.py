@@ -48,6 +48,25 @@ HOST_DEADLINE_SLACK_S: Final = 10
 MAX_COMMAND_BYTES: Final = 100_000
 # Largest output file read back from a sandbox, in bytes (50 MiB).
 OUTPUT_FILE_CAP_BYTES: Final = 50 * 1024 * 1024
+# Most seconds a session waits for a cancelled backend call to end (the post-exec kill, or a put, read or stat
+# already under way) before it gives the sandbox up as in doubt, which stops it before the chat's lock is released.
+CANCEL_WAIT_S: Final = 30
+
+# The file tools' limits (sandbox/workspace.py).
+
+# Longest path a file tool accepts or resolves to, in UTF-8 bytes (PATH_MAX); infra/sandbox/common/lllm-path's
+# MAX_BYTES must equal it, which tests/test_sandbox_tools.py checks.
+MAX_PATH_BYTES: Final = 4096
+# Timeout of each guest helper the file tools run (lllm-path, the read check, the listing, the write), in seconds.
+HELPER_TIMEOUT_S: Final = 30
+# Largest file `view` or `str_replace` reads, in bytes (10 MiB).
+VIEW_MAX_BYTES: Final = 10 * 1024 * 1024
+# Largest image `view` returns, in bytes: its data URI is stored with the chat and sent with every later request.
+IMAGE_MAX_BYTES: Final = 2 * 1024 * 1024
+# Widest or tallest image `view` returns, in pixels, by its header.
+IMAGE_MAX_SIDE: Final = 8192
+# Most pixels an image `view` returns may have, by its header, so a small file cannot decode to a huge picture.
+IMAGE_MAX_PIXELS: Final = 40_000_000
 
 # The fixed container options.
 

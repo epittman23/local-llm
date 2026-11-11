@@ -18,18 +18,23 @@ never fails with ENOSPC, so a test of a full workspace needs a script.
 The guest outside `/workspace` is modelled too, with the kernel's checks: a
 root-owned `/etc` holding a 0o644 `/etc/passwd` that UID 1000 can read but
 not change, a 0o1777 tmpfs `/tmp` emptied at every container start, and a
-read-only root everywhere else (EROFS). Every path is checked for the search
-bit on each ancestor, so a test that something refuses `/etc/passwd` fails
-for the right reason: the file is there and readable.
+read-only root everywhere else (EROFS). Every path is walked as the kernel
+walks it, checking the search bit on each directory on the way and following
+symlinks (at most 40), so a test that something refuses `/etc/passwd`, or a
+symlink to it, fails for the right reason: the file is there and readable.
 
 `exec` runs a script the test supplies, or by default `interpret`, a tiny
-bash for `cat`, `ls`, `printf` and `sleep` that honours the timeout without
-sleeping. It is test support, not a shell. Every call is recorded in
+bash for `cat`, `ls`, `printf`, `sleep`, `ln -s`, `chmod` and `mkdir` that
+honours the timeout without sleeping, and that runs the guest helpers the
+file tools use (sandbox/workspace.py: lllm-path, the listing and the write)
+with their guest semantics. It is test support, not a shell. Every call is
+recorded in
 `FakeBackend.calls`, so a test can assert what the manager asked for,
 including the `('kill_uid_1000', ...)` entry that stands for the kill every
 backend runs after every exec.
 """
 
+import asyncio
 import datetime as dt
 import errno
 import itertools
@@ -40,7 +45,9 @@ import shlex
 import time
 from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
+from typing import NoReturn
 
+from local_llm.sandbox import workspace as guest
 from local_llm.sandbox.backend import validate_create, validate_get_files, validate_put_files, validate_sandbox_path
 from local_llm.sandbox.exec import StreamCap, require_wrapped, result_from
 from local_llm.sandbox.limits import HOST_DEADLINE_SLACK_S, SANDBOX_UID, WORKSPACE
@@ -69,14 +76,36 @@ def _under(full: str, top: str) -> bool:
     return full == top or full.startswith(top + '/')
 
 
+def _components(path: str) -> list[str]:
+    # The names a path walk visits: empty ones (`//`, a trailing `/`) and `.` change nothing.
+    return [name for name in path.split('/') if name not in ('', '.')]
+
+
+#: Symlinks one path walk follows before it fails with ELOOP (the kernel's limit).
+MAX_SYMLINKS = 40
+
+
 @dataclass
 class FakeFile:
-    """One entry of a fake sandbox's file table: a file, or a directory when `content` is None."""
+    """One entry of a fake sandbox's file table: a file, a symlink when `link` is set, else a directory.
+
+    A symlink and a directory both have `content` None.
+    """
 
     content: bytes | None
     uid: int
     mode: int
     mtime: float = field(default_factory=time.time)
+    #: The target of a symlink, as given to `ln -s`; None for a file or a directory.
+    link: str | None = None
+    #: A FIFO (made by `mkfifo`), standing for any special file; its `content` is b''. The daemon reports it as
+    #: `other`, get_files omits it, and the write helper refuses it.
+    fifo: bool = False
+
+    @property
+    def is_dir(self) -> bool:
+        """Whether the entry is a directory."""
+        return self.content is None and self.link is None
 
 
 def guest_root() -> dict[str, FakeFile]:
@@ -126,27 +155,89 @@ class FakeWorkspace:
     def _get(self, full: str) -> FakeFile | None:
         return (self.files if _under(full, WORKSPACE) else self.rootfs).get(full)
 
-    def _lookup(self, path: str, uid: int) -> tuple[str, FakeFile | None]:
-        """Walk to `path` as the kernel does: every ancestor must be a directory UID `uid` can search.
+    def _writable(self, full: str) -> dict[str, FakeFile] | None:
+        """The table `full` is written in: the volume, or the `/tmp` tmpfs; None on the read-only root."""
+        return self.files if _under(full, WORKSPACE) else self.rootfs if _under(full, TMP) else None
+
+    def _lookup(self, path: str, uid: int, *, follow: bool = True) -> tuple[str, FakeFile | None]:
+        """Walk to `path` as the kernel does, as UID `uid`.
+
+        Each directory walked through must be one `uid` can search. A
+        symlink on the way is followed, and so is one at the end when
+        `follow` is set; `..` goes up from the directory reached, not from
+        the text. A trailing `/` is ignored.
+
+        Returns:
+            The absolute path reached, with every symlink followed resolved,
+            and its entry, or None when the last component does not exist.
 
         Raises:
-            FileNotFoundError, NotADirectoryError, PermissionError: For the first ancestor that fails.
+            FileNotFoundError, NotADirectoryError, PermissionError: For the
+                first directory on the way that fails.
+            OSError: ELOOP after MAX_SYMLINKS symlinks.
         """
-        full = self.resolve(path)
-        ancestors: list[str] = []
-        parent = full
-        while parent != '/':
-            parent = posixpath.dirname(parent)
-            ancestors.append(parent)
-        for ancestor in reversed(ancestors):
-            entry = self._get(ancestor)
+        pending = _components(posixpath.join(WORKSPACE, path))
+        current = '/'
+        links = 0
+        while pending:
+            directory = self._get(current)
+            assert directory is not None, 'the walk only ever enters an existing directory'
+            if not _allowed(directory, uid, 0o1):
+                raise _error(errno.EACCES, path)
+            name = pending.pop(0)
+            if name == '..':
+                current = posixpath.dirname(current)
+                continue
+            full = posixpath.join(current, name)
+            entry = self._get(full)
+            if entry is not None and entry.link is not None and (pending or follow):
+                links += 1
+                if links > MAX_SYMLINKS:
+                    raise _error(errno.ELOOP, path)
+                pending[:0] = _components(entry.link)
+                if entry.link.startswith('/'):
+                    current = '/'
+                continue
+            if not pending:
+                return full, entry
             if entry is None:
                 raise _error(errno.ENOENT, path)
-            if entry.content is not None:
+            if not entry.is_dir:
                 raise _error(errno.ENOTDIR, path)
-            if not _allowed(entry, uid, 0o1):
-                raise _error(errno.EACCES, path)
-        return full, self._get(full)
+            current = full
+        return current, self._get(current)
+
+    def realpath(self, path: str, uid: int = SANDBOX_UID) -> str:
+        """What `realpath -m PATH` prints when UID `uid` runs it in `/workspace`.
+
+        Components that do not exist are kept as they are, and `..` goes up
+        from the directory reached. A symlink is followed when `uid` can see
+        it; one it cannot (in a directory it cannot search) is kept as a
+        name, and so is one met again with the same rest of the path to
+        resolve (a loop), as coreutils does. lllm-path refuses a result that
+        still holds a symlink.
+        """
+        pending = _components(posixpath.join(WORKSPACE, path))
+        current = '/'
+        seen: set[tuple[str, tuple[str, ...]]] = set()
+        while pending:
+            name = pending.pop(0)
+            if name == '..':
+                current = posixpath.dirname(current)
+                continue
+            full = posixpath.join(current, name)
+            try:
+                _, entry = self._lookup(full, uid, follow=False)
+            except OSError:
+                entry = None
+            if entry is not None and entry.link is not None and (full, tuple(pending)) not in seen:
+                seen.add((full, tuple(pending)))
+                pending[:0] = _components(entry.link)
+                if entry.link.startswith('/'):
+                    current = '/'
+                continue
+            current = full
+        return current
 
     def read(self, path: str, uid: int = SANDBOX_UID) -> bytes:
         """Read a file as `uid`.
@@ -178,7 +269,7 @@ class FakeWorkspace:
         full, entry = self._lookup(path, uid)
         if entry is not None and entry.content is None:
             raise _error(errno.EISDIR, path)
-        writable = self.files if _under(full, WORKSPACE) else self.rootfs if _under(full, TMP) else None
+        writable = self._writable(full)
         if writable is None:
             raise _error(errno.EROFS, path)
         if entry is not None:
@@ -212,6 +303,87 @@ class FakeWorkspace:
             for p in itertools.chain(self.files, self.rootfs)
             if p != full and p.startswith(prefix) and '/' not in p[len(prefix) :]
         )
+
+    def _create(self, path: str, new: FakeFile, uid: int) -> None:
+        """Add `new` at `path` as `uid`, as mkdir(2) and symlink(2) do: a final symlink is never followed.
+
+        Raises:
+            OSError: EEXIST for any existing entry, then EROFS outside
+                `/workspace` and `/tmp`, then EACCES without write and
+                search permission on the parent; FileNotFoundError,
+                NotADirectoryError or PermissionError on the way.
+        """
+        full, entry = self._lookup(path, uid, follow=False)
+        if entry is not None:
+            raise _error(errno.EEXIST, path)
+        writable = self._writable(full)
+        if writable is None:
+            raise _error(errno.EROFS, path)
+        parent = self._get(posixpath.dirname(full))
+        assert parent is not None, '_lookup has already checked the parent exists and is a directory'
+        if not _allowed(parent, uid, 0o3):
+            raise _error(errno.EACCES, path)
+        writable[full] = new
+
+    def mkdir(self, path: str, uid: int = SANDBOX_UID, *, parents: bool = False) -> None:
+        """Create a directory as `uid`, mode 0o755, as `mkdir` does; with `parents`, as `mkdir -p` does.
+
+        With `parents`, each missing component of `path` is created in turn,
+        and one that exists is passed through when it is a directory (or a
+        symlink to one).
+
+        Raises:
+            OSError: As _create; with `parents`, EEXIST only for a component
+                that is not a directory.
+        """
+        if not parents:
+            self._create(path, FakeFile(content=None, uid=uid, mode=0o755), uid)
+            return
+        names = path.split('/')
+        for end in range(1, len(names) + 1):
+            prefix = '/'.join(names[:end])
+            if not prefix.strip('/.'):
+                continue
+            _, entry = self._lookup(prefix, uid)
+            if entry is None:
+                self._create(prefix, FakeFile(content=None, uid=uid, mode=0o755), uid)
+            elif not entry.is_dir:
+                raise _error(errno.EEXIST, path)
+
+    def mkfifo(self, path: str, uid: int = SANDBOX_UID) -> None:
+        """Create a FIFO as `uid`, mode 0o644, as `mkfifo` does.
+
+        Raises:
+            OSError: As _create.
+        """
+        self._create(path, FakeFile(content=b'', uid=uid, mode=0o644, fifo=True), uid)
+
+    def symlink(self, target: str, path: str, uid: int = SANDBOX_UID) -> None:
+        """Create the symlink `path` pointing to `target` as `uid`, as `ln -s` does; `target` need not exist.
+
+        Raises:
+            OSError: ENOENT for an empty target, else as _create.
+        """
+        if not target:
+            raise _error(errno.ENOENT, path)
+        self._create(path, FakeFile(content=None, uid=uid, mode=0o777, link=target), uid)
+
+    def chmod(self, path: str, mode: int, uid: int = SANDBOX_UID) -> None:
+        """Set the permission bits of `path` (following symlinks) as `uid`, as chmod(2) does.
+
+        Raises:
+            OSError: ENOENT for a missing path, EROFS on the read-only root,
+                EPERM unless `uid` owns it (no root override: capabilities
+                are dropped); NotADirectoryError or PermissionError on the way.
+        """
+        full, entry = self._lookup(path, uid)
+        if entry is None:
+            raise _error(errno.ENOENT, path)
+        if self._writable(full) is None:
+            raise _error(errno.EROFS, path)
+        if entry.uid != uid:
+            raise _error(errno.EPERM, path)
+        entry.mode = mode
 
 
 @dataclass(frozen=True)
@@ -295,6 +467,14 @@ class FakeBackend:
             (an exec it did not survive raises SandboxNotRunning).
         ready_reason: What `ready` returns; set it to make the backend
             unusable, so `create` raises SandboxUnavailable.
+        kill_wait_s: Seconds a cancelled exec waits for its command to end
+            after the kill; past it, the kill counts as failed (fail closed),
+            the bound the exec contract asks of every backend.
+        kill_fails: Make the post-exec kill fail to confirm that no UID 1000
+            process is left, as under a fork bomb at the nproc limit: the
+            backend then records `('kill_uid_1000_failed', ...)`, stops the
+            sandbox and raises SandboxNotRunning, as the contract requires
+            (fail closed).
     """
 
     def __init__(self, script: ExecScript | None = None) -> None:
@@ -307,6 +487,10 @@ class FakeBackend:
         self.sandboxes: dict[str, FakeSandbox] = {}
         self.calls: list[tuple[str, dict[str, object]]] = []
         self.ready_reason: str | None = None
+        self.kill_fails = False
+        self.kill_wait_s = float(HOST_DEADLINE_SLACK_S)
+        # Commands whose kill timed out, kept referenced until they end.
+        self._lingering: set[asyncio.Future[FakeRun]] = set()
         self._starts = itertools.count()
 
     def _running(self, chat_id: str) -> FakeSandbox:
@@ -317,6 +501,19 @@ class FakeBackend:
 
     def _still_running(self, chat_id: str, box: FakeSandbox) -> bool:
         return self.sandboxes.get(chat_id) is box and box.running
+
+    def _kill(self, chat_id: str, box: FakeSandbox) -> None:
+        if self.kill_fails:
+            self._kill_failed(chat_id, box)
+        self.calls.append(('kill_uid_1000', {'chat_id': chat_id}))
+
+    def _kill_failed(self, chat_id: str, box: FakeSandbox) -> NoReturn:
+        self.calls.append(('kill_uid_1000_failed', {'chat_id': chat_id}))
+        box.running = False
+        box.ip = None
+        raise SandboxNotRunning(
+            'the processes the command started could not be confirmed ended, so the sandbox was stopped'
+        )
 
     async def create(self, chat_id: str, spec: SandboxSpec) -> None:
         self.calls.append(('create', {'chat_id': chat_id, 'spec': spec}))
@@ -355,13 +552,38 @@ class FakeBackend:
         require_wrapped(argv, timeout_s)
         box = self._running(chat_id)
         workspace = FakeWorkspace(box.files, box.rootfs)
-        try:
-            run = await self.script(FakeExecRequest(chat_id, list(argv), timeout_s, stdin, workspace))
-        finally:
-            # The kill every backend runs after every exec (owner decision
-            # Q10), whenever the sandbox is still there to run it in.
-            if self._still_running(chat_id, box):
-                self.calls.append(('kill_uid_1000', {'chat_id': chat_id}))
+        # The command runs on in the guest whatever happens to the caller, as T14's exec in a thread does, until it
+        # ends or the kill ends it.
+        command = asyncio.ensure_future(self.script(FakeExecRequest(chat_id, list(argv), timeout_s, stdin, workspace)))
+        loop = asyncio.get_running_loop()
+        deadline: float | None = None
+        while not command.done():
+            if deadline is not None and loop.time() >= deadline:
+                # The kill did not end the command within its bound: a failed kill, so fail closed.
+                self._lingering.add(command)
+                command.add_done_callback(self._lingering.discard)
+                self._kill_failed(chat_id, box)
+            try:
+                await asyncio.wait([command], timeout=None if deadline is None else deadline - loop.time())
+            except asyncio.CancelledError:
+                # The caller gave up: the contract's kill ends the command at once (the script sees CancelledError
+                # and ends when it ends), and later cancellations do not cut the wait short, which is bounded by
+                # `kill_wait_s`.
+                if deadline is None:
+                    deadline = loop.time() + self.kill_wait_s
+                    command.cancel()
+        cancelled = deadline is not None
+        # The kill every backend runs after every exec (owner decision Q10), once the command has ended,
+        # whenever the sandbox is still there to run it in; recorded only now, as T14's runs only now.
+        if self._still_running(chat_id, box):
+            self._kill(chat_id, box)
+        if cancelled:
+            if not command.cancelled():
+                # Retrieved, so asyncio does not log it as never retrieved.
+                command.exception()
+            raise asyncio.CancelledError
+        # An exception the script raised reaches the caller unchanged.
+        run = command.result()
         # Whatever the return code: a sandbox that died during the command is a failure, not a result.
         if not self._still_running(chat_id, box):
             raise SandboxNotRunning(f'the sandbox for chat {chat_id} stopped during the command')
@@ -401,7 +623,7 @@ class FakeBackend:
         for path in paths:
             # Read as the archive API reads, not as UID 1000: no permission check.
             entry = box.files.get(path)
-            if entry is not None and entry.content is not None and len(entry.content) <= max_bytes:
+            if entry is not None and entry.content is not None and not entry.fifo and len(entry.content) <= max_bytes:
                 found[path] = entry.content
         return found
 
@@ -413,7 +635,11 @@ class FakeBackend:
         entry = box.files.get(path)
         if entry is None:
             return None
-        # The fake has no symlinks or special files; a directory's size is 0.
+        # A directory's size is 0, a symlink's the length of its target, a FIFO's 0.
+        if entry.link is not None:
+            return FileStat(path, 'symlink', entry.uid, entry.mode, len(entry.link.encode()), entry.mtime)
+        if entry.fifo:
+            return FileStat(path, 'other', entry.uid, entry.mode, 0, entry.mtime)
         if entry.content is None:
             return FileStat(path, 'dir', entry.uid, entry.mode, 0, entry.mtime)
         return FileStat(path, 'file', entry.uid, entry.mode, len(entry.content), entry.mtime)
@@ -517,19 +743,225 @@ def _sleep(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
     return FakeRun(0, elapsed_s=seconds)
 
 
+def _ln(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    # Only `ln -s TARGET LINK`, with LINK a new name (not the form that creates the link inside a directory).
+    if len(args) != 3 or args[0] != '-s':
+        return FakeRun(1, stderr=b'ln: only `ln -s TARGET LINK` is modelled\n')
+    target, link = args[1:]
+    try:
+        request.workspace.symlink(target, link)
+    except OSError as exc:
+        return FakeRun(1, stderr=f"ln: failed to create symbolic link '{link}': {exc.strerror}\n".encode())
+    return FakeRun(0)
+
+
+def _chmod(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    # Only an octal mode.
+    if len(args) < 2 or not re.fullmatch(r'[0-7]{1,4}', args[0]):
+        return FakeRun(1, stderr=b'chmod: only `chmod OCTAL-MODE PATH...` is modelled\n')
+    err: list[str] = []
+    for path in args[1:]:
+        try:
+            request.workspace.chmod(path, int(args[0], 8))
+        except OSError as exc:
+            what = 'changing permissions of' if exc.errno in (errno.EPERM, errno.EROFS) else 'cannot access'
+            err.append(f"chmod: {what} '{path}': {exc.strerror}\n")
+    return FakeRun(1 if err else 0, stderr=''.join(err).encode())
+
+
+def _mkdir(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    parents = args[:1] == ['-p']
+    paths = args[1:] if parents else args
+    if not paths:
+        return FakeRun(1, stderr=b'mkdir: missing operand\n')
+    err: list[str] = []
+    for path in paths:
+        try:
+            request.workspace.mkdir(path, parents=parents)
+        except OSError as exc:
+            err.append(f"mkdir: cannot create directory '{path}': {exc.strerror}\n")
+    return FakeRun(1 if err else 0, stderr=''.join(err).encode())
+
+
 _COMMANDS: dict[str, Callable[[list[str], FakeExecRequest, int], FakeRun]] = {
     'cat': _cat,
+    'chmod': _chmod,
+    'ln': _ln,
     'ls': _ls,
+    'mkdir': _mkdir,
     'printf': _printf,
     'sleep': _sleep,
 }
 
 
-async def interpret(request: FakeExecRequest) -> FakeRun:
-    """The default exec script: a tiny bash for `cat`, `ls`, `printf` and `sleep`.
+# The guest helpers of sandbox/workspace.py, emulated from what their scripts do.
 
-    The argv must pass exec.require_wrapped (ValueError otherwise), and the
-    command after the prefix must be `/bin/bash -lc -- <command>`, as
+# Names for the write helper's temporary files, as mktemp's random suffix; unique within the process.
+_TEMPORARY_NAMES = itertools.count()
+
+
+def lllm_path(workspace: FakeWorkspace, path: str) -> FakeRun:
+    """The guest's `/usr/local/bin/lllm-path PATH` (infra/sandbox/common/lllm-path), as UID 1000.
+
+    Resolves `path` as `realpath -m` does (FakeWorkspace.realpath), a
+    relative path taken from `/workspace`, and prints it with a newline
+    when it is `/workspace` or under it, no component is still a symlink,
+    and every existing directory above the last component is searchable;
+    otherwise exits 1 with the reason on stderr. tests/test_sandbox_tools.py
+    runs the real script through the same cases as this.
+    """
+
+    def refuse(why: str) -> FakeRun:
+        return FakeRun(1, stderr=f'lllm-path: {why}\n'.encode())
+
+    if not path:
+        return refuse('the path is empty')
+    if '\n' in path:
+        return refuse('the path contains a newline')
+    if len(path.encode('utf-8', 'surrogatepass')) > guest.MAX_PATH_BYTES:
+        return refuse(f'the path is longer than {guest.MAX_PATH_BYTES} bytes')
+    resolved = workspace.realpath(path)
+    if '\n' in resolved:
+        return refuse('the path leads to a name with a newline')
+    if len(resolved.encode('utf-8', 'surrogatepass')) > guest.MAX_PATH_BYTES:
+        return refuse(f'the path leads to a name longer than {guest.MAX_PATH_BYTES} bytes')
+    if not _under(resolved, WORKSPACE):
+        return refuse(f'the path leads outside {WORKSPACE}')
+    names = _components(resolved)
+    prefix = ''
+    for index, name in enumerate(names):
+        prefix = f'{prefix}/{name}'
+        # Every directory above `prefix` has been found searchable, so UID 1000 sees exactly this entry.
+        entry = workspace._get(prefix)
+        if entry is not None and entry.link is not None:
+            return refuse(f'the path goes through a symlink that cannot be followed: {prefix}')
+        if entry is None:
+            break
+        if index < len(names) - 1 and entry.is_dir and not _allowed(entry, SANDBOX_UID, 0o1):
+            return refuse(f'the path goes through a directory that cannot be searched: {prefix}')
+    return FakeRun(0, stdout=f'{resolved}\n'.encode())
+
+
+def _list_helper(workspace: FakeWorkspace, path: str) -> FakeRun:
+    # LIST_SCRIPT: lllm-path, then `find -mindepth 1 -maxdepth 2` without hidden entries but `.runs`, never
+    # following a symlink, cut to LIST_CAP_BYTES by `head -c` (whose exit status, 0, is the pipeline's).
+    run = lllm_path(workspace, path)
+    if run.returncode:
+        return run
+    records: list[str] = []
+    errors: list[str] = []
+
+    def walk(directory: str, relative: str, depth: int) -> None:
+        _, entry = workspace._lookup(directory, SANDBOX_UID)
+        assert entry is not None, 'walk only enters a directory lllm-path or find found'
+        if not _allowed(entry, SANDBOX_UID, 0o5):
+            errors.append(f"/usr/bin/find: '{directory}': Permission denied\n")
+            return
+        for name in workspace.listdir(directory):
+            if name.startswith('.') and name != '.runs':
+                continue
+            child = workspace._get(f'{directory}/{name}')
+            assert child is not None, 'listdir only names existing entries'
+            kind, size = (
+                ('l', len(child.link.encode()))
+                if child.link is not None
+                else ('d', 0)
+                if child.content is None
+                else ('p', 0)
+                if child.fifo
+                else ('f', len(child.content))
+            )
+            shown = f'{relative}/{name}' if relative else name
+            records.append(f'{kind}\t{size}\t{shown}\0')
+            if kind == 'd' and depth < 2:
+                walk(f'{directory}/{name}', shown, depth + 1)
+
+    walk(run.stdout.decode()[:-1], '', 1)
+    return FakeRun(0, ''.join(records).encode()[: guest.LIST_CAP_BYTES], ''.join(errors).encode())
+
+
+def _write_helper(workspace: FakeWorkspace, path: str, mode: str, stdin: bytes | None) -> FakeRun:
+    # WRITE_SCRIPT: lllm-path; refuse a directory, then anything else not a regular file; exit EXISTS_EXIT for
+    # an existing file unless `overwrite`; refuse a file UID 1000 may not write; `mkdir -p` the parent; write stdin
+    # to a temporary file there and rename it over the target with the target's mode; print the path.
+    run = lllm_path(workspace, path)
+    if run.returncode:
+        return run
+    resolved = run.stdout.decode()[:-1]
+    try:
+        _, entry = workspace._lookup(resolved, SANDBOX_UID)
+    except OSError:
+        # `[ -d ]` and `[ -e ]` are false for a path whose parent does not exist.
+        entry = None
+    if entry is not None and entry.is_dir:
+        return FakeRun(1, stderr=f'{resolved} is a directory\n'.encode())
+    if entry is not None and entry.fifo:
+        return FakeRun(1, stderr=f'{resolved} is not a regular file\n'.encode())
+    if entry is not None and mode != 'overwrite':
+        return FakeRun(guest.EXISTS_EXIT)
+    if entry is not None and not _allowed(entry, SANDBOX_UID, 0o2):
+        return FakeRun(1, stderr=f'{resolved} is read-only\n'.encode())
+    parent = posixpath.dirname(resolved)
+    try:
+        workspace.mkdir(parent, parents=True)
+    except OSError as exc:
+        return FakeRun(1, stderr=f"/usr/bin/mkdir: cannot create directory '{parent}': {exc.strerror}\n".encode())
+    # mktemp, then the rename over the target, keeping its mode (0644 for a new file).
+    temporary = f'{parent}/.lllm-write.{next(_TEMPORARY_NAMES):06d}'
+    try:
+        workspace.write(temporary, stdin or b'')
+    except OSError as exc:
+        return FakeRun(
+            1,
+            stderr=f"/usr/bin/mktemp: failed to create file via template '{parent}/.lllm-write.XXXXXX': "
+            f'{exc.strerror}\n'.encode(),
+        )
+    table = workspace.files if _under(resolved, WORKSPACE) else workspace.rootfs
+    written = table.pop(temporary)
+    written.mode = 0o644 if entry is None else entry.mode
+    table[resolved] = written
+    return FakeRun(0, stdout=f'{resolved}\n'.encode())
+
+
+def _read_helper(workspace: FakeWorkspace, path: str) -> FakeRun:
+    # READ_SCRIPT: lllm-path, then refuse an existing file (not a directory) UID 1000 cannot read.
+    run = lllm_path(workspace, path)
+    if run.returncode:
+        return run
+    resolved = run.stdout.decode()[:-1]
+    try:
+        _, entry = workspace._lookup(resolved, SANDBOX_UID)
+    except OSError:
+        # `[ -e ]` is false for a path whose parent does not exist.
+        entry = None
+    if entry is not None and not entry.is_dir and not _allowed(entry, SANDBOX_UID, 0o4):
+        return FakeRun(1, stderr=f'lllm-read: {resolved} cannot be read: permission denied\n'.encode())
+    return run
+
+
+def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
+    # What follows GUEST_SHELL in the argv: exactly one of the helpers, by the exact script text, or bash's 127.
+    match args:
+        case [guest.LLLM_PATH, path]:
+            return lllm_path(request.workspace, path)
+        case ['-c', guest.READ_SCRIPT, 'lllm-read', path]:
+            return _read_helper(request.workspace, path)
+        case ['-c', guest.LIST_SCRIPT, 'lllm-list', path]:
+            return _list_helper(request.workspace, path)
+        case ['-c', guest.WRITE_SCRIPT, 'lllm-write', path, mode]:
+            return _write_helper(request.workspace, path, mode, request.stdin)
+        case _:
+            return _not_found(shlex.join(args))
+
+
+async def interpret(request: FakeExecRequest) -> FakeRun:
+    """The default exec script: a tiny bash for `cat`, `chmod`, `ln -s`, `ls`, `mkdir`, `printf` and `sleep`.
+
+    The argv must pass exec.require_wrapped (ValueError otherwise). After
+    the prefix comes either one of the file tools' guest helpers
+    (workspace.GUEST_SHELL then lllm-path, the read check, the listing or
+    the write, matched by their exact script text and run as `lllm_path`,
+    `_read_helper`, `_list_helper` and `_write_helper` emulate them), or `/bin/bash -lc -- <command>`, as
     exec.wrap_command builds it; the command inside is one simple command
     with an optional `> path`, run as UID 1000 in `/workspace`. `sleep`
     longer than the wrapped timeout returns 124 at the timeout, without
@@ -540,11 +972,15 @@ async def interpret(request: FakeExecRequest) -> FakeRun:
 
     Where it differs from bash: a quoted `'>'` is still read as a redirect
     (`printf a '>' f` writes `a` to `f`), since the tokenizer does not say
-    which words were quoted, and `printf` knows only `%s`, `%%`, `\\n`,
+    which words were quoted, `printf` knows only `%s`, `%%`, `\\n`,
     `\\t` and `\\\\` (it does reuse its format for extra arguments, as bash
-    does).
+    does), `chmod` only octal modes, and `ln` only `ln -s TARGET LINK` with
+    LINK a new name.
     """
     require_wrapped(request.argv, request.timeout_s)
+    shell = list(guest.GUEST_SHELL)
+    if request.argv[3 : 3 + len(shell)] == shell:
+        return _guest_helper(request.argv[3 + len(shell) :], request)
     match request.argv[3:]:
         case ['/bin/bash', '-lc', '--', command]:
             pass
