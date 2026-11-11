@@ -1780,6 +1780,15 @@ stdout, stderr and attached outputs under the block, reusing
 **Verify:** the `docs-sync` skill's checks; `uvx pre-commit run --files
 <changed docs>`.
 
+**From T17 and T18 (2026-11-11): bullets for this PR's decisions entry.**
+- Outputs are collected by comparing listings of `/workspace/outputs`: against the listing the previous call kept for the running sandbox (so files written by `write_file` or `str_replace` are attached by the next `bash` call), or one taken before the command. The listing is NUL-delimited, newest first, with an `END` sentinel and `find`'s stderr dropped, since a model-chosen name can hold a newline or tab.
+- Caps the proposal lacked: per call 20 files and 200 MiB (50 MiB a file), PDF preview pages included; previews for 3 PDFs of 10 pages at 80 dpi cropped to 1600 px; 1 GiB per chat over all calls (Q22), counted from rows the server marks with `meta.source` and `meta.chat_id`, linked or not (an unsaved chat counts only the caller's rows); a file whose bytes equal the last stored version of its path is not stored again. The HTML route's limit is 5 MiB, not "5 MB".
+- Outputs are stored through `Storage` and `Files.insert_new_file`, not `upload_file_handler` (which files caller metadata under `meta.data`), each row linked to the message as it is stored; a call with no message id stores and counts its outputs but links nothing; an unsaved chat's outputs stay the user's unlinked rows.
+- Sandbox outputs are served as attachments with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and `application/octet-stream` outside images (SVG included, shown only as `<img>`), PDF, audio and video; `/content/html` refuses them with 403 after the access check (Corrections, item 4).
+- The HTML policy adds `base-uri 'none'`. It is not "no network": it does not stop a frame navigating itself (Q4: denied in the desktop app only) or WebRTC, which no CSP directive covers; a script in an HTML output can leak what the model wrote, what the user types into it and the user's IP over STUN/TURN or DNS (found in T18's security review on Electron 45.1.0; the owner accepted and documented it, Q23, over rendering static-first with a "run scripts" button).
+- The `files` event carries only the call's new files; the chat page (`history.ts`, by id, then url) and the socket handler merge it into the message's list.
+- The desktop app denies a srcdoc or blank sub-frame's navigation unless the app's own page starts it (Q4), so a link in the chat's artifact preview no longer navigates in the desktop app.
+
 ### T24: workspace cap and deletion dialog **security**
 
 *Author: any. Verify: any; docker, kvm. Depends: T11, T14, T19.*
