@@ -296,6 +296,8 @@ Every question the proposal raised was decided by the owner.
 | All slots held by idle sandboxes | Evict the least-recently-used sandbox idle at least 60 s (its files stay); otherwise wait at most 2 minutes, then fail with "no free sandbox" | 2026-11-10 |
 | Who may use a saved chat's sandbox | Its owner, or an admin as the chat endpoint allows; not every reader of the chat | 2026-11-10 |
 | Workspaces per user | At most 20 persistent workspaces per user (admin-settable); before one is deleted for the cap or the 7-day expiry the user sees its contents and chooses remove or keep, nothing is deleted unanswered, and at the cap a new workspace is refused with an error the model relays | 2026-11-10 |
+| The sandbox's first process | Runs as `nobody` (65534:65534) under tini, while every command runs as UID 1000, so the per-call kill of UID 1000's processes cannot stop the sandbox and tini reaps what it kills | 2026-11-11 |
+| First mirror packages | `polars`, `duckdb`, `pingouin` and `lifelines`, as binary wheels constrained to the data image's versions | 2026-11-11 |
 
 ## Sources
 

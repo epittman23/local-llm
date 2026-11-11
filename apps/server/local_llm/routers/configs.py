@@ -11,6 +11,7 @@ from local_llm.config import BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.config import API_CONFIG_KEYS, Config
+from local_llm.sandbox.manager import SETTING_KEYS, TIMEOUT_KEY, sandbox_setting_error
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
@@ -62,6 +63,11 @@ CODE_EXECUTION_CONFIG_KEYS = {
     'CODE_INTERPRETER_JUPYTER_AUTH_TOKEN': 'code_interpreter.jupyter.auth_token',
     'CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD': 'code_interpreter.jupyter.auth_password',
     'CODE_INTERPRETER_JUPYTER_TIMEOUT': 'code_interpreter.jupyter.timeout',
+    'CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE': 'code_interpreter.sandbox.default_image',
+    'CODE_INTERPRETER_SANDBOX_TIMEOUT': 'code_interpreter.sandbox.timeout',
+    'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 'code_interpreter.sandbox.max_running',
+    'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES': 'code_interpreter.sandbox.idle_minutes',
+    'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS': 'code_interpreter.sandbox.retention_days',
 }
 MODELS_CONFIG_KEYS = {
     'DEFAULT_MODELS': 'ui.default_models',
@@ -153,6 +159,10 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
     ):
         if key in form_data.config and (error := check(form_data.config[key])):
             raise HTTPException(status_code=400, detail=error)
+    # And the sandbox settings': one outside the bounds would fail the Code Execution page's form.
+    for key in (*SETTING_KEYS, TIMEOUT_KEY):
+        if key in form_data.config and (error := sandbox_setting_error(key, form_data.config[key])):
+            raise HTTPException(status_code=400, detail=f'{key}: {error}')
     await Config.upsert(without_null_settings(form_data.config))
     await publish_event(
         request,
@@ -714,7 +724,9 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
 ############################
 # CodeInterpreterConfig
 ############################
-class CodeInterpreterConfigForm(BaseModel):
+class CodeInterpreterConfig(BaseModel):
+    """What GET serves: the stored values as they are, with no checks, so a bad stored value cannot break the page."""
+
     ENABLE_CODE_EXECUTION: bool
     CODE_EXECUTION_ENGINE: str
     CODE_EXECUTION_JUPYTER_URL: str | None
@@ -730,18 +742,47 @@ class CodeInterpreterConfigForm(BaseModel):
     CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: str | None
     CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD: str | None
     CODE_INTERPRETER_JUPYTER_TIMEOUT: int | None
+    # Optional so a client that predates these fields still saves: an omitted field keeps its stored value, and
+    # a null one means the manager's default.
+    CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: str | None = None
+    CODE_INTERPRETER_SANDBOX_TIMEOUT: int | None = None
+    CODE_INTERPRETER_SANDBOX_MAX_RUNNING: int | None = None
+    CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: int | None = None
+    CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: int | None = None
 
 
-@router.get('/code_execution', response_model=CodeInterpreterConfigForm)
+class CodeInterpreterConfigForm(CodeInterpreterConfig):
+    """What POST accepts: the same fields, with the sandbox settings held to the manager's bounds."""
+
+    @field_validator(
+        'CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE',
+        'CODE_INTERPRETER_SANDBOX_TIMEOUT',
+        'CODE_INTERPRETER_SANDBOX_MAX_RUNNING',
+        'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES',
+        'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS',
+        mode='before',
+    )
+    @classmethod
+    def _sandbox_setting_in_bounds(cls, value, info):
+        # The rules settings_from_config applies, and the config import's: a bool is refused as it is there,
+        # before pydantic can turn it into 1.
+        key = f'code_interpreter.sandbox.{info.field_name.removeprefix("CODE_INTERPRETER_SANDBOX_").lower()}'
+        if error := sandbox_setting_error(key, value):
+            raise ValueError(error)
+        return value
+
+
+@router.get('/code_execution', response_model=CodeInterpreterConfig)
 async def get_code_execution_config(request: Request, user=Depends(get_admin_user)):
     return await get_config_values(CODE_EXECUTION_CONFIG_KEYS)
 
 
-@router.post('/code_execution', response_model=CodeInterpreterConfigForm)
+@router.post('/code_execution', response_model=CodeInterpreterConfig)
 async def set_code_execution_config(
     request: Request, form_data: CodeInterpreterConfigForm, user=Depends(get_admin_user)
 ):
-    await Config.upsert(config_updates(form_data.model_dump(), CODE_EXECUTION_CONFIG_KEYS))
+    # exclude_unset: a sandbox setting the client did not send keeps its stored value.
+    await Config.upsert(config_updates(form_data.model_dump(exclude_unset=True), CODE_EXECUTION_CONFIG_KEYS))
     values = await get_config_values(CODE_EXECUTION_CONFIG_KEYS)
     await publish_event(
         request,

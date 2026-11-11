@@ -27,6 +27,7 @@ from local_llm.env import (
     log,
 )
 from local_llm.models.config import Config
+from local_llm.sandbox.limits import TIMEOUT_DEFAULT_S
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import jwt_expiry_startup_error
 
@@ -481,6 +482,31 @@ CODE_INTERPRETER_JUPYTER_PROMPT = """
 - Files the user attached to this chat are in the current working directory. Open them by name, for example
   `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.
 - Files written by the code are deleted when the block ends, so print the results the user needs."""
+
+# The sandbox engine's counterpart: the model works in a per-chat microVM
+# through four tools, and nothing is captured inline, so what it wants shown
+# goes to /workspace/outputs.
+CODE_INTERPRETER_SANDBOX_PROMPT = """
+
+##### Sandbox Environment
+
+- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`
+  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).
+- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to
+  the next. Only running processes do not: each command ends every process it started.
+- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.
+- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with
+  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`.
+- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.
+- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers "no matching
+  distribution", tell the user the package is not available instead of working around it.
+- For a LaTeX document, build it in `/workspace/build/<name>/` with
+  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined
+  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.
+- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running
+  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,
+  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in
+  headless Chromium with Playwright; `/workspace` carries over when you switch."""
 
 
 ####################################
@@ -2630,6 +2656,11 @@ DEFAULT_CONFIG = {
     'code_interpreter.jupyter.auth_token': CODE_INTERPRETER_JUPYTER_AUTH_TOKEN,
     'code_interpreter.jupyter.auth_password': CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD,
     'code_interpreter.jupyter.timeout': CODE_INTERPRETER_JUPYTER_TIMEOUT,
+    'code_interpreter.sandbox.default_image': 'data',
+    'code_interpreter.sandbox.timeout': TIMEOUT_DEFAULT_S,
+    'code_interpreter.sandbox.max_running': 4,
+    'code_interpreter.sandbox.idle_minutes': 30,
+    'code_interpreter.sandbox.retention_days': 7,
     'google_drive.enable': ENABLE_GOOGLE_DRIVE_INTEGRATION,
     'google_drive.client_id': GOOGLE_DRIVE_CLIENT_ID,
     'google_drive.api_key': GOOGLE_DRIVE_API_KEY,
