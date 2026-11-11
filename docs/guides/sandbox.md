@@ -4,7 +4,8 @@
 > [docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md)
 > is being built on the `feat/sandbox-code-interpreter` branch (PR #884).
 > Nothing in the app uses it yet: the code interpreter is still Jupyter.
-> This guide grows with the build; today it covers only the host setup.
+> This guide grows with the build; so far it covers the host setup and the
+> images.
 
 Each chat's code runs in its own microVM: a Kata Containers container whose
 runtime boots a Cloud Hypervisor VM with its own guest kernel, started by
@@ -161,3 +162,95 @@ sudo rm -rf /opt/kata
 sudo rm /etc/docker/daemon.json   # or remove only the kata-clh entry
 sudo systemctl restart docker
 ```
+
+## Images
+
+Two images, both built from `infra/sandbox/` by `make sandbox-images` and
+tagged `local-llm/sandbox-<key>:<tag>`. The model chooses between them per
+chat (`data` is the default); see the proposal's
+[Images](../proposals/sandbox-code-interpreter.md#images) section.
+
+| Image | Base | Contains | Size (2026-11-11) |
+|---|---|---|---|
+| `sandbox-data` | `quay.io/jupyter/scipy-notebook:2026-10-12` (Ubuntu 26.04, conda Python 3.13) | pandas 3.0.6, scipy 1.18.1, scikit-learn 1.9.1 and the rest of scipy-notebook (`image-freeze.txt`); R 4.5.3 from conda-forge with tidyverse, data.table, broom, lme4 and survival, pinned in `data/environment-r.yml`; TeX Live 2025 (`scheme-small` plus the `latexrecommended`, `latexextra`, `fontsrecommended`, `mathscience`, `bibtexextra` and `pictures` collections, `latexmk`, `biber`) | 8.89 GB (base 5.39 GB) |
+| `sandbox-web` | `node:26.13.0-trixie-slim`, pinned by digest (the Node.js LTS line, Debian 13) | TypeScript 6.0.3, `tsx`, ESLint, Prettier and Playwright 1.65.0 with headless Chromium (`/opt/pw-browsers`), from `web/package.json` and `web/package-lock.json` (npm) | 2.28 GB |
+
+Both also hold the common tools (`common/install-common.sh`): `bash`, `git`,
+`sqlite3`, `poppler-utils`, `file`, `xxd`, `procps`, `tini` and the DuckDB CLI (v2.0.0, checked
+against a pinned SHA-256), and `/usr/local/bin/lllm-path`, the path
+confinement helper the file tools call.
+
+Both run as UID 1000 with `/workspace` (the per-chat volume's mount point)
+created owned by `1000:1000` in the image, so an empty named volume
+inherits that ownership; the backend's ext4 workspace volumes get theirs
+from `mkfs` instead. GID 1000 has a name (`sandbox` in `data`, `node`
+in `web`). `/workspace/.local/bin` is last on `PATH`, after the image's own
+directories, so a model-written file cannot shadow `timeout` or `bash`;
+`web` also appends it from `/etc/profile.d`, because Debian's `/etc/profile`
+resets `PATH` for the login shell the manager runs. Both images set
+`ENTRYPOINT ["tini", "-g", "--"]` and `CMD ["sleep", "infinity"]`.
+
+What is pinned, and what is not:
+
+- Pinned: the base images (both by digest as well as tag), R's six top-level packages, the TeX Live release (from
+  the final, frozen 2025 archive, so a rebuild installs the same packages;
+  2026's is not frozen yet), DuckDB, and the npm packages with integrity
+  hashes. `typescript` is 6.0.x because `typescript-eslint` 8.72 does not
+  yet accept 7.
+- Not pinned: apt packages (`git`, `sqlite3`, `poppler-utils`, Chromium's
+  system libraries) follow the base's distribution release, since archives
+  drop old versions; Playwright's Chromium is pinned only by Playwright's
+  version; R's dependencies resolve at build time. What actually landed is
+  recorded: `infra/sandbox/image-freeze.txt` (Python, `pip list
+  --format=freeze`; conda's `pip freeze` prints `file://` paths) and
+  `infra/sandbox/image-freeze-r.txt` (R packages), both committed and
+  rewritten by `make sandbox-images`.
+
+Notes on the build:
+
+- The base ships a small Ubuntu TeX Live for notebook PDF export; the data
+  image removes it, so `latexmk` and `kpsewhich` are the pinned 2025 ones.
+  `data/texmf.cnf` (at the TeX tree's root) sets `shell_escape = f` and
+  `openout_any = p`, and points `TEXMFVAR` and `TEXMFCONFIG` into `/tmp`
+  so fonts generated on the fly work on a read-only home. `\write18` is
+  reported "disabled". That stops a document built with the defaults from
+  running commands; it is not a boundary against the model, which has
+  `bash`. TeX Live's repository is signature-verified by `install-tl`.
+- `biber` is a PAR-packed binary that unpacks itself and runs from the
+  unpacked copy. The sandbox's `/tmp` is a `noexec` tmpfs, so the data
+  image puts a root-owned wrapper (`data/biber`) at `/usr/local/bin/biber`,
+  ahead of the TeX tree on `PATH`: it creates `/workspace/.cache/par` and
+  runs the real biber with `PAR_GLOBAL_TMPDIR` pointing there (it fails
+  with a message if the directory cannot be made). It does not depend on
+  what the image put in `/workspace`. The first biber run leaves about
+  121 MB there, which counts toward the workspace cap.
+- `MPLCONFIGDIR` and `XDG_CACHE_HOME` point into `/tmp` in the data image,
+  so matplotlib and fontconfig print no cache warnings on a read-only home.
+- The web image links `/node_modules` to `/opt/sandbox-web/node_modules`,
+  so `import` from a `.mjs` or `.ts` file anywhere under `/workspace`
+  resolves the baked-in packages (`NODE_PATH` covers `require`).
+- `npm audit` reports 10 moderate findings (minimatch denial of service in
+  the lint tooling); accepted, since the sandbox has no network and the
+  tools run on the model's own files.
+- The TeX collections include no XeTeX or LuaTeX, so documents using
+  `fontspec` do not build; use `latexmk -pdf`.
+- Setuid and setgid bits are stripped from both images.
+- The `PATH` rule above (nothing the model writes shadows `timeout` or
+  `bash`) rests on the read-only root filesystem the backend runs the
+  containers with: the base leaves `/opt/conda`, first on `PATH`, owned by
+  UID 1000.
+- `data` is about 19 minutes from clean, almost all of it TeX Live (2,700
+  packages) and the R install; `web` a few minutes.
+
+### Rebuilding and the tag
+
+```sh
+make sandbox-images
+```
+
+builds both and rewrites `infra/sandbox/image-freeze.txt` and `image-freeze-r.txt`. The tag is the
+one line in `infra/sandbox/TAG` (`2026-11-11.1`: the date, then a counter
+for that day). Any change to an image bumps it, because the tag is what
+the manager starts and what benchmark runs record. The backend holds the
+same value in a constant, so bump both together. Pre-existing containers keep their old image until they are
+recreated.

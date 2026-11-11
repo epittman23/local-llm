@@ -1,0 +1,69 @@
+# The sandbox's default image: Python data stack, R, TeX Live, and the common
+# tools. Build context is infra/sandbox (`make sandbox-images`). Layers are
+# ordered slowest and least-changing first; lllm-path comes last.
+FROM quay.io/jupyter/scipy-notebook:2026-10-12@sha256:8f8a5763d9a01e7f488eff8d9379654788e9cc08286dbcbc6bcda129c1b0edcd
+
+USER root
+
+COPY common/install-common.sh /tmp/sandbox/install-common.sh
+RUN bash /tmp/sandbox/install-common.sh
+
+# The base ships a small Ubuntu TeX Live for nbconvert's PDF export, which the
+# sandbox does not use. Remove it so there is one TeX (the pinned one below).
+RUN apt-get purge -y texlive-base texlive-binaries texlive-fonts-recommended \
+        texlive-latex-base texlive-latex-extra texlive-latex-recommended \
+        texlive-pictures texlive-plain-generic texlive-xetex tex-common \
+    && apt-get autoremove -y --purge \
+    && rm -rf /var/lib/apt/lists/*
+
+# R, from conda-forge, into the base environment (pinned in environment-r.yml).
+COPY data/environment-r.yml /tmp/sandbox/environment-r.yml
+RUN mamba env update --name base --file /tmp/sandbox/environment-r.yml --yes \
+    && mamba clean --all --yes
+
+# TeX Live 2025 (frozen archive), then the shell-escape-off configuration.
+COPY data/texlive.profile data/install-texlive.sh /tmp/sandbox/
+RUN bash /tmp/sandbox/install-texlive.sh
+COPY data/texmf.cnf /opt/texlive/2025/texmf.cnf
+
+# /workspace is the per-chat volume's mount point. An empty named volume takes
+# the ownership of this directory, so it must be 1000:1000 here. GID 1000 gets
+# a name (the base's jovyan is in group 100, so `id` would print "cannot find
+# name for group ID 1000").
+RUN groupadd --gid 1000 sandbox \
+    && install -d -o 1000 -g 1000 -m 0755 /workspace
+
+# No setuid or setgid binaries: nothing the model runs needs one, and a plain
+# `docker run` (which has none of the backend's no-new-privileges and
+# cap-drop) would otherwise keep them as an escalation path.
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} +
+
+# The confinement helper (written and tested separately; copied in last so the
+# slow layers above stay cached while it changes).
+COPY --chown=root:root --chmod=0755 common/lllm-path /usr/local/bin/lllm-path
+
+# biber needs an exec-able temp directory; /usr/local/bin precedes the TeX
+# tree on PATH, so this wrapper is the one latexmk finds.
+COPY --chown=root:root --chmod=0755 data/biber /usr/local/bin/biber
+
+# The image's own directories first; /workspace/.local/bin LAST, so a
+# model-written file cannot shadow `timeout`, `bash` or what the manager runs.
+# That protection rests on the read-only root filesystem the backend runs the
+# container with: the base leaves /opt/conda (first on PATH) owned by UID 1000.
+ENV PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/texlive/2025/bin/x86_64-linux:/workspace/.local/bin
+
+# The root is read-only and /tmp is a tmpfs: send matplotlib's and fontconfig's
+# caches there, so a read-only HOME produces no warnings.
+ENV MPLCONFIGDIR=/tmp/matplotlib XDG_CACHE_HOME=/tmp/.cache
+
+WORKDIR /workspace
+USER 1000
+# The base's Jupyter healthcheck would mark the sandbox unhealthy and run an
+# exec in the guest every few seconds; the sandbox serves no Jupyter.
+HEALTHCHECK NONE
+# For plain `docker run` only. The backend replaces both: it starts the
+# container with Docker's own init as PID 1 and `sleep infinity` as 65534,
+# and runs every exec as 1000 (the sandbox's Q16 design), so this tini is not
+# what reaps a call's leftovers there. Replaces the base's `tini -g -- start.sh`.
+ENTRYPOINT ["tini", "-g", "--"]
+CMD ["sleep", "infinity"]

@@ -69,7 +69,7 @@ The same for every session:
 | T12 | The four tools and path confinement | any | any | T11 | done | | 2026-11-11: `bash`, `view`, `write_file`, `str_replace` in `tools/builtin.py`, offered instead of `execute_code` under engine `sandbox` (a custom selector with the same four gates; `code_interpreter.engine` added to the `get_many` batch, so the golden `tool_loading.json` gained that key in its 22 cases, the expected gate finding); path confinement in `sandbox/workspace.py` (host checks) and `infra/sandbox/common/lllm-path` (guest `realpath -m` plus a walk refusing any remaining symlink or unsearchable directory, since `realpath -m` leaves loops and symlinks under mode-000 directories unresolved), helpers under `env -i` with absolute paths, model strings only as positional arguments, atomic writes, readable-file checks, image header and size limits; the real script and the fake agree on every confinement case; session calls now hold the chat's lock through cancellation until the backend call and its kill end (bounded by `CANCEL_WAIT_S`), and the model sees only text written for it; `tests/test_sandbox_tools*.py` (author plus a separate test-engineer, about 650 tests); security review (1 blocking: a cancelled call released the lock while its processes ran, letting a symlink swap between check and use; 4 should-fix) and two re-reviews APPROVE; code review and re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (6,125 passed, 21 skipped, diff coverage 100%), `make test-types` no new findings, `make lint` exit 0. Notes for T13, T14, T20 in their sections |
 | T13 | Chat uploads into `/workspace/uploads` | any | any; docker, kvm | T11 | todo | | |
 | T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Q8 answered: pass `--ulimit nproc=512:512` with `--pids-limit 512`; Q9 answered: pass `extra_hosts={'sandbox-mirror': <fixed address>}` |
-| T15 | Sandbox images | any | docker, host-internet | T02 | todo | | |
+| T15 | Sandbox images | any | docker, host-internet | T02 | done | | 2026-11-11 on the laptop: `infra/sandbox/` (`Dockerfile.data` from `scipy-notebook:2026-10-12` pinned by digest, R 4.5.3 with the six packages from conda-forge, TeX Live 2025 from its frozen archive with the installer's SHA-512 and GPG check, `shell_escape = f`, `openout_any = p`; `Dockerfile.web` from `node:26.13.0-trixie-slim` by digest with TypeScript 6.0.3, tsx, ESLint, Prettier, Playwright 1.65.0; `common/install-common.sh` with DuckDB 2.0.0 by SHA-256, `file`, `xxd`, `procps`, setuid and setgid bits stripped), tag `2026-11-11.1` in `infra/sandbox/TAG`, `make sandbox-images` (gate finding, expected) writing `image-freeze.txt` and `image-freeze-r.txt`; both images built from clean by the target (data 18m54s to 21m40s, web 1m39s uncached), sizes 8.89 GB and 2.28 GB; inside `data`: pandas/scipy/sklearn import, `library(dplyr); library(lme4)`, `latexmk -v` 4.87, `pdftoppm -v` 26.01.0, `kpsewhich -var-value=shell_escape` `f`, a biblatex/biber/tikz document builds and `\write18` is disabled, `mktexpk` works under a read-only home, matplotlib quiet; inside `web`: `tsc --version` 6.0.3, `npx playwright --version` 1.65.0 offline, a headless Chromium screenshot (CommonJS and ESM), `tsx` importing a package; both run under `kata-clh` read-only with a fresh volume; code review (9 should-fix) applied, re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (6,129 passed, 21 skipped, diff coverage 100%), `make lint` exit 0. Changes from the plan: `pip list --format=freeze` (conda's `pip freeze` prints file URLs), a `biber` wrapper (biber unpacks into a noexec `/tmp`), `/node_modules` link for ESM, `HEALTHCHECK NONE`; T21's files left to T21 |
 | T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | todo | | Q9 answered: fixed subnet and mirror address in Compose |
 | T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | todo | | |
 | T18 | Outputs: frontend rendering | any | any | T17 | todo | | |
@@ -943,8 +943,12 @@ controls. File modes may not carry write bits (`mode & ~0o555`).
   network='local-llm_sandbox', extra_hosts={'sandbox-mirror': SANDBOX_MIRROR_ADDRESS},
   volumes={'lllm-sandbox-<chat id>': {'bind': '/workspace', 'mode': 'rw'}},
   working_dir='/workspace', detach=True, auto_remove=False,
-  command=['sleep', 'infinity'] (under tini, as `nobody`; see Q16)
+  entrypoint=['/usr/bin/sleep', 'infinity'] (under Docker's tini, as `nobody`; see Q16),
+  healthcheck={'test': ['NONE']}
   ```
+  (Amended by T14, 2026-11-11: the images' own `ENTRYPOINT ["tini", "-g",
+  "--"]` is replaced, so `init=True` does not stack two inits; the data
+  image's inherited Jupyter health check is turned off.)
   `ulimits` is the process limit that Kata 4.3.1 enforces; it does not
   enforce `pids_limit`, which stays in case a later release does (Q8).
   `extra_hosts` is how the guest finds the mirror: Docker's embedded DNS
@@ -1101,6 +1105,63 @@ with fixed wording free of host paths and the daemon URL (S4); the tools
 pass on only `SandboxError.public`. The acceptance tests "Fork bomb
 contained" and "Timeout" also check that the next call sees no leftover
 UID 1000 process.
+
+**Found while building T14 (2026-11-11, `kata-clh`, data image
+`2026-11-11.1`):**
+
+- **`exec_inspect` stays `Running: true` while a background child holds
+  the exec's stdout** (8 s observed with `sleep 30 & echo started`; the
+  exit status appears only once the stream closes), so the main process's
+  end cannot be read from the daemon. The backend starts, after 0.25 s, a
+  watcher exec as `nobody` (UID 1000 cannot kill it) that polls `/proc`
+  until the UID 1000 process with `PPid: 0` (an exec's own process) is
+  gone, then runs the kill, which closes the stream; the daemon then
+  reports the true exit status. `sleep 300 & echo hi` returns in about
+  0.4 s.
+- **`kill -0 -1` cannot confirm that no UID 1000 process is left:**
+  kill(2) with -1 counts every visible process, even one it may not
+  signal, and returns success, so with PID 1's `nobody` processes present
+  it always succeeds. The kill script repeats `kill -9 -1` and reads the
+  `Uid:` line of every `/proc/*/status` (zombies included) until none is
+  1000, up to 5 s; the backend allows it 15 s, then fails closed.
+- **PID 1 (Q16) re-proved on the data image:** `init=True`, user
+  `65534:65534`, entrypoint `/usr/bin/sleep infinity`: `ps` shows
+  `/sbin/docker-init -- /usr/bin/sleep infinity` and `sleep`, both
+  `nobody`; 300 calls each leaving background `sleep 300` children (half
+  holding the stream) left the process count at its baseline, 0 zombies,
+  0 UID 1000 processes, the container running.
+- **virtio-fs caches names and attributes for a second** (Kata's
+  `virtio_fs_cache = "auto"`): straight after `put_files` replaced
+  `uploads`, the guest saw the old directory's attributes and "Stale file
+  handle". `put_files` now waits (up to 5 s) until the guest's `stat`
+  shows the new root-owned 0555 directory; the daemon's stat remains the
+  check of what was written.
+- **The fixed-size volume (Q11, Q18):** Docker's local driver cannot use
+  `o=loop` ("loop: invalid argument"); the image is attached with
+  `udisksctl loop-setup` and mounted from `/dev/disk/by-uuid/<key>`, the
+  filesystem's UUID being the key (`docs/guides/sandbox.md`, "Backend").
+- **Fork bomb:** peaked at 512 UID 1000 processes; the kill still started
+  and confirmed, so the call returned a result (the fail-closed path is
+  covered by the unit tests).
+- The docker SDK gzips archive bodies unless asked not to; the backend
+  sends `Accept-Encoding: identity` for `get_archive` reads.
+- **The polkit rule (Q18 b) is installed** on the laptop (2026-11-11,
+  `/etc/polkit-1/rules.d/50-local-llm-sandbox.rules`, `loop-setup` for
+  `epittman` only; text in `docs/guides/sandbox.md`, "Host setup"). What
+  it grants was checked by evaluating the rule under node against stub
+  objects. Its effect cannot be shown while a desktop session is active:
+  polkit maps a process outside any session to the user's active seat0
+  session, which the default `allow_active=yes` already admits, and the
+  laptop runs no `sshd`. It is to be proved on the home server, with
+  nobody logged in.
+- **Scope.** `make test-boot` boots the real app with a temporary
+  `DATA_DIR`, its own database and `LLLM_STOP_JOBS_ON_SHUTDOWN=true`
+  against the same Docker daemon, so its startup sweep would have stopped
+  the dev backend's sandboxes and its retention sweep found every chat
+  missing. Each backend labels what it makes `lllm.scope=<hash of its
+  volume directory>` and lists only that, so instances with different
+  data directories never see each other's sandboxes; two with the same
+  one are kept apart by the manager lock under `DATA_DIR/sandbox`.
 
 ### T15: sandbox images
 
