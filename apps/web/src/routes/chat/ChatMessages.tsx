@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Copy, FileText, RotateCcw } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
+import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { type History, type Message, messagesList, replyColumns, showBranch, siblingsOf } from '@/lib/chat/history';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -223,7 +224,7 @@ function Sources({ message, onOpen }: { message: Message; onOpen: (n: number) =>
 
 /**
  * Ports chat/Messages/ResponseMessage.svelte (the parts every reply needs):
- * model name and time, live status, the Markdown body, an error, its sources,
+ * model name and time, live status, the Markdown body, its sandbox outputs, an error, its sources,
  * suggested follow-ups, versions, Copy and Regenerate.
  */
 export function ResponseMessage({
@@ -299,6 +300,7 @@ export function ResponseMessage({
 							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
 						/>
 					))}
+				{!edit && <SandboxOutputs files={message.files} />}
 				{message.error ? (
 					<div
 						className="border-destructive/40 bg-destructive/5 text-destructive my-2 rounded-xl border px-3 py-2 text-sm whitespace-pre-wrap"

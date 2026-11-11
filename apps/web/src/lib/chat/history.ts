@@ -321,6 +321,38 @@ export function hasPendingAssistantLeaf(history: History, messageId?: string | n
 }
 
 /**
+ * A message's files after a `files` event: the files it had, in order, with
+ * each incoming one replacing the entry with its id (or, with no id, its url)
+ * in place, and appended when new. Some senders send the whole list
+ * (streamed images), others only their new files (a tool, an unsaved chat's
+ * sandbox outputs); replacing the list would drop the earlier ones until a
+ * reload. The server's copy (socket/main.py `merge_message_files`) adds an
+ * entry unless an identical one is there; every sender re-sends identical
+ * entries, so a reload shows the same files. An entry that is not an object
+ * (from a plugin's event, say) is skipped, never thrown on.
+ */
+export function mergeFiles(existing: ChatFile[] | undefined, incoming: unknown): ChatFile[] | undefined {
+	if (!Array.isArray(incoming)) return existing;
+	const merged = [...(existing ?? [])];
+	for (const file of incoming as unknown[]) {
+		if (!file || typeof file !== 'object') continue;
+		const { id, url } = file as ChatFile;
+		const at = merged.findIndex((f) =>
+			!f || typeof f !== 'object'
+				? false
+				: id
+					? f.id === id
+					: url
+						? !f.id && f.url === url
+						: JSON.stringify(f) === JSON.stringify(file)
+		);
+		if (at === -1) merged.push(file as ChatFile);
+		else merged[at] = file as ChatFile;
+	}
+	return merged.length ? merged : undefined;
+}
+
+/**
  * Applies one `events` socket event (Chat.svelte's chatEventHandler and its
  * chat:completion / response:completion handlers) to the history. Events for
  * messages this history does not hold are ignored.
@@ -409,7 +441,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			break;
 		case 'chat:message:files':
 		case 'files':
-			patch = { files: data?.files };
+			patch = { files: mergeFiles(message.files, data?.files) };
 			break;
 		case 'chat:message:embeds':
 		case 'embeds':

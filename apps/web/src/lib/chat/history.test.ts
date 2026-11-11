@@ -109,6 +109,49 @@ describe('streaming events', () => {
 			{ kind: 'title', title: 'Greeting' }
 		]);
 	});
+	it('merges a files event into the reply: same id replaced in place, new ones appended', () => {
+		let { h, replyId } = conversation();
+		const plot = { type: 'file', id: 'f1', name: 'plot.png' };
+		h = applyChatEvent(h, ev(replyId, 'files', { files: [plot, { type: 'image', url: '/img/a.png' }] })).history;
+		// A tool sends only its new files; the earlier ones stay, in order.
+		h = applyChatEvent(h, ev(replyId, 'files', { files: [{ type: 'file', id: 'f2', name: 'report.pdf' }] })).history;
+		// A whole-list sender repeats what the reply has; nothing is duplicated, and an id's entry is replaced.
+		h = applyChatEvent(
+			h,
+			ev(replyId, 'chat:message:files', {
+				files: [
+					{ ...plot, size: 9 },
+					{ type: 'image', url: '/img/a.png' },
+					{ type: 'image', url: '/img/b.png' }
+				]
+			})
+		).history;
+		expect(h.messages[replyId].files).toEqual([
+			{ ...plot, size: 9 },
+			{ type: 'image', url: '/img/a.png' },
+			{ type: 'file', id: 'f2', name: 'report.pdf' },
+			{ type: 'image', url: '/img/b.png' }
+		]);
+		// An entry with neither id nor url is matched whole; an event without a list changes nothing.
+		const before = h.messages[replyId].files;
+		h = applyChatEvent(h, ev(replyId, 'files', { files: [{ type: 'web', name: 'x' }] })).history;
+		h = applyChatEvent(h, ev(replyId, 'files', { files: [{ type: 'web', name: 'x' }] })).history;
+		h = applyChatEvent(h, ev(replyId, 'files', {})).history;
+		expect(h.messages[replyId].files).toEqual([...(before ?? []), { type: 'web', name: 'x' }]);
+	});
+	it('a files event skips entries that are not objects, and survives such entries already on the reply', () => {
+		let { h, replyId } = conversation();
+		h = updateMessage(h, replyId, { files: [null, 'x'] as never });
+		h = applyChatEvent(
+			h,
+			ev(replyId, 'files', { files: [null, 5, 'x', { type: 'file', id: 'f1' }, { type: 'file', id: 'f1' }] })
+		).history;
+		expect(h.messages[replyId].files).toEqual([null, 'x', { type: 'file', id: 'f1' }]);
+	});
+	it('a files event with an empty list leaves a reply without files', () => {
+		const { h, replyId } = conversation();
+		expect(applyChatEvent(h, ev(replyId, 'files', { files: [] })).history.messages[replyId].files).toBeUndefined();
+	});
 	it('ignores events for messages it does not hold', () => {
 		const { h } = conversation();
 		expect(applyChatEvent(h, ev('nope', 'chat:message:delta', { content: 'x' })).history).toBe(h);

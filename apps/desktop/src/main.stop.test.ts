@@ -1,4 +1,4 @@
-// How main.ts stops (#421, #423), run against a fake Electron. main.ts runs at
+// How main.ts stops (#421, #423), and its window policy wiring, run against a fake Electron. main.ts runs at
 // import, so each test imports it afresh with a new fake. Nothing here spawns
 // or signals a real process: spawnInGroup, probe, stopGroup and the llama-server
 // lookup are fakes driven by the test, and process.kill is spied on.
@@ -1042,4 +1042,41 @@ test('the stack this app started before a crash is adopted even while it holds t
 	expect(h.state.spawned).toBe(0);
 	expect(h.state.stops).toEqual([]);
 	expect(appWindows()).toHaveLength(1);
+});
+
+test('a sub-frame showing an inline document may not navigate away from it unless the app page starts it (Q4)', async () => {
+	await launch();
+	const origin = new URL(appWindows()[0]?.loaded ?? '').origin;
+	const contents = Object.assign(new h.Emitter(), { id: 990301, setWindowOpenHandler: () => {} });
+	h.state.appEvents.emit('web-contents-created', {}, contents);
+	const prevented = (details: Record<string, unknown>) => {
+		let refused = false;
+		contents.emit('will-frame-navigate', { ...details, preventDefault: () => (refused = true) });
+		return refused;
+	};
+
+	// A sandbox output's frame navigating itself out, with what it holds in the URL.
+	const leak = { isMainFrame: false, url: 'https://example.com/?data=1', initiator: { origin: 'null' } };
+	expect(prevented({ ...leak, frame: { url: 'about:srcdoc' } })).toBe(true);
+	expect(prevented({ ...leak, frame: null })).toBe(true);
+	expect(prevented({ ...leak, url: 'about:blank', frame: { url: 'about:srcdoc' } })).toBe(false);
+	// A frame that throws when read (disposed) is refused, not let through.
+	const disposed = {
+		get url(): string {
+			throw new Error('Render frame was disposed before WebFrameMain could be accessed');
+		}
+	};
+	expect(prevented({ ...leak, frame: disposed })).toBe(true);
+	// The app's page loading an iframe's src, and the main frame (left to will-navigate).
+	expect(
+		prevented({
+			isMainFrame: false,
+			url: 'https://www.youtube.com/embed/x',
+			frame: { url: 'about:blank' },
+			initiator: { origin }
+		})
+	).toBe(false);
+	expect(
+		prevented({ isMainFrame: true, url: 'https://example.com/', frame: { url: 'about:srcdoc' }, initiator: null })
+	).toBe(false);
 });

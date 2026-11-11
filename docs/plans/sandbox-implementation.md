@@ -71,8 +71,8 @@ The same for every session:
 | T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | done | | 2026-11-11, one commit with T13 and T16 (T14's protocol gained `put_uploads`, which T13's fake implements, and its backend refuses a network without T16's Compose options): `sandbox/kata.py` (docker==7.2.0), `sandbox/lifespan.py` and the `main.py` wiring; PID 1 as `nobody` (Q16), the post-call kill as UID 1000 judged by a separate exec as `nobody` that also detects PID hopping, fixed-size ext4 workspaces on loop devices via udisks2 (Q18), uploads as a read-only bind mount, guest seccomp checked at run time (Q19), the network checked for `internal`, `inhibit_ipv4`, the `lllm-sandbox` bridge name and no IPv6 (Q20), and a guard exec in each new guest; `LLLM_TEST_KATA=1 uv run --frozen python -m pytest tests/test_sandbox_kata.py -v` on the laptop with the `2026-11-11.2` images and final `kata.py` (md5 `7a8a740b`): 33 passed in 257 s (VM boundary, IPv4 and IPv6 fence, cross-chat isolation, persistence across stop, read-only uploads, timeout leaves no process, background child, cancelled exec, output flood capped, OOM inside, fork bomb at 512, PID 1 survives and reaps, real-symlink confinement, restart sweep, fixed-size volume and ENOSPC, a ptrace survivor and a PID-hopping survivor ended or failed closed, guest seccomp, pip/R/latexmk/Playwright under seccomp, workspace data cannot change the device's identity, a planted `uploads` entry, the mirror install, the guard refusing a guest with IPv6), nothing left behind; unit and edge tests (mocked SDK) at 100% of `kata.py` and `lifespan.py`; per-call overhead about 0.19 s; security review (blocking: a survivor could fake the kill by ptrace) and re-reviews (blocking: PID hopping; the guard's IPv6 check was a no-op) all applied; code review (blocking: unwrapped SDK errors, abandoned creates) and re-reviews applied, final security and code reviews APPROVE. On this commit alone (a worktree, T13 and T16 included): `make test-backend` exit 0 (6,764 passed, 23 skipped, diff coverage 99%: the one line is `main.py`'s lifespan call, which `make test-boot` runs), `make test-types` no new findings, `make lint` exit 0, `make test-boot` exit 0 (`GET /api/v1/sandbox/status` 200). Gate finding: `pytest.skip(` in the Kata tests (Q3) |
 | T15 | Sandbox images | any | docker, host-internet | T02 | done | | 2026-11-11 on the laptop: `infra/sandbox/` (`Dockerfile.data` from `scipy-notebook:2026-10-12` pinned by digest, R 4.5.3 with the six packages from conda-forge, TeX Live 2025 from its frozen archive with the installer's SHA-512 and GPG check, `shell_escape = f`, `openout_any = p`; `Dockerfile.web` from `node:26.13.0-trixie-slim` by digest with TypeScript 6.0.3, tsx, ESLint, Prettier, Playwright 1.65.0; `common/install-common.sh` with DuckDB 2.0.0 by SHA-256, `file`, `xxd`, `procps`, setuid and setgid bits stripped), tag `2026-11-11.1` in `infra/sandbox/TAG`, `make sandbox-images` (gate finding, expected) writing `image-freeze.txt` and `image-freeze-r.txt`; both images built from clean by the target (data 18m54s to 21m40s, web 1m39s uncached), sizes 8.89 GB and 2.28 GB; inside `data`: pandas/scipy/sklearn import, `library(dplyr); library(lme4)`, `latexmk -v` 4.87, `pdftoppm -v` 26.01.0, `kpsewhich -var-value=shell_escape` `f`, a biblatex/biber/tikz document builds and `\write18` is disabled, `mktexpk` works under a read-only home, matplotlib quiet; inside `web`: `tsc --version` 6.0.3, `npx playwright --version` 1.65.0 offline, a headless Chromium screenshot (CommonJS and ESM), `tsx` importing a package; both run under `kata-clh` read-only with a fresh volume; code review (9 should-fix) applied, re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (6,129 passed, 21 skipped, diff coverage 100%), `make lint` exit 0. Changes from the plan: `pip list --format=freeze` (conda's `pip freeze` prints file URLs), a `biber` wrapper (biber unpacks into a noexec `/tmp`), `/node_modules` link for ESM, `HEALTHCHECK NONE`; T21's files left to T21 |
 | T16 | Wheelhouse and `sandbox-mirror` | any | docker, host-internet, kvm | T15 | done | | 2026-11-11 (committed with T14; see T14): `infra/sandbox/allowlist.in` (Q17: polars, duckdb, pingouin, lifelines), `requirements.lock` (hashes, constrained by `image-freeze.txt`), `make wheelhouse` (35 wheels, 183 MB, every file hash-checked against the lock before it is served), `sandbox-mirror` (nginx 1.30.0-alpine by digest, uid 101, no capabilities, read-only, no egress, no published port, connection limits and timeouts), the `sandbox` network (internal, `inhibit_ipv4`, bridge `lllm-sandbox`, no IPv6, 10.231.0.0/24, mirror at .2), `make backend` runs the mirror, images `2026-11-11.2` with the `PIP_*` environment; on the laptop: an allowlisted package installs from a sandbox and imports in the next call, an unlisted or sdist-only one gives "No matching distribution" (T14's Kata run), the mirror reaches nothing outside (`wget https://pypi.org` and DNS fail), the host is unreachable from a sandbox on every IPv4 and IPv6 address, each IPv6 layer holding alone; security review (blocking: IPv6 link-local reached the host; fixed by guest sysctls and Q20's udev rule) and re-review PASS; code review (no blockers, 4 should-fix) applied. Gate finding: `Makefile` (expected). `pip-audit` of the lock not run (blocked in this session) |
-| T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | todo | | |
-| T18 | Outputs: frontend rendering | any | any | T17 | todo | | |
+| T17 | Outputs: collection, storage, endpoints, HTML policy, PDF previews | any | any; docker, kvm | T12 | done | | 2026-11-11 (one commit with T18): `sandbox/outputs.py`; `bash` lists `/workspace/outputs` NUL-delimited (T10's note) and attaches new or changed files through `get_files` as File rows (`source=sandbox_output`, `sandbox_path`, server-set `chat_id` and `stored_ns`), each linked to the message as it is stored, so a Stop or a database error leaves at most the row being linked unlinked; the last listing is kept per sandbox so files written by `write_file`/`str_replace` are attached by the next `bash` call (and a stopped command's outputs are not lost); PDF previews by the image's `pdftoppm -png -r 80 -l 10 -W 1600 -H 1600`, stored with `preview_of`; per call at most 20 files and 200 MiB, previews included, and 1 GiB per chat counted from the rows (Q22); a file whose bytes equal the last stored version of its path is not stored again; the `files` event carries the call's new files and both readers merge; `GET /api/v1/sandbox/outputs/{id}/html` returns JSON with the policy (plus `base-uri 'none'`) inserted after an optional doctype, 413 over 5 MiB; both content routes send sandbox outputs as attachments with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox` and `application/octet-stream` outside images, PDF, audio and video, `/content/html` 403s, access checked first (uniform 404); `tests/test_sandbox_outputs.py` (fake listing checked byte for byte against the real script) and the Kata acceptance test "Outputs" `tests/test_sandbox_outputs_kata.py`: on the laptop with `.2` images, 1 passed in 7.0 s (a matplotlib figure attached, a 2-page PDF with 2 previews, a `write_file` note attached by the next call, the saved message holding every event's files), nothing left behind; security review (blocking: previews outside the caps) and two re-reviews APPROVE; code review and re-review APPROVE, follow-ups applied. On this commit (T18 included): `make test-backend` exit 0 (6,895 passed, 24 skipped, diff coverage 99%: `main.py`'s lifespan line, run by `make test-boot`), `make test-types` no new findings, `make lint` exit 0, `make test-boot` exit 0. Changed from the plan: listing caps of 20 files, previews cropped to 1600 px, the per-chat cap (Q22), content de-duplication, stricter served types, `base-uri`. Gate finding: `pytest.skip(` in the Kata test (Q3) |
+| T18 | Outputs: frontend rendering | any | any | T17 | done | | 2026-11-11 (one commit with T17; see T17): `components/chat/SandboxOutputs.tsx` from `ResponseMessage`: images and SVG only as `<img>`, HTML in `SandboxedHtmlFrame` (`sandbox="allow-scripts"` exactly, `srcDoc` from T17's route, 360 px with drag and keyboard Taller/Shorter, an Enlarge dialog reusing the frame), PDF previews in page order, `.tex`/`.py`/`.R`/text/JSON highlighted through the existing code block (256 KiB), CSV as a table (200 rows, 50 columns, 1,000 characters a cell, read from at most 1 MiB), a named download link for every output; captions use the server-cleaned name, ids must be UUIDs, malformed entries are skipped, fetches abort on unmount; `history.ts` merges the `files` event by id, then url; desktop `applyPolicy` gains a fail-closed `will-frame-navigate` handler (`isAllowedFrameNavigation`) denying a srcdoc or blank sub-frame's navigation unless the app's own page starts it (checked on Electron 45.1.0: location, meta refresh, link click and nested frame denied, `src` embeds still load); a link in the desktop artifact preview no longer navigates. Security review (blocking: WebRTC gets data out of the frame, which no CSP covers; the owner accepted and documented it as Q23) and re-review APPROVE; code review and re-review APPROVE, nits applied. On this commit: `make test-web` exit 0 (1,330 passed, diff coverage 97%), `make test-e2e` exit 0 (393 passed, with sandbox outputs under T17's real headers), `make test-desktop` exit 0 (149 passed), `make lint` exit 0. The acceptance test "Output rendering", with an `RTCPeerConnection` probe, is T29's |
 | T19 | Engine value, settings, prompt, admin page | any | any | T10 | done | | 2026-11-11: `code_interpreter.sandbox.*` defaults in `DEFAULT_CONFIG` (engine values are free strings, so `sandbox` needed no server change), `CODE_INTERPRETER_SANDBOX_PROMPT` (used from T20), the five keys in the Code Execution form and the config import, both checked by one `sandbox_setting_error` in `manager.py` (GET serves stored values through a check-free response model, so a bad stored value cannot 500 the page), `GET /api/v1/sandbox/status` (admin; `SandboxManager.ready()`, 5 s bound, "not running" before T14 wires the manager), the admin page's sandbox fields, status line and 4 GiB/2 CPU note; `tests/test_sandbox_settings.py` (42), 10 Vitest cases, one Playwright case; code review (1 high, 4 medium) applied, re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (5,460 passed, 21 skipped, diff coverage 100%), `make test-types` no new findings, `make test-web` exit 0 (1,299 passed), `make test-e2e` exit 0 (392 passed). For T20: nothing reads `code_interpreter.sandbox.timeout` yet |
 | T20 | Call sites: native tool, tag path, Run endpoint, sub-agents | any | any; docker, kvm | T12, T19 | todo | | |
 | T21 | Package telemetry | any | any; docker, kvm | T15, T16, T20 | todo | | |
@@ -148,6 +148,9 @@ to the decision.
   in the desktop app also deny sub-frame navigation away from
   `about:srcdoc` (`will-frame-navigate`), and accept it in the browser.
   Recommended: (b), documenting the browser limitation.
+  *Note (T17's security review, 2026-11-11):* WebRTC (STUN/TURN lookups from a script in the frame) is not covered by
+  CSP or by the desktop app's `will-frame-navigate` either; the owner accepted it as Q23, and it is recorded beside navigation
+  in this PR's decisions entry.
 - **Q5 (found in review 2026-11-10). Answered 2026-11-10: (a),
   ephemeral sandboxes for unsaved chats.** Not every chat has a
   saved chat row. The harness runs each item as
@@ -364,6 +367,32 @@ to the decision.
   such file under `## Gate changes` with a local grep of its added lines
   for every suppression the gate looks for, and the owner reviews them
   at T49; (b) stop and split the PR. Chosen: (a).
+- **Q22 (found in T17's security review, 2026-11-11). Answered
+  2026-11-11: 1 GiB per chat, a constant.** The per-call caps (20 files,
+  200 MiB) bound one `bash` call, but nothing bounded a chat's sandbox
+  outputs over many calls: a model looping on new files could fill the
+  host's upload directory, which the database and the Docker volumes share.
+  Options: (a) a fixed cap per chat in `sandbox/limits.py`; (b) an admin
+  setting; (c) no total bound. Chosen: (a), `OUTPUT_CHAT_CAP_BYTES` = 1 GiB,
+  counting the File rows the server marked as the chat's (`meta.source`
+  and `meta.chat_id`), previews included, whether or not they are linked
+  to a message (an unsaved chat's only when they are also the caller's);
+  a file that would pass it is named as not attached (T17).
+- **Q23 (found in T18's security review, 2026-11-11). Answered
+  2026-11-11: accept and document.** A script in an HTML output can reach
+  the network over WebRTC: an `RTCPeerConnection` to a STUN or TURN host
+  it names sends data in the ICE traffic (a TURN username, or the host
+  name itself through the DNS lookup), past the injected policy (CSP has
+  no WebRTC directive), the `allow-scripts`-only sandbox and the desktop
+  app's `will-frame-navigate` rule (Q4), which stops navigation only.
+  Probed on Electron 45.1.0. It can leak what the model wrote, what the
+  user types into the output, and the user's public IP. Options: (a)
+  accept and document it; (b) render HTML outputs static first
+  (`sandbox=""`) with a "Run this page's scripts" button that switches to
+  `allow-scripts` on the user's consent; (c) delete `RTCPeerConnection`
+  from the frame first (defeated by a fresh `about:blank` child frame).
+  Chosen: (a); scripts keep running when the reply shows. T29's "output
+  rendering" check includes an `RTCPeerConnection` probe.
 
 ### Session log
 
@@ -520,7 +549,7 @@ The PR will trip the gate; the local session lists every finding under
 | Finding | Task | Why it is needed and does not weaken CI |
 |---|---|---|
 | `Makefile` changed | T15, T16, T41 | New lifecycle targets (`sandbox-images`, `wheelhouse`), the `sandbox-mirror` service in `make backend`'s service list, Jupyter's removal. No check target changes meaning |
-| New `pytest.skip(` in the Kata tests | T14, T13 (`test_sandbox_uploads_kata.py`) | KVM is unavailable on hosted runners (Q3); the tests run on the laptop and their results are recorded in the PR |
+| New `pytest.skip(` in the Kata tests | T14, T13 (`test_sandbox_uploads_kata.py`), T17 (`test_sandbox_outputs_kata.py`) | KVM is unavailable on hosted runners (Q3); the tests run on the laptop and their results are recorded in the PR |
 | Deleted test files `test_jupyter_chat_files.py`, `test_jupyter_idle_timeout.py`; fewer test definitions | T40 | The code they test is deleted; the sandbox's own tests (T10-T21) cover the replacement behaviour, including the `chat_files()` checks moved into `sandbox/uploads.py` |
 | Edited golden files `tests/fixtures/chat_payload.json`, `streaming_response.json`, `subagent_delegate.json` | T40, T42 | Their Jupyter and Pyodide cases describe engines that no longer exist; the replacement cases record the sandbox engine's payloads |
 | Fewer tests in `test_makefile.py`, `progress.test.ts` (if a Jupyter-only case goes) | T41 | Same reason; the service-list assertions are rewritten, not dropped |
@@ -1669,6 +1698,13 @@ provider every attachment is downloaded again on every `bash` call, even
 when nothing changed (the sync compares ids and sizes only after
 reading); compare before downloading.
 
+**From T17's code review (2026-11-11):** the `bash` tool attaches the
+files new or changed in `/workspace/outputs` since the last `bash` call's
+listing, so files that any other path writes there (the Run endpoint, the
+tag path, a sub-agent sharing the parent's sandbox, Q6) are attached by the
+next `bash` call, on that call's message. That is probably what is wanted;
+decide it here, and say so in the guide.
+
 ### T21: package telemetry
 
 *Author: any. Verify: any; docker, kvm. Depends: T15, T16, T20.*
@@ -1811,7 +1847,7 @@ the step 1 acceptance tests from the proposal, each recorded in the PR
 body's `## Laptop checks` with date and commit: network fence, VM
 boundary, cross-chat isolation, persistence, read-only uploads, timeout,
 fork bomb, memory, output flood, outputs, mirror installs, image
-switching, output rendering, LaTeX, telemetry, tag path, parallel
+switching, output rendering (with an `RTCPeerConnection` probe, Q23), LaTeX, telemetry, tag path, parallel
 sessions, start latency and overhead, restart. A failure becomes a new
 ledger row before anything else.
 

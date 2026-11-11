@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyOpen, isAllowedPermission, isAppUrl } from './policy';
+import { classifyOpen, isAllowedFrameNavigation, isAllowedPermission, isAppUrl } from './policy';
 
 const app = 'http://127.0.0.1:4000';
 
@@ -54,5 +54,45 @@ describe('isAllowedPermission', () => {
 		expect(isAllowedPermission('geolocation', app, app)).toBe(false);
 		expect(isAllowedPermission('openExternal', app, app)).toBe(false);
 		expect(isAllowedPermission('hid', app, app)).toBe(false);
+	});
+});
+
+describe('isAllowedFrameNavigation', () => {
+	const sandboxed = 'null';
+
+	it('keeps a sandbox output’s frame from navigating itself anywhere but another inline document', () => {
+		for (const url of [
+			'https://example.com/?leak=1',
+			'http://127.0.0.1:4000/c/x',
+			'data:text/html,x',
+			'javascript:1'
+		]) {
+			expect(isAllowedFrameNavigation('about:srcdoc', url, sandboxed, app)).toBe(false);
+			expect(isAllowedFrameNavigation('about:blank', url, sandboxed, app)).toBe(false);
+			expect(isAllowedFrameNavigation('', url, null, app)).toBe(false);
+		}
+		expect(isAllowedFrameNavigation('about:srcdoc', 'about:blank', sandboxed, app)).toBe(true);
+		expect(isAllowedFrameNavigation('about:srcdoc', 'about:srcdoc', sandboxed, app)).toBe(true);
+		expect(isAllowedFrameNavigation('about:blank#x', 'about:blank?y', sandboxed, app)).toBe(true);
+		// No initiator (none, or one already gone) is not the app.
+		expect(isAllowedFrameNavigation('about:srcdoc', 'https://example.com/', null, app)).toBe(false);
+		// Any spelling of the inline URLs counts as inline.
+		expect(isAllowedFrameNavigation('ABOUT:SRCDOC', 'https://example.com/', sandboxed, app)).toBe(false);
+		expect(isAllowedFrameNavigation('about:srcdoc?x', 'https://example.com/', sandboxed, app)).toBe(false);
+		expect(isAllowedFrameNavigation('about:srcdoc', 'ABOUT:BLANK', sandboxed, app)).toBe(true);
+	});
+
+	it('lets the app’s own page load an iframe’s src', () => {
+		expect(isAllowedFrameNavigation('about:blank', 'https://www.youtube.com/embed/x', app, app)).toBe(true);
+		expect(isAllowedFrameNavigation('', 'http://127.0.0.1:4000/api/v1/files/x/content/html', app, app)).toBe(true);
+		expect(isAllowedFrameNavigation('about:srcdoc', 'https://example.com/', 'https://example.com', app)).toBe(false);
+		// The app's page may navigate even a srcdoc frame (it sets the frames it makes); no sandboxed frame is the app.
+		expect(isAllowedFrameNavigation('about:srcdoc', 'https://example.com/', app, app)).toBe(true);
+	});
+
+	it('leaves frames showing a page of their own to the other rules', () => {
+		expect(
+			isAllowedFrameNavigation('https://www.youtube.com/embed/x', 'https://www.youtube.com/watch', null, app)
+		).toBe(true);
 	});
 });

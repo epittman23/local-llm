@@ -65,7 +65,7 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, fields
-from typing import Any, Final, Protocol, get_args
+from typing import TYPE_CHECKING, Any, Final, Protocol, get_args
 
 from local_llm.sandbox.backend import SandboxBackend
 from local_llm.sandbox.limits import CANCEL_WAIT_S, TIMEOUT_MAX_S, TIMEOUT_MIN_S
@@ -80,6 +80,9 @@ from local_llm.sandbox.types import (
     validate_chat_id,
 )
 from local_llm.sandbox.uploads import SyncedUploads
+
+if TYPE_CHECKING:
+    from local_llm.sandbox.outputs import Listing
 from local_llm.utils.chat_id import NON_SAVED_CHAT_ID_PREFIXES
 
 log = logging.getLogger(__name__)
@@ -281,6 +284,23 @@ class DatabaseChats:
         }
 
 
+@dataclass
+class OutputsMemory:
+    """What the `bash` tool keeps about one running sandbox's /workspace/outputs between calls (sandbox/outputs.py).
+
+    Attributes:
+        listing: The listing the last call took after its command; the next
+            compares with it, so files other tools wrote in between count as
+            new. None until a call keeps one, and while a call runs.
+        stored: By sandbox path, the SHA-256 and file id of the last File row
+            stored for it, so a file whose bytes did not change is not stored
+            and attached again.
+    """
+
+    listing: 'Listing | None' = None
+    stored: dict[str, tuple[str, str]] = field(default_factory=dict)
+
+
 class SandboxRefused(SandboxError):
     """A chat id the manager will not give a sandbox; raised before the backend is called.
 
@@ -309,12 +329,14 @@ class SandboxSession:
         *,
         cancel_wait_s: float = CANCEL_WAIT_S,
         uploads: dict[str, SyncedUploads] | None = None,
+        outputs: dict[str, OutputsMemory] | None = None,
     ) -> None:
-        """Open a session on `key`; only the manager makes one, passing its per-key upload records as `uploads`."""
+        """Open a session on `key`; only the manager makes one, passing its per-key records `uploads` and `outputs`."""
         self.key = key
         self._backend = backend
         self._cancel_wait_s = cancel_wait_s
         self._uploads: dict[str, SyncedUploads] = {} if uploads is None else uploads
+        self._outputs: dict[str, OutputsMemory] = {} if outputs is None else outputs
         self._open = True
         self._died = False
 
@@ -330,6 +352,12 @@ class SandboxSession:
             self._uploads.pop(self.key, None)
         else:
             self._uploads[self.key] = value
+
+    @property
+    def outputs_memory(self) -> OutputsMemory:
+        """What the `bash` tool keeps about this sandbox's /workspace/outputs; the manager keeps it while it runs."""
+        self._check()
+        return self._outputs.setdefault(self.key, OutputsMemory())
 
     def _check(self) -> None:
         if not self._open:
@@ -530,6 +558,9 @@ class SandboxManager:
         self._unsaved_by_key: dict[str, tuple[str, str]] = {}
         # What the last upload sync put into each running sandbox (sandbox/uploads.py); dropped when it is forgotten.
         self._uploads: dict[str, SyncedUploads] = {}
+        # What the `bash` tool keeps about each running sandbox's /workspace/outputs (sandbox/outputs.py); dropped when
+        # it is forgotten.
+        self._outputs: dict[str, OutputsMemory] = {}
         # Set, and replaced, whenever a slot is freed, waking every session waiting for one.
         self._freed = asyncio.Event()
         # Backend calls run to their end even when the session that started them is cancelled; kept here so a
@@ -605,7 +636,11 @@ class SandboxManager:
                         key, image, ephemeral=owner is not None, user=user, settings=settings, on_wait=on_wait
                     )
                     handle = SandboxSession(
-                        self._backend, key, cancel_wait_s=self._cancel_wait_s, uploads=self._uploads
+                        self._backend,
+                        key,
+                        cancel_wait_s=self._cancel_wait_s,
+                        uploads=self._uploads,
+                        outputs=self._outputs,
                     )
                     try:
                         yield handle
@@ -868,8 +903,9 @@ class SandboxManager:
     def _forget(self, key: str) -> None:
         """Record that `key`'s sandbox no longer runs, freeing its slot."""
         # No await, so a cancellation can neither lose the slot nor keep the waiters from being woken.
-        # A container started again, or a new volume, gets a full upload sync.
+        # A container started again, or a new volume, gets a full upload sync, and lists its outputs afresh.
         self._uploads.pop(key, None)
+        self._outputs.pop(key, None)
         if self._tracked.pop(key, None) is not None:
             self._free_slot()
 

