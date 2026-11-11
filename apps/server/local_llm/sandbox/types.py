@@ -62,7 +62,22 @@ def volume_name(chat_id: str) -> str:
 
 
 class SandboxError(Exception):
-    """A sandbox operation that could not be carried out."""
+    """A sandbox operation that could not be carried out.
+
+    Its message may carry internals (a Docker error, a host path, a daemon
+    URL), so the tools log it and never show it to the model, which would
+    send it on to the model's provider. Text written for the model on
+    purpose goes in `public` instead.
+
+    Attributes:
+        public: What the model may be told, written without internals; None
+            when only a fixed message may be shown.
+    """
+
+    def __init__(self, *args: object, public: str | None = None) -> None:
+        """Keep the message as Exception does, and `public` beside it."""
+        super().__init__(*args)
+        self.public = public
 
 
 class SandboxNotRunning(SandboxError):

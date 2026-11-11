@@ -66,7 +66,7 @@ The same for every session:
 | T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | done | `adc53af2` (after `fc3cc9ee`, `758ac82f`) | 2026-11-10 on the laptop (Kata 4.3.1 runtime-rs, Cloud Hypervisor v54.0, Docker 29.8.2, docker-py 7.2.0), throwaway scripts, every option set as T14 will: **1 yes:** a named volume at `/workspace` mounts as `virtiofs`, keeps files across container removal, and an empty volume takes the image's `1000:1000` `/workspace`. **2 yes:** `--read-only` root (`virtiofs ro`) refuses writes; `--tmpfs /tmp:size=256m` is a 256 MiB `tmpfs` (`nosuid,nodev,noexec`). **3 yes after Q8:** uid 1000, CapPrm/CapEff/CapBnd 0, `NoNewPrivs: 1`, `memory.max` 4 GiB (guest 3966 MiB), `cpu.max` 2 CPUs (guest 3 vCPUs) honoured; `--pids-limit 512` is not (fork bomb reached 15,849), `--ulimit nproc=512:512` is (bomb stopped at 516, host load 0.46); 256 MiB chunks are OOM-killed in the guest at 3840 MiB (rc 137, `oom_kill 1`), container and host unaffected; one 6 GB `bytearray` fails at once with `MemoryError`; `cloud-hypervisor` keeps 4.2 GB RSS after the kill. **4 yes after Q9:** an `internal` network attaches; host LAN IP, `docker0` and a public IP are "Network unreachable", no outside name resolves; a peer is reachable by IP and by name only with `--add-host` (Docker's DNS does not answer in the guest). **5 yes:** `put_archive` into the volume writes root-owned files with the tar's modes (`0:0 555` dir, `0:0 444` file; uid 1000 cannot write, delete, chmod or add); `put_archive` into the read-only root is refused ("container rootfs is marked read-only"); `get_archive` works. **6 yes:** `exec_create` with a list argv and `user='1000:1000'`, `exec_start(stream=True, demux=True)` streams stdout and stderr as written (1 s apart). **7 yes:** scipy-notebook's `/opt/conda/bin/python` 3.13.16 has `ENABLE_USER_SITE` True and no `PYTHONNOUSERSITE`; with `PYTHONUSERBASE=/workspace/.local` and `PIP_USER=1`, an offline `pip install` from a find-links directory lands in `/workspace/.local` (read-only home is fine) and imports in the next exec and in a new container; no `.venv` fallback. **8:** `docker run -d` to the first exec's output 0.99-1.03 s (scipy-notebook, 5 runs) and 0.99-1.06 s (alpine); idle host RSS (`cloud-hypervisor` + `virtiofsd`) 381-395 MiB (scipy-notebook) and 290-295 MiB (alpine); i9-12900H, 62 GiB. **9 yes, as expected:** uid 1000 can `mv` the root-owned `0555` `uploads` aside and create its own; a root exec (no caps) can `chmod` and empty the moved copy but not remove it from the 1000-owned `/workspace`; uid 1000 can then `rmdir` it. **10 yes:** one exec with `stdin=True` via `exec_start(socket=True)`: 900,000 bytes sent then `shutdown(SHUT_WR)`, 8-byte-header frames demultiplexed to stdout `900000` and stderr, exit code 3 from `exec_inspect`. **11:** `docker compose down` with a sandbox attached exits 0 but leaves the network ("Resource is still in use"); the next `up` reuses the same network id, and the running sandbox reaches the restarted peer; so T16 keeps the network in Compose (no external network, no stop-first). Findings for T13-T16 are in their sections ("From T02") and `docs/guides/sandbox.md` |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | done | `563b1ce8` | 2026-11-10: `apps/server/local_llm/sandbox/` (types, `SandboxBackend` protocol with 9 methods and shared validators, limits, exec wrapping and `StreamCap`, `FakeBackend`) and `tests/test_sandbox_core.py` (600 cases, 100% statement coverage of the package, 0.98 s); security review (3 blocking, 10 should-fix) and code review (1 blocking, 10 should-fix) applied, re-review APPROVE; owner answers Q10, Q11 from the review folded in; `make test-backend` exit 0 (5,266 passed, 21 skipped, none new); `make test-types` no new findings; ruff and format clean. For T14: the keep-alive must survive Q10's kill and reap zombies (checked on Kata: tini as UID 1000 dies, `sleep` as PID 1 leaves zombies); Docker's untar merges directories (see T14's notes) |
 | T11 | `SandboxManager` lifecycle | any | any | T10 | done | `a72299c1` | 2026-11-10: `apps/server/local_llm/sandbox/manager.py` (`SandboxManager`, `SandboxSession`, settings, `DatabaseChats`) and `tests/test_sandbox_manager.py` (152 tests, 100% statement coverage of manager.py; with the core suite 752 passed, three runs); security review (1 blocking, 9 should-fix) and two code reviews (1 blocking each) applied, final re-review APPROVE; randomized fuzzers (2000 seeds each) clean on slot accounting and tracking; owner answered Q12-Q15 on the way (Q15 became T24); `make test-backend` exit 0 (5,418 passed, 21 skipped, none new); `make test-types` no new findings. Lifespan wiring moved to T14; retention judged by the chat row's `updated_at` until T24 |
-| T12 | The four tools and path confinement | any | any | T11 | todo | | |
+| T12 | The four tools and path confinement | any | any | T11 | done | | 2026-11-11: `bash`, `view`, `write_file`, `str_replace` in `tools/builtin.py`, offered instead of `execute_code` under engine `sandbox` (a custom selector with the same four gates; `code_interpreter.engine` added to the `get_many` batch, so the golden `tool_loading.json` gained that key in its 22 cases, the expected gate finding); path confinement in `sandbox/workspace.py` (host checks) and `infra/sandbox/common/lllm-path` (guest `realpath -m` plus a walk refusing any remaining symlink or unsearchable directory, since `realpath -m` leaves loops and symlinks under mode-000 directories unresolved), helpers under `env -i` with absolute paths, model strings only as positional arguments, atomic writes, readable-file checks, image header and size limits; the real script and the fake agree on every confinement case; session calls now hold the chat's lock through cancellation until the backend call and its kill end (bounded by `CANCEL_WAIT_S`), and the model sees only text written for it; `tests/test_sandbox_tools*.py` (author plus a separate test-engineer, about 650 tests); security review (1 blocking: a cancelled call released the lock while its processes ran, letting a symlink swap between check and use; 4 should-fix) and two re-reviews APPROVE; code review and re-review APPROVE; on this commit alone (a worktree): `make test-backend` exit 0 (6,125 passed, 21 skipped, diff coverage 100%), `make test-types` no new findings, `make lint` exit 0. Notes for T13, T14, T20 in their sections |
 | T13 | Chat uploads into `/workspace/uploads` | any | any; docker, kvm | T11 | todo | | |
 | T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Q8 answered: pass `--ulimit nproc=512:512` with `--pids-limit 512`; Q9 answered: pass `extra_hosts={'sandbox-mirror': <fixed address>}` |
 | T15 | Sandbox images | any | docker, host-internet | T02 | todo | | |
@@ -317,6 +317,20 @@ to the decision.
   packages to the owner, and with none T16's "Mirror installs" check
   cannot pass. Options: that data and statistics set; `tabulate` alone to
   prove the path; none. Chosen: the data and statistics set.
+- **Q18 (found in T14, 2026-11-11). Answered 2026-11-11: a root setup
+  step now.** Q11's fixed-size workspace cannot be built with Docker's
+  local volume driver: `type=ext4, device=<image>, o=loop` fails on first
+  mount with "loop: invalid argument" (Docker calls mount(2), and `loop`
+  is a mount(8) feature). Without root, an ext4 image made by the
+  backend's user can be attached with `udisksctl loop-setup` and given to
+  Docker as the block device (checked under `kata-clh`: mounts, persists,
+  `ENOSPC` at the size, clean removal), but polkit allows that only to a
+  user with an active local login. Options: (a) rely on the login session
+  and document a polkit rule for a headless server later; (b) add the
+  root step now, a polkit rule granting the backend's user exactly the
+  udisks2 loop actions it needs, so it works headless from the start;
+  (c) a watchdog instead (Q11's option b); (d) no cap on the laptop.
+  Chosen: (b); the rule is in `docs/guides/sandbox.md`, "Host setup".
 
 ### Session log
 
@@ -897,6 +911,11 @@ side alone: a root exec (capabilities dropped) can `chmod u+w` and empty
 it, but only UID 1000 can `rmdir` it from the 1000-owned `/workspace`.
 `put_archive` keeps the tar headers' mtime, so set it (zero shows as 1970).
 
+**From T12's code review (2026-11-11):** a cancelled session call waits
+at most `limits.CANCEL_WAIT_S` (30 s), and `put_files` is included, so a
+Stop during a large upload sync can cost a sandbox restart; keep each
+sync's `put_files` small enough to finish well inside that bound.
+
 **From T10's security review (2026-11-10):** `put_files`
 leaves `/workspace/<dir>` containing exactly the given files, replacing
 (never following) an entry of that name that is a symlink, a file or a
@@ -1058,6 +1077,31 @@ start its maintenance loop there, and in `_shutdown` call its
 a reason (no Kata on the host), the app still starts and the manager
 refuses calls with that reason.
 
+**From T12's security review (2026-11-11):** the file tools resolve a
+path in one exec and use it in the next call, so `exec`'s contract
+(`backend.py`) now requires: the post-exec kill waits until no UID 1000
+process remains (check the `Uid:` lines in `/proc`: T14 found `kill -0
+-1` succeeds whenever any process is visible) and fails closed, stopping the sandbox
+and raising `SandboxNotRunning` with fixed text, when it cannot confirm
+that (a fork bomb at the `nproc` limit stops the kill exec itself); a
+cancelled `exec` runs the kill at once and neither returns nor raises
+until it has completed (a cancelled `to_thread` call runs on, so catch the
+cancellation, kill, wait for the thread, then re-raise). The manager waits
+at most `limits.CANCEL_WAIT_S` (30 s) for a cancelled call; past that it
+marks the session died and stops the sandbox under its lock, so `stop`
+must work while an abandoned exec thread is still running.
+After that bound the manager also gives up on a cancelled `put_files` or
+`get_files` that is still running; `stop` must make sure such a root-side
+call cannot land in the restarted sandbox (for example by waiting for it,
+or by stopping the container so the archive call fails). `stat` maps a
+FIFO, a socket or a device to `kind='other'`, never `'file'`. Refuse to
+start the manager with more than one uvicorn worker, since the per-chat
+lock is per process (N7). Wrap every Docker SDK error in a `SandboxError`
+with fixed wording free of host paths and the daemon URL (S4); the tools
+pass on only `SandboxError.public`. The acceptance tests "Fork bomb
+contained" and "Timeout" also check that the next call sees no leftover
+UID 1000 process.
+
 ### T15: sandbox images
 
 *Author: any. Verify: docker, host-internet. Depends: T02.*
@@ -1092,7 +1136,8 @@ Under `infra/sandbox/`:
   target and before the "--- Checks" divider, in `.PHONY` and `help`.
   It is a lifecycle target, not a check.
 - `image-freeze.txt` (T16 needs it): `make sandbox-images` also writes
-  `docker run --rm local-llm/sandbox-data:<tag> pip freeze` to
+  `docker run --rm local-llm/sandbox-data:<tag> pip list --format=freeze`
+  (conda's `pip freeze` prints `file://` paths, useless as constraints) to
   `infra/sandbox/image-freeze.txt`, committed.
 
 **Docs:** `docs/guides/sandbox.md` "Images": what each contains, how to
@@ -1173,6 +1218,29 @@ leaves the network ("Resource is still in use"), and the next `up` reuses
 it, so `make backend`'s exit needs no change; expect that line in its
 output. Names do not resolve in a Kata guest, so the network has a fixed
 subnet and the mirror a fixed address (Q9).
+
+**From T14 (2026-11-11): the subnet and the mirror's address are chosen.**
+`sandbox/kata.py` holds them as `SANDBOX_SUBNET = '10.231.0.0/24'`,
+`SANDBOX_IP_RANGE = '10.231.0.128/25'` and `SANDBOX_MIRROR_ADDRESS =
+'10.231.0.2'`; Compose must use the same: the `sandbox` network with
+`internal: true` and `ipam.config` `subnet: 10.231.0.0/24`, `ip_range:
+10.231.0.128/25` (Docker hands sandboxes addresses only from the upper
+half, so none can take the mirror's address before the mirror starts),
+and `sandbox-mirror` at `ipv4_address: 10.231.0.2`. Add the test that
+reads `infra/docker-compose.yml` and checks all three against the
+constants. Chosen outside Docker's default address pools (172.17-31/16,
+192.168/16), so Compose's other networks can never take it first, and
+clear of every network on the laptop (`docker0` 172.17.0.0/16, podman's
+10.88.0.0/16 and 10.89.0.0/24, the LAN 192.168.1.0/24). Until T16 lands,
+`tests/test_sandbox_kata.py` creates `local-llm_sandbox` with these values
+when it is missing, and removes it afterwards; a network left over under
+that name without Compose's labels would make `docker compose up` refuse
+it. The network fence test found the internal bridge's gateway
+(`10.231.0.1`), the host's LAN address and `docker0` unreachable from a
+guest on every port tried. Sandboxes on the network can reach each other
+by address, though nothing listens between calls, since Q10's kill ends
+every process the model started; `enable_icc: false` would also cut them
+off from the mirror.
 
 ### T17: outputs, backend **security**
 

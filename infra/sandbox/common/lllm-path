@@ -1,0 +1,93 @@
+#!/bin/bash
+# lllm-path PATH: print where PATH leads inside the sandbox, or refuse it.
+#
+# The sandbox tools (view, write_file and str_replace in
+# apps/server/local_llm/tools/builtin.py, through
+# apps/server/local_llm/sandbox/workspace.py) run this as UID 1000 inside
+# the guest before they touch a path, since only the guest sees its own
+# symlinks. It resolves PATH as `realpath -m` does, a relative PATH being
+# taken from /workspace and missing components allowed, and prints the
+# result and a newline when it is /workspace or under it, has no symlink left
+# in it, and every existing directory above its last component is searchable.
+# Otherwise it prints why on stderr and exits 1; wrong usage exits 2.
+#
+# `realpath -m` alone is not a confinement check: a symlink it cannot follow
+# (a loop, or one inside a directory UID 1000 cannot search) is left in its
+# output as it is, and a step that later followed it could leave /workspace.
+# So the result is walked again here, and refused if any symlink or
+# unsearchable directory is left on it.
+#
+# This file is the one source; the images copy it to /usr/local/bin/lllm-path
+# (infra/sandbox/Dockerfile.*). Callers run it as
+# `/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin /bin/bash --noprofile --norc /usr/local/bin/lllm-path PATH`,
+# so nothing the model wrote can change what it runs.
+# apps/server/tests/test_sandbox_tools.py runs it against a temporary
+# directory by rewriting the ROOT line below, the only line it changes, and
+# checks that the fake backend's emulation gives the same answers.
+set -u
+# Bytes, not characters: ${#path} counts bytes, and no locale file is read.
+export LC_ALL=C
+
+readonly ROOT=/workspace
+readonly MAX_BYTES=4096
+
+refuse() {
+    printf 'lllm-path: %s\n' "$1" >&2
+    exit 1
+}
+
+if [ "$#" -ne 1 ]; then
+    printf 'usage: lllm-path PATH\n' >&2
+    exit 2
+fi
+path=$1
+if [ -z "$path" ]; then
+    refuse 'the path is empty'
+fi
+case $path in
+*$'\n'*) refuse 'the path contains a newline' ;;
+esac
+if [ "${#path}" -gt "$MAX_BYTES" ]; then
+    refuse "the path is longer than $MAX_BYTES bytes"
+fi
+case $path in
+/*) ;;
+*) path=$ROOT/$path ;;
+esac
+
+resolved=$(/usr/bin/realpath -m -- "$path") || refuse 'the path cannot be resolved'
+case $resolved in
+*$'\n'*) refuse 'the path leads to a name with a newline' ;;
+esac
+if [ "${#resolved}" -gt "$MAX_BYTES" ]; then
+    refuse "the path leads to a name longer than $MAX_BYTES bytes"
+fi
+case $resolved in
+"$ROOT" | "$ROOT"/*) ;;
+*) refuse "the path leads outside $ROOT" ;;
+esac
+
+# Walk the result: no component may still be a symlink, and every existing
+# directory above the last component must be searchable, or a symlink below
+# it could not have been seen.
+rest=${resolved#/}
+prefix=
+while [ -n "$rest" ]; do
+    part=${rest%%/*}
+    if [ "$part" = "$rest" ]; then
+        rest=
+    else
+        rest=${rest#*/}
+    fi
+    prefix=$prefix/$part
+    if [ -L "$prefix" ]; then
+        refuse "the path goes through a symlink that cannot be followed: $prefix"
+    fi
+    if [ ! -e "$prefix" ]; then
+        break
+    fi
+    if [ -n "$rest" ] && [ -d "$prefix" ] && [ ! -x "$prefix" ]; then
+        refuse "the path goes through a directory that cannot be searched: $prefix"
+    fi
+done
+printf '%s\n' "$resolved"

@@ -51,6 +51,7 @@ from local_llm.models.users import UserModel
 from local_llm.tools.builtin import (
     add_memory,
     ask_user,
+    bash,
     calculate_timestamp,
     create_automation,
     create_calendar_event,
@@ -89,12 +90,14 @@ from local_llm.tools.builtin import (
     search_memories,
     search_notes,
     search_web,
+    str_replace,
     timer,
     toggle_automation,
     update_automation,
     update_calendar_event,
     update_memory,
     update_task,
+    view,
     view_channel_message,
     view_channel_thread,
     view_chat,
@@ -102,6 +105,7 @@ from local_llm.tools.builtin import (
     view_knowledge_file,
     view_note,
     view_skill,
+    write_file,
     write_note,
 )
 from local_llm.utils.access_control import has_connection_access, has_permission
@@ -736,6 +740,27 @@ async def _skill_tools(ctx: _BuiltinToolContext) -> list[Callable]:
     return [view_skill] if ctx.extra_params.get('__skill_ids__') else []
 
 
+# The code interpreter's four gates; the engine then picks which tools pass them (_code_interpreter_tools).
+_code_interpreter_gates = _gated_tools(
+    'code_interpreter',
+    [execute_code],
+    config_key='code_interpreter.enable',
+    capability='code_interpreter',
+    feature='code_interpreter',
+    permission='code_interpreter',
+)
+
+
+async def _code_interpreter_tools(ctx: _BuiltinToolContext) -> list[Callable]:
+    # The sandbox engine offers its four tools instead of execute_code; any other engine (jupyter, pyodide, or
+    # one execute_code reports as unknown when called) keeps execute_code.
+    if not await _code_interpreter_gates(ctx):
+        return []
+    if ctx.config.get('code_interpreter.engine') == 'sandbox':
+        return [bash, view, write_file, str_replace]
+    return [execute_code]
+
+
 async def _task_tools(ctx: _BuiltinToolContext) -> list[Callable]:
     # Task state is stored on the chats row; local/channel IDs do not have one.
     if ctx.enabled('tasks') and is_saved_chat_id(ctx.metadata.get('chat_id')):
@@ -791,14 +816,7 @@ _BUILTIN_TOOL_SELECTORS = [
         feature='image_generation',
         permission='image_generation',
     ),
-    _gated_tools(
-        'code_interpreter',
-        [execute_code],
-        config_key='code_interpreter.enable',
-        capability='code_interpreter',
-        feature='code_interpreter',
-        permission='code_interpreter',
-    ),
+    _code_interpreter_tools,
     _note_tools,
     _gated_tools(
         'channels',
@@ -846,6 +864,7 @@ async def get_builtin_tools(
         'image_generation.enable',
         'images.edit.enable',
         'code_interpreter.enable',
+        'code_interpreter.engine',
         'notes.enable',
         'channels.enable',
         'automations.enable',

@@ -186,6 +186,36 @@ class SandboxBackend(Protocol):
         `kill -9 -1`), so nothing the command started runs between calls
         (owner decision Q10). Backgrounded children survive `timeout`, and
         root in the guest cannot kill them, since it has no CAP_KILL (T02).
+        The file tools depend on it (sandbox/workspace.py: a path resolved
+        in one exec is used in the next call, which nothing may change in
+        between), so (T12's security review, B1 and S2):
+
+        - The kill waits until no UID 1000 process remains (`kill -9 -1`
+          returns once the signals are queued, so it polls `kill -0 -1`
+          until that fails), and fails closed: when it cannot confirm that
+          (the kill exec cannot be created or start, as under a fork bomb
+          holding UID 1000 at its nproc limit, exits non-zero, or times
+          out), the backend stops the sandbox and raises SandboxNotRunning,
+          whose message is fixed text free of host details. The manager
+          then treats the sandbox as stopped behind its back and cleans it
+          up.
+        - If the coroutine awaiting `exec` is cancelled, the backend ends
+          the command by running the kill at once, then re-raises
+          CancelledError; it neither returns nor raises until that kill has
+          completed. A backend whose Docker call runs in a thread
+          (`asyncio.to_thread` goes on after its awaiter is cancelled) must
+          therefore catch the cancellation, run the kill, wait for the
+          thread, and only then re-raise. That wait is bounded (R2): when
+          the command and its streams have not ended within the kill's own
+          timeout, well inside limits.CANCEL_WAIT_S, it is a failed kill:
+          stop the sandbox and raise SandboxNotRunning. The manager waits
+          for a cancelled call at most CANCEL_WAIT_S in any case, and then
+          stops the sandbox itself before the chat's lock is released.
+
+        Every error from the Docker SDK or the runtime is raised as a
+        SandboxError with fixed wording, never the SDK's own text, which
+        carries the daemon URL and host paths; SandboxError.public is left
+        None unless the text was written for the model.
 
         Raises:
             ValueError: `timeout_s` is outside TIMEOUT_MIN_S..TIMEOUT_MAX_S,
@@ -248,7 +278,9 @@ class SandboxBackend(Protocol):
 
         For checks that must not trust the guest, such as the owner and
         mode of `/workspace/uploads` before each upload sync (T13) and the
-        outputs (T17). A symlink is reported as a symlink, not followed.
+        outputs (T17). A symlink is reported as a symlink, not followed,
+        and a FIFO, a socket or a device as `other`, never `file`: the file
+        tools read only `file`, and opening a FIFO would block.
         `path` must pass validate_sandbox_path with `/workspace` itself
         allowed.
 

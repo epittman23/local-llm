@@ -26,6 +26,12 @@ Pins, without Docker, Kata or a database (except for DatabaseChats):
   backend is called; an unsaved chat gets an ephemeral sandbox keyed by a
   fresh UUID per (chat id, user id) (Q5, Q12), destroyed on release, and a
   failed or cancelled start leaves no mapping behind;
+- a session's backend calls (exec, put_files, get_files, stat) end before the
+  session does, a cancelled caller included: an exec is cancelled once and
+  its kill awaited, through a second cancellation, other calls run to their
+  end, a call that has not ended within `cancel_wait_s` gets the sandbox
+  stopped first, and a call that ends cancelled on its own is a SandboxError
+  (T12's security reviews);
 - the settings read from config, the maintenance loop, and DatabaseChats on a
   real temporary SQLite database.
 
@@ -41,6 +47,7 @@ import pkgutil
 import time
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -2402,3 +2409,241 @@ def test_database_chats_refuses_a_folder_reader_the_chat_read_rule_lets_in():
         return reads, await DatabaseChats().usable(chat_id, reader)
 
     assert _db(scenario) == (True, False)
+
+
+# SandboxSession's backend calls under cancellation (T12's security reviews: B1, R1, R2, R5). A session may not
+# end, and so hand its lock on, while a backend call it started may still act on the sandbox.
+
+
+class _HeldBackend(FakeBackend):
+    """A FakeBackend whose exec, put_files, get_files and stat wait for `release` and log when they end.
+
+    `cancelled_outcome`, when set, is what exec ends in once it is cancelled: a result, or an exception to raise.
+    `ignore_cancel` makes every call go on waiting for `release` through a cancellation, and `fail_late` makes
+    it raise once released.
+    """
+
+    def __init__(self, log: list[str], *, cancelled_outcome: object = None, ignore_cancel: bool = False) -> None:
+        super().__init__()
+        self.log = log
+        self.cancelled_outcome = cancelled_outcome
+        self.ignore_cancel = ignore_cancel
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.fail_late = False
+
+    async def _held(self, what: str) -> None:
+        self.started.set()
+        while True:
+            try:
+                await self.release.wait()
+            except asyncio.CancelledError:
+                if self.ignore_cancel:
+                    continue
+                raise
+            if self.fail_late:
+                raise RuntimeError('the daemon call failed after its caller had gone')
+            self.log.append(f'{what} ended')
+            return
+
+    async def exec(self, chat_id, argv, timeout_s, stdin=None):
+        try:
+            await self._held('exec')
+        except asyncio.CancelledError:
+            if isinstance(self.cancelled_outcome, BaseException):
+                raise self.cancelled_outcome from None
+            if self.cancelled_outcome is None:
+                raise
+            return cast(manager_module.ExecResult, self.cancelled_outcome)
+        return manager_module.ExecResult(
+            returncode=0, stdout='', stderr='', timed_out=False, truncated=False, duration_ms=1
+        )
+
+    async def put_files(self, chat_id, dir, files):
+        await self._held('put_files')
+
+    async def get_files(self, chat_id, paths, max_bytes):
+        await self._held('get_files')
+        return {}
+
+    async def stat(self, chat_id, path):
+        await self._held('stat')
+        return None
+
+
+_SESSION_CALLS = {
+    'exec': lambda session: session.exec(wrap_command('true', 60), 60),
+    'put_files': lambda session: session.put_files('uploads', []),
+    'get_files': lambda session: session.get_files(['/workspace/f'], 10),
+    'stat': lambda session: session.stat('/workspace/f'),
+}
+
+
+async def _second_session(manager: SandboxManager, log: list[str]) -> None:
+    async with manager.session(CHAT_A, USER):
+        log.append('second session')
+
+
+@pytest.mark.parametrize('call', ['put_files', 'get_files', 'stat'])
+def test_a_cancelled_put_read_or_stat_keeps_the_lock_until_the_backend_call_has_ended(call):
+    # R1: the daemon may still be untarring into /workspace when the user presses Stop.
+    log: list[str] = []
+    backend = _HeldBackend(log)
+    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+
+    async def go():
+        async def first_call():
+            async with manager.session(CHAT_A, USER) as session:
+                await _SESSION_CALLS[call](session)
+
+        first = asyncio.ensure_future(first_call())
+        await backend.started.wait()
+        first.cancel()
+        second = asyncio.ensure_future(_second_session(manager, log))
+        for _ in range(20):
+            await asyncio.sleep(0)
+        log.append('released')
+        backend.release.set()
+        return await asyncio.gather(first, second, return_exceptions=True)
+
+    first, second = asyncio.run(go())
+    assert isinstance(first, asyncio.CancelledError)
+    assert second is None
+    assert log == ['released', f'{call} ended', 'second session']
+
+
+@pytest.mark.parametrize(
+    ('outcome', 'stopped'),
+    [
+        (None, False),
+        (SandboxError('the exec failed'), False),
+        (SandboxNotRunning('the kill could not be confirmed'), True),
+        (
+            manager_module.ExecResult(
+                returncode=0, stdout='', stderr='', timed_out=False, truncated=False, duration_ms=1
+            ),
+            False,
+        ),
+    ],
+    ids=['cancelled', 'error', 'not-running', 'result'],
+)
+def test_a_cancelled_session_exec_raises_cancelled_error_whatever_the_backend_ends_with(outcome, stopped):
+    # B1: whatever the backend's exec ends in once cancelled, the caller gets CancelledError; a sandbox the backend
+    # stopped (its kill failed) is cleaned up when the session ends, freeing its slot.
+    backend = _HeldBackend([], cancelled_outcome=outcome)
+    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+
+    async def go():
+        async def call():
+            async with manager.session(CHAT_A, USER) as session:
+                await session.exec(wrap_command('true', 60), 60)
+
+        task = asyncio.ensure_future(call())
+        await backend.started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(go())
+    assert (('stop', {'chat_id': CHAT_A}) in backend.calls) is stopped
+    assert not manager._locks
+
+
+class _InterruptibleKillBackend(FakeBackend):
+    """A backend that honours one cancellation the naive way, `except CancelledError: await kill(); raise`.
+
+    Its kill takes a few event-loop turns, so a second cancellation delivered to it meanwhile would cut the kill
+    short: only the session's own wait keeps the lock until the kill has run.
+    """
+
+    def __init__(self, log: list[str]) -> None:
+        super().__init__()
+        self.log = log
+        self.started = asyncio.Event()
+
+    async def exec(self, chat_id, argv, timeout_s, stdin=None):
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            for _ in range(10):
+                await asyncio.sleep(0)
+            self.log.append('kill')
+            raise
+        raise AssertionError('the exec is only ever cancelled')
+
+
+def test_the_session_keeps_the_lock_through_a_second_cancellation_while_the_backend_kills():
+    # B1, pinned on the session: with a backend whose kill a second cancellation could interrupt, the second
+    # session still waits until that kill has run. The old `return await backend.exec(...)` fails this.
+    log: list[str] = []
+    backend = _InterruptibleKillBackend(log)
+    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+
+    async def go():
+        async def first_call():
+            async with manager.session(CHAT_A, USER) as session:
+                await session.exec(wrap_command('slow', 60), 60)
+
+        first = asyncio.ensure_future(first_call())
+        await backend.started.wait()
+        first.cancel()
+        second = asyncio.ensure_future(_second_session(manager, log))
+        await asyncio.sleep(0)
+        first.cancel()
+        return await asyncio.gather(first, second, return_exceptions=True)
+
+    first, second = asyncio.run(go())
+    assert isinstance(first, asyncio.CancelledError)
+    assert second is None
+    assert log == ['kill', 'second session']
+
+
+@pytest.mark.parametrize('ends_with', ['result', 'error'])
+def test_a_cancelled_call_that_never_ends_is_given_up_after_the_bound_and_the_sandbox_stopped_first(ends_with):
+    # R2: the wait after a cancellation is bounded; past it, the sandbox is stopped, still under its lock, before the
+    # next session may use it, and the abandoned call is kept until it ends.
+    log: list[str] = []
+    backend = _HeldBackend(log, ignore_cancel=True)
+    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}), cancel_wait_s=0.05)
+
+    async def go():
+        async def first_call():
+            async with manager.session(CHAT_A, USER) as session:
+                await session.exec(wrap_command('true', 60), 60)
+
+        first = asyncio.ensure_future(first_call())
+        await backend.started.wait()
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        stopped_before = ('stop', {'chat_id': CHAT_A}) in backend.calls
+        abandoned = len(manager_module._ABANDONED)
+        backend.fail_late = ends_with == 'error'
+        backend.release.set()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        await _second_session(manager, log)
+        return stopped_before, abandoned, len(manager_module._ABANDONED)
+
+    stopped_before, abandoned, left = asyncio.run(go())
+    assert stopped_before
+    assert (abandoned, left) == (1, 0)
+    assert log[-1] == 'second session'
+
+
+def test_a_backend_call_that_ends_cancelled_on_its_own_is_a_sandbox_error_not_an_escaping_cancellation():
+    # R5: a cancellation the caller did not ask for must not escape a tool's `except Exception`.
+    class _SelfCancelling(FakeBackend):
+        async def stat(self, chat_id, path):
+            raise asyncio.CancelledError
+
+    manager = SandboxManager(_SelfCancelling(), chats=FakeChats({CHAT_A: 1}))
+
+    async def go():
+        async with manager.session(CHAT_A, USER) as session:
+            await session.stat('/workspace/f')
+
+    with pytest.raises(SandboxError) as caught:
+        asyncio.run(go())
+    assert caught.value.public == 'the sandbox call was interrupted; try again'

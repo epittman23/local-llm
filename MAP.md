@@ -220,8 +220,12 @@ fork's pre-import history is kept read-only at
   (the per-chat microVM sandbox, under construction on the sandbox branch:
   so far its core types, the `SandboxBackend` protocol, the fixed limits,
   command wrapping and output capping, the in-memory `FakeBackend` for
-  tests, and the `SandboxManager` (per-chat lifecycle, slots, sweeps);
-  nothing calls it yet), and **`benchmarks/`** (see below).
+  tests, the `SandboxManager` (per-chat lifecycle, slots, sweeps), and
+  `workspace.py`, the file tools' path confinement and guest helpers, whose
+  in-guest half is `infra/sandbox/common/lllm-path`; its four tools,
+  `bash`, `view`, `write_file` and `str_replace` in `tools/builtin.py`, are
+  offered under the `sandbox` engine, though nothing creates a manager
+  until T14), and **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
