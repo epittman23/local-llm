@@ -1,8 +1,8 @@
 """The values that cross the sandbox backend interface, and its errors.
 
 The manager (T11) talks to a backend (sandbox/backend.py) only in these
-types, so a later backend (Firecracker, say) can replace the planned Kata one
-(T14) without touching the tools, the call sites or the tests above the
+types, so a later backend (Firecracker, say) can replace the Kata one
+(sandbox/kata.py) without touching the tools, the call sites or the tests above the
 interface.
 
 No caller string may reach a Docker option: a chat id is accepted only as a
@@ -106,7 +106,9 @@ class SandboxSpec:
         chat_id: The chat the sandbox belongs to, a canonical UUID
             (validate_chat_id), stored as a plain str.
         image: Which image to run, one of ImageKey's values.
-        labels: Extra container and volume labels. Keys and values are
+        labels: Extra labels, which no backend applies so far (the Kata
+            backend sets only its own, so nothing a caller gives reaches a
+            Docker option). Keys and values are
             non-empty strings (exactly str, not a subclass) without NUL, and
             no key starts with `lllm.`, which the backend keeps for
             `lllm.chat`, `lllm.image` and `lllm.ephemeral`. Copied into a

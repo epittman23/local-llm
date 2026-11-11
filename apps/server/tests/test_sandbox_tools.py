@@ -642,7 +642,8 @@ def test_write_file_view_and_str_replace_edit_a_file(monkeypatch):
         'total_lines': 2,
         'showing_lines': '2-2',
     }
-    assert listing == {'path': '/workspace', 'entries': ['src/', 'src/a.py (12 bytes)']}
+    # uploads/ is the read-only uploads mount every sandbox has (T13).
+    assert listing == {'path': '/workspace', 'entries': ['src/', 'src/a.py (12 bytes)', 'uploads/']}
 
 
 def test_write_file_overwrites_when_asked(monkeypatch):
@@ -896,7 +897,8 @@ def test_the_fake_reports_a_fifo_as_other_lists_it_and_never_reads_it():
     assert stat is not None
     assert stat.kind == 'other'
     assert files == {}
-    assert listing.stdout == 'p\t0\tpipe\0'
+    # uploads is the read-only uploads mount every sandbox has (T13).
+    assert listing.stdout == 'p\t0\tpipe\0d\t0\tuploads\0'
 
 
 def test_view_refuses_a_fifo_and_write_file_refuses_it_without_waiting(monkeypatch):

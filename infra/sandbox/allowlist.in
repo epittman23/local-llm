@@ -1,0 +1,17 @@
+# Extra Python packages a sandbox may `pip install` (docs/guides/sandbox.md
+# "Mirror and wheelhouse"). The sandbox has no route to PyPI: `make wheelhouse`
+# downloads exactly what requirements.lock names, and the mirror serves only
+# that. Add a package here, recompile the lock (the
+# command is in requirements.lock's header), then `make wheelhouse`. Binary
+# wheels only.
+# Pins that the image already carries come from image-freeze.txt (-c), so a
+# package here can never replace one of the image's.
+
+# Fast DataFrame library for data larger than pandas handles comfortably.
+polars
+# Embedded analytical SQL engine; queries CSV and Parquet files directly.
+duckdb
+# Statistical tests (ANOVA, effect sizes, post-hoc) returned as DataFrames.
+pingouin
+# Survival analysis (Kaplan-Meier, Cox regression).
+lifelines

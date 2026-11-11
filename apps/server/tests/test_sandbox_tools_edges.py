@@ -941,6 +941,8 @@ def test_view_lists_two_levels_without_hidden_entries_except_runs(monkeypatch):
         'a/b/',
         'a/two.txt (1 bytes)',
         'top.txt (1 bytes)',
+        # Every sandbox has its read-only uploads mount (T13), empty without attachments.
+        'uploads/',
     ]
 
 
@@ -957,7 +959,8 @@ def test_view_of_the_workspace_itself_is_a_listing_except_for_the_empty_path(mon
     result = _run(rig, builtin.view, path=path)
     assert isinstance(result, dict)
     if path:
-        assert result == {'path': '/workspace', 'entries': []}
+        # Every sandbox has its read-only uploads mount (T13), empty without attachments.
+        assert result == {'path': '/workspace', 'entries': ['uploads/']}
     else:
         assert result['error'] == 'the path is empty'
 

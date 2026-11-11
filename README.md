@@ -88,7 +88,8 @@ then, in one terminal:
 make backend
 ```
 
-which brings up Postgres, Redis, Jupyter and SearXNG (`infra/docker-compose.yml`) and the
+which brings up Postgres, Redis, Jupyter, SearXNG and the sandbox package mirror (`infra/docker-compose.yml`; the mirror serves no wheels until `make wheelhouse` has run, see
+[docs/guides/sandbox.md](docs/guides/sandbox.md#mirror-and-wheelhouse)) and the
 backend (`uvicorn`, port `4000`) together, and tears them back down when the
 backend stops (Ctrl-C included); services that were already running when it
 started (another `make backend`'s) are left up. It waits for Postgres's healthcheck before

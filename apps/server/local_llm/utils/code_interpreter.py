@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import logging
-import os
 import time
 import uuid
 
@@ -10,6 +9,7 @@ import websockets
 from pydantic import BaseModel
 
 from local_llm.env import AIOHTTP_CLIENT_ALLOW_REDIRECTS
+from local_llm.sandbox import uploads as _uploads
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.upstream_trace import note_code_run
 
@@ -18,58 +18,18 @@ logger = logging.getLogger(__name__)
 #: Where each run works on the Jupyter server, relative to its root: a
 #: subdirectory per run, holding the chat's files, removed when the run ends.
 UPLOADS_DIR = 'lllm-uploads'
-#: Copied files are sent base64-encoded in one request each, so they are capped.
-MAX_FILE_BYTES = 50 * 1024 * 1024
-MAX_TOTAL_BYTES = 200 * 1024 * 1024
+#: Copied files are sent base64-encoded in one request each, so they are capped (sandbox/uploads.py's caps).
+MAX_FILE_BYTES = _uploads.MAX_FILE_BYTES
+MAX_TOTAL_BYTES = _uploads.MAX_TOTAL_BYTES
 
 
 async def chat_files(items: list | None, user) -> tuple[list[tuple[str, str]], list[str]]:
-    """The chat's uploaded files this user may read, as (name, local path) pairs.
+    """The chat's uploaded files this user may read, as (name, local path) pairs, and a note for each left out.
 
-    `items` is the chat's `metadata['files']`. Only uploaded files count
-    (type 'file' with an id): knowledge bases, web results and images are not
-    files on disk. Each one is re-checked against the user, since the list
-    comes from the request. Also returns a note for each file left out.
+    Moved to sandbox/uploads.py (T13); kept here for the Jupyter engine until
+    T40 removes it, under this module's caps.
     """
-    from local_llm.models.files import Files
-    from local_llm.storage.provider import Storage
-    from local_llm.utils.access_control.files import has_access_to_file
-
-    files: list[tuple[str, str]] = []
-    notes: list[str] = []
-    names: set[str] = set()
-    total = 0
-    for item in items or []:
-        if not isinstance(item, dict) or item.get('type') != 'file' or not item.get('id'):
-            continue
-        file = await Files.get_file_by_id(item['id'])
-        if not file or not file.path or user is None:
-            continue
-        if file.user_id != user.id and not await has_access_to_file(file.id, 'read', user):
-            continue
-        name = os.path.basename((file.filename or item.get('name') or file.id).replace('\\', '/')) or file.id
-        try:
-            path = await asyncio.to_thread(Storage.get_file, file.path)
-            size = await asyncio.to_thread(os.path.getsize, path)
-        except Exception as err:
-            logger.warning('chat file %s is not readable: %s', file.id, err)
-            notes.append(f'{name}: could not be read')
-            continue
-        if size > MAX_FILE_BYTES or total + size > MAX_TOTAL_BYTES:
-            notes.append(
-                f'{name}: not copied, over the {MAX_FILE_BYTES // 2**20} MB per file'
-                f' or {MAX_TOTAL_BYTES // 2**20} MB total limit'
-            )
-            continue
-        stem, ext = os.path.splitext(name)
-        n = 1
-        while name in names:
-            n += 1
-            name = f'{stem} ({n}){ext}'
-        names.add(name)
-        total += size
-        files.append((name, path))
-    return files, notes
+    return await _uploads.chat_files(items, user, max_file_bytes=MAX_FILE_BYTES, max_total_bytes=MAX_TOTAL_BYTES)
 
 
 class ResultModel(BaseModel):

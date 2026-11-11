@@ -2,11 +2,14 @@
 
 CI's hosted runners have no `/dev/kvm`, so the manager, the tools and the
 call sites are tested against this fake. It keeps the invariants the
-backend contract (sandbox/backend.py) requires of the planned Kata backend
-(T14), or those tests would pass for the wrong reason: it checks chat ids,
-specs, argv, timeouts, paths, names and modes with the shared validators
-every backend is to call; `put_files` leaves exactly the given root-owned
-files, so UID 1000 cannot change them or keep a planted one; a stopped
+backend contract (sandbox/backend.py) requires of the Kata backend
+(sandbox/kata.py), or those tests would pass for the wrong reason: it checks
+chat ids, specs, argv, timeouts, paths, names and modes with the shared
+validators every backend calls; `put_files` leaves exactly the given root-owned
+files, so UID 1000 cannot change them or keep a planted one; every
+container has its uploads at `/workspace/uploads`, a read-only mount that
+`put_uploads` fills, which nothing in the guest can change, rename or
+remove; a stopped
 sandbox keeps its volume and a destroyed one loses it; a chat with no
 running sandbox cannot run anything, and one that stops during a command
 raises SandboxNotRunning instead of returning a result; and output goes
@@ -24,14 +27,13 @@ symlinks (at most 40), so a test that something refuses `/etc/passwd`, or a
 symlink to it, fails for the right reason: the file is there and readable.
 
 `exec` runs a script the test supplies, or by default `interpret`, a tiny
-bash for `cat`, `ls`, `printf`, `sleep`, `ln -s`, `chmod` and `mkdir` that
-honours the timeout without sleeping, and that runs the guest helpers the
-file tools use (sandbox/workspace.py: lllm-path, the listing and the write)
-with their guest semantics. It is test support, not a shell. Every call is
-recorded in
-`FakeBackend.calls`, so a test can assert what the manager asked for,
-including the `('kill_uid_1000', ...)` entry that stands for the kill every
-backend runs after every exec.
+bash for `cat`, `ls`, `printf`, `sleep`, `ln -s`, `chmod`, `mkdir`, `mv`,
+`rm` and `rmdir` that honours the timeout without sleeping, and that runs the guest
+helpers the file tools use (sandbox/workspace.py: lllm-path, the listing and
+the write) with their guest semantics. It is test support, not a shell.
+Every call is recorded in `FakeBackend.calls`, so a test can assert what the
+manager asked for, including the `('kill_uid_1000', ...)` entry that stands
+for the kill every backend runs after every exec.
 """
 
 import asyncio
@@ -48,7 +50,13 @@ from dataclasses import dataclass, field
 from typing import NoReturn
 
 from local_llm.sandbox import workspace as guest
-from local_llm.sandbox.backend import validate_create, validate_get_files, validate_put_files, validate_sandbox_path
+from local_llm.sandbox.backend import (
+    validate_create,
+    validate_get_files,
+    validate_put_files,
+    validate_put_uploads,
+    validate_sandbox_path,
+)
 from local_llm.sandbox.exec import StreamCap, require_wrapped, result_from
 from local_llm.sandbox.limits import HOST_DEADLINE_SLACK_S, SANDBOX_UID, WORKSPACE
 from local_llm.sandbox.types import (
@@ -64,6 +72,8 @@ from local_llm.sandbox.types import (
 
 #: The guest's writable tmpfs; the rest of the root outside `/workspace` is read-only.
 TMP = '/tmp'
+#: Where every container mounts its chat's uploads, read-only (SandboxBackend.put_uploads).
+UPLOADS = f'{WORKSPACE}/uploads'
 
 
 def _error(code: int, path: str) -> OSError:
@@ -132,18 +142,31 @@ class FakeWorkspace:
     Relative paths are taken from `/workspace`, the commands' working
     directory. Paths under `/workspace` are the volume (`files`); every
     other path is the container's own root (`rootfs`), writable only under
-    `/tmp`. Every ancestor directory needs the search bit for the UID.
+    `/tmp`. Every ancestor directory needs the search bit for the UID. A
+    read-only mount (`mounts`: its point, and the table of what is at and
+    under it) hides whatever the volume has there: nothing at or under it
+    can be written, created, removed or `chmod`ed (EROFS), whatever its
+    owner and mode, and the mount point itself cannot be renamed or removed
+    (EBUSY).
     """
 
-    def __init__(self, files: dict[str, FakeFile], rootfs: dict[str, FakeFile] | None = None) -> None:
+    def __init__(
+        self,
+        files: dict[str, FakeFile],
+        rootfs: dict[str, FakeFile] | None = None,
+        mounts: dict[str, dict[str, FakeFile]] | None = None,
+    ) -> None:
         """Wrap a volume's files and a container root.
 
         Args:
             files: The volume's entries, keyed by absolute, normalised path; shared with the backend.
             rootfs: The container's entries outside `/workspace`; a fresh guest_root() when omitted.
+            mounts: Read-only mounts under `/workspace`, such as UPLOADS: each point's table, keyed by absolute
+                path, the point itself included.
         """
         self.files = files
         self.rootfs = guest_root() if rootfs is None else rootfs
+        self.mounts = {} if mounts is None else mounts
 
     @staticmethod
     def resolve(path: str) -> str:
@@ -152,11 +175,20 @@ class FakeWorkspace:
         # normpath keeps a leading `//`, which the kernel reads as `/`.
         return '/' + full.lstrip('/')
 
+    def _mount(self, full: str) -> dict[str, FakeFile] | None:
+        """The table of the mount `full` is at or under, or None."""
+        return next((table for point, table in self.mounts.items() if _under(full, point)), None)
+
     def _get(self, full: str) -> FakeFile | None:
+        mounted = self._mount(full)
+        if mounted is not None:
+            return mounted.get(full)
         return (self.files if _under(full, WORKSPACE) else self.rootfs).get(full)
 
     def _writable(self, full: str) -> dict[str, FakeFile] | None:
-        """The table `full` is written in: the volume, or the `/tmp` tmpfs; None on the read-only root."""
+        """The table `full` is written in: the volume, or the `/tmp` tmpfs; None on the read-only root or a mount."""
+        if self._mount(full) is not None:
+            return None
         return self.files if _under(full, WORKSPACE) else self.rootfs if _under(full, TMP) else None
 
     def _lookup(self, path: str, uid: int, *, follow: bool = True) -> tuple[str, FakeFile | None]:
@@ -298,10 +330,10 @@ class FakeWorkspace:
         if not _allowed(entry, uid, 0o4):
             raise _error(errno.EACCES, path)
         prefix = full.rstrip('/') + '/'
+        # Each path as _get sees it: a mount's own entries, never what the volume has under its point.
+        paths = {p for p in itertools.chain(self.files, self.rootfs, *self.mounts.values()) if self._get(p) is not None}
         return sorted(
-            p[len(prefix) :]
-            for p in itertools.chain(self.files, self.rootfs)
-            if p != full and p.startswith(prefix) and '/' not in p[len(prefix) :]
+            p[len(prefix) :] for p in paths if p != full and p.startswith(prefix) and '/' not in p[len(prefix) :]
         )
 
     def _create(self, path: str, new: FakeFile, uid: int) -> None:
@@ -385,6 +417,105 @@ class FakeWorkspace:
             raise _error(errno.EPERM, path)
         entry.mode = mode
 
+    def unlink(self, path: str, uid: int = SANDBOX_UID) -> None:
+        """Remove a file or symlink (never followed) as `uid`, as `rm PATH` does.
+
+        Raises:
+            OSError: ENOENT for a missing entry, EISDIR for a directory,
+                EROFS on the read-only root, EACCES without write and search
+                permission on the parent (no root override); FileNotFoundError,
+                NotADirectoryError or PermissionError on the way.
+        """
+        full, entry = self._lookup(path, uid, follow=False)
+        if entry is None:
+            raise _error(errno.ENOENT, path)
+        if entry.is_dir:
+            raise _error(errno.EISDIR, path)
+        writable = self._writable(full)
+        if writable is None:
+            raise _error(errno.EROFS, path)
+        parent = self._get(posixpath.dirname(full))
+        assert parent is not None, '_lookup has already checked the parent exists and is a directory'
+        if not _allowed(parent, uid, 0o3):
+            raise _error(errno.EACCES, path)
+        del writable[full]
+
+    def rmdir(self, path: str, uid: int = SANDBOX_UID) -> None:
+        """Remove an empty directory (a final symlink never followed) as `uid`, as `rmdir PATH` does.
+
+        Raises:
+            OSError: ENOENT for a missing entry, ENOTDIR for anything but a
+                directory, EBUSY for a mount point, EROFS on the read-only
+                root or in a mount, ENOTEMPTY for a directory with entries,
+                EACCES without write and search permission on the parent;
+                FileNotFoundError, NotADirectoryError or PermissionError on
+                the way.
+        """
+        full, entry = self._lookup(path, uid, follow=False)
+        if entry is None:
+            raise _error(errno.ENOENT, path)
+        if not entry.is_dir:
+            raise _error(errno.ENOTDIR, path)
+        if full in self.mounts:
+            raise _error(errno.EBUSY, path)
+        writable = self._writable(full)
+        if writable is None:
+            raise _error(errno.EROFS, path)
+        if any(p.startswith(full + '/') for p in writable):
+            raise _error(errno.ENOTEMPTY, path)
+        parent = self._get(posixpath.dirname(full))
+        assert parent is not None, '_lookup has already checked the parent exists and is a directory'
+        if not _allowed(parent, uid, 0o3):
+            raise _error(errno.EACCES, path)
+        del writable[full]
+
+    def rename(self, source: str, target: str, uid: int = SANDBOX_UID) -> None:
+        """Move `source` (never followed) to the new name `target` as `uid`, as rename(2) does, with what is under it.
+
+        Write and search permission are needed on both parents, and on a
+        directory that changes parent, which rename(2) must update `..` in;
+        there is no root override. So UID 1000 could move a root-owned 0555
+        directory aside within the 1000-owned `/workspace` (T02 item 9),
+        though not move or remove anything inside it; a mount point, such as
+        the uploads, cannot be moved at all. The sticky bit is not modelled:
+        the only sticky directory, `/tmp`, holds only UID 1000's own entries.
+
+        Raises:
+            OSError: ENOENT for a missing source, EEXIST for an existing
+                target (rename(2) would replace it; not modelled), EBUSY for
+                a mount point, EXDEV between `/workspace`, a mount, `/tmp`
+                and the root (the real `mv` would copy instead), EROFS on the
+                read-only root or within a mount, EINVAL for a
+                directory moved under itself, EACCES as above;
+                FileNotFoundError, NotADirectoryError or PermissionError on
+                the way.
+        """
+        source_full, entry = self._lookup(source, uid, follow=False)
+        if entry is None:
+            raise _error(errno.ENOENT, source)
+        target_full, existing = self._lookup(target, uid, follow=False)
+        if existing is not None:
+            raise _error(errno.EEXIST, target)
+        if source_full in self.mounts:
+            raise _error(errno.EBUSY, source)
+        table = self._writable(source_full)
+        if table is not self._writable(target_full):
+            raise _error(errno.EXDEV, target)
+        if table is None:
+            raise _error(errno.EROFS, target)
+        if _under(target_full, source_full):
+            raise _error(errno.EINVAL, target)
+        for full in (source_full, target_full):
+            parent = self._get(posixpath.dirname(full))
+            assert parent is not None, '_lookup has already checked the parent exists and is a directory'
+            if not _allowed(parent, uid, 0o3):
+                raise _error(errno.EACCES, source if full == source_full else target)
+        new_parent = posixpath.dirname(source_full) != posixpath.dirname(target_full)
+        if entry.is_dir and new_parent and not _allowed(entry, uid, 0o2):
+            raise _error(errno.EACCES, source)
+        for full in [p for p in table if _under(p, source_full)]:
+            table[target_full + full[len(source_full) :]] = table.pop(full)
+
 
 @dataclass(frozen=True)
 class FakeExecRequest:
@@ -442,6 +573,19 @@ class FakeSandbox:
     ip: str | None = None
     #: The container's own files outside `/workspace`, fresh at every container start, so `/tmp` is emptied.
     rootfs: dict[str, FakeFile] = field(default_factory=guest_root)
+    #: The uploads directory the backend keeps outside the volume, mounted read-only at UPLOADS in every
+    #: container, keyed by guest path, UPLOADS itself included; emptied by `stop` (every start puts again), as
+    #: the Kata backend does, and gone with `destroy`.
+    uploads: dict[str, FakeFile] = field(default_factory=lambda: {UPLOADS: _uploads_root()})
+
+    def entry(self, path: str) -> FakeFile | None:
+        """What the daemon finds at `path` in the running container: the uploads mount's entry, else the volume's."""
+        return (self.uploads if _under(path, UPLOADS) else self.files).get(path)
+
+
+def _uploads_root() -> FakeFile:
+    # As virtio-fs shows the backend's directory: owned by the backend's user, 1000 on the laptop.
+    return FakeFile(content=None, uid=SANDBOX_UID, mode=0o755)
 
 
 def _now() -> dt.datetime:
@@ -551,7 +695,7 @@ class FakeBackend:
         chat_id = validate_chat_id(chat_id)
         require_wrapped(argv, timeout_s)
         box = self._running(chat_id)
-        workspace = FakeWorkspace(box.files, box.rootfs)
+        workspace = FakeWorkspace(box.files, box.rootfs, mounts={UPLOADS: box.uploads})
         # The command runs on in the guest whatever happens to the caller, as T14's exec in a thread does, until it
         # ends or the kill ends it.
         command = asyncio.ensure_future(self.script(FakeExecRequest(chat_id, list(argv), timeout_s, stdin, workspace)))
@@ -614,6 +758,21 @@ class FakeBackend:
         for name, content, mode in files:
             box.files[f'{full}/{name}'] = FakeFile(content=content, uid=0, mode=mode, mtime=now)
 
+    async def put_uploads(self, chat_id: str, files: list[tuple[str, bytes]]) -> None:
+        self.calls.append(('put_uploads', {'chat_id': chat_id, 'files': _copy(files)}))
+        chat_id = validate_chat_id(chat_id)
+        validate_put_uploads(files)
+        box = self._running(chat_id)
+        # The mounted directory holds exactly `files`, 0444, in Kata's order: entries not asked for go first, then each
+        # new or changed file is written; one already there with the same content is kept.
+        wanted = dict(files)
+        for path in [p for p in box.uploads if p != UPLOADS and p[len(UPLOADS) + 1 :] not in wanted]:
+            del box.uploads[path]
+        for name, content in files:
+            path = f'{UPLOADS}/{name}'
+            if (kept := box.uploads.get(path)) is None or kept.content != content:
+                box.uploads[path] = FakeFile(content=content, uid=SANDBOX_UID, mode=0o444)
+
     async def get_files(self, chat_id: str, paths: list[str], max_bytes: int) -> dict[str, bytes]:
         self.calls.append(('get_files', {'chat_id': chat_id, 'paths': _copy(paths), 'max_bytes': max_bytes}))
         chat_id = validate_chat_id(chat_id)
@@ -622,7 +781,7 @@ class FakeBackend:
         found: dict[str, bytes] = {}
         for path in paths:
             # Read as the archive API reads, not as UID 1000: no permission check.
-            entry = box.files.get(path)
+            entry = box.entry(path)
             if entry is not None and entry.content is not None and not entry.fifo and len(entry.content) <= max_bytes:
                 found[path] = entry.content
         return found
@@ -632,7 +791,7 @@ class FakeBackend:
         chat_id = validate_chat_id(chat_id)
         validate_sandbox_path(path, allow_workspace=True)
         box = self._running(chat_id)
-        entry = box.files.get(path)
+        entry = box.entry(path)
         if entry is None:
             return None
         # A directory's size is 0, a symlink's the length of its target, a FIFO's 0.
@@ -651,6 +810,7 @@ class FakeBackend:
         if box is not None:
             box.running = False
             box.ip = None
+            box.uploads = {UPLOADS: _uploads_root()}
 
     async def destroy(self, chat_id: str) -> None:
         self.calls.append(('destroy', {'chat_id': chat_id}))
@@ -783,13 +943,57 @@ def _mkdir(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
     return FakeRun(1 if err else 0, stderr=''.join(err).encode())
 
 
+def _mv(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    # Only `mv SOURCE TARGET`: TARGET a new name, or an existing directory to move SOURCE into.
+    if len(args) != 2:
+        return FakeRun(1, stderr=b'mv: only `mv SOURCE TARGET` is modelled\n')
+    source, target = args
+    try:
+        _, entry = request.workspace._lookup(target, SANDBOX_UID)
+        if entry is not None and entry.is_dir:
+            target = posixpath.join(target, posixpath.basename(source.rstrip('/')))
+        request.workspace.rename(source, target)
+    except OSError as exc:
+        return FakeRun(1, stderr=f"mv: cannot move '{source}' to '{target}': {exc.strerror}\n".encode())
+    return FakeRun(0)
+
+
+def _rmdir(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    # Only `rmdir PATH...`, without options.
+    if not args:
+        return FakeRun(1, stderr=b'rmdir: missing operand\n')
+    err: list[str] = []
+    for path in args:
+        try:
+            request.workspace.rmdir(path)
+        except OSError as exc:
+            err.append(f"rmdir: failed to remove '{path}': {exc.strerror}\n")
+    return FakeRun(1 if err else 0, stderr=''.join(err).encode())
+
+
+def _rm(args: list[str], request: FakeExecRequest, limit: int) -> FakeRun:
+    # Only `rm PATH...`, without options: files and symlinks.
+    if not args:
+        return FakeRun(1, stderr=b'rm: missing operand\n')
+    err: list[str] = []
+    for path in args:
+        try:
+            request.workspace.unlink(path)
+        except OSError as exc:
+            err.append(f"rm: cannot remove '{path}': {exc.strerror}\n")
+    return FakeRun(1 if err else 0, stderr=''.join(err).encode())
+
+
 _COMMANDS: dict[str, Callable[[list[str], FakeExecRequest, int], FakeRun]] = {
     'cat': _cat,
     'chmod': _chmod,
     'ln': _ln,
     'ls': _ls,
     'mkdir': _mkdir,
+    'mv': _mv,
     'printf': _printf,
+    'rm': _rm,
+    'rmdir': _rmdir,
     'sleep': _sleep,
 }
 
@@ -955,7 +1159,8 @@ def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
 
 
 async def interpret(request: FakeExecRequest) -> FakeRun:
-    """The default exec script: a tiny bash for `cat`, `chmod`, `ln -s`, `ls`, `mkdir`, `printf` and `sleep`.
+    """The default exec script: a tiny bash for `cat`, `chmod`, `ln -s`, `ls`, `mkdir`, `mv`, `printf`, `rm`, `rmdir`
+    and `sleep`.
 
     The argv must pass exec.require_wrapped (ValueError otherwise). After
     the prefix comes either one of the file tools' guest helpers
@@ -968,14 +1173,16 @@ async def interpret(request: FakeExecRequest) -> FakeRun:
     waiting. Anything else (another command after the prefix, another
     command name, `;`, `&&`, pipes, unbalanced quotes) exits 127 with bash's
     "command not found". A redirect that cannot be written exits 1 with
-    bash's message, as when UID 1000 writes into root-owned uploads.
+    bash's message, as when UID 1000 writes into the read-only uploads.
 
     Where it differs from bash: a quoted `'>'` is still read as a redirect
     (`printf a '>' f` writes `a` to `f`), since the tokenizer does not say
     which words were quoted, `printf` knows only `%s`, `%%`, `\\n`,
     `\\t` and `\\\\` (it does reuse its format for extra arguments, as bash
-    does), `chmod` only octal modes, and `ln` only `ln -s TARGET LINK` with
-    LINK a new name.
+    does), `chmod` only octal modes, `ln` only `ln -s TARGET LINK` with
+    LINK a new name, `mv` only `mv SOURCE TARGET` with TARGET a new name or a
+    directory to move into, within one filesystem, `rm` only files and
+    symlinks, and `rmdir` only directories, both without options.
     """
     require_wrapped(request.argv, request.timeout_s)
     shell = list(guest.GUEST_SHELL)

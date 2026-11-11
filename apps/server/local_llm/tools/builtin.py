@@ -77,6 +77,7 @@ from local_llm.sandbox import (
 )
 from local_llm.sandbox import workspace as sandbox_files
 from local_llm.sandbox.limits import TIMEOUT_DEFAULT_S
+from local_llm.sandbox.uploads import chat_owner, sync_uploads
 from local_llm.sandbox.workspace import WorkspaceError
 from local_llm.socket.main import sio
 from local_llm.tasks import stop_item_tasks
@@ -847,14 +848,23 @@ async def _sandbox_session(
     metadata: dict | None,
     event_emitter: Callable[[dict], Awaitable[None]] | None,
     image: str | None = None,
+    upload_notes: list[str] | None = None,
 ) -> AsyncIterator[SandboxSession]:
     """The chat's sandbox session, saying so through the event emitter while it waits for a free sandbox.
+
+    With `upload_notes` given (`bash`, `view`), the chat's attached files
+    (`metadata['files']`) are synced into /workspace/uploads first
+    (sandbox/uploads.py), and the notes for files left out are appended to it.
+    A sync that fails never refuses the call: a full workspace must still run
+    `rm`. Its failure becomes one more note, with the reason only when it was
+    written for the model; the details are logged.
 
     Raises:
         SandboxUnavailable: The app has no sandbox manager.
         SandboxRefused: There is no user, or the manager refuses the chat.
         WorkspaceError: `image` is not `data`, `web` or None.
         SandboxError: The manager could not start the sandbox.
+        SandboxNotRunning: The sandbox stopped during the upload sync.
     """
     manager = getattr(getattr(getattr(request, 'app', None), 'state', None), 'sandbox', None)
     if manager is None:
@@ -883,6 +893,24 @@ async def _sandbox_session(
             entered = True
             if waited and event_emitter is not None:
                 await event_emitter({'type': 'status', 'data': {'description': 'Sandbox ready', 'done': True}})
+            if upload_notes is not None:
+                try:
+                    upload_notes.extend(
+                        # The owner is looked up only when the chat has files.
+                        await sync_uploads(
+                            session, (metadata or {}).get('files'), account, lambda: chat_owner(chat, account)
+                        )
+                    )
+                except SandboxNotRunning:
+                    raise
+                except Exception as exc:
+                    log.warning('the upload sync for chat %s failed', chat, exc_info=True)
+                    why = (
+                        exc.public if isinstance(exc, SandboxError) and exc.public else 'the copy failed on the server'
+                    )
+                    upload_notes.append(
+                        f'{UPLOADS_NOT_COPIED} ({why}), so it may be missing files or hold an older set'
+                    )
             yield session
     except Exception:
         # A wait that ends without a sandbox closes its status too, or the chat would show it waiting for good.
@@ -903,7 +931,11 @@ def _model_input() -> Iterator[None]:
         raise WorkspaceError(str(exc)) from exc
 
 
-def _sandbox_error(tool: str, exc: Exception) -> str:
+#: How the note for a failed upload sync starts (_sandbox_session); `view` adds that note to its errors.
+UPLOADS_NOT_COPIED = 'The attached files could not be copied into /workspace/uploads'
+
+
+def _sandbox_error(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
     """The tool result for a failure, worded so the model can tell its own mistake from the sandbox's.
 
     The result goes to the model and on to its provider, so the text of an
@@ -911,7 +943,8 @@ def _sandbox_error(tool: str, exc: Exception) -> str:
     is logged and never returned: only the manager's refusals, text written
     for the model (SandboxError.public) and the model's own mistakes
     (WorkspaceError) are. Any other ValueError or TypeError, from a library
-    or a bug, gets the fixed text too.
+    or a bug, gets the fixed text too. A failed upload sync's note in
+    `notes` is added to the message.
     """
     if isinstance(exc, SandboxUnavailable):
         log.warning('%s: the sandbox is not available: %s', tool, exc)
@@ -931,6 +964,7 @@ def _sandbox_error(tool: str, exc: Exception) -> str:
     else:
         log.exception('%s failed', tool)
         message = f'{tool} failed inside the sandbox service; try again, and say so if it keeps failing'
+    message = ' '.join([message, *(f'({note})' for note in notes or [] if note.startswith(UPLOADS_NOT_COPIED))])
     return JSONCodec.dumps({'error': message}, ensure_ascii=False)
 
 
@@ -978,8 +1012,9 @@ async def bash(
             requested = _line_arg(timeout_s, 'timeout_s')
             timeout = clamp_timeout(TIMEOUT_DEFAULT_S if requested is None else requested)
             argv = wrap_command(command, timeout)
+        notes: list[str] = []
         async with _sandbox_session(
-            __request__, __user__, __chat_id__, __metadata__, __event_emitter__, image
+            __request__, __user__, __chat_id__, __metadata__, __event_emitter__, image, upload_notes=notes
         ) as session:
             result = await session.exec(argv, timeout)
     except Exception as exc:
@@ -988,7 +1023,8 @@ async def bash(
         {
             'returncode': result.returncode,
             'stdout': result.stdout,
-            'stderr': result.stderr,
+            # As the Jupyter engine does: the model sees why an attached file is missing.
+            'stderr': '\n'.join(filter(None, [result.stderr, *notes])),
             'timed_out': result.timed_out,
             'truncated': result.truncated,
         },
@@ -1026,10 +1062,18 @@ async def view(
             sandbox_files.confine(path)
             first = _line_arg(start_line, 'start_line')
             last = _line_arg(end_line, 'end_line')
-        async with _sandbox_session(__request__, __user__, __chat_id__, __metadata__, __event_emitter__) as session:
-            shown = await sandbox_files.view(session, path, first, last)
     except Exception as exc:
         return _sandbox_error('view', exc)
+    # Synced as for bash, so the attached files are there from the chat's first call. The notes are bash's, except
+    # that a failed sync is named in an error, which a missing upload would otherwise show without a reason.
+    notes: list[str] = []
+    try:
+        async with _sandbox_session(
+            __request__, __user__, __chat_id__, __metadata__, __event_emitter__, upload_notes=notes
+        ) as session:
+            shown = await sandbox_files.view(session, path, first, last)
+    except Exception as exc:
+        return _sandbox_error('view', exc, notes)
     # An image is returned as its data: URI, which the tool-result path shows to a vision model.
     return shown if isinstance(shown, str) else JSONCodec.dumps(shown, ensure_ascii=False)
 

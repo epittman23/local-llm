@@ -119,7 +119,8 @@ Start here for "how do I run/use this."
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
   sign-in on through environment variables), `sandbox.md` (the per-chat
-  microVM sandbox under construction; so far its Kata host setup).
+  microVM sandbox under construction; so far its Kata host setup, images
+  and backend).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -180,6 +181,9 @@ Infrastructure this repo runs but does not write.
   (the code interpreter's engine) and **SearXNG** (web search), each on its
   own network so neither can reach Postgres or Redis; see
   `docs/guides/assistant-tools.md`.
+  It also runs the code sandbox's **`sandbox-mirror`** (nginx serving the
+  wheelhouse) on the `internal` `sandbox` network at a fixed address; see
+  `docs/guides/sandbox.md` "Mirror and wheelhouse".
 - **`searxng/settings.yml`** — SearXNG's settings: only what differs from
   its defaults (JSON output on, limiter off). Its secret comes from
   `infra/.env`.
@@ -187,7 +191,10 @@ Infrastructure this repo runs but does not write.
   `Dockerfile.web`), the files they share (`common/`), per-image inputs
   (`data/`, `web/`), the image tag (`TAG`) and the data image's package
   list (`image-freeze.txt`, `image-freeze-r.txt`). Built by `make sandbox-images`;
-  `docs/guides/sandbox.md` "Images".
+  `docs/guides/sandbox.md` "Images". Also the package allowlist
+  (`allowlist.in`), its hash-locked wheel list (`requirements.lock`; `make
+  wheelhouse` downloads it) and the mirror's nginx configuration
+  (`mirror/nginx.conf`); `docs/guides/sandbox.md` "Mirror and wheelhouse".
 - **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the
@@ -229,8 +236,10 @@ fork's pre-import history is kept read-only at
   `workspace.py`, the file tools' path confinement and guest helpers, whose
   in-guest half is `infra/sandbox/common/lllm-path`; its four tools,
   `bash`, `view`, `write_file` and `str_replace` in `tools/builtin.py`, are
-  offered under the `sandbox` engine, though nothing creates a manager
-  until T14), and **`benchmarks/`** (see below).
+  offered under the `sandbox` engine; `kata.py`, `KataDockerBackend`, the
+  backend that runs each chat in a Kata microVM through Docker, with its
+  fixed-size workspace volumes; and `lifespan.py`, which `main.py`'s
+  lifespan uses to start and stop the manager), and **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
