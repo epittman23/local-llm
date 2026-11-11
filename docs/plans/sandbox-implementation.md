@@ -65,7 +65,7 @@ The same for every session:
 | T01 | Install and register Kata on the laptop | owner, kvm | owner, kvm | T00 | done | `5bc8814f` | 2026-11-10, branch head `523e2b30` + this commit: Fedora 44 `kata-containers` 3.26.0 is QEMU-only, so upstream 4.3.1 runtime-rs (Q7), sha256 verified, under `/opt/kata`; `kata-clh` registered in `/etc/docker/daemon.json` with the runtime-rs shim and `ConfigPath` = `configuration-clh-runtime-rs.toml` (a `KATA_CONF_FILE` wrapper failed: "only shipped Kata configuration files are accepted"); `kata-ctl check no-network-checks` exit 0; `docker run --rm --runtime kata-clh alpine uname -r` = `6.18.56` vs host `7.2.8-200.fc44.x86_64`, 1.3 s; one `cloud-hypervisor` + two `virtiofsd` per running container, none after; no AVC denials; Kata 4.3.1, Cloud Hypervisor v54.0, virtiofsd 1.14.0, Docker 29.8.2, containerd 2.3.6. Details in `docs/guides/sandbox.md`, "Host setup" |
 | T02 | Spike: prove the Kata assumptions | docker, kvm | docker, kvm | T01 | done | `adc53af2` (after `fc3cc9ee`, `758ac82f`) | 2026-11-10 on the laptop (Kata 4.3.1 runtime-rs, Cloud Hypervisor v54.0, Docker 29.8.2, docker-py 7.2.0), throwaway scripts, every option set as T14 will: **1 yes:** a named volume at `/workspace` mounts as `virtiofs`, keeps files across container removal, and an empty volume takes the image's `1000:1000` `/workspace`. **2 yes:** `--read-only` root (`virtiofs ro`) refuses writes; `--tmpfs /tmp:size=256m` is a 256 MiB `tmpfs` (`nosuid,nodev,noexec`). **3 yes after Q8:** uid 1000, CapPrm/CapEff/CapBnd 0, `NoNewPrivs: 1`, `memory.max` 4 GiB (guest 3966 MiB), `cpu.max` 2 CPUs (guest 3 vCPUs) honoured; `--pids-limit 512` is not (fork bomb reached 15,849), `--ulimit nproc=512:512` is (bomb stopped at 516, host load 0.46); 256 MiB chunks are OOM-killed in the guest at 3840 MiB (rc 137, `oom_kill 1`), container and host unaffected; one 6 GB `bytearray` fails at once with `MemoryError`; `cloud-hypervisor` keeps 4.2 GB RSS after the kill. **4 yes after Q9:** an `internal` network attaches; host LAN IP, `docker0` and a public IP are "Network unreachable", no outside name resolves; a peer is reachable by IP and by name only with `--add-host` (Docker's DNS does not answer in the guest). **5 yes:** `put_archive` into the volume writes root-owned files with the tar's modes (`0:0 555` dir, `0:0 444` file; uid 1000 cannot write, delete, chmod or add); `put_archive` into the read-only root is refused ("container rootfs is marked read-only"); `get_archive` works. **6 yes:** `exec_create` with a list argv and `user='1000:1000'`, `exec_start(stream=True, demux=True)` streams stdout and stderr as written (1 s apart). **7 yes:** scipy-notebook's `/opt/conda/bin/python` 3.13.16 has `ENABLE_USER_SITE` True and no `PYTHONNOUSERSITE`; with `PYTHONUSERBASE=/workspace/.local` and `PIP_USER=1`, an offline `pip install` from a find-links directory lands in `/workspace/.local` (read-only home is fine) and imports in the next exec and in a new container; no `.venv` fallback. **8:** `docker run -d` to the first exec's output 0.99-1.03 s (scipy-notebook, 5 runs) and 0.99-1.06 s (alpine); idle host RSS (`cloud-hypervisor` + `virtiofsd`) 381-395 MiB (scipy-notebook) and 290-295 MiB (alpine); i9-12900H, 62 GiB. **9 yes, as expected:** uid 1000 can `mv` the root-owned `0555` `uploads` aside and create its own; a root exec (no caps) can `chmod` and empty the moved copy but not remove it from the 1000-owned `/workspace`; uid 1000 can then `rmdir` it. **10 yes:** one exec with `stdin=True` via `exec_start(socket=True)`: 900,000 bytes sent then `shutdown(SHUT_WR)`, 8-byte-header frames demultiplexed to stdout `900000` and stderr, exit code 3 from `exec_inspect`. **11:** `docker compose down` with a sandbox attached exits 0 but leaves the network ("Resource is still in use"); the next `up` reuses the same network id, and the running sandbox reaches the restarted peer; so T16 keeps the network in Compose (no external network, no stop-first). Findings for T13-T16 are in their sections ("From T02") and `docs/guides/sandbox.md` |
 | T10 | Sandbox core: types, `SandboxBackend`, `FakeBackend`, exec limits | any | any | T00 | done | `563b1ce8` | 2026-11-10: `apps/server/local_llm/sandbox/` (types, `SandboxBackend` protocol with 9 methods and shared validators, limits, exec wrapping and `StreamCap`, `FakeBackend`) and `tests/test_sandbox_core.py` (600 cases, 100% statement coverage of the package, 0.98 s); security review (3 blocking, 10 should-fix) and code review (1 blocking, 10 should-fix) applied, re-review APPROVE; owner answers Q10, Q11 from the review folded in; `make test-backend` exit 0 (5,266 passed, 21 skipped, none new); `make test-types` no new findings; ruff and format clean. For T14: the keep-alive must survive Q10's kill and reap zombies (checked on Kata: tini as UID 1000 dies, `sleep` as PID 1 leaves zombies); Docker's untar merges directories (see T14's notes) |
-| T11 | `SandboxManager` lifecycle | any | any | T10 | todo | | |
+| T11 | `SandboxManager` lifecycle | any | any | T10 | done |  | 2026-11-10: `apps/server/local_llm/sandbox/manager.py` (`SandboxManager`, `SandboxSession`, settings, `DatabaseChats`) and `tests/test_sandbox_manager.py` (152 tests, 100% statement coverage of manager.py; with the core suite 752 passed, three runs); security review (1 blocking, 9 should-fix) and two code reviews (1 blocking each) applied, final re-review APPROVE; randomized fuzzers (2000 seeds each) clean on slot accounting and tracking; owner answered Q12-Q15 on the way (Q15 became T24); `make test-backend` exit 0 (5,418 passed, 21 skipped, none new); `make test-types` no new findings. Lifespan wiring moved to T14; retention judged by the chat row's `updated_at` until T24 |
 | T12 | The four tools and path confinement | any | any | T11 | todo | | |
 | T13 | Chat uploads into `/workspace/uploads` | any | any; docker, kvm | T11 | todo | | |
 | T14 | `KataDockerBackend` and its integration tests | any | docker, kvm | T10, T02 | todo | | Q8 answered: pass `--ulimit nproc=512:512` with `--pids-limit 512`; Q9 answered: pass `extra_hosts={'sandbox-mirror': <fixed address>}` |
@@ -78,7 +78,8 @@ The same for every session:
 | T21 | Package telemetry | any | any; docker, kvm | T15, T16, T20 | todo | | |
 | T22 | Run button in chat code blocks | any | any | T20 | todo | | |
 | T23 | Step 1 docs | any | any | T20 | todo | | |
-| T29 | Step 1 gate | local | docker, kvm, owner | T10-T23 | todo | | |
+| T24 | Workspace cap and deletion dialog (Q15) | any | any; docker, kvm | T11, T14, T19 | todo | | |
+| T29 | Step 1 gate | local | docker, kvm, owner | T10-T24 | todo | | |
 | T30 | Harness on the sandbox engine | any | any | T20 | todo | | |
 | T31 | Harness baseline on the sandbox engine | local | gpu, kvm, owner | T29, T30 | todo | | |
 | T39 | Step 2 gate | local | docker, kvm | T31 | todo | | |
@@ -263,6 +264,42 @@ to the decision.
   the manager that stops a sandbox whose volume passes a size, which is
   reactive and can overshoot; (c) accept it on the laptop and revisit on
   the home server. Recommended: (a).
+- **Q12 (found while building T11, 2026-11-10). Answered 2026-11-10:
+  key unsaved chats by chat id and user.** Q5's ephemeral sandboxes were
+  mapped from the chat id alone, so every member of a `channel:` chat
+  would share one sandbox and its files, and anyone sending another
+  user's `temporary:` id would reach that user's sandbox. Options: (a)
+  map by (chat id, user id), so each user gets their own and
+  `release(chat_id)` destroys every user's sandbox for that chat (the
+  harness's case); (b) keep the chat id alone. Recommended and chosen:
+  (a). Saved chats are unaffected: their read access is checked against
+  the chat row.
+- **Q13 (found in T11's security review, 2026-11-10). Answered
+  2026-11-10: evict an idle sandbox, with a deadline.** When every slot
+  is held, a waiting chat used to wait for the 30-minute reaper while
+  holding its own lock, so four earlier chats could block a new one for
+  half an hour. Now the manager stops the least-recently-used sandbox
+  that is not in use and has been idle at least 60 seconds (its files stay
+  on its volume) and takes its slot; with none to evict it waits at most
+  2 minutes, then the call fails with "no free sandbox". Options were
+  that, a per-user cap with the deadline, or the deadline alone.
+- **Q14 (found in T11's security review, 2026-11-10). Answered
+  2026-11-10: the owner or an admin.** A saved chat's sandbox is usable by
+  its owner, or by an admin exactly as the chat completion endpoint
+  allows, not by everyone who can read the chat (folder readers), since
+  running code writes to the workspace the owner's model later uses.
+- **Q15 (found in T11's security review, 2026-11-10). Answered
+  2026-11-10: a per-user cap of 20 persistent workspaces, and a dialog
+  before deleting one.** Each workspace is capped at 10 GiB (Q11), but
+  nothing bounded how many a user holds within the 7-day retention. The
+  owner chose: at most 20 persistent workspaces per user (admin-settable);
+  before a workspace is deleted for the cap or for the 7-day expiry, the
+  user sees a dialog listing its contents and chooses to remove or keep
+  it; nothing is deleted without an answer (it stays pending, using its
+  disk, until answered); a workspace whose chat was deleted still goes
+  silently. The cap is hard: at the cap, the user either picks another
+  workspace to remove, or the new workspace is not created and the model
+  gets an error saying what happened. Built as T24.
 
 ### Session log
 
@@ -647,29 +684,40 @@ uv run --frozen python -m pytest tests/test_sandbox_core.py -q`);
 
 *Author: any. Verify: any. Depends: T10.*
 
-`apps/server/local_llm/sandbox/manager.py`, one instance on
-`app.state.sandbox` (created in `main.py`'s `lifespan`, near the other
-`app.state` tasks at `main.py:417-423`, closed in `_shutdown` at
-`main.py:490`). It is the only module that talks to the backend.
+`apps/server/local_llm/sandbox/manager.py`. It is the only module that
+talks to the backend. Its instance lives on `app.state.sandbox`, created
+in `main.py`'s `lifespan` and closed in `_shutdown`, but that wiring is
+T14's (changed 2026-11-10): until T14 there is no real backend to give
+it, and wiring the `FakeBackend` into the app would be placeholder work.
+T11 provides everything the wiring calls (the maintenance loop, the
+startup sweep, `shutdown()`), tested against `FakeBackend`.
 
-- **Per-chat lock:** `dict[str, asyncio.Lock]`; every operation on a chat
-  holds its lock, so concurrent tool calls never interleave.
-- **Concurrency cap:** an `asyncio.Semaphore(max_running)` held while a
-  sandbox is *running* (acquired on create, released on stop/destroy), so
-  a fifth chat waits until one stops. The wait is visible: the tool call
+- **Per-sandbox lock:** one lock per backend key (a saved chat, or an
+  unsaved chat and user, Q12), dropped when nobody holds or waits on it;
+  every operation on a sandbox holds its lock, so concurrent tool calls
+  never interleave.
+- **Concurrency cap:** at most `max_running` sandboxes tracked as
+  running (a count, not a fixed `Semaphore`, since the limit is re-read
+  from the settings), a slot taken on create and freed only on a
+  confirmed stop or destroy, so a fifth chat waits until one stops. The wait is visible: the tool call
   emits a status event ("waiting for a free sandbox") through the event
-  emitter after one second.
+  emitter after one second. Per Q13, a waiting chat first evicts the
+  least-recently-used sandbox that is not in use and has been idle at
+  least 60 seconds (its files stay on its volume); with none to evict it
+  waits at most 2 minutes, then fails with "no free sandbox".
 - **Lazy create:** the first call for a chat resolves its sandbox key:
-  - a **saved chat** (a row exists, `Chats.get_chat_by_id`, owned by or
-    readable by the caller): the key is the chat id, and the sandbox is
+  - a **saved chat** (a row exists, and the caller is its owner or an
+    admin exactly as the chat completion endpoint allows, Q14; not every
+    reader of the chat): the key is the chat id, and the sandbox is
     persistent (volume kept, retention applies);
   - an **unsaved chat** (an id starting with one of
     `NON_SAVED_CHAT_ID_PREFIXES` in `utils/chat_id.py`, including the
     harness's `temporary:benchmark-<uuid>`; use that tuple, not a copy of
     the prefixes): per Q5, an
     **ephemeral** sandbox, keyed by a UUID the manager generates and maps
-    from the chat id in memory; its volume is destroyed whenever its
-    container stops;
+    in memory from the chat id **and the user** (Q12), so members of a
+    shared `channel:` chat each get their own; its volume is destroyed
+    whenever its container stops;
   - anything else is refused before the backend is called.
 
   Then `backend.create`. The backend only ever sees the UUID key, never
@@ -682,12 +730,19 @@ uv run --frozen python -m pytest tests/test_sandbox_core.py -q`);
   unused for `retention_days` (default 7) **and every persistent volume
   whose chat no longer exists** (Corrections, item 6). Ephemeral sandboxes
   (label `lllm.ephemeral=1`) are never judged by "chat exists"; they go
-  when stopped, and the startup sweep destroys any left over.
+  when stopped, and the startup sweep destroys any left over. T24 (Q15)
+  later changes the expiry case: an expired volume is marked pending and
+  kept until its user answers a dialog, while a deleted chat's volume
+  still goes silently.
 - **Harness items:** an API to destroy a chat's sandbox now
   (`manager.release(chat_id)`), which the harness calls when an item
-  finishes (T30), so ephemeral harness sandboxes never idle in a slot. Last use is a label or a manager-side
-  record updated on each call; choose one in this task and say which in
-  the docstring.
+  finishes (T30), so ephemeral harness sandboxes never idle in a slot.
+- **Last use** (chosen 2026-11-10): the idle reaper uses an in-memory
+  record of each running sandbox's last call (every running sandbox
+  started under this manager, since the startup sweep stops the rest);
+  the retention sweep uses the chat row's `updated_at`, since every call
+  happens inside a chat that is being updated, it survives restarts and
+  it needs no new table. Ephemeral sandboxes need neither.
 - **Orphan sweep at startup:** list sandboxes by label
   `lllm.chat`; stop every running one (they lost their manager), keep
   their volumes for the retention rule.
@@ -706,7 +761,7 @@ concurrent calls on one chat run one after the other; the fifth chat
 waits and proceeds when one stops; the reaper stops an idle sandbox and
 keeps its volume; the sweep destroys an expired volume and an orphaned
 one (chat deleted) and keeps a live one; an image switch keeps files;
-startup sweep stops leftovers; an unknown or unreadable chat id is
+startup sweep stops leftovers; an unknown chat id, or a saved chat the caller does not own and cannot reach as an admin (Q14), is
 refused before the backend is called; a `temporary:` id gets an
 ephemeral sandbox that the sweep leaves alone while running and that
 `release()` destroys with its volume.
@@ -719,7 +774,9 @@ container (or created the volume): Docker labels cannot change after
 creation, so no backend reports per-call use, and once a sandbox is
 stopped only the volume's creation time remains. The 7-day retention
 sweep therefore keeps its own last-used record (a manager-side table or
-file updated on every call), not `last_used`. A volume's `ephemeral`
+file updated on every call), not `last_used`. (Superseded the same day by
+T11's "Last use" choice, the chat row's `updated_at`; T24 adds the
+manager's own table.) A volume's `ephemeral`
 flag is fixed when the volume is created; `list_sandboxes()` reports it
 whether or not the container runs, and `image` only while it runs.
 
@@ -926,6 +983,13 @@ entry, then the files. `nano_cpus` is `limits.NANO_CPUS`, an int.
 `exec_inspect` reports no exit time, so the backend times `elapsed_s`
 itself (for example by polling until the exec stops running).
 
+**From T11 (2026-11-10):** the manager lets a `create`, `stop` or
+`destroy` finish even when the session that started it is cancelled (a
+cancelled `to_thread` call keeps running, and the manager must know
+whether a container exists), so a hung Docker daemon would hang a
+session's cancellation and the lifespan's shutdown too: give each of
+those backend calls its own timeout, raising `SandboxError`.
+
 **The keep-alive and Q10's kill (checked on Kata, 2026-11-10):** with
 `--init` (tini) and `user='1000:1000'`, `kill -9 -1` as UID 1000 kills
 the keep-alive `sleep`, tini exits and the container stops (exit 137).
@@ -941,6 +1005,15 @@ and never exits. Prove the choice with a test that runs several hundred
 calls, each leaving a background child, and checks the process count
 stays flat; if it changes the proposal's `--user 1000:1000` for PID 1,
 ask the owner.
+
+**Lifespan wiring (moved here from T11, 2026-11-10):** create the
+`SandboxManager` with this backend on `app.state.sandbox` in `main.py`'s
+`lifespan` (near the other `app.state` tasks), run its startup sweep and
+start its maintenance loop there, and in `_shutdown` call its
+`shutdown()` (stopping running sandboxes only under
+`LLLM_STOP_JOBS_ON_SHUTDOWN`) and cancel the loop. When `ready()` reports
+a reason (no Kata on the host), the app still starts and the manager
+refuses calls with that reason.
 
 ### T15: sandbox images
 
@@ -1239,8 +1312,8 @@ an existing golden file is an edit to it (a gate finding), so put the new
 cases in new fixture files `tests/fixtures/sandbox_*.json` and leave
 those two goldens untouched until T40 (`tool_loading.json` already
 changes in T12); `note_code_run` called with and without
-failure; the Run endpoint refuses without a chat id and for an unreadable
-chat; sub-agent settings keep the feature.
+failure; the Run endpoint refuses without a chat id and for a
+chat the user may not use (Q14); sub-agent settings keep the feature.
 
 **Verify:** the tests; `make test-backend`; on the laptop, a model
 without native tool calling runs a `<code_interpreter>` block (acceptance
@@ -1253,6 +1326,17 @@ can act on (its message says to write the script to a file), not a
 sandbox failure. Only `SandboxError` may call `note_code_run(failure)`;
 a command that fails, is OOM-killed or times out is the model's result,
 or the harness would refuse a whole run over one model mistake.
+
+**From T11's code review (2026-11-10):** the manager's admin rule for
+using a saved chat's sandbox (Q14) mirrors `main.py`'s
+`_admin_reaches_other_chats` and `_persist_follow_up`, and a parity test
+checks they agree; but `main.py` binds `ENABLE_ADMIN_CHAT_ACCESS` at
+import while the manager reads it on every call. While changing the call
+sites here, move the rule into one public helper in
+`models/chats.py` (for example `admin_reaches_other_chats(user)`) used by
+`main.py`, `routers/chats.py`'s `can_access_chat` and
+`DatabaseChats.usable`, and update the patch targets in
+`tests/test_admin_chat_access.py`.
 
 ### T21: package telemetry
 
@@ -1328,9 +1412,68 @@ stdout, stderr and attached outputs under the block, reusing
 **Verify:** the `docs-sync` skill's checks; `uvx pre-commit run --files
 <changed docs>`.
 
+### T24: workspace cap and deletion dialog **security**
+
+*Author: any. Verify: any; docker, kvm. Depends: T11, T14, T19.*
+
+Owner decision Q15 (2026-11-10). Each user holds at most
+`code_interpreter.sandbox.max_workspaces` persistent workspaces (default
+20, admin-settable, added with T19's keys), and no workspace is deleted
+for the cap or for the 7-day expiry without the user's answer.
+
+- **Record.** A new append-only table (with the `new-migration` skill),
+  for example `sandbox_workspace`: the backend key, the owning user, the
+  chat id, created and last-used times, and a pending deletion (reason
+  `cap` or `expired`, since when, and the workspace that would replace it
+  for `cap`). The manager writes it when it creates a persistent volume,
+  and reads it for the cap and the sweeps; it survives restarts.
+- **Cap.** When `session()` would create a user's 21st persistent
+  volume, it creates nothing: it records a pending `cap` request and
+  raises a `SandboxError` whose message tells the model that the user's
+  workspace limit is reached and that the user has been asked to remove
+  one (the tool returns it as an error the model can relay). Once the
+  user removes one, the next call creates the new workspace. Ephemeral
+  sandboxes do not count.
+- **Expiry.** T11's retention sweep stops destroying a volume unused for
+  `retention_days`: it marks it pending (`expired`). It judges last use
+  by this table's own last-used time, which the manager updates on every
+  call, not by the chat row's `updated_at`, which the chat import route
+  takes from the client (a chat imported with a future date would keep its
+  volume until then). A pending volume is
+  kept, with its disk, until the user answers. A volume whose chat was
+  deleted is still destroyed silently, as in T11.
+- **Contents.** The dialog lists each pending workspace's files (paths,
+  sizes, modified times, capped at a few hundred entries, with a total)
+  from a backend listing of the volume that does not need its sandbox
+  running; add it to `SandboxBackend` and both backends (T14's lists the
+  volume from a short-lived helper with the volume mounted read-only,
+  never with model-chosen options).
+- **API.** `GET /api/v1/sandbox/pending` (the current user's pending
+  deletions with their contents, and for a `cap` request the user's
+  other workspaces to choose from) and `POST
+  /api/v1/sandbox/pending/{id}` with `remove` or `keep`; for `cap`,
+  `remove` names the workspace to delete (the expired candidate or
+  another of the user's), and `keep` leaves the new workspace uncreated.
+  Each route acts only on the caller's own workspaces.
+- **Dialog.** In `apps/web`, when the user has pending deletions (on
+  load and after a tool call that hit the cap), a dialog shows each one:
+  the chat it belongs to, the reason, its contents, and Remove / Keep.
+  Keep on an `expired` workspace resets its last use, so it is not asked
+  about again until it expires again.
+
+**Tests:** the cap blocks the 21st and records one request; removing a
+workspace lets the next call create; expiry marks pending and never
+destroys; a deleted chat's volume still goes; the routes refuse another
+user's workspaces; the listing is capped; Vitest and Playwright for the
+dialog (Playwright mocks the backend).
+
+**Verify:** `make test-backend`; `make test-web`; `make test-e2e`; on
+the laptop (docker, kvm), the real listing of a stopped volume and one
+cap round trip in the browser.
+
 ### T29: step 1 gate
 
-*Author: local. Verify: docker, kvm, owner. Depends: T10-T23.*
+*Author: local. Verify: docker, kvm, owner. Depends: T10-T24.*
 
 `make check` on the branch head; `LLLM_TEST_KATA=1` suite; with the owner,
 the step 1 acceptance tests from the proposal, each recorded in the PR

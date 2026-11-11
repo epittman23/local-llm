@@ -292,6 +292,10 @@ Every question the proposal raised was decided by the owner.
 | Finding the mirror from a Kata guest | A fixed subnet and `sandbox-mirror` address in Compose, passed to each sandbox as `extra_hosts`: Docker's embedded DNS does not answer inside a Kata VM, so no container name resolves there | 2026-11-10 |
 | Processes between calls | None: after every command the backend kills every UID 1000 process in the sandbox, since background children survive `timeout` and root in the guest cannot kill them | 2026-11-10 |
 | Disk per sandbox | Each `/workspace` volume is a fixed-size 10 GiB filesystem (sparse, loop-backed), so a runaway write cannot fill the host's disk | 2026-11-10 |
+| Unsaved chats' sandboxes | One per chat and user, so members of a shared channel chat each get their own and another user's temporary chat id reaches nothing | 2026-11-10 |
+| All slots held by idle sandboxes | Evict the least-recently-used sandbox idle at least 60 s (its files stay); otherwise wait at most 2 minutes, then fail with "no free sandbox" | 2026-11-10 |
+| Who may use a saved chat's sandbox | Its owner, or an admin as the chat endpoint allows; not every reader of the chat | 2026-11-10 |
+| Workspaces per user | At most 20 persistent workspaces per user (admin-settable); before one is deleted for the cap or the 7-day expiry the user sees its contents and chooses remove or keep, nothing is deleted unanswered, and at the cap a new workspace is refused with an error the model relays | 2026-11-10 |
 
 ## Sources
 
