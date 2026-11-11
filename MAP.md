@@ -219,8 +219,9 @@ fork's pre-import history is kept read-only at
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, `sandbox/`
   (the per-chat microVM sandbox, under construction on the sandbox branch:
   so far its core types, the `SandboxBackend` protocol, the fixed limits,
-  command wrapping and output capping, and the in-memory `FakeBackend`
-  for tests; nothing calls it yet), and **`benchmarks/`** (see below).
+  command wrapping and output capping, the in-memory `FakeBackend` for
+  tests, and the `SandboxManager` (per-chat lifecycle, slots, sweeps);
+  nothing calls it yet), and **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
