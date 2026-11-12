@@ -32,7 +32,7 @@ disagree.
 
 **Pull request:** #884 (draft)
 **Feature branch:** `feat/sandbox-code-interpreter`
-**Active session:** none
+**Active session:** cloud, 2026-11-12T16:12Z, T20-T24 (hand-off branch `claude/bold-heisenberg-u4a3kv`; the owner confirmed in the session chat that no other session is working on the sandbox)
 **`main` last merged in at:** `64c977f1` (branch created from it by T00)
 
 ### Statuses
@@ -393,6 +393,34 @@ to the decision.
   from the frame first (defeated by a fresh `about:blank` child frame).
   Chosen: (a); scripts keep running when the reply shows. T29's "output
   rendering" check includes an `RTCPeerConnection` probe.
+- **Q24 (found in T12, raised for T20, 2026-11-12). Answered
+  2026-11-12: (d), never both in one chat, and refuse the request.** An
+  Open Terminal server's tools are added before the builtins, and
+  `_add_builtin_tools` skips a name already present, so a chat with a
+  terminal selected and engine `sandbox` got the terminal's `write_file`
+  (writing on the terminal's machine) beside the sandbox's `bash`, `view`
+  and `str_replace` (acting on `/workspace` in the microVM). Options: (a)
+  the sandbox's `write_file` wins; (b) the terminal's wins, documented;
+  (c) rename the sandbox's tools; (d) never offer both in one chat.
+  Chosen: (d). A chat request that has a terminal selected while the code
+  interpreter is on with engine `sandbox` is refused with an error asking
+  the user to turn one of them off; nothing is guessed. Independently,
+  `terminal_event_handler` emits `terminal:*` events only for terminal
+  tools.
+- **Q25 (from T17's code review, raised for T20, 2026-11-12). Answered
+  2026-11-12: every path collects its own outputs.** The tag path, the Run
+  endpoint and a sub-agent's `bash` calls collect `/workspace/outputs` the
+  way `bash` does (the same comparison, the same per-sandbox listing, the
+  same caps), so the next `bash` call does not attach them again. The tag
+  path's outputs attach to the assistant message holding the block. The
+  Run endpoint's outputs are shown under the code block and stored as the
+  user's files, counted in the chat's 1 GiB, but not added to the saved
+  message's files (pressing Run is the user's act, not part of the reply;
+  they do not reappear after a reload). A sub-agent's outputs attach to the
+  sub-agent's own message and count against the parent chat's cap, since
+  the workspace is the parent's. Rejected: leaving collection to the next
+  `bash` call, which attaches files late or, for a tag-path model that
+  has no `bash` tool, never.
 
 ### Session log
 

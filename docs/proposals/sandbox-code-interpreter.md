@@ -301,6 +301,8 @@ Every question the proposal raised was decided by the owner.
 | How the workspace size is enforced | Each workspace is an ext4 image file attached as a loop device through udisks2, with a polkit rule (a root step at host setup) letting the backend's user do that without a login session; Docker's own volume driver cannot loop-mount | 2026-11-11 |
 | Seccomp inside the guest | On: `disable_guest_seccomp = false` in the Kata Cloud Hypervisor configuration, so Docker's default profile applies inside the VM (blocks user namespaces and similar), as defense in depth behind the VM | 2026-11-11 |
 | The sandbox network's host fence | `internal: true`, plus `inhibit_ipv4` (no IPv4 on the bridge), plus no IPv6: disabled in each guest by sysctl, and on the bridge (named `lllm-sandbox`) by a udev rule at host setup, since an internal network alone leaves the host reachable through the bridge's own addresses | 2026-11-11 |
+| A terminal server and the sandbox in one chat | Never both: a chat request with an Open Terminal server selected while the code interpreter runs on engine `sandbox` is refused with an error asking the user to turn one off, since both offer a `write_file` acting on different machines (Q24) | 2026-11-12 |
+| Outputs from paths other than `bash` | Every path that runs code in the sandbox (the tag path, the Run endpoint, a sub-agent) collects `/workspace/outputs` itself, with the same listing and caps; Run outputs are stored and shown under the block but not added to the saved message; a sub-agent's attach to its own message and count against the parent chat's cap (Q25) | 2026-11-12 |
 
 ## Sources
 
