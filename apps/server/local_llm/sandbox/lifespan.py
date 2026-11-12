@@ -1,7 +1,9 @@
 """Starting and stopping the sandbox manager with the app, from main.py's lifespan.
 
 `start` puts a SandboxManager on `app.state.sandbox` (None when it does not
-run), sweeps up after the previous process, and starts the maintenance loop;
+run) and the package telemetry beside it on `app.state.sandbox_telemetry`
+(sandbox/telemetry.py), sweeps up after the previous process, and starts the
+maintenance loop;
 `stop` ends the loop and the manager. The app starts whatever the sandbox's
 state: when the backend reports a reason it cannot run sandboxes (no Kata on
 the host, say), the reason is logged, the admin page shows it
@@ -29,6 +31,7 @@ from typing import IO, Any, Final
 
 from local_llm.sandbox.backend import SandboxBackend
 from local_llm.sandbox.manager import SandboxManager
+from local_llm.sandbox.telemetry import PackageTelemetry
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +142,7 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
         data_dir: The sandbox's directory under DATA_DIR, which holds the lock file.
     """
     app.state.sandbox = None
+    app.state.sandbox_telemetry = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = backend
@@ -171,6 +175,7 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
         lock.close()
         return
     app.state.sandbox = manager
+    app.state.sandbox_telemetry = PackageTelemetry()
     app.state.sandbox_lock = lock
     app.state.sandbox_maintenance = asyncio.create_task(_maintain(manager, sweep))
 
@@ -206,6 +211,7 @@ async def stop(app: Any, *, stop_running: bool) -> None:
         except Exception:
             log.exception('the sandbox backend could not release its threads')
     app.state.sandbox = None
+    app.state.sandbox_telemetry = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = None

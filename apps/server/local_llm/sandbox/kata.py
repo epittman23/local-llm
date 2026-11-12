@@ -48,6 +48,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -76,6 +77,7 @@ from local_llm.sandbox.backend import (
     validate_create,
     validate_get_files,
     validate_list_workspace,
+    validate_mirror_log,
     validate_put_files,
     validate_put_uploads,
     validate_sandbox_path,
@@ -105,6 +107,7 @@ from local_llm.sandbox.types import (
     FileEntry,
     FileStat,
     ImageKey,
+    MirrorLine,
     SandboxError,
     SandboxInfo,
     SandboxNotRunning,
@@ -747,6 +750,84 @@ def _recv_exactly(raw: Any, n: int) -> bytes | None:
     return data
 
 
+# A daemon log timestamp (`timestamps=1`): RFC 3339 with up to nine fraction digits, as Go's RFC3339Nano writes it.
+_LOG_TIME: Final = re.compile(r'(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)')
+
+
+def log_time_ns(text: str) -> int | None:
+    """A daemon log timestamp as nanoseconds since the epoch; None when it is not one."""
+    match = _LOG_TIME.fullmatch(text)
+    if match is None:
+        return None
+    try:
+        when = dt.datetime.fromisoformat(match[1] + ('+00:00' if match[3] == 'Z' else match[3]))
+    except ValueError:
+        return None
+    return int(when.timestamp()) * 1_000_000_000 + int((match[2] or '').ljust(9, '0'))
+
+
+def _read_exactly(raw: Any, n: int) -> bytes | None:
+    """`n` bytes of a response body, or None when it ends first."""
+    data = b''
+    while len(data) < n:
+        chunk = raw.read(n - len(data))
+        if not chunk:
+            return None
+        data += chunk
+    return data
+
+
+def _read_frame_body(raw: Any, length: int, keep: int) -> bytes | None:
+    """A frame's body, of which at most `keep` bytes are kept and the rest read past; None when the body ends first."""
+    kept = b''
+    while length:
+        chunk = raw.read(min(length, 65536))
+        if not chunk:
+            return None
+        length -= len(chunk)
+        if len(kept) < keep:
+            kept += chunk[: keep - len(kept)]
+    return kept
+
+
+def read_log_lines(raw: Any, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+    """The stdout lines of a multiplexed `docker logs` body (`timestamps=1`) recorded after `since_ns`.
+
+    Each frame is one log message: an 8-byte header (stream number, three
+    zero bytes, a big-endian length), then `<timestamp> <line>` and a newline. A
+    message without a readable timestamp, or at or before `since_ns`, is
+    skipped; stderr frames too. Reading stops before the line that would
+    take the lines past `max_bytes` (each counted with its newline), so the
+    next read, after the last line returned, gets it; a first line longer
+    than that is returned cut to `max_bytes - 1` bytes.
+    """
+    lines: list[MirrorLine] = []
+    size = 0
+    while True:
+        header = _read_exactly(raw, 8)
+        if header is None:
+            return lines
+        kind, length = struct.unpack('>BxxxL', header)
+        # The timestamp (at most 35 bytes) and a space come before the line.
+        body = _read_frame_body(raw, length, max_bytes + 64)
+        if body is None:
+            return lines
+        if kind != 1:
+            continue
+        stamp, _, rest = body.rstrip(b'\n').partition(b' ')
+        at = log_time_ns(stamp.decode('ascii', 'replace'))
+        if at is None or at <= since_ns:
+            continue
+        cost = len(rest) + 1
+        if lines and size + cost > max_bytes:
+            return lines
+        if cost > max_bytes:
+            lines.append(MirrorLine(at, rest[: max_bytes - 1].decode('utf-8', 'replace')))
+            return lines
+        lines.append(MirrorLine(at, rest.decode('utf-8', 'replace')))
+        size += cost
+
+
 def write_stdin(raw: Any, data: bytes) -> None:
     """Send `data` as the command's stdin and close the writing side, so it reads EOF after it."""
     try:
@@ -977,6 +1058,44 @@ class KataDockerBackend:
             return self._docker().containers.get(name)
         except docker.errors.NotFound:
             return None
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        """The `sandbox-mirror` container's access log lines after `since_ns` (SandboxBackend.mirror_log).
+
+        Read through the daemon's logs endpoint (`docker logs --since
+        --timestamps`, stdout only), streamed, and closed once `max_bytes`
+        of lines are in hand. The daemon is asked from one second before
+        `since_ns`, since it reads `since` in whole seconds here, and every
+        line is then filtered by its own timestamp. The mirror must run
+        without a TTY (Compose gives it none), so its log is multiplexed.
+        """
+        validate_mirror_log(since_ns, max_bytes)
+        return await self._call(
+            'read the sandbox mirror log', self._mirror_log, since_ns, max_bytes, limit_s=FILES_TIMEOUT_S
+        )
+
+    def _mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        container = self._container_named(MIRROR_CONTAINER)
+        if container is None:
+            raise SandboxError('the sandbox-mirror container does not exist')
+        if (container.attrs.get('Config') or {}).get('Tty'):
+            raise SandboxError('the sandbox-mirror container runs with a TTY, so its log cannot be read line by line')
+        api = self._docker().api
+        url = f'{api.base_url}/v{api.api_version}/containers/{container.id}/logs'
+        params = {
+            'stdout': '1',
+            'stderr': '0',
+            'timestamps': '1',
+            'follow': '0',
+            # 0 would mean the whole log; a cursor is never that old.
+            'since': str(max(since_ns // 1_000_000_000 - 1, 1)),
+        }
+        response = api.get(url, params=params, stream=True, headers={'Accept-Encoding': 'identity'})
+        try:
+            response.raise_for_status()
+            return read_log_lines(response.raw, since_ns, max_bytes)
+        finally:
+            response.close()
 
     async def ready(self) -> str | None:
         """None when sandboxes can run, else why not: the daemon, the runtime, the images, the network, the volume

@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from local_llm.sandbox.manager import (
     WorkspaceNotFound,
 )
 from local_llm.sandbox.outputs import decode_html, is_sandbox_output, with_policy
+from local_llm.sandbox.telemetry import package_report
 from local_llm.sandbox.types import SandboxError, WorkspaceListing
 from local_llm.sandbox.workspaces import WorkspaceRecord
 from local_llm.storage.provider import Storage
@@ -43,6 +44,33 @@ async def get_sandbox_status(request: Request, user=Depends(get_admin_user)):
         return {'ready': False, 'reason': 'The sandbox manager is not running'}
     reason = await manager.ready()
     return {'ready': reason is None, 'reason': reason}
+
+
+@router.get('/packages')
+async def get_package_report(
+    include_harness: bool = False,
+    limit: int = Query(500, ge=1, le=5000),
+    user=Depends(get_verified_user),
+):
+    """The package telemetry's report (sandbox/telemetry.py, T21), for admins.
+
+    `packages`: per Python distribution or R namespace, the distinct chats
+    using it, its imports and installs, its last use (epoch seconds) and its
+    source (`image`, `wheelhouse` or `other`, by infra/sandbox's
+    image-freeze lists and requirements.lock), most chats first. `misses`:
+    per kind and name, the distinct chats that met it, its events and when it
+    was last seen, most chats first: the review queue for the allowlist and
+    the images. Harness runs are left out unless `include_harness`. At most
+    `limit` rows of each. 403 for a signed-in user who is not an admin; 503
+    when the events cannot be read.
+    """
+    if user.role != 'admin':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
+    try:
+        return await package_report(include_harness=include_harness, limit=limit)
+    except Exception:
+        log.exception('could not build the sandbox package report')
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='The package report is unavailable')
 
 
 def _read_capped(path: str) -> bytes | None:

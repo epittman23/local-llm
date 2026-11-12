@@ -235,6 +235,21 @@ class SandboxInfo:
 
 
 @dataclass(frozen=True)
+class MirrorLine:
+    """One line of the pip mirror's access log, as the daemon recorded it (SandboxBackend.mirror_log).
+
+    Attributes:
+        at_ns: When the daemon received the line, in nanoseconds since the epoch: the cursor the next read
+            continues after.
+        line: The line, without its newline, decoded as UTF-8 with bad bytes replaced. A sandbox chooses the URI
+            and user agent the mirror logs, so it is hostile text: parse it, never trust it.
+    """
+
+    at_ns: int
+    line: str
+
+
+@dataclass(frozen=True)
 class FileStat:
     """One path in a sandbox as the daemon sees it, which sandboxed code cannot forge.
 

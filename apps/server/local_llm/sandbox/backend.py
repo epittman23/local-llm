@@ -18,10 +18,11 @@ lists and file contents.
 import posixpath
 from typing import Protocol, runtime_checkable
 
-from local_llm.sandbox.limits import LIST_MAX_ENTRIES, WORKSPACE
+from local_llm.sandbox.limits import LIST_MAX_ENTRIES, MIRROR_LOG_MAX_BYTES, WORKSPACE
 from local_llm.sandbox.types import (
     ExecResult,
     FileStat,
+    MirrorLine,
     SandboxInfo,
     SandboxSpec,
     WorkspaceListing,
@@ -133,6 +134,22 @@ def validate_list_workspace(max_entries: int) -> None:
         raise TypeError(f'list_workspace: max_entries must be an int, not {type(max_entries).__name__}')
     if not 1 <= max_entries <= LIST_MAX_ENTRIES:
         raise ValueError(f'list_workspace: max_entries {max_entries} is outside 1..{LIST_MAX_ENTRIES}')
+
+
+def validate_mirror_log(since_ns: int, max_bytes: int) -> None:
+    """Check `mirror_log` arguments against the contract, before the log is read.
+
+    Raises:
+        TypeError: Either is not an int (a bool is refused).
+        ValueError: `since_ns` is negative, or `max_bytes` is outside 1..MIRROR_LOG_MAX_BYTES.
+    """
+    for name, value in (('since_ns', since_ns), ('max_bytes', max_bytes)):
+        if type(value) is not int:
+            raise TypeError(f'mirror_log: {name} must be an int, not {type(value).__name__}')
+    if since_ns < 0:
+        raise ValueError(f'mirror_log: since_ns {since_ns} is negative')
+    if not 1 <= max_bytes <= MIRROR_LOG_MAX_BYTES:
+        raise ValueError(f'mirror_log: max_bytes {max_bytes} is outside 1..{MIRROR_LOG_MAX_BYTES}')
 
 
 def validate_sandbox_path(path: str, *, allow_workspace: bool = False) -> str:
@@ -413,6 +430,26 @@ class SandboxBackend(Protocol):
         Each SandboxInfo carries what `create` recorded as labels: the
         container's image (None once only the volume is left) and the
         ephemeral flag (from the volume too, so it is known while stopped).
+        """
+        ...
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        """The pip mirror's access log lines recorded after `since_ns`, oldest first, for the package telemetry (T21).
+
+        The arguments must pass validate_mirror_log. Only lines the daemon
+        recorded strictly after `since_ns` (nanoseconds since the epoch) are
+        returned, each with its own time, so a caller that passes the last
+        line's `at_ns` next time reads every line once. At most `max_bytes`
+        bytes of lines are returned: the read stops before the line that
+        would pass it, which the next read returns (a single line longer
+        than `max_bytes` is returned cut to it, so the cursor still moves).
+        The log is the mirror's own (its JSON access log on stdout); what is
+        in a line is the sandboxes' choice, so the caller parses it as
+        hostile text.
+
+        Raises:
+            ValueError, TypeError: The arguments break validate_mirror_log's rules.
+            SandboxError: The mirror's log could not be read (the mirror is not there, the daemon failed).
         """
         ...
 

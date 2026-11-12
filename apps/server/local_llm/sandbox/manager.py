@@ -76,7 +76,7 @@ import logging
 import time
 import uuid
 from collections import OrderedDict
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, Final, Protocol, get_args
@@ -87,6 +87,7 @@ from local_llm.sandbox.types import (
     ExecResult,
     FileStat,
     ImageKey,
+    MirrorLine,
     SandboxError,
     SandboxInfo,
     SandboxNotRunning,
@@ -128,6 +129,9 @@ MAX_UNSAVED_CHAT_ID_LEN: Final = 200
 
 # Seconds between a waiting session's eviction attempts when no slot is freed meanwhile.
 _SLOT_RETRY_S: Final = 5.0
+
+#: Seconds mirror_log and addresses wait for the backend, so a hung daemon cannot hold a `bash` call's result.
+TELEMETRY_TIMEOUT_S: Final = 10.0
 
 #: Listings of workspace volumes (the deletion dialog's contents) run at once; each may start a helper VM.
 LISTING_CONCURRENCY: Final = 2
@@ -381,6 +385,7 @@ class SandboxSession:
 
     Attributes:
         key: The UUID the backend knows the sandbox by.
+        image: The image the sandbox runs for this session (None only for a session made outside the manager).
     """
 
     def __init__(
@@ -391,9 +396,11 @@ class SandboxSession:
         cancel_wait_s: float = CANCEL_WAIT_S,
         uploads: dict[str, SyncedUploads] | None = None,
         outputs: dict[str, OutputsMemory] | None = None,
+        image: ImageKey | None = None,
     ) -> None:
         """Open a session on `key`; only the manager makes one, passing its per-key records `uploads` and `outputs`."""
         self.key = key
+        self.image: ImageKey | None = image
         self._backend = backend
         self._cancel_wait_s = cancel_wait_s
         self._uploads: dict[str, SyncedUploads] = {} if uploads is None else uploads
@@ -709,12 +716,14 @@ class SandboxManager:
                     await self._start(
                         key, image, ephemeral=owner is not None, user=user, settings=settings, on_wait=on_wait
                     )
+                    tracked = self._tracked.get(key)
                     handle = SandboxSession(
                         self._backend,
                         key,
                         cancel_wait_s=self._cancel_wait_s,
                         uploads=self._uploads,
                         outputs=self._outputs,
+                        image=None if tracked is None else tracked.image,
                     )
                     try:
                         yield handle
@@ -1322,6 +1331,43 @@ class SandboxManager:
             async with self._hold(record.key):
                 if await self._drop_record(record.key):
                     log.info('dropped the record of workspace %s, which has no volume', record.key)
+
+    # The package telemetry (sandbox/telemetry.py, T21).
+
+    def image_digest(self, image: ImageKey | None) -> str:
+        """The id (digest) of `image` as the backend last saw it (its `image_ids`), or '' when it has not."""
+        ids = getattr(self._backend, 'image_ids', None)
+        value = ids.get(image) if image is not None and isinstance(ids, Mapping) else None
+        return value if isinstance(value, str) else ''
+
+    def chat_of(self, key: str) -> str:
+        """The chat a sandbox key belongs to: an unsaved chat's id for an ephemeral key this manager maps (Q12), else
+        the key itself, which for a saved chat is its id."""
+        owner = self._unsaved_by_key.get(key)
+        return key if owner is None else owner[0]
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        """The pip mirror's log lines after `since_ns` (SandboxBackend.mirror_log), waiting TELEMETRY_TIMEOUT_S at most.
+
+        Raises:
+            SandboxError: The backend could not read it, or did not answer in time.
+        """
+        try:
+            return await asyncio.wait_for(self._backend.mirror_log(since_ns, max_bytes), TELEMETRY_TIMEOUT_S)
+        except TimeoutError:
+            raise SandboxError(f'the mirror log was not read within {TELEMETRY_TIMEOUT_S:g} s') from None
+
+    async def addresses(self) -> dict[str, str]:
+        """Each running sandbox's address on the sandbox network, to its key; waits TELEMETRY_TIMEOUT_S at most.
+
+        Raises:
+            SandboxError: The backend could not list the sandboxes, or did not answer in time.
+        """
+        try:
+            infos = await asyncio.wait_for(self._backend.list_sandboxes(), TELEMETRY_TIMEOUT_S)
+        except TimeoutError:
+            raise SandboxError(f'the sandboxes were not listed within {TELEMETRY_TIMEOUT_S:g} s') from None
+        return {info.ip: info.chat_id for info in infos if info.running and info.ip}
 
     # The workspaces' owners (T24).
 

@@ -6,7 +6,8 @@
 > The app uses it only where an admin sets the engine to `sandbox` in
 > Admin Settings > Code Execution; Jupyter stays the code interpreter until
 > then. This guide grows with the build; so far it covers the host setup,
-> the images, the backend, uploads, outputs and the call sites.
+> the images, the backend, uploads, outputs, the call sites, the workspace
+> cap and the package telemetry.
 
 Each chat's code runs in its own microVM: a Kata Containers container whose
 runtime boots a Cloud Hypervisor VM with its own guest kernel, started by
@@ -370,6 +371,12 @@ Notes on the build:
   with a message if the directory cannot be made). It does not depend on
   what the image put in `/workspace`. The first biber run leaves about
   121 MB there, which counts toward the workspace cap.
+- The data image's Python has a `sitecustomize.py` and its R an
+  `Rprofile.site` addition (`data/sitecustomize.py`, `data/Rprofile.site`)
+  that record what each process imports, for the
+  [package telemetry](#package-telemetry). The build refuses a base whose
+  Python already has a `sitecustomize.py`, which this one would replace.
+  The web image has no Python and no hooks.
 - `MPLCONFIGDIR` and `XDG_CACHE_HOME` point into `/tmp` in the data image,
   so matplotlib and fontconfig print no cache warnings on a read-only home.
 - The web image links `/node_modules` to `/opt/sandbox-web/node_modules`,
@@ -489,8 +496,11 @@ older version of a listed package.
   capability dropped, and it answers `GET` and `HEAD` for files only, with
   short timeouts and at most 8 connections per sandbox address. Its log is
   one JSON line per request on stdout (`docker logs local-llm-sandbox-mirror`),
-  capped at three 10 MB files, because a sandbox chooses what it requests;
-  the package telemetry (T21) that reads it must keep up with that rotation.
+  capped at three 10 MB files, because a sandbox chooses what it requests.
+  The package telemetry reads it after every `bash` call, from where its
+  last read stopped (see [Package telemetry](#package-telemetry)), so it
+  keeps up with that rotation unless 30 MB of requests arrive between two
+  calls.
 - `docker compose down` with sandboxes attached exits 0 but leaves the
   network ("Resource is still in use"); that is expected. The next `up`
   reuses it.
@@ -1238,3 +1248,151 @@ directory), `PendingWorkspacesDialog.test.tsx`, and
 `e2e/sandbox-workspaces.spec.ts`. Still to verify on the laptop (docker,
 kvm): the real listing of a stopped volume through the Kata helper, and
 one cap round trip in the browser.
+
+## Package telemetry
+
+T21 (the proposal's
+[Package telemetry](../proposals/sandbox-code-interpreter.md#package-telemetry)):
+which packages the sandboxes use, and which they miss, so the wheelhouse
+allowlist (`infra/sandbox/allowlist.in`) and the images grow from use, not
+guesses. It is advisory: code in a sandbox can delete or forge its own
+events, `atexit` does not run in a process killed by a timeout, the OOM
+killer or `os._exit`, so those undercount, and only Python and R are seen
+per package; other languages appear only as misses.
+
+**Signals.** Each becomes one row of `sandbox_package_events`:
+
+| `kind` | Recorded by | `name` | `version` |
+|---|---|---|---|
+| `import` | the data image's `sitecustomize.py`, at each Python process's exit: the top-level names in `sys.modules`, the standard library dropped (`sys.stdlib_module_names`), mapped with `importlib.metadata.packages_distributions()` | the distribution, PEP 503 normalised | its installed version |
+| `r_import` | the data image's `Rprofile.site`, at each R session's exit (a finalizer run on exit): `loadedNamespaces()` without base R's own | the namespace | `packageVersion()` |
+| `module_miss` | `sitecustomize.py`'s `sys.excepthook`, for an uncaught `ModuleNotFoundError` whose top-level package did not import | the top-level module | |
+| `install` | the mirror's access log: a `GET` answered 200 for a `.whl` | the distribution, from the wheel's file name | from the file name |
+| `pip_miss` | stderr: pip's "No matching distribution found for" | the requirement's name, normalised | |
+| `command_miss` | stderr: bash's "`<name>`: command not found" | the command | |
+| `r_miss` | stderr: R's "there is no package called" | the package | |
+| `latex_miss` | stdout or stderr (pdflatex prints its errors on stdout): LaTeX's "File \`...' not found" | the file | |
+
+The hooks append one JSON line per event
+(`{"kind","name","version","ts"}`) to `/workspace/.telemetry/events.jsonl`,
+and never raise (everything is in `try/except Exception: pass`, or R's
+`try(silent = TRUE)` with warnings suppressed); Python's previous
+`excepthook` still prints the traceback. `packages_distributions()` reads
+every installed distribution's metadata (about half a second for a few
+hundred), so `sitecustomize.py` keeps its answer in
+`/workspace/.telemetry/distributions.json`, keyed by the site directories'
+modification times, which an install or removal changes; after the first
+process, an exit costs a few milliseconds.
+
+**Collection** (`sandbox/telemetry.py`, `PackageTelemetry`, on
+`app.state.sandbox_telemetry`, made by `sandbox/lifespan.py` with the
+manager). After each `bash` call and each `run_code_in_sandbox` (the tag
+path and the Run endpoint), inside the session, once the command and its
+outputs are done:
+
+- The events file is read through the daemon and emptied, only when the
+  daemon's stat (which does not follow a symlink) shows
+  `/workspace/.telemetry` a directory and the file a regular file. An empty
+  or missing file costs no exec. The read is `get_files`, which never goes
+  through a symlink (the Kata backend checks each directory on the way); a
+  file over 256 KiB is emptied unread. The emptying is a fixed helper
+  (`TRUNCATE_SCRIPT`) that runs `lllm-path` and empties the file as UID
+  1000 only when it resolves to exactly `/workspace/.telemetry/events.jsonl`.
+  Nothing changes the file between the stat and the emptying: the session
+  holds the sandbox's lock, and the post-exec kill has ended every process
+  the command started. Every line is checked as hostile: at most 2,000
+  lines of at most 1,024 bytes, a JSON object with only those four fields,
+  a kind the hooks write, a name of at most 128 characters from a fixed
+  alphabet per kind, a version of at most 64 (dropped, not the line, when
+  invalid), and a timestamp within 30 days of the collection's, else the
+  collection's. Anything else is dropped.
+- The output's misses are matched, each kind and name once per call, at
+  most 50.
+- The mirror's log is read from its last line on, through the backend
+  (`SandboxBackend.mirror_log(since_ns, max_bytes)`: the Kata backend reads
+  the daemon's logs endpoint for `local-llm-sandbox-mirror`, stdout with
+  timestamps, at most 1 MiB a read; what is left waits for the next call).
+  The cursor starts when the backend starts, since older lines name
+  addresses other sandboxes held, and one read runs at a time. An install
+  is attributed to the sandbox holding its client address now
+  (`list_sandboxes()`, asked only when a line records a wheel) or at the
+  previous listing, and to that sandbox's latest call: its chat, image and
+  harness run, even when another chat's call read the line. An address no
+  sandbox holds is dropped. A failure to read the log is logged once until
+  a read succeeds again.
+
+Rows are written after the session, so the database write does not hold
+the chat's sandbox. Every step's failure is logged and swallowed: the
+tool's result is the same with telemetry failing, or off.
+
+**What each row carries.** `ts` (epoch seconds), `chat_id` (the sandbox's
+chat: a sub-agent's parent; an unsaved chat's own id, such as the
+harness's `temporary:benchmark-<hex>`, for an ephemeral sandbox, which is
+recorded like any other), `image_digest` (the image id the backend last saw
+for the session's image, `KataDockerBackend.image_ids`, set by `ready` and
+`create`; `''` when unknown), `lock_sha` (SHA-256 of
+`infra/sandbox/requirements.lock` in the checkout the backend runs from,
+read again when its size or modification time changes; `''` when
+unreadable; it is the lock `make wheelhouse` downloads, so it identifies the
+wheelhouse as long as the wheelhouse was rebuilt after the lock last
+changed), and `harness_run_id`: the benchmark runner puts its suite run id
+on the harness request (`request.state.harness_run_id`), and a harness
+request without one is marked `harness`, so reports leave both out.
+
+**The table.** `sandbox_package_events` (`models/sandbox.py`, migration
+`5d1e9c3a7b42`): `event_id` integer primary key, `ts`, `chat_id`, `kind`,
+`name`, `version` (nullable), `image_digest`, `lock_sha`, `harness_run_id`
+(nullable), indexed on `(name, kind)`. Append-only rows; nothing prunes it
+yet.
+
+**The report.** `GET /api/v1/sandbox/packages` (admins; 403 for anyone
+else signed in, 503 when the events cannot be read), with
+`include_harness=true` to count harness rows and `limit` (default 500):
+
+- `packages`: per language (`python` for `import` and `install`, `r` for
+  `r_import`) and name, `chats` (distinct), `imports`, `installs`,
+  `last_used`, and `source`: `image` when `infra/sandbox/image-freeze.txt`
+  (R: `image-freeze-r.txt`) lists it, `wheelhouse` when only
+  `requirements.lock` does, `other` otherwise (a dependency vendored inside
+  another, or a list that is out of date). Most chats first.
+- `misses`: per kind and name, `chats` (distinct), `events` and
+  `last_seen`, most chats first: the review queue for `allowlist.in` and the
+  Dockerfiles.
+
+The same from `psql`:
+
+```sql
+-- Packages in use, harness runs left out.
+SELECT CASE kind WHEN 'r_import' THEN 'r' ELSE 'python' END AS language, name,
+       count(DISTINCT chat_id) AS chats,
+       count(*) FILTER (WHERE kind IN ('import', 'r_import')) AS imports,
+       count(*) FILTER (WHERE kind = 'install') AS installs,
+       to_timestamp(max(ts)) AS last_used
+FROM sandbox_package_events
+WHERE kind IN ('import', 'r_import', 'install') AND harness_run_id IS NULL
+GROUP BY 1, 2
+ORDER BY chats DESC, imports DESC;
+
+-- Misses ranked by the chats that met them.
+SELECT kind, name, count(DISTINCT chat_id) AS chats, count(*) AS events,
+       to_timestamp(max(ts)) AS last_seen
+FROM sandbox_package_events
+WHERE kind IN ('module_miss', 'pip_miss', 'command_miss', 'latex_miss', 'r_miss')
+  AND harness_run_id IS NULL
+GROUP BY kind, name
+ORDER BY chats DESC, events DESC;
+```
+
+**After changing the hooks.** They are in the data image, so a change to
+`data/sitecustomize.py` or `data/Rprofile.site` needs a new tag and
+`make sandbox-images` ([Rebuilding and the tag](#rebuilding-and-the-tag)).
+A sandbox started from an image without them records only installs and
+output misses.
+
+Tests: `tests/test_sandbox_telemetry.py` (the parsers, the miss matchers,
+the collection through `FakeBackend`, the truncation helper against real
+bash, the Kata backend's log read against a mocked SDK, `sitecustomize.py`
+run in a subprocess, `Rprofile.site` run when R is installed and checked
+statically otherwise, the table, the report and its route). Still to verify
+on the laptop (docker, kvm): the proposal's acceptance test "Telemetry"
+with the rebuilt data image.

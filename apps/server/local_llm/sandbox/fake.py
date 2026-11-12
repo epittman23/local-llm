@@ -30,8 +30,9 @@ symlink to it, fails for the right reason: the file is there and readable.
 bash for `cat`, `ls`, `printf`, `sleep`, `ln -s`, `chmod`, `mkdir`, `mv`,
 `rm` and `rmdir` that honours the timeout without sleeping, and that runs the guest
 helpers the file tools use (sandbox/workspace.py: lllm-path, the listing and
-the write) and the `bash` tool's listing of `/workspace/outputs`
-(sandbox/outputs.py) with their guest semantics; the PDF preview helpers are
+the write), the `bash` tool's listing of `/workspace/outputs`
+(sandbox/outputs.py) and the package telemetry's emptying of its events
+file (sandbox/telemetry.py) with their guest semantics; the PDF preview helpers are
 not emulated, so they exit 127 and no previews are made. It is test support, not a shell.
 Every call is recorded in `FakeBackend.calls`, so a test can assert what the
 manager asked for, including the `('kill_uid_1000', ...)` entry that stands
@@ -51,12 +52,13 @@ from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from typing import NoReturn
 
-from local_llm.sandbox import outputs, runs
+from local_llm.sandbox import outputs, runs, telemetry
 from local_llm.sandbox import workspace as guest
 from local_llm.sandbox.backend import (
     validate_create,
     validate_get_files,
     validate_list_workspace,
+    validate_mirror_log,
     validate_put_files,
     validate_put_uploads,
     validate_sandbox_path,
@@ -68,6 +70,8 @@ from local_llm.sandbox.types import (
     FileEntry,
     FileStat,
     ImageKey,
+    MirrorLine,
+    SandboxError,
     SandboxInfo,
     SandboxNotRunning,
     SandboxSpec,
@@ -625,6 +629,13 @@ class FakeBackend:
             backend then records `('kill_uid_1000_failed', ...)`, stops the
             sandbox and raises SandboxNotRunning, as the contract requires
             (fail closed).
+        image_ids: Each image key's image id, as the Kata backend's
+            attribute of that name (for the package telemetry); empty
+            unless a test sets it.
+        mirror_lines: The pip mirror's access log, oldest first, which
+            `mirror_log` reads; a test appends to it.
+        mirror_error: Raised by `mirror_log` when set, as when the mirror
+            is not running.
     """
 
     def __init__(self, script: ExecScript | None = None) -> None:
@@ -642,6 +653,9 @@ class FakeBackend:
         # Commands whose kill timed out, kept referenced until they end.
         self._lingering: set[asyncio.Future[FakeRun]] = set()
         self._starts = itertools.count()
+        self.image_ids: dict[str, str] = {}
+        self.mirror_lines: list[MirrorLine] = []
+        self.mirror_error: SandboxError | None = None
 
     def _running(self, chat_id: str) -> FakeSandbox:
         box = self.sandboxes.get(chat_id)
@@ -878,6 +892,28 @@ class FakeBackend:
             )
             for chat_id, box in self.sandboxes.items()
         ]
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        self.calls.append(('mirror_log', {'since_ns': since_ns, 'max_bytes': max_bytes}))
+        validate_mirror_log(since_ns, max_bytes)
+        if self.mirror_error is not None:
+            raise self.mirror_error
+        found: list[MirrorLine] = []
+        size = 0
+        for entry in self.mirror_lines:
+            if entry.at_ns <= since_ns:
+                continue
+            length = len(entry.line.encode()) + 1
+            if found and size + length > max_bytes:
+                break
+            if length > max_bytes:
+                # A line longer than the whole budget comes back cut, so the cursor still moves past it.
+                cut = entry.line.encode()[: max_bytes - 1].decode('utf-8', 'replace')
+                found.append(MirrorLine(entry.at_ns, cut))
+                break
+            found.append(entry)
+            size += length
+        return found
 
     async def ready(self) -> str | None:
         self.calls.append(('ready', {}))
@@ -1227,6 +1263,23 @@ def _read_helper(workspace: FakeWorkspace, path: str) -> FakeRun:
     return run
 
 
+def _truncate_helper(workspace: FakeWorkspace, path: str, expected: str) -> FakeRun:
+    # telemetry.TRUNCATE_SCRIPT: lllm-path; refuse unless it printed exactly `expected` and that is a regular file
+    # (not a symlink); then empty it, as UID 1000 (`: > "$p"`).
+    run = lllm_path(workspace, path)
+    if run.returncode:
+        return run
+    resolved = run.stdout.decode()[:-1]
+    entry = workspace._get(resolved)
+    if resolved != expected or entry is None or entry.content is None or entry.link is not None or entry.fifo:
+        return FakeRun(1)
+    try:
+        workspace.write(resolved, b'')
+    except OSError as exc:
+        return FakeRun(1, stderr=f'bash: line 3: {resolved}: {exc.strerror}\n'.encode())
+    return FakeRun(0)
+
+
 def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
     # What follows GUEST_SHELL in the argv: exactly one of the helpers, by the exact script text, or bash's 127.
     match args:
@@ -1242,6 +1295,8 @@ def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
             return _outputs_helper(request.workspace)
         case ['-c', runs.LIST_SCRIPT, 'lllm-runs']:
             return _runs_helper(request.workspace)
+        case ['-c', telemetry.TRUNCATE_SCRIPT, 'lllm-telemetry', path, expected]:
+            return _truncate_helper(request.workspace, path, expected)
         case _:
             return _not_found(shlex.join(args))
 

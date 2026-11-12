@@ -1,0 +1,33 @@
+## The sandbox's package telemetry hook for R (docs/guides/sandbox.md,
+## "Package telemetry"). Dockerfile.data appends it to the conda R's
+## Rprofile.site, so every R session in the sandbox runs it at start.
+##
+## At exit (a finalizer run on exit, kept alive through options()) it records
+## one JSON line per namespace the session loaded, base R's own left out, to
+## the same file sitecustomize.py writes; the backend reads and empties it
+## after each call (apps/server/local_llm/sandbox/telemetry.py checks every
+## field). It must never change what a session does: everything is inside
+## try(silent = TRUE) with warnings suppressed, and nothing is printed.
+local({
+    lllm_events <- "/workspace/.telemetry/events.jsonl"
+    lllm_hook <- new.env()
+    reg.finalizer(lllm_hook, function(e) {
+        try(suppressWarnings({
+            base_r <- c("base", "compiler", "datasets", "graphics", "grDevices", "grid", "methods",
+                        "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils")
+            loaded <- sort(setdiff(loadedNamespaces(), base_r))
+            if (length(loaded) > 0L) {
+                now <- sprintf("%.0f", as.numeric(Sys.time()))
+                lines <- vapply(loaded, function(ns) {
+                    v <- tryCatch(as.character(utils::packageVersion(ns)), error = function(c) "")
+                    v <- if (nzchar(v)) sprintf("\"%s\"", v) else "null"
+                    sprintf("{\"kind\":\"r_import\",\"name\":\"%s\",\"version\":%s,\"ts\":%s}", ns, v, now)
+                }, character(1))
+                dir.create(dirname(lllm_events), showWarnings = FALSE, mode = "0700")
+                cat(lines, file = lllm_events, sep = "\n", append = TRUE)
+                cat("\n", file = lllm_events, append = TRUE)
+            }
+        }), silent = TRUE)
+    }, onexit = TRUE)
+    options(lllm.telemetry = lllm_hook)
+})

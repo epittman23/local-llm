@@ -94,6 +94,11 @@ IMAGE_MAX_SIDE: Final = 8192
 # Most pixels an image `view` returns may have, by its header, so a small file cannot decode to a huge picture.
 IMAGE_MAX_PIXELS: Final = 40_000_000
 
+# The package telemetry's limits (sandbox/telemetry.py, T21).
+
+# Most bytes one read of the pip mirror's access log returns (SandboxBackend.mirror_log); the rest waits for the next.
+MIRROR_LOG_MAX_BYTES: Final = 1024 * 1024
+
 # The fixed container options.
 
 # Capabilities dropped (`--cap-drop`): all of them, so root in the guest cannot override file permissions or signal
