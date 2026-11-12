@@ -15,8 +15,9 @@ signals, each turned into rows of `sandbox_package_events`
   stderr, LaTeX's "File `...' not found" on either stream (pdflatex prints
   its errors on stdout) (output_misses).
 - Installs: the pip mirror's access log since the last read, through the
-  backend (SandboxBackend.mirror_log), each wheel download mapped to the
-  chat whose sandbox holds the request's client address (mirror_events).
+  backend (SandboxBackend.mirror_log), each wheel download credited to the
+  sandbox whose recorded address window (SandboxManager.sandbox_at) holds
+  the request's client address at the line's time (mirror_events).
 
 Everything the guest wrote is hostile: the file is read only when it is a
 regular file, not a symlink, under a real directory, and at most
@@ -26,9 +27,13 @@ alphabet, a version of at most VERSION_MAX). A line that fails is dropped.
 Telemetry is advisory: code in the sandbox can delete or forge its own
 events, so the report counts what was recorded, nothing more.
 
-Telemetry never breaks a call: every step's failure is logged and
-swallowed, and the tools call it only after the command's result is in
-hand. Rows carry the chat, the image's digest (the backend's `image_ids`),
+Telemetry never breaks or stalls a call: every step's failure is logged
+and swallowed, the tools call it only after the command's result is in
+hand, the in-session part has COLLECT_TIMEOUT_S in all, and the mirror's
+log and the database write run in a background task. A call's rows are
+deduplicated on (kind, name, version) and capped at ROWS_PER_CALL; rows
+older than PACKAGE_EVENTS_RETENTION_DAYS are pruned hourly. Rows carry the
+chat, its owner's user id, the image's digest (the backend's `image_ids`),
 the SHA-256 of infra/sandbox/requirements.lock (lock_sha) and, for the
 benchmark harness, its suite run id, so reports can leave harness runs out.
 """
@@ -40,16 +45,17 @@ import logging
 import re
 import time
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import unquote, urlsplit
 
 from local_llm.sandbox.exec import wrap_argv
-from local_llm.sandbox.limits import HELPER_TIMEOUT_S, MIRROR_LOG_MAX_BYTES, WORKSPACE
+from local_llm.sandbox.limits import MIRROR_LOG_MAX_BYTES, PACKAGE_EVENTS_RETENTION_DAYS, WORKSPACE
 from local_llm.sandbox.types import ExecResult, MirrorLine
 from local_llm.sandbox.workspace import GUEST_SHELL, LLLM_PATH
+from local_llm.utils.chat_id import NON_SAVED_CHAT_ID_PREFIXES
 
 if TYPE_CHECKING:
     from local_llm.sandbox.manager import SandboxManager, SandboxSession
@@ -77,6 +83,17 @@ TS_SLACK_S: Final = 30 * 86_400
 HARNESS_UNKNOWN: Final = 'harness'
 #: Sandbox keys whose context (chat, image, harness run) is kept for attributing mirror lines.
 CONTEXTS_KEPT: Final = 1_024
+#: The most rows one call records, misses included, after each (kind, name, version) is kept once.
+ROWS_PER_CALL: Final = 200
+#: Seconds a call's own collection (its events file, its sandbox's address) may take inside its session.
+COLLECT_TIMEOUT_S: Final = 3.0
+#: Seconds the background part (the mirror, the owners, the database write) may take.
+FINISH_TIMEOUT_S: Final = 30.0
+#: Seconds without a mirror read after a failed one, doubling with each failure up to MIRROR_BACKOFF_MAX_S.
+MIRROR_BACKOFF_S: Final = 60.0
+MIRROR_BACKOFF_MAX_S: Final = 900.0
+#: Timeout of the guest helper that empties the events file, in seconds.
+TRUNCATE_TIMEOUT_S: Final = 5
 
 #: The repository's infra/sandbox, where the lock and the image's frozen package lists live.
 INFRA_SANDBOX: Final = Path(__file__).resolve().parents[4] / 'infra' / 'sandbox'
@@ -336,7 +353,7 @@ def package_sources() -> PackageSources:
 
 
 async def package_report(*, include_harness: bool = False, limit: int = 500) -> dict[str, Any]:
-    """The admin report: packages with their source, and misses ranked by distinct chats (models/sandbox.py)."""
+    """The admin report: packages with their source, and misses ranked by distinct users (models/sandbox.py)."""
     from local_llm.models.sandbox import SandboxPackageEvents
 
     uses = await SandboxPackageEvents.uses(include_harness=include_harness, limit=limit)
@@ -354,6 +371,20 @@ async def store_events(rows: list[dict[str, Any]]) -> None:
     await SandboxPackageEvents.add_events(rows)
 
 
+async def chat_owner_id(chat_id: str) -> str | None:
+    """The owner of the saved chat `chat_id`, or None when it has no row."""
+    from local_llm.sandbox.workspaces import DatabaseWorkspaces
+
+    return await DatabaseWorkspaces().owner_of(chat_id)
+
+
+async def prune_events(before: int) -> int:
+    """Delete the rows older than `before` (epoch seconds); how many."""
+    from local_llm.models.sandbox import SandboxPackageEvents
+
+    return await SandboxPackageEvents.delete_before(before)
+
+
 @dataclass(frozen=True)
 class Context:
     """What every row of one call carries besides the event itself."""
@@ -364,12 +395,15 @@ class Context:
     harness_run_id: str | None
     #: Epoch seconds when the call began.
     started: int
+    #: The caller's user id: the owner of an unsaved chat's sandbox (Q12); for a saved chat the owner is looked up.
+    caller_id: str | None = None
 
-    def row(self, event: Event) -> dict[str, Any]:
-        """The `sandbox_package_events` row of `event` in this context."""
+    def row(self, event: Event, user_id: str | None = None) -> dict[str, Any]:
+        """The `sandbox_package_events` row of `event` in this context, credited to `user_id`."""
         return {
             'ts': event.ts,
             'chat_id': self.chat_id,
+            'user_id': user_id,
             'kind': event.kind,
             'name': event.name,
             'version': event.version,
@@ -379,36 +413,70 @@ class Context:
         }
 
 
+#: An event waiting to be stored, with the context of the call it belongs to.
+Pending = tuple[Context, Event]
+
+
+def deduplicated(pending: Iterable[Pending], cap: int = ROWS_PER_CALL) -> list[Pending]:
+    """Each chat's (kind, name, version) once, the earliest kept, at most `cap` in all."""
+    seen: set[tuple[str, str, str, str | None]] = set()
+    kept: list[Pending] = []
+    for context, event in pending:
+        key = (context.chat_id, event.kind, event.name, event.version)
+        if key in seen:
+            continue
+        if len(kept) >= cap:
+            break
+        seen.add(key)
+        kept.append((context, event))
+    return kept
+
+
 class PackageTelemetry:
     """Collects the package telemetry for the `bash` tool and run_code_in_sandbox; one per app (app.state).
 
-    It keeps the mirror log's cursor (the last line read, starting at the
-    moment it is made, since earlier lines name addresses other sandboxes
-    held), a lock so two calls never read the same lines, and the context of
-    each sandbox's latest call, so an install read during another chat's
-    call is still attributed to its own chat, image and harness run.
+    A call's own events (its events file and its output's misses) are
+    gathered inside its session, under COLLECT_TIMEOUT_S in all. Everything
+    else runs after the session in a tracked background task (`finish`), so
+    the call returns without waiting: the mirror's new lines, the chats'
+    owners, and the database write. `close` cancels what is left at
+    shutdown; `drain` waits for it (tests).
+
+    It keeps the mirror log's cursor (the last line credited, starting when
+    it is made, since earlier lines name addresses nobody here recorded), a
+    lock that a second reader skips rather than waits on (the next call
+    reads those lines), a back-off after a failed read, and the context of
+    each sandbox's latest call, so an install read after another chat's
+    call is still credited to its own chat, image and harness run.
     """
 
     def __init__(
         self,
         *,
         store: Callable[[list[dict[str, Any]]], Awaitable[None]] = store_events,
+        owner_of: Callable[[str], Awaitable[str | None]] = chat_owner_id,
+        prune: Callable[[int], Awaitable[int]] = prune_events,
         wall_clock: Callable[[], float] = time.time,
         wall_clock_ns: Callable[[], int] = time.time_ns,
+        clock: Callable[[], float] = time.monotonic,
         lock_file: Path = REQUIREMENTS_LOCK,
     ) -> None:
         """Start with the mirror cursor at `wall_clock_ns()`."""
         self._store = store
+        self._owner_of = owner_of
+        self._prune = prune
         self._wall_clock = wall_clock
+        self._clock = clock
         self._lock_file = lock_file
         self._cursor_ns = wall_clock_ns()
         self._mirror_lock = asyncio.Lock()
+        self._mirror_retry_at = 0.0
+        self._mirror_backoff_s = MIRROR_BACKOFF_S
         self._contexts: OrderedDict[str, Context] = OrderedDict()
-        # The address each sandbox key was last seen at, for a line read after its sandbox stopped.
-        self._seen_at: dict[str, str] = {}
+        self._owners: OrderedDict[str, str | None] = OrderedDict()
+        self._tasks: set[asyncio.Task[None]] = set()
         self._lock_stamp: tuple[int, int] | None = None
         self._lock_sha = ''
-        self._mirror_failing = False
 
     def lock_sha(self) -> str:
         """SHA-256 of requirements.lock, read again only when its size or mtime changed; '' when unreadable."""
@@ -424,7 +492,7 @@ class PackageTelemetry:
         return self._lock_sha
 
     def begin(
-        self, manager: 'SandboxManager', session: 'SandboxSession', chat_id: str, request: object
+        self, manager: 'SandboxManager', session: 'SandboxSession', chat_id: str, request: object, caller_id: object
     ) -> Context | None:
         """Note the context of a call about to run in `session`'s sandbox; None (logged) when it cannot be made."""
         try:
@@ -434,6 +502,7 @@ class PackageTelemetry:
                 lock_sha=self.lock_sha(),
                 harness_run_id=harness_run_id(request),
                 started=int(self._wall_clock()),
+                caller_id=caller_id if isinstance(caller_id, str) and caller_id else None,
             )
             self._contexts[session.key] = context
             self._contexts.move_to_end(session.key)
@@ -446,89 +515,166 @@ class PackageTelemetry:
 
     async def gather(
         self, manager: 'SandboxManager', session: 'SandboxSession', context: Context | None, result: ExecResult
-    ) -> list[dict[str, Any]]:
-        """The rows of a call that has run: the events file, the output's misses and the mirror's new lines.
+    ) -> list[Pending]:
+        """A call's own events: its output's misses, then its events file; and the sandbox's address, once per start.
 
         Runs inside the session, after the command (its sandbox's lock is
-        held, and no process the command started is left). Each step that
-        fails is logged and gives no rows; nothing is raised but a
-        cancellation.
+        held, and no process the command started is left), for at most
+        COLLECT_TIMEOUT_S in all: what is not done by then is given up,
+        logged. Each step that fails is logged and gives nothing; nothing is
+        raised but a cancellation of the caller.
         """
         if context is None:
             return []
         now = int(self._wall_clock())
-        rows: list[dict[str, Any]] = []
+        pending: list[Pending] = []
         try:
-            rows += [context.row(event) for event in await read_events(session, now=now)]
-        except Exception:
-            log.warning('package telemetry: could not read the events of sandbox %s', session.key, exc_info=True)
-        try:
-            rows += [context.row(event) for event in output_misses(result.stdout, result.stderr, now=now)]
+            pending += [(context, event) for event in output_misses(result.stdout, result.stderr, now=now)]
         except Exception:
             log.warning('package telemetry: could not match the output of sandbox %s', session.key, exc_info=True)
         try:
-            rows += await self.mirror_events(manager)
-        except Exception:
-            log.warning('package telemetry: could not read the mirror log', exc_info=True)
-        return rows
+            async with asyncio.timeout(COLLECT_TIMEOUT_S):
+                try:
+                    pending += [(context, event) for event in await read_events(session, now=now)]
+                except TimeoutError:
+                    raise
+                except Exception:
+                    log.warning(
+                        'package telemetry: could not read the events of sandbox %s', session.key, exc_info=True
+                    )
+                try:
+                    await manager.learn_address(session.key)
+                except TimeoutError:
+                    raise
+                except Exception:
+                    log.warning(
+                        'package telemetry: could not learn the address of sandbox %s', session.key, exc_info=True
+                    )
+        except TimeoutError:
+            log.warning(
+                'package telemetry: sandbox %s took over %g s; giving the rest up', session.key, COLLECT_TIMEOUT_S
+            )
+        return deduplicated(pending)
 
-    async def store(self, rows: list[dict[str, Any]]) -> None:
-        """Append the rows; a failure is logged, never raised (but a cancellation)."""
-        if not rows:
-            return
+    def finish(self, manager: 'SandboxManager', pending: list[Pending]) -> None:
+        """Store `pending` with the mirror's new installs, in a tracked background task; never raises."""
         try:
-            await self._store(rows)
+            task = asyncio.get_running_loop().create_task(self._finish(manager, pending))
         except Exception:
-            log.warning('package telemetry: could not record %d events', len(rows), exc_info=True)
+            log.warning('package telemetry: could not start recording %d events', len(pending), exc_info=True)
+            return
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
-    async def mirror_events(self, manager: 'SandboxManager') -> list[dict[str, Any]]:
-        """The installs in the mirror's log since the last read, attributed by client address; the cursor moves on.
+    async def _finish(self, manager: 'SandboxManager', pending: list[Pending]) -> None:
+        try:
+            async with asyncio.timeout(FINISH_TIMEOUT_S):
+                installs: list[Pending] = []
+                try:
+                    installs = await self.mirror_events(manager)
+                except Exception:
+                    log.warning('package telemetry: could not credit the mirror log', exc_info=True)
+                rows = [context.row(event, await self._user(context)) for context, event in pending]
+                rows += [context.row(event, await self._user(context)) for context, event in deduplicated(installs)]
+                if rows:
+                    await self._store(rows)
+        except Exception:
+            log.warning('package telemetry: could not record %d events', len(pending), exc_info=True)
 
-        One read at a time (the lock), of at most MIRROR_LOG_MAX_BYTES; what
-        is left waits for the next call. The running sandboxes' addresses are
-        listed only when a line records a wheel. A line whose address no
-        sandbox holds now, nor held when last listed, is dropped (logged at
-        debug level). A failure to read the log is logged once until a read
-        succeeds again.
+    async def _user(self, context: Context) -> str | None:
+        """Whose workspace the context's chat is: the caller for an unsaved chat (Q12), else the saved chat's owner."""
+        if context.chat_id.startswith(NON_SAVED_CHAT_ID_PREFIXES) or not context.chat_id:
+            return context.caller_id
+        if context.chat_id not in self._owners:
+            try:
+                self._owners[context.chat_id] = await self._owner_of(context.chat_id)
+            except Exception:
+                log.warning('package telemetry: could not look up the owner of chat %s', context.chat_id, exc_info=True)
+                return None
+            while len(self._owners) > CONTEXTS_KEPT:
+                self._owners.popitem(last=False)
+        return self._owners[context.chat_id]
+
+    async def drain(self) -> None:
+        """Wait for every background task started so far."""
+        while self._tasks:
+            await asyncio.gather(*list(self._tasks), return_exceptions=True)
+
+    async def close(self) -> None:
+        """Cancel the background tasks still running (the app's shutdown) and wait for them to end."""
+        for task in list(self._tasks):
+            task.cancel()
+        await asyncio.gather(*list(self._tasks), return_exceptions=True)
+
+    async def mirror_events(self, manager: 'SandboxManager') -> list[Pending]:
+        """The installs in the mirror's log since the last read, credited by client address and time.
+
+        One read at a time: a call that finds a read under way skips its own
+        (the next call reads those lines). After a failed read none is tried
+        for MIRROR_BACKOFF_S, doubling with each failure up to
+        MIRROR_BACKOFF_MAX_S; the failure is logged when the back-off starts.
+        At most MIRROR_LOG_MAX_BYTES a read; what is left waits for the next
+        call. Each install goes to the sandbox whose recorded address window
+        holds the line's time (SandboxManager.sandbox_at); one no window
+        holds is dropped (debug). The cursor moves past the lines only once
+        they are credited, so a failure reads them again.
         """
+        if self._mirror_lock.locked() or self._clock() < self._mirror_retry_at:
+            return []
         async with self._mirror_lock:
             try:
                 lines = await manager.mirror_log(self._cursor_ns, MIRROR_LOG_MAX_BYTES)
             except Exception:
-                if not self._mirror_failing:
+                if self._mirror_backoff_s == MIRROR_BACKOFF_S:
                     log.warning('package telemetry: could not read the mirror log', exc_info=True)
-                self._mirror_failing = True
+                self._mirror_retry_at = self._clock() + self._mirror_backoff_s
+                self._mirror_backoff_s = min(self._mirror_backoff_s * 2, MIRROR_BACKOFF_MAX_S)
                 return []
-            self._mirror_failing = False
+            self._mirror_backoff_s = MIRROR_BACKOFF_S
+            self._mirror_retry_at = 0.0
+            credited = self._credit(manager, lines)
             if lines:
                 self._cursor_ns = max(self._cursor_ns, max(line.at_ns for line in lines))
-            return await self._attribute(manager, lines)
+            return credited
 
-    async def _attribute(self, manager: 'SandboxManager', lines: Iterable[MirrorLine]) -> list[dict[str, Any]]:
-        installs = [(line.at_ns, parsed) for line in lines if (parsed := parse_mirror_line(line.line)) is not None]
-        if not installs:
-            return []
-        current = await manager.addresses()
-        for address, key in current.items():
-            self._seen_at[key] = address
-        known: Mapping[str, str] = {address: key for key, address in self._seen_at.items()} | current
-        rows: list[dict[str, Any]] = []
-        for at_ns, (address, name, version) in installs:
-            key = known.get(address)
+    def _credit(self, manager: 'SandboxManager', lines: Iterable[MirrorLine]) -> list[Pending]:
+        pending: list[Pending] = []
+        for line in lines:
+            parsed = parse_mirror_line(line.line)
+            if parsed is None:
+                continue
+            address, name, version = parsed
+            key = manager.sandbox_at(address, line.at_ns)
             if key is None:
-                log.debug('package telemetry: no sandbox holds %s, so its install of %s is not recorded', address, name)
+                log.debug(
+                    'package telemetry: no recorded sandbox held %s then; its install of %s is dropped', address, name
+                )
                 continue
             context = self._contexts.get(key) or Context(manager.chat_of(key), '', self.lock_sha(), None, 0)
-            rows.append(context.row(Event('install', name, version, at_ns // 1_000_000_000)))
-        # Forget addresses of sandboxes no longer running, so a reused address is never taken for an old sandbox.
-        self._seen_at = {key: address for key, address in self._seen_at.items() if key in current.values()}
-        return rows
+            pending.append((context, Event('install', name, version, line.at_ns // 1_000_000_000)))
+        return pending
+
+    async def prune(self) -> None:
+        """Delete rows older than PACKAGE_EVENTS_RETENTION_DAYS; a failure is logged."""
+        try:
+            removed = await self._prune(int(self._wall_clock()) - PACKAGE_EVENTS_RETENTION_DAYS * 86_400)
+        except Exception:
+            log.warning('package telemetry: could not prune old events', exc_info=True)
+            return
+        if removed:
+            log.info('package telemetry: pruned %d events older than %d days', removed, PACKAGE_EVENTS_RETENTION_DAYS)
+
+    async def maintenance_loop(self, every_s: float = 3600) -> None:
+        """Prune now, then every `every_s` seconds, until cancelled."""
+        while True:
+            await self.prune()
+            await asyncio.sleep(every_s)
 
 
 def truncate_argv() -> list[str]:
-    """The argv that runs TRUNCATE_SCRIPT on EVENTS_PATH, for HELPER_TIMEOUT_S."""
+    """The argv that runs TRUNCATE_SCRIPT on EVENTS_PATH, for TRUNCATE_TIMEOUT_S."""
     return wrap_argv(
-        [*GUEST_SHELL, '-c', TRUNCATE_SCRIPT, 'lllm-telemetry', EVENTS_PATH, EVENTS_PATH], HELPER_TIMEOUT_S
+        [*GUEST_SHELL, '-c', TRUNCATE_SCRIPT, 'lllm-telemetry', EVENTS_PATH, EVENTS_PATH], TRUNCATE_TIMEOUT_S
     )
 
 
@@ -560,7 +706,7 @@ async def read_events(session: 'SandboxSession', *, now: int) -> list[Event]:
         data = (await session.get_files([EVENTS_PATH], EVENTS_MAX_BYTES)).get(EVENTS_PATH, b'')
     else:
         log.warning('package telemetry: sandbox %s wrote %d bytes of events; dropping them', session.key, info.size)
-    result = await session.exec(truncate_argv(), HELPER_TIMEOUT_S)
+    result = await session.exec(truncate_argv(), TRUNCATE_TIMEOUT_S)
     if result.returncode != 0:
         log.warning('package telemetry: could not empty the events file of sandbox %s', session.key)
     events, dropped = parse_events(data, now=now)

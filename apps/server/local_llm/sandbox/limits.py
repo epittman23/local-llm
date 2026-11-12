@@ -98,6 +98,8 @@ IMAGE_MAX_PIXELS: Final = 40_000_000
 
 # Most bytes one read of the pip mirror's access log returns (SandboxBackend.mirror_log); the rest waits for the next.
 MIRROR_LOG_MAX_BYTES: Final = 1024 * 1024
+# Days a package telemetry event is kept; older rows are deleted every hour (sandbox/lifespan.py).
+PACKAGE_EVENTS_RETENTION_DAYS: Final = 180
 
 # The fixed container options.
 

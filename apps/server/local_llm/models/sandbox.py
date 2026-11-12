@@ -10,7 +10,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Integer, Text, case, func, select
+from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Integer, Text, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
@@ -78,6 +78,8 @@ class SandboxPackageEvent(Base):
         ts: When it happened, epoch seconds (the guest's time for an import, checked to be plausible; the
             collection's otherwise).
         chat_id: The chat whose sandbox it came from (an unsaved chat's own id for an ephemeral sandbox).
+        user_id: Whose workspace that is: the saved chat's owner, or the caller for an unsaved chat; None when it
+            could not be looked up.
         kind: One of USE_KINDS or MISS_KINDS.
         name: The distribution (PEP 503 normalised), R namespace, module, command or file.
         version: The version, for an import or an install; None otherwise.
@@ -87,11 +89,15 @@ class SandboxPackageEvent(Base):
     """
 
     __tablename__ = 'sandbox_package_events'
-    __table_args__ = (Index('ix_sandbox_package_events_name_kind', 'name', 'kind'),)
+    __table_args__ = (
+        Index('ix_sandbox_package_events_name_kind', 'name', 'kind'),
+        Index('ix_sandbox_package_events_ts', 'ts'),
+    )
 
     event_id = Column(Integer, primary_key=True, autoincrement=True)
     ts = Column(BigInteger, nullable=False)
     chat_id = Column(Text, nullable=False)
+    user_id = Column(Text, nullable=True)
     kind = Column(Text, nullable=False)
     name = Column(Text, nullable=False)
     version = Column(Text, nullable=True)
@@ -104,6 +110,7 @@ class SandboxPackageEventModel(BaseModel):
     event_id: int
     ts: int
     chat_id: str
+    user_id: str | None = None
     kind: str
     name: str
     version: str | None = None
@@ -114,7 +121,7 @@ class SandboxPackageEventModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-_COLUMNS = ('ts', 'chat_id', 'kind', 'name', 'version', 'image_digest', 'lock_sha', 'harness_run_id')
+_COLUMNS = ('ts', 'chat_id', 'user_id', 'kind', 'name', 'version', 'image_digest', 'lock_sha', 'harness_run_id')
 
 
 class SandboxPackageEventsTable:
@@ -141,23 +148,26 @@ class SandboxPackageEventsTable:
     async def uses(
         self, *, include_harness: bool = False, limit: int = 500, db: AsyncSession | None = None
     ) -> list[dict[str, Any]]:
-        """Per package (language and name): distinct chats, imports, installs and last use, most chats first.
+        """Per package (language and name): distinct users and chats, imports, installs and last use, most users first.
 
         A Python distribution's imports and installs count together (`python`); an R namespace is `r`. Harness
         rows (harness_run_id set) are left out unless `include_harness`.
         """
         event = SandboxPackageEvent
         language = case((event.kind == 'r_import', 'r'), else_='python').label('language')
+        users = func.count(func.distinct(event.user_id)).label('users')
         chats = func.count(func.distinct(event.chat_id)).label('chats')
         imports = func.sum(case((event.kind.in_(('import', 'r_import')), 1), else_=0)).label('imports')
         installs = func.sum(case((event.kind == 'install', 1), else_=0)).label('installs')
         last_used = func.max(event.ts).label('last_used')
-        query = select(language, event.name, chats, imports, installs, last_used).where(event.kind.in_(USE_KINDS))
+        query = select(language, event.name, users, chats, imports, installs, last_used).where(
+            event.kind.in_(USE_KINDS)
+        )
         if not include_harness:
             query = query.where(event.harness_run_id.is_(None))
         query = (
             query.group_by(language, event.name)
-            .order_by(chats.desc(), imports.desc(), last_used.desc(), event.name)
+            .order_by(users.desc(), chats.desc(), imports.desc(), last_used.desc(), event.name)
             .limit(limit)
         )
         async with get_async_db_context(db) as db:
@@ -166,6 +176,7 @@ class SandboxPackageEventsTable:
             {
                 'language': row.language,
                 'name': row.name,
+                'users': int(row.users),
                 'chats': int(row.chats),
                 'imports': int(row.imports or 0),
                 'installs': int(row.installs or 0),
@@ -177,17 +188,19 @@ class SandboxPackageEventsTable:
     async def misses(
         self, *, include_harness: bool = False, limit: int = 500, db: AsyncSession | None = None
     ) -> list[dict[str, Any]]:
-        """Per miss (kind and name): distinct chats, events and last seen, most chats first (the review queue)."""
+        """Per miss (kind and name): distinct users and chats, events and last seen, most users first (the review
+        queue: a request signal, not vetting)."""
         event = SandboxPackageEvent
+        users = func.count(func.distinct(event.user_id)).label('users')
         chats = func.count(func.distinct(event.chat_id)).label('chats')
         events = func.count().label('events')
         last_seen = func.max(event.ts).label('last_seen')
-        query = select(event.kind, event.name, chats, events, last_seen).where(event.kind.in_(MISS_KINDS))
+        query = select(event.kind, event.name, users, chats, events, last_seen).where(event.kind.in_(MISS_KINDS))
         if not include_harness:
             query = query.where(event.harness_run_id.is_(None))
         query = (
             query.group_by(event.kind, event.name)
-            .order_by(chats.desc(), events.desc(), last_seen.desc(), event.kind, event.name)
+            .order_by(users.desc(), chats.desc(), events.desc(), last_seen.desc(), event.kind, event.name)
             .limit(limit)
         )
         async with get_async_db_context(db) as db:
@@ -196,12 +209,20 @@ class SandboxPackageEventsTable:
             {
                 'kind': row.kind,
                 'name': row.name,
+                'users': int(row.users),
                 'chats': int(row.chats),
                 'events': int(row.events),
                 'last_seen': int(row.last_seen),
             }
             for row in rows
         ]
+
+    async def delete_before(self, before: int, db: AsyncSession | None = None) -> int:
+        """Delete the events older than `before` (epoch seconds), the retention; how many."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(delete(SandboxPackageEvent).where(SandboxPackageEvent.ts < before))
+            await db.commit()
+        return int(getattr(result, 'rowcount', 0) or 0)
 
 
 SandboxPackageEvents = SandboxPackageEventsTable()

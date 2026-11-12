@@ -82,7 +82,7 @@ from local_llm.sandbox import workspace as sandbox_files
 from local_llm.sandbox.limits import OUTPUT_CHAT_CAP_BYTES, TIMEOUT_DEFAULT_S
 from local_llm.sandbox.manager import TIMEOUT_KEY, OutputsMemory, SandboxManager, sandbox_setting_error
 from local_llm.sandbox.telemetry import Context as PackageContext
-from local_llm.sandbox.telemetry import PackageTelemetry
+from local_llm.sandbox.telemetry import PackageTelemetry, Pending
 from local_llm.sandbox.uploads import chat_owner, sync_uploads
 from local_llm.sandbox.workspace import WorkspaceError
 from local_llm.socket.main import sio
@@ -1179,12 +1179,14 @@ async def _bash_outputs(
 class _Packages:
     """One call's package telemetry (sandbox/telemetry.py); a no-op when app.state.sandbox_telemetry is None.
 
-    `begin` before the command and `gather` after it run inside the session;
-    `store` after the session, so the database write does not hold the
-    chat's sandbox. None of them raises but a cancellation.
+    `begin` before the command and `gather` after it run inside the session
+    (the latter for at most telemetry.COLLECT_TIMEOUT_S); `finish` after the
+    session hands the rest (the mirror's log, the database write) to a
+    background task, so the call never waits for it. None of them raises
+    but a cancellation.
     """
 
-    def __init__(self, request: Request | None, chat_id: str | None) -> None:
+    def __init__(self, request: Request | None, chat_id: str | None, user: dict | None) -> None:
         state = getattr(getattr(request, 'app', None), 'state', None)
         telemetry = getattr(state, 'sandbox_telemetry', None)
         manager = getattr(state, 'sandbox', None)
@@ -1192,20 +1194,21 @@ class _Packages:
         self._manager: SandboxManager | None = manager if isinstance(manager, SandboxManager) else None
         self._request = request
         self._chat_id = chat_id or ''
+        self._caller = (user or {}).get('id')
         self._context: PackageContext | None = None
-        self._rows: list[dict] = []
+        self._pending: list[Pending] = []
 
     def begin(self, session: SandboxSession) -> None:
         if self._telemetry is not None and self._manager is not None:
-            self._context = self._telemetry.begin(self._manager, session, self._chat_id, self._request)
+            self._context = self._telemetry.begin(self._manager, session, self._chat_id, self._request, self._caller)
 
     async def gather(self, session: SandboxSession, result: ExecResult) -> None:
         if self._telemetry is not None and self._manager is not None:
-            self._rows = await self._telemetry.gather(self._manager, session, self._context, result)
+            self._pending = await self._telemetry.gather(self._manager, session, self._context, result)
 
-    async def store(self) -> None:
-        if self._telemetry is not None:
-            await self._telemetry.store(self._rows)
+    def finish(self) -> None:
+        if self._telemetry is not None and self._manager is not None:
+            self._telemetry.finish(self._manager, self._pending)
 
 
 async def _emit_output_files(event_emitter: Callable[[dict], Awaitable[None]] | None, files: list[dict]) -> None:
@@ -1268,7 +1271,7 @@ async def bash(
         with _model_input():
             argv = wrap_command(command, timeout)
         notes: list[str] = []
-        packages = _Packages(__request__, sandbox_chat(__request__, chat_id))
+        packages = _Packages(__request__, sandbox_chat(__request__, chat_id), __user__)
         async with _sandbox_session(
             __request__, __user__, __chat_id__, __metadata__, __event_emitter__, image, upload_notes=notes
         ) as session:
@@ -1296,7 +1299,7 @@ async def bash(
             )
             # Last in the session: the events the command's processes recorded, its misses, and the mirror's log.
             await packages.gather(session, result)
-        await packages.store()
+        packages.finish()
     except Exception as exc:
         note_code_run((time.monotonic() - started) * 1000, _code_run_failure(exc))
         return _sandbox_error('bash', exc)
@@ -1359,7 +1362,7 @@ async def run_code_in_sandbox(
                 raise WorkspaceError(f'the code must be text, not {type(code).__name__}')
             data = code.encode('utf-8')
         timeout = await configured_timeout()
-        packages = _Packages(request, sandbox_chat(request, chat_id or (metadata or {}).get('chat_id')))
+        packages = _Packages(request, sandbox_chat(request, chat_id or (metadata or {}).get('chat_id')), user)
         async with _sandbox_session(
             request, user, chat_id, metadata, event_emitter, image='data', upload_notes=notes if sync else None
         ) as session:
@@ -1384,7 +1387,7 @@ async def run_code_in_sandbox(
                 cap_chat=sandbox_chat(request, chat_id),
             )
             await packages.gather(session, result)
-        await packages.store()
+        packages.finish()
     except Exception as exc:
         note_code_run((time.monotonic() - started) * 1000, _code_run_failure(exc))
         return {'error': sandbox_error_text(what, exc, notes)}

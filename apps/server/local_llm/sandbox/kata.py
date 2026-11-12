@@ -121,7 +121,7 @@ from local_llm.sandbox.types import (
 log = logging.getLogger(__name__)
 
 #: The images' tag; infra/sandbox/TAG holds the same value, and a test checks they agree.
-SANDBOX_IMAGE_TAG: Final = '2026-11-11.2'
+SANDBOX_IMAGE_TAG: Final = '2026-11-12.1'
 #: The image each key runs.
 IMAGES: Final[Mapping[ImageKey, str]] = MappingProxyType(
     {
@@ -163,6 +163,8 @@ KILL_TIMEOUT_S: Final = 10.0
 KILL_STOP_TIMEOUT_S: Final = 10.0
 #: Seconds put_files, get_files or stat may take in all.
 FILES_TIMEOUT_S: Final = 120.0
+#: Seconds a read of the mirror's log may take (SandboxBackend.mirror_log), the request's socket timeout too.
+MIRROR_LOG_TIMEOUT_S: Final = 5.0
 #: The most bytes of the guest's listing the guest-view check reads; a longer one never matches, so it times out.
 GUEST_VIEW_MAX_BYTES: Final = 65536
 #: Seconds the guest may take to see files put_files wrote (virtio-fs caches attributes for a second).
@@ -1071,7 +1073,7 @@ class KataDockerBackend:
         """
         validate_mirror_log(since_ns, max_bytes)
         return await self._call(
-            'read the sandbox mirror log', self._mirror_log, since_ns, max_bytes, limit_s=FILES_TIMEOUT_S
+            'read the sandbox mirror log', self._mirror_log, since_ns, max_bytes, limit_s=MIRROR_LOG_TIMEOUT_S
         )
 
     def _mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
@@ -1090,7 +1092,10 @@ class KataDockerBackend:
             # 0 would mean the whole log; a cursor is never that old.
             'since': str(max(since_ns // 1_000_000_000 - 1, 1)),
         }
-        response = api.get(url, params=params, stream=True, headers={'Accept-Encoding': 'identity'})
+        # The request's own timeout, so the worker thread ends soon after the caller stops waiting for it.
+        response = api.get(
+            url, params=params, stream=True, headers={'Accept-Encoding': 'identity'}, timeout=MIRROR_LOG_TIMEOUT_S
+        )
         try:
             response.raise_for_status()
             return read_log_lines(response.raw, since_ns, max_bytes)

@@ -402,7 +402,7 @@ make sandbox-images
 ```
 
 builds both and rewrites `infra/sandbox/image-freeze.txt` and `image-freeze-r.txt`. The tag is the
-one line in `infra/sandbox/TAG` (`2026-11-11.2`: the date, then a counter
+one line in `infra/sandbox/TAG` (`2026-11-12.1`: the date, then a counter
 for that day). Any change to an image bumps it, because the tag is what
 the manager starts and what benchmark runs record. The backend holds the
 same value in a constant, so bump both together. Pre-existing containers keep their old image until they are
@@ -498,9 +498,12 @@ older version of a listed package.
   one JSON line per request on stdout (`docker logs local-llm-sandbox-mirror`),
   capped at three 10 MB files, because a sandbox chooses what it requests.
   The package telemetry reads it after every `bash` call, from where its
-  last read stopped (see [Package telemetry](#package-telemetry)), so it
-  keeps up with that rotation unless 30 MB of requests arrive between two
-  calls.
+  last read stopped, at most 1 MiB a read (see
+  [Package telemetry](#package-telemetry)). So it keeps up with that
+  rotation only while each call has at most about 1 MiB of new lines to
+  read: a backlog that grows faster (many installs between calls, or a
+  sandbox requesting junk) falls behind by the difference each call, and
+  lines rotated away before they are read are lost.
 - `docker compose down` with sandboxes attached exits 0 but leaves the
   network ("Resource is still in use"); that is expected. The next `up`
   reuses it.
@@ -1288,7 +1291,9 @@ process, an exit costs a few milliseconds.
 `app.state.sandbox_telemetry`, made by `sandbox/lifespan.py` with the
 manager). After each `bash` call and each `run_code_in_sandbox` (the tag
 path and the Run endpoint), inside the session, once the command and its
-outputs are done:
+outputs are done, for at most 3 seconds in all (`COLLECT_TIMEOUT_S`; a
+daemon call already under way is still waited for, as every session call
+is, so the sandbox's lock is never handed on mid-call):
 
 - The events file is read through the daemon and emptied, only when the
   daemon's stat (which does not follow a symlink) shows
@@ -1308,27 +1313,57 @@ outputs are done:
   collection's. Anything else is dropped.
 - The output's misses are matched, each kind and name once per call, at
   most 50.
-- The mirror's log is read from its last line on, through the backend
+- The sandbox's address is learnt, once per container start: the manager
+  records each start and stop of a sandbox (`AddressWindow`: key, start
+  and stop in epoch nanoseconds, at most 4,096 kept), and the first
+  telemetry call in it fills in its address from `list_sandboxes()`.
+
+A call's rows are then deduplicated on (kind, name, version), the
+earliest kept, and capped at 200 (`ROWS_PER_CALL`), misses included: a
+loop that runs Python a thousand times records each package once, so
+`imports` counts calls that imported a package, not processes.
+
+The rest runs in a background task after the session (`finish`), so the
+call returns without waiting for it; the app's shutdown cancels what is
+left (`close`), dropping those rows. It has 30 seconds in all:
+
+- The mirror's log is read from its cursor on, through the backend
   (`SandboxBackend.mirror_log(since_ns, max_bytes)`: the Kata backend reads
   the daemon's logs endpoint for `local-llm-sandbox-mirror`, stdout with
-  timestamps, at most 1 MiB a read; what is left waits for the next call).
-  The cursor starts when the backend starts, since older lines name
-  addresses other sandboxes held, and one read runs at a time. An install
-  is attributed to the sandbox holding its client address now
-  (`list_sandboxes()`, asked only when a line records a wheel) or at the
-  previous listing, and to that sandbox's latest call: its chat, image and
-  harness run, even when another chat's call read the line. An address no
-  sandbox holds is dropped. A failure to read the log is logged once until
-  a read succeeds again.
+  timestamps, at most 1 MiB a read and 5 seconds, the request's own socket
+  timeout too; what is left waits for the next call). The cursor starts
+  when the backend starts, and moves past the lines only once they are
+  credited, so a failure reads them again. One read runs at a time: a call
+  that finds one under way skips its own rather than wait. After a failed
+  read none is tried for 60 seconds, doubling with each failure up to 15
+  minutes; the failure is logged when the back-off starts. Each install is
+  credited to the sandbox whose address window holds the line's time and
+  address, and to that sandbox's latest call: its chat, image and harness
+  run, even when another chat's call read the line. A line no window
+  holds (a gap between two sandboxes that had the same address, an
+  address never learnt, or a time before the earliest start recorded) is
+  dropped.
+- Each row is credited to a user: an unsaved chat's caller (its sandbox is
+  theirs, Q12), or the saved chat's owner, looked up once per chat (an
+  admin running code in another user's chat counts for the owner).
+- The rows are written.
 
-Rows are written after the session, so the database write does not hold
-the chat's sandbox. Every step's failure is logged and swallowed: the
-tool's result is the same with telemetry failing, or off.
+Every step's failure is logged and swallowed: the tool's result is the
+same with telemetry failing, slow, or off.
+
+Two edge cases of the daemon's log. A read stops before the line that
+would pass its 1 MiB, and the next read continues strictly after the last
+line returned; a line the daemon stamped with exactly the same nanosecond
+as that last one, left out by the cap, is then skipped. And the daemon
+splits a log line longer than 16 KiB into parts; each part fails to parse
+as JSON and is dropped, which loses only requests whose URI and user agent
+together exceed that, never a real wheel download.
 
 **What each row carries.** `ts` (epoch seconds), `chat_id` (the sandbox's
 chat: a sub-agent's parent; an unsaved chat's own id, such as the
 harness's `temporary:benchmark-<hex>`, for an ephemeral sandbox, which is
-recorded like any other), `image_digest` (the image id the backend last saw
+recorded like any other), `user_id` (above; None when the lookup failed),
+`image_digest` (the image id the backend last saw
 for the session's image, `KataDockerBackend.image_ids`, set by `ready` and
 `create`; `''` when unknown), `lock_sha` (SHA-256 of
 `infra/sandbox/requirements.lock` in the checkout the backend runs from,
@@ -1340,30 +1375,41 @@ on the harness request (`request.state.harness_run_id`), and a harness
 request without one is marked `harness`, so reports leave both out.
 
 **The table.** `sandbox_package_events` (`models/sandbox.py`, migration
-`5d1e9c3a7b42`): `event_id` integer primary key, `ts`, `chat_id`, `kind`,
-`name`, `version` (nullable), `image_digest`, `lock_sha`, `harness_run_id`
-(nullable), indexed on `(name, kind)`. Append-only rows; nothing prunes it
-yet.
+`5d1e9c3a7b42`): `event_id` integer primary key, `ts`, `chat_id`,
+`user_id` (nullable), `kind`, `name`, `version` (nullable), `image_digest`,
+`lock_sha`, `harness_run_id` (nullable), indexed on `(name, kind)` and on
+`ts`. Rows are never changed; those older than 180 days
+(`PACKAGE_EVENTS_RETENTION_DAYS` in `sandbox/limits.py`) are deleted at
+startup and every hour after (`PackageTelemetry.maintenance_loop`, started
+by `sandbox/lifespan.py`). No index serves the harness filter: the report
+aggregates every non-harness row anyway.
 
 **The report.** `GET /api/v1/sandbox/packages` (admins; 403 for anyone
 else signed in, 503 when the events cannot be read), with
 `include_harness=true` to count harness rows and `limit` (default 500):
 
 - `packages`: per language (`python` for `import` and `install`, `r` for
-  `r_import`) and name, `chats` (distinct), `imports`, `installs`,
-  `last_used`, and `source`: `image` when `infra/sandbox/image-freeze.txt`
-  (R: `image-freeze-r.txt`) lists it, `wheelhouse` when only
-  `requirements.lock` does, `other` otherwise (a dependency vendored inside
-  another, or a list that is out of date). Most chats first.
-- `misses`: per kind and name, `chats` (distinct), `events` and
-  `last_seen`, most chats first: the review queue for `allowlist.in` and the
-  Dockerfiles.
+  `r_import`) and name, `users` and `chats` (distinct), `imports`,
+  `installs`, `last_used`, and `source`: `image` when
+  `infra/sandbox/image-freeze.txt` (R: `image-freeze-r.txt`) lists it,
+  `wheelhouse` when only `requirements.lock` does, `other` otherwise (a
+  dependency vendored inside another, or a list that is out of date). Most
+  users first.
+- `misses`: per kind and name, `users` and `chats` (distinct), `events` and
+  `last_seen`, most users first: the review queue for `allowlist.in` and the
+  Dockerfiles. Ranking by users rather than chats keeps one user (or one
+  model looping in many chats) from steering it alone. It is a request
+  signal, not vetting: a miss says something was wanted, never that the
+  package is safe, maintained or worth its size; each addition is still
+  reviewed as T16's "Adding a package" describes, and a forged event can
+  only add to the queue.
 
 The same from `psql`:
 
 ```sql
 -- Packages in use, harness runs left out.
 SELECT CASE kind WHEN 'r_import' THEN 'r' ELSE 'python' END AS language, name,
+       count(DISTINCT user_id) AS users,
        count(DISTINCT chat_id) AS chats,
        count(*) FILTER (WHERE kind IN ('import', 'r_import')) AS imports,
        count(*) FILTER (WHERE kind = 'install') AS installs,
@@ -1371,27 +1417,39 @@ SELECT CASE kind WHEN 'r_import' THEN 'r' ELSE 'python' END AS language, name,
 FROM sandbox_package_events
 WHERE kind IN ('import', 'r_import', 'install') AND harness_run_id IS NULL
 GROUP BY 1, 2
-ORDER BY chats DESC, imports DESC;
+ORDER BY users DESC, chats DESC, imports DESC;
 
--- Misses ranked by the chats that met them.
-SELECT kind, name, count(DISTINCT chat_id) AS chats, count(*) AS events,
+-- Misses ranked by the users who met them.
+SELECT kind, name, count(DISTINCT user_id) AS users, count(DISTINCT chat_id) AS chats,
+       count(*) AS events,
        to_timestamp(max(ts)) AS last_seen
 FROM sandbox_package_events
 WHERE kind IN ('module_miss', 'pip_miss', 'command_miss', 'latex_miss', 'r_miss')
   AND harness_run_id IS NULL
 GROUP BY kind, name
-ORDER BY chats DESC, events DESC;
+ORDER BY users DESC, chats DESC, events DESC;
 ```
 
 **After changing the hooks.** They are in the data image, so a change to
 `data/sitecustomize.py` or `data/Rprofile.site` needs a new tag and
 `make sandbox-images` ([Rebuilding and the tag](#rebuilding-and-the-tag)).
-A sandbox started from an image without them records only installs and
-output misses.
+T21 bumped the tag to `2026-11-12.1`: until the owner rebuilds with
+`make sandbox-images` (which also rewrites the image-freeze files), the
+backend reports the images missing and refuses to start sandboxes. On the
+rebuilt image, check that the hook is the one Python loads:
+
+```sh
+docker run --rm local-llm/sandbox-data:2026-11-12.1 python -c 'import sitecustomize; print(sitecustomize.__file__)'
+```
+
+which prints a path under `/opt/conda/lib/python3.*/site-packages/`.
 
 Tests: `tests/test_sandbox_telemetry.py` (the parsers, the miss matchers,
-the collection through `FakeBackend`, the truncation helper against real
-bash, the Kata backend's log read against a mocked SDK, `sitecustomize.py`
+the collection through `FakeBackend` (address reuse, back-off, a read
+under way skipped, the cursor kept on a failure, deduplication and the
+cap, a sub-agent's rows on its parent chat, failures and a slow daemon
+leaving the result unchanged), the truncation helper against real bash,
+the Kata backend's log read against a mocked SDK, the retention, `sitecustomize.py`
 run in a subprocess, `Rprofile.site` run when R is installed and checked
 statically otherwise, the table, the report and its route). Still to verify
 on the laptop (docker, kvm): the proposal's acceptance test "Telemetry"

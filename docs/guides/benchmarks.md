@@ -333,6 +333,17 @@ for where it came from. The run stops, with `not recorded: ...`, when:
   `fail_error`. A server that stopped answering raises, as in the bare
   mode, and records nothing.
 
+**The sandbox engine's telemetry.** With the code interpreter on the
+sandbox engine, every `bash` call also runs the package telemetry
+([sandbox guide](sandbox.md#package-telemetry)): a few daemon calls, and
+one more exec in the guest when the call ran Python or R, and the image's
+hooks add a little to each Python or R exit. So passes per minute under
+the sandbox engine are not comparable with sandbox runs from before T21
+(2026-11-12). `harness_sha` does not cover the sandbox image's digest
+either: two runs with the same sha may have used different images (the
+harness does not yet run on the sandbox engine; adding the image digest to
+its spec is planned with that move).
+
 **Kept apart.** Compare and Report leave harness rows out for now, until
 they group and label by `harness_sha` (PR 2). A resume continues only a run
 in the same mode. Like the system prompt, the harness is not part of

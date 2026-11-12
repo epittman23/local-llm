@@ -31,6 +31,7 @@ Run from apps/server (any LLLM_SECRET_KEY of 32 characters or more):
 import asyncio
 import datetime as dt
 import hashlib
+import itertools
 import json
 import logging
 import os
@@ -52,16 +53,22 @@ from local_llm.benchmarks.evaluation import runner
 from local_llm.models.sandbox import SandboxPackageEvents
 from local_llm.models.users import Users
 from local_llm.routers import sandbox as sandbox_router
-from local_llm.sandbox import SandboxError, SandboxManager, SandboxSettings, telemetry, workspace
+from local_llm.sandbox import SandboxError, SandboxManager, SandboxSettings, kata, lifespan, telemetry, workspace
 from local_llm.sandbox.fake import FakeBackend, FakeExecRequest, FakeFile, FakeWorkspace, interpret
 from local_llm.sandbox.kata import MIRROR_CONTAINER, KataDockerBackend, log_time_ns, read_log_lines
-from local_llm.sandbox.limits import MIRROR_LOG_MAX_BYTES, SANDBOX_UID, TIMEOUT_DEFAULT_S
+from local_llm.sandbox.limits import (
+    MIRROR_LOG_MAX_BYTES,
+    PACKAGE_EVENTS_RETENTION_DAYS,
+    SANDBOX_UID,
+    TIMEOUT_DEFAULT_S,
+)
 from local_llm.sandbox.telemetry import (
     EVENTS_DIR,
     EVENTS_MAX_BYTES,
     EVENTS_MAX_LINES,
     EVENTS_PATH,
     MISSES_MAX,
+    ROWS_PER_CALL,
     TRUNCATE_SCRIPT,
     Event,
     PackageSources,
@@ -304,16 +311,35 @@ class Rig:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, store=None) -> None:
         self.backend = FakeBackend()
         self.backend.image_ids = {'data': 'sha256:data-image', 'web': 'sha256:web-image'}
-        self.manager = SandboxManager(self.backend, workspaces=MemoryWorkspaces(), chats=_Chats(), settings=_settings)
+        # The wall clock the manager stamps container starts with, and the monotonic one the mirror's back-off uses.
+        self.wall = float(NOW)
+        self.mono = 0.0
+        self.manager = SandboxManager(
+            self.backend,
+            workspaces=MemoryWorkspaces(),
+            chats=_Chats(),
+            settings=_settings,
+            wall_clock=lambda: self.wall,
+        )
         self.rows: list[dict] = []
+        self.owner_lookups: list[str] = []
         self.lock = tmp_path / 'requirements.lock'
         self.lock.write_bytes(b'pkg==1.0\n')
 
         async def keep(rows):
             self.rows.extend(rows)
 
+        async def owner_of(chat_id):
+            self.owner_lookups.append(chat_id)
+            return OWNER
+
         self.telemetry = PackageTelemetry(
-            store=store or keep, wall_clock=lambda: float(NOW), wall_clock_ns=lambda: NOW * NS, lock_file=self.lock
+            store=store or keep,
+            owner_of=owner_of,
+            wall_clock=lambda: float(NOW),
+            wall_clock_ns=lambda: NOW * NS,
+            clock=lambda: self.mono,
+            lock_file=self.lock,
         )
         state = SimpleNamespace(sandbox=self.manager, sandbox_telemetry=self.telemetry)
         self.request = SimpleNamespace(app=SimpleNamespace(state=state), state=SimpleNamespace())
@@ -329,11 +355,17 @@ class Rig:
 
     def bash(self, command: str, chat_id: str = CHAT, **kwargs) -> dict:
         async def go():
-            return await builtin.bash(
+            out = await builtin.bash(
                 command, __request__=self.request, __user__={'id': 'u1'}, __chat_id__=chat_id, **kwargs
             )
+            # The rows are written in the background: wait for them, as the app's event loop would run them.
+            await self.telemetry.drain()
+            return out
 
         return json.loads(run(go()))
+
+    def mirror_calls(self) -> int:
+        return sum(1 for name, _ in self.backend.calls if name == 'mirror_log')
 
     def files(self, chat_id: str = CHAT) -> dict[str, FakeFile]:
         return self.backend.sandboxes[chat_id].files
@@ -359,10 +391,14 @@ EVENTS = b'\n'.join(
 )
 
 
-def _row(kind, name, version=None, ts=NOW, chat=CHAT, image='sha256:data-image', lock=None, harness=None):
+OWNER = 'owner-of-chat'
+
+
+def _row(kind, name, version=None, ts=NOW, chat=CHAT, image='sha256:data-image', lock=None, harness=None, user=OWNER):
     return {
         'ts': ts,
         'chat_id': chat,
+        'user_id': user,
         'kind': kind,
         'name': name,
         'version': version,
@@ -385,12 +421,14 @@ def test_bash_records_the_events_misses_and_installs_of_its_call(monkeypatch, tm
     assert result['returncode'] == 127
     lock = hashlib.sha256(b'pkg==1.0\n').hexdigest()
     assert rig.rows == [
+        _row('command_miss', 'fakecmd', lock=lock),
         _row('import', 'pandas', '2.3.0', NOW - 2, lock=lock),
         _row('import', 'numpy', '2.3.1', NOW - 2, lock=lock),
         _row('module_miss', 'notapkg', None, NOW - 1, lock=lock),
-        _row('command_miss', 'fakecmd', lock=lock),
         _row('install', 'lifelines', '0.30.0', NOW + 1, lock=lock),
     ]
+    # The owner is looked up once per chat, then kept.
+    assert rig.owner_lookups == [CHAT]
     # Emptied through the guest helper, not removed.
     assert rig.files()[EVENTS_PATH].content == b''
     assert rig.truncations() == 1
@@ -429,20 +467,30 @@ def test_installs_go_to_the_chat_whose_sandbox_has_the_address_and_unknown_ones_
     ]
 
 
-def test_an_install_from_a_sandbox_that_stopped_since_the_last_listing_keeps_its_chat(monkeypatch, tmp_path):
+def test_a_reused_address_credits_each_line_to_the_sandbox_that_held_it_then(monkeypatch, tmp_path):
     rig = Rig(monkeypatch, tmp_path)
-    rig.bash('mkdir a')
-    ip = rig.backend.sandboxes[CHAT].ip
-    rig.backend.mirror_lines.append(MirrorLine((NOW + 1) * NS, mirror(ip, '/autograd-1.9.1-py3-none-any.whl')))
-    rig.bash('mkdir b')
-    assert len(rig.rows) == 1
-    rig.backend.mirror_lines.append(MirrorLine((NOW + 2) * NS, mirror(ip, '/autograd-1.9.1-py3-none-any.whl')))
-    run(rig.backend.stop(CHAT))
-    rows = run(rig.telemetry.mirror_events(rig.manager))
-    assert [(r['chat_id'], r['name']) for r in rows] == [(CHAT, 'autograd')]
-    # Forgotten once a listing no longer shows it: its address may go to another sandbox.
-    rig.backend.mirror_lines.append(MirrorLine((NOW + 3) * NS, mirror(ip, '/autograd-1.9.1-py3-none-any.whl')))
-    assert run(rig.telemetry.mirror_events(rig.manager)) == []
+    rig.bash('mkdir a', chat_id=CHAT)
+    address = rig.backend.sandboxes[CHAT].ip
+    assert address is not None
+    rig.wall = float(NOW + 10)
+    run(rig.manager.release(CHAT))
+    # The next container start gets the same address, as Docker may hand it out again.
+    rig.backend._starts = itertools.count(0)
+    rig.wall = float(NOW + 20)
+    rig.bash('mkdir b', chat_id=OTHER)
+    assert rig.backend.sandboxes[OTHER].ip == address
+    rig.backend.mirror_lines += [
+        MirrorLine((NOW + 5) * NS, mirror(address, '/autograd-1.9.1-py3-none-any.whl')),
+        MirrorLine((NOW + 15) * NS, mirror(address, '/cloudpickle-3.1.2-py3-none-any.whl')),
+        MirrorLine((NOW + 25) * NS, mirror(address, '/lifelines-0.30.0-py3-none-any.whl')),
+    ]
+    rig.bash('mkdir c', chat_id=OTHER)
+    # Each to the sandbox whose window holds its time; the gap between the two windows to nobody.
+    assert [(r['chat_id'], r['name']) for r in rig.rows] == [(CHAT, 'autograd'), (OTHER, 'lifelines')]
+    # A line older than the earliest start recorded names an address nobody here recorded.
+    assert rig.manager.sandbox_at(address, (NOW - 1) * NS) is None
+    assert rig.manager.sandbox_at(address, (NOW + 5) * NS) == CHAT
+    assert rig.manager.sandbox_at('10.231.0.250', (NOW + 25) * NS) is None
 
 
 def test_an_ephemeral_sandbox_s_events_carry_its_unsaved_chat_id(monkeypatch, tmp_path):
@@ -456,7 +504,35 @@ def test_an_ephemeral_sandbox_s_events_carry_its_unsaved_chat_id(monkeypatch, tm
         MirrorLine((NOW + 1) * NS, mirror(rig.backend.sandboxes[key].ip or '', '/autograd-1.9.1-py3-none-any.whl'))
     )
     rig.bash('mkdir b', chat_id=chat)
-    assert [(r['chat_id'], r['kind']) for r in rig.rows] == [(chat, 'import'), (chat, 'install')]
+    # Credited to the caller, whose sandbox an unsaved chat's is (Q12), with no owner lookup.
+    assert [(r['chat_id'], r['kind'], r['user_id']) for r in rig.rows] == [
+        (chat, 'import', 'u1'),
+        (chat, 'install', 'u1'),
+    ]
+    assert rig.owner_lookups == []
+
+
+def test_a_sub_agent_s_rows_go_to_its_parent_chat(monkeypatch, tmp_path):
+    rig = Rig(monkeypatch, tmp_path)
+    rig.request.state.sandbox_chat_id = CHAT
+    rig.bash('fakecmd', chat_id=OTHER)
+    assert [(r['chat_id'], r['name']) for r in rig.rows] == [(CHAT, 'fakecmd')]
+    assert CHAT in rig.backend.sandboxes and OTHER not in rig.backend.sandboxes
+
+
+def test_a_call_s_rows_are_deduplicated_and_capped(monkeypatch, tmp_path):
+    rig = Rig(monkeypatch, tmp_path)
+    rig.bash('mkdir a')
+    same = [line(kind='import', name='pandas', version='2.3.0', ts=NOW - i) for i in range(50)]
+    many = [line(kind='import', name=f'pkg{i}', version='1', ts=NOW) for i in range(ROWS_PER_CALL + 50)]
+    rig.plant(b'\n'.join(same + many))
+    rig.bash('fakecmd')
+    names = [r['name'] for r in rig.rows]
+    assert len(names) == ROWS_PER_CALL
+    # The miss comes first, then pandas once (its earliest line), then as many others as fit.
+    assert names[:3] == ['fakecmd', 'pandas', 'pkg0']
+    assert names.count('pandas') == 1
+    assert next(r for r in rig.rows if r['name'] == 'pandas')['ts'] == NOW
 
 
 @pytest.mark.parametrize('shape', ['symlinked file', 'symlinked directory', 'fifo', 'directory'])
@@ -502,7 +578,7 @@ def test_an_events_file_over_the_cap_is_emptied_unread(monkeypatch, tmp_path, ca
 
 
 def _fake_truncate(ws: FakeWorkspace) -> int:
-    request = FakeExecRequest(CHAT, telemetry.truncate_argv(), 30, None, ws)
+    request = FakeExecRequest(CHAT, telemetry.truncate_argv(), telemetry.TRUNCATE_TIMEOUT_S, None, ws)
     return run(interpret(request)).returncode
 
 
@@ -569,7 +645,7 @@ def _plain_result(monkeypatch, tmp_path, command: str) -> dict:
     return rig.bash(command)
 
 
-@pytest.mark.parametrize('failure', ['store', 'mirror', 'listing', 'stat', 'begin'])
+@pytest.mark.parametrize('failure', ['store', 'mirror', 'listing', 'stat', 'begin', 'owner', 'slow stat'])
 def test_no_telemetry_failure_changes_the_result(monkeypatch, tmp_path, caplog, failure):
     expected = _plain_result(monkeypatch, tmp_path, 'fakecmd')
 
@@ -577,18 +653,19 @@ def test_no_telemetry_failure_changes_the_result(monkeypatch, tmp_path, caplog, 
         raise RuntimeError('database down')
 
     rig = Rig(monkeypatch, tmp_path, store=broken_store if failure == 'store' else None)
+    if failure == 'listing':
+        # Before the first call: the address is learnt once per container start.
+
+        async def no_listing():
+            raise SandboxError('daemon down')
+
+        monkeypatch.setattr(rig.backend, 'list_sandboxes', no_listing)
     rig.bash('mkdir a')
     rig.plant(EVENTS)
     ip = rig.backend.sandboxes[CHAT].ip or ''
     rig.backend.mirror_lines.append(MirrorLine((NOW + 1) * NS, mirror(ip, '/autograd-1.9.1-py3-none-any.whl')))
     if failure == 'mirror':
         rig.backend.mirror_error = SandboxError('the sandbox-mirror container does not exist')
-    elif failure == 'listing':
-
-        async def no_listing():
-            raise SandboxError('daemon down')
-
-        monkeypatch.setattr(rig.backend, 'list_sandboxes', no_listing)
     elif failure == 'stat':
         real_stat = rig.backend.stat
 
@@ -600,18 +677,140 @@ def test_no_telemetry_failure_changes_the_result(monkeypatch, tmp_path, caplog, 
         monkeypatch.setattr(rig.backend, 'stat', no_stat)
     elif failure == 'begin':
         monkeypatch.setattr(rig.manager, 'image_digest', lambda image: 1 / 0)
+    elif failure == 'owner':
+
+        async def no_owner(chat_id):
+            raise RuntimeError('database down')
+
+        monkeypatch.setattr(rig.telemetry, '_owner_of', no_owner)
+    elif failure == 'slow stat':
+        monkeypatch.setattr(telemetry, 'COLLECT_TIMEOUT_S', 0.05)
+        real_slow_stat = rig.backend.stat
+
+        async def slow_stat(chat_id, path):
+            if path.startswith(EVENTS_DIR):
+                await asyncio.sleep(0.3)
+            return await real_slow_stat(chat_id, path)
+
+        monkeypatch.setattr(rig.backend, 'stat', slow_stat)
     with caplog.at_level(logging.WARNING, logger='local_llm.sandbox.telemetry'):
         assert rig.bash('fakecmd') == expected
     assert 'package telemetry' in caplog.text
 
 
-def test_a_mirror_that_keeps_failing_is_logged_once(monkeypatch, tmp_path, caplog):
+def test_a_failing_mirror_is_backed_off_and_logged_once(monkeypatch, tmp_path, caplog):
     rig = Rig(monkeypatch, tmp_path)
     rig.backend.mirror_error = SandboxError('no mirror')
     with caplog.at_level(logging.WARNING, logger='local_llm.sandbox.telemetry'):
         for _ in range(3):
             rig.bash('mkdir -p a')
+        assert rig.mirror_calls() == 1
+        rig.mono = telemetry.MIRROR_BACKOFF_S + 1
+        rig.bash('mkdir -p a')
+        assert rig.mirror_calls() == 2
+        # Failed again: the next wait is twice as long.
+        rig.mono += telemetry.MIRROR_BACKOFF_S + 1
+        rig.bash('mkdir -p a')
+        assert rig.mirror_calls() == 2
+        rig.mono += telemetry.MIRROR_BACKOFF_S
+        rig.backend.mirror_error = None
+        rig.bash('mkdir -p a')
+        assert rig.mirror_calls() == 3
     assert caplog.text.count('could not read the mirror log') == 1
+
+
+def test_a_read_under_way_is_skipped_not_waited_for(monkeypatch, tmp_path):
+    rig = Rig(monkeypatch, tmp_path)
+
+    async def scenario():
+        async with rig.telemetry._mirror_lock:
+            return await rig.telemetry.mirror_events(rig.manager)
+
+    assert run(scenario()) == []
+    assert rig.mirror_calls() == 0
+
+
+def test_the_cursor_stays_when_crediting_fails(monkeypatch, tmp_path):
+    rig = Rig(monkeypatch, tmp_path)
+    rig.bash('mkdir a')
+    address = rig.backend.sandboxes[CHAT].ip or ''
+    rig.backend.mirror_lines.append(MirrorLine((NOW + 1) * NS, mirror(address, '/autograd-1.9.1-py3-none-any.whl')))
+    real = rig.manager.sandbox_at
+
+    def broken(ip, at_ns):
+        raise RuntimeError('no windows')
+
+    monkeypatch.setattr(rig.manager, 'sandbox_at', broken)
+    with pytest.raises(RuntimeError):
+        run(rig.telemetry.mirror_events(rig.manager))
+    monkeypatch.setattr(rig.manager, 'sandbox_at', real)
+    credited = run(rig.telemetry.mirror_events(rig.manager))
+    assert [(context.chat_id, event.name) for context, event in credited] == [(CHAT, 'autograd')]
+    assert run(rig.telemetry.mirror_events(rig.manager)) == []
+
+
+def test_close_cancels_a_write_still_running_and_drain_waits(monkeypatch, tmp_path):
+    started = []
+
+    async def slow_store(rows):
+        started.append(rows)
+        await asyncio.sleep(30)
+
+    rig = Rig(monkeypatch, tmp_path, store=slow_store)
+    pending = [(telemetry.Context(CHAT, '', '', None, NOW), Event('command_miss', 'x', None, NOW))]
+
+    async def scenario():
+        rig.telemetry.finish(rig.manager, pending)
+        await asyncio.sleep(0.01)
+        tasks = list(rig.telemetry._tasks)
+        await rig.telemetry.close()
+        return tasks
+
+    tasks = run(scenario())
+    assert len(started) == 1 and len(tasks) == 1
+    assert tasks[0].cancelled()
+    assert not rig.telemetry._tasks
+
+
+def test_prune_deletes_past_the_retention_and_logs_a_failure(caplog):
+    asked = []
+
+    async def prune(before):
+        asked.append(before)
+        return 3
+
+    collector = PackageTelemetry(prune=prune, wall_clock=lambda: float(NOW))
+    run(collector.prune())
+    assert asked == [NOW - PACKAGE_EVENTS_RETENTION_DAYS * 86_400]
+
+    async def broken(before):
+        raise RuntimeError('database down')
+
+    with caplog.at_level(logging.WARNING, logger='local_llm.sandbox.telemetry'):
+        run(PackageTelemetry(prune=broken).prune())
+    assert 'could not prune' in caplog.text
+
+
+def test_the_lifespan_runs_the_prune_and_stops_it(tmp_path, monkeypatch):
+    pruned = []
+
+    async def prune(self):
+        pruned.append(True)
+
+    monkeypatch.setattr(PackageTelemetry, 'prune', prune)
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    async def scenario():
+        await lifespan.start(app, FakeBackend(), tmp_path / 'sandbox')
+        task = app.state.sandbox_telemetry_task
+        await asyncio.sleep(0.01)
+        await lifespan.stop(app, stop_running=False)
+        return task
+
+    task = run(scenario())
+    assert pruned == [True]
+    assert task.done()
+    assert app.state.sandbox_telemetry is None and app.state.sandbox_telemetry_task is None
 
 
 def test_run_code_in_sandbox_collects_too(monkeypatch, tmp_path):
@@ -625,7 +824,7 @@ def test_run_code_in_sandbox_collects_too(monkeypatch, tmp_path):
         )
 
     run(go())
-    assert [(r['kind'], r['name']) for r in rig.rows][:1] == [('import', 'pandas')]
+    assert ('import', 'pandas') in [(r['kind'], r['name']) for r in rig.rows]
 
 
 def test_the_manager_s_telemetry_helpers(monkeypatch, tmp_path):
@@ -635,9 +834,14 @@ def test_the_manager_s_telemetry_helpers(monkeypatch, tmp_path):
     rig.backend.image_ids = {}
     assert rig.manager.image_digest('web') == ''
     assert rig.manager.chat_of(CHAT) == CHAT
-    assert run(rig.manager.addresses()) == {}
+    assert rig.manager.sandbox_at('10.0.0.1', NOW * NS) is None
     rig.bash('mkdir a')
-    assert run(rig.manager.addresses()) == {rig.backend.sandboxes[CHAT].ip: CHAT}
+    address = rig.backend.sandboxes[CHAT].ip or ''
+    assert rig.manager.sandbox_at(address, NOW * NS + 1) == CHAT
+    listings = sum(1 for name, _ in rig.backend.calls if name == 'list_sandboxes')
+    rig.bash('mkdir b')
+    # The address is learnt once per container start.
+    assert sum(1 for name, _ in rig.backend.calls if name == 'list_sandboxes') == listings == 1
 
 
 def test_the_fake_mirror_log_reads_after_the_cursor_within_the_budget():
@@ -689,9 +893,9 @@ class _Docker:
                 raise docker.errors.NotFound(name)
             return mirror_container
 
-        def api_get(url, params, stream, headers):
+        def api_get(url, params, stream, headers, timeout):
             self.calls.append((url, dict(params)))
-            assert stream and headers == {'Accept-Encoding': 'identity'}
+            assert stream and headers == {'Accept-Encoding': 'identity'} and timeout == kata.MIRROR_LOG_TIMEOUT_S
             response = _Response(body, status)
             self.responses.append(response)
             return response
@@ -847,24 +1051,28 @@ def test_rprofile_site_records_loaded_namespaces(tmp_path):
 # The table and the report.
 
 
-def test_the_table_round_trips_and_the_report_ranks_and_leaves_harness_rows_out():
+def test_the_table_round_trips_and_the_report_ranks_by_users_and_leaves_harness_rows_out():
     tag = uuid.uuid4().hex[:10]
-    used, rare, missed = f'used-{tag}', f'rare-{tag}', f'missed-{tag}'
-    chats = [f'chat-{tag}-{n}' for n in range(3)]
+    used, rare, by_one, by_two = f'used-{tag}', f'rare-{tag}', f'one-user-{tag}', f'two-users-{tag}'
+    chats = [f'chat-{tag}-{n}' for n in range(4)]
+    alice, bob = f'alice-{tag}', f'bob-{tag}'
 
-    def row(kind, name, chat, ts, version=None, harness=None):
-        return _row(kind, name, version, ts, chat=chat, image='sha256:x', lock='l', harness=harness)
+    def row(kind, name, chat, ts, version=None, harness=None, user=alice):
+        return _row(kind, name, version, ts, chat=chat, image='sha256:x', lock='l', harness=harness, user=user)
 
     rows = [
         row('import', used, chats[0], 10, '1.0'),
         row('import', used, chats[0], 11, '1.0'),
-        row('install', used, chats[1], 12, '1.0'),
-        row('import', used, chats[2], 13, '1.0', harness='run-1'),
+        row('install', used, chats[1], 12, '1.0', user=bob),
+        row('import', used, chats[2], 13, '1.0', harness='run-1', user=None),
         row('r_import', rare, chats[0], 14, '0.1'),
-        row('command_miss', missed, chats[0], 15),
-        row('command_miss', missed, chats[0], 16),
-        row('command_miss', missed, chats[1], 17),
-        row('command_miss', missed, chats[2], 18, harness='run-1'),
+        # One user meeting a miss in three chats ranks below two users meeting one in two.
+        row('command_miss', by_one, chats[0], 15),
+        row('command_miss', by_one, chats[1], 16),
+        row('command_miss', by_one, chats[3], 17),
+        row('pip_miss', by_two, chats[0], 18),
+        row('pip_miss', by_two, chats[2], 19, user=bob),
+        row('pip_miss', by_two, chats[3], 20, harness='run-1', user='harness-user'),
     ]
 
     async def scenario():
@@ -878,34 +1086,62 @@ def test_the_table_round_trips_and_the_report_ranks_and_leaves_harness_rows_out(
         return stored, uses, uses_all, misses, misses_all
 
     stored, uses, uses_all, misses, misses_all = run(scenario())
-    assert [(e.kind, e.name, e.ts, e.version, e.image_digest, e.lock_sha, e.harness_run_id) for e in stored] == [
-        ('import', used, 10, '1.0', 'sha256:x', 'l', None),
-        ('import', used, 11, '1.0', 'sha256:x', 'l', None),
-        ('r_import', rare, 14, '0.1', 'sha256:x', 'l', None),
-        ('command_miss', missed, 15, None, 'sha256:x', 'l', None),
-        ('command_miss', missed, 16, None, 'sha256:x', 'l', None),
+    assert [(e.kind, e.name, e.ts, e.user_id, e.version, e.harness_run_id) for e in stored] == [
+        ('import', used, 10, alice, '1.0', None),
+        ('import', used, 11, alice, '1.0', None),
+        ('r_import', rare, 14, alice, '0.1', None),
+        ('command_miss', by_one, 15, alice, None, None),
+        ('pip_miss', by_two, 18, alice, None, None),
     ]
-    assert all(isinstance(e.event_id, int) for e in stored)
+    assert all(isinstance(e.event_id, int) and (e.image_digest, e.lock_sha) == ('sha256:x', 'l') for e in stored)
     mine = {(u['language'], u['name']): u for u in uses if u['name'].endswith(tag)}
     assert mine == {
         ('python', used): {
             'language': 'python',
             'name': used,
+            'users': 2,
             'chats': 2,
             'imports': 2,
             'installs': 1,
             'last_used': 12,
         },
-        ('r', rare): {'language': 'r', 'name': rare, 'chats': 1, 'imports': 1, 'installs': 0, 'last_used': 14},
+        ('r', rare): {
+            'language': 'r',
+            'name': rare,
+            'users': 1,
+            'chats': 1,
+            'imports': 1,
+            'installs': 0,
+            'last_used': 14,
+        },
     }
     assert next(u for u in uses_all if u['name'] == used)['chats'] == 3
-    assert [m for m in misses if m['name'] == missed] == [
-        {'kind': 'command_miss', 'name': missed, 'chats': 2, 'events': 3, 'last_seen': 17}
+    assert [m for m in misses if m['name'].endswith(tag)] == [
+        {'kind': 'pip_miss', 'name': by_two, 'users': 2, 'chats': 2, 'events': 2, 'last_seen': 19},
+        {'kind': 'command_miss', 'name': by_one, 'users': 1, 'chats': 3, 'events': 3, 'last_seen': 17},
     ]
-    assert next(m for m in misses_all if m['name'] == missed)['chats'] == 3
-    # Most chats first.
-    ranked = [m['chats'] for m in misses]
+    assert next(m for m in misses_all if m['name'] == by_two)['users'] == 3
+    # Most users first.
+    ranked = [m['users'] for m in misses]
     assert ranked == sorted(ranked, reverse=True)
+
+
+def test_delete_before_removes_only_older_rows():
+    tag = uuid.uuid4().hex[:10]
+    rows = [
+        _row('command_miss', f'old-{tag}', ts=-100, lock='l'),
+        _row('command_miss', f'kept-{tag}', ts=-10, lock='l'),
+    ]
+
+    async def scenario():
+        await SandboxPackageEvents.add_events(rows)
+        removed = await SandboxPackageEvents.delete_before(-50)
+        return removed, await SandboxPackageEvents.get_events(CHAT)
+
+    removed, left = run(scenario())
+    assert removed >= 1
+    names = {e.name for e in left}
+    assert f'kept-{tag}' in names and f'old-{tag}' not in names
 
 
 def _user(role: str) -> SimpleNamespace:
@@ -947,6 +1183,7 @@ def test_the_report_route_is_for_admins_and_names_each_package_s_source(client, 
         {
             'language': 'python',
             'name': name,
+            'users': 1,
             'chats': 1,
             'imports': 0,
             'installs': 1,

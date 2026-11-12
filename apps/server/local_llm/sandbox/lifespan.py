@@ -143,6 +143,7 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
     """
     app.state.sandbox = None
     app.state.sandbox_telemetry = None
+    app.state.sandbox_telemetry_task = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = backend
@@ -175,7 +176,10 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
         lock.close()
         return
     app.state.sandbox = manager
-    app.state.sandbox_telemetry = PackageTelemetry()
+    telemetry = PackageTelemetry()
+    app.state.sandbox_telemetry = telemetry
+    # Prunes events past the retention every hour (PACKAGE_EVENTS_RETENTION_DAYS).
+    app.state.sandbox_telemetry_task = asyncio.create_task(telemetry.maintenance_loop())
     app.state.sandbox_lock = lock
     app.state.sandbox_maintenance = asyncio.create_task(_maintain(manager, sweep))
 
@@ -194,6 +198,19 @@ async def stop(app: Any, *, stop_running: bool) -> None:
             pass
         except Exception:
             log.exception('the sandbox maintenance task had failed')
+    telemetry_task = getattr(app.state, 'sandbox_telemetry_task', None)
+    if telemetry_task is not None:
+        telemetry_task.cancel()
+        try:
+            await telemetry_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            log.exception('the package telemetry task had failed')
+    telemetry = getattr(app.state, 'sandbox_telemetry', None)
+    if telemetry is not None:
+        # Events still being recorded are dropped, not waited for.
+        await telemetry.close()
     manager = getattr(app.state, 'sandbox', None)
     if manager is not None:
         try:
@@ -212,6 +229,7 @@ async def stop(app: Any, *, stop_running: bool) -> None:
             log.exception('the sandbox backend could not release its threads')
     app.state.sandbox = None
     app.state.sandbox_telemetry = None
+    app.state.sandbox_telemetry_task = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = None

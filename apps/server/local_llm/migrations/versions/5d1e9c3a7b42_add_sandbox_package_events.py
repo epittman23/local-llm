@@ -13,7 +13,9 @@ mirror served, and appends one row per event here. The admin report
 misses by the chats that met them, the review queue for the wheelhouse
 allowlist and the images.
 
-Append-only rows, with an index on (name, kind) for the report. Nothing from
+Rows carry the chat owner's user id (nullable), so the report can rank by
+distinct users. Indexes on (name, kind) for the report and on ts for the
+retention, which deletes rows older than a fixed number of days. Nothing from
 `local_llm` is imported, because the migrations run while its config is
 being imported. config_id is unchanged, so no benchmark_schema_note row.
 """
@@ -39,6 +41,7 @@ def upgrade():
         sa.Column('event_id', sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column('ts', sa.BigInteger(), nullable=False),
         sa.Column('chat_id', sa.Text(), nullable=False),
+        sa.Column('user_id', sa.Text(), nullable=True),
         sa.Column('kind', sa.Text(), nullable=False),
         sa.Column('name', sa.Text(), nullable=False),
         sa.Column('version', sa.Text(), nullable=True),
@@ -47,8 +50,10 @@ def upgrade():
         sa.Column('harness_run_id', sa.Text(), nullable=True),
     )
     op.create_index('ix_sandbox_package_events_name_kind', 'sandbox_package_events', ['name', 'kind'])
+    op.create_index('ix_sandbox_package_events_ts', 'sandbox_package_events', ['ts'])
 
 
 def downgrade():
+    op.drop_index('ix_sandbox_package_events_ts', table_name='sandbox_package_events')
     op.drop_index('ix_sandbox_package_events_name_kind', table_name='sandbox_package_events')
     op.drop_table('sandbox_package_events')

@@ -54,15 +54,17 @@ async def get_package_report(
 ):
     """The package telemetry's report (sandbox/telemetry.py, T21), for admins.
 
-    `packages`: per Python distribution or R namespace, the distinct chats
-    using it, its imports and installs, its last use (epoch seconds) and its
-    source (`image`, `wheelhouse` or `other`, by infra/sandbox's
-    image-freeze lists and requirements.lock), most chats first. `misses`:
-    per kind and name, the distinct chats that met it, its events and when it
-    was last seen, most chats first: the review queue for the allowlist and
-    the images. Harness runs are left out unless `include_harness`. At most
-    `limit` rows of each. 403 for a signed-in user who is not an admin; 503
-    when the events cannot be read.
+    `packages`: per Python distribution or R namespace, the distinct users
+    and chats using it, its imports and installs (each counted once per
+    call), its last use (epoch seconds) and its source (`image`,
+    `wheelhouse` or `other`, by infra/sandbox's image-freeze lists and
+    requirements.lock), most users first. `misses`: per kind and name, the
+    distinct users and chats that met it, its events and when it was last
+    seen, most users first: the review queue for the allowlist and the
+    images, a request signal rather than a vetting of the package. Harness
+    runs are left out unless `include_harness`. At most `limit` rows of
+    each. 403 for a signed-in user who is not an admin; 503 when the events
+    cannot be read.
     """
     if user.role != 'admin':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)

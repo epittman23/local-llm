@@ -130,8 +130,10 @@ MAX_UNSAVED_CHAT_ID_LEN: Final = 200
 # Seconds between a waiting session's eviction attempts when no slot is freed meanwhile.
 _SLOT_RETRY_S: Final = 5.0
 
-#: Seconds mirror_log and addresses wait for the backend, so a hung daemon cannot hold a `bash` call's result.
-TELEMETRY_TIMEOUT_S: Final = 10.0
+#: Seconds mirror_log and learn_address wait for the backend (the package telemetry, T21).
+TELEMETRY_TIMEOUT_S: Final = 5.0
+#: Container starts whose address window the manager keeps for the package telemetry; the oldest closed go first.
+ADDRESS_HISTORY: Final = 4096
 
 #: Listings of workspace volumes (the deletion dialog's contents) run at once; each may start a helper VM.
 LISTING_CONCURRENCY: Final = 2
@@ -551,6 +553,23 @@ def _settle_abandoned(task: asyncio.Future[Any]) -> None:
 
 
 @dataclass
+class AddressWindow:
+    """One container start of a sandbox: the address it held and when, for crediting the mirror's log lines (T21).
+
+    Attributes:
+        key: The sandbox's key.
+        started_ns: When the manager started it, epoch nanoseconds.
+        stopped_ns: When the manager saw it stopped or replaced; None while it runs.
+        ip: Its address on the sandbox network, once learnt (learn_address); None before.
+    """
+
+    key: str
+    started_ns: int
+    stopped_ns: int | None = None
+    ip: str | None = None
+
+
+@dataclass
 class _KeyLock:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     #: Coroutines holding or waiting on `lock`; the entry is dropped when it reaches 0.
@@ -648,6 +667,8 @@ class SandboxManager:
         self._tasks: set[asyncio.Future[Any]] = set()
         # Set by shutdown(stop_running=True), after which no sandbox starts.
         self._stopped_all = False
+        # Each container start's address window, oldest first (AddressWindow).
+        self._windows: list[AddressWindow] = []
 
     async def ready(self) -> str | None:
         """Why the backend cannot run sandboxes, or None when it can; never raises; waits READY_TIMEOUT_S at most."""
@@ -825,6 +846,7 @@ class SandboxManager:
         tracked = self._tracked[key]
         tracked.image = want
         tracked.last_call = self._clock()
+        self._open_window(key)
         log.info('started sandbox %s (%s%s)', key, want, ', ephemeral' if ephemeral else '')
 
     async def _create(self, key: str, spec: SandboxSpec) -> None:
@@ -1074,8 +1096,26 @@ class SandboxManager:
         self._freed.set()
         self._freed = asyncio.Event()
 
+    def _now_ns(self) -> int:
+        return int(self._wall_clock() * 1_000_000_000)
+
+    def _open_window(self, key: str) -> None:
+        """Record a container start of `key` (closing any window still open for it: a create replaces the container)."""
+        now = self._now_ns()
+        self._close_window(key, now)
+        self._windows.append(AddressWindow(key, now))
+        while len(self._windows) > ADDRESS_HISTORY:
+            closed = next((w for w in self._windows if w.stopped_ns is not None), None)
+            self._windows.remove(closed if closed is not None else self._windows[0])
+
+    def _close_window(self, key: str, now: int | None = None) -> None:
+        for window in self._windows:
+            if window.key == key and window.stopped_ns is None:
+                window.stopped_ns = self._now_ns() if now is None else now
+
     def _forget(self, key: str) -> None:
         """Record that `key`'s sandbox no longer runs, freeing its slot."""
+        self._close_window(key)
         # No await, so a cancellation can neither lose the slot nor keep the waiters from being woken.
         # A container started again, or a new volume, gets a full upload sync, and lists its outputs afresh.
         self._uploads.pop(key, None)
@@ -1357,17 +1397,39 @@ class SandboxManager:
         except TimeoutError:
             raise SandboxError(f'the mirror log was not read within {TELEMETRY_TIMEOUT_S:g} s') from None
 
-    async def addresses(self) -> dict[str, str]:
-        """Each running sandbox's address on the sandbox network, to its key; waits TELEMETRY_TIMEOUT_S at most.
+    async def learn_address(self, key: str) -> None:
+        """Fill in the address of `key`'s open window, once per container start, from the backend's listing.
+
+        The package telemetry calls it inside a session on `key`, so the
+        sandbox runs and the address it lists is this start's. A window
+        that has its address already costs nothing.
 
         Raises:
-            SandboxError: The backend could not list the sandboxes, or did not answer in time.
+            SandboxError: The backend could not list the sandboxes, or did not answer within TELEMETRY_TIMEOUT_S.
         """
+        window = next((w for w in reversed(self._windows) if w.key == key and w.stopped_ns is None), None)
+        if window is None or window.ip is not None:
+            return
         try:
             infos = await asyncio.wait_for(self._backend.list_sandboxes(), TELEMETRY_TIMEOUT_S)
         except TimeoutError:
             raise SandboxError(f'the sandboxes were not listed within {TELEMETRY_TIMEOUT_S:g} s') from None
-        return {info.ip: info.chat_id for info in infos if info.running and info.ip}
+        window.ip = next((info.ip for info in infos if info.chat_id == key and info.running and info.ip), None)
+
+    def sandbox_at(self, ip: str, at_ns: int) -> str | None:
+        """The key of the sandbox that held `ip` at `at_ns` (epoch nanoseconds), by the recorded windows; None when
+        none did, or the time is before the earliest start recorded (an older line names addresses nobody here
+        recorded)."""
+        if not self._windows or at_ns < min(w.started_ns for w in self._windows):
+            return None
+        for window in reversed(self._windows):
+            if (
+                window.ip == ip
+                and window.started_ns <= at_ns
+                and (window.stopped_ns is None or at_ns <= window.stopped_ns)
+            ):
+                return window.key
+        return None
 
     # The workspaces' owners (T24).
 
