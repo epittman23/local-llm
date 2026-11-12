@@ -76,7 +76,7 @@ describe('CodeBlock Run', () => {
 	});
 
 	it('says when a run printed nothing or was stopped at its time limit', async () => {
-		const onRun = vi.fn(async () => ({ stdout: '', stderr: '', result: '', files: [] }));
+		const onRun = vi.fn(async (): Promise<CodeRunResult> => ({ stdout: '', stderr: '', result: '', files: [] }));
 		block({ onRun });
 		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
 		await waitFor(() => expect(screen.getByTestId('code-run-output').textContent).toContain('No output'));
