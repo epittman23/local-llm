@@ -51,8 +51,8 @@ from typing import cast
 
 import pytest
 
-import local_llm.env as env_module
 import local_llm.models as models_pkg
+import local_llm.models.chats as chats_model
 import local_llm.sandbox.manager as manager_module
 from local_llm.internal.db import Base, async_engine, get_async_db_context
 from local_llm.models.chats import Chat, Chats
@@ -2346,7 +2346,7 @@ def test_a_manager_without_a_chat_lookup_uses_the_database():
 def test_database_chats_lets_an_admin_use_another_users_existing_chat_only_as_the_chat_endpoint_does(
     monkeypatch, enabled
 ):
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
 
     async def scenario():
         chat_id = str(uuid.uuid4())
@@ -2359,7 +2359,7 @@ def test_database_chats_lets_an_admin_use_another_users_existing_chat_only_as_th
 
 
 def test_database_chats_refuses_an_admin_when_the_chat_lookup_fails_and_logs_it(monkeypatch, caplog):
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', True)
 
     async def broken(self, chat_ids):
         raise RuntimeError('database is down')
@@ -2381,11 +2381,10 @@ def test_database_chats_refuses_an_admin_when_the_chat_lookup_fails_and_logs_it(
 @pytest.mark.parametrize('enabled', [True, False], ids=['admin chat access on', 'admin chat access off'])
 @pytest.mark.parametrize('role', ['admin', 'user'])
 def test_database_chats_admin_rule_agrees_with_the_chat_endpoints(monkeypatch, role, enabled):
-    # DatabaseChats.usable mirrors main.py's rule rather than importing it; this keeps the two in step.
+    # DatabaseChats.usable and main.py's chat endpoints share models/chats.py's admin_reaches_other_chats.
     from local_llm import main
 
-    monkeypatch.setattr(main, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
     user = SimpleNamespace(id=f'{role}-{uuid.uuid4().hex}', role=role)
 
     async def scenario():
@@ -2394,7 +2393,7 @@ def test_database_chats_admin_rule_agrees_with_the_chat_endpoints(monkeypatch, r
         await _add_chat(chat_id, f'o-{uuid.uuid4().hex}', created=1, updated=2)
         return await DatabaseChats().usable(chat_id, user)
 
-    assert _db(scenario) == main._admin_reaches_other_chats(user) == (role == 'admin' and enabled)
+    assert _db(scenario) == main.admin_reaches_other_chats(user) == (role == 'admin' and enabled)
 
 
 def test_database_chats_refuses_a_folder_reader_the_chat_read_rule_lets_in():

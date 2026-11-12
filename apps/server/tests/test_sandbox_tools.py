@@ -63,6 +63,7 @@ from local_llm.sandbox.fake import (
     interpret,
     lllm_path,
 )
+from local_llm.sandbox.limits import TIMEOUT_DEFAULT_S
 from local_llm.tools import builtin
 
 REPO = Path(__file__).resolve().parents[3]
@@ -561,7 +562,12 @@ class _Rig:
         async def get_user_by_id(user_id, db=None):
             return SimpleNamespace(id=user_id, role='user') if user_id == 'u1' else None
 
+        async def configured_timeout() -> int:
+            return TIMEOUT_DEFAULT_S
+
         monkeypatch.setattr(Users, 'get_user_by_id', get_user_by_id)
+        # The admin's timeout setting, as on a fresh install: the test database is shared, and other tests store it.
+        monkeypatch.setattr(builtin, 'configured_timeout', configured_timeout)
 
     async def call(self, tool: Callable, chat_id: str = CHAT, **kwargs) -> dict | str:
         async def emit(event: dict) -> None:

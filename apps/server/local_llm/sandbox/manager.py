@@ -237,23 +237,19 @@ class DatabaseChats:
         """Whether `user` may run code in the saved chat `chat_id`: its owner, or an admin as the chat endpoint allows.
 
         The rule is the chat completion endpoint's for posting into an
-        existing chat (main.py's `_persist_follow_up`, with
-        `_admin_reaches_other_chats`): the owner, or an admin while
-        ENABLE_ADMIN_CHAT_ACCESS is on. It is mirrored here rather than
-        imported, since importing main.py builds the whole app; change both
-        together. Unlike the endpoint, the chat must exist for an admin too,
+        existing chat (main.py's `_persist_follow_up`): the owner, or an
+        admin while ENABLE_ADMIN_CHAT_ACCESS is on, through the same
+        `admin_reaches_other_chats` (models/chats.py). Unlike the endpoint, the chat must exist for an admin too,
         so no sandbox is keyed to a chat with no row. Folder readers and
         other readers are not let in (Q14): reading a chat is not running
         code in it. A database error refuses, as `Chats.is_chat_owner`
         does, and is logged.
         """
-        from local_llm import env
-        from local_llm.models.chats import Chats
+        from local_llm.models.chats import Chats, admin_reaches_other_chats
 
         if await Chats.is_chat_owner(chat_id, user.id):
             return True
-        # main.py's _admin_reaches_other_chats.
-        if getattr(user, 'role', None) == 'admin' and env.ENABLE_ADMIN_CHAT_ACCESS:
+        if admin_reaches_other_chats(user):
             try:
                 return chat_id in await self.updated_at([chat_id])
             except Exception:

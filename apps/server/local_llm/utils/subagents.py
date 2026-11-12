@@ -271,6 +271,8 @@ async def process_pending_internal_messages(
             form_data['terminal_id'] = run['terminal_id']
 
         request = _build_request(source_request, user.id, internal=False)
+        # The parent chat's own sandbox, with all its attachments: `files` here is only what the sub-agent was given.
+        _share_parent_sandbox(request, source_request, parent_chat_id)
         await source_request.app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
 
@@ -303,13 +305,14 @@ def _subagent_limits(config: dict) -> tuple[int, int, int | None, int | None]:
 async def _run_settings(metadata: dict, background: bool) -> dict:
     """What the sub-agent inherits from the parent's request.
 
-    In the background it gets no tool servers, and no code interpreter unless that runs on Jupyter.
+    In the background it gets no tool servers, and no code interpreter unless that runs on the server (Jupyter, or
+    the sandbox): Pyodide runs in the user's browser.
     """
     features = copy.deepcopy(metadata.get('features') or {})
     if (
         background
         and features.get('code_interpreter')
-        and await Config.get('code_interpreter.engine', 'pyodide') != 'jupyter'
+        and await Config.get('code_interpreter.engine', 'pyodide') not in ('jupyter', 'sandbox')
     ):
         features.pop('code_interpreter')
     return {
@@ -330,6 +333,29 @@ async def _run_settings(metadata: dict, background: bool) -> dict:
 
 def _nested_file_id(file: dict):
     return file.get('file', {}).get('id') if isinstance(file.get('file'), dict) else None
+
+
+def _share_parent_sandbox(child: Request, source: Request, parent_chat_id: str) -> None:
+    """Make the tools of a request the server builds use the parent chat's sandbox and attachments (owner decision Q6).
+
+    The sandbox tools read `sandbox_chat_id` and `sandbox_files` from the
+    request (tools/builtin.py sandbox_chat), which only the server sets. The
+    attachments are all the parent's (the parent request's metadata, which
+    main.py keeps on it), not the few a sub-agent is given, so syncing them
+    never empties the parent's /workspace/uploads. A sub-agent of a sub-agent
+    keeps the outermost chat's, so every level shares one sandbox; the
+    chat's lock serializes their calls, and one slot serves them all.
+    """
+    state = getattr(source, 'state', None)
+    outer = getattr(state, 'sandbox_chat_id', None)
+    if type(outer) is str and outer:
+        files = getattr(state, 'sandbox_files', None)
+        child.state.sandbox_chat_id = outer
+    else:
+        metadata = getattr(state, 'metadata', None)
+        files = metadata.get('files') if isinstance(metadata, dict) else None
+        child.state.sandbox_chat_id = parent_chat_id
+    child.state.sandbox_files = copy.deepcopy(files) if isinstance(files, list) else []
 
 
 def _select_files(metadata: dict, file_ids: list[str] | None) -> tuple[list, str | None]:
@@ -570,6 +596,7 @@ class _SubagentRun:
         try:
             child_request = _build_request(self.request, self.user.id, internal=True)
             child_request.state.max_tool_call_iterations = self.max_iterations
+            _share_parent_sandbox(child_request, self.request, self.parent_chat_id)
             await self.request.app.state.CHAT_COMPLETION_HANDLER(child_request, self._completion_form(), user=self.user)
             message = await Chats.get_message_by_id_and_message_id(self.chat_id, self.assistant_message_id)
             if not message:

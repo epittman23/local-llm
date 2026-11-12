@@ -480,6 +480,7 @@ async def collect(
     chat_left: int | None = None,
     stored: dict[str, tuple[str, str]] | None = None,
     into: Collected | None = None,
+    cap_chat_id: str | None = None,
 ) -> Collected:
     """Attach `entries` (from changed_entries) to the message, within the caps; with `upload` off, only list them.
 
@@ -504,6 +505,12 @@ async def collect(
     A sandbox failure (SandboxError) ends the collection without raising:
     the files not yet read are named as not attached, no more previews are
     made, and the failure is in `error`.
+
+    The rows are marked as `cap_chat_id`'s (`meta.chat_id`, which chat_usage
+    counts), and linked to `message_id` in `chat_id`. They differ only for a
+    sub-agent, which works in its parent chat's sandbox (owner decision Q6):
+    its outputs attach to its own message and count against the parent
+    chat's cap (Q25). None means `chat_id`.
     """
     collected = Collected() if into is None else into
     allowance = _Allowance(call=OUTPUT_CALL_CAP_BYTES, chat=chat_left)
@@ -515,7 +522,7 @@ async def collect(
     ) -> str | None:
         """Store one file, record it, then link it; its file id, or None when it could not be stored."""
         digest = digest or hashlib.sha256(data).hexdigest()
-        result = await _store(request, user, chat_id or '', data, name, media_type, meta, digest)
+        result = await _store(request, user, cap_chat_id or chat_id or '', data, name, media_type, meta, digest)
         if result is None:
             return None
         ref, descriptor = result

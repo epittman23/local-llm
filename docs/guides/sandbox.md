@@ -3,9 +3,10 @@
 > **Under construction.** The sandbox described in
 > [docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md)
 > is being built on the `feat/sandbox-code-interpreter` branch (PR #884).
-> Nothing in the app uses it yet: the code interpreter is still Jupyter.
-> This guide grows with the build; so far it covers the host setup, the
-> images and the backend.
+> The app uses it only where an admin sets the engine to `sandbox` in
+> Admin Settings > Code Execution; Jupyter stays the code interpreter until
+> then. This guide grows with the build; so far it covers the host setup,
+> the images, the backend, uploads, outputs and the call sites.
 
 Each chat's code runs in its own microVM: a Kata Containers container whose
 runtime boots a Cloud Hypervisor VM with its own guest kernel, started by
@@ -1017,3 +1018,60 @@ cd apps/server
 LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
   uv run --frozen python -m pytest tests/test_sandbox_outputs_kata.py -v -s
 ```
+
+## Call sites
+
+Everything that runs code under the `sandbox` engine goes through the chat's
+sandbox, one per chat (owner decision Q6 for sub-agents), and every path
+collects `/workspace/outputs` itself, with the same comparison, listing and
+caps as `bash` (Q25), so the next `bash` call never attaches them again.
+
+- **Native function calling.** The model gets the four tools (`bash`,
+  `view`, `write_file`, `str_replace`) in place of `execute_code`, and
+  `CODE_INTERPRETER_SANDBOX_PROMPT` is appended to the system message.
+  `bash`'s `timeout_s`, left out, is the admin's
+  `code_interpreter.sandbox.timeout` (a cleared or invalid setting means
+  60, `configured_timeout` in `tools/builtin.py`).
+- **The tag path** (legacy function calling,
+  `utils/middleware.py` `_execute_code_in_sandbox`). Each
+  `<code_interpreter>` block is written to `/workspace/.runs/<n>.py` (`n`
+  one more than the highest number there, `sandbox/runs.py`) and run with
+  `python` from `/workspace` on the `data` image, with the configured
+  timeout and without the Jupyter path's blocked-modules preamble. Its
+  outputs attach to the reply as a `bash` call's do, and the block's stdout
+  gains a line naming them, since stdout is all the model is shown of a
+  block. `CODE_INTERPRETER_SANDBOX_TAG_PROMPT` describes this environment.
+- **The Run endpoint** (`POST /api/v1/utils/code/execute`, with
+  `code_execution.engine` set to `sandbox`). It needs the block's
+  `chat_id`, runs the code as the tag path does in that chat's sandbox,
+  and answers 404 for a saved chat the user may not run code in (the owner,
+  or an admin while `ENABLE_ADMIN_CHAT_ACCESS` is on; Q14). Its outputs are
+  stored and count toward the chat's 1 GiB, come back under `files` for the
+  block to show, and are linked to no message: pressing Run is the user's
+  act, not part of the reply. It does not sync the chat's attachments,
+  which it does not know, so `/workspace/uploads` stays as the chat's last
+  call left it.
+- **Sub-agents** (`utils/subagents.py`). A sub-agent's request carries its
+  parent chat (`request.state.sandbox_chat_id`, set only by the server) and
+  all the parent's attachments (`sandbox_files`, from the parent request's
+  metadata), so its tools use the parent's sandbox and never replace the
+  parent's uploads with the few files it was given; a sub-agent of a
+  sub-agent keeps the outermost chat's. The chat's lock serializes their
+  calls, and one slot serves them all. A sub-agent's outputs attach to its
+  own message and count against the parent chat's cap. Background
+  sub-agents keep the code interpreter under the `sandbox` engine, as under
+  Jupyter.
+- **A terminal server in the same chat is refused** (Q24). An Open
+  Terminal server offers its own `write_file`, acting on its own machine,
+  so a chat request with a terminal selected while the code interpreter is
+  on with the `sandbox` engine fails with a 400 asking the user to turn one
+  of them off. `terminal:*` events go out for terminal tools only.
+- **The harness.** `request.state.benchmark_harness` keeps every path's
+  outputs listed in the result but stored nowhere. Each call is recorded
+  with `note_code_run`, as failed only when the sandbox itself failed
+  (unavailable, refused, a backend error), never for the model's command
+  failing, timing out or being refused as malformed, so one model mistake
+  never refuses a whole harness run.
+
+`tests/test_sandbox_call_sites.py` covers all of these on the FakeBackend,
+including the `.runs` listing against the real script.

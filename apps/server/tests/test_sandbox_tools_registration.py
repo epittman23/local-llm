@@ -111,7 +111,9 @@ def test_spec_requires_exactly_the_arguments_without_a_default(func, required):
 def test_bash_spec_types_and_defaults_its_arguments():
     properties = tools.get_builtin_tool_spec(builtin.bash)['parameters']['properties']
     assert properties['timeout_s']['type'] == 'integer'
-    assert properties['timeout_s']['default'] == 60
+    # No default in the spec: left out, the command gets the admin's setting (configured_timeout).
+    assert 'default' not in properties['timeout_s']
+    assert "server's setting" in properties['timeout_s']['description']
     assert properties['image']['type'] == 'string'
 
 

@@ -76,9 +76,10 @@ from local_llm.sandbox import (
     wrap_command,
 )
 from local_llm.sandbox import outputs as sandbox_outputs
+from local_llm.sandbox import runs as sandbox_runs
 from local_llm.sandbox import workspace as sandbox_files
 from local_llm.sandbox.limits import OUTPUT_CHAT_CAP_BYTES, TIMEOUT_DEFAULT_S
-from local_llm.sandbox.manager import OutputsMemory
+from local_llm.sandbox.manager import TIMEOUT_KEY, OutputsMemory, sandbox_setting_error
 from local_llm.sandbox.uploads import chat_owner, sync_uploads
 from local_llm.sandbox.workspace import WorkspaceError
 from local_llm.socket.main import sio
@@ -90,6 +91,7 @@ from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import find_in_lowered
 from local_llm.utils.notifications import notify_target
 from local_llm.utils.sanitize import sanitize_code
+from local_llm.utils.upstream_trace import note_code_run
 
 log = logging.getLogger(__name__)
 
@@ -842,6 +844,42 @@ async def execute_code(
 # sandbox's lock, so no other call on the chat runs between them.
 
 
+def sandbox_chat(request: Request | None, chat_id: str | None) -> str | None:
+    """The chat whose sandbox a call uses: the parent chat for a sub-agent's request, else `chat_id`.
+
+    utils/subagents.py sets `request.state.sandbox_chat_id` on the request it
+    builds for a sub-agent, which nothing a client sends can set; the manager
+    still checks that the user may use that chat.
+    """
+    parent = getattr(getattr(request, 'state', None), 'sandbox_chat_id', None)
+    return parent if type(parent) is str and parent else chat_id
+
+
+def sandbox_attachments(request: Request | None, metadata: dict | None) -> list | None:
+    """The files to sync into /workspace/uploads: a sub-agent's parent's (`request.state.sandbox_files`, set with
+    sandbox_chat_id), else the chat's own `metadata['files']`, so a sub-agent never replaces its parent's uploads."""
+    state = getattr(request, 'state', None)
+    if type(getattr(state, 'sandbox_chat_id', None)) is str:
+        parent_files = getattr(state, 'sandbox_files', None)
+        return parent_files if isinstance(parent_files, list) else []
+    return (metadata or {}).get('files')
+
+
+async def configured_timeout() -> int:
+    """The admin's default command timeout (`code_interpreter.sandbox.timeout`), clamped; TIMEOUT_DEFAULT_S when
+    it is unset, stored as null (a cleared field) or not a valid value."""
+    value = await Config.get(TIMEOUT_KEY, TIMEOUT_DEFAULT_S)
+    if value is None or sandbox_setting_error(TIMEOUT_KEY, value) is not None:
+        return TIMEOUT_DEFAULT_S
+    return clamp_timeout(value)
+
+
+def _code_run_failure(exc: BaseException) -> str:
+    """What note_code_run records as the sandbox's own failure: empty for the model's mistakes (WorkspaceError),
+    which are its result, as a command that fails, times out or is OOM-killed is; else the error's class name."""
+    return '' if isinstance(exc, WorkspaceError) else f'sandbox: {type(exc).__name__}'
+
+
 @asynccontextmanager
 async def _sandbox_session(
     request: Request | None,
@@ -854,9 +892,13 @@ async def _sandbox_session(
 ) -> AsyncIterator[SandboxSession]:
     """The chat's sandbox session, saying so through the event emitter while it waits for a free sandbox.
 
+    The chat is sandbox_chat's: a sub-agent's request names its parent chat,
+    whose sandbox it shares (owner decision Q6).
+
     With `upload_notes` given (`bash`, `view`), the chat's attached files
-    (`metadata['files']`) are synced into /workspace/uploads first
-    (sandbox/uploads.py), and the notes for files left out are appended to it.
+    (sandbox_attachments: `metadata['files']`, or a sub-agent's parent's) are synced
+    into /workspace/uploads first (sandbox/uploads.py), and the notes for
+    files left out are appended to it.
     A sync that fails never refuses the call: a full workspace must still run
     `rm`. Its failure becomes one more note, with the reason only when it was
     written for the model; the details are logged.
@@ -888,7 +930,8 @@ async def _sandbox_session(
                 {'type': 'status', 'data': {'description': 'Waiting for a free sandbox', 'done': False}}
             )
 
-    chat = chat_id or (metadata or {}).get('chat_id')
+    chat = sandbox_chat(request, chat_id or (metadata or {}).get('chat_id'))
+    attached = sandbox_attachments(request, metadata)
     entered = False
     try:
         async with manager.session(chat, account, image=cast(ImageKey | None, image), on_wait=on_wait) as session:
@@ -899,9 +942,7 @@ async def _sandbox_session(
                 try:
                     upload_notes.extend(
                         # The owner is looked up only when the chat has files.
-                        await sync_uploads(
-                            session, (metadata or {}).get('files'), account, lambda: chat_owner(chat, account)
-                        )
+                        await sync_uploads(session, attached, account, lambda: chat_owner(chat, account))
                     )
                 except SandboxNotRunning:
                     raise
@@ -938,7 +979,12 @@ UPLOADS_NOT_COPIED = 'The attached files could not be copied into /workspace/upl
 
 
 def _sandbox_error(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
-    """The tool result for a failure, worded so the model can tell its own mistake from the sandbox's.
+    """The tool result for a failure: JSON with `error`, the text sandbox_error_text gives."""
+    return JSONCodec.dumps({'error': sandbox_error_text(tool, exc, notes)}, ensure_ascii=False)
+
+
+def sandbox_error_text(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
+    """The text for a failure, worded so the model can tell its own mistake from the sandbox's.
 
     The result goes to the model and on to its provider, so the text of an
     error that may carry internals (a Docker or database error, a host path)
@@ -966,8 +1012,7 @@ def _sandbox_error(tool: str, exc: Exception, notes: list[str] | None = None) ->
     else:
         log.exception('%s failed', tool)
         message = f'{tool} failed inside the sandbox service; try again, and say so if it keeps failing'
-    message = ' '.join([message, *(f'({note})' for note in notes or [] if note.startswith(UPLOADS_NOT_COPIED))])
-    return JSONCodec.dumps({'error': message}, ensure_ascii=False)
+    return ' '.join([message, *(f'({note})' for note in notes or [] if note.startswith(UPLOADS_NOT_COPIED))])
 
 
 def _flag(value: object, name: str) -> bool:
@@ -1052,8 +1097,12 @@ async def _bash_outputs(
     message_id: str | None,
     *,
     upload: bool,
+    cap_chat: str | None = None,
 ) -> tuple[list[dict], list[str], list[dict]]:
     """The files new or changed in /workspace/outputs since `before`, attached (sandbox/outputs.py).
+
+    They link to `message_id` in `chat_id` and count against `cap_chat`'s cap
+    (the sandbox's chat: a sub-agent's parent, Q25); None means `chat_id`.
 
     Returns the tool result's `outputs`, notes for the model, and the new
     message files for the `files` event: whatever was stored, even when a
@@ -1090,9 +1139,10 @@ async def _bash_outputs(
                 chat_id=chat_id,
                 message_id=message_id,
                 upload=upload,
-                chat_left=await _chat_left(memory, chat_id, account) if upload else None,
+                chat_left=await _chat_left(memory, cap_chat or chat_id, account) if upload else None,
                 stored=memory.stored,
                 into=collected,
+                cap_chat_id=cap_chat,
             )
         except Exception:
             log.exception('bash: attaching the files in /workspace/outputs failed')
@@ -1128,7 +1178,7 @@ async def _emit_output_files(event_emitter: Callable[[dict], Awaitable[None]] | 
 
 async def bash(
     command: str,
-    timeout_s: int = TIMEOUT_DEFAULT_S,
+    timeout_s: int | None = None,
     image: str | None = None,
     __request__: Request | None = None,
     __user__: dict | None = None,
@@ -1146,8 +1196,8 @@ async def bash(
     write_file and run the file.
 
     :param command: The bash command or script to run
-    :param timeout_s: Seconds before the command is stopped, 1 to 300 (default 60); a value outside that range
-        is brought into it
+    :param timeout_s: Seconds before the command is stopped, 1 to 300 (default: the server's setting, normally
+        60); a value outside that range is brought into it
     :param image: The machine to run it on, keeping /workspace: 'data' (Python with numpy, pandas, scipy,
         scikit-learn and matplotlib; R with the tidyverse, data.table, lme4 and survival; TeX Live with latexmk;
         git, sqlite3, DuckDB and poppler-utils) or 'web' (Node.js with TypeScript, tsx, ESLint, Prettier and
@@ -1160,10 +1210,14 @@ async def bash(
     message_id = __message_id__ or (__metadata__ or {}).get('message_id')
     # A benchmark run (benchmarks/evaluation/harness.py) lists the outputs but stores none in the owner's Files.
     upload = getattr(getattr(__request__, 'state', None), 'benchmark_harness', False) is not True
+    started = time.monotonic()
     try:
         with _model_input():
             requested = _line_arg(timeout_s, 'timeout_s')
-            timeout = clamp_timeout(TIMEOUT_DEFAULT_S if requested is None else requested)
+            requested = None if requested is None else clamp_timeout(requested)
+        # Left out, it is the admin's setting (configured_timeout).
+        timeout = await configured_timeout() if requested is None else requested
+        with _model_input():
             argv = wrap_command(command, timeout)
         notes: list[str] = []
         async with _sandbox_session(
@@ -1181,10 +1235,20 @@ async def bash(
                 session.outputs_memory.listing = before
                 raise
             found, output_notes, files = await _bash_outputs(
-                session, before, __request__, __user__, chat_id, message_id, upload=upload
+                session,
+                before,
+                __request__,
+                __user__,
+                chat_id,
+                message_id,
+                upload=upload,
+                cap_chat=sandbox_chat(__request__, chat_id),
             )
     except Exception as exc:
+        note_code_run((time.monotonic() - started) * 1000, _code_run_failure(exc))
         return _sandbox_error('bash', exc)
+    # The command's own failure (an exit status, a timeout, an OOM kill) is the model's result, not the sandbox's.
+    note_code_run((time.monotonic() - started) * 1000)
     await _emit_output_files(__event_emitter__, files)
     response: dict = {
         'returncode': result.returncode,
@@ -1198,6 +1262,89 @@ async def bash(
     if output_notes:
         response['outputs_note'] = '; '.join(output_notes)
     return JSONCodec.dumps(response, ensure_ascii=False)
+
+
+async def run_code_in_sandbox(
+    code: str,
+    *,
+    request: Request | None,
+    user: dict | None,
+    chat_id: str | None,
+    message_id: str | None,
+    metadata: dict | None,
+    event_emitter: Callable[[dict], Awaitable[None]] | None = None,
+    what: str = 'the code',
+    sync: bool = True,
+) -> dict:
+    """Run a block of Python in the chat's sandbox: the tag path's `<code_interpreter>` blocks and the Run endpoint.
+
+    The code is written to /workspace/.runs/<n>.py (sandbox/runs.py) and run
+    with `python` on the `data` image, as a `bash` call would run it, with the
+    configured timeout, the chat's uploads synced first and its outputs
+    collected after (owner decision Q25: every path collects its own). With
+    `message_id`, the outputs link to that message and the `files` event is
+    sent; without one (the Run endpoint) they are stored and counted against
+    the chat's cap but linked to nothing. With `sync` off (the Run endpoint,
+    which does not know the chat's attachments), /workspace/uploads is left
+    as the chat's last call synced it rather than emptied.
+
+    Returns:
+        On success: `stdout`, `stderr` (with the upload and output notes),
+        `result` (empty: nothing is captured inline), `returncode`,
+        `timed_out`, `truncated`, `path` (the run's file), `outputs` (as
+        `bash` lists them) and `files` (the stored files' descriptors). On
+        failure: `error`, worded for the model as the tools' errors are.
+        Each call is recorded with note_code_run, as failed only when the
+        sandbox itself failed.
+    """
+    upload = getattr(getattr(request, 'state', None), 'benchmark_harness', False) is not True
+    started = time.monotonic()
+    notes: list[str] = []
+    try:
+        with _model_input():
+            if type(code) is not str:
+                raise WorkspaceError(f'the code must be text, not {type(code).__name__}')
+            data = code.encode('utf-8')
+        timeout = await configured_timeout()
+        async with _sandbox_session(
+            request, user, chat_id, metadata, event_emitter, image='data', upload_notes=notes if sync else None
+        ) as session:
+            before = await _outputs_before(session)
+            try:
+                number = await sandbox_runs.next_run(session)
+                await sandbox_files.write(session, sandbox_runs.run_path(number), data, overwrite=False)
+                result = await session.exec(wrap_command(sandbox_runs.run_command(number), timeout), timeout)
+            except BaseException:
+                # As in bash: nothing was attached yet, so the next call compares with the listing from before.
+                session.outputs_memory.listing = before
+                raise
+            found, output_notes, files = await _bash_outputs(
+                session,
+                before,
+                request,
+                user,
+                chat_id,
+                message_id,
+                upload=upload,
+                cap_chat=sandbox_chat(request, chat_id),
+            )
+    except Exception as exc:
+        note_code_run((time.monotonic() - started) * 1000, _code_run_failure(exc))
+        return {'error': sandbox_error_text(what, exc, notes)}
+    note_code_run((time.monotonic() - started) * 1000)
+    if message_id:
+        await _emit_output_files(event_emitter, files)
+    return {
+        'stdout': result.stdout,
+        'stderr': '\n'.join(filter(None, [result.stderr, *notes, *output_notes])),
+        'result': '',
+        'returncode': result.returncode,
+        'timed_out': result.timed_out,
+        'truncated': result.truncated,
+        'path': sandbox_runs.run_path(number),
+        'outputs': found,
+        'files': files,
+    }
 
 
 async def view(

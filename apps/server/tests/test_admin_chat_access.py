@@ -14,6 +14,7 @@ import pytest
 from fastapi import HTTPException
 
 from local_llm import main
+from local_llm.models import chats as chats_model
 
 ADMIN = SimpleNamespace(id='admin', role='admin')
 OTHERS_CHAT = SimpleNamespace(id='c1', user_id='someone-else')
@@ -41,8 +42,8 @@ def _request():
 
 
 def test_admin_cannot_touch_others_chat_tasks_with_the_flag_off(monkeypatch, chat_lookup):
-    monkeypatch.setattr(main, 'ENABLE_ADMIN_CHAT_ACCESS', False)
-    assert not main._admin_reaches_other_chats(ADMIN)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', False)
+    assert not chats_model.admin_reaches_other_chats(ADMIN)
     listed = asyncio.run(main.list_tasks_by_chat_id_endpoint(_request(), 'c1', user=ADMIN))
     assert listed == {'task_ids': []}
     with pytest.raises(HTTPException) as exc:
@@ -51,12 +52,12 @@ def test_admin_cannot_touch_others_chat_tasks_with_the_flag_off(monkeypatch, cha
 
 
 def test_admin_can_with_the_flag_on(monkeypatch, chat_lookup):
-    monkeypatch.setattr(main, 'ENABLE_ADMIN_CHAT_ACCESS', True)
-    assert main._admin_reaches_other_chats(ADMIN)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    assert chats_model.admin_reaches_other_chats(ADMIN)
     listed = asyncio.run(main.list_tasks_by_chat_id_endpoint(_request(), 'c1', user=ADMIN))
     assert listed == {'task_ids': ['t1']}
 
 
 def test_a_regular_user_never_can(monkeypatch):
-    monkeypatch.setattr(main, 'ENABLE_ADMIN_CHAT_ACCESS', True)
-    assert not main._admin_reaches_other_chats(SimpleNamespace(id='u', role='user'))
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    assert not chats_model.admin_reaches_other_chats(SimpleNamespace(id='u', role='user'))

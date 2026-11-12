@@ -51,7 +51,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from typing import NoReturn
 
-from local_llm.sandbox import outputs
+from local_llm.sandbox import outputs, runs
 from local_llm.sandbox import workspace as guest
 from local_llm.sandbox.backend import (
     validate_create,
@@ -1116,6 +1116,19 @@ def _outputs_helper(workspace: FakeWorkspace) -> FakeRun:
     return FakeRun(0, listing.encode()[: outputs.LISTING_CAP_BYTES])
 
 
+def _runs_helper(workspace: FakeWorkspace) -> FakeRun:
+    # runs.LIST_SCRIPT: the names in /workspace/.runs ending in `.py`, not hidden, sorted bytewise (the C locale), one
+    # a line; nothing when it is missing, a symlink, not a directory, or one UID 1000 cannot read and search.
+    top = workspace._get(runs.RUNS_DIR)
+    if top is None or not top.is_dir or not _allowed(top, SANDBOX_UID, 0o5):
+        return FakeRun(0)
+    names = sorted(
+        (name for name in workspace.listdir(runs.RUNS_DIR) if name.endswith('.py') and not name.startswith('.')),
+        key=lambda name: name.encode(),
+    )
+    return FakeRun(0, ''.join(f'{name}\n' for name in names).encode())
+
+
 def _write_helper(workspace: FakeWorkspace, path: str, mode: str, stdin: bytes | None) -> FakeRun:
     # WRITE_SCRIPT: lllm-path; refuse a directory, then anything else not a regular file; exit EXISTS_EXIT for
     # an existing file unless `overwrite`; refuse a file UID 1000 may not write; `mkdir -p` the parent; write stdin
@@ -1188,6 +1201,8 @@ def _guest_helper(args: list[str], request: FakeExecRequest) -> FakeRun:
             return _write_helper(request.workspace, path, mode, request.stdin)
         case ['-c', outputs.LIST_SCRIPT, 'lllm-outputs']:
             return _outputs_helper(request.workspace)
+        case ['-c', runs.LIST_SCRIPT, 'lllm-runs']:
+            return _runs_helper(request.workspace)
         case _:
             return _not_found(shlex.join(args))
 
