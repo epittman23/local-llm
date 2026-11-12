@@ -5,7 +5,8 @@ button (routers/utils.py) is written to `/workspace/.runs/<n>.py` and run
 with `python` in the same way the `bash` tool runs a command, so its code is
 never a command line (it can be longer than MAX_COMMAND_BYTES) and stays in
 the workspace for the model and the user to read again. `n` counts up per
-chat: the next number after the highest one already there.
+chat: one more than the highest number already there (a name the model
+chose that is not a plain number is ignored).
 """
 
 import re
@@ -17,19 +18,22 @@ from local_llm.sandbox.manager import SandboxSession
 from local_llm.sandbox.types import SandboxError
 from local_llm.sandbox.workspace import GUEST_SHELL
 
+_RUN_NAME: Final = re.compile(r'[1-9][0-9]{0,8}\.py')
+
 #: The directory, under /workspace, that holds the runs.
 RUNS_DIR: Final = '/workspace/.runs'
 
-#: Prints the name of each entry in RUNS_DIR ending in `.py` (not hidden), one a line, in the C locale's order;
-#: nothing when RUNS_DIR is missing, a symlink, not a directory, or not one UID 1000 can read and search. Only names
-#: are read, and the write that follows goes through lllm-path's confinement (sandbox/workspace.py).
+#: Prints the highest `<n>` among the names `<n>.py` in RUNS_DIR (n from 1 to 999999999, no leading zero), or 0;
+#: 0 too when RUNS_DIR is missing, a symlink, not a directory, or not one UID 1000 can read and search. One number,
+#: so the output stays a few bytes however many files the directory holds. Only names are read, and the write that
+#: follows goes through lllm-path's confinement (sandbox/workspace.py).
 LIST_SCRIPT: Final = (
-    f'[ -d {RUNS_DIR} ] && [ ! -L {RUNS_DIR} ] && cd {RUNS_DIR} 2>/dev/null || exit 0\n'
+    f'[ -d {RUNS_DIR} ] && [ ! -L {RUNS_DIR} ] && cd {RUNS_DIR} 2>/dev/null || {{ echo 0; exit 0; }}\n'
     'shopt -s nullglob\n'
-    'for f in *.py; do printf \'%s\\n\' "$f"; done\n'
+    'm=0\n'
+    'for f in *.py; do n=${f%.py}; [[ $n =~ ^[1-9][0-9]{0,8}$ ]] && (( n > m )) && m=$n; done\n'
+    'echo $m\n'
 )
-
-_RUN_NAME: Final = re.compile(r'([1-9][0-9]{0,8})\.py')
 
 
 def list_argv() -> list[str]:
@@ -37,10 +41,9 @@ def list_argv() -> list[str]:
     return wrap_argv([*GUEST_SHELL, '-c', LIST_SCRIPT, 'lllm-runs'], HELPER_TIMEOUT_S)
 
 
-def next_number(listing: str) -> int:
-    """One more than the highest `<n>.py` in LIST_SCRIPT's output (1 when there is none); other names are ignored."""
-    numbers = [int(match.group(1)) for line in listing.split('\n') if (match := _RUN_NAME.fullmatch(line))]
-    return max(numbers, default=0) + 1
+def highest(names: list[str]) -> int:
+    """What LIST_SCRIPT prints for a directory holding `names`: the highest `<n>` of a `<n>.py`, or 0."""
+    return max((int(name[:-3]) for name in names if _RUN_NAME.fullmatch(name)), default=0)
 
 
 def run_path(number: int) -> str:
@@ -60,9 +63,11 @@ async def next_run(session: SandboxSession) -> int:
         SandboxError: The sandbox failed, or the listing did not finish.
     """
     result = await session.exec(list_argv(), HELPER_TIMEOUT_S)
-    if result.returncode != 0 or result.truncated:
+    printed = result.stdout.strip()
+    if result.returncode != 0 or not printed.isascii() or not printed.isdigit():
         raise SandboxError(
-            f'listing {RUNS_DIR} failed: exit status {result.returncode}, {result.stderr[:200]!r}',
+            f'listing {RUNS_DIR} failed: exit status {result.returncode}, {result.stdout[:100]!r}, '
+            f'{result.stderr[:200]!r}',
             public=f'{RUNS_DIR} could not be listed',
         )
-    return next_number(result.stdout)
+    return int(printed) + 1

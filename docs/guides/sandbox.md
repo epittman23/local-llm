@@ -1035,12 +1035,15 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
 - **The tag path** (legacy function calling,
   `utils/middleware.py` `_execute_code_in_sandbox`). Each
   `<code_interpreter>` block is written to `/workspace/.runs/<n>.py` (`n`
-  one more than the highest number there, `sandbox/runs.py`) and run with
-  `python` from `/workspace` on the `data` image, with the configured
-  timeout and without the Jupyter path's blocked-modules preamble. Its
-  outputs attach to the reply as a `bash` call's do, and the block's stdout
-  gains a line naming them, since stdout is all the model is shown of a
-  block. `CODE_INTERPRETER_SANDBOX_TAG_PROMPT` describes this environment.
+  one more than the highest plain number there, which a fixed script prints
+  as one number, `sandbox/runs.py`) and run with `python` from `/workspace`
+  on the `data` image, with the configured timeout and without the Jupyter
+  path's blocked-modules preamble. Its outputs attach to the reply as a
+  `bash` call's do. The model is shown only a block's stdout
+  (`utils/misc.py`), so the block's stderr (after a `[stderr]` line), a
+  sandbox failure, and lines naming the files attached, not attached (with
+  why) or only listed all go into stdout.
+  `CODE_INTERPRETER_SANDBOX_TAG_PROMPT` describes this environment.
 - **The Run endpoint** (`POST /api/v1/utils/code/execute`, with
   `code_execution.engine` set to `sandbox`). It needs the block's
   `chat_id`, runs the code as the tag path does in that chat's sandbox,
@@ -1052,26 +1055,37 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   which it does not know, so `/workspace/uploads` stays as the chat's last
   call left it.
 - **Sub-agents** (`utils/subagents.py`). A sub-agent's request carries its
-  parent chat (`request.state.sandbox_chat_id`, set only by the server) and
-  all the parent's attachments (`sandbox_files`, from the parent request's
-  metadata), so its tools use the parent's sandbox and never replace the
-  parent's uploads with the few files it was given; a sub-agent of a
-  sub-agent keeps the outermost chat's. The chat's lock serializes their
-  calls, and one slot serves them all. A sub-agent's outputs attach to its
+  parent chat (`request.state.sandbox_chat_id`, set only by the server), so
+  its tools use the parent's sandbox; a sub-agent of a sub-agent keeps the
+  outermost chat's, and so does the parent's continuation after a
+  background sub-agent. Such a request never syncs `/workspace/uploads`
+  (`shares_parent_sandbox`): the files it carries are a few of the parent's
+  or a snapshot from an earlier turn, and a sync makes the uploads hold
+  exactly what it is given, so it would remove what the parent attached
+  since. It uses the uploads the parent's own calls synced. The chat's lock
+  serializes their calls, and one slot serves them all. A sub-agent's outputs attach to its
   own message and count against the parent chat's cap. Background
   sub-agents keep the code interpreter under the `sandbox` engine, as under
   Jupyter.
 - **A terminal server in the same chat is refused** (Q24). An Open
   Terminal server offers its own `write_file`, acting on its own machine,
   so a chat request with a terminal selected while the code interpreter is
-  on with the `sandbox` engine fails with a 400 asking the user to turn one
-  of them off. `terminal:*` events go out for terminal tools only.
+  on with the `sandbox` engine is refused, asking the user to turn one of
+  them off: a 400 for an API caller, the message's error in the chat. It is
+  refused only when the sandbox would really be in play (the code
+  interpreter's gates, and the tag path or builtin tools on the native
+  path), and before any feature runs. `terminal:*` events go out for
+  terminal tools only.
 - **The harness.** `request.state.benchmark_harness` keeps every path's
-  outputs listed in the result but stored nowhere. Each call is recorded
-  with `note_code_run`, as failed only when the sandbox itself failed
-  (unavailable, refused, a backend error), never for the model's command
-  failing, timing out or being refused as malformed, so one model mistake
-  never refuses a whole harness run.
+  outputs listed in the result but stored nowhere. Each `bash` call and
+  each run is recorded with `note_code_run`, as failed only when the
+  sandbox itself failed (unavailable, refused, a backend error), never for
+  the model's command failing, timing out or being refused as malformed,
+  so one model mistake never refuses a whole harness run. `view`,
+  `write_file` and `str_replace` record only the sandbox's failures, so a
+  model that gives up after one is not scored as having made the mistake.
+  A harness request is internal, which drops the sub-agent tools
+  (`benchmarks/evaluation/harness.py`), so no sub-agent runs inside one.
 
 `tests/test_sandbox_call_sites.py` covers all of these on the FakeBackend,
 including the `.runs` listing against the real script.

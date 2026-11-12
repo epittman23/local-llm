@@ -271,7 +271,7 @@ async def process_pending_internal_messages(
             form_data['terminal_id'] = run['terminal_id']
 
         request = _build_request(source_request, user.id, internal=False)
-        # The parent chat's own sandbox, with all its attachments: `files` here is only what the sub-agent was given.
+        # The parent chat's sandbox, its uploads left as synced: `files` here is only what the sub-agent was given.
         _share_parent_sandbox(request, source_request, parent_chat_id)
         await source_request.app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
@@ -336,26 +336,18 @@ def _nested_file_id(file: dict):
 
 
 def _share_parent_sandbox(child: Request, source: Request, parent_chat_id: str) -> None:
-    """Make the tools of a request the server builds use the parent chat's sandbox and attachments (owner decision Q6).
+    """Make the tools of a request the server builds use the parent chat's sandbox (owner decision Q6).
 
-    The sandbox tools read `sandbox_chat_id` and `sandbox_files` from the
-    request (tools/builtin.py sandbox_chat), which only the server sets. The
-    attachments are all the parent's (the parent request's metadata, which
-    main.py keeps on it), not the few a sub-agent is given, so syncing them
-    never empties the parent's /workspace/uploads. A sub-agent of a sub-agent
+    The sandbox tools read `sandbox_chat_id` from the request
+    (tools/builtin.py sandbox_chat), which only the server sets; such a
+    request leaves /workspace/uploads as the parent's own calls synced it
+    (shares_parent_sandbox), since the files it carries are a few of the
+    parent's or a snapshot from an earlier turn. A sub-agent of a sub-agent
     keeps the outermost chat's, so every level shares one sandbox; the
     chat's lock serializes their calls, and one slot serves them all.
     """
-    state = getattr(source, 'state', None)
-    outer = getattr(state, 'sandbox_chat_id', None)
-    if type(outer) is str and outer:
-        files = getattr(state, 'sandbox_files', None)
-        child.state.sandbox_chat_id = outer
-    else:
-        metadata = getattr(state, 'metadata', None)
-        files = metadata.get('files') if isinstance(metadata, dict) else None
-        child.state.sandbox_chat_id = parent_chat_id
-    child.state.sandbox_files = copy.deepcopy(files) if isinstance(files, list) else []
+    outer = getattr(getattr(source, 'state', None), 'sandbox_chat_id', None)
+    child.state.sandbox_chat_id = outer if type(outer) is str and outer else parent_chat_id
 
 
 def _select_files(metadata: dict, file_ids: list[str] | None) -> tuple[list, str | None]:

@@ -855,14 +855,12 @@ def sandbox_chat(request: Request | None, chat_id: str | None) -> str | None:
     return parent if type(parent) is str and parent else chat_id
 
 
-def sandbox_attachments(request: Request | None, metadata: dict | None) -> list | None:
-    """The files to sync into /workspace/uploads: a sub-agent's parent's (`request.state.sandbox_files`, set with
-    sandbox_chat_id), else the chat's own `metadata['files']`, so a sub-agent never replaces its parent's uploads."""
-    state = getattr(request, 'state', None)
-    if type(getattr(state, 'sandbox_chat_id', None)) is str:
-        parent_files = getattr(state, 'sandbox_files', None)
-        return parent_files if isinstance(parent_files, list) else []
-    return (metadata or {}).get('files')
+def shares_parent_sandbox(request: Request | None) -> bool:
+    """Whether the request uses another chat's sandbox (sandbox_chat): a sub-agent's, or the parent's continuation
+    after a background sub-agent. Such a request never syncs /workspace/uploads: its attachments are a few of the
+    parent's, or a snapshot from an earlier turn, and the sync makes uploads hold exactly what it is given."""
+    parent = getattr(getattr(request, 'state', None), 'sandbox_chat_id', None)
+    return type(parent) is str and bool(parent)
 
 
 async def configured_timeout() -> int:
@@ -896,9 +894,11 @@ async def _sandbox_session(
     whose sandbox it shares (owner decision Q6).
 
     With `upload_notes` given (`bash`, `view`), the chat's attached files
-    (sandbox_attachments: `metadata['files']`, or a sub-agent's parent's) are synced
-    into /workspace/uploads first (sandbox/uploads.py), and the notes for
-    files left out are appended to it.
+    (`metadata['files']`) are synced into /workspace/uploads first
+    (sandbox/uploads.py), and the notes for files left out are appended to
+    it; never for a request that shares its parent's sandbox
+    (shares_parent_sandbox), which uses the uploads the parent's own calls
+    synced.
     A sync that fails never refuses the call: a full workspace must still run
     `rm`. Its failure becomes one more note, with the reason only when it was
     written for the model; the details are logged.
@@ -931,7 +931,8 @@ async def _sandbox_session(
             )
 
     chat = sandbox_chat(request, chat_id or (metadata or {}).get('chat_id'))
-    attached = sandbox_attachments(request, metadata)
+    if shares_parent_sandbox(request):
+        upload_notes = None
     entered = False
     try:
         async with manager.session(chat, account, image=cast(ImageKey | None, image), on_wait=on_wait) as session:
@@ -942,7 +943,9 @@ async def _sandbox_session(
                 try:
                     upload_notes.extend(
                         # The owner is looked up only when the chat has files.
-                        await sync_uploads(session, attached, account, lambda: chat_owner(chat, account))
+                        await sync_uploads(
+                            session, (metadata or {}).get('files'), account, lambda: chat_owner(chat, account)
+                        )
                     )
                 except SandboxNotRunning:
                     raise
@@ -981,6 +984,16 @@ UPLOADS_NOT_COPIED = 'The attached files could not be copied into /workspace/upl
 def _sandbox_error(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
     """The tool result for a failure: JSON with `error`, the text sandbox_error_text gives."""
     return JSONCodec.dumps({'error': sandbox_error_text(tool, exc, notes)}, ensure_ascii=False)
+
+
+def _file_tool_error(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
+    """_sandbox_error for `view`, `write_file` and `str_replace`, recording the sandbox's own failure with
+    note_code_run (as a run of 0 ms), so a harness run never scores a broken sandbox as the model's mistake when the
+    model gives up before a `bash` call. The model's own mistakes are not recorded: they are not code runs."""
+    failure = _code_run_failure(exc)
+    if failure:
+        note_code_run(0, failure)
+    return _sandbox_error(tool, exc, notes)
 
 
 def sandbox_error_text(tool: str, exc: Exception, notes: list[str] | None = None) -> str:
@@ -1378,7 +1391,7 @@ async def view(
             first = _line_arg(start_line, 'start_line')
             last = _line_arg(end_line, 'end_line')
     except Exception as exc:
-        return _sandbox_error('view', exc)
+        return _file_tool_error('view', exc)
     # Synced as for bash, so the attached files are there from the chat's first call. The notes are bash's, except
     # that a failed sync is named in an error, which a missing upload would otherwise show without a reason.
     notes: list[str] = []
@@ -1388,7 +1401,7 @@ async def view(
         ) as session:
             shown = await sandbox_files.view(session, path, first, last)
     except Exception as exc:
-        return _sandbox_error('view', exc, notes)
+        return _file_tool_error('view', exc, notes)
     # An image is returned as its data: URI, which the tool-result path shows to a vision model.
     return shown if isinstance(shown, str) else JSONCodec.dumps(shown, ensure_ascii=False)
 
@@ -1425,7 +1438,7 @@ async def write_file(
             await _keep_outputs_listing(session)
             written = await sandbox_files.write(session, path, data, overwrite=replace)
     except Exception as exc:
-        return _sandbox_error('write_file', exc)
+        return _file_tool_error('write_file', exc)
     return JSONCodec.dumps({'path': written, 'bytes_written': len(data)}, ensure_ascii=False)
 
 
@@ -1458,7 +1471,7 @@ async def str_replace(
             await _keep_outputs_listing(session)
             edited = await sandbox_files.str_replace(session, path, old_str, new_str)
     except Exception as exc:
-        return _sandbox_error('str_replace', exc)
+        return _file_tool_error('str_replace', exc)
     return JSONCodec.dumps(edited, ensure_ascii=False)
 
 

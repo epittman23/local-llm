@@ -2559,13 +2559,17 @@ _CODE_INTERPRETER_TOOL_PROMPTS = {
 
 def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str:
     """What a sandbox run's stdout gains for the model on the tag path: which files from /workspace/outputs were
-    attached to the reply, which were not and why, and whether the run was stopped at its timeout."""
+    attached to the reply (stored: they have a `file_id`), which were not and why, which were only listed (a
+    benchmark run stores none), and whether the run was stopped at its timeout."""
     lines = []
     if timed_out:
         lines.append('[The code was stopped at its time limit.]')
-    attached = [item['path'] for item in outputs if 'reason' not in item]
+    attached = [item['path'] for item in outputs if 'file_id' in item]
+    listed = [item['path'] for item in outputs if 'file_id' not in item and 'reason' not in item]
     if attached:
         lines.append(f'[Attached to the reply: {", ".join(attached)}]')
+    if listed:
+        lines.append(f'[New in /workspace/outputs, not attached: {", ".join(listed)}]')
     lines.extend(f'[Not attached: {item["path"]} ({item["reason"]})]' for item in outputs if 'reason' in item)
     return ''.join(f'\n{line}' for line in lines)
 
@@ -2645,8 +2649,8 @@ TERMINAL_WITH_SANDBOX = (
 )
 
 
-async def _refuse_terminal_with_sandbox(user, model: dict, terminal_id, features: dict) -> None:
-    """Refuse (400) a request that would get both a terminal's tools and the sandbox's (owner decision Q24).
+async def _refuse_terminal_with_sandbox(user, model: dict, metadata: dict, terminal_id, features: dict) -> None:
+    """Refuse (an HTTPException 400) a request that would get both a terminal's tools and the sandbox's (Q24).
 
     Both offer a `write_file`, writing on different machines, and a model
     told to write a file and run it would do the two on different machines;
@@ -2654,15 +2658,21 @@ async def _refuse_terminal_with_sandbox(user, model: dict, terminal_id, features
     check mirrors when each is in effect: a terminal the model may use
     (_add_terminal_tools), and the code interpreter on the sandbox engine
     with its gates passed (feature, setting, model capability and
-    permission), on either function-calling path.
+    permission), on the tag path (legacy function calling) or as builtin
+    tools on the native path (a session, and the model's `builtin_tools`
+    capability, as process_chat_payload's `use_builtin_tools`). An API
+    caller gets the 400; in the chat it shows as the message's error.
     """
     meta = model.get('info', {}).get('meta', {})
+    capabilities = meta.get('capabilities') or {}
+    legacy = metadata.get('params', {}).get('function_calling') == 'legacy'
     if not (
         terminal_id
-        and (meta.get('capabilities') or {}).get('terminal', True)
+        and capabilities.get('terminal', True)
         and features.get('code_interpreter')
-        and (meta.get('capabilities') or {}).get('code_interpreter', True)
+        and capabilities.get('code_interpreter', True)
         and (meta.get('builtinTools') or {}).get('code_interpreter', True)
+        and (legacy or (bool(metadata.get('session_id')) and capabilities.get('builtin_tools', True)))
     ):
         return
     if (
@@ -3118,11 +3128,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     features = form_data.pop('features', None) or {}
     extra_params['__features__'] = features
+    # Before any feature runs (memory, a forced web search): a refused request does nothing.
+    await _refuse_terminal_with_sandbox(user, model, metadata, form_data.get('terminal_id'), features)
     form_data = await _apply_features(request, form_data, user, model, metadata, extra_params, features)
 
     tool_ids = form_data.pop('tool_ids', None)
     terminal_id = form_data.pop('terminal_id', None)
-    await _refuse_terminal_with_sandbox(user, model, terminal_id, features)
     files = form_data.pop('files', None)
     form_data.pop('folder_id', None)
 
@@ -6233,8 +6244,9 @@ class _StreamingReply:
         """A `<code_interpreter>` block run in the chat's sandbox (tools/builtin.py run_code_in_sandbox).
 
         Its outputs attach to this reply as a `bash` call's do (owner decision
-        Q25), so they render under it; the model sees their names in stdout,
-        the only part of the output it is shown (utils/misc.py).
+        Q25), so they render under it. The model is shown only stdout
+        (utils/misc.py), so the block's stderr, a sandbox failure and the
+        names of its outputs all go there.
         """
         from local_llm.tools.builtin import run_code_in_sandbox
 
@@ -6249,10 +6261,18 @@ class _StreamingReply:
             what='the code block',
         )
         if 'error' in run:
-            return {'stdout': '', 'stderr': run['error'], 'result': ''}
+            return {'stdout': run['error'], 'stderr': '', 'result': ''}
+        # The model is shown a block's stdout only, so stderr (a traceback, pip's "no matching distribution", the
+        # upload and output notes) goes there too, after it, as a terminal would show it.
         return {
-            'stdout': run['stdout'] + sandbox_outputs_note(run['outputs'], timed_out=run['timed_out']),
-            'stderr': run['stderr'],
+            'stdout': ''.join(
+                [
+                    run['stdout'],
+                    f'\n[stderr]\n{run["stderr"]}' if run['stderr'] else '',
+                    sandbox_outputs_note(run['outputs'], timed_out=run['timed_out']),
+                ]
+            ),
+            'stderr': '',
             'result': '',
         }
 

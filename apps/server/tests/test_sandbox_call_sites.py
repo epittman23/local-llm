@@ -49,7 +49,7 @@ from local_llm.sandbox.fake import FakeBackend, FakeExecRequest, FakeFile, FakeR
 from local_llm.sandbox.limits import HELPER_TIMEOUT_S, TIMEOUT_DEFAULT_S
 from local_llm.sandbox.workspace import GUEST_SHELL
 from local_llm.tools import builtin
-from local_llm.utils import middleware, subagents
+from local_llm.utils import middleware, misc, subagents
 from local_llm.utils.auth import get_verified_user
 from local_llm.utils.upstream_trace import tracing
 
@@ -244,17 +244,17 @@ def test_bash_records_a_failure_when_the_server_has_no_sandbox(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ('listing', 'number'),
+    ('names', 'number'),
     [
-        ('', 1),
-        ('1.py\n', 2),
-        ('1.py\n10.py\n2.py\n', 11),
-        ('notes.py\n0.py\n01.py\n7.py\n-3.py\n3.pyc\n1234567890.py\n', 8),
-        ('a\nb\n9.py', 10),
+        ([], 0),
+        (['1.py'], 1),
+        (['1.py', '10.py', '2.py'], 10),
+        (['notes.py', '0.py', '01.py', '7.py', '-3.py', '3.pyc', '1234567890.py', '999999999.py.bak'], 7),
+        (['999999999.py', '5.py'], 999999999),
     ],
 )
-def test_the_next_run_follows_the_highest_numbered_one(listing, number):
-    assert runs.next_number(listing) == number
+def test_the_highest_run_ignores_names_that_are_not_plain_numbers(names, number):
+    assert runs.highest(names) == number
 
 
 def _fake_runs(files: dict[str, FakeFile]) -> FakeRun:
@@ -271,8 +271,8 @@ def _f(data: bytes = b'x') -> FakeFile:
 
 
 def test_the_fake_lists_runs_as_the_real_script_does(tmp_path):
-    tree = {'.runs': _d(), '.runs/2.py': _f(), '.runs/10.py': _f(), '.runs/a.txt': _f(), '.runs/.h.py': _f()}
-    tree['.runs/sub.py'] = _d()
+    tree = {'.runs': _d(), '.runs/2.py': _f(), '.runs/10.py': _f(), '.runs/a.txt': _f(), '.runs/.12.py': _f()}
+    tree.update({'.runs/11.py': _d(), '.runs/012.py': _f(), '.runs/1234567890.py': _f(), '.runs/x\n13.py': _f()})
     fake = _fake_runs({'/workspace': _d(), **{f'/workspace/{k}': v for k, v in tree.items()}})
     root = tmp_path / '.runs'
     root.mkdir()
@@ -284,11 +284,18 @@ def test_the_fake_lists_runs_as_the_real_script_does(tmp_path):
         [*GUEST_SHELL, '-c', runs.LIST_SCRIPT.replace(runs.RUNS_DIR, str(root)), 'x'], capture_output=True
     )
     assert (fake.returncode, fake.stdout, fake.stderr) == (real.returncode, real.stdout, real.stderr)
-    assert fake.stdout == b'10.py\n2.py\nsub.py\n'
+    # A directory named like a run counts too: its name is taken, so the next run must pass it.
+    assert fake.stdout == b'11\n'
+
+
+def test_the_runs_listing_prints_one_number_however_many_runs_there_are():
+    files = {'/workspace': _d(), '/workspace/.runs': _d()}
+    files.update({f'/workspace/.runs/{n}.py': _f() for n in range(1, 5001)})
+    assert _fake_runs(files).stdout == b'5000\n'
 
 
 @pytest.mark.parametrize('kind', ['missing', 'file', 'symlink'])
-def test_the_runs_listing_is_empty_without_a_real_runs_directory(tmp_path, kind):
+def test_the_runs_listing_is_zero_without_a_real_runs_directory(tmp_path, kind):
     files = {'/workspace': _d(), '/workspace/real': _d(), '/workspace/real/5.py': _f()}
     root = tmp_path / '.runs'
     (tmp_path / 'real').mkdir()
@@ -303,7 +310,8 @@ def test_the_runs_listing_is_empty_without_a_real_runs_directory(tmp_path, kind)
     real = subprocess.run(
         [*GUEST_SHELL, '-c', runs.LIST_SCRIPT.replace(runs.RUNS_DIR, str(root)), 'x'], capture_output=True
     )
-    assert (fake.returncode, fake.stdout, fake.stderr) == (real.returncode, real.stdout, real.stderr) == (0, b'', b'')
+    expected = (0, b'0\n', b'')
+    assert (fake.returncode, fake.stdout, fake.stderr) == (real.returncode, real.stdout, real.stderr) == expected
 
 
 # --- run_code_in_sandbox -------------------------------------------------------------------------------------------
@@ -434,10 +442,16 @@ def test_a_run_without_sync_leaves_the_uploads_alone(monkeypatch):
 
 
 def test_the_outputs_note_names_what_was_attached_what_was_not_and_a_timeout():
-    outputs = [{'path': 'outputs/a.png'}, {'path': 'outputs/b.csv'}, {'path': 'outputs/c.bin', 'reason': 'too big'}]
+    outputs = [
+        {'path': 'outputs/a.png', 'file_id': 'f1'},
+        {'path': 'outputs/b.csv', 'file_id': 'f2'},
+        {'path': 'outputs/c.bin', 'reason': 'too big'},
+        {'path': 'outputs/d.txt'},
+    ]
     assert middleware.sandbox_outputs_note(outputs, timed_out=True) == (
         '\n[The code was stopped at its time limit.]'
         '\n[Attached to the reply: outputs/a.png, outputs/b.csv]'
+        '\n[New in /workspace/outputs, not attached: outputs/d.txt]'
         '\n[Not attached: outputs/c.bin (too big)]'
     )
     assert middleware.sandbox_outputs_note([]) == ''
@@ -475,21 +489,34 @@ def test_the_tag_path_runs_a_block_in_the_sandbox_without_the_blocked_modules_pr
         'stderr': 'warning\n',
         'result': '',
         'timed_out': False,
-        'outputs': [{'path': 'outputs/fig.png'}],
+        'outputs': [{'path': 'outputs/fig.png', 'file_id': 'f1'}],
     }
     reply, calls = _reply(monkeypatch, 'sandbox', run)
     out = asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': 'print("hi")'}))
-    assert out == {'stdout': 'hi\n\n[Attached to the reply: outputs/fig.png]', 'stderr': 'warning\n', 'result': ''}
+    # The model is shown stdout only (utils/misc.py), so stderr and the outputs note are put there.
+    stdout = 'hi\n\n[stderr]\nwarning\n\n[Attached to the reply: outputs/fig.png]'
+    assert out == {'stdout': stdout, 'stderr': '', 'result': ''}
+    item = {'type': 'open_webui:code_interpreter', 'code': 'print("hi")', 'output': out}
+    assert (
+        misc._code_interpreter_contents(item)[1] == f'<code_interpreter_output>\n{stdout}\n</code_interpreter_output>'
+    )
     (call,) = calls
     assert call['code'] == 'print("hi")'
     assert (call['chat_id'], call['message_id'], call['what']) == (CHAT, MESSAGE, 'the code block')
     assert call['user']['id'] == 'u1' and call['event_emitter'] is reply.event_emitter
 
 
-def test_the_tag_path_shows_a_sandbox_failure_in_stderr(monkeypatch):
+def test_the_tag_path_shows_the_model_a_sandbox_failure(monkeypatch):
     reply, _ = _reply(monkeypatch, 'sandbox', {'error': 'The sandbox is not available on this server'})
     out = asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': 'print(1)'}))
-    assert out == {'stdout': '', 'stderr': 'The sandbox is not available on this server', 'result': ''}
+    assert out == {'stdout': 'The sandbox is not available on this server', 'stderr': '', 'result': ''}
+
+
+def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
+    run = {'stdout': 'ok\n', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
+    reply, _ = _reply(monkeypatch, 'sandbox', run)
+    out = asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': 'print(1)'}))
+    assert out == {'stdout': 'ok\n', 'stderr': '', 'result': ''}
 
 
 @pytest.mark.parametrize(
@@ -552,6 +579,10 @@ def _config(monkeypatch, **values):
         ('t1', {'code_interpreter': True}, {'builtinTools': {'code_interpreter': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {}, {'code_interpreter.enable': False}, False),
         ('t1', {'code_interpreter': True}, {}, {'code_interpreter.engine': 'jupyter'}, False),
+        ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {}, False),
+        ('t1', {'code_interpreter': True}, {}, {'no session': True}, False),
+        ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {'legacy': True}, True),
+        ('t1', {'code_interpreter': True}, {}, {'no session': True, 'legacy': True}, True),
     ],
     ids=[
         'both',
@@ -562,14 +593,21 @@ def _config(monkeypatch, **values):
         'tool off',
         'code interpreter off',
         'jupyter',
+        'native without builtin tools',
+        'native without a session',
+        'tag path without builtin tools',
+        'tag path without a session',
     ],  # fmt: skip
 )
 def test_a_request_with_a_terminal_and_the_sandbox_is_refused(
     monkeypatch, terminal_id, features, meta, config, refused
 ):
+    metadata = {} if config.pop('no session', False) else {'session_id': 's1'}
+    if config.pop('legacy', False):
+        metadata['params'] = {'function_calling': 'legacy'}
     _config(monkeypatch, **config)
     call = middleware._refuse_terminal_with_sandbox(
-        _user(role='admin'), {'info': {'meta': meta}}, terminal_id, features
+        _user(role='admin'), {'info': {'meta': meta}}, metadata, terminal_id, features
     )
     if refused:
         with pytest.raises(HTTPException) as exc:
@@ -587,7 +625,8 @@ def test_a_user_without_the_code_interpreter_permission_is_not_refused(monkeypat
         return False
 
     monkeypatch.setattr(middleware, '_may_use_feature', may_use)
-    call = middleware._refuse_terminal_with_sandbox(_user(), {'info': {'meta': {}}}, 't1', {'code_interpreter': True})
+    model, metadata = {'info': {'meta': {}}}, {'session_id': 's1'}
+    call = middleware._refuse_terminal_with_sandbox(_user(), model, metadata, 't1', {'code_interpreter': True})
     assert asyncio.run(call) is None
 
 
@@ -698,21 +737,20 @@ def test_the_run_endpoint_keeps_its_other_answers(endpoint):
 def test_the_sandbox_chat_is_the_parent_chat_for_a_sub_agents_request():
     assert builtin.sandbox_chat(None, CHAT) == CHAT
     assert builtin.sandbox_chat(SimpleNamespace(state=SimpleNamespace()), CHAT) == CHAT
-    sub = SimpleNamespace(state=SimpleNamespace(sandbox_chat_id=CHAT, sandbox_files=[{'id': 'f1'}]))
+    sub = SimpleNamespace(state=SimpleNamespace(sandbox_chat_id=CHAT))
     assert builtin.sandbox_chat(sub, SUBAGENT_CHAT) == CHAT
-    assert builtin.sandbox_attachments(sub, {'files': [{'id': 'f2'}]}) == [{'id': 'f1'}]
-    assert builtin.sandbox_attachments(None, {'files': [{'id': 'f2'}]}) == [{'id': 'f2'}]
-    # Only a str set by the server counts.
-    odd = SimpleNamespace(state=SimpleNamespace(sandbox_chat_id=5, sandbox_files='x'))
-    assert builtin.sandbox_chat(odd, CHAT) == CHAT
-    assert builtin.sandbox_attachments(odd, {'files': [{'id': 'f2'}]}) == [{'id': 'f2'}]
-    without_files = SimpleNamespace(state=SimpleNamespace(sandbox_chat_id=CHAT))
-    assert builtin.sandbox_attachments(without_files, {'files': [{'id': 'f2'}]}) == []
+    assert builtin.shares_parent_sandbox(sub) is True
+    assert builtin.shares_parent_sandbox(None) is False
+    # Only a non-empty str set by the server counts.
+    for odd in (5, '', None):
+        request = SimpleNamespace(state=SimpleNamespace(sandbox_chat_id=odd))
+        assert builtin.sandbox_chat(request, CHAT) == CHAT
+        assert builtin.shares_parent_sandbox(request) is False
 
 
 def test_a_sub_agent_sees_the_parents_files_and_takes_no_second_sandbox(monkeypatch):
     rig = _Rig(monkeypatch)
-    sub_request = SimpleNamespace(app=rig.request.app, state=SimpleNamespace(sandbox_chat_id=CHAT, sandbox_files=[]))
+    sub_request = SimpleNamespace(app=rig.request.app, state=SimpleNamespace(sandbox_chat_id=CHAT))
 
     async def go():
         await rig.bash(command='printf parent > shared.txt')
@@ -733,7 +771,7 @@ def test_a_sub_agent_sees_the_parents_files_and_takes_no_second_sandbox(monkeypa
 
 def test_a_sub_agents_outputs_attach_to_its_message_and_count_against_the_parent_chat(monkeypatch):
     rig = _Rig(monkeypatch)
-    rig.request.state = SimpleNamespace(sandbox_chat_id=CHAT, sandbox_files=[])
+    rig.request.state = SimpleNamespace(sandbox_chat_id=CHAT)
 
     async def go():
         await rig.bash(command='mkdir outputs')
@@ -755,19 +793,44 @@ def test_a_sub_agents_outputs_attach_to_its_message_and_count_against_the_parent
     assert {'usage_of': CHAT} in rig.stored
 
 
-def test_a_sub_agents_request_carries_the_parent_chat_and_all_its_attachments():
-    parent = SimpleNamespace(state=SimpleNamespace(metadata={'files': [{'id': 'f1'}, {'id': 'f2'}]}))
+def test_a_sub_agents_request_carries_the_parent_chat():
     child = SimpleNamespace(state=SimpleNamespace())
-    subagents._share_parent_sandbox(child, parent, CHAT)
-    assert (child.state.sandbox_chat_id, child.state.sandbox_files) == (CHAT, [{'id': 'f1'}, {'id': 'f2'}])
-    # A sub-agent of a sub-agent keeps the outermost chat's sandbox and files.
+    subagents._share_parent_sandbox(child, SimpleNamespace(state=SimpleNamespace()), CHAT)
+    assert child.state.sandbox_chat_id == CHAT
+    # A sub-agent of a sub-agent keeps the outermost chat's sandbox.
     grandchild = SimpleNamespace(state=SimpleNamespace())
     subagents._share_parent_sandbox(grandchild, child, SUBAGENT_CHAT)
-    assert (grandchild.state.sandbox_chat_id, grandchild.state.sandbox_files) == (CHAT, [{'id': 'f1'}, {'id': 'f2'}])
-    # A parent request without metadata shares the chat and no files.
+    assert grandchild.state.sandbox_chat_id == CHAT
     bare = SimpleNamespace(state=SimpleNamespace())
     subagents._share_parent_sandbox(bare, SimpleNamespace(), CHAT)
-    assert (bare.state.sandbox_chat_id, bare.state.sandbox_files) == (CHAT, [])
+    assert bare.state.sandbox_chat_id == CHAT
+
+
+def test_a_request_sharing_the_parents_sandbox_never_syncs_its_uploads(monkeypatch):
+    rig = _Rig(monkeypatch)
+    synced = []
+
+    async def sync_uploads(session, items, account, owner):
+        synced.append(items)
+        return []
+
+    monkeypatch.setattr(builtin, 'sync_uploads', sync_uploads)
+    sub_request = SimpleNamespace(app=rig.request.app, state=SimpleNamespace(sandbox_chat_id=CHAT))
+
+    async def go():
+        # The parent's own call syncs its files; the sub-agent's, carrying a stale or partial list, does not.
+        await builtin.bash(
+            command='printf hi', __request__=rig.request, __user__={'id': 'u1'}, __metadata__=_meta(['a', 'b'])
+        )
+        for tool, kwargs in ((builtin.bash, {'command': 'printf hi'}), (builtin.view, {'path': '.'})):
+            await tool(**kwargs, __request__=sub_request, __user__={'id': 'u1'}, __metadata__=_meta(['a']))
+
+    asyncio.run(go())
+    assert synced == [[{'id': 'a'}, {'id': 'b'}]]
+
+
+def _meta(file_ids: list[str]) -> dict:
+    return {'chat_id': CHAT, 'files': [{'id': file_id} for file_id in file_ids]}
 
 
 def test_a_sub_agents_completion_runs_on_a_request_sharing_the_parents_sandbox(monkeypatch):
@@ -789,7 +852,7 @@ def test_a_sub_agents_completion_runs_on_a_request_sharing_the_parents_sandbox(m
     agent = object.__new__(subagents._SubagentRun)
     agent.request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(CHAT_COMPLETION_HANDLER=handler)),
-        state=SimpleNamespace(metadata={'files': [{'id': 'f1'}]}),
+        state=SimpleNamespace(),
     )
     agent.user = SimpleNamespace(id='u1')
     agent.chat_id, agent.assistant_message_id, agent.parent_chat_id = SUBAGENT_CHAT, 'm1', CHAT
@@ -798,7 +861,7 @@ def test_a_sub_agents_completion_runs_on_a_request_sharing_the_parents_sandbox(m
     agent.release = release
     asyncio.run(agent.run_reserved())
     (state,) = seen
-    assert (state.sandbox_chat_id, state.sandbox_files) == (CHAT, [{'id': 'f1'}])
+    assert state.sandbox_chat_id == CHAT
 
 
 @pytest.mark.parametrize(('engine', 'kept'), [('sandbox', True), ('jupyter', True), ('pyodide', False)])
@@ -832,3 +895,27 @@ def test_a_run_whose_file_cannot_be_written_is_the_models_error_and_loses_no_out
     assert trace.code_run_failures == []
     # The listing from before the failed run was put back, so the next bash call still attaches the note.
     assert [item['path'] for item in after['outputs']] == ['outputs/note.txt']
+
+
+@pytest.mark.parametrize('tool', ['view', 'write_file', 'str_replace'])
+def test_the_file_tools_record_the_sandboxs_failures_but_not_the_models_mistakes(monkeypatch, tool):
+    kwargs = {'view': {'path': '.'}, 'write_file': {'path': 'a.txt', 'content': 'x'}}.get(
+        tool, {'path': 'a.txt', 'old_str': 'x', 'new_str': 'y'}
+    )
+    down = _Rig(monkeypatch, manager=False)
+    with tracing() as trace:
+        asyncio.run(getattr(builtin, tool)(**kwargs, __request__=down.request, __user__={'id': 'u1'}, __chat_id__=CHAT))
+    assert trace.code_run_failures == ['sandbox: SandboxUnavailable']
+    rig = _Rig(monkeypatch)
+    with tracing() as trace:
+        out = asyncio.run(
+            getattr(builtin, tool)(
+                path='../etc/passwd',
+                **{k: v for k, v in kwargs.items() if k != 'path'},
+                __request__=rig.request,
+                __user__={'id': 'u1'},
+                __chat_id__=CHAT,
+            )  # fmt: skip
+        )
+    assert 'error' in json.loads(out)
+    assert trace.code_run_failures == [] and trace.code_runs_ms == []

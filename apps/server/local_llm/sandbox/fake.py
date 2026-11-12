@@ -1117,16 +1117,12 @@ def _outputs_helper(workspace: FakeWorkspace) -> FakeRun:
 
 
 def _runs_helper(workspace: FakeWorkspace) -> FakeRun:
-    # runs.LIST_SCRIPT: the names in /workspace/.runs ending in `.py`, not hidden, sorted bytewise (the C locale), one
-    # a line; nothing when it is missing, a symlink, not a directory, or one UID 1000 cannot read and search.
+    # runs.LIST_SCRIPT: the highest `<n>` of a `<n>.py` in /workspace/.runs, or 0; 0 too when it is missing, a
+    # symlink, not a directory, or one UID 1000 cannot read and search.
     top = workspace._get(runs.RUNS_DIR)
     if top is None or not top.is_dir or not _allowed(top, SANDBOX_UID, 0o5):
-        return FakeRun(0)
-    names = sorted(
-        (name for name in workspace.listdir(runs.RUNS_DIR) if name.endswith('.py') and not name.startswith('.')),
-        key=lambda name: name.encode(),
-    )
-    return FakeRun(0, ''.join(f'{name}\n' for name in names).encode())
+        return FakeRun(0, b'0\n')
+    return FakeRun(0, f'{runs.highest(workspace.listdir(runs.RUNS_DIR))}\n'.encode())
 
 
 def _write_helper(workspace: FakeWorkspace, path: str, mode: str, stdin: bytes | None) -> FakeRun:
