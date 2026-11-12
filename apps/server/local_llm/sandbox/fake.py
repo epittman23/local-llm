@@ -62,7 +62,7 @@ from local_llm.sandbox.backend import (
     validate_sandbox_path,
 )
 from local_llm.sandbox.exec import StreamCap, require_wrapped, result_from
-from local_llm.sandbox.limits import HOST_DEADLINE_SLACK_S, SANDBOX_UID, WORKSPACE
+from local_llm.sandbox.limits import HOST_DEADLINE_SLACK_S, LIST_PATH_MAX_BYTES, SANDBOX_UID, WORKSPACE
 from local_llm.sandbox.types import (
     ExecResult,
     FileEntry,
@@ -838,8 +838,16 @@ class FakeBackend:
             files += 1
             total += len(entry.content)
             if len(entries) < max_entries:
-                entries.append(FileEntry(path[len(prefix) :], len(entry.content), entry.mtime))
+                shown = path[len(prefix) :].encode()
+                cut = len(shown) > LIST_PATH_MAX_BYTES
+                if cut:
+                    shown = shown[: LIST_PATH_MAX_BYTES - 3].decode('utf-8', 'ignore').encode() + '\u2026'.encode()
+                entries.append(FileEntry(shown.decode(), len(entry.content), entry.mtime, truncated=cut))
         return WorkspaceListing(tuple(entries), files, total, complete)
+
+    async def remove_helpers(self) -> None:
+        # The fake's listing runs no helper, so none is ever left.
+        self.calls.append(('remove_helpers', {}))
 
     async def stop(self, chat_id: str) -> None:
         self.calls.append(('stop', {'chat_id': chat_id}))

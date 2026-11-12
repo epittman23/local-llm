@@ -387,6 +387,18 @@ class SandboxBackend(Protocol):
         """
         ...
 
+    async def remove_helpers(self) -> None:
+        """Remove every short-lived helper (list_workspace's) a previous process left behind; for the startup sweep.
+
+        A helper mounts its workspace's volume, so one left behind would keep
+        the volume from being destroyed. `stop` and `destroy` remove the
+        key's own helper too.
+
+        Raises:
+            SandboxError: The helpers could not be listed or removed.
+        """
+        ...
+
     async def stop(self, chat_id: str) -> None:
         """Remove the chat's container and keep its volume. A no-op when nothing is running."""
         ...

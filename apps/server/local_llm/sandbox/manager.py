@@ -75,6 +75,7 @@ import asyncio
 import logging
 import time
 import uuid
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, fields
@@ -130,6 +131,8 @@ _SLOT_RETRY_S: Final = 5.0
 
 #: Listings of workspace volumes (the deletion dialog's contents) run at once; each may start a helper VM.
 LISTING_CONCURRENCY: Final = 2
+#: Workspace listings kept (see SandboxManager.workspace_contents).
+LISTING_CACHE_SIZE: Final = 128
 #: Seconds a workspace record must have existed before the retention sweep drops it for having no volume: longer
 #: than any create, so a record whose create is still running is never taken for a leftover.
 PRUNE_AFTER_S: Final = 3600
@@ -144,6 +147,15 @@ def cap_message(limit: int) -> str:
         f'this chat has no code workspace yet, and none was created: the user already has {limit} saved '
         'workspaces, the most allowed. The user has been asked in the app to remove one of them (or to keep them '
         'all). Tell the user, and run the code again once they have removed one.'
+    )
+
+
+def cap_unanswered_message(limit: int) -> str:
+    """What the model is told at the cap when every workspace is already asked about for other chats (Q15)."""
+    return (
+        f'this chat has no code workspace yet, and none was created: the user already has {limit} saved '
+        'workspaces, the most allowed, and has not yet answered the requests to remove one that the app already '
+        'shows for other chats. Tell the user to answer those first, then run the code again.'
     )
 
 
@@ -350,6 +362,14 @@ class WorkspaceNotFound(LookupError):
 
 class WorkspaceBusy(Exception):
     """The workspace's chat is using its sandbox right now, so it cannot be removed; try again once it is done."""
+
+
+class WorkspaceChanged(Exception):
+    """The request the user answered is no longer the one recorded (answered, replaced or cleared meanwhile)."""
+
+
+class ListingBusy(Exception):
+    """A listing of this user's waiting workspaces is already running; one at a time per user."""
 
 
 class SandboxSession:
@@ -592,6 +612,11 @@ class SandboxManager:
         # cannot both take the last place.
         self._claim_lock = asyncio.Lock()
         self._listing = asyncio.Semaphore(LISTING_CONCURRENCY)
+        # Listings of stopped workspaces by (key, last use): a stopped volume does not change until it is used, so
+        # repeated dialog loads list it once. Bounded, oldest dropped first.
+        self._listings: OrderedDict[tuple[str, int], WorkspaceListing | None] = OrderedDict()
+        # Users with a listing of their waiting workspaces in progress (pending_listing).
+        self._listing_users: set[str] = set()
         self._clock = clock
         self._wall_clock = wall_clock
         self._wait_notice_s = wait_notice_s
@@ -817,9 +842,16 @@ class SandboxManager:
         recorded before an earlier create. Otherwise, under the claim lock,
         the chat's owner's records are counted: below `max_workspaces`, one
         is added, and any `cap` request made for this chat is cleared, since
-        it is answered; at the limit, nothing is added, a `cap` request is
-        recorded once for this chat (_ask_for_room), and SandboxError is
-        raised with cap_message as its public text.
+        it is answered. At the limit, a volume the backend already lists for
+        the key (made before the records existed) is recorded without the
+        check, since refusing it would create nothing; otherwise nothing is
+        added, a `cap` request is recorded once for this chat
+        (_ask_for_room), and SandboxError is raised: its public text is
+        cap_message, or cap_unanswered_message when every workspace is
+        already asked about for another chat, so nothing new could be asked.
+        The backend is listed only at the limit, so the common path costs it
+        nothing. False for a record of an existing volume, so a failed start
+        never drops it.
 
         Raises:
             SandboxRefused: The chat has no row, so no owner (deleted meanwhile).
@@ -841,11 +873,15 @@ class SandboxManager:
                             await self._workspaces.clear_pending(record.key)
                     log.info('recorded the workspace of chat %s for user %s', key, owner)
                     return True
-                await self._ask_for_room(key, held, now)
+                if any(info.chat_id == key and not info.ephemeral for info in await self._backend.list_sandboxes()):
+                    await self._workspaces.add(WorkspaceRecord(key, owner, key, now, now))
+                    log.info('recorded the existing workspace of chat %s for user %s, over the limit', key, owner)
+                    return False
+                asked = await self._ask_for_room(key, held, now)
+                limit = settings.max_workspaces
                 raise SandboxError(
-                    f'user {owner} holds {len(held)} workspaces, the limit is {settings.max_workspaces}; '
-                    f'chat {key} gets none',
-                    public=cap_message(settings.max_workspaces),
+                    f'user {owner} holds {len(held)} workspaces, the limit is {limit}; chat {key} gets none',
+                    public=cap_message(limit) if asked else cap_unanswered_message(limit),
                 )
         except SandboxError:
             raise
@@ -853,17 +889,19 @@ class SandboxManager:
             log.exception('could not check the workspace record of %s', key)
             raise SandboxError(f'could not check the workspace record of {key}', public=_RECORD_FAILED) from e
 
-    async def _ask_for_room(self, key: str, held: list[WorkspaceRecord], now: int) -> None:
+    async def _ask_for_room(self, key: str, held: list[WorkspaceRecord], now: int) -> bool:
         """Record one `cap` request for the chat `key`, on its owner's least recently used workspace not already asked
-        about for another chat; a no-op when one is recorded for `key` already, or every workspace is."""
+        about for another chat; True when the user has been asked for this chat (now or before), False when every
+        workspace is asked about for another chat, so nothing was recorded."""
         if any(r.pending_reason == 'cap' and r.pending_for == key for r in held):
-            return
+            return True
         free = [r for r in held if r.pending_reason != 'cap']
         if not free:
-            return
+            return False
         candidate = min(free, key=lambda r: (r.last_used_at, r.key))
         await self._workspaces.set_pending(candidate.key, 'cap', now, key)
         log.info('chat %s waits for room: asked user %s about workspace %s', key, candidate.user_id, candidate.key)
+        return True
 
     async def _touch(self, key: str) -> None:
         """Record a use of `key`'s workspace now; a failure is logged, since the call itself is done."""
@@ -1303,39 +1341,78 @@ class SandboxManager:
         """Each existing chat's title, for the deletion dialog."""
         return await self._workspaces.chat_titles(chat_ids)
 
-    async def workspace_contents(self, key: str) -> WorkspaceListing | None:
+    async def workspace_contents(self, key: str, last_used_at: int | None = None) -> WorkspaceListing | None:
         """What the workspace `key` holds (SandboxBackend.list_workspace), at most LIST_MAX_ENTRIES files listed.
 
         For trusted callers that have checked whose workspace it is. At most
         LISTING_CONCURRENCY listings run at once. None when it has no volume.
+        With `last_used_at` (its record's), the listing of a stopped
+        workspace is kept, LISTING_CACHE_SIZE at most, and served again while
+        that last use is the same: nothing changes a stopped volume until a
+        session uses it, which moves its last use. A running or held one is
+        always listed afresh.
 
         Raises:
             ValueError: `key` is not a canonical UUID.
             SandboxError: The backend could not list it.
         """
         key = validate_chat_id(key)
+        stamp = None if last_used_at is None or self._busy(key) else (key, last_used_at)
+        if stamp is not None and stamp in self._listings:
+            self._listings.move_to_end(stamp)
+            return self._listings[stamp]
         async with self._listing:
-            return await self._backend.list_workspace(key, LIST_MAX_ENTRIES)
+            listing = await self._backend.list_workspace(key, LIST_MAX_ENTRIES)
+        # Kept only if nothing took the workspace while it was listed.
+        if stamp is not None and not self._busy(key):
+            self._listings[stamp] = listing
+            while len(self._listings) > LISTING_CACHE_SIZE:
+                self._listings.popitem(last=False)
+        return listing
 
-    async def answer_pending(self, user_id: str, key: str, action: str, workspace: str | None = None) -> None:
+    @asynccontextmanager
+    async def pending_listing(self, user_id: str) -> AsyncIterator[None]:
+        """Hold the one listing of `user_id`'s waiting workspaces that may run at a time.
+
+        Raises:
+            ListingBusy: One is already running for this user.
+        """
+        if user_id in self._listing_users:
+            raise ListingBusy(user_id)
+        self._listing_users.add(user_id)
+        try:
+            yield
+        finally:
+            self._listing_users.discard(user_id)
+
+    async def answer_pending(
+        self, user_id: str, key: str, action: str, workspace: str | None = None, since: int | None = None
+    ) -> None:
         """Carry out the user's answer to the deletion that `key`'s workspace waits for (owner decision Q15).
 
         Only the user's own records are looked at, so another user's key is
-        WorkspaceNotFound, as a missing one is. `keep` clears the request:
-        for `expired` it also moves the last use to now, so it is not asked
-        about again until it expires again; for `cap` the chat that wanted
-        a new workspace stays without one (its next call asks again).
-        `remove` destroys a workspace and drops its record: for `expired`,
-        `key`'s own; for `cap`, `workspace` (another of the user's, `key`'s
-        own when None), clearing `key`'s request when it is another, after
-        which the waiting chat's next call creates its workspace.
+        WorkspaceNotFound, as a missing one is. `since` is the request's
+        `pending_since` as the user was shown it: a request answered,
+        cleared or replaced meanwhile (another `pending_since`) is
+        WorkspaceChanged, and the request is read again under the lock of
+        the workspace to remove, just before it goes. `keep` clears the
+        request: for `expired` it also moves the last use to now, so it is
+        not asked about again until it expires again; for `cap` the chat
+        that wanted a new workspace stays without one (its next call asks
+        again). `remove` destroys a workspace and drops its record: for
+        `expired`, `key`'s own; for `cap`, `workspace` (another of the
+        user's, `key`'s own when None), clearing `key`'s request when it is
+        another, after which the waiting chat's next call creates its
+        workspace. A workspace whose sandbox is running code is not removed.
 
         Raises:
             ValueError: `action` is neither, `keep` names a workspace, or an
                 `expired` request is answered by removing another.
             WorkspaceNotFound: `key` is not the user's or waits for nothing, or `workspace` is not the user's.
+            WorkspaceChanged: The request is not the one shown (`since`), or changed before the removal.
             WorkspaceBusy: The workspace to remove is in use.
             SandboxError: The backend could not destroy it; its record is kept.
+            Exception: The records could not be read or written.
         """
         if action not in ('remove', 'keep'):
             raise ValueError(f'the answer must be remove or keep, not {action!r}')
@@ -1343,6 +1420,8 @@ class SandboxManager:
         record = records.get(key)
         if record is None or record.pending_reason is None:
             raise WorkspaceNotFound(key)
+        if since is not None and record.pending_since != since:
+            raise WorkspaceChanged(key)
         if action == 'keep':
             if workspace is not None:
                 raise ValueError('keep names no workspace')
@@ -1355,19 +1434,32 @@ class SandboxManager:
             raise ValueError('an expired workspace is answered by removing it, or keeping it')
         if target not in records:
             raise WorkspaceNotFound(target)
-        await self._remove_workspace(target)
+        await self._remove_workspace(target, user_id, request=record)
         log.info('user %s removed workspace %s (%s request on %s)', user_id, target, record.pending_reason, key)
         if target != key:
             await self._workspaces.clear_pending(key)
 
-    async def _remove_workspace(self, key: str) -> None:
-        """Destroy `key`'s sandbox and volume and drop its record, under its lock; refused while it is in use."""
+    async def _remove_workspace(self, key: str, user_id: str, *, request: WorkspaceRecord) -> None:
+        """Destroy `key`'s sandbox and volume and drop its record, under its lock, once the request is still `request`
+        and `key` still the user's; refused while its sandbox is in use (held, or waited on)."""
         # Checked with no await before the lock is taken, so no session can take it in between.
         if key in self._locks:
             raise WorkspaceBusy(key)
         async with self._hold(key):
+            now = await self._workspaces.get(request.key)
+            if now is None or (now.pending_reason, now.pending_since, now.pending_for) != (
+                request.pending_reason,
+                request.pending_since,
+                request.pending_for,
+            ):
+                raise WorkspaceChanged(request.key)
+            target = now if key == request.key else await self._workspaces.get(key)
+            if target is None or target.user_id != user_id:
+                raise WorkspaceNotFound(key)
             await self._stop(key, destroy=True)
-            await self._workspaces.delete(key)
+            if not await self._drop_record(key):
+                # The volume is gone; the sweep drops the record once it is old enough (_prune).
+                raise SandboxError(f'workspace {key} was destroyed, but its record could not be dropped')
 
     async def startup_sweep(self) -> None:
         """Clean up after the previous process; it must run before the manager serves any session.
@@ -1380,9 +1472,16 @@ class SandboxManager:
         manager tracks, or a session holds or waits on, is skipped.
         Failures are logged per sandbox.
 
+        Listing helpers left behind (SandboxBackend.remove_helpers) are
+        removed first; a failure there is logged, not raised.
+
         Raises:
             SandboxError: Listing the sandboxes failed.
         """
+        try:
+            await self._backend.remove_helpers()
+        except Exception:
+            log.exception('could not remove the listing helpers a previous process left')
         for info in await self._backend.list_sandboxes():
             # Checked with no await before the lock is taken, so nobody can start it in between.
             if self._busy(info.chat_id):

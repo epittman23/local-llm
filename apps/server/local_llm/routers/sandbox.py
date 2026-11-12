@@ -14,7 +14,13 @@ from local_llm.constants import ERROR_MESSAGES
 from local_llm.internal.db import get_async_session
 from local_llm.models.files import Files
 from local_llm.sandbox.limits import HTML_MAX_BYTES
-from local_llm.sandbox.manager import SandboxManager, WorkspaceBusy, WorkspaceNotFound
+from local_llm.sandbox.manager import (
+    ListingBusy,
+    SandboxManager,
+    WorkspaceBusy,
+    WorkspaceChanged,
+    WorkspaceNotFound,
+)
 from local_llm.sandbox.outputs import decode_html, is_sandbox_output, with_policy
 from local_llm.sandbox.types import SandboxError, WorkspaceListing
 from local_llm.sandbox.workspaces import WorkspaceRecord
@@ -83,23 +89,29 @@ async def get_sandbox_output_html(
 # workspaces: the records are read by the caller's id, so another user's workspace is the same 404 as a missing one.
 
 
+_UNREADABLE = 'The workspaces could not be read'
+
+
 def _manager(request: Request) -> SandboxManager | None:
     return getattr(request.app.state, 'sandbox', None)
 
 
 def _contents(listing: WorkspaceListing) -> dict[str, Any]:
     return {
-        'files': [{'path': e.path, 'size': e.size, 'mtime': e.mtime} for e in listing.entries],
+        'files': [
+            {'path': e.path, 'size': e.size, 'mtime': e.mtime, 'truncated': e.truncated} for e in listing.entries
+        ],
         'file_count': listing.files,
         'total_bytes': listing.bytes,
         'complete': listing.complete,
     }
 
 
-async def _listed(manager: SandboxManager, key: str) -> tuple[dict[str, Any] | None, str | None]:
+async def _listed(manager: SandboxManager, record: WorkspaceRecord) -> tuple[dict[str, Any] | None, str | None]:
     """The workspace's contents for the dialog, or None and why not; an error's details are only logged."""
+    key = record.key
     try:
-        listing = await manager.workspace_contents(key)
+        listing = await manager.workspace_contents(key, record.last_used_at)
     except (SandboxError, ValueError):
         log.warning('could not list workspace %s for its deletion dialog', key, exc_info=True)
         return None, 'The contents could not be listed.'
@@ -113,7 +125,7 @@ async def _records(manager: SandboxManager, user_id: str) -> list[WorkspaceRecor
         return await manager.workspaces_of(user_id)
     except Exception:
         log.exception('could not read the workspace records of user %s', user_id)
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='The workspaces could not be read')
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_UNREADABLE) from None
 
 
 @router.get('/pending/ids')
@@ -131,17 +143,34 @@ async def get_pending_workspaces(request: Request, user=Depends(get_verified_use
 
     For a `cap` request, also the caller's other workspaces, any of which the
     user may remove instead. Listing a stopped workspace may start a helper
-    VM per workspace (SandboxManager.workspace_contents).
+    VM per workspace (SandboxManager.workspace_contents), so a stopped
+    workspace's listing is kept until its next use, and each user runs one
+    of these at a time: a second while the first runs is 429. 503 when the
+    records, the settings or the chat titles cannot be read.
     """
     manager = _manager(request)
     if manager is None:
         return {'pending': [], 'max_workspaces': None, 'retention_days': None}
-    settings = await manager.current_settings()
-    records = await _records(manager, user.id)
+    try:
+        async with manager.pending_listing(user.id):
+            return await _pending(manager, user.id)
+    except ListingBusy:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='The workspaces are being listed already'
+        ) from None
+
+
+async def _pending(manager: SandboxManager, user_id: str) -> dict[str, Any]:
+    records = await _records(manager, user_id)
     waiting = [r for r in records if r.pending_reason is not None]
     chats = {r.chat_id for r in records} | {r.pending_for for r in waiting if r.pending_for}
-    titles = await manager.chat_titles(sorted(chats)) if waiting else {}
-    listings = await asyncio.gather(*(_listed(manager, r.key) for r in waiting))
+    try:
+        settings = await manager.current_settings()
+        titles = await manager.chat_titles(sorted(chats)) if waiting else {}
+    except Exception:
+        log.exception('could not read the settings or chat titles for user %s', user_id)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_UNREADABLE) from None
+    listings = await asyncio.gather(*(_listed(manager, r) for r in waiting))
     pending = []
     for record, (contents, error) in zip(waiting, listings, strict=True):
         item: dict[str, Any] = {
@@ -179,6 +208,8 @@ class PendingAnswer(BaseModel):
 
     action: Literal['remove', 'keep']
     workspace: str | None = None
+    #: The request's `since` as the dialog showed it; a request changed since then is not answered (409).
+    since: int
 
 
 @router.post('/pending/{id}')
@@ -188,20 +219,26 @@ async def answer_pending_workspace(
     """Remove or keep the caller's workspace `id` that waits for an answer (SandboxManager.answer_pending).
 
     404 when `id` (or `workspace`) is not one of the caller's waiting workspaces, another user's included; 400
-    for an answer that does not fit the request; 409 while the workspace to remove is in use; 502 when the
-    backend could not remove it, which then stays.
+    for an answer that does not fit the request; 409 while the workspace to remove is running code, or when the
+    request is no longer the one shown (`since`); 502 when the backend could not remove it, which then stays, or
+    its record could not be dropped; 503 when the records cannot be read or written.
     """
     manager = _manager(request)
     if manager is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='The sandbox is not running')
     try:
-        await manager.answer_pending(user.id, id, form_data.action, form_data.workspace)
+        await manager.answer_pending(user.id, id, form_data.action, form_data.workspace, form_data.since)
     except WorkspaceNotFound:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND) from None
     except WorkspaceBusy:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="The workspace's chat is running code; try again once its reply has finished",
+        ) from None
+    except WorkspaceChanged:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This request changed since it was shown (answered or replaced); look at the list again',
         ) from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
@@ -210,4 +247,7 @@ async def answer_pending_workspace(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail='The workspace could not be removed; try again'
         ) from None
+    except Exception:
+        log.exception('could not read or change the workspace records of user %s', user.id)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_UNREADABLE) from None
     return {'ok': True}

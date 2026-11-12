@@ -174,11 +174,13 @@ class FileEntry:
         path: Relative to the directory that was listed.
         size: Size in bytes.
         mtime: Modification time, in seconds since the epoch.
+        truncated: The path was cut short for showing (a workspace listing keeps a bounded part of each name).
     """
 
     path: str
     size: int
     mtime: float
+    truncated: bool = False
 
 
 @dataclass(frozen=True)

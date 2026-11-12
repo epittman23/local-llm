@@ -83,6 +83,8 @@ MAX_PATH_BYTES: Final = 4096
 HELPER_TIMEOUT_S: Final = 30
 # The workspace listing the deletion dialog shows (T24): at most this many files are listed, with a total of all.
 LIST_MAX_ENTRIES: Final = 300
+# The most UTF-8 bytes of a path the listing shows; a longer one is cut, ending in an ellipsis, and marked as cut.
+LIST_PATH_MAX_BYTES: Final = 1024
 # Largest file `view` or `str_replace` reads, in bytes (10 MiB).
 VIEW_MAX_BYTES: Final = 10 * 1024 * 1024
 # Largest image `view` returns, in bytes: its data URI is stored with the chat and sent with every later request.

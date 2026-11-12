@@ -1120,7 +1120,11 @@ and, for `cap`, `pending_for_chat_id`, the chat whose new workspace
 waits. The manager reaches it only through `sandbox/workspaces.py`
 (`DatabaseWorkspaces`; tests use `MemoryWorkspaces`). A row is added
 before a volume's first create, under the key's lock and one claim lock,
-so two chats of one user cannot both take the last place; it is dropped
+so two chats of one user cannot both take the last place. Both locks are
+in the memory of the one backend process (the sandbox refuses to run
+under more than one uvicorn or gunicorn worker, `sandbox/lifespan.py`),
+so the cap holds within that process only, which is the only kind of
+deployment the sandbox supports. A row is dropped
 when the volume is destroyed (`release`, a deleted chat, the user's
 answer). Every session moves `last_used_at` when it ends, and that use
 also clears an `expired` request.
@@ -1132,7 +1136,13 @@ check comes before the slot wait, so nothing is evicted for it), records a
 asked about for another chat (once per waiting chat, however often the
 model retries), and raises a `SandboxError` whose public text tells the
 model that the user's workspace limit is reached and that the user has
-been asked in the app to remove one. Once a workspace is removed, the
+been asked in the app to remove one. When every workspace is already
+asked about for other chats, nothing new is recorded, and the text says
+instead that the user must first answer the requests the app already
+shows. A volume the backend already holds for the chat (made before the
+records existed) is recorded at the cap instead of refused, since
+refusing it would create nothing; the backend is listed for that only
+at the cap. Once a workspace is removed, the
 waiting chat's next call creates its workspace and clears any request
 made for it. A database error while checking fails closed, with a fixed
 message for the model.
@@ -1157,13 +1167,29 @@ options (`list_helper_options`): the `data` image under `kata-clh`, the
 volume mounted read-only at `/workspace`, `network_mode=none`, UID 1000,
 every capability dropped, a read-only root, 512 MiB and 16 processes.
 It runs a fixed script (`LIST_SCRIPT`) with `python -I -S` from `/`, which
-walks with `lstat` (no symlink is followed) and stops after 20 seconds;
-the backend waits at most 60 seconds, reads its stdout, removes it, and
-checks every field of the output (`parse_listing`), since the names are
-the model's. Nothing a caller or the model chose reaches its options. It
-holds the key's backend lock, attaches the image first (a reboot
-detaches it), and carries no `lllm.chat` label, so the sweeps never take
-it for a sandbox. At most two listings run at once.
+walks with `lstat` (no symlink is followed) and stops after 20 seconds.
+A name that is not UTF-8 has its bad bytes replaced (U+FFFD), and a path
+over `LIST_PATH_MAX_BYTES` (1,024 UTF-8 bytes) is cut at a character
+boundary, ends in an ellipsis and is marked `truncated`, so the output is
+bounded (`LIST_OUTPUT_MAX_BYTES` allows six bytes per path byte, JSON's
+worst escape) whatever names the model wrote. The backend waits at most
+60 seconds, reads its stdout and checks every field (`parse_listing`):
+an entry that is not what the script prints is dropped and the listing
+marked incomplete, and only a malformed whole is refused. Nothing a
+caller or the model chose reaches its options. It holds the key's
+backend lock, attaches the image first (a reboot detaches it), and
+carries no `lllm.chat` label, so the sweeps never take it for a sandbox.
+
+The helper is created, then started, and removed in a `finally` that
+covers a failed start too, since a helper left behind mounts the volume
+and would keep every later destroy from removing it. `stop` and
+`destroy` also remove the key's helper (this scope's only) before the
+volume, and the startup sweep first removes every `lllm.helper=list`
+container of this scope (`SandboxBackend.remove_helpers`), each under
+its key's lock; a failure there is logged. At most two listings run at
+once; a stopped workspace's listing is kept by (key, last use), up to
+`LISTING_CACHE_SIZE` (128) of them, since nothing changes a stopped
+volume until a session uses it, and a running one is listed afresh.
 
 **API** (`routers/sandbox.py`; each route reads the records by the
 caller's id, so another user's workspace is the same 404 as a missing
@@ -1172,24 +1198,38 @@ one):
 - `GET /api/v1/sandbox/pending/ids`: the ids of the caller's waiting
   workspaces, one query, which the app asks on load and after each reply.
 - `GET /api/v1/sandbox/pending`: each waiting workspace with its chat's
-  title, reason, times and contents (or why they could not be listed),
-  and for `cap` the waiting chat and the caller's other workspaces; plus
-  `max_workspaces` and `retention_days`.
-- `POST /api/v1/sandbox/pending/{id}` with `{"action": "remove"|"keep"}`
-  and, for `cap`, an optional `workspace` naming another of the caller's
+  title, reason, `since`, times and contents (or why they could not be
+  listed), and for `cap` the waiting chat and the caller's other
+  workspaces; plus `max_workspaces` and `retention_days`. One at a time
+  per user: a second while the first runs is 429. 503 when the records,
+  the settings or the chat titles cannot be read.
+- `POST /api/v1/sandbox/pending/{id}` with
+  `{"action": "remove"|"keep", "since": <the request's since>}` and, for
+  `cap`, an optional `workspace` naming another of the caller's
   workspaces to remove instead. `keep` on `expired` moves the last use to
   now, so it is not asked about again until it expires again; `keep` on
-  `cap` leaves the waiting chat without a workspace. 400 for an answer
-  that does not fit, 409 while the workspace to remove is running code,
-  502 when the backend could not destroy it (it stays).
+  `cap` leaves the waiting chat without a workspace. A request whose
+  `since` differs from the one shown (answered, cleared or replaced
+  meanwhile) is 409; a removal reads the request again under the lock of
+  the workspace to remove, just before it goes, and is 409 if it changed
+  then. 400 for an answer that does not fit, 409 also while the workspace
+  to remove is running code, 502 when the backend could not destroy it
+  (it stays) or its record could not be dropped afterwards, 503 when the
+  records cannot be read or written.
 
 **The dialog** (`apps/web/src/routes/chat/PendingWorkspacesDialog.tsx`,
 mounted in the app shell): opens when the ids list has one the user has
 not dismissed, lists each workspace's chat, reason and files with Remove
 and Keep (and, for `cap`, which workspace to remove), and "Decide later"
 hides it until a new request arrives or the app loads again. A finished
-reply in a saved chat asks for the ids again, so a call that hit the cap
-opens it at once.
+reply in a saved chat, or a Run, asks for the ids again, so a call that
+hit the cap opens it at once. It sends the `since` it showed with each
+answer, refetches the ids and the list after a refused answer, drops a
+removed workspace from the other items' choices, offers Retry when the
+list cannot be read, labels each button with its workspace's chat, and
+shows chat titles and file names isolated (`<bdi>`, or U+2068/U+2069 in
+the choices), so a right-to-left override in a name cannot reorder the
+text around it.
 
 Tests: `tests/test_sandbox_workspaces.py` (the cap, expiry, answers,
 routes, both stores), the listing cases in `tests/test_sandbox_kata_unit.py`

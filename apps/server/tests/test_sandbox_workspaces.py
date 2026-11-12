@@ -26,6 +26,7 @@ Run from apps/server (any LLLM_SECRET_KEY of 32 characters or more):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import logging
 import uuid
@@ -48,10 +49,18 @@ from local_llm.sandbox import (
     WorkspaceBusy,
     WorkspaceNotFound,
 )
+from local_llm.sandbox import manager as manager_module
 from local_llm.sandbox.backend import validate_list_workspace
 from local_llm.sandbox.fake import FakeBackend, FakeFile
 from local_llm.sandbox.limits import LIST_MAX_ENTRIES, SANDBOX_UID
-from local_llm.sandbox.manager import PRUNE_AFTER_S, cap_message
+from local_llm.sandbox.manager import (
+    LISTING_CACHE_SIZE,
+    PRUNE_AFTER_S,
+    ListingBusy,
+    WorkspaceChanged,
+    cap_message,
+    cap_unanswered_message,
+)
 from local_llm.sandbox.workspaces import DatabaseWorkspaces, MemoryWorkspaces, WorkspaceRecord
 from local_llm.utils.auth import create_token
 
@@ -229,13 +238,19 @@ def test_each_waiting_chat_gets_its_own_request_on_another_workspace():
         await rig.use(chat(0))
         rig.wall += 10
         await rig.use(chat(1))
-        for waiting in (chat(2), chat(3), chat(4)):
-            with pytest.raises(SandboxError):
+        errors = []
+        for waiting in (chat(2), chat(3), chat(4), chat(2)):
+            with pytest.raises(SandboxError) as raised:
                 await rig.use(waiting)
-        return rig
+            errors.append(raised.value.public)
+        return rig, errors
 
-    # The third waiting chat finds every workspace asked about already: it is refused, and nothing more recorded.
-    assert run(scenario()).pending() == {chat(0): ('cap', chat(2)), chat(1): ('cap', chat(3))}
+    rig, errors = run(scenario())
+    # The third waiting chat finds every workspace asked about already: it is refused, and nothing more recorded,
+    # so it is not told that the user has been asked; the first is still told so on a retry.
+    assert rig.pending() == {chat(0): ('cap', chat(2)), chat(1): ('cap', chat(3))}
+    assert errors == [cap_message(2), cap_message(2), cap_unanswered_message(2), cap_message(2)]
+    assert 'has not yet answered' in errors[2] and 'asked in the app to remove one' not in errors[2]
 
 
 def test_at_the_cap_the_refusal_comes_at_once_with_every_slot_taken_and_evicts_nothing():
@@ -770,6 +785,10 @@ class RouteRig:
 
         asyncio.run(go())
 
+    def since(self, key: str) -> int:
+        """The `since` of `key`'s request, as the dialog shows it."""
+        return self.store.records[key].pending_since or 0
+
     def at_cap(self) -> None:
         """Alice holds chats 0 and 1, chat 2 waits for room; bob holds 10 and 11, chat 12 waits."""
         for n in (0, 1):
@@ -799,7 +818,7 @@ def test_get_pending_lists_the_caller_s_requests_with_contents_and_choices(peopl
     assert (item['chat_title'], item['reason']) == ('Chat 0', 'cap')
     assert (item['waiting_chat_id'], item['waiting_chat_title']) == (chat(2), 'Chat 2')
     assert item['contents'] == {
-        'files': [{'path': 'notes.md', 'size': 7, 'mtime': 1.5}],
+        'files': [{'path': 'notes.md', 'size': 7, 'mtime': 1.5, 'truncated': False}],
         'file_count': 1,
         'total_bytes': 7,
         'complete': True,
@@ -841,13 +860,17 @@ def test_nothing_pending_is_an_empty_list(people):
 def test_the_routes_refuse_another_user_s_workspace_with_the_same_404(people):
     rig = RouteRig(people)
     rig.at_cap()
-    missing = rig.client.post(f'/sandbox/pending/{uuid.uuid4()}', json={'action': 'keep'}, headers=people.bob.headers)
-    for answer in ({'action': 'remove'}, {'action': 'keep'}):
+    missing = rig.client.post(
+        f'/sandbox/pending/{uuid.uuid4()}', json={'action': 'keep', 'since': 0}, headers=people.bob.headers
+    )
+    for answer in ({'action': 'remove', 'since': rig.since(chat(0))}, {'action': 'keep', 'since': rig.since(chat(0))}):
         r = rig.client.post(f'/sandbox/pending/{chat(0)}', json=answer, headers=people.bob.headers)
         assert (r.status_code, r.json()) == (404, missing.json())
     # Bob's request may not name alice's workspace either.
     r = rig.client.post(
-        f'/sandbox/pending/{chat(10)}', json={'action': 'remove', 'workspace': chat(1)}, headers=people.bob.headers
+        f'/sandbox/pending/{chat(10)}',
+        json={'action': 'remove', 'workspace': chat(1), 'since': rig.since(chat(10))},
+        headers=people.bob.headers,
     )
     assert (r.status_code, r.json()) == (404, missing.json())
     assert missing.status_code == 404
@@ -858,7 +881,9 @@ def test_post_remove_then_the_waiting_chat_creates(people):
     rig = RouteRig(people)
     rig.at_cap()
     r = rig.client.post(
-        f'/sandbox/pending/{chat(0)}', json={'action': 'remove', 'workspace': chat(1)}, headers=people.alice.headers
+        f'/sandbox/pending/{chat(0)}',
+        json={'action': 'remove', 'workspace': chat(1), 'since': rig.since(chat(0))},
+        headers=people.alice.headers,
     )
     assert (r.status_code, r.json()) == (200, {'ok': True})
     assert chat(1) not in rig.backend.sandboxes
@@ -870,7 +895,11 @@ def test_post_remove_then_the_waiting_chat_creates(people):
 def test_post_keep_clears_the_request(people):
     rig = RouteRig(people)
     rig.at_cap()
-    r = rig.client.post(f'/sandbox/pending/{chat(0)}', json={'action': 'keep'}, headers=people.alice.headers)
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}',
+        json={'action': 'keep', 'since': rig.since(chat(0))},
+        headers=people.alice.headers,
+    )
     assert r.status_code == 200, r.text
     assert rig.client.get('/sandbox/pending/ids', headers=people.alice.headers).json() == {'ids': []}
     assert chat(0) in rig.backend.sandboxes
@@ -882,11 +911,14 @@ def test_post_keep_clears_the_request(people):
         ({'action': 'delete'}, 422),
         ({'action': 'keep', 'extra': 1}, 422),
         ({'action': 'keep', 'workspace': 'x'}, 400),
+        ({'action': 'keep', 'since': None}, 422),
+        ({'action': 'keep', 'since': 'later'}, 422),
     ],
 )
 def test_post_refuses_a_malformed_answer(people, body, code):
     rig = RouteRig(people)
     rig.at_cap()
+    body = {'since': rig.since(chat(0)), **body}
     r = rig.client.post(f'/sandbox/pending/{chat(0)}', json=body, headers=people.alice.headers)
     assert r.status_code == code, r.text
 
@@ -902,7 +934,11 @@ def test_post_while_the_workspace_is_in_use_is_409_and_a_failed_destroy_502(peop
         raise WorkspaceBusy(chat(0))
 
     rig.manager.answer_pending = busy
-    r = rig.client.post(f'/sandbox/pending/{chat(0)}', json={'action': 'remove'}, headers=people.alice.headers)
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}',
+        json={'action': 'remove', 'since': rig.since(chat(0))},
+        headers=people.alice.headers,
+    )
     assert r.status_code == 409 and 'running code' in r.json()['detail']
     rig.manager.answer_pending = real
 
@@ -910,7 +946,11 @@ def test_post_while_the_workspace_is_in_use_is_409_and_a_failed_destroy_502(peop
         raise SandboxError('/var/lib/docker')
 
     rig.backend.destroy = broken
-    r = rig.client.post(f'/sandbox/pending/{chat(0)}', json={'action': 'remove'}, headers=people.alice.headers)
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}',
+        json={'action': 'remove', 'since': rig.since(chat(0))},
+        headers=people.alice.headers,
+    )
     assert r.status_code == 502 and 'docker' not in r.text
 
 
@@ -921,7 +961,7 @@ def test_the_routes_without_a_manager(people):
     client = TestClient(app)
     assert client.get('/sandbox/pending', headers=people.alice.headers).json()['pending'] == []
     assert client.get('/sandbox/pending/ids', headers=people.alice.headers).json() == {'ids': []}
-    r = client.post(f'/sandbox/pending/{chat(0)}', json={'action': 'keep'}, headers=people.alice.headers)
+    r = client.post(f'/sandbox/pending/{chat(0)}', json={'action': 'keep', 'since': 0}, headers=people.alice.headers)
     assert r.status_code == 503
 
 
@@ -1002,3 +1042,241 @@ def test_memory_workspaces_add_refuses_a_key_it_has():
         return first, second, store.records['k'].user_id
 
     assert run(scenario()) == (True, False, 'u')
+
+
+# Review fixes.
+
+
+def test_a_volume_made_before_the_records_is_recorded_at_the_cap_not_refused():
+    async def scenario():
+        rig = Rig(max_workspaces=1)
+        await rig.use(chat(0))
+        # Below the limit the claim never lists the backend.
+        listed_under = [name for name, _ in rig.backend.calls if name == 'list_sandboxes']
+        await rig.backend.create(chat(1), SandboxSpec(chat(1), 'data'))
+        await rig.backend.stop(chat(1))
+        await rig.use(chat(1))
+        return rig, listed_under
+
+    rig, listed_under = run(scenario())
+    assert listed_under == []
+    assert set(rig.store.records) == {chat(0), chat(1)}
+    assert rig.pending() == {}
+
+
+def test_a_stopped_workspace_s_listing_is_kept_until_its_next_use_and_bounded(monkeypatch):
+    async def scenario():
+        rig = Rig()
+        await rig.use(chat(0))
+        await rig.backend.stop(chat(0))
+        rig.manager._forget(chat(0))
+        first = await rig.manager.workspace_contents(chat(0), 100)
+        again = await rig.manager.workspace_contents(chat(0), 100)
+        after_use = await rig.manager.workspace_contents(chat(0), 101)
+        no_stamp = await rig.manager.workspace_contents(chat(0))
+        # A running one is listed afresh every time.
+        await rig.use(chat(0))
+        await rig.manager.workspace_contents(chat(0), 101)
+        await rig.manager.workspace_contents(chat(0), 101)
+        monkeypatch.setattr(manager_module, 'LISTING_CACHE_SIZE', 2)
+        await rig.backend.stop(chat(0))
+        rig.manager._forget(chat(0))
+        for stamp in (200, 201, 202):
+            await rig.manager.workspace_contents(chat(0), stamp)
+        return rig, first, again, after_use, no_stamp
+
+    rig, first, again, after_use, no_stamp = run(scenario())
+    assert first is again
+    assert first == after_use == no_stamp
+    lists = [name for name, _ in rig.backend.calls if name == 'list_workspace']
+    # 100, 101 (after use), no stamp, two while running, then 200, 201, 202.
+    assert len(lists) == 8
+    assert len(rig.manager._listings) == 2
+    assert LISTING_CACHE_SIZE >= 64
+
+
+def test_one_pending_listing_per_user_at_a_time():
+    async def scenario():
+        rig = Rig()
+        async with rig.manager.pending_listing('alice'):
+            with pytest.raises(ListingBusy):
+                async with rig.manager.pending_listing('alice'):
+                    pass
+            async with rig.manager.pending_listing('bob'):
+                pass
+        async with rig.manager.pending_listing('alice'):
+            pass
+        return rig
+
+    assert run(scenario()).manager._listing_users == set()
+
+
+def test_an_answer_to_a_request_that_changed_is_refused():
+    async def scenario():
+        rig = Rig(max_workspaces=1)
+        await rig.use(chat(0))
+        with pytest.raises(SandboxError):
+            await rig.use(chat(1))
+        shown = rig.store.records[chat(0)].pending_since
+        for action in ('keep', 'remove'):
+            with pytest.raises(WorkspaceChanged):
+                await rig.manager.answer_pending('alice', chat(0), action, since=shown - 1)
+        return rig
+
+    rig = run(scenario())
+    assert chat(0) in rig.backend.sandboxes
+    assert rig.pending() == {chat(0): ('cap', chat(1))}
+
+
+@pytest.mark.parametrize('change', ['cleared', 'replaced', 'target gone'])
+def test_a_request_is_read_again_under_the_lock_just_before_the_removal(change):
+    async def scenario():
+        rig = Rig(max_workspaces=2)
+        await rig.use(chat(0))
+        rig.wall += 10
+        await rig.use(chat(1))
+        with pytest.raises(SandboxError):
+            await rig.use(chat(2))
+        shown = rig.store.records[chat(0)].pending_since
+        real = rig.manager._hold
+
+        @contextlib.asynccontextmanager
+        async def hold(key):
+            # What another answer or a session did while this one waited for the lock.
+            if change == 'cleared':
+                await rig.store.clear_pending(chat(0))
+            elif change == 'replaced':
+                await rig.store.set_pending(chat(0), 'cap', shown, chat(3))
+            else:
+                await rig.store.delete(chat(1))
+            async with real(key):
+                yield
+
+        rig.manager._hold = hold
+        expected = WorkspaceNotFound if change == 'target gone' else WorkspaceChanged
+        with pytest.raises(expected):
+            await rig.manager.answer_pending('alice', chat(0), 'remove', workspace=chat(1), since=shown)
+        return rig
+
+    rig = run(scenario())
+    assert {chat(0), chat(1)} <= set(rig.backend.sandboxes)
+
+
+def test_removing_another_workspace_whose_sandbox_runs_code_is_refused():
+    async def scenario():
+        rig = Rig(max_workspaces=2)
+        await rig.use(chat(0))
+        rig.wall += 10
+        await rig.use(chat(1))
+        with pytest.raises(SandboxError):
+            await rig.use(chat(2))
+        async with rig.manager.session(chat(1), ALICE):
+            with pytest.raises(WorkspaceBusy):
+                await rig.manager.answer_pending('alice', chat(0), 'remove', workspace=chat(1))
+        return rig
+
+    rig = run(scenario())
+    assert chat(1) in rig.backend.sandboxes
+    assert rig.pending() == {chat(0): ('cap', chat(2))}
+
+
+def test_a_record_that_cannot_be_dropped_after_the_removal_is_a_sandbox_error():
+    async def scenario():
+        rig = Rig(max_workspaces=1)
+        await rig.use(chat(0))
+        with pytest.raises(SandboxError):
+            await rig.use(chat(1))
+
+        async def broken(key):
+            raise RuntimeError('down')
+
+        rig.store.delete = broken
+        with pytest.raises(SandboxError, match='could not be dropped'):
+            await rig.manager.answer_pending('alice', chat(0), 'remove')
+        return rig
+
+    assert chat(0) not in run(scenario()).backend.sandboxes
+
+
+def test_the_fake_listing_cuts_a_long_path_as_the_script_does():
+    async def scenario():
+        rig = Rig()
+        await rig.use(chat(0))
+        files = rig.backend.sandboxes[chat(0)].files
+        name = 'é' * 600
+        files[f'/workspace/{name}'] = FakeFile(content=b'x', uid=SANDBOX_UID, mode=0o644)
+        return await rig.manager.workspace_contents(chat(0))
+
+    listing = run(scenario())
+    assert listing is not None
+    [entry] = listing.entries
+    assert entry.truncated and entry.path.endswith('\u2026') and len(entry.path.encode()) <= 1024
+
+
+def test_get_pending_serves_a_stopped_workspace_s_listing_from_the_cache_and_one_at_a_time(people):
+    rig = RouteRig(people)
+    rig.at_cap()
+    for key in (chat(0), chat(1)):
+        asyncio.run(rig.backend.stop(key))
+        rig.manager._forget(key)
+    for _ in range(2):
+        assert rig.client.get('/sandbox/pending', headers=people.alice.headers).status_code == 200
+    assert [kw['chat_id'] for name, kw in rig.backend.calls if name == 'list_workspace'] == [chat(0)]
+    rig.manager._listing_users.add(people.alice.id)
+    r = rig.client.get('/sandbox/pending', headers=people.alice.headers)
+    assert r.status_code == 429
+    # Another user is not held up.
+    assert rig.client.get('/sandbox/pending', headers=people.bob.headers).status_code == 200
+
+
+def test_post_with_a_stale_since_is_409(people):
+    rig = RouteRig(people)
+    rig.at_cap()
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}',
+        json={'action': 'remove', 'since': rig.since(chat(0)) - 1},
+        headers=people.alice.headers,
+    )
+    assert r.status_code == 409 and 'changed since it was shown' in r.json()['detail']
+    assert chat(0) in rig.backend.sandboxes
+
+
+@pytest.mark.parametrize('broken', ['current_settings', 'chat_titles'])
+def test_get_pending_maps_a_settings_or_titles_failure_to_503(people, broken):
+    rig = RouteRig(people)
+    rig.at_cap()
+
+    async def fail(*args):
+        raise RuntimeError('postgres://secret')
+
+    setattr(rig.manager, broken, fail)
+    r = rig.client.get('/sandbox/pending', headers=people.alice.headers)
+    assert r.status_code == 503 and 'secret' not in r.text
+    # The per-user hold is released after a failure.
+    assert rig.manager._listing_users == set()
+
+
+def test_post_maps_a_records_failure_to_503_and_a_failed_record_drop_to_502(people):
+    rig = RouteRig(people)
+    rig.at_cap()
+    since = rig.since(chat(0))
+    real = rig.store.of_user
+
+    async def down(user_id):
+        raise RuntimeError('postgres://secret')
+
+    rig.store.of_user = down
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}', json={'action': 'keep', 'since': since}, headers=people.alice.headers
+    )
+    assert r.status_code == 503 and 'secret' not in r.text
+    rig.store.of_user = real
+
+    async def broken(key):
+        raise RuntimeError('postgres://secret')
+
+    rig.store.delete = broken
+    r = rig.client.post(
+        f'/sandbox/pending/{chat(0)}', json={'action': 'remove', 'since': since}, headers=people.alice.headers
+    )
+    assert r.status_code == 502 and 'secret' not in r.text

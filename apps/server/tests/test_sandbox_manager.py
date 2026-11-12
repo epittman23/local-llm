@@ -1604,7 +1604,7 @@ def test_the_startup_sweep_leaves_a_sandbox_this_manager_already_runs():
         return rig
 
     rig = run(scenario())
-    assert rig.names() == ['list_sandboxes']
+    assert rig.names() == ['remove_helpers', 'list_sandboxes']
     assert rig.backend.sandboxes[CHAT_A].running
 
 
@@ -2686,3 +2686,22 @@ def test_a_backend_call_that_ends_cancelled_on_its_own_is_a_sandbox_error_not_an
     with pytest.raises(SandboxError) as caught:
         asyncio.run(go())
     assert caught.value.public == 'the sandbox call was interrupted; try again'
+
+
+def test_the_startup_sweep_removes_leftover_helpers_first_and_a_failure_there_is_only_logged(caplog):
+    async def scenario():
+        rig = Rig()
+        await rig.make_volume(CHAT_A, running=True)
+
+        async def broken():
+            rig.backend.calls.append(('remove_helpers', {}))
+            raise SandboxError('docker is down')
+
+        rig.backend.remove_helpers = broken
+        await rig.manager.startup_sweep()
+        return rig
+
+    with caplog.at_level(logging.ERROR, logger='local_llm.sandbox.manager'):
+        rig = run(scenario())
+    assert rig.names() == ['remove_helpers', 'list_sandboxes', 'stop']
+    assert 'could not remove the listing helpers' in caplog.text

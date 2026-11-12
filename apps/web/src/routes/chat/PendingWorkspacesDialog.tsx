@@ -18,13 +18,20 @@ import {
 	getPendingWorkspaces,
 	PENDING_WORKSPACE_IDS_KEY,
 	type PendingWorkspace,
-	type PendingWorkspaces
+	type PendingWorkspaces,
+	type WorkspaceFile
 } from '@/lib/apis/sandbox';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { formatFileSize } from '@/lib/utils/files';
 
 const title = (t: string | null | undefined) => t || 'Untitled chat';
+/**
+ * A name the model or user chose, isolated from the text around it (U+2068 FIRST STRONG ISOLATE ... U+2069 POP
+ * DIRECTIONAL ISOLATE), for places that take text only, such as an <option>: a right-to-left override in a chat
+ * title or a file name cannot reorder the words around it. In markup, <bdi> does the same.
+ */
+const isolated = (t: string) => `\u2068${t}\u2069`;
 
 /** Why this workspace waits, in the user's terms. */
 function reasonText(item: PendingWorkspace, data: PendingWorkspaces): string {
@@ -33,7 +40,20 @@ function reasonText(item: PendingWorkspace, data: PendingWorkspaces): string {
 		return `Not used${days} (last used ${formatSecondsTimestamp(item.last_used_at)}). Remove it to free its disk, or keep it.`;
 	}
 	const limit = data.max_workspaces ? ` (${data.max_workspaces})` : '';
-	return `"${title(item.waiting_chat_title)}" needs a code workspace, and you have the most allowed${limit}. Remove one to make room, or keep them all: that chat then runs no code until you remove one.`;
+	return `"${isolated(title(item.waiting_chat_title))}" needs a code workspace, and you have the most allowed${limit}. Remove one to make room, or keep them all: that chat then runs no code until you remove one.`;
+}
+
+/**
+ * Each file with a key unique in the list: its path, and how many times that path came before, since a name cut
+ * short, or with bad bytes replaced, can repeat another's.
+ */
+function rowKeys(files: WorkspaceFile[]): [string, WorkspaceFile][] {
+	const seen = new Map<string, number>();
+	return files.map((f) => {
+		const n = seen.get(f.path) ?? 0;
+		seen.set(f.path, n + 1);
+		return [`${n}:${f.path}`, f];
+	});
 }
 
 /** The workspace's files as the server listed them, capped, with totals over all of them. */
@@ -61,9 +81,12 @@ function Contents({ item }: { item: PendingWorkspace }) {
 							</tr>
 						</thead>
 						<tbody>
-							{contents.files.map((f) => (
-								<tr key={f.path} className="border-t">
-									<td className="px-2 py-1 break-all">{f.path}</td>
+							{rowKeys(contents.files).map(([key, f]) => (
+								<tr key={key} className="border-t">
+									<td className="px-2 py-1 break-all">
+										<bdi>{f.path}</bdi>
+										{f.truncated ? <span className="text-muted-foreground"> (name shortened)</span> : null}
+									</td>
 									<td className="px-2 py-1 text-right whitespace-nowrap">{formatFileSize(f.size)}</td>
 									<td className="px-2 py-1 text-right whitespace-nowrap">
 										{formatSecondsTimestamp(Math.floor(f.mtime))}
@@ -83,11 +106,13 @@ const detailsKey = (ids: string[]) => ['sandbox', 'pending-workspace-details', i
 function PendingItem({
 	item,
 	data,
-	onAnswered
+	onAnswered,
+	onFailed
 }: {
 	item: PendingWorkspace;
 	data: PendingWorkspaces;
-	onAnswered: (gone: string[]) => void;
+	onAnswered: (answered: string, removed: string | null) => void;
+	onFailed: () => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [target, setTarget] = useState(item.id);
@@ -97,12 +122,13 @@ function PendingItem({
 	const answer = async (action: 'remove' | 'keep') => {
 		setBusy(true);
 		try {
-			await answerPendingWorkspace(token, item.id, action, action === 'remove' ? target : undefined);
+			await answerPendingWorkspace(token, item.id, action, item.since ?? 0, action === 'remove' ? target : undefined);
 			toast.success(action === 'remove' ? 'Workspace removed.' : 'Workspace kept.');
-			// The answered request goes, and so does a removed workspace's own, if it had one.
-			onAnswered(action === 'remove' ? [item.id, target] : [item.id]);
+			onAnswered(item.id, action === 'remove' ? target : null);
 		} catch (err) {
 			toast.error(errorMessage(err, 'The answer could not be saved.'));
+			// The request may have changed or gone meanwhile (404, 409): show the list as it is now.
+			onFailed();
 		} finally {
 			setBusy(false);
 		}
@@ -115,7 +141,9 @@ function PendingItem({
 			data-testid="pending-workspace"
 		>
 			<div className="flex flex-wrap items-baseline justify-between gap-2">
-				<h3 className="text-sm font-medium">{title(item.chat_title)}</h3>
+				<h3 className="text-sm font-medium">
+					<bdi>{title(item.chat_title)}</bdi>
+				</h3>
 				<span className="text-muted-foreground text-xs">
 					{item.reason === 'cap' ? 'Workspace limit reached' : 'Unused'}
 				</span>
@@ -133,21 +161,33 @@ function PendingItem({
 						aria-label="Workspace to remove"
 					>
 						<option value={item.id}>
-							{title(item.chat_title)} (last used {formatSecondsTimestamp(item.last_used_at)})
+							{isolated(title(item.chat_title))} (last used {formatSecondsTimestamp(item.last_used_at)})
 						</option>
 						{others.map((w) => (
 							<option key={w.id} value={w.id}>
-								{title(w.chat_title)} (last used {formatSecondsTimestamp(w.last_used_at)})
+								{isolated(title(w.chat_title))} (last used {formatSecondsTimestamp(w.last_used_at)})
 							</option>
 						))}
 					</select>
 				</label>
 			)}
 			<div className="flex justify-end gap-2">
-				<Button size="sm" variant="outline" disabled={busy} onClick={() => answer('keep')}>
+				<Button
+					size="sm"
+					variant="outline"
+					disabled={busy}
+					onClick={() => answer('keep')}
+					aria-label={`Keep workspace of ${title(item.chat_title)}`}
+				>
 					Keep
 				</Button>
-				<Button size="sm" variant="destructive" disabled={busy} onClick={() => answer('remove')}>
+				<Button
+					size="sm"
+					variant="destructive"
+					disabled={busy}
+					onClick={() => answer('remove')}
+					aria-label={`Remove workspace of ${title(item.chat_title)}`}
+				>
 					{busy ? <Spinner className="size-3" /> : null}
 					Remove
 				</Button>
@@ -189,17 +229,26 @@ export function PendingWorkspacesDialog() {
 		refetchOnWindowFocus: false
 	});
 	const close = () => setDismissed(new Set([...dismissed, ...waiting]));
-	// The answered items leave the list as it is, without listing the others again; then the ids are asked anew.
-	const answered = (gone: string[]) => {
-		const left = waiting.filter((id) => !gone.includes(id));
+	// The answered items leave the list as it is, without listing the others again, and a removed workspace leaves
+	// every other item's choices; then the ids are asked anew.
+	const answered = (request: string, removed: string | null) => {
+		// The answered request goes, and so does a removed workspace's own request, if it had one.
+		const left = waiting.filter((id) => id !== request && id !== removed);
 		if (details.data) {
 			queryClient.setQueryData<PendingWorkspaces>(detailsKey(left), {
 				...details.data,
-				pending: details.data.pending.filter((p) => left.includes(p.id))
+				pending: details.data.pending
+					.filter((p) => left.includes(p.id))
+					.map((p) => (p.workspaces ? { ...p, workspaces: p.workspaces.filter((w) => w.id !== removed) } : p))
 			});
 		}
 		queryClient.setQueryData<string[]>(PENDING_WORKSPACE_IDS_KEY, left);
 		void queryClient.invalidateQueries({ queryKey: PENDING_WORKSPACE_IDS_KEY });
+	};
+	// After a refused answer: the ids and the list are asked again, as they are now.
+	const failed = () => {
+		void queryClient.invalidateQueries({ queryKey: PENDING_WORKSPACE_IDS_KEY });
+		void queryClient.invalidateQueries({ queryKey: detailsKey(waiting) });
 	};
 
 	return (
@@ -216,11 +265,18 @@ export function PendingWorkspacesDialog() {
 						<Spinner className="size-4" /> Listing the workspaces...
 					</div>
 				) : details.isError ? (
-					<p className="text-destructive text-sm">The workspaces could not be listed: {errorMessage(details.error)}</p>
+					<div className="flex items-center gap-2">
+						<p className="text-destructive text-sm">
+							The workspaces could not be listed: {errorMessage(details.error)}
+						</p>
+						<Button size="sm" variant="outline" onClick={() => void details.refetch()}>
+							Retry
+						</Button>
+					</div>
 				) : (
 					<div className="space-y-3">
 						{details.data.pending.map((item) => (
-							<PendingItem key={item.id} item={item} data={details.data} onAnswered={answered} />
+							<PendingItem key={item.id} item={item} data={details.data} onAnswered={answered} onFailed={failed} />
 						))}
 					</div>
 				)}

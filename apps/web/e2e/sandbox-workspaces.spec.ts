@@ -67,9 +67,9 @@ test('on load, a workspace unused too long is shown with its contents, and Remov
 	await expect(item.getByRole('cell', { name: 'outputs/plot.png' })).toBeVisible();
 	await expect(item.getByTestId('workspace-totals')).toHaveText('2 files, 2.5 KB');
 
-	await item.getByRole('button', { name: 'Remove' }).click();
+	await item.getByRole('button', { name: 'Remove workspace of Sales analysis' }).click();
 	await expect(dialog).toHaveCount(0);
-	expect(answers).toEqual([{ id: W1, body: { action: 'remove' } }]);
+	expect(answers).toEqual([{ id: W1, body: { action: 'remove', since: 1_700_000_000 } }]);
 });
 
 test('a reply whose code hit the workspace limit opens the dialog, where another workspace can go', async ({
@@ -94,11 +94,11 @@ test('a reply whose code hit the workspace limit opens the dialog, where another
 
 	await expect(dialog).toBeVisible();
 	const item = dialog.getByRole('region', { name: 'Workspace of Sales analysis' });
-	await expect(item).toContainText('"Code" needs a code workspace, and you have the most allowed (20)');
+	await expect(item).toContainText('"\u2068Code\u2069" needs a code workspace, and you have the most allowed (20)');
 	await item.getByLabel('Workspace to remove').selectOption(W2);
-	await item.getByRole('button', { name: 'Remove' }).click();
+	await item.getByRole('button', { name: 'Remove workspace of Sales analysis' }).click();
 	await expect(dialog).toHaveCount(0);
-	expect(answers).toEqual([{ id: W1, body: { action: 'remove', workspace: W2 } }]);
+	expect(answers).toEqual([{ id: W1, body: { action: 'remove', since: 1_700_000_000, workspace: W2 } }]);
 });
 
 test('Decide later closes the dialog and Keep answers without deleting', async ({ page }) => {
@@ -114,10 +114,10 @@ test('Decide later closes the dialog and Keep answers without deleting', async (
 	await page.reload();
 	await dialog
 		.getByRole('region', { name: 'Workspace of Sales analysis' })
-		.getByRole('button', { name: 'Keep' })
+		.getByRole('button', { name: 'Keep workspace of Sales analysis' })
 		.click();
 	await expect(dialog).toHaveCount(0);
-	expect(answers).toEqual([{ id: W1, body: { action: 'keep' } }]);
+	expect(answers).toEqual([{ id: W1, body: { action: 'keep', since: 1_700_000_000 } }]);
 });
 
 test('a Run that hit the workspace limit opens the dialog too', async ({ page }) => {

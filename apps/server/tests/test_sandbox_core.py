@@ -778,6 +778,7 @@ _BACKEND_METHODS = [
     'put_files',
     'put_uploads',
     'ready',
+    'remove_helpers',
     'stat',
     'stop',
 ]

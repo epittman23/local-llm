@@ -120,22 +120,22 @@ describe('the pending workspace routes', () => {
 	});
 	it('posts an answer, naming another workspace only when it is another', async () => {
 		const fetch = stubFetch(() => Response.json({ ok: true }));
-		await answerPendingWorkspace('tok', 'w/1', 'remove', 'w2');
-		await answerPendingWorkspace('tok', 'w1', 'remove', 'w1');
-		await answerPendingWorkspace('tok', 'w1', 'keep');
+		await answerPendingWorkspace('tok', 'w/1', 'remove', 7, 'w2');
+		await answerPendingWorkspace('tok', 'w1', 'remove', 7, 'w1');
+		await answerPendingWorkspace('tok', 'w1', 'keep', 8);
 		expect(fetch.mock.calls.map(([url, init]) => [url, init?.method, JSON.parse(String(init?.body))])).toEqual([
-			['/api/v1/sandbox/pending/w%2F1', 'POST', { action: 'remove', workspace: 'w2' }],
-			['/api/v1/sandbox/pending/w1', 'POST', { action: 'remove' }],
-			['/api/v1/sandbox/pending/w1', 'POST', { action: 'keep' }]
+			['/api/v1/sandbox/pending/w%2F1', 'POST', { action: 'remove', since: 7, workspace: 'w2' }],
+			['/api/v1/sandbox/pending/w1', 'POST', { action: 'remove', since: 7 }],
+			['/api/v1/sandbox/pending/w1', 'POST', { action: 'keep', since: 8 }]
 		]);
 	});
 	it('throws a refusal body and an unreachable server', async () => {
 		stubFetch(() => Response.json({ detail: 'busy' }, { status: 409 }));
-		await expect(answerPendingWorkspace('t', 'w', 'remove')).rejects.toEqual({ detail: 'busy' });
+		await expect(answerPendingWorkspace('t', 'w', 'remove', 1)).rejects.toEqual({ detail: 'busy' });
 		await expect(getPendingWorkspaces('t')).rejects.toEqual({ detail: 'busy' });
 		await expect(getPendingWorkspaceIds('t')).rejects.toEqual({ detail: 'busy' });
 		stubFetch(() => Promise.reject(new TypeError('failed')));
-		await expect(answerPendingWorkspace('t', 'w', 'keep')).rejects.toBeInstanceOf(ServerUnreachableError);
+		await expect(answerPendingWorkspace('t', 'w', 'keep', 1)).rejects.toBeInstanceOf(ServerUnreachableError);
 		await expect(getPendingWorkspaces('t')).rejects.toBeInstanceOf(ServerUnreachableError);
 		await expect(getPendingWorkspaceIds('t')).rejects.toBeInstanceOf(ServerUnreachableError);
 	});

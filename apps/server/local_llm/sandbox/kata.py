@@ -86,6 +86,7 @@ from local_llm.sandbox.limits import (
     HOST_DEADLINE_SLACK_S,
     KILL_GRACE_S,
     LIST_MAX_ENTRIES,
+    LIST_PATH_MAX_BYTES,
     MAX_PATH_BYTES,
     MEMORY_LIMIT,
     NANO_CPUS,
@@ -266,11 +267,20 @@ done
 # (list_helper_options): every regular file's path, size and modification time, the first `limit` of them kept and
 # all of them counted, as one line of JSON on stdout. It walks with lstat, so it follows no symlink; skips, and
 # notes, what it may not read; and stops at its time budget. Run with `python -I -S` from `/`, so nothing on the
-# volume is imported. Its arguments are the limit, the budget in seconds and the directory, all fixed by the backend.
+# volume is imported. Its arguments are the limit, the budget in seconds, the directory and the most UTF-8 bytes a
+# listed path keeps, all fixed by the backend. A name that is not UTF-8 has its bad bytes replaced (U+FFFD), then a
+# path over the byte budget is cut at a character boundary, ending in an ellipsis, and marked as cut, so no name the
+# model chose can make the output too long for parse_listing. The output is UTF-8 JSON, written as bytes.
 LIST_SCRIPT: Final = """\
 import json, os, stat, sys, time
 limit, end, top = int(sys.argv[1]), time.monotonic() + float(sys.argv[2]), sys.argv[3]
+budget = int(sys.argv[4])
 entries, files, size, complete = [], 0, 0, True
+def shown(path):
+    raw = path.encode('utf-8', 'surrogateescape').decode('utf-8', 'replace').encode('utf-8')
+    if len(raw) <= budget:
+        return raw.decode('utf-8'), False
+    return raw[: budget - 3].decode('utf-8', 'ignore') + '\\u2026', True
 stack = ['']
 while stack:
     if time.monotonic() > end:
@@ -297,10 +307,11 @@ while stack:
             files += 1
             size += info.st_size
             if len(entries) < limit:
-                name = path.encode('utf-8', 'surrogateescape').decode('utf-8', 'replace')
-                entries.append([name, info.st_size, info.st_mtime])
+                name, cut = shown(path)
+                entries.append([name, info.st_size, info.st_mtime, cut])
     stack.extend(reversed(below))
-sys.stdout.write(json.dumps({'entries': entries, 'files': files, 'bytes': size, 'complete': complete}))
+out = {'entries': entries, 'files': files, 'bytes': size, 'complete': complete}
+sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode('utf-8'))
 """
 
 #: The listing helper's interpreter, in the `data` image.
@@ -309,8 +320,9 @@ LIST_PYTHON: Final = '/opt/conda/bin/python3'
 LIST_WALK_S: Final = 20
 #: Seconds the backend waits for the listing helper to exit.
 LIST_TIMEOUT_S: Final = 60.0
-#: The most the listing helper may print, in bytes: LIST_MAX_ENTRIES paths of up to MAX_PATH_BYTES, and change.
-LIST_OUTPUT_MAX_BYTES: Final = LIST_MAX_ENTRIES * (MAX_PATH_BYTES * 3 + 64) + 4096
+#: The most the listing helper may print, in bytes: LIST_MAX_ENTRIES entries whose path, at most LIST_PATH_MAX_BYTES,
+#: JSON escapes six bytes per byte at worst (a control character as `\u0001`), with room for the numbers.
+LIST_OUTPUT_MAX_BYTES: Final = LIST_MAX_ENTRIES * (LIST_PATH_MAX_BYTES * 6 + 128) + 4096
 #: The listing helper's memory and process limits: it runs one Python process.
 LIST_MEMORY_LIMIT: Final = '512m'
 LIST_PIDS_LIMIT: Final = 16
@@ -553,7 +565,16 @@ def list_helper_options(key: str, *, scope: str, max_entries: int) -> dict[str, 
         'labels': {'lllm.scope': _check_scope(scope), 'lllm.helper': 'list', 'lllm.workspace': key},
         'user': SANDBOX_USER,
         'entrypoint': [LIST_PYTHON],
-        'command': ['-I', '-S', '-c', LIST_SCRIPT, str(max_entries), str(LIST_WALK_S), WORKSPACE],
+        'command': [
+            '-I',
+            '-S',
+            '-c',
+            LIST_SCRIPT,
+            str(max_entries),
+            str(LIST_WALK_S),
+            WORKSPACE,
+            str(LIST_PATH_MAX_BYTES),
+        ],
         'environment': {},
         'cap_drop': list(CAP_DROP),
         'security_opt': list(SECURITY_OPT),
@@ -573,11 +594,16 @@ def list_helper_options(key: str, *, scope: str, max_entries: int) -> dict[str, 
 def parse_listing(raw: object, max_entries: int) -> WorkspaceListing:
     """The listing helper's output as a WorkspaceListing, checked field by field; it reads names the model wrote.
 
+    One entry that is not what LIST_SCRIPT prints (not a list of a path, a
+    size, a time and a cut flag of those types; a path empty, holding NUL or
+    over MAX_PATH_BYTES) is dropped and the listing marked incomplete, so a
+    name the model chose cannot hide the rest.
+
     Raises:
-        SandboxError: The output is not what LIST_SCRIPT prints: too long, not
-            JSON, a field missing or of the wrong type, more entries than
-            asked for, a path that is empty, holds NUL or is over
-            MAX_PATH_BYTES, or totals smaller than the entries listed.
+        SandboxError: The output as a whole is not what LIST_SCRIPT prints:
+            too long, not JSON, a top-level field missing or of the wrong
+            type, more entries than asked for, or totals smaller than the
+            entries listed.
     """
     bad = SandboxError('the workspace listing was malformed')
     if not isinstance(raw, bytes) or len(raw) > LIST_OUTPUT_MAX_BYTES:
@@ -593,19 +619,24 @@ def parse_listing(raw: object, max_entries: int) -> WorkspaceListing:
         raise bad
     if type(files) is not int or type(size) is not int or files < len(entries) or size < 0:
         raise bad
-    parsed: list[FileEntry] = []
-    for entry in entries:
-        if not isinstance(entry, list) or len(entry) != 3:
-            raise bad
-        path, length, mtime = entry
-        if type(path) is not str or not path or '\0' in path or len(path.encode('utf-8', 'replace')) > MAX_PATH_BYTES:
-            raise bad
-        if type(length) is not int or length < 0 or type(mtime) not in (int, float):
-            raise bad
-        parsed.append(FileEntry(path, length, float(mtime)))
+    parsed = [entry for entry in map(_listed_entry, entries) if entry is not None]
+    if len(parsed) < len(entries):
+        complete = False
     if sum(e.size for e in parsed) > size:
         raise bad
     return WorkspaceListing(tuple(parsed), files, size, complete)
+
+
+def _listed_entry(entry: object) -> FileEntry | None:
+    """One entry of LIST_SCRIPT's output as a FileEntry, or None when it is not one."""
+    if not isinstance(entry, list) or len(entry) != 4:
+        return None
+    path, length, mtime, cut = entry
+    if type(path) is not str or not path or '\0' in path or len(path.encode('utf-8', 'replace')) > MAX_PATH_BYTES:
+        return None
+    if type(length) is not int or length < 0 or type(mtime) not in (int, float) or type(cut) is not bool:
+        return None
+    return FileEntry(path, length, float(mtime), truncated=cut)
 
 
 def _labels(key: str, *, ephemeral: bool, scope: str) -> dict[str, str]:
@@ -1229,6 +1260,9 @@ class KataDockerBackend:
                     container.remove(force=True)
                 except docker.errors.NotFound:
                     pass
+            # A listing helper left by a listing cut short also mounts the volume, which no destroy could then
+            # remove.
+            self._remove_helper(key)
             # Uploads are put again at every start, so a stopped sandbox keeps none on the host's disk, outside the
             # workspace's cap (T13's security re-review, N-b).
             uploads = self._uploads_path(key)
@@ -1261,6 +1295,36 @@ class KataDockerBackend:
         # Gone for good (N3): a later call for the key makes a new lock; a waiter keeps its own reference.
         with self._setup_lock:
             self._key_locks.pop(key, None)
+
+    def _remove_helper(self, key: str) -> bool:
+        """Remove the key's listing helper if this backend made it; False when one of another scope has its name."""
+        helper = self._container_named(list_helper_name(key))
+        if helper is None:
+            return True
+        if not self._ours(helper.labels):
+            log.warning('the listing helper of %s belongs to another app instance; leaving it alone', key)
+            return False
+        try:
+            helper.remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        return True
+
+    async def remove_helpers(self) -> None:
+        """Remove every listing helper of this scope (SandboxBackend.remove_helpers), each under its key's lock."""
+        await self._call('remove the listing helpers', self._remove_helpers)
+
+    def _remove_helpers(self) -> None:
+        scope = self._scope
+        found = self._docker().containers.list(
+            all=True, filters={'label': ['lllm.helper=list', f'lllm.scope={scope}']}, ignore_removed=True
+        )
+        for helper in found:
+            key = _key_of({'lllm.chat': (helper.labels or {}).get('lllm.workspace', ''), 'lllm.scope': scope}, scope)
+            if key is None:
+                continue
+            with self._key_lock(key):
+                self._remove_helper(key)
 
     async def list_sandboxes(self) -> list[SandboxInfo]:
         """Every chat with a sandbox container or volume (SandboxBackend.list_sandboxes)."""
@@ -1354,13 +1418,13 @@ class KataDockerBackend:
             if not self._ours(volume.attrs.get('Labels')) or not path.exists():
                 return None
             self._attach(path, key)
-            leftover = self._container_named(list_helper_name(key))
-            if leftover is not None:
-                if not self._ours(leftover.labels):
-                    raise SandboxError('a listing helper of another app instance has this name')
-                leftover.remove(force=True)
-            helper = client.containers.run(**list_helper_options(key, scope=self._scope, max_entries=max_entries))
+            if self._container_named(list_helper_name(key)) is not None and not self._remove_helper(key):
+                raise SandboxError('a listing helper of another app instance has this name')
+            # Created, then started, so the removal below covers a start that fails too: a helper left behind would
+            # hold the volume, and no destroy could remove it.
+            helper = client.containers.create(**list_helper_options(key, scope=self._scope, max_entries=max_entries))
             try:
+                helper.start()
                 status = helper.wait(timeout=LIST_TIMEOUT_S)
                 raw = helper.logs(stdout=True, stderr=False)
             finally:

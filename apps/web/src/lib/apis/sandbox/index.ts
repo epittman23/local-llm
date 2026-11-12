@@ -114,7 +114,13 @@ export const getSandboxOutputText = async (
 export const PENDING_WORKSPACE_IDS_KEY = ['sandbox', 'pending-workspaces'] as const;
 
 /** One file of a workspace, its path relative to `/workspace`. */
-export type WorkspaceFile = { path: string; size: number; mtime: number };
+export type WorkspaceFile = {
+	path: string;
+	size: number;
+	mtime: number;
+	/** The name was cut short for showing (it ends in an ellipsis). */
+	truncated?: boolean;
+};
 
 /** What a workspace holds: at most a few hundred files listed, and totals over all of them. */
 export type WorkspaceContents = {
@@ -197,19 +203,22 @@ export const getPendingWorkspaces = async (token: string, signal?: AbortSignal):
 /**
  * Answer a waiting workspace (POST /sandbox/pending/{id}): `keep` it, or
  * `remove` it; for a `cap` request, `workspace` names another of the user's
- * workspaces to remove instead. A refusal throws the response's error body.
+ * workspaces to remove instead. `since` is the request's `since` as shown: a
+ * request that changed meanwhile is refused (409). A refusal throws the
+ * response's error body.
  */
 export const answerPendingWorkspace = async (
 	token: string,
 	id: string,
 	action: 'remove' | 'keep',
+	since: number,
 	workspace?: string
 ): Promise<void> => {
 	const res = await fetch(`${WEBUI_API_BASE_URL}/sandbox/pending/${encodeURIComponent(id)}`, {
 		method: 'POST',
 		headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
 		credentials: 'include',
-		body: JSON.stringify(workspace && workspace !== id ? { action, workspace } : { action })
+		body: JSON.stringify(workspace && workspace !== id ? { action, since, workspace } : { action, since })
 	}).catch((err) => {
 		throw requestError(err);
 	});

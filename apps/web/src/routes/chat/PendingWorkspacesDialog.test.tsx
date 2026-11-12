@@ -114,7 +114,7 @@ describe('PendingWorkspacesDialog', () => {
 		);
 		const cap = item('Untitled chat');
 		expect(
-			within(cap).getByText(/"New report" needs a code workspace, and you have the most allowed \(20\)/)
+			within(cap).getByText(/"\u2068New report\u2069" needs a code workspace, and you have the most allowed \(20\)/)
 		).toBeTruthy();
 		expect(within(cap).getByText('The contents could not be listed.')).toBeTruthy();
 		const choices = within(cap).getByLabelText('Workspace to remove');
@@ -128,10 +128,14 @@ describe('PendingWorkspacesDialog', () => {
 		const cap = await screen.findByRole('region', { name: 'Workspace of Untitled chat' });
 		fireEvent.change(within(cap).getByLabelText('Workspace to remove'), { target: { value: 'w-other' } });
 		ids = [EXPIRED.id];
-		fireEvent.click(within(cap).getByRole('button', { name: 'Remove' }));
+		fireEvent.click(within(cap).getByRole('button', { name: 'Remove workspace of Untitled chat' }));
 		await waitFor(() => expect(screen.queryByRole('region', { name: 'Workspace of Untitled chat' })).toBeNull());
 		expect(calls.filter((c) => c.method === 'POST')).toEqual([
-			{ url: '/api/v1/sandbox/pending/w-lru', method: 'POST', body: { action: 'remove', workspace: 'w-other' } }
+			{
+				url: '/api/v1/sandbox/pending/w-lru',
+				method: 'POST',
+				body: { action: 'remove', since: 1_700_000_000, workspace: 'w-other' }
+			}
 		]);
 		expect(toastSuccess).toHaveBeenCalledWith('Workspace removed.');
 		expect(item('Old analysis')).toBeTruthy();
@@ -145,9 +149,9 @@ describe('PendingWorkspacesDialog', () => {
 		renderDialog();
 		const old = await screen.findByRole('region', { name: 'Workspace of Old analysis' });
 		ids = [];
-		fireEvent.click(within(old).getByRole('button', { name: 'Keep' }));
+		fireEvent.click(within(old).getByRole('button', { name: 'Keep workspace of Old analysis' }));
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-		expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ action: 'keep' });
+		expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ action: 'keep', since: 1_700_000_000 });
 		expect(toastSuccess).toHaveBeenCalledWith('Workspace kept.');
 	});
 
@@ -155,7 +159,7 @@ describe('PendingWorkspacesDialog', () => {
 		answer = () => Response.json({ detail: "The workspace's chat is running code" }, { status: 409 });
 		renderDialog();
 		const old = await screen.findByRole('region', { name: 'Workspace of Old analysis' });
-		fireEvent.click(within(old).getByRole('button', { name: 'Remove' }));
+		fireEvent.click(within(old).getByRole('button', { name: 'Remove workspace of Old analysis' }));
 		await waitFor(() => expect(toastError).toHaveBeenCalledWith("The workspace's chat is running code"));
 		expect(item('Old analysis')).toBeTruthy();
 	});
@@ -184,5 +188,84 @@ describe('PendingWorkspacesDialog', () => {
 		await act(() => client.invalidateQueries({ queryKey: PENDING_WORKSPACE_IDS_KEY }));
 		expect(await screen.findByRole('region', { name: 'Workspace of Third' })).toBeTruthy();
 		expect(listings()).toBe(2);
+	});
+
+	it('offers Retry when the list cannot be read, and lists again on it', async () => {
+		let fail = true;
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+			const url = String(input);
+			if (url.endsWith('/ids')) return Response.json({ ids: ['w-old'] });
+			if (fail) return Response.json({ detail: 'down' }, { status: 503 });
+			return Response.json({ pending: [EXPIRED], max_workspaces: 20, retention_days: 7 });
+		});
+		renderDialog();
+		await screen.findByText('The workspaces could not be listed: down');
+		fail = false;
+		fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+		expect(await screen.findByRole('region', { name: 'Workspace of Old analysis' })).toBeTruthy();
+	});
+
+	it('drops a removed workspace from the choices of the other items', async () => {
+		const second: PendingWorkspace = {
+			...CAP,
+			id: 'w-two',
+			chat_title: 'Second',
+			since: 1_700_000_500,
+			workspaces: [
+				{ id: 'w-other', chat_id: 'w-other', chat_title: 'Other chat', last_used_at: 1 },
+				{ id: 'w-lru', chat_id: 'w-lru', chat_title: null, last_used_at: 2 }
+			]
+		};
+		ids = [CAP.id, second.id];
+		pending = [CAP, second];
+		renderDialog();
+		const cap = await screen.findByRole('region', { name: 'Workspace of Untitled chat' });
+		fireEvent.change(within(cap).getByLabelText('Workspace to remove'), { target: { value: 'w-other' } });
+		ids = [second.id];
+		fireEvent.click(within(cap).getByRole('button', { name: 'Remove workspace of Untitled chat' }));
+		await waitFor(() => expect(screen.queryByRole('region', { name: 'Workspace of Untitled chat' })).toBeNull());
+		const choices = within(item('Second')).getByLabelText('Workspace to remove');
+		// w-other is gone; w-lru, whose request was answered without removing it, stays a choice.
+		expect(Array.from(choices.querySelectorAll('option')).map((o) => o.value)).toEqual(['w-two', 'w-lru']);
+		expect(listings()).toBe(1);
+	});
+
+	it('asks again for the ids and the list after a refused answer', async () => {
+		answer = () => Response.json({ detail: 'This request changed since it was shown' }, { status: 409 });
+		renderDialog();
+		const old = await screen.findByRole('region', { name: 'Workspace of Old analysis' });
+		fireEvent.click(within(old).getByRole('button', { name: 'Keep workspace of Old analysis' }));
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith('This request changed since it was shown'));
+		await waitFor(() => expect(listings()).toBe(2));
+		expect(calls.filter((c) => c.url.endsWith('/pending/ids')).length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('isolates names in their own direction and keeps rows whose names repeat', async () => {
+		const rtl = '\u202Egpj.exe';
+		ids = [EXPIRED.id];
+		pending = [
+			{
+				...EXPIRED,
+				chat_title: rtl,
+				contents: {
+					files: [
+						{ path: 'same\u2026', size: 1, mtime: 1, truncated: true },
+						{ path: 'same\u2026', size: 2, mtime: 2, truncated: true }
+					],
+					file_count: 2,
+					total_bytes: 3,
+					complete: true
+				}
+			}
+		];
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		renderDialog();
+		const region = await screen.findByRole('region', { name: `Workspace of ${rtl}` });
+		expect(region.querySelector('h3 bdi')?.textContent).toBe(rtl);
+		const cells = within(region).getAllByText('same\u2026');
+		expect(cells).toHaveLength(2);
+		expect(cells.every((c) => c.tagName === 'BDI')).toBe(true);
+		expect(within(region).getAllByText('(name shortened)')).toHaveLength(2);
+		expect(errors.mock.calls.some((c) => String(c[0]).includes('same key'))).toBe(false);
 	});
 });
