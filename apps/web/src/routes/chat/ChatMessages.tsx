@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
+import type { CodeRunner } from '@/lib/chat/codeRun';
 import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
 import { modelImage } from './ModelSelector';
 import { StatusLine } from './StatusLine';
@@ -34,6 +35,8 @@ export type MessageHandlers = {
 	editing?: (m: Message) => ReactNode | null;
 	/** An html/svg code block's Preview button (the artifacts panel). */
 	onPreview?: (code: string) => void;
+	/** A python code block's Run button in a reply (lib/chat/codeRun.ts); none when the server has no runner. */
+	onRun?: CodeRunner;
 };
 
 const actionButton = 'text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition';
@@ -298,6 +301,11 @@ export function ResponseMessage({
 							onSourceClick={(id) => h.onSourceClick?.(message, id)}
 							onToolCallResolved={h.onToolCallResolved}
 							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
+							onRun={
+								message.role === 'assistant' && h.onRun && chatId
+									? (code) => (h.onRun as CodeRunner)(code, chatId)
+									: undefined
+							}
 						/>
 					))}
 				{!edit && <SandboxOutputs files={message.files} />}

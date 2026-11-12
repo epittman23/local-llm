@@ -1054,6 +1054,14 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   act, not part of the reply. It does not sync the chat's attachments,
   which it does not know, so `/workspace/uploads` stays as the chat's last
   call left it.
+- **The Run button** (`apps/web`, T22). A Python code block in a reply
+  shows Run when code execution is on and its engine is `sandbox` or
+  `jupyter` (`lib/chat/codeRun.ts`; Pyodide, which ran in the browser, has
+  no runner in this app). Under `sandbox` it sends the block with its
+  chat's id. The block's stdout, stderr and result, an error (the
+  endpoint's refusal, or the sandbox's own failure) and the files the run
+  left in `/workspace/outputs` (as `SandboxOutputs` shows a reply's) appear
+  under the block until it is closed; they are not saved with the chat.
 - **Sub-agents** (`utils/subagents.py`). A sub-agent's request carries its
   parent chat (`request.state.sandbox_chat_id`, set only by the server), so
   its tools use the parent's sandbox; a sub-agent of a sub-agent keeps the

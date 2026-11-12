@@ -28,7 +28,21 @@ export const getGravatarUrl = async (token: string, email: string) => {
 	return res;
 };
 
-export const executeCode = async (token: string, code: string) => {
+/**
+ * What the Run endpoint answers (routers/utils.py): the code's output, and under the `sandbox` engine the files it
+ * left in /workspace/outputs (`files`, sandbox outputs as on a reply) or `error` when the sandbox could not run it.
+ */
+export type CodeRunResult = {
+	stdout?: string;
+	stderr?: string;
+	result?: string;
+	error?: string;
+	timed_out?: boolean;
+	files?: unknown[];
+};
+
+/** Run a code block: in its chat's sandbox when `chatId` is given and the engine is `sandbox` (owner decision Q2). */
+export const executeCode = async (token: string, code: string, chatId?: string): Promise<CodeRunResult> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/utils/code/execute`, {
@@ -38,7 +52,8 @@ export const executeCode = async (token: string, code: string) => {
 			Authorization: `Bearer ${token}`
 		},
 		body: JSON.stringify({
-			code: code
+			code: code,
+			...(chatId ? { chat_id: chatId } : {})
 		})
 	})
 		.then(async (res) => {

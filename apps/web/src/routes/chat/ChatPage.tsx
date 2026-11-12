@@ -10,6 +10,7 @@ import { Tip } from '@/components/common/Tip';
 import { getFolderById } from '@/lib/apis/folders';
 import { updateChatById } from '@/lib/apis/chats';
 import type { ChatFile, History } from '@/lib/chat/history';
+import { codeRunner } from '@/lib/chat/codeRun';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
@@ -319,6 +320,7 @@ export function ChatPage() {
 			setControlsOpen(false);
 			setPreview(code);
 		},
+		onRun: codeRunner(config, token),
 		// A citation `[n]` (or `n#chunk`) is the n-th grouped source, 1-based.
 		onSourceClick: (m, id) => setCitation(citationsOf(m.sources)[citationIndex(id)] ?? null)
 	};
