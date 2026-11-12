@@ -97,8 +97,10 @@ choosing `sandbox` is an admin's decision per server.
   everything.
 - **State.** Files, installed packages and data persist for the whole chat
   (a fixed 10 GiB per workspace); nothing keeps running between calls. An
-  idle sandbox stops after 30 minutes and starts again on the next call;
-  its workspace is kept until 7 days after its last use.
+  idle sandbox stops after 30 minutes and starts again on the next call.
+  A workspace unused for 7 days, or one standing in the way of a new
+  chat's past the per-user cap (20), is deleted only when the user
+  answers the app's keep-or-remove dialog.
 - **Packages.** No internet: `pip install` reaches only the reviewed
   wheelhouse (`make wheelhouse`), and the images carry the scientific
   Python stack, R, TeX Live and Node.js tooling.
@@ -107,7 +109,8 @@ choosing `sandbox` is an admin's decision per server.
 
 **Settings** (Admin Settings > Code Execution): set the engine to
 `sandbox`; the sandbox fields (default image, command timeout, how many
-run at once, idle minutes, retention days) and a status line saying
+run at once, idle minutes, retention days, workspaces per user) and a
+status line saying
 whether the host can run sandboxes are on the same page. The host needs
 KVM, Kata registered as `kata-clh`, the images (`make sandbox-images`) and
 the wheelhouse; setup, operations and tests are in

@@ -245,7 +245,11 @@ fork's pre-import history is kept read-only at
   output for `routers/sandbox.py`'s `/outputs/{id}/html`; and `runs.py`,
   where the tag path's `<code_interpreter>` blocks and the Run endpoint's
   code are written, `/workspace/.runs/<n>.py`, before
-  `tools/builtin.py`'s `run_code_in_sandbox` runs them), and
+  `tools/builtin.py`'s `run_code_in_sandbox` runs them; and
+  `workspaces.py`, the record of each chat's persistent workspace (owner,
+  last use, a pending keep-or-remove request) that the per-user cap and
+  the retention sweep read, stored in `models/sandbox.py`'s
+  `sandbox_workspace` table), and
   **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
@@ -430,6 +434,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
   `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
   (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
+  `src/routes/chat/PendingWorkspacesDialog.tsx`, mounted by `AppShell`,
+  asks the user to keep or remove a sandbox workspace that expired or
+  stands in the way of the per-user cap.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
