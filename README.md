@@ -58,6 +58,16 @@ Redis: a Jupyter server for the code interpreter and SearXNG for web search
 (see [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md)). The
 first run pulls their images, about 5.8 GB together.
 
+**The code sandbox (optional, under construction on PR #884).** A third
+code interpreter engine, `sandbox`, runs each chat's code in its own
+microVM. It needs hardware virtualization (`/dev/kvm`), Kata Containers
+registered with Docker as `kata-clh`, and a few root steps at host setup;
+then `make sandbox-images` builds its two images (about 11 GB, 20 minutes
+or more) and `make wheelhouse` downloads the reviewed Python wheels its
+package mirror serves. It is chosen in Admin Settings > Code Execution, by
+setting the engine to `sandbox`; nothing uses it otherwise. See
+[docs/guides/sandbox.md](docs/guides/sandbox.md).
+
 > **The database.** Postgres data (accounts, chats, settings, benchmark
 > history) lives in the `local-llm_postgres-data` Docker volume, role and
 > database `local_llm`. The first `make backend` creates it empty. A Docker

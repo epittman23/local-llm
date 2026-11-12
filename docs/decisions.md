@@ -7,6 +7,84 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-12**: **The per-chat microVM sandbox is built as a third code
+  interpreter engine, `sandbox`, beside Jupyter and Pyodide; step 1 of
+  [docs/proposals/sandbox-code-interpreter.md](proposals/sandbox-code-interpreter.md)
+  (PR #884, `feat/sandbox-code-interpreter`).** It is used only where an
+  admin sets the Code Interpreter or Code Execution engine to `sandbox`;
+  Jupyter stays the default until the harness has a baseline on the sandbox
+  (step 2) and Jupyter and Pyodide are removed (step 3). This entry records
+  how the build differs from the 2026-11-10 proposal entry; the task-by-task
+  record, with every check's evidence, is the ledger in
+  [docs/plans/sandbox-implementation.md](plans/sandbox-implementation.md),
+  and how it runs is [docs/guides/sandbox.md](guides/sandbox.md).
+
+  **Host and runtime.** Kata Containers 4.3.1 with runtime-rs from upstream
+  under `/opt/kata`, registered as `kata-clh` with Cloud Hypervisor chosen by
+  the `ConfigPath` runtime option: Fedora 44's package is QEMU-only, and
+  4.3's runtime-rs rejects a non-default `KATA_CONF_FILE`. Three root steps
+  the proposal lacked: guest seccomp on (Docker's default profile inside the
+  VM, as defense in depth); a polkit rule letting the backend attach each
+  workspace as a fixed-size 10 GiB ext4 image on a loop device through
+  udisks2 (Docker's volume driver cannot loop-mount, and the proposal had no
+  disk bound); and a udev rule that removes IPv6 from the sandbox bridge.
+
+  **Isolation, as found on the laptop (2026-11-10 and 11).**
+  `--pids-limit` is not enforced under Kata 4.3.1, so the process cap is
+  `--ulimit nproc=512:512`. No container name resolves inside a Kata guest,
+  so the package mirror has a fixed address passed as `extra_hosts`. An
+  `internal: true` network does not fence the host by itself: its bridge
+  keeps an address a sandbox can reach host listeners through, so the
+  network also sets `inhibit_ipv4`, IPv6 is off in each guest and on the
+  bridge, and the backend refuses a network without these. The sandbox's
+  first process runs as `nobody` and commands as UID 1000; after every call
+  every UID 1000 process is killed, judged by a separate exec so a
+  surviving process cannot fake its own death, so nothing runs between
+  calls. Commands run as `/usr/bin/timeout --kill-after=5 <t> /bin/bash -lc
+  -- <command>`, and a command with a NUL byte or over 100,000 bytes is
+  refused. Uploads are a read-only bind mount, not files in the volume.
+
+  **Packages.** The wheelhouse allowlist is polars, duckdb, pingouin and
+  lifelines beside the images' own packages, served by `sandbox-mirror`
+  (nginx, no egress) from wheels whose hashes are checked against
+  `requirements.lock`; `pip install` reaches nothing else.
+
+  **Outputs.** Collected by comparing listings of `/workspace/outputs`
+  before and after each call (a call by any path: `bash`, a
+  `<code_interpreter>` block, the Run button, a sub-agent), with caps the
+  proposal lacked: 20 files and 200 MiB per call, previews included, PDF
+  previews for 3 PDFs of 10 pages cropped to 1600 px, 1 GiB per chat over
+  all calls, and a file whose bytes did not change not stored again. They
+  are stored as File rows linked to the message, and served as attachments
+  with `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`
+  and `application/octet-stream` outside images, PDF, audio and video;
+  `/content/html` refuses them. HTML outputs render only in a frame with
+  `sandbox="allow-scripts"` and an injected policy that also sets
+  `base-uri 'none'`. That policy is not "no network": it does not stop a
+  frame navigating itself (denied in the desktop app only, which now denies
+  any srcdoc or blank sub-frame navigation the app's page did not start),
+  or WebRTC, which no CSP covers; a script in an HTML output can leak what
+  the model wrote, what the user types into it and the user's IP, which the
+  owner accepted on 2026-11-11 over rendering static first.
+
+  **Call sites.** A `<code_interpreter>` block (models without native tool
+  calling) and the Run button write the code to `/workspace/.runs/<n>.py`
+  and run it in the chat's sandbox; the Run button exists for the first
+  time, shown only under the `sandbox` engine, and its outputs are shown
+  under the block, not saved with the message. A sub-agent works in its
+  parent chat's sandbox and never syncs its uploads. A chat with an Open
+  Terminal server selected and the code interpreter on the sandbox engine
+  is refused, since both offer a `write_file` acting on different machines
+  (owner decision, 2026-11-12). The admin rule for using another user's
+  chat is one helper, `admin_reaches_other_chats`, shared by the chat
+  endpoints and the sandbox.
+
+  **Other owner decisions on the way** (all in the ledger's "Owner
+  questions"): an unsaved chat's sandbox is per chat and user; a full
+  server evicts an idle sandbox, with a 2-minute deadline; only the chat's
+  owner, or an admin while `ENABLE_ADMIN_CHAT_ACCESS` is on, runs code in
+  it; and each user keeps at most 20 workspaces, none deleted for the cap or
+  for the 7-day expiry without the user's answer in a dialog.
 - **2026-11-10**: **The Jupyter and Pyodide code interpreters are to be
   replaced by a per-chat microVM shell sandbox; proposed, nothing built
   ([docs/proposals/sandbox-code-interpreter.md](proposals/sandbox-code-interpreter.md)).**
