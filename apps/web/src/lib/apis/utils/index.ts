@@ -38,6 +38,9 @@ export type CodeRunResult = {
 	result?: string;
 	error?: string;
 	timed_out?: boolean;
+	/** Set when stdout or stderr was cut to its first and last 10,000 characters. */
+	truncated?: boolean;
+	returncode?: number;
 	files?: unknown[];
 };
 

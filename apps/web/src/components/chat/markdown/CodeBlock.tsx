@@ -68,23 +68,29 @@ function Stream({ label, text, tone }: { label: string; text?: string; tone?: 'e
 	);
 }
 
+/** The one-line status of a run, which is also what a screen reader announces (RunStatus). */
+function runStatus(run: Run | null): string {
+	if (run === null) return '';
+	if (run.state === 'running') return 'Running...';
+	if (run.state === 'failed' || run.result.error) return 'Run failed';
+	if (run.result.timed_out) return 'Stopped at its time limit';
+	const code = run.result.returncode;
+	return typeof code === 'number' && code !== 0 ? `Exited with code ${code}` : 'Output';
+}
+
 /**
  * What a Run left: its stdout, stderr and result, an error (the endpoint's refusal, or the sandbox's own failure),
  * and the files it put in /workspace/outputs, shown as a reply's sandbox outputs are (SandboxOutputs).
  */
 function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
 	return (
-		<div className="flex flex-col gap-2 border-t px-4 py-3" data-testid="code-run-output" aria-live="polite">
+		<div
+			className="flex flex-col gap-2 border-t px-4 py-3"
+			data-testid="code-run-output"
+			aria-busy={run.state === 'running'}
+		>
 			<div className="text-muted-foreground flex items-center justify-between text-xs">
-				<span>
-					{run.state === 'running'
-						? 'Running...'
-						: run.state === 'failed' || run.result.error
-							? 'Run failed'
-							: run.result.timed_out
-								? 'Stopped at its time limit'
-								: 'Output'}
-				</span>
+				<span aria-hidden="true">{runStatus(run)}</span>
 				{run.state !== 'running' && (
 					<button type="button" className="hover:bg-muted rounded-md p-0.5" onClick={onClose} aria-label="Close output">
 						<X className="size-3" />
@@ -99,6 +105,11 @@ function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
 					<Stream label="Output" text={run.result.stdout} />
 					<Stream label="Errors" text={run.result.stderr} tone="error" />
 					<Stream label="Result" text={run.result.result} />
+					{run.result.truncated && (
+						<div className="text-muted-foreground text-xs">
+							The output was cut to its first and last 10,000 characters.
+						</div>
+					)}
 					{!run.result.error &&
 						!run.result.stdout &&
 						!run.result.stderr &&
@@ -140,10 +151,12 @@ export function CodeBlock({
 	const [collapsed, setCollapsed] = useState(defaultCollapsed);
 	const [copied, setCopied] = useState(false);
 	const [run, setRun] = useState<Run | null>(null);
+	const runButton = useRef<HTMLButtonElement>(null);
 	// Counts runs, so an answer to a run that was closed or replaced is dropped.
 	const runs = useRef(0);
+	const blocked = !complete || run?.state === 'running';
 	const start = async () => {
-		if (!onRun || run?.state === 'running') return;
+		if (!onRun || blocked) return;
 		const n = ++runs.current;
 		setRun({ state: 'running' });
 		try {
@@ -193,10 +206,12 @@ export function CodeBlock({
 					</button>
 					{onRun && ['python', 'py'].includes(language) && (
 						<button
+							ref={runButton}
 							type="button"
-							className={bar}
+							// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
+							className={cn(bar, blocked && 'cursor-not-allowed opacity-50')}
 							onClick={() => void start()}
-							disabled={!complete || run?.state === 'running'}
+							aria-disabled={blocked}
 						>
 							<Play className="size-3" /> Run
 						</button>
@@ -230,12 +245,19 @@ export function CodeBlock({
 				{html !== null ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}
 			</pre>
 			{hidden > 0 && <div className="text-muted-foreground border-t px-4 py-1 text-xs">{hidden} hidden lines</div>}
+			{/* Always mounted, so screen readers announce each status, and only the status, not the whole output. */}
+			{onRun && (
+				<span className="sr-only" role="status" aria-live="polite">
+					{runStatus(run)}
+				</span>
+			)}
 			{run && (
 				<RunOutput
 					run={run}
 					onClose={() => {
 						runs.current += 1;
 						setRun(null);
+						runButton.current?.focus();
 					}}
 				/>
 			)}

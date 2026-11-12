@@ -37,7 +37,11 @@ describe('CodeBlock Run', () => {
 		rerender(<CodeBlock id="b1" lang="js" code="1" complete onRun={onRun} />);
 		expect(screen.queryByRole('button', { name: /Run/ })).toBeNull();
 		rerender(<CodeBlock id="b1" lang="py" code="1" complete={false} onRun={onRun} />);
-		expect((screen.getByRole('button', { name: /Run/ }) as HTMLButtonElement).disabled).toBe(true);
+		const run = screen.getByRole('button', { name: /Run/ });
+		// aria-disabled, so the button keeps the keyboard focus; a press does nothing.
+		expect(run.getAttribute('aria-disabled')).toBe('true');
+		fireEvent.click(run);
+		expect(onRun).not.toHaveBeenCalled();
 	});
 
 	it('runs the code and shows its output, errors and sandbox outputs under the block', async () => {
@@ -76,7 +80,7 @@ describe('CodeBlock Run', () => {
 		block({ onRun });
 		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
 		await waitFor(() => expect(screen.getByTestId('code-run-output').textContent).toContain('No output'));
-		onRun.mockResolvedValueOnce({ stdout: 'part', stderr: '', result: '', files: [], timed_out: true } as never);
+		onRun.mockResolvedValueOnce({ stdout: 'part', stderr: '', result: '', files: [], timed_out: true });
 		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
 		await waitFor(() =>
 			expect(screen.getByTestId('code-run-output').textContent).toContain('Stopped at its time limit')
@@ -106,5 +110,27 @@ describe('CodeBlock Run', () => {
 		unmount();
 		await act(async () => run.resolve({ stdout: 'late' }));
 		expect(screen.queryByTestId('code-run-output')).toBeNull();
+	});
+
+	it('announces only the status, and says when a run exited non-zero or its output was cut', async () => {
+		const run = pending();
+		block({ onRun: run.onRun });
+		const status = screen.getByRole('status');
+		expect(status.textContent).toBe('');
+		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
+		expect(status.textContent).toBe('Running...');
+		expect(screen.getByTestId('code-run-output').getAttribute('aria-busy')).toBe('true');
+		await act(async () => run.resolve({ stdout: 'x'.repeat(50), returncode: 2, truncated: true }));
+		expect(status.textContent).toBe('Exited with code 2');
+		expect(screen.getByTestId('code-run-output').textContent).toContain('cut to its first and last');
+	});
+
+	it('gives the focus back to Run when the output is closed', async () => {
+		const onRun = vi.fn(async () => ({ stdout: 'ok', returncode: 0 }));
+		block({ onRun });
+		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
+		await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Output'));
+		fireEvent.click(screen.getByRole('button', { name: 'Close output' }));
+		expect(document.activeElement).toBe(screen.getByRole('button', { name: /Run/ }));
 	});
 });

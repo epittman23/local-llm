@@ -1055,13 +1055,17 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   which it does not know, so `/workspace/uploads` stays as the chat's last
   call left it.
 - **The Run button** (`apps/web`, T22). A Python code block in a reply
-  shows Run when code execution is on and its engine is `sandbox` or
-  `jupyter` (`lib/chat/codeRun.ts`; Pyodide, which ran in the browser, has
-  no runner in this app). Under `sandbox` it sends the block with its
-  chat's id. The block's stdout, stderr and result, an error (the
-  endpoint's refusal, or the sandbox's own failure) and the files the run
-  left in `/workspace/outputs` (as `SandboxOutputs` shows a reply's) appear
-  under the block until it is closed; they are not saved with the chat.
+  shows Run when code execution is on with the `sandbox` engine
+  (`lib/chat/codeRun.ts`); it sends the block with its chat's id. The other
+  engines show none: Jupyter is left as it was until its removal (T40),
+  and Pyodide ran in the browser, which this app has no runner for. The
+  block's stdout, stderr and result, an error (the endpoint's refusal, or
+  the sandbox's own failure), a non-zero exit code, a note when the output
+  was cut, and the files the run left in `/workspace/outputs` (as
+  `SandboxOutputs` shows a reply's) appear under the block until it is
+  closed; they are not saved with the chat, so a reload, or a chat reload
+  while the run is in flight, loses them. A screen reader hears only the
+  run's status.
 - **Sub-agents** (`utils/subagents.py`). A sub-agent's request carries its
   parent chat (`request.state.sandbox_chat_id`, set only by the server), so
   its tools use the parent's sandbox; a sub-agent of a sub-agent keeps the

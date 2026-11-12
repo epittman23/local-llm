@@ -7,11 +7,11 @@ export type CodeRunner = (code: string, chatId: string) => Promise<CodeRunResult
 /**
  * The Run button's runner for this server, or undefined when code blocks have none.
  *
- * Code execution must be on (`features.enable_code_execution`). Under the
- * `sandbox` engine the code runs in its chat's sandbox (the endpoint needs the
- * chat id, owner decision Q2); under `jupyter` on the Jupyter server, which
- * takes no chat. `pyodide` runs in the browser, which this app has no runner
- * for, so it gets no button.
+ * Code execution must be on (`features.enable_code_execution`) with the
+ * `sandbox` engine: the code runs in its chat's sandbox (the endpoint needs
+ * the chat id, owner decision Q2). The other engines get no button: Jupyter
+ * stays as it was until it is removed (T40), and Pyodide ran in the browser,
+ * which this app has no runner for.
  */
 export function codeRunner(
 	config: BackendConfig | null,
@@ -20,7 +20,5 @@ export function codeRunner(
 ): CodeRunner | undefined {
 	if (!config?.features?.enable_code_execution) return undefined;
 	const engine = (config.code as { engine?: unknown } | undefined)?.engine;
-	if (engine === 'sandbox') return (code, chatId) => run(token, code, chatId);
-	if (engine === 'jupyter') return (code) => run(token, code);
-	return undefined;
+	return engine === 'sandbox' ? (code, chatId) => run(token, code, chatId) : undefined;
 }

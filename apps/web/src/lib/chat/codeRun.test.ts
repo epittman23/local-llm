@@ -22,15 +22,8 @@ describe('codeRunner', () => {
 		expect(run).toHaveBeenCalledWith('tok', 'print(1)', 'chat-1');
 	});
 
-	it('runs on Jupyter without a chat', async () => {
-		const run = vi.fn(async () => ({}));
-		const runner = codeRunner(config(true, 'jupyter'), 'tok', run);
-		if (!runner) throw new Error('no runner under the jupyter engine');
-		await runner('x', 'chat-1');
-		expect(run).toHaveBeenCalledWith('tok', 'x');
-	});
-
-	it('offers no runner for Pyodide, an unknown engine, disabled code execution or no config', () => {
+	it('offers no runner for Jupyter, Pyodide, an unknown engine, disabled code execution or no config', () => {
+		expect(codeRunner(config(true, 'jupyter'), 'tok')).toBeUndefined();
 		expect(codeRunner(config(true, 'pyodide'), 'tok')).toBeUndefined();
 		expect(codeRunner(config(true), 'tok')).toBeUndefined();
 		expect(codeRunner(config(false, 'sandbox'), 'tok')).toBeUndefined();
