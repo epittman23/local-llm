@@ -103,7 +103,10 @@ choosing `sandbox` is an admin's decision per server.
   answers the app's keep-or-remove dialog.
 - **Packages.** No internet: `pip install` reaches only the reviewed
   wheelhouse (`make wheelhouse`), and the images carry the scientific
-  Python stack, R, TeX Live and Node.js tooling.
+  Python stack, R, TeX Live and Node.js tooling. The names and versions
+  of the packages a chat imports, installs or lacks are recorded for the
+  admin's report (never its code or data; sandbox.md "Package
+  telemetry").
 - **Run button.** Under the `sandbox` Code Execution engine, a Python block
   in a reply has Run, which runs it in the chat's sandbox.
 

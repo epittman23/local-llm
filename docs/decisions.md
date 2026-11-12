@@ -79,6 +79,17 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   chat is one helper, `admin_reaches_other_chats`, shared by the chat
   endpoints and the sandbox.
 
+  **Package telemetry.** To decide what the images and the wheelhouse
+  should carry, each call records the packages a chat imports (Python and
+  R, from hooks in the data image), installs from the mirror (its access
+  log, attributed by the sandbox's address) or misses (an uncaught
+  `ModuleNotFoundError`, pip's "No matching distribution", "command not
+  found", a missing LaTeX file) in the table `sandbox_package_events`; an
+  admin reads them at `GET /api/v1/sandbox/packages`, benchmark-harness
+  rows left out unless asked for. It records package names and versions
+  only, never code or data, and a failure in it never changes a tool's
+  result.
+
   **Other owner decisions on the way** (all in the ledger's "Owner
   questions"): an unsaved chat's sandbox is per chat and user; a full
   server evicts an idle sandbox, with a 2-minute deadline; only the chat's

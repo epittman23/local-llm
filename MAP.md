@@ -189,7 +189,8 @@ Infrastructure this repo runs but does not write.
   `infra/.env`.
 - **`sandbox/`** — the code sandbox's two images (`Dockerfile.data`,
   `Dockerfile.web`), the files they share (`common/`), per-image inputs
-  (`data/`, `web/`), the image tag (`TAG`) and the data image's package
+  (`data/`, `web/`; `data/sitecustomize.py` and `data/Rprofile.site` are
+  the package-telemetry hooks), the image tag (`TAG`) and the data image's package
   list (`image-freeze.txt`, `image-freeze-r.txt`). Built by `make sandbox-images`;
   `docs/guides/sandbox.md` "Images". Also the package allowlist
   (`allowlist.in`), its hash-locked wheel list (`requirements.lock`; `make
@@ -249,7 +250,10 @@ fork's pre-import history is kept read-only at
   `workspaces.py`, the record of each chat's persistent workspace (owner,
   last use, a pending keep-or-remove request) that the per-user cap and
   the retention sweep read, stored in `models/sandbox.py`'s
-  `sandbox_workspace` table), and
+  `sandbox_workspace` table; and `telemetry.py`, which collects the
+  packages a chat imports, installs or misses into
+  `sandbox_package_events` for the admin report at
+  `/api/v1/sandbox/packages`), and
   **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
