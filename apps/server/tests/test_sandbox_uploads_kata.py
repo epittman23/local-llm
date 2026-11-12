@@ -40,6 +40,7 @@ from local_llm.sandbox import uploads
 from local_llm.sandbox.kata import KataDockerBackend
 from local_llm.sandbox.limits import CANCEL_WAIT_S
 from local_llm.sandbox.manager import SandboxManager, SandboxSettings
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.tools import builtin
 
 USER = SimpleNamespace(id='owner', role='user')
@@ -104,7 +105,7 @@ def test_uploads_are_a_read_only_mount_nothing_in_the_guest_can_change_or_move(
     backend: KataDockerBackend, keys: Keys, stored_files, monkeypatch
 ) -> None:
     chat = keys.new(backend)
-    manager = SandboxManager(backend, chats=_Chats(chat), settings=_settings)
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=_Chats(chat), settings=_settings)
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(sandbox=manager)))
     stored_files('f1', 'a.csv', b'a,b\n1,2\n')
     stored_files('f2', 'b.csv', b'second\n')

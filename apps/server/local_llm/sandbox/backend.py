@@ -18,8 +18,15 @@ lists and file contents.
 import posixpath
 from typing import Protocol, runtime_checkable
 
-from local_llm.sandbox.limits import WORKSPACE
-from local_llm.sandbox.types import ExecResult, FileStat, SandboxInfo, SandboxSpec, validate_chat_id
+from local_llm.sandbox.limits import LIST_MAX_ENTRIES, WORKSPACE
+from local_llm.sandbox.types import (
+    ExecResult,
+    FileStat,
+    SandboxInfo,
+    SandboxSpec,
+    WorkspaceListing,
+    validate_chat_id,
+)
 
 # The longest file name Linux filesystems accept (NAME_MAX), in bytes.
 _NAME_MAX_BYTES = 255
@@ -113,6 +120,19 @@ def validate_get_files(paths: list[str], max_bytes: int) -> None:
         raise TypeError(f'get_files: max_bytes must be an int, not {type(max_bytes).__name__}')
     if max_bytes < 0:
         raise ValueError(f'get_files: max_bytes {max_bytes} is negative')
+
+
+def validate_list_workspace(max_entries: int) -> None:
+    """Check `list_workspace`'s `max_entries` against the contract, before anything is listed.
+
+    Raises:
+        TypeError: `max_entries` is not an int (a bool is refused).
+        ValueError: `max_entries` is outside 1..LIST_MAX_ENTRIES.
+    """
+    if type(max_entries) is not int:
+        raise TypeError(f'list_workspace: max_entries must be an int, not {type(max_entries).__name__}')
+    if not 1 <= max_entries <= LIST_MAX_ENTRIES:
+        raise ValueError(f'list_workspace: max_entries {max_entries} is outside 1..{LIST_MAX_ENTRIES}')
 
 
 def validate_sandbox_path(path: str, *, allow_workspace: bool = False) -> str:
@@ -343,6 +363,27 @@ class SandboxBackend(Protocol):
         Raises:
             ValueError: `path` breaks the rules.
             SandboxNotRunning: The chat has no running sandbox.
+        """
+        ...
+
+    async def list_workspace(self, chat_id: str, max_entries: int) -> WorkspaceListing | None:
+        """The regular files on the chat's workspace volume, whether or not its sandbox runs; None when it has none.
+
+        For the workspace deletion dialog (T24), which shows a stopped
+        workspace's contents before the user decides. It never starts the
+        chat's sandbox and runs nothing from the workspace: the Kata backend
+        lists the volume from a short-lived helper container of fixed
+        options (the volume mounted read-only, no network, UID 1000, a fixed
+        script), and nothing a caller or the model chose reaches those
+        options. Symlinks are not followed and not listed; a directory UID
+        1000 may not search is skipped, and the listing marked incomplete.
+        At most `max_entries` files are listed, and `files` and `bytes`
+        count them all (WorkspaceListing).
+
+        Raises:
+            ValueError, TypeError: `max_entries` breaks
+                validate_list_workspace's rules.
+            SandboxError: The volume could not be listed.
         """
         ...
 

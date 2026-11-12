@@ -182,6 +182,28 @@ class FileEntry:
 
 
 @dataclass(frozen=True)
+class WorkspaceListing:
+    """What a chat's workspace volume holds, listed without its sandbox running (SandboxBackend.list_workspace).
+
+    Attributes:
+        entries: Regular files, at most the `max_entries` asked for, each with
+            its path relative to `/workspace`; the first ones the walk found,
+            not the largest. A name that is not UTF-8 has its bad bytes
+            replaced.
+        files: How many regular files the walk found, listed or not.
+        bytes: Their total size, in bytes.
+        complete: False when part of the workspace could not be read (a
+            directory UID 1000 may not search) or the walk ran out of time,
+            so the totals may be short.
+    """
+
+    entries: tuple[FileEntry, ...]
+    files: int
+    bytes: int
+    complete: bool
+
+
+@dataclass(frozen=True)
 class SandboxInfo:
     """One chat's sandbox as the backend sees it: a container, a volume, or both.
 

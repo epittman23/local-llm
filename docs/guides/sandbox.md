@@ -1101,3 +1101,100 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
 
 `tests/test_sandbox_call_sites.py` covers all of these on the FakeBackend,
 including the `.runs` listing against the real script.
+
+## Workspace cap and deletion
+
+Owner decision Q15 (T24): each user keeps at most
+`code_interpreter.sandbox.max_workspaces` persistent workspaces (default
+20, at least 1; Admin Settings > Code Execution, "Sandbox Workspaces per
+User"), and no workspace is deleted for that cap or for the retention
+expiry without the user's answer. Ephemeral sandboxes (unsaved chats,
+the harness) do not count and are not asked about.
+
+**The record.** The table `sandbox_workspace` (`models/sandbox.py`,
+migration `8bede0d9f5c2`) holds one row per persistent volume: the
+backend key, the owning user (the chat's owner, also when an admin runs
+code in it, Q14), the chat id, when it was recorded and last used, and a
+pending deletion: `pending_reason` (`cap` or `expired`), `pending_since`
+and, for `cap`, `pending_for_chat_id`, the chat whose new workspace
+waits. The manager reaches it only through `sandbox/workspaces.py`
+(`DatabaseWorkspaces`; tests use `MemoryWorkspaces`). A row is added
+before a volume's first create, under the key's lock and one claim lock,
+so two chats of one user cannot both take the last place; it is dropped
+when the volume is destroyed (`release`, a deleted chat, the user's
+answer). Every session moves `last_used_at` when it ends, and that use
+also clears an `expired` request.
+
+**The cap.** When a session would create a user's
+(`max_workspaces` + 1)th volume, it creates nothing, takes no slot (the
+check comes before the slot wait, so nothing is evicted for it), records a
+`cap` request on the user's least recently used workspace not already
+asked about for another chat (once per waiting chat, however often the
+model retries), and raises a `SandboxError` whose public text tells the
+model that the user's workspace limit is reached and that the user has
+been asked in the app to remove one. Once a workspace is removed, the
+waiting chat's next call creates its workspace and clears any request
+made for it. A database error while checking fails closed, with a fixed
+message for the model.
+
+**Expiry.** The hourly retention sweep no longer destroys a stopped
+workspace unused for `retention_days`: it marks it `expired`, judged by
+the record's `last_used_at`, not the chat row's `updated_at` (which the
+chat import takes from the client). It keeps its disk until the user
+answers. A volume whose chat was deleted is still destroyed without
+asking, with the same safeguards as before (none when most chats looked
+up are missing; a second lookup just before). A volume with no record
+(made before T24) is given one, last used now; a record whose volume the
+listing does not show, made over an hour ago and not in use, is dropped.
+
+**Contents.** `SandboxBackend.list_workspace(key, max_entries)` lists a
+volume's regular files (path, size, modified time) without its sandbox
+running, at most `LIST_MAX_ENTRIES` (300) listed, with the count and
+total size of all of them, and `complete` false when a directory could
+not be read or the walk ran out of time. The Kata backend runs a
+short-lived helper container `lllm-sandbox-list-<key>` with fixed
+options (`list_helper_options`): the `data` image under `kata-clh`, the
+volume mounted read-only at `/workspace`, `network_mode=none`, UID 1000,
+every capability dropped, a read-only root, 512 MiB and 16 processes.
+It runs a fixed script (`LIST_SCRIPT`) with `python -I -S` from `/`, which
+walks with `lstat` (no symlink is followed) and stops after 20 seconds;
+the backend waits at most 60 seconds, reads its stdout, removes it, and
+checks every field of the output (`parse_listing`), since the names are
+the model's. Nothing a caller or the model chose reaches its options. It
+holds the key's backend lock, attaches the image first (a reboot
+detaches it), and carries no `lllm.chat` label, so the sweeps never take
+it for a sandbox. At most two listings run at once.
+
+**API** (`routers/sandbox.py`; each route reads the records by the
+caller's id, so another user's workspace is the same 404 as a missing
+one):
+
+- `GET /api/v1/sandbox/pending/ids`: the ids of the caller's waiting
+  workspaces, one query, which the app asks on load and after each reply.
+- `GET /api/v1/sandbox/pending`: each waiting workspace with its chat's
+  title, reason, times and contents (or why they could not be listed),
+  and for `cap` the waiting chat and the caller's other workspaces; plus
+  `max_workspaces` and `retention_days`.
+- `POST /api/v1/sandbox/pending/{id}` with `{"action": "remove"|"keep"}`
+  and, for `cap`, an optional `workspace` naming another of the caller's
+  workspaces to remove instead. `keep` on `expired` moves the last use to
+  now, so it is not asked about again until it expires again; `keep` on
+  `cap` leaves the waiting chat without a workspace. 400 for an answer
+  that does not fit, 409 while the workspace to remove is running code,
+  502 when the backend could not destroy it (it stays).
+
+**The dialog** (`apps/web/src/routes/chat/PendingWorkspacesDialog.tsx`,
+mounted in the app shell): opens when the ids list has one the user has
+not dismissed, lists each workspace's chat, reason and files with Remove
+and Keep (and, for `cap`, which workspace to remove), and "Decide later"
+hides it until a new request arrives or the app loads again. A finished
+reply in a saved chat asks for the ids again, so a call that hit the cap
+opens it at once.
+
+Tests: `tests/test_sandbox_workspaces.py` (the cap, expiry, answers,
+routes, both stores), the listing cases in `tests/test_sandbox_kata_unit.py`
+(fixed helper options, output checks, and `LIST_SCRIPT` run on a real
+directory), `PendingWorkspacesDialog.test.tsx`, and
+`e2e/sandbox-workspaces.spec.ts`. Still to verify on the laptop (docker,
+kvm): the real listing of a stopped volume through the Kata helper, and
+one cap round trip in the browser.

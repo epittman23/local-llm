@@ -68,6 +68,7 @@ CODE_EXECUTION_CONFIG_KEYS = {
     'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 'code_interpreter.sandbox.max_running',
     'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES': 'code_interpreter.sandbox.idle_minutes',
     'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS': 'code_interpreter.sandbox.retention_days',
+    'CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES': 'code_interpreter.sandbox.max_workspaces',
 }
 MODELS_CONFIG_KEYS = {
     'DEFAULT_MODELS': 'ui.default_models',
@@ -749,6 +750,7 @@ class CodeInterpreterConfig(BaseModel):
     CODE_INTERPRETER_SANDBOX_MAX_RUNNING: int | None = None
     CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: int | None = None
     CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: int | None = None
+    CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES: int | None = None
 
 
 class CodeInterpreterConfigForm(CodeInterpreterConfig):
@@ -760,6 +762,7 @@ class CodeInterpreterConfigForm(CodeInterpreterConfig):
         'CODE_INTERPRETER_SANDBOX_MAX_RUNNING',
         'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES',
         'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS',
+        'CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES',
         mode='before',
     )
     @classmethod

@@ -58,6 +58,7 @@ from local_llm.sandbox.outputs import (
 )
 from local_llm.sandbox.types import ExecResult, FileStat, SandboxError, SandboxNotRunning
 from local_llm.sandbox.workspace import GUEST_SHELL
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.storage.provider import Storage
 from local_llm.tools import builtin
 from local_llm.utils.auth import create_token
@@ -902,7 +903,9 @@ class _BashRig:
     def __init__(self, *, saved: bool = True, harness: bool = False) -> None:
         self.backend = FakeBackend()
         self.app = _app()
-        self.app.state.sandbox = SandboxManager(self.backend, chats=_AnyChat(), settings=_sandbox_settings)
+        self.app.state.sandbox = SandboxManager(
+            self.backend, workspaces=MemoryWorkspaces(), chats=_AnyChat(), settings=_sandbox_settings
+        )
         state = SimpleNamespace(benchmark_harness=True) if harness else SimpleNamespace()
         self.request = SimpleNamespace(app=self.app, state=state)
         self.user = _people().owner
@@ -1566,7 +1569,9 @@ def test_bash_refuses_what_would_pass_a_saved_chat_s_cap_across_restarts(monkeyp
         over = await rig.bash('printf 123456 > outputs/b.txt')
         # A restarted server: a new manager, so nothing is remembered, on the same volume. The count comes from the
         # rows linked to the chat, and so does the last row per path.
-        rig.app.state.sandbox = SandboxManager(rig.backend, chats=_AnyChat(), settings=_sandbox_settings)
+        rig.app.state.sandbox = SandboxManager(
+            rig.backend, workspaces=MemoryWorkspaces(), chats=_AnyChat(), settings=_sandbox_settings
+        )
         again = await rig.bash('printf 123456 > outputs/c.txt')
         same = await rig.bash('printf 123456 > outputs/a.txt')
         small = await rig.bash('printf 1234 > outputs/d.txt')
@@ -1591,7 +1596,9 @@ def test_an_unsaved_chat_counts_its_rows_across_sandboxes_and_only_its_user_s(mo
         await rig.bash('mkdir outputs')
         first = await rig.bash('printf 123456 > outputs/a.txt')
         # A new manager (a restarted server), so a new ephemeral sandbox: the count comes from the rows.
-        rig.app.state.sandbox = SandboxManager(rig.backend, chats=_AnyChat(), settings=_sandbox_settings)
+        rig.app.state.sandbox = SandboxManager(
+            rig.backend, workspaces=MemoryWorkspaces(), chats=_AnyChat(), settings=_sandbox_settings
+        )
         await rig.bash('mkdir outputs')
         over = await rig.bash('printf 123456 > outputs/b.txt')
         fits = await rig.bash('printf 1234 > outputs/c.txt')

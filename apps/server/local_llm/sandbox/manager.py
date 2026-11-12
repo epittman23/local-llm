@@ -48,9 +48,22 @@ the next session; one that finds more sandboxes running than a lowered
 Last use. The idle reaper uses an in-memory record of each running
 sandbox's last call, which covers every running sandbox, since the startup
 sweep stops whatever a previous process left running. The retention sweep
-uses the chat row's `updated_at` instead: every call happens inside a chat
-that is being updated, it survives restarts, and it needs no new table.
+uses the workspace record's own last use instead (sandbox/workspaces.py),
+which survives restarts and which every session moves when it ends; not the
+chat row's `updated_at`, which the chat import takes from the client.
 Ephemeral sandboxes need neither.
+
+Workspaces (owner decision Q15, T24). Every persistent volume has a
+WorkspaceRecord, written before its first create: whose it is (the chat's
+owner), and whether its deletion waits for the user. A user holds at most
+`max_workspaces`; a session that would create one more creates nothing,
+records a `cap` request on the user's least recently used workspace, and
+raises SandboxError telling the model so. A stopped workspace unused for
+`retention_days` is marked `expired`, never destroyed. Either waits, with
+its disk, until the user answers (answer_pending): remove one, or keep it.
+A volume whose chat was deleted is still destroyed without asking. Records
+are added under the key's lock and one claim lock, so two chats of one user
+cannot both take the last place.
 
 The instance lives on `app.state.sandbox`, created in main.py's lifespan
 with the Kata backend (sandbox/lifespan.py), which runs `startup_sweep()`
@@ -68,7 +81,7 @@ from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, Final, Protocol, get_args
 
 from local_llm.sandbox.backend import SandboxBackend
-from local_llm.sandbox.limits import CANCEL_WAIT_S, TIMEOUT_MAX_S, TIMEOUT_MIN_S
+from local_llm.sandbox.limits import CANCEL_WAIT_S, LIST_MAX_ENTRIES, TIMEOUT_MAX_S, TIMEOUT_MIN_S
 from local_llm.sandbox.types import (
     ExecResult,
     FileStat,
@@ -77,9 +90,11 @@ from local_llm.sandbox.types import (
     SandboxInfo,
     SandboxNotRunning,
     SandboxSpec,
+    WorkspaceListing,
     validate_chat_id,
 )
 from local_llm.sandbox.uploads import SyncedUploads
+from local_llm.sandbox.workspaces import DatabaseWorkspaces, WorkspaceRecord, WorkspaceStore
 
 if TYPE_CHECKING:
     from local_llm.sandbox.outputs import Listing
@@ -92,6 +107,7 @@ _BOUNDS: Final[dict[str, tuple[int, int | None]]] = {
     'max_running': (1, 16),
     'idle_minutes': (1, None),
     'retention_days': (1, None),
+    'max_workspaces': (1, None),
 }
 
 #: Seconds ready() waits for the backend, so a hung Docker daemon cannot leave the admin page waiting.
@@ -111,6 +127,24 @@ MAX_UNSAVED_CHAT_ID_LEN: Final = 200
 
 # Seconds between a waiting session's eviction attempts when no slot is freed meanwhile.
 _SLOT_RETRY_S: Final = 5.0
+
+#: Listings of workspace volumes (the deletion dialog's contents) run at once; each may start a helper VM.
+LISTING_CONCURRENCY: Final = 2
+#: Seconds a workspace record must have existed before the retention sweep drops it for having no volume: longer
+#: than any create, so a record whose create is still running is never taken for a leftover.
+PRUNE_AFTER_S: Final = 3600
+
+# What the model is told when a database error keeps the manager from checking a chat's workspace record.
+_RECORD_FAILED: Final = "the sandbox could not check this chat's workspace; try again in a moment"
+
+
+def cap_message(limit: int) -> str:
+    """What the model is told when a chat's new workspace would be one more than the user's `limit` (Q15)."""
+    return (
+        f'this chat has no code workspace yet, and none was created: the user already has {limit} saved '
+        'workspaces, the most allowed. The user has been asked in the app to remove one of them (or to keep them '
+        'all). Tell the user, and run the code again once they have removed one.'
+    )
 
 
 def _setting_error(name: str, value: object) -> str | None:
@@ -134,8 +168,9 @@ class SandboxSettings:
         default_image: The image a chat's sandbox starts with when a call names none.
         max_running: How many sandboxes may run at once, 1 to 16.
         idle_minutes: Minutes since its last call after which a running sandbox is stopped, at least 1.
-        retention_days: Days since its chat was last updated after which a stopped saved chat's volume is
-            destroyed, at least 1.
+        retention_days: Days since its last use after which a stopped saved chat's workspace is marked for
+            deletion, which waits for the user's answer (T24), at least 1.
+        max_workspaces: How many persistent workspaces one user may hold, at least 1 (owner decision Q15).
 
     Raises:
         ValueError: A field is outside the bounds above, or of the wrong type.
@@ -145,6 +180,7 @@ class SandboxSettings:
     max_running: int = 4
     idle_minutes: int = 30
     retention_days: int = 7
+    max_workspaces: int = 20
 
     def __post_init__(self) -> None:
         for f in fields(self):
@@ -156,12 +192,13 @@ class SandboxSettings:
 #: The command timeout's config key: bounded by limits.TIMEOUT_MIN_S..TIMEOUT_MAX_S, not a SandboxSettings field.
 TIMEOUT_KEY: Final = 'code_interpreter.sandbox.timeout'
 
-#: Config key -> SandboxSettings field, the keys T19 registers.
+#: Config key -> SandboxSettings field, the keys T19 registers (and T24's max_workspaces).
 SETTING_KEYS: Final = {
     'code_interpreter.sandbox.default_image': 'default_image',
     'code_interpreter.sandbox.max_running': 'max_running',
     'code_interpreter.sandbox.idle_minutes': 'idle_minutes',
     'code_interpreter.sandbox.retention_days': 'retention_days',
+    'code_interpreter.sandbox.max_workspaces': 'max_workspaces',
 }
 
 
@@ -305,6 +342,14 @@ class SandboxRefused(SandboxError):
     chat's id is not a canonical UUID, names no chat, or names one the user
     may not run code in (ChatLookup.usable).
     """
+
+
+class WorkspaceNotFound(LookupError):
+    """No workspace of this user has that key, or none of them waits for an answer under it (answer_pending)."""
+
+
+class WorkspaceBusy(Exception):
+    """The workspace's chat is using its sandbox right now, so it cannot be removed; try again once it is done."""
 
 
 class SandboxSession:
@@ -514,6 +559,7 @@ class SandboxManager:
         *,
         settings: Callable[[], Awaitable[SandboxSettings]] = settings_from_config,
         chats: ChatLookup | None = None,
+        workspaces: WorkspaceStore | None = None,
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], float] = time.time,
         wait_notice_s: float = 1.0,
@@ -527,8 +573,9 @@ class SandboxManager:
             backend: Runs the sandboxes.
             settings: Reads the current settings; called once per operation.
             chats: Answers what the manager needs to know about chats; the app's database when None.
+            workspaces: Keeps the persistent workspaces' records (T24); the app's database when None.
             clock: Monotonic seconds, for the last-call times the idle reaper and eviction compare.
-            wall_clock: Epoch seconds, compared with chats' `updated_at` by the retention sweep.
+            wall_clock: Epoch seconds, for the workspace records' times, which the retention sweep compares.
             wait_notice_s: Seconds a session waits for a slot before it calls its `on_wait`.
             evict_idle_s: Seconds, by `clock`, a sandbox must have been idle before a session with no free
                 slot may stop it and take its slot (Q13).
@@ -540,6 +587,11 @@ class SandboxManager:
         self._backend = backend
         self._settings = settings
         self._chats: ChatLookup = DatabaseChats() if chats is None else chats
+        self._workspaces: WorkspaceStore = DatabaseWorkspaces() if workspaces is None else workspaces
+        # Held while a new workspace is counted against its user's cap and recorded, so two chats of one user
+        # cannot both take the last place.
+        self._claim_lock = asyncio.Lock()
+        self._listing = asyncio.Semaphore(LISTING_CONCURRENCY)
         self._clock = clock
         self._wall_clock = wall_clock
         self._wait_notice_s = wait_notice_s
@@ -615,9 +667,10 @@ class SandboxManager:
         Raises:
             SandboxRefused: The chat may not have a sandbox; the backend has not been called.
             ValueError: `image` is not an ImageKey.
-            SandboxError: No slot came free within `slot_wait_timeout_s`, the manager has shut down, or the
-                backend could not start the sandbox. No slot, lock or mapping is kept, except for a sandbox
-                left to clean up.
+            SandboxError: The chat would get a new workspace beyond its owner's `max_workspaces` (its public
+                text is cap_message, and a `cap` request is recorded; see _claim), no slot came free within
+                `slot_wait_timeout_s`, the manager has shut down, or the backend could not start the sandbox. No
+                slot, lock or mapping is kept, except for a sandbox left to clean up.
         """
         owner = await self._admit(chat_id, user)
         settings = await self._settings()
@@ -705,7 +758,16 @@ class SandboxManager:
         # Built first: a bad image is refused before any backend call.
         spec = SandboxSpec(key, want, ephemeral=ephemeral)
         if tracked is None:
-            await self._take_slot(key, ephemeral, settings.max_running, on_wait)
+            # A new volume is counted against its owner's cap, and recorded, before a slot is sought (T24), so a
+            # chat at the cap is told at once, and no idle sandbox is evicted for it.
+            added = not ephemeral and await self._claim(key, settings)
+            try:
+                await self._take_slot(key, ephemeral, settings.max_running, on_wait)
+            except BaseException:
+                if added:
+                    # Nothing was created: the record would count a workspace that does not exist.
+                    await self._drop_record(key)
+                raise
             try:
                 if self._stopped_all:
                     # shutdown(stop_running=True) freed the slot this session waited for: start nothing behind it.
@@ -716,6 +778,8 @@ class SandboxManager:
             except BaseException:
                 # Nothing has been created, so the slot is free at once.
                 self._forget(key)
+                if added:
+                    await self._drop_record(key)
                 raise
         await self._create(key, spec)
         if self._stopped_all:
@@ -744,8 +808,72 @@ class SandboxManager:
             await self._clean_up(key, spec.ephemeral)
             raise
 
+    async def _claim(self, key: str, settings: SandboxSettings) -> bool:
+        """Make sure `key` has a workspace record, adding one if its owner has room; True when it added one.
+
+        The caller holds the key's lock.
+
+        A key with a record is the common case: its volume exists, or was
+        recorded before an earlier create. Otherwise, under the claim lock,
+        the chat's owner's records are counted: below `max_workspaces`, one
+        is added, and any `cap` request made for this chat is cleared, since
+        it is answered; at the limit, nothing is added, a `cap` request is
+        recorded once for this chat (_ask_for_room), and SandboxError is
+        raised with cap_message as its public text.
+
+        Raises:
+            SandboxRefused: The chat has no row, so no owner (deleted meanwhile).
+            SandboxError: The owner is at the limit, or the records could not be read or written.
+        """
+        try:
+            if await self._workspaces.get(key) is not None:
+                return False
+            async with self._claim_lock:
+                owner = await self._workspaces.owner_of(key)
+                if owner is None:
+                    raise SandboxRefused(f'chat {key} has no row, so its workspace would have no owner')
+                held = await self._workspaces.of_user(owner)
+                now = int(self._wall_clock())
+                if len(held) < settings.max_workspaces:
+                    await self._workspaces.add(WorkspaceRecord(key, owner, key, now, now))
+                    for record in held:
+                        if record.pending_reason == 'cap' and record.pending_for == key:
+                            await self._workspaces.clear_pending(record.key)
+                    log.info('recorded the workspace of chat %s for user %s', key, owner)
+                    return True
+                await self._ask_for_room(key, held, now)
+                raise SandboxError(
+                    f'user {owner} holds {len(held)} workspaces, the limit is {settings.max_workspaces}; '
+                    f'chat {key} gets none',
+                    public=cap_message(settings.max_workspaces),
+                )
+        except SandboxError:
+            raise
+        except Exception as e:
+            log.exception('could not check the workspace record of %s', key)
+            raise SandboxError(f'could not check the workspace record of {key}', public=_RECORD_FAILED) from e
+
+    async def _ask_for_room(self, key: str, held: list[WorkspaceRecord], now: int) -> None:
+        """Record one `cap` request for the chat `key`, on its owner's least recently used workspace not already asked
+        about for another chat; a no-op when one is recorded for `key` already, or every workspace is."""
+        if any(r.pending_reason == 'cap' and r.pending_for == key for r in held):
+            return
+        free = [r for r in held if r.pending_reason != 'cap']
+        if not free:
+            return
+        candidate = min(free, key=lambda r: (r.last_used_at, r.key))
+        await self._workspaces.set_pending(candidate.key, 'cap', now, key)
+        log.info('chat %s waits for room: asked user %s about workspace %s', key, candidate.user_id, candidate.key)
+
+    async def _touch(self, key: str) -> None:
+        """Record a use of `key`'s workspace now; a failure is logged, since the call itself is done."""
+        try:
+            await self._workspaces.touch(key, int(self._wall_clock()))
+        except Exception:
+            log.exception('could not record the use of workspace %s', key)
+
     async def _end(self, handle: SandboxSession, *, ephemeral: bool) -> None:
-        """Close a session; the caller still holds its key's lock."""
+        """Close a session, recording a persistent workspace's use; the caller still holds its key's lock."""
         if handle._close():
             # The backend reported it not running, which may be wrong while the container lives on: stop it
             # (destroy, if ephemeral) before its slot is freed. A persistent sandbox keeps its volume and key, so
@@ -753,6 +881,9 @@ class SandboxManager:
             await self._clean_up(handle.key, ephemeral)
         elif (tracked := self._tracked.get(handle.key)) is not None:
             tracked.last_call = self._clock()
+        if not ephemeral:
+            # Last, so a cancellation during the database write skips nothing above.
+            await self._touch(handle.key)
 
     async def _clean_up(self, key: str, ephemeral: bool) -> None:
         """Stop a sandbox that may still run (destroy, if ephemeral), logging a failure; the caller holds its lock.
@@ -1008,7 +1139,18 @@ class SandboxManager:
                 # Already destroyed (reaped or released) while this waited for the lock.
                 return
             await self._stop(key, destroy=True)
+            if not ephemeral:
+                await self._drop_record(key)
         log.info('released sandbox %s', key)
+
+    async def _drop_record(self, key: str) -> bool:
+        """Drop the record of a workspace whose volume is gone; False, logged, when that fails (the sweep retries)."""
+        try:
+            await self._workspaces.delete(key)
+        except Exception:
+            log.exception('could not drop the record of workspace %s', key)
+            return False
+        return True
 
     async def reap_idle(self) -> None:
         """Stop every running sandbox idle for at least `idle_minutes` and not in use, and retry those in doubt.
@@ -1031,28 +1173,39 @@ class SandboxManager:
             await self._stop_idle(key, threshold, in_doubt_due=True, why='')
 
     async def sweep_retention(self) -> None:
-        """Destroy the volumes of stopped saved chats not updated for `retention_days`, or deleted.
+        """Mark stopped workspaces unused for `retention_days` for deletion, and destroy deleted chats' volumes.
 
         Only sandboxes the backend lists as not running are judged, and
         none in use. A stopped ephemeral one whose key this manager no
         longer maps is destroyed whatever its age, since an ephemeral
-        sandbox goes when it stops (Q5). The persistent ones' chats are
-        looked up in one `updated_at` call, skipped when there is nothing
-        to judge. A volume is destroyed when its chat has no row (deleted,
-        by any path) or its `updated_at` is before `wall_clock() -
-        retention_days` days; exactly at that moment, it is kept. The chat's
-        `updated_at` is taken as given, so a chat imported with a future date
-        keeps its volume until then; T24 judges expiry by the manager's own
-        record of last use instead. If more than half of the
-        chats looked up, and more than 3, have no row, the database may be
-        empty or wrong: none of those volumes is destroyed that pass, and
-        an error is logged. The chats of the volumes to be destroyed are
-        looked up again just before, so one updated meanwhile is kept.
+        sandbox goes when it stops (Q5).
+
+        The persistent ones' chats are looked up in one `updated_at` call,
+        skipped when there is nothing to judge. A volume whose chat has no
+        row (deleted, by any path) is destroyed without asking, and its
+        record dropped; if more than half of the chats looked up, and more
+        than 3, have no row, the database may be empty or wrong: none of
+        those volumes is destroyed that pass, and an error is logged. Those
+        chats are looked up again just before, so one that reappeared keeps
+        its volume.
+
+        A volume whose chat exists is never destroyed here (owner decision
+        Q15, T24): when its record's last use is before `wall_clock() -
+        retention_days` days, it is marked pending `expired`, and waits,
+        with its files, for its user's answer (answer_pending); exactly at
+        that moment it is not. Its last use is the record's, which every
+        session moves, not the chat's `updated_at`. A volume with no record
+        (made before the records existed) gets one, last used now. A record
+        whose volume the listing does not show, made over PRUNE_AFTER_S ago
+        and not in use, is dropped: its create never finished.
 
         Raises:
-            SandboxError: Listing the sandboxes failed. A volume that fails to be destroyed is logged instead.
+            SandboxError: Listing the sandboxes failed. A volume that fails to be destroyed, or a record that
+                fails to be written, is logged instead.
         """
         settings = await self._settings()
+        # Read before the listing: a record in it was made before the listing began (see _prune).
+        records = await self._workspaces.all()
         infos = await self._backend.list_sandboxes()
         for info in infos:
             key = info.chat_id
@@ -1068,38 +1221,153 @@ class SandboxManager:
                     log.info('destroyed stopped ephemeral sandbox volume %s', key)
         stopped = [info.chat_id for info in infos if not info.running and not info.ephemeral]
         candidates = [key for key in stopped if not self._busy(key)]
-        if not candidates:
-            return
-        updated = await self._chats.updated_at(candidates)
-        cutoff = self._wall_clock() - settings.retention_days * _SECONDS_PER_DAY
-        missing = {key for key in candidates if key not in updated}
-        if len(missing) > 3 and 2 * len(missing) > len(candidates):
-            log.error(
-                'the chats of %d of %d stopped sandbox volumes were not found; destroying none of those this pass, '
-                'in case the database is empty or wrong',
-                len(missing),
-                len(candidates),
-            )
-            candidates = [key for key in candidates if key not in missing]
-        doomed = [key for key in candidates if key in missing or updated[key] < cutoff]
-        if not doomed:
-            return
-        # Looked up again just before destroying: a chat updated during the awaits above keeps its volume.
-        fresh = await self._chats.updated_at(doomed)
-        for key in doomed:
-            stamp = fresh.get(key)
-            if stamp is not None and stamp >= cutoff:
-                continue
+        if candidates:
+            updated = await self._chats.updated_at(candidates)
+            missing = [key for key in candidates if key not in updated]
+            if len(missing) > 3 and 2 * len(missing) > len(candidates):
+                log.error(
+                    'the chats of %d of %d stopped sandbox volumes were not found; destroying none of those this '
+                    'pass, in case the database is empty or wrong',
+                    len(missing),
+                    len(candidates),
+                )
+            elif missing:
+                await self._destroy_orphans(missing)
+            await self._judge_expiry([key for key in candidates if key in updated], settings)
+        await self._prune(records, {info.chat_id for info in infos})
+
+    async def _destroy_orphans(self, keys: list[str]) -> None:
+        """Destroy the volumes of chats that have no row, after looking them up once more, and drop their records."""
+        # Looked up again just before destroying: a chat that came back meanwhile keeps its volume.
+        fresh = await self._chats.updated_at(keys)
+        for key in keys:
             # Checked again, with no await before the lock: a session may have started it during the awaits above.
-            if self._busy(key):
+            if key in fresh or self._busy(key):
                 continue
             async with self._hold(key):
                 try:
                     await self._backend.destroy(key)
                 except Exception:
-                    log.exception('could not destroy expired sandbox volume %s', key)
-                else:
-                    log.info('destroyed sandbox volume %s (%s)', key, 'chat deleted' if stamp is None else 'expired')
+                    log.exception('could not destroy sandbox volume %s of a deleted chat', key)
+                    continue
+                log.info('destroyed sandbox volume %s (chat deleted)', key)
+                await self._drop_record(key)
+
+    async def _judge_expiry(self, keys: list[str], settings: SandboxSettings) -> None:
+        """Mark the stopped workspaces of existing chats that are unused for `retention_days` pending `expired`, and
+        record those without a record; each under its lock, against its record as it is then."""
+        now = int(self._wall_clock())
+        cutoff = now - settings.retention_days * _SECONDS_PER_DAY
+        for key in keys:
+            if self._busy(key):
+                continue
+            async with self._hold(key):
+                try:
+                    record = await self._workspaces.get(key)
+                    if record is None:
+                        owner = await self._workspaces.owner_of(key)
+                        if owner is not None:
+                            await self._workspaces.add(WorkspaceRecord(key, owner, key, now, now))
+                            log.info('recorded the workspace of chat %s, made before its record', key)
+                    elif record.pending_reason is None and record.last_used_at < cutoff:
+                        await self._workspaces.set_pending(key, 'expired', now, None)
+                        log.info('workspace %s is unused since %d; asking its user before deleting it', key, cutoff)
+                except Exception:
+                    log.exception('could not judge the expiry of workspace %s', key)
+
+    async def _prune(self, records: list[WorkspaceRecord], listed: set[str]) -> None:
+        """Drop records, read before the listing `listed`, whose volume it does not show (see sweep_retention)."""
+        old = int(self._wall_clock()) - PRUNE_AFTER_S
+        for record in records:
+            if record.key in listed or record.created_at >= old or self._busy(record.key):
+                continue
+            async with self._hold(record.key):
+                if await self._drop_record(record.key):
+                    log.info('dropped the record of workspace %s, which has no volume', record.key)
+
+    # The workspaces' owners (T24).
+
+    async def current_settings(self) -> SandboxSettings:
+        """The settings as they are now, read as every operation reads them."""
+        return await self._settings()
+
+    async def workspaces_of(self, user_id: str) -> list[WorkspaceRecord]:
+        """Every workspace record of the user, least recently used first.
+
+        Raises:
+            Exception: The records could not be read.
+        """
+        return await self._workspaces.of_user(user_id)
+
+    async def chat_titles(self, chat_ids: list[str]) -> dict[str, str]:
+        """Each existing chat's title, for the deletion dialog."""
+        return await self._workspaces.chat_titles(chat_ids)
+
+    async def workspace_contents(self, key: str) -> WorkspaceListing | None:
+        """What the workspace `key` holds (SandboxBackend.list_workspace), at most LIST_MAX_ENTRIES files listed.
+
+        For trusted callers that have checked whose workspace it is. At most
+        LISTING_CONCURRENCY listings run at once. None when it has no volume.
+
+        Raises:
+            ValueError: `key` is not a canonical UUID.
+            SandboxError: The backend could not list it.
+        """
+        key = validate_chat_id(key)
+        async with self._listing:
+            return await self._backend.list_workspace(key, LIST_MAX_ENTRIES)
+
+    async def answer_pending(self, user_id: str, key: str, action: str, workspace: str | None = None) -> None:
+        """Carry out the user's answer to the deletion that `key`'s workspace waits for (owner decision Q15).
+
+        Only the user's own records are looked at, so another user's key is
+        WorkspaceNotFound, as a missing one is. `keep` clears the request:
+        for `expired` it also moves the last use to now, so it is not asked
+        about again until it expires again; for `cap` the chat that wanted
+        a new workspace stays without one (its next call asks again).
+        `remove` destroys a workspace and drops its record: for `expired`,
+        `key`'s own; for `cap`, `workspace` (another of the user's, `key`'s
+        own when None), clearing `key`'s request when it is another, after
+        which the waiting chat's next call creates its workspace.
+
+        Raises:
+            ValueError: `action` is neither, `keep` names a workspace, or an
+                `expired` request is answered by removing another.
+            WorkspaceNotFound: `key` is not the user's or waits for nothing, or `workspace` is not the user's.
+            WorkspaceBusy: The workspace to remove is in use.
+            SandboxError: The backend could not destroy it; its record is kept.
+        """
+        if action not in ('remove', 'keep'):
+            raise ValueError(f'the answer must be remove or keep, not {action!r}')
+        records = {record.key: record for record in await self._workspaces.of_user(user_id)}
+        record = records.get(key)
+        if record is None or record.pending_reason is None:
+            raise WorkspaceNotFound(key)
+        if action == 'keep':
+            if workspace is not None:
+                raise ValueError('keep names no workspace')
+            now = int(self._wall_clock())
+            await self._workspaces.clear_pending(key, last_used_at=now if record.pending_reason == 'expired' else None)
+            log.info('user %s keeps workspace %s (%s)', user_id, key, record.pending_reason)
+            return
+        target = key if workspace is None else workspace
+        if record.pending_reason == 'expired' and target != key:
+            raise ValueError('an expired workspace is answered by removing it, or keeping it')
+        if target not in records:
+            raise WorkspaceNotFound(target)
+        await self._remove_workspace(target)
+        log.info('user %s removed workspace %s (%s request on %s)', user_id, target, record.pending_reason, key)
+        if target != key:
+            await self._workspaces.clear_pending(key)
+
+    async def _remove_workspace(self, key: str) -> None:
+        """Destroy `key`'s sandbox and volume and drop its record, under its lock; refused while it is in use."""
+        # Checked with no await before the lock is taken, so no session can take it in between.
+        if key in self._locks:
+            raise WorkspaceBusy(key)
+        async with self._hold(key):
+            await self._stop(key, destroy=True)
+            await self._workspaces.delete(key)
 
     async def startup_sweep(self) -> None:
         """Clean up after the previous process; it must run before the manager serves any session.

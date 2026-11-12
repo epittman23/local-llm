@@ -81,6 +81,8 @@ CANCEL_WAIT_S: Final = 30
 MAX_PATH_BYTES: Final = 4096
 # Timeout of each guest helper the file tools run (lllm-path, the read check, the listing, the write), in seconds.
 HELPER_TIMEOUT_S: Final = 30
+# The workspace listing the deletion dialog shows (T24): at most this many files are listed, with a total of all.
+LIST_MAX_ENTRIES: Final = 300
 # Largest file `view` or `str_replace` reads, in bytes (10 MiB).
 VIEW_MAX_BYTES: Final = 10 * 1024 * 1024
 # Largest image `view` returns, in bytes: its data URI is stored with the chat and sent with every later request.

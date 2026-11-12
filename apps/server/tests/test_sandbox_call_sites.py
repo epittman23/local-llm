@@ -48,6 +48,7 @@ from local_llm.sandbox import outputs as sandbox_outputs
 from local_llm.sandbox.fake import FakeBackend, FakeExecRequest, FakeFile, FakeRun, FakeWorkspace, interpret
 from local_llm.sandbox.limits import HELPER_TIMEOUT_S, TIMEOUT_DEFAULT_S
 from local_llm.sandbox.workspace import GUEST_SHELL
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.tools import builtin
 from local_llm.utils import middleware, misc, subagents
 from local_llm.utils.auth import get_verified_user
@@ -104,7 +105,9 @@ class _Rig:
         self.backend = FakeBackend(_python)
         state = SimpleNamespace()
         if manager:
-            state.sandbox = SandboxManager(self.backend, chats=_Chats(), settings=_settings)
+            state.sandbox = SandboxManager(
+                self.backend, workspaces=MemoryWorkspaces(), chats=_Chats(), settings=_settings
+            )
         self.request = SimpleNamespace(app=SimpleNamespace(state=state), state=SimpleNamespace())
         self.events: list[dict] = []
         self.stored: list[dict] = []

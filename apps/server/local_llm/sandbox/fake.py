@@ -56,6 +56,7 @@ from local_llm.sandbox import workspace as guest
 from local_llm.sandbox.backend import (
     validate_create,
     validate_get_files,
+    validate_list_workspace,
     validate_put_files,
     validate_put_uploads,
     validate_sandbox_path,
@@ -64,12 +65,14 @@ from local_llm.sandbox.exec import StreamCap, require_wrapped, result_from
 from local_llm.sandbox.limits import HOST_DEADLINE_SLACK_S, SANDBOX_UID, WORKSPACE
 from local_llm.sandbox.types import (
     ExecResult,
+    FileEntry,
     FileStat,
     ImageKey,
     SandboxInfo,
     SandboxNotRunning,
     SandboxSpec,
     SandboxUnavailable,
+    WorkspaceListing,
     validate_chat_id,
 )
 
@@ -805,6 +808,38 @@ class FakeBackend:
         if entry.content is None:
             return FileStat(path, 'dir', entry.uid, entry.mode, 0, entry.mtime)
         return FileStat(path, 'file', entry.uid, entry.mode, len(entry.content), entry.mtime)
+
+    async def list_workspace(self, chat_id: str, max_entries: int) -> WorkspaceListing | None:
+        self.calls.append(('list_workspace', {'chat_id': chat_id, 'max_entries': max_entries}))
+        chat_id = validate_chat_id(chat_id)
+        validate_list_workspace(max_entries)
+        box = self.sandboxes.get(chat_id)
+        if box is None:
+            return None
+        # The volume as the Kata helper walks it, as UID 1000, running or not: the uploads mount is not on the
+        # volume, symlinks and FIFOs are not files, and a file under a directory UID 1000 cannot read and search is
+        # missed, which makes the listing incomplete.
+        entries: list[FileEntry] = []
+        files = total = 0
+        complete = True
+        prefix = WORKSPACE + '/'
+        for path in sorted(p for p in box.files if p.startswith(prefix)):
+            entry = box.files[path]
+            if entry.content is None or entry.link is not None or entry.fifo:
+                continue
+            parents = [posixpath.dirname(path)]
+            while parents[-1] != WORKSPACE:
+                parents.append(posixpath.dirname(parents[-1]))
+            if not all(
+                (d := box.files.get(parent)) is not None and _allowed(d, SANDBOX_UID, 0o5) for parent in parents
+            ):
+                complete = False
+                continue
+            files += 1
+            total += len(entry.content)
+            if len(entries) < max_entries:
+                entries.append(FileEntry(path[len(prefix) :], len(entry.content), entry.mtime))
+        return WorkspaceListing(tuple(entries), files, total, complete)
 
     async def stop(self, chat_id: str) -> None:
         self.calls.append(('stop', {'chat_id': chat_id}))

@@ -36,6 +36,7 @@ SANDBOX_FIELDS = {
     'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 'code_interpreter.sandbox.max_running',
     'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES': 'code_interpreter.sandbox.idle_minutes',
     'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS': 'code_interpreter.sandbox.retention_days',
+    'CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES': 'code_interpreter.sandbox.max_workspaces',
 }
 
 
@@ -70,7 +71,7 @@ def client(app):
 
 
 def _form(**overrides) -> dict:
-    """A complete form as the admin page posts it: Jupyter fields plus the five sandbox ones."""
+    """A complete form as the admin page posts it: Jupyter fields plus the six sandbox ones."""
     form = {
         'ENABLE_CODE_EXECUTION': True,
         'CODE_EXECUTION_ENGINE': 'sandbox',
@@ -92,6 +93,7 @@ def _form(**overrides) -> dict:
         'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 8,
         'CODE_INTERPRETER_SANDBOX_IDLE_MINUTES': 15,
         'CODE_INTERPRETER_SANDBOX_RETENTION_DAYS': 3,
+        'CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES': 12,
     }
     form.update(overrides)
     return form
@@ -104,6 +106,7 @@ class TestDefaults:
         assert DEFAULT_CONFIG['code_interpreter.sandbox.max_running'] == settings.max_running
         assert DEFAULT_CONFIG['code_interpreter.sandbox.idle_minutes'] == settings.idle_minutes
         assert DEFAULT_CONFIG['code_interpreter.sandbox.retention_days'] == settings.retention_days
+        assert DEFAULT_CONFIG['code_interpreter.sandbox.max_workspaces'] == settings.max_workspaces == 20
         assert DEFAULT_CONFIG['code_interpreter.sandbox.timeout'] == limits.TIMEOUT_DEFAULT_S
 
     def test_the_form_maps_every_key_the_manager_reads(self):
@@ -141,7 +144,7 @@ class TestConfigForm:
             assert _run(Config.get(key)) == _form()[field]
         # The manager reads the stored values back as it will at run time.
         assert _run(settings_from_config()) == SandboxSettings(
-            default_image='web', max_running=8, idle_minutes=15, retention_days=3
+            default_image='web', max_running=8, idle_minutes=15, retention_days=3, max_workspaces=12
         )
 
     def test_a_form_without_the_sandbox_fields_keeps_what_is_stored(self, client, people):
@@ -164,6 +167,8 @@ class TestConfigForm:
             ('CODE_INTERPRETER_SANDBOX_IDLE_MINUTES', 0),
             ('CODE_INTERPRETER_SANDBOX_RETENTION_DAYS', -1),
             ('CODE_INTERPRETER_SANDBOX_MAX_RUNNING', 'many'),
+            ('CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES', 0),
+            ('CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES', 2.5),
         ],
     )
     def test_a_value_outside_the_bounds_is_refused_and_nothing_is_stored(self, client, people, field, value):
@@ -173,6 +178,7 @@ class TestConfigForm:
             'code_interpreter.sandbox.max_running': 5,
             'code_interpreter.sandbox.idle_minutes': 31,
             'code_interpreter.sandbox.retention_days': 6,
+            'code_interpreter.sandbox.max_workspaces': 9,
         }
         _run(Config.upsert(seeded))
         r = client.post('/configs/code_execution', json=_form(**{field: value}), headers=people.admin.headers)
@@ -210,6 +216,7 @@ class TestConfigForm:
             ('code_interpreter.sandbox.timeout', 301),
             ('code_interpreter.sandbox.idle_minutes', 0),
             ('code_interpreter.sandbox.retention_days', True),
+            ('code_interpreter.sandbox.max_workspaces', 0),
         ],
     )
     def test_the_config_import_refuses_what_the_form_would(self, client, people, key, value):
@@ -239,6 +246,8 @@ class TestConfigForm:
             ('CODE_INTERPRETER_SANDBOX_MAX_RUNNING', 16),
             ('CODE_INTERPRETER_SANDBOX_IDLE_MINUTES', 1),
             ('CODE_INTERPRETER_SANDBOX_RETENTION_DAYS', 365),
+            ('CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES', 1),
+            ('CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES', 1000),
         ],
     )
     def test_the_bounds_themselves_are_accepted(self, client, people, field, value):

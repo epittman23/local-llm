@@ -114,7 +114,7 @@ describe('CodeExecution: a rejected save', () => {
 	});
 });
 
-// Both engines on the sandbox, with the five settings the server stores.
+// Both engines on the sandbox, with the six settings the server stores.
 const SANDBOX_CONFIG = {
 	...CONFIG,
 	CODE_EXECUTION_ENGINE: 'sandbox',
@@ -123,7 +123,8 @@ const SANDBOX_CONFIG = {
 	CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
 	CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
 	CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
-	CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7
+	CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7,
+	CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES: 20
 };
 
 const renderSandbox = async (config: Record<string, unknown> = SANDBOX_CONFIG) => {
@@ -146,13 +147,14 @@ describe('CodeExecution: the sandbox engine', () => {
 		}
 	});
 
-	it('shows the five sandbox fields once, with the memory note', async () => {
+	it('shows the six sandbox fields once, with the memory note', async () => {
 		await renderSandbox();
 		expect(screen.getAllByLabelText('Sandbox Default Image')).toHaveLength(1);
 		expect(screen.getByLabelText('Sandbox Command Timeout')).toHaveValue(60);
 		expect(screen.getByLabelText('Sandbox Maximum Running')).toHaveValue(4);
 		expect(screen.getByLabelText('Sandbox Idle Minutes')).toHaveValue(30);
 		expect(screen.getByLabelText('Sandbox Retention Days')).toHaveValue(7);
+		expect(screen.getByLabelText('Sandbox Workspaces per User')).toHaveValue(20);
 		expect(screen.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeTruthy();
 		expect(screen.queryByText('Jupyter URL')).toBeNull();
 	});
@@ -213,6 +215,7 @@ describe('CodeExecution: the sandbox engine', () => {
 		fireEvent.change(screen.getByLabelText('Sandbox Maximum Running'), { target: { value: '8' } });
 		fireEvent.change(screen.getByLabelText('Sandbox Idle Minutes'), { target: { value: '' } });
 		fireEvent.change(screen.getByLabelText('Sandbox Default Image'), { target: { value: 'web' } });
+		fireEvent.change(screen.getByLabelText('Sandbox Workspaces per User'), { target: { value: '5' } });
 		save();
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({
@@ -221,7 +224,8 @@ describe('CodeExecution: the sandbox engine', () => {
 			CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
 			CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 8,
 			CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: null,
-			CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7
+			CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7,
+			CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES: 5
 		});
 	});
 });

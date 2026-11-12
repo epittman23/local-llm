@@ -44,6 +44,7 @@ from local_llm.sandbox.kata import KataDockerBackend
 from local_llm.sandbox.limits import PREVIEW_MAX_SIDE
 from local_llm.sandbox.manager import SandboxManager, SandboxSettings
 from local_llm.sandbox.workspace import image_size
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.socket.main import merge_message_files
 from local_llm.storage.provider import Storage
 from local_llm.tools import builtin
@@ -99,7 +100,7 @@ def test_a_figure_and_a_pdf_in_outputs_come_back_on_the_message(backend: KataDoc
     user = asyncio.run(Users.insert_new_user(f'kata-o-{tag}', 'Owner', f'kata-o-{tag}@example.invalid', role='user'))
     history = {'messages': {'m1': {'id': 'm1', 'role': 'assistant'}}}
     asyncio.run(Chats.insert_new_chat(chat, user.id, ChatForm(chat={'title': 'Outputs', 'history': history})))
-    manager = SandboxManager(backend, chats=_Chats(chat), settings=_settings)
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=_Chats(chat), settings=_settings)
     app = FastAPI()
     app.include_router(files_router.router, prefix='/api/v1/files')
     app.state.sandbox = manager

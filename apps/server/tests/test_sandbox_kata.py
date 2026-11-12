@@ -71,6 +71,7 @@ from local_llm.sandbox.types import (
     SandboxUnavailable,
     volume_name,
 )
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 
 MIRROR_REASON = 'The sandbox-mirror container is not running; make backend starts it'
 
@@ -586,7 +587,7 @@ def test_path_confinement_against_a_real_symlink(backend: KataDockerBackend, key
     async def settings() -> SandboxSettings:
         return SandboxSettings()
 
-    manager = SandboxManager(backend, settings=settings, chats=Chats())
+    manager = SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats())
     user = SimpleNamespace(id='kata-test-user', role='user')
 
     async def check() -> None:
@@ -619,7 +620,9 @@ def test_restart_sweep(backend: KataDockerBackend, keys: Keys) -> None:
             return {c: int(time.time()) for c in chat_ids}
 
     # A new process's manager: everything it lists belongs to the previous one.
-    asyncio.run(SandboxManager(backend, settings=settings, chats=Chats()).startup_sweep())
+    asyncio.run(
+        SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats()).startup_sweep()
+    )
     infos = {i.chat_id: i for i in asyncio.run(backend.list_sandboxes())}
     assert saved in infos and infos[saved].running is False
     assert ephemeral not in infos

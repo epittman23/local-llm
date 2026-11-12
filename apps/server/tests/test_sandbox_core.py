@@ -774,6 +774,7 @@ _BACKEND_METHODS = [
     'exec',
     'get_files',
     'list_sandboxes',
+    'list_workspace',
     'put_files',
     'put_uploads',
     'ready',

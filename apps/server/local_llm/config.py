@@ -2684,6 +2684,7 @@ DEFAULT_CONFIG = {
     'code_interpreter.sandbox.max_running': 4,
     'code_interpreter.sandbox.idle_minutes': 30,
     'code_interpreter.sandbox.retention_days': 7,
+    'code_interpreter.sandbox.max_workspaces': 20,
     'google_drive.enable': ENABLE_GOOGLE_DRIVE_INTEGRATION,
     'google_drive.client_id': GOOGLE_DRIVE_CLIENT_ID,
     'google_drive.api_key': GOOGLE_DRIVE_API_KEY,
