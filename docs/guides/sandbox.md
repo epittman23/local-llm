@@ -5,8 +5,8 @@
 > is being built on the `feat/sandbox-code-interpreter` branch (PR #884).
 > The app uses it only where an admin sets the engine to `sandbox` in
 > Admin Settings > Code Execution; Jupyter stays the code interpreter until
-> then. This guide grows with the build; so far it covers the host setup,
-> the images, the backend, uploads, outputs, the call sites, the workspace
+> then. It covers the host setup, the images, the mirror, the backend and
+> its tests, operations, uploads, outputs, the call sites, the workspace
 > cap and the package telemetry.
 
 Each chat's code runs in its own microVM: a Kata Containers container whose
@@ -715,6 +715,84 @@ They skip without `LLLM_TEST_KATA=1` (CI has no `/dev/kvm`). Without the
 `local-llm_sandbox` network they create it with the backend's subnet and
 remove it afterwards, and they remove every container, volume and image
 file they make. About three minutes, most of it the PID 1 test's 300 calls.
+
+## Operations
+
+Everything below is on the host running the backend. `DATA_DIR` is
+`apps/server/data` under `make backend`.
+
+**Where things are.** A chat's sandbox is known by its key, the manager's
+UUID for the chat (not the chat id); the table `sandbox_workspace` maps
+each persistent key to its owner and chat (`key`, `user_id`, `chat_id`).
+
+| What | Where |
+|---|---|
+| Container | `lllm-sandbox-<key>`, labels `lllm.chat=<key>`, `lllm.scope`, `lllm.image` (and `lllm.ephemeral=1` for an unsaved chat) |
+| Workspace volume | Docker volume `lllm-sandbox-<key>` over the image file `DATA_DIR/sandbox/volumes/<key>.img`, attached to a loop device |
+| Uploads | `DATA_DIR/sandbox/uploads/<key>`, bound read-only at `/workspace/uploads` |
+| Listing helper | `lllm-sandbox-list-<key>`, label `lllm.helper=list`, alive only while the keep-or-remove dialog lists a workspace |
+| Scope id | `DATA_DIR/sandbox/volumes/scope`; another app instance on the same daemon has its own |
+| Images and mirror | `local-llm/sandbox-data:<TAG>`, `local-llm/sandbox-web:<TAG>`; the `local-llm-sandbox-mirror` container |
+
+**Looking at them.**
+
+```sh
+scope=$(cat apps/server/data/sandbox/volumes/scope)
+docker ps -a --filter label=lllm.scope=$scope \
+  --format '{{.Names}}\t{{.Status}}\t{{.Label "lllm.image"}}'
+docker volume ls --filter label=lllm.scope=$scope
+ls -lsh apps/server/data/sandbox/volumes/     # allocated vs. apparent size
+udisksctl status; losetup -l                  # the attached loop devices
+psql "$DATABASE_URL" -c 'select key, user_id, chat_id, to_timestamp(last_used_at), pending_reason from sandbox_workspace order by last_used_at'
+```
+
+**Removing them.** Use the app wherever possible: deleting a chat
+destroys its workspace at the next hourly sweep, and the keep-or-remove
+dialog removes one the user chooses. Both go through `destroy`, which
+removes, in order, the container, the loop device, the image file and
+the volume, so a destroy cut short is finished by a later sweep. By
+hand, with the backend stopped, the same order is:
+
+```sh
+docker rm -f lllm-sandbox-<key> lllm-sandbox-list-<key>
+udisksctl loop-delete -b /dev/loopN          # the device losetup -l shows for <key>.img
+rm apps/server/data/sandbox/volumes/<key>.img
+docker volume rm lllm-sandbox-<key>
+rm -rf apps/server/data/sandbox/uploads/<key>
+```
+
+Its `sandbox_workspace` row is dropped by the next sweep once the volume
+is gone (after an hour, `PRUNE_AFTER_S`). Never remove a volume of
+another scope: it belongs to another app instance.
+
+**What runs on its own** (`sandbox/lifespan.py`, `manager.py`):
+
+- **Startup sweep**, before the app serves: removes listing helpers left
+  behind, stops every running sandbox and destroys every ephemeral one a
+  previous process left; persistent volumes are kept.
+- **Idle reaper**, every minute: stops a sandbox idle for
+  `code_interpreter.sandbox.idle_minutes` (default 30) and not in use; an
+  ephemeral one is destroyed with its volume. A stopped persistent
+  sandbox keeps its volume and starts again on the next call.
+- **Retention sweep**, hourly (the first with the first reap): destroys
+  the volumes of deleted chats, with the safeguards in "Workspace cap and
+  deletion"; marks a workspace unused for
+  `code_interpreter.sandbox.retention_days` (default 7) `expired`, which
+  the user is asked about and nothing deletes without their answer;
+  records volumes without a row and drops rows without a volume.
+- **Telemetry prune**, at startup and hourly: deletes
+  `sandbox_package_events` rows older than 180 days.
+
+A failed pass is logged and the loop goes on. With
+`LLLM_STOP_JOBS_ON_SHUTDOWN=true`, shutdown stops every running sandbox
+and destroys the ephemeral ones; otherwise running sandboxes are left for
+the next startup sweep, so a `--reload` restart kills no command.
+
+**Status.** `GET /api/v1/sandbox/status` (admin) answers
+`{"ready": bool, "reason": str | null}`: the first failing check of
+"Checks" above, the same text each refused call gets, shown on Admin
+Settings > Code Execution. `GET /api/v1/sandbox/packages` (admin) is the
+package report, "Package telemetry" below.
 
 ## Uploads
 
