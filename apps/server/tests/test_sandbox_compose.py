@@ -146,8 +146,16 @@ def test_every_lock_entry_is_hashed_and_the_allowlist_is_locked():
 
 def test_make_backend_starts_the_mirror_and_wheelhouse_is_a_target():
     makefile = (REPO / 'Makefile').read_text()
-    assert 'for svc in postgres redis jupyter searxng sandbox-mirror; do' in makefile
-    assert 'up -d postgres redis jupyter searxng sandbox-mirror;' in makefile
+    assert 'for svc in postgres redis searxng sandbox-mirror; do' in makefile
+    assert 'up -d postgres redis searxng sandbox-mirror;' in makefile
     phony = next(line for line in makefile.splitlines() if line.startswith('.PHONY:'))
     assert 'wheelhouse' in phony.split()
+    assert 'jupyter' not in makefile.lower()
     assert re.search(r'^wheelhouse:', makefile, re.M)
+
+
+def test_the_compose_file_has_no_jupyter_service_network_or_volume(compose):
+    assert 'jupyter' not in compose['services']
+    assert 'jupyter' not in (compose.get('networks') or {})
+    assert 'jupyter-work' not in (compose.get('volumes') or {})
+    assert 'jupyter' not in (INFRA / 'docker-compose.yml').read_text().lower()

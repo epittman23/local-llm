@@ -51,7 +51,7 @@ def _checkout(tmp_path: Path, name: str = 'repo') -> Path:
     # What `make backend` reads: infra/.env with every key it checks, and the
     # backend venv's interpreter, here a stub that prints a database URL.
     (root / 'infra' / '.env').write_text(
-        'OPENROUTER_API_KEY=stub\nPOSTGRES_PASSWORD=stub\nLLLM_SECRET_KEY=stub\nJUPYTER_TOKEN=stub\nSEARXNG_SECRET=stub\n'
+        'OPENROUTER_API_KEY=stub\nPOSTGRES_PASSWORD=stub\nLLLM_SECRET_KEY=stub\nSEARXNG_SECRET=stub\n'
     )
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
@@ -218,7 +218,7 @@ def test_backend_keeps_a_spaced_or_quoted_checkout_path_whole(tmp_path, name):
     assert compose[0][-4:] == ['ps', '--services', '--status', 'running']
     assert 'up' in compose[1]
     assert compose[-1][-1] == 'down'
-    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+    assert '==> Stopping Postgres and Redis, SearXNG and the sandbox mirror' in result.stdout
 
 
 # --- make backend stops only what it started (#422) ---------------------------
@@ -245,18 +245,19 @@ def test_backend_brings_everything_down_when_nothing_ran_before(tmp_path):
     result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
     assert result.returncode == 0, result.stderr
     assert _compose_after_uvicorn(calls) == [['down']]
-    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+    assert '==> Starting Postgres and Redis, SearXNG and the sandbox mirror' in result.stdout
+    assert '==> Stopping Postgres and Redis, SearXNG and the sandbox mirror' in result.stdout
 
 
 def test_backend_leaves_services_that_ran_before_it_up(tmp_path):
     """Another `make backend` (starting, reloading) owns them: this run's exit must not take them down."""
     root = _checkout(tmp_path)
-    every = 'postgres\nredis\njupyter\nsearxng\nsandbox-mirror'
+    every = 'postgres\nredis\nsearxng\nsandbox-mirror'
     result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER=every)
     assert result.returncode == 0, result.stderr
     assert _compose_after_uvicorn(calls) == []
     assert '==> Stopping Postgres' not in result.stdout
-    assert 'leaving Postgres, Redis, Jupyter and SearXNG running' in result.stdout
+    assert 'leaving Postgres, Redis, SearXNG and the sandbox mirror running' in result.stdout
 
 
 def test_backend_stops_only_the_services_it_started(tmp_path):
@@ -265,7 +266,7 @@ def test_backend_stops_only_the_services_it_started(tmp_path):
         root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER='redis\npostgres'
     )
     assert result.returncode == 0, result.stderr
-    assert _compose_after_uvicorn(calls) == [['rm', '-f', '-s', 'jupyter', 'searxng', 'sandbox-mirror']]
+    assert _compose_after_uvicorn(calls) == [['rm', '-f', '-s', 'searxng', 'sandbox-mirror']]
     assert '==> Stopping Postgres' not in result.stdout
 
 
@@ -278,7 +279,7 @@ def test_backend_that_cannot_ask_compose_goes_on_and_brings_everything_down(tmp_
     assert compose[0] == ['ps', '--services', '--status', 'running']
     assert compose[1][:1] == ['up']
     assert compose[-1] == ['down']
-    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+    assert '==> Stopping Postgres and Redis, SearXNG and the sandbox mirror' in result.stdout
 
 
 def test_backend_makes_the_wheelhouse_directory_and_starts_the_mirror(tmp_path):
@@ -287,7 +288,9 @@ def test_backend_makes_the_wheelhouse_directory_and_starts_the_mirror(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (root / 'apps/server/data/sandbox/wheelhouse').is_dir()
     up = next(c['argv'] for c in calls if c['tool'] == 'docker' and 'up' in c['argv'])
-    assert up[-5:] == ['postgres', 'redis', 'jupyter', 'searxng', 'sandbox-mirror']
+    assert up[-4:] == ['postgres', 'redis', 'searxng', 'sandbox-mirror']
+    assert 'jupyter' not in up
+    assert 'JUPYTER_TOKEN' not in (root / 'Makefile').read_text()
 
 
 def test_wheelhouse_that_fails_to_download_leaves_the_served_wheels_alone(tmp_path):

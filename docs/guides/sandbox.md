@@ -801,6 +801,25 @@ the next startup sweep, so a `--reload` restart kills no command.
 Settings > Code Execution. `GET /api/v1/sandbox/packages` (admin) is the
 package report, "Package telemetry" below.
 
+**Leftovers from the Jupyter engine.** The sandbox replaced the Jupyter
+code interpreter, and the Compose file no longer has a `jupyter` service
+or its `jupyter-work` volume. A machine that ran the stack before keeps
+both until they are removed by hand; nothing removes them automatically.
+A `local-llm-jupyter` container still running (left up by a `make backend`
+from before, or brought back by `restart: unless-stopped` after a reboot)
+is an orphan of the Compose project, and `docker compose ps` counts
+orphans: the desktop app then finds services running and refuses to
+start its own stack, and `make backend` treats the stack as already up.
+Remove the leftovers with the stack stopped:
+
+```sh
+docker compose -f infra/docker-compose.yml down --remove-orphans   # stops the stack and the orphan
+docker network rm local-llm_jupyter       # if it outlived the container
+docker volume rm local-llm_jupyter-work   # Jupyter's scratch space; nothing reads it
+```
+
+A `JUPYTER_TOKEN=` line left in `infra/.env` is harmless.
+
 ## Uploads
 
 `apps/server/local_llm/sandbox/uploads.py`. Before every `bash` and `view`

@@ -109,7 +109,7 @@ If it started the stack, the dialog shows the shutdown:
    chat reply still being written, saving what arrived (up to 10 s more), then
    benchmark jobs and the served model.
 4. **The Makefile's trap brings the Compose services down** (Postgres,
-   Redis, Jupyter, SearXNG and the sandbox mirror). It brings down only what its own run
+   Redis, SearXNG and the sandbox mirror). It brings down only what its own run
    started: any already running when `make backend` began are left up. The
    app starts its stack only with none running, so this is all of them.
 

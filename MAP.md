@@ -36,7 +36,7 @@ local-llm/
 │   ├── web/                   Astro + React + shadcn/ui frontend
 │   └── desktop/               Electron desktop app (Linux), loading the backend's pages
 ├── docs/                      decisions log, roadmap, guides, proposals, history
-└── infra/                     docker-compose for Postgres + pgvector, Redis, Jupyter and SearXNG
+└── infra/                     docker-compose for Postgres + pgvector, Redis, SearXNG and the sandbox mirror
 ```
 
 `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and

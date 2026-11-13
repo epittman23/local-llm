@@ -124,7 +124,7 @@ setting, its server URL.
 [MAP.md](MAP.md) is the structural index: what lives where. In short:
 `apps/server/` is the FastAPI backend (its package is
 `apps/server/local_llm/`), `apps/web/` is the Astro + React +
-shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds the Compose file for Postgres + pgvector, Redis, Jupyter, SearXNG and the sandbox package mirror, and
+shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds the Compose file for Postgres + pgvector, Redis, SearXNG and the sandbox package mirror, and
 `docs/` holds the decisions log, roadmap, guides, proposals and history.
 
 ## Conventions
@@ -160,7 +160,7 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
 
 ## Commands
 
-- `make backend`: Postgres, Redis, Jupyter, SearXNG and the sandbox package mirror plus the backend (`uvicorn --reload` on
+- `make backend`: Postgres, Redis, SearXNG and the sandbox package mirror plus the backend (`uvicorn --reload` on
   `127.0.0.1:4000`), which also serves the last build of `apps/web` at `/`.
   It owns their lifecycle: up before uvicorn, down on exit, Ctrl-C
   included; services already running before it started are left up. The backend refuses to start without Redis (`REDIS_URL`), which
