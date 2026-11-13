@@ -8,18 +8,18 @@ license = { text = "See LICENSE and NOTICE at the repository root" }
 dependencies = [
     "fastapi==0.136.3",
     "uvicorn[standard]==0.54.0",
-    "pydantic==2.14.2",
-    "python-multipart==0.0.32",
+    "pydantic==2.14.3",
+    "python-multipart==0.0.33",
     "itsdangerous==2.2.0",
 
-    "python-socketio==5.17.1",
+    "python-socketio==5.18.1",
     "orjson==3.13.0",
     "cryptography==50.0.2",
     "bcrypt==5.0.0",
     "argon2-cffi==25.1.0",
     "PyJWT[crypto]==2.15.1",
-    "authlib==1.9.1",
-    "joserfc==1.7.7",
+    "authlib==1.9.5",
+    "joserfc==1.8.0",
 
     "requests==2.34.2",
     "aiohttp==3.14.5",
@@ -34,9 +34,9 @@ dependencies = [
     "starsessions[redis]==2.2.1",
     "python-mimeparse==2.0.0",
 
-    "sqlalchemy[asyncio]==2.1.6",
+    "sqlalchemy[asyncio]==2.1.8",
     "aiosqlite==0.22.1",
-    "psycopg[binary]==3.3.6",
+    "psycopg[binary]==3.3.8",
     "alembic==1.20.1",
 
     "redis==8.1.0",
@@ -52,23 +52,23 @@ dependencies = [
     "regex==2026.9.29",
     "mcp==2.3.0",
 
-    "openai==3.41.0",
-    "anthropic==2.3.0",
+    "openai==3.46.0",
+    "anthropic==2.6.0",
     "google-genai==3.0.0",
 
-    "langchain==1.4.7",
+    "langchain==1.4.9",
     "langchain-community==0.4.2",
     "langchain-classic==1.0.8",
     "langchain-text-splitters==1.1.3",
 
     "fake-useragent==2.2.0",
     "PyMySQL==1.2.0",
-    "boto3==1.43.122",
+    "boto3==1.43.125",
     
-    "transformers==5.22.1",
+    "transformers==5.22.2",
     "sentence-transformers==6.2.0",
     "accelerate==1.15.0",
-    "pyarrow==26.0.0",
+    "pyarrow==26.0.1",
     "einops==0.8.2",
 
     "ftfy==6.3.1",
@@ -79,18 +79,18 @@ dependencies = [
     "docx2txt==0.9",
     "python-docx==1.2.0",
     "python-pptx==1.0.2",
-    "msoffcrypto-tool==6.0.0",
+    "msoffcrypto-tool==6.1.0",
     "Markdown==3.10.2",
     "beautifulsoup4==4.15.0",
     "lxml==6.1.3",
     "pypandoc==1.17",
-    "pandas==3.1.0",
+    "pandas==3.1.1",
     "openpyxl==3.1.5",
     "pyxlsb==1.0.10",
     "xlrd==2.0.2",
     "validators==0.36.0",
     "psutil==7.2.2",
-    "sentencepiece==0.2.2",
+    "sentencepiece==0.2.3",
     "soundfile==0.14.0",
     "azure-ai-documentintelligence==1.0.2",
 
@@ -103,7 +103,7 @@ dependencies = [
     "faster-whisper==1.2.1",
 
     "black==26.10.1",
-    "youtube-transcript-api==1.2.4",
+    "youtube-transcript-api==1.2.5",
     "pytube==15.0.0",
 
     "pydub==0.25.1",
@@ -206,7 +206,7 @@ dev = [
     "pytest",
     "pytest-asyncio>=1.4.1.post1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.17.3",
+    "ruff>=0.17.4",
 ]
 
 # The single source of the backend's dependencies is this file plus uv.lock;
