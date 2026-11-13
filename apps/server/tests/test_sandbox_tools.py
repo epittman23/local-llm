@@ -33,6 +33,7 @@ import base64
 import errno
 import json
 import os
+import re
 import subprocess
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager
@@ -225,7 +226,12 @@ def test_real_lllm_path_confines_to_the_root(real_root: Path, given: str, leads_
     if leads_to is None:
         assert run.returncode == 1, run.stdout
         assert run.stdout == b''
-        assert run.stderr.startswith(b'lllm-path: ')
+        # The refusal is lllm-path's last line. uutils coreutils (the data image's, and ubuntu-26.04's) fails
+        # `realpath -m` on a symlink loop and says so first; GNU's (the web image's) leaves the loop in the result
+        # for lllm-path's walk to refuse.
+        lines = run.stderr.splitlines()
+        assert lines[-1].startswith(b'lllm-path: '), run.stderr
+        assert all(line.startswith((b'lllm-path: ', b'realpath: ')) for line in lines), run.stderr
     else:
         assert run.returncode == 0, run.stderr
         assert _relative(run.stdout.decode(), str(real_root)) == leads_to
@@ -1271,7 +1277,10 @@ def test_a_write_into_a_directory_it_cannot_write_is_refused_by_mktemp_in_the_fa
     finally:
         (real_root / 'sub').chmod(0o755)
     assert real.returncode == fake.returncode == 1
-    assert b'mktemp: failed to create file via template' in real.stderr
+    # The wording is the host's mktemp: GNU's (the web image's) "failed to create file via template", uutils' (the
+    # data image's, and ubuntu-26.04's) "Permission denied (os error 13) at path". Both name the temporary file.
+    assert re.match(rb'(/usr/bin/)?mktemp: ', real.stderr), real.stderr
+    assert b'/sub/.lllm-write.' in real.stderr
     assert b'mktemp: failed to create file via template' in fake.stderr
     assert (real_root / 'sub/ok.txt').read_bytes() == ws.read('sub/ok.txt') == b'ok\n'
 
