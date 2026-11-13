@@ -204,7 +204,7 @@ packages = ["local_llm"]
 [dependency-groups]
 dev = [
     "pytest",
-    "pytest-asyncio>=1.4.1",
+    "pytest-asyncio>=1.4.1.post1",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.3",
 ]
