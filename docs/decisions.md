@@ -7,6 +7,19 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-13**: **A pull request no longer has to be up to date with
+  `main` to merge.** The owner turned off the main ruleset's "require
+  branches to be up to date" setting (`strict_required_status_checks_policy`,
+  now `false`), reversing the 2026-10-24 choice to keep it. A PR merges once
+  its required checks (`CI passed`, `PR gate`, CodeQL) pass, even if `main`
+  has moved since they ran.
+  - The cost is the one the 2026-10-24 entry named: two PRs that pass alone
+    and break together are caught only after both merge, by the next CI run
+    on `main` (every push to it, and the daily schedule).
+  - `update-branches.yml` is unchanged: it still turns auto-merge on and
+    still merges `main` into auto-merge PRs that fall behind, so their CI
+    keeps running against current `main`; a merge no longer waits for it.
+    Such an update still removes the approval label from a gated PR.
 - **2026-11-10**: **The Jupyter and Pyodide code interpreters are to be
   replaced by a per-chat microVM shell sandbox; proposed, nothing built
   ([docs/proposals/sandbox-code-interpreter.md](proposals/sandbox-code-interpreter.md)).**

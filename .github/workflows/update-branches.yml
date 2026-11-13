@@ -1,10 +1,11 @@
 # Auto-merge for this repository's own pull requests, and branch updates
 # for those that fall behind their base.
 #
-# The main ruleset requires a branch to be up to date before it merges, so
-# an auto-merge PR that falls behind would wait forever. This updates it
-# (a merge commit; never a rebase or a force-push), and CI runs again on
-# the result.
+# The main ruleset required a branch to be up to date before it merged
+# until 2026-11-13, when the owner turned that rule off (docs/decisions.md).
+# A PR that falls behind can now merge as it is; this still updates it (a
+# merge commit; never a rebase or a force-push), so CI runs again against
+# current main before the merge when the update gets there first.
 #
 # Why a token (secret AUTOMERGE_TOKEN, the owner's fine-grained token for
 # this repository; docs/guides/testing.md, "Merging"): GitHub
