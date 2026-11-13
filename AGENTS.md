@@ -91,7 +91,7 @@ been measured on either build yet.
   release-date window the run gives), against whatever is being served, either straight to
   `llama-server` or, with `harness_model` (a Workspace model entry; API only
   so far), through the app's own chat pipeline with the entry's prompt and
-  the Jupyter code interpreter (`benchmarks/evaluation/harness.py`); Compare ranks configurations by
+  the code interpreter on the sandbox or Jupyter engine (`benchmarks/evaluation/harness.py`); Compare ranks configurations by
   pass rate and passes per minute; Report writes the statistical comparison,
   auditing the design first. Coding and data analysis are covered; math and
   statistics are not yet.

@@ -39,7 +39,7 @@ Jupyter is reached through one module and three call sites, checked at commit `9
 | Native tool call | `tools/builtin.py`, `execute_code()` | The tool a model calls with native function calling; prepends the blocked-modules import hook |
 | Tag path | `utils/middleware.py`, `_run_code_interpreter()` | Runs `<code_interpreter>` blocks for models without native tool calling |
 | Run button | `routers/utils.py`, code execute endpoint | Runs a code block when the user presses Run in the UI (`code_execution.*` settings) |
-| Benchmark harness | `benchmarks/evaluation/harness.py` | Refuses unless the engine is `jupyter`; records `code_interpreter_engine: 'jupyter'` in the run spec |
+| Benchmark harness | `benchmarks/evaluation/harness.py` | Refuses unless the engine is `jupyter`; records `code_interpreter_engine: 'jupyter'` in the run spec (changed in T30: it runs on the sandbox engine too, until T40 removes Jupyter) |
 | Settings | `config.py`, `CodeExecution.tsx` | `code_interpreter.jupyter.*` and `code_execution.jupyter.*` per-key config rows; Admin > Code Execution page |
 | Service | `infra/docker-compose.yml` | `quay.io/jupyter/scipy-notebook:2026-10-12`, own network, `cap_drop: [ALL]`, `no-new-privileges`, 4 GB, 512 PIDs, internet allowed |
 | Startup | `Makefile`, `apps/desktop/src/progress.ts` | Generates `JUPYTER_TOKEN`; the desktop progress dialog parses the Jupyter stage |

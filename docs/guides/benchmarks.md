@@ -273,13 +273,39 @@ bare model. With `harness_model` set on a Tests run (`POST
 each item is answered the way a chat answers it instead:
 
 - through that model entry, with its system prompt and params;
-- with the code interpreter on the Jupyter engine, and `execute_code` as the
-  only tool offered (the builtin tools that browse notes, chats and
-  knowledge are cut);
+- with the code interpreter on the engine Admin Settings > Code Execution
+  selects, the sandbox or (until it is removed) Jupyter, and only that
+  engine's code tools offered: `bash`, `view`, `write_file` and
+  `str_replace` on the sandbox, `execute_code` on Jupyter (the builtin
+  tools that browse notes, chats and knowledge are cut);
 - through the app's own chat pipeline (`benchmarks/evaluation/harness.py`),
-  with a `temporary:` chat id, so no chat row, title or memory is written,
-  and a plot a code run prints stays inline rather than being stored in the
-  owner's Files.
+  with a `temporary:` chat id of its own for each item
+  (`temporary:benchmark-<hex>`), so no chat row, title or memory is
+  written. On Jupyter a plot a code run prints stays inline rather than
+  being stored in the owner's Files; on the sandbox nothing printed is
+  captured as an image, and files written to `/workspace/outputs` are
+  listed in the tool result but not stored in the owner's Files.
+
+**On the sandbox engine** every item runs on the `data` image: a harness
+request's sandbox calls are pinned to it (`_sandbox_session` in
+`tools/builtin.py`), so a `bash` call asking for `web` runs on `data` too,
+and its `stderr` tells the model so ("This benchmark run uses the 'data'
+image; image 'web' was not used."). Each item that runs code starts a fresh
+ephemeral sandbox of its own (its chat id); that cold start (about 1.4 s
+median on the laptop's 12th Gen Intel Core i9-12900H, measured at T29 on
+2026-11-13, Kata 4.3.1 runtime-rs with Cloud Hypervisor v54.0, images
+`2026-11-12.1`) is inside the item's `wall_ms`. The
+harness releases the sandbox (`SandboxManager.release`) as soon as the item
+ends, whether it passed, failed, errored or timed out, so the next item
+starts from a clean `/workspace` and no idle sandbox holds a slot. The
+release is not counted in `wall_ms`, and it never changes the item's
+outcome. The harness puts a 60 s deadline on the release, which cannot cut
+short a destroy already under way (Kata bounds that at
+`DESTROY_TIMEOUT_S`, 60 s), so a release can take about 2 minutes; one
+that fails or times out is
+logged ("release of harness item ... failed or timed out"), and the idle
+reaper removes what it left. A destroy that succeeded after the 60 s may
+still be logged that way.
 
 There is no switch on the Tests page yet (planned in PR 2 of
 [the plan](../plans/benchmarks-through-the-app.md)).
@@ -295,8 +321,9 @@ offloaded and thinking. `harness_stats.code_runs` shows which case a run is.
 **What it needs.** The model entry has to be on an OpenAI-compatible
 connection that points at the `llama-server` being measured, for example
 `http://127.0.0.1:8090/v1` in Admin Settings > Connections. The code
-interpreter has to be on, on the Jupyter engine. Native function calling
-only.
+interpreter has to be on, on the sandbox or the Jupyter engine (Pyodide is
+refused: its code runs in a browser, and a harness request has none).
+Native function calling only.
 
 **What it refuses.** A result is recorded only when the harness can vouch
 for where it came from. The run stops, with `not recorded: ...`, when:
@@ -305,14 +332,45 @@ for where it came from. The run stops, with `not recorded: ...`, when:
 - it turns streaming off, uses legacy function calling, or sets
   `max_completion_tokens` (in its own params or in the global model
   defaults);
-- the Jupyter server does not answer, or a code run fails in the
-  interpreter itself rather than in the code;
+- on the sandbox engine, this server has no sandbox manager running, the
+  manager's `ready()` gives a reason it cannot run sandboxes (named in the
+  refusal), or the `data` image's digest is unknown, so the spec could not
+  name the image. The digest is read again for every item (the `data`
+  image's id as the backend last saw it), and an unknown one stops the run
+  on any item, the first included;
+- on the Jupyter engine, the Jupyter server does not answer;
+- a code run fails in the interpreter itself rather than in the code: on
+  the sandbox, a sandbox that is unavailable, refuses the chat or fails in
+  its backend, never the model's command failing or timing out;
+- on the sandbox engine, an item's calls ran in more than one sandbox: its
+  sandbox was replaced between two calls, so its files were lost and the
+  next call started on an empty `/workspace`. Between calls the sandbox is
+  unlocked, so a session needing a slot while all `max_running` slots are
+  busy evicts it once it has been idle 60 s (a slow local model often
+  generates for longer than that between calls), and the idle reaper
+  destroys it if `idle_minutes` is shorter than the gap (the default 30
+  minutes is longer than the 900 s item timeout). Either drops the chat's
+  sandbox, so the next call runs under a new sandbox key, which is what
+  this check catches. It does not catch a replacement under the same key:
+  an eviction whose destroy fails or outlives Kata's `DESTROY_TIMEOUT_S`
+  leaves the key mapped and in doubt, and the next call recreates it with
+  an empty `/workspace`. That case is not detected; it shows only as the
+  eviction's error in the log, in the context of the chat that evicted it.
+  During a run, avoid running code in other chats, so a slot is never
+  needed while all `max_running` (4 by default) are taken;
 - a single upstream request would go anywhere but `127.0.0.1:<port>`.
   It is stopped before it is sent, so the item never reaches that host;
 - no upstream request is seen at all;
-- the request changes between items: the system prompt, the tools or any
-  param. That includes a resume, which continues under the spec its run was
-  recorded with.
+- the request changes between items: the system prompt, the tools, any
+  param, or, on the sandbox engine, the `data` image's digest. That digest
+  is the image's id as the backend last saw it (refreshed by its readiness
+  check and by every sandbox create, never cleared), not one read from the
+  item's own container: after the image is rebuilt during a run, the next
+  create, this run's or another chat's, changes it and the run stops.
+  That includes a resume, which continues under the
+  spec its run was recorded with: a run started on Jupyter cannot resume
+  on the sandbox engine, or the other way round, since the two specs
+  differ. That is intended; start a new run instead.
 
 **What is recorded.**
 
@@ -320,8 +378,15 @@ for where it came from. The run stops, with `not recorded: ...`, when:
   first request actually sent upstream: the model entry, the system
   message, the tools offered, every other key of the request body (the
   sampling params, whatever their source), and the limits (at most 8 tool
-  rounds, no tool approval). `benchmark_harness` holds what each sha
-  stands for. NULL means a bare request.
+  rounds, no tool approval), plus `code_interpreter_engine` from the
+  configuration and, on the sandbox engine only, `sandbox_image`: the
+  `data` image's id as the backend last saw it, read again for every item.
+  A Jupyter spec has
+  exactly the keys it had before the sandbox engine, so Jupyter-era shas
+  still name their runs, and a sandbox-engine sha never equals one of
+  them (migration `2c8cdc04929d` records this in `benchmark_schema_note`).
+  `benchmark_harness` holds what each sha stands for. NULL means a bare
+  request.
 - **What is graded.** Only the text of the message after the last code run,
   never the code the model ran on the way. The whole structured output is
   kept in `benchmark_answer.output`.
@@ -339,10 +404,11 @@ sandbox engine, every `bash` call also runs the package telemetry
 one more exec in the guest when the call ran Python or R, and the image's
 hooks add a little to each Python or R exit. So passes per minute under
 the sandbox engine are not comparable with sandbox runs from before T21
-(2026-11-12). `harness_sha` does not cover the sandbox image's digest
-either: two runs with the same sha may have used different images (the
-harness does not yet run on the sandbox engine; adding the image digest to
-its spec is planned with that move).
+(2026-11-12). A harness item's `sandbox_package_events` rows carry the
+run's `suite_run_id` as `harness_run_id` (the runner sets it on the
+harness request), and `GET /api/v1/sandbox/packages` leaves them out
+unless `include_harness=true`, so a benchmark run does not skew the
+package report. That has not yet been checked end to end on the laptop.
 
 **Kept apart.** Compare and Report leave harness rows out for now, until
 they group and label by `harness_sha` (PR 2). A resume continues only a run

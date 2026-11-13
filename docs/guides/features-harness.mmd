@@ -6,7 +6,7 @@ sequenceDiagram
   participant P as Chat pipeline
   participant G as upstream_trace guard
   participant L as llama-server :8090
-  participant J as Jupyter :8888
+  participant C as Code interpreter: sandbox or Jupyter
   participant DB as Postgres
 
   T->>R: tier run or one item, with harness_model
@@ -15,20 +15,21 @@ sequenceDiagram
     L-->>R: answer and llama.cpp timings
   else harness_model set
     R->>H: prepare(model entry, port)
-    H->>J: liveness check
-    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or Jupyter down
+    H->>C: sandbox manager ready and data image digest, or Jupyter liveness check
+    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or the engine is not ready
     R->>H: ask(item prompt)
-    H->>P: process_chat_payload with a temporary chat id and native calling
+    H->>P: process_chat_payload with the item's own temporary chat id and native calling
     P-->>H: tools offered
-    H->>P: tools cut to execute_code only, then generate_chat_completion
+    H->>P: tools cut to the engine's code tools, then generate_chat_completion
     loop at most 8 tool rounds, driven by process_chat_response
       P->>G: upstream request
       G->>L: sent only if its host is 127.0.0.1 on the served port
-      L-->>P: streamed reply, maybe an execute_code call
-      P->>J: execute_code runs the block in a fresh kernel
-      J-->>P: stdout, stderr, result
+      L-->>P: streamed reply, maybe a tool call
+      P->>C: bash, view, write_file or str_replace in the item's sandbox on the data image, or execute_code in a fresh Jupyter kernel
+      C-->>P: the tool's result
     end
     P-->>H: assistant message
+    H->>C: on the sandbox engine, release the item's ephemeral sandbox
     H-->>R: text after the last code run, full output, harness_stats
     R->>R: spec read from the first upstream request, its sha is harness_sha
     R-->>T: run stops if the spec changes between items

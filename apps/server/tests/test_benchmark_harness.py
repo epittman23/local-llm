@@ -89,6 +89,33 @@ def _entry(params=None, base='qwen25c'):
     )
 
 
+_NO_SANDBOX = object()
+
+
+class FakeSandbox:
+    """The manager's surface the harness uses: ready(), image_digest() and release()."""
+
+    def __init__(self, *, reason=None, digest='sha256:data-1', release=None):
+        self.reason = reason
+        self.digest = digest
+        self.released: list[str] = []
+        self.ready_calls = 0
+        self._release = release
+
+    async def ready(self):
+        self.ready_calls += 1
+        return self.reason
+
+    def image_digest(self, image):
+        assert image == 'data'
+        return self.digest
+
+    async def release(self, chat_id):
+        self.released.append(chat_id)
+        if self._release is not None:
+            await self._release()
+
+
 @pytest.fixture
 def app_with(monkeypatch):
     """prepare() against a fake app: models, one connection URL, the code interpreter settings."""
@@ -106,6 +133,8 @@ def app_with(monkeypatch):
         'enabled': True,
         'defaults': {},
         'jupyter': True,
+        # The fake app's `state.sandbox`: a FakeSandbox, None, or _NO_SANDBOX for an app that never set one.
+        'sandbox': _NO_SANDBOX,
     }
 
     async def resolve(request, model_id, model_item, user):
@@ -131,7 +160,10 @@ def app_with(monkeypatch):
     monkeypatch.setattr(harness, '_jupyter_alive', jupyter_alive)
 
     def prepare(model='coder'):
-        source = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(MODELS=state['models'])))
+        app_state = SimpleNamespace(MODELS=state['models'])
+        if state['sandbox'] is not _NO_SANDBOX:
+            app_state.sandbox = state['sandbox']
+        source = SimpleNamespace(app=SimpleNamespace(state=app_state))
         return asyncio.run(harness.prepare(source, SimpleNamespace(id='u1'), model, PORT))
 
     return state, prepare
@@ -795,3 +827,335 @@ def test_a_benchmark_keeps_code_run_images_inline(monkeypatch, benchmark):
 
     assert uploaded == ([] if benchmark else ['data:image/png;base64,AAAA'])
     assert ('data:image/png;base64' in out['stdout']) is benchmark
+
+
+# ---------------------------------------------------------------------------
+# the sandbox engine (T30): preparing, the spec, the tools, the item's sandbox
+# ---------------------------------------------------------------------------
+SANDBOX_TOOLS = ('bash', 'view', 'write_file', 'str_replace')
+
+
+def _sandbox_hctx(manager=None, **over):
+    manager = manager if manager is not None else FakeSandbox()
+    return {
+        **HCTX,
+        'engine': 'sandbox',
+        'tools': SANDBOX_TOOLS,
+        'sandbox': manager,
+        **over,
+    }
+
+
+def test_a_ready_sandbox_is_accepted_with_its_tools_manager_and_digest(app_with):
+    state, prepare = app_with
+    manager = FakeSandbox()
+    state.update(engine='sandbox', sandbox=manager)
+    hctx = prepare()
+
+    assert (hctx['engine'], hctx['tools']) == ('sandbox', SANDBOX_TOOLS)
+    assert hctx['sandbox'] is manager and 'sandbox_image' not in hctx
+
+
+@pytest.mark.parametrize(
+    ('sandbox', 'message'),
+    [
+        (_NO_SANDBOX, 'this server has no sandbox running'),
+        (None, 'this server has no sandbox running'),
+        (FakeSandbox(reason='the runtime is not installed'), 'the sandbox is not ready: the runtime is not installed'),
+        (FakeSandbox(digest=''), 'the sandbox.s data image has no known digest'),
+    ],
+)
+def test_a_sandbox_that_cannot_run_the_harness_is_refused(app_with, sandbox, message):
+    state, prepare = app_with
+    state.update(engine='sandbox', sandbox=sandbox)
+
+    with pytest.raises(harness.HarnessRefused, match=message):
+        prepare()
+
+
+@pytest.mark.parametrize('change', [{'engine': 'pyodide'}, {'enabled': False}, {'engine': 'sandbox', 'enabled': False}])
+def test_the_code_interpreter_must_be_on_the_sandbox_or_jupyter_engine(app_with, change):
+    state, prepare = app_with
+    state.update(sandbox=FakeSandbox(), **change)
+
+    with pytest.raises(harness.HarnessRefused, match='sandbox or Jupyter engine'):
+        prepare()
+
+
+def test_a_sandbox_engine_run_never_probes_jupyter(app_with):
+    state, prepare = app_with
+    state.update(engine='sandbox', sandbox=FakeSandbox(), jupyter=False)
+
+    assert prepare()['engine'] == 'sandbox'
+
+
+def test_a_jupyter_run_is_accepted_without_asking_the_sandbox(app_with):
+    state, prepare = app_with
+    manager = FakeSandbox()
+    state['sandbox'] = manager
+    hctx = prepare()
+
+    assert (hctx['engine'], hctx['tools'], hctx['sandbox']) == ('jupyter', ('execute_code',), None)
+    assert manager.ready_calls == 0
+
+
+def test_a_jupyter_run_with_jupyter_down_is_still_refused_with_a_sandbox_present(app_with):
+    state, prepare = app_with
+    state.update(sandbox=FakeSandbox(), jupyter=False)
+
+    with pytest.raises(harness.HarnessRefused, match='does not answer'):
+        prepare()
+
+
+# Computed from the harness before the sandbox engine (`git show HEAD:` of harness.py, T30's parent) for HCTX and BODY.
+# It pins Jupyter-era shas: a change that moves it renames every earlier Jupyter run's harness.
+JUPYTER_ERA_SHA = '8b71b99938eb'
+
+
+def test_a_jupyter_spec_keeps_the_sha_it_had_before_the_sandbox_engine():
+    assert harness.spec_sha(harness.spec_from_request(HCTX, BODY)) == JUPYTER_ERA_SHA
+
+
+def test_a_jupyter_spec_has_no_sandbox_key_even_with_a_manager_in_the_context():
+    spec = harness.spec_from_request({**HCTX, 'engine': 'jupyter', 'sandbox': FakeSandbox()}, BODY)
+
+    assert 'sandbox_image' not in spec and spec['code_interpreter_engine'] == 'jupyter'
+
+
+def test_a_sandbox_spec_names_the_engine_and_the_image_digest():
+    spec = harness.spec_from_request(_sandbox_hctx(), BODY)
+
+    assert (spec['code_interpreter_engine'], spec['sandbox_image']) == ('sandbox', 'sha256:data-1')
+
+
+def test_a_sandbox_spec_sha_differs_from_the_jupyter_one_for_the_same_body():
+    sandbox = harness.spec_sha(harness.spec_from_request(_sandbox_hctx(), BODY))
+
+    assert sandbox != JUPYTER_ERA_SHA
+
+
+def test_the_digest_is_read_again_for_every_spec():
+    manager = FakeSandbox()
+    hctx = _sandbox_hctx(manager)
+    first = harness.spec_from_request(hctx, BODY)
+    manager.digest = 'sha256:data-2'
+    second = harness.spec_from_request(hctx, BODY)
+
+    assert second['sandbox_image'] == 'sha256:data-2'
+    assert harness.spec_sha(first) != harness.spec_sha(second)
+
+
+def _sandbox_offered(pipeline_steps, names):
+    _, offered = pipeline_steps
+    offered.clear()
+    offered.update({name: {'spec': {'name': name}} for name in names})
+
+
+def test_the_sandbox_engine_offers_the_model_exactly_its_four_tools(pipeline_steps):
+    calls, _ = pipeline_steps
+    _sandbox_offered(pipeline_steps, (*SANDBOX_TOOLS, 'execute_code', 'search_notes'))
+    hctx = {**_hctx(), 'engine': 'sandbox', 'tools': SANDBOX_TOOLS}
+    asyncio.run(harness._run_pipeline(hctx, 'item', []))
+
+    assert ('generate', list(SANDBOX_TOOLS), 0) in calls
+    assert ('context', sorted(SANDBOX_TOOLS)) in calls
+
+
+def test_the_tools_default_to_the_engines_when_the_context_names_none(pipeline_steps):
+    calls, _ = pipeline_steps
+    _sandbox_offered(pipeline_steps, (*SANDBOX_TOOLS, 'search_notes'))
+    asyncio.run(harness._run_pipeline({**_hctx(), 'engine': 'sandbox'}, 'item', []))
+
+    assert ('generate', list(SANDBOX_TOOLS), 0) in calls
+
+
+@pytest.mark.parametrize('missing', SANDBOX_TOOLS)
+def test_a_model_missing_a_sandbox_tool_is_refused_naming_them(pipeline_steps, missing):
+    _sandbox_offered(pipeline_steps, [t for t in SANDBOX_TOOLS if t != missing])
+    hctx = {**_hctx(), 'engine': 'sandbox', 'tools': SANDBOX_TOOLS}
+
+    with pytest.raises(harness.HarnessRefused, match='bash, view, write_file, str_replace'):
+        asyncio.run(harness._run_pipeline(hctx, 'item', []))
+
+
+def test_the_pipeline_uses_the_chat_id_it_is_given(pipeline_steps, monkeypatch):
+    seen = []
+    from local_llm.utils import middleware
+
+    original = middleware.process_chat_payload
+
+    async def payload(request, form_data, user, metadata, model):
+        seen.append(metadata['chat_id'])
+        return await original(request, form_data, user, metadata, model)
+
+    monkeypatch.setattr(middleware, 'process_chat_payload', payload)
+    asyncio.run(harness._run_pipeline({**_hctx(), 'chat_id': 'temporary:benchmark-fixed'}, 'item', []))
+
+    assert seen == ['temporary:benchmark-fixed']
+
+
+def _released_pipeline(monkeypatch, *, outcome='pass', seen=None):
+    """_run_pipeline fake that records the chat id it was given and ends the way `outcome` says."""
+
+    async def run(hctx, prompt, errs):
+        if seen is not None:
+            seen.append(hctx['chat_id'])
+        upstream_trace.note_request(LOCAL, json.dumps(BODY))
+        if outcome == 'error':
+            errs.append('upstream 500')
+            return None
+        if outcome == 'raise':
+            raise ValueError('bad chunk')
+        if outcome == 'refuse':
+            raise harness.HarnessRefused('went elsewhere')
+        if outcome == 'timeout':
+            await asyncio.sleep(1)
+        return {'output': [_message('answer')]}
+
+    async def server_alive(port):
+        return True
+
+    monkeypatch.setattr(harness, '_run_pipeline', run)
+    monkeypatch.setattr(harness, '_server_alive', server_alive)
+
+
+@pytest.mark.parametrize('outcome', ['pass', 'error', 'raise', 'timeout'])
+def test_the_items_sandbox_is_released_once_whatever_the_item_did(monkeypatch, outcome):
+    seen: list[str] = []
+    _released_pipeline(monkeypatch, outcome=outcome, seen=seen)
+    manager = FakeSandbox()
+    asyncio.run(harness.ask(_sandbox_hctx(manager, timeout=0.05), 'item'))
+
+    assert seen and seen[0].startswith('temporary:benchmark-')
+    assert manager.released == seen
+
+
+def test_a_refused_item_still_releases_its_sandbox_and_the_refusal_propagates(monkeypatch):
+    seen: list[str] = []
+    _released_pipeline(monkeypatch, outcome='refuse', seen=seen)
+    manager = FakeSandbox()
+
+    with pytest.raises(harness.HarnessRefused, match='went elsewhere'):
+        asyncio.run(harness.ask(_sandbox_hctx(manager), 'item'))
+    assert manager.released == seen
+
+
+def test_each_item_gets_its_own_chat_id(monkeypatch):
+    seen: list[str] = []
+    _released_pipeline(monkeypatch, seen=seen)
+    manager = FakeSandbox()
+
+    async def go():
+        await harness.ask(_sandbox_hctx(manager), 'one')
+        await harness.ask(_sandbox_hctx(manager), 'two')
+
+    asyncio.run(go())
+    assert len(set(seen)) == 2 and manager.released == seen
+
+
+def test_a_release_that_fails_is_logged_and_the_answer_stands(monkeypatch, caplog):
+    from local_llm.sandbox import SandboxError
+
+    async def fail():
+        raise SandboxError('the backend is gone')
+
+    _released_pipeline(monkeypatch)
+    manager = FakeSandbox(release=fail)
+    with caplog.at_level('WARNING', logger=harness.log.name):
+        ans = asyncio.run(harness.ask(_sandbox_hctx(manager), 'item'))
+
+    assert (ans.content, ans.error) == ('answer', '')
+    assert 'release of harness item temporary:benchmark-' in caplog.text and 'failed or timed out' in caplog.text
+
+
+def test_a_release_that_takes_too_long_is_logged_and_the_answer_stands(monkeypatch, caplog):
+    async def hang():
+        await asyncio.sleep(5)
+
+    _released_pipeline(monkeypatch)
+    monkeypatch.setattr(harness, 'RELEASE_TIMEOUT_S', 0.05)
+    manager = FakeSandbox(release=hang)
+    with caplog.at_level('WARNING', logger=harness.log.name):
+        ans = asyncio.run(harness.ask(_sandbox_hctx(manager), 'item'))
+
+    assert (ans.content, ans.error) == ('answer', '')
+    assert 'failed or timed out; the idle reaper removes what it left' in caplog.text
+
+
+def test_a_sandbox_context_without_a_manager_is_refused_as_having_no_digest(monkeypatch):
+    _released_pipeline(monkeypatch)
+
+    with pytest.raises(harness.HarnessRefused, match='no known digest'):
+        asyncio.run(harness.ask({**_sandbox_hctx(), 'sandbox': None}, 'item'))
+
+
+def test_a_jupyter_item_never_releases_a_sandbox(monkeypatch):
+    _released_pipeline(monkeypatch)
+    manager = FakeSandbox()
+    asyncio.run(harness.ask({**HCTX, 'sandbox': manager}, 'item'))
+
+    assert manager.released == []
+
+
+def test_a_sandbox_spec_is_refused_when_the_digest_is_unknown_on_the_first_item():
+    with pytest.raises(harness.HarnessRefused, match='no known digest, so the spec cannot name it; the run stops'):
+        harness.spec_from_request(_sandbox_hctx(FakeSandbox(digest='')), BODY)
+
+
+def test_a_sandbox_spec_is_refused_when_the_digest_turns_unknown_on_a_later_item():
+    manager = FakeSandbox()
+    hctx = _sandbox_hctx(manager)
+    harness.spec_from_request(hctx, BODY)
+    manager.digest = ''
+
+    with pytest.raises(harness.HarnessRefused, match='no known digest'):
+        harness.spec_from_request(hctx, BODY)
+
+
+def test_a_sandbox_spec_is_refused_when_there_is_no_manager():
+    with pytest.raises(harness.HarnessRefused, match='no known digest'):
+        harness.spec_from_request({**_sandbox_hctx(), 'sandbox': None}, BODY)
+
+
+def test_an_item_whose_calls_ran_in_two_sandboxes_is_refused_after_its_release(monkeypatch):
+    async def run(hctx, prompt, errs):
+        upstream_trace.note_request(LOCAL, json.dumps(BODY))
+        upstream_trace.note_sandbox('k1')
+        upstream_trace.note_sandbox('k1')
+        upstream_trace.note_sandbox('k2')
+        return {'output': [_message('answer')]}
+
+    monkeypatch.setattr(harness, '_run_pipeline', run)
+    manager = FakeSandbox()
+
+    with pytest.raises(harness.HarnessRefused, match='sandbox was replaced while it ran'):
+        asyncio.run(harness.ask(_sandbox_hctx(manager), 'item'))
+    assert len(manager.released) == 1
+
+
+def test_an_item_whose_calls_all_ran_in_one_sandbox_is_not_refused(monkeypatch):
+    async def run(hctx, prompt, errs):
+        upstream_trace.note_request(LOCAL, json.dumps(BODY))
+        upstream_trace.note_sandbox('k1')
+        upstream_trace.note_sandbox('k1')
+        return {'output': [_message('answer')]}
+
+    monkeypatch.setattr(harness, '_run_pipeline', run)
+
+    assert asyncio.run(harness.ask(_sandbox_hctx(), 'item')).content == 'answer'
+
+
+def test_note_sandbox_outside_a_trace_records_nothing():
+    upstream_trace.note_sandbox('k1')
+    with upstream_trace.tracing() as trace:
+        pass
+
+    assert trace.sandbox_keys == []
+
+
+def test_note_sandbox_records_distinct_keys_in_first_use_order():
+    with upstream_trace.tracing() as trace:
+        for key in ('b', 'a', 'b', 'a', 'c'):
+            upstream_trace.note_sandbox(key)
+
+    assert trace.sandbox_keys == ['b', 'a', 'c']

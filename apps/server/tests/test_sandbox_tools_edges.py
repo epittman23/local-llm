@@ -61,6 +61,8 @@ def _stat(kind: str = 'file', size: int = 1) -> FileStat:
 class _Script:
     """Stands in for a SandboxSession: exec answers come from a queue, stat and get_files from fields."""
 
+    key = 'k'
+
     def __init__(
         self,
         execs: list[ExecResult] | None = None,
