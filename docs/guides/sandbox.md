@@ -704,7 +704,8 @@ image switching, read-only uploads, timeout and background children,
 cancellation, output flood, memory, fork bomb, PID 1, path confinement
 against a real symlink, restart sweep, the fixed-size volume, and the
 keep-or-remove dialog's listing of a stopped and of a running workspace
-through the helper), on a host
+through the helper, and four chats running at once under `max_running=4`
+while a fifth waits for a slot), on a host
 with Kata, both images, udisks and the loop-device permission above:
 
 ```sh
@@ -718,7 +719,7 @@ They skip without `LLLM_TEST_KATA=1` (CI has no `/dev/kvm`). Without the
 remove it afterwards, and they remove every container, volume and image
 file they make. About three minutes, most of it the PID 1 test's 300 calls;
 with `test_sandbox_uploads_kata.py` and `test_sandbox_outputs_kata.py`,
-362 s on the laptop (2026-11-13). The two mirror tests need the
+38 tests in 366 s on the laptop (2026-11-13). The two mirror tests need the
 `sandbox-mirror` container, which `make backend` starts; without it they
 fail.
 
