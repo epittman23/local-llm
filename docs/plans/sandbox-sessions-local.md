@@ -2,7 +2,8 @@
 
 > **To start a session**, open Claude Code in `~/local-llm` and say:
 > "Resume the sandbox work by following `docs/plans/sandbox-sessions-local.md`
-> on the `feat/sandbox-code-interpreter` branch."
+> on the `feat/sandbox-harness` branch." From T40 on, name
+> `feat/sandbox-remove-jupyter` instead.
 
 How an agent session on the owner's laptop picks up the sandbox work where
 the last session left it, drives it forward with the oh-my-claudecode (OMC)
@@ -38,9 +39,9 @@ under way; always read the copies on the feature branch.
 
 | Thing | Value |
 |---|---|
-| Feature branch | `feat/sandbox-code-interpreter` |
-| Pull request | one draft PR from that branch into `main`, opened by task T00; its number is recorded in the ledger header |
-| PR title | `feat(sandbox): replace the Jupyter and Pyodide code interpreters with per-chat microVM sandboxes` |
+| Feature branch | the branch of the layer the next task belongs to, from the ledger header's table: `feat/sandbox-harness` for T30-T39, `feat/sandbox-remove-jupyter` for T40-T49 (`<feature-branch>` in the commands below) |
+| Pull request | that layer's draft PR, one of four stacked PRs (split from the single PR #884 on 2026-11-13); each number is in the ledger header's table |
+| PR titles | one per layer, as the PRs carry them; each PR's body has the layer table. Never retitle a PR to the single-PR title used before the split |
 | OMC ultragoal plan id | `sandbox` (pass `--plan-id sandbox` to every `omc ultragoal` command) |
 | Ultragoal goal mode | `per-story` (one `/goal` per task, so a session can stop when its task is done) |
 
@@ -88,11 +89,11 @@ one is how sessions continue on the wrong branch or redo finished work.
 2. **Get the branch.**
    ```sh
    git fetch origin --prune
-   git switch feat/sandbox-code-interpreter   # first time: see T00 in the plan
-   git merge --ff-only origin/feat/sandbox-code-interpreter
+   git switch <feature-branch>
+   git merge --ff-only origin/<feature-branch>
    ```
    If the fast-forward fails because both sides have commits, merge
-   (`git merge origin/feat/sandbox-code-interpreter`). Never rebase this
+   (`git merge origin/<feature-branch>`). Never rebase this
    branch and never force-push it: cloud sessions and the PR both build on
    its history.
 
@@ -302,7 +303,7 @@ in the "Open" list in "Owner questions".
      `complete-goals <goal-id> --retry-failed`.
    - Never use `--status blocked`: in OMC it means only that a different,
      completed `/goal` is in the way, and it needs that goal's snapshot.
-4. Push: `git push origin feat/sandbox-code-interpreter`.
+4. Push: `git push origin <feature-branch>`.
 5. `make pr-gate PR=<PR>` (read-only). A finding not yet in the plan's
    "Expected PR gate findings" is a stop: add it there and to "Open owner
    questions", and ask the owner about it (AGENTS.md, "The CI tripwire")
@@ -319,7 +320,9 @@ left half done under one ID.
 `main` keeps moving while the branch is open, and a draft PR is not kept up
 to date automatically in every case (see the testing guide's "Merging,
 auto-merge and branch updates"). At each session start, if
-`git rev-list --count HEAD..origin/main` is not zero:
+`git rev-list --count HEAD..origin/main` is not zero, merge it into the
+bottom open layer of the stack first (the ledger header's table), then
+merge each layer into the one above it, up to the feature branch:
 
 1. `git merge origin/main`, resolving conflicts in favour of `main`'s
    intent and re-applying the branch's change on top. Never rebase. Set

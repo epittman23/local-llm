@@ -4,9 +4,10 @@ The benchmark harness (benchmarks/evaluation/harness.py) answers an item
 through the app's chat pipeline, and nothing in the pipeline's result says
 which connection answered it, what was actually sent, or how long the code
 blocks ran. Inside `tracing()`, routers/openai.py notes each upstream request
-(its URL and the exact body sent) and utils/code_interpreter.py notes each
-code run's duration; outside it, both notes are no-ops, so ordinary chats are
-untouched.
+(its URL and the exact body sent), utils/code_interpreter.py and
+tools/builtin.py note each code run's duration, and tools/builtin.py notes
+the key of each sandbox a call ran in; outside it, every note is a no-op, so
+ordinary chats are untouched.
 
 The ContextVar holds one Trace, appended to and never reassigned: asyncio
 copies the context into tasks started inside the call, and a reassignment
@@ -37,6 +38,12 @@ class Trace:
     #: Code runs that failed in the code interpreter itself (Jupyter down, a
     #: refused token), as opposed to code that raised.
     code_run_failures: list[str] = field(default_factory=list)
+    #: The keys of the sandboxes the calls ran in, distinct, in first-use
+    #: order: more than one means the chat's sandbox was replaced between
+    #: calls under a new key (evicted or reaped). A replacement under the
+    #: same key (an eviction's destroy that failed or outlived its limit,
+    #: then recreated empty) leaves one key, so it is not seen here.
+    sandbox_keys: list[str] = field(default_factory=list)
     allow: Callable[[str], bool] | None = None
 
 
@@ -69,3 +76,11 @@ def note_code_run(ms: float, failure: str = '') -> None:
     trace.code_runs_ms.append(ms)
     if failure:
         trace.code_run_failures.append(failure)
+
+
+def note_sandbox(key: str) -> None:
+    trace = _trace.get()
+    if trace is None:
+        return
+    if key not in trace.sandbox_keys:
+        trace.sandbox_keys.append(key)

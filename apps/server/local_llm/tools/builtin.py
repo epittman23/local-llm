@@ -94,7 +94,7 @@ from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import find_in_lowered
 from local_llm.utils.notifications import notify_target
 from local_llm.utils.sanitize import sanitize_code
-from local_llm.utils.upstream_trace import note_code_run
+from local_llm.utils.upstream_trace import note_code_run, note_sandbox
 
 log = logging.getLogger(__name__)
 
@@ -905,6 +905,9 @@ async def _sandbox_session(
     A sync that fails never refuses the call: a full workspace must still run
     `rm`. Its failure becomes one more note, with the reason only when it was
     written for the model; the details are logged.
+    For a benchmark run every call runs on the `data` image (_harness_image),
+    and when that overrides the image the call named, `upload_notes`, if
+    given, gets a note saying so.
 
     Raises:
         SandboxUnavailable: The app has no sandbox manager.
@@ -918,6 +921,9 @@ async def _sandbox_session(
         raise SandboxUnavailable('this server has no sandbox running')
     if image is not None and image not in get_args(ImageKey):
         raise WorkspaceError(f"image must be 'data' or 'web', not {image!r}")
+    image, image_note = _harness_image(request, image)
+    if image_note is not None and upload_notes is not None:
+        upload_notes.append(image_note)
     from local_llm.models.users import Users
 
     account = await Users.get_user_by_id(user['id']) if user and user.get('id') else None
@@ -940,6 +946,8 @@ async def _sandbox_session(
     try:
         async with manager.session(chat, account, image=cast(ImageKey | None, image), on_wait=on_wait) as session:
             entered = True
+            # A benchmark item whose calls ran in two sandboxes lost its files in between (harness.ask refuses it).
+            note_sandbox(session.key)
             if waited and event_emitter is not None:
                 await event_emitter({'type': 'status', 'data': {'description': 'Sandbox ready', 'done': True}})
             if upload_notes is not None:
@@ -966,6 +974,20 @@ async def _sandbox_session(
         if waited and not entered and event_emitter is not None:
             await event_emitter({'type': 'status', 'data': {'description': 'No sandbox could start', 'done': True}})
         raise
+
+
+def _harness_image(request: Request | None, image: str | None) -> tuple[str | None, str | None]:
+    """The image a call runs on, and a note for the model when a benchmark run overrides the one it asked for.
+
+    A benchmark run (benchmarks/evaluation/harness.py) always runs on the `data` image, whose digest its spec names:
+    `bash(image='web')` runs on `data` too, and the file tools, which pass None, never keep `web`. Only a call that
+    named another image gets the note.
+    """
+    if getattr(getattr(request, 'state', None), 'benchmark_harness', False) is not True:
+        return image, None
+    if image is None or image == 'data':
+        return 'data', None
+    return 'data', f"This benchmark run uses the 'data' image; image '{image}' was not used."
 
 
 @contextmanager

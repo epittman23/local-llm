@@ -1202,6 +1202,22 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   model that gives up after one is not scored as having made the mistake.
   A harness request is internal, which drops the sub-agent tools
   (`benchmarks/evaluation/harness.py`), so no sub-agent runs inside one.
+  Every sandbox call of a harness request runs on the `data` image
+  (`_sandbox_session` pins it, whatever `image` the call asks for, and a
+  `bash` call that named `web` is told so in its `stderr`), whose digest
+  the harness spec names, and each item's ephemeral sandbox is released
+  (`SandboxManager.release`) as soon as the item ends
+  ([benchmarks guide](benchmarks.md#through-the-app-harness-mode)).
+  `_sandbox_session` notes each session's sandbox key in the harness's
+  trace (`note_sandbox`), and the harness refuses an item whose calls ran
+  in more than one sandbox: between calls its sandbox is unlocked, so
+  another chat needing a slot while all `max_running` are taken can evict
+  it after 60 s idle (or the idle reaper destroy it), and the next call
+  would start on an empty `/workspace` under a new key. The check catches
+  only that replacement under a new key. An eviction whose destroy fails
+  or outlives `DESTROY_TIMEOUT_S` leaves the key mapped and in doubt, and
+  the next call recreates it empty under the same key; that is not
+  detected, and shows only as the eviction's error in the log.
 
 `tests/test_sandbox_call_sites.py` covers all of these on the FakeBackend,
 including the `.runs` listing against the real script.
@@ -1553,5 +1569,5 @@ statically otherwise, the table, the report and its route). The
 proposal's acceptance test "Telemetry" passed on the laptop on 2026-11-13
 with the `2026-11-12.1` data image (an import with its version, a module
 miss, a command miss, and a mirror install credited to the right chat),
-except its harness part, which needs the harness on the sandbox engine
-(T30).
+except its harness part: T30 put the harness on the sandbox engine, which
+makes that part reachable, but it has not been run on the laptop yet.

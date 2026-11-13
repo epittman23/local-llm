@@ -273,7 +273,7 @@ sequenceDiagram
   participant P as Chat pipeline
   participant G as upstream_trace guard
   participant L as llama-server :8090
-  participant J as Jupyter :8888
+  participant C as Code interpreter: sandbox or Jupyter
   participant DB as Postgres
 
   T->>R: tier run or one item, with harness_model
@@ -282,20 +282,21 @@ sequenceDiagram
     L-->>R: answer and llama.cpp timings
   else harness_model set
     R->>H: prepare(model entry, port)
-    H->>J: liveness check
-    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or Jupyter down
+    H->>C: sandbox manager ready and data image digest, or Jupyter liveness check
+    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or the engine is not ready
     R->>H: ask(item prompt)
-    H->>P: process_chat_payload with a temporary chat id and native calling
+    H->>P: process_chat_payload with the item's own temporary chat id and native calling
     P-->>H: tools offered
-    H->>P: tools cut to execute_code only, then generate_chat_completion
+    H->>P: tools cut to the engine's code tools, then generate_chat_completion
     loop at most 8 tool rounds, driven by process_chat_response
       P->>G: upstream request
       G->>L: sent only if its host is 127.0.0.1 on the served port
-      L-->>P: streamed reply, maybe an execute_code call
-      P->>J: execute_code runs the block in a fresh kernel
-      J-->>P: stdout, stderr, result
+      L-->>P: streamed reply, maybe a tool call
+      P->>C: bash, view, write_file or str_replace in the item's sandbox on the data image, or execute_code in a fresh Jupyter kernel
+      C-->>P: the tool's result
     end
     P-->>H: assistant message
+    H->>C: on the sandbox engine, release the item's ephemeral sandbox
     H-->>R: text after the last code run, full output, harness_stats
     R->>R: spec read from the first upstream request, its sha is harness_sha
     R-->>T: run stops if the spec changes between items
@@ -312,22 +313,29 @@ A Tests run measures either the bare model or the assistant as deployed.
 - **Harness mode.** With `harness_model` set to a Workspace model entry,
   `benchmarks/evaluation/harness.py` sends each item through the chat
   pipeline above: the entry's system prompt and params, native function
-  calling, and the code interpreter on Jupyter. It uses a `temporary:` chat
-  id, so no chat, title or memory is written, and it cuts the tools offered
-  to `execute_code` alone. It measures the assistant.
+  calling, and the code interpreter on its configured engine, the sandbox
+  or (until it is removed) Jupyter. Each item gets its own `temporary:`
+  chat id, so no chat, title or memory is written, and the tools offered
+  are cut to the engine's code tools: `bash`, `view`, `write_file` and
+  `str_replace` on the sandbox, which runs every item on the `data` image
+  in an ephemeral sandbox released when the item ends; `execute_code` on
+  Jupyter. It measures the assistant.
 
 What keeps a harness result trustworthy:
 
 - **It refuses before it starts** when the entry is not served by the
   `llama-server` being measured, its base model is missing, it turns
   streaming off, uses legacy function calling or sets
-  `max_completion_tokens`, or Jupyter does not answer.
+  `max_completion_tokens`, or the engine is not ready: the sandbox has no
+  manager, is not ready or has no known `data` image digest, or Jupyter
+  does not answer.
 - **Every upstream request is checked** (`utils/upstream_trace.py`): one
   bound for anywhere but `127.0.0.1:<port>` is stopped before it is sent,
   and nothing is recorded.
 - **The run is fingerprinted.** `harness_sha` is a sha of what every item
   shares, read back from the first request actually sent upstream (the
-  entry, the system message, the tools, every param, the 8-round limit).
+  entry, the system message, the tools, every param, the 8-round limit),
+  plus the engine and, on the sandbox, the `data` image's digest.
   It sits beside `system_sha` as a grouping key, and a run whose request
   changes between items stops. Like the system prompt, it is not part of
   `config_id`.
@@ -343,10 +351,11 @@ Where it stands:
   and Compare and Report leave harness rows out until they group by
   `harness_sha`; both are planned in PR 2 of
   [the plan](../plans/benchmarks-through-the-app.md).
-- It needs a model that makes structured tool calls. `qwen25c` writes its
-  `execute_code` call as JSON text, so no code runs and a harness run on it
-  measures the bare model plus the entry's prompt. `qwen38` makes the
-  structured call. `harness_stats.code_runs` tells the two apart.
+- It needs a model that makes structured tool calls. On Jupyter
+  (2026-10-24), `qwen25c` wrote its `execute_code` call as JSON text, so no
+  code ran and a harness run on it measured the bare model plus the entry's
+  prompt; `qwen38` made the structured call. `harness_stats.code_runs`
+  tells the two apart.
 
 The full rules and what each recorded field means are in
 [benchmarks.md's harness section](benchmarks.md#through-the-app-harness-mode).
