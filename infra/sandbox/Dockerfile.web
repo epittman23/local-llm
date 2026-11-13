@@ -1,0 +1,59 @@
+# The sandbox's web image: Node.js LTS, TypeScript, tsx, ESLint, Prettier and
+# Playwright with headless Chromium, plus the common tools. Build context is
+# infra/sandbox (`make sandbox-images`). Versions are pinned in
+# web/package.json and web/package-lock.json (npm); lllm-path comes last.
+# node:26.13.0 is the "lts" tag (Node 26, "Lithium") on Debian 13.
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072
+
+USER root
+
+COPY common/install-common.sh /tmp/sandbox/install-common.sh
+RUN bash /tmp/sandbox/install-common.sh
+
+# The tools, from the lockfile, with the browser and its system libraries. The
+# binaries are linked into /usr/local/bin, which even a Debian login shell
+# keeps on PATH. NODE_PATH lets CommonJS scripts require() the packages.
+COPY web/package.json web/package-lock.json /opt/sandbox-web/
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+RUN cd /opt/sandbox-web \
+    && npm ci --no-audit --no-fund \
+    && ./node_modules/.bin/playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/* /root/.npm \
+    && for b in tsc tsx eslint prettier playwright; do \
+        ln -s "/opt/sandbox-web/node_modules/.bin/$b" "/usr/local/bin/$b"; \
+    done
+ENV NODE_PATH=/opt/sandbox-web/node_modules
+# ESM `import` ignores NODE_PATH but walks up from the importing file, so a
+# file anywhere under /workspace finds the packages through /node_modules.
+RUN ln -s /opt/sandbox-web/node_modules /node_modules
+
+# /workspace is the per-chat volume's mount point. An empty named volume takes
+# the ownership of this directory, so it must be 1000:1000 here (the base's
+# `node` user is 1000:1000, and its group is named).
+RUN install -d -o 1000 -g 1000 -m 0755 /workspace
+
+# No setuid or setgid binaries: nothing the model runs needs one, and a plain
+# `docker run` (which has none of the backend's no-new-privileges and
+# cap-drop) would otherwise keep them as an escalation path.
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} +
+
+# Debian's /etc/profile resets PATH for a login shell (`bash -lc`, how the
+# manager runs commands); put the workspace directory back, last.
+RUN printf '%s\n' 'PATH="$PATH:/workspace/.local/bin"' 'export PATH' > /etc/profile.d/10-sandbox-path.sh
+
+# The confinement helper (written and tested separately; copied in last so the
+# slow layers above stay cached while it changes).
+COPY --chown=root:root --chmod=0755 common/lllm-path /usr/local/bin/lllm-path
+
+# The image's own directories first; /workspace/.local/bin LAST, so a
+# model-written file cannot shadow `timeout`, `bash` or what the manager runs.
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/workspace/.local/bin
+
+WORKDIR /workspace
+USER 1000
+# For plain `docker run` only. The backend replaces both: it starts the
+# container with Docker's own init as PID 1 and `sleep infinity` as 65534,
+# and runs every exec as 1000 (the sandbox's Q16 design), so this tini is not
+# what reaps a call's leftovers there.
+ENTRYPOINT ["tini", "-g", "--"]
+CMD ["sleep", "infinity"]

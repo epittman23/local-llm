@@ -251,7 +251,7 @@ def test_backend_brings_everything_down_when_nothing_ran_before(tmp_path):
 def test_backend_leaves_services_that_ran_before_it_up(tmp_path):
     """Another `make backend` (starting, reloading) owns them: this run's exit must not take them down."""
     root = _checkout(tmp_path)
-    every = 'postgres\nredis\njupyter\nsearxng'
+    every = 'postgres\nredis\njupyter\nsearxng\nsandbox-mirror'
     result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER=every)
     assert result.returncode == 0, result.stderr
     assert _compose_after_uvicorn(calls) == []
@@ -265,7 +265,7 @@ def test_backend_stops_only_the_services_it_started(tmp_path):
         root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub', STUB_OUT_DOCKER='redis\npostgres'
     )
     assert result.returncode == 0, result.stderr
-    assert _compose_after_uvicorn(calls) == [['rm', '-f', '-s', 'jupyter', 'searxng']]
+    assert _compose_after_uvicorn(calls) == [['rm', '-f', '-s', 'jupyter', 'searxng', 'sandbox-mirror']]
     assert '==> Stopping Postgres' not in result.stdout
 
 
@@ -279,6 +279,101 @@ def test_backend_that_cannot_ask_compose_goes_on_and_brings_everything_down(tmp_
     assert compose[1][:1] == ['up']
     assert compose[-1] == ['down']
     assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
+
+
+def test_backend_makes_the_wheelhouse_directory_and_starts_the_mirror(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
+    assert result.returncode == 0, result.stderr
+    assert (root / 'apps/server/data/sandbox/wheelhouse').is_dir()
+    up = next(c['argv'] for c in calls if c['tool'] == 'docker' and 'up' in c['argv'])
+    assert up[-5:] == ['postgres', 'redis', 'jupyter', 'searxng', 'sandbox-mirror']
+
+
+def test_wheelhouse_that_fails_to_download_leaves_the_served_wheels_alone(tmp_path):
+    root = _checkout(tmp_path)
+    (root / 'infra/sandbox').mkdir()
+    (root / 'infra/sandbox/TAG').write_text('2026-01-01.1\n')
+    wheelhouse = root / 'apps/server/data/sandbox/wheelhouse'
+    wheelhouse.mkdir(parents=True)
+    (wheelhouse / 'served-1.0-py3-none-any.whl').write_text('x')
+    result, calls = _make(root, tmp_path, 'wheelhouse', STUB_EXIT_DOCKER='1')
+    assert result.returncode != 0
+    assert (wheelhouse / 'served-1.0-py3-none-any.whl').exists()
+    (run,) = [c['argv'] for c in calls if c['tool'] == 'docker']
+    assert 'local-llm/sandbox-data:2026-01-01.1' in run
+    assert any(a.endswith('/infra/sandbox/requirements.lock:/requirements.lock:ro') for a in run)
+    assert not any('--network' in a for a in run), 'the download needs the default network'
+
+
+# A docker stub that writes the wheels named in $WHEELS (name=content, one per line) into the
+# directory mounted at /wheelhouse, as `pip download` would.
+DOWNLOADING_DOCKER = """#!/bin/bash
+printf '%s\\n' "$*" >> "$STUB_LOG.docker"
+for arg in "$@"; do case "$arg" in *:/wheelhouse) dir="${arg%:/wheelhouse}" ;; esac; done
+while IFS== read -r name content; do [ -z "$name" ] || printf '%s' "$content" > "$dir/$name"; done <<< "$WHEELS"
+"""
+
+
+def _wheelhouse_checkout(tmp_path: Path, locked: dict[str, str]) -> Path:
+    import hashlib
+
+    root = _checkout(tmp_path)
+    (root / 'infra/sandbox').mkdir()
+    (root / 'infra/sandbox/TAG').write_text('2026-01-01.1\n')
+    hashes = ''.join(f'    --hash=sha256:{hashlib.sha256(c.encode()).hexdigest()}\n' for c in locked.values())
+    (root / 'infra/sandbox/requirements.lock').write_text(f'pkg==1.0 \\\n{hashes}')
+    stub = tmp_path / 'bin' / 'docker'
+    stub.write_text(DOWNLOADING_DOCKER)
+    return root
+
+
+def test_wheelhouse_swaps_in_the_new_wheels_and_drops_stale_ones(tmp_path):
+    root = _wheelhouse_checkout(tmp_path, {'good-1.0-py3-none-any.whl': 'good'})
+    wheelhouse = root / 'apps/server/data/sandbox/wheelhouse'
+    wheelhouse.mkdir(parents=True)
+    (wheelhouse / 'old-1.0-py3-none-any.whl').write_text('old')
+    (wheelhouse.parent / 'wheelhouse.tmp').mkdir()
+    (wheelhouse.parent / 'wheelhouse.tmp' / 'leftover-1.0-py3-none-any.whl').write_text('leftover')
+    result, _ = _make(root, tmp_path, 'wheelhouse', WHEELS='good-1.0-py3-none-any.whl=good')
+    assert result.returncode == 0, result.stderr
+    assert sorted(p.name for p in wheelhouse.iterdir()) == ['good-1.0-py3-none-any.whl']
+    assert not (wheelhouse.parent / 'wheelhouse.tmp').exists()
+    assert '--cap-drop ALL' in (tmp_path / 'calls.jsonl.docker').read_text()
+
+
+def test_wheelhouse_refuses_a_download_that_is_not_in_the_lock_and_serves_the_old_wheels(tmp_path):
+    root = _wheelhouse_checkout(tmp_path, {'good-1.0-py3-none-any.whl': 'good'})
+    wheelhouse = root / 'apps/server/data/sandbox/wheelhouse'
+    wheelhouse.mkdir(parents=True)
+    (wheelhouse / 'old-1.0-py3-none-any.whl').write_text('old')
+    result, _ = _make(
+        root, tmp_path, 'wheelhouse', WHEELS='good-1.0-py3-none-any.whl=good\nevil-1.0-py3-none-any.whl=evil'
+    )
+    assert result.returncode != 0
+    assert 'not in requirements.lock' in result.stderr
+    assert sorted(p.name for p in wheelhouse.iterdir()) == ['old-1.0-py3-none-any.whl']
+
+
+def test_wheelhouse_refuses_a_dotfile_among_the_downloads(tmp_path):
+    root = _wheelhouse_checkout(tmp_path, {'good-1.0-py3-none-any.whl': 'good'})
+    wheelhouse = root / 'apps/server/data/sandbox/wheelhouse'
+    wheelhouse.mkdir(parents=True)
+    (wheelhouse / 'old-1.0-py3-none-any.whl').write_text('old')
+    result, _ = _make(root, tmp_path, 'wheelhouse', WHEELS='good-1.0-py3-none-any.whl=good\n.hidden=x')
+    assert result.returncode != 0
+    assert 'unexpected entry' in result.stderr
+    assert sorted(p.name for p in wheelhouse.iterdir()) == ['old-1.0-py3-none-any.whl']
+
+
+def test_wheelhouse_of_an_empty_lock_empties_the_served_directory(tmp_path):
+    root = _wheelhouse_checkout(tmp_path, {})
+    wheelhouse = root / 'apps/server/data/sandbox/wheelhouse'
+    wheelhouse.mkdir(parents=True)
+    (wheelhouse / 'old-1.0-py3-none-any.whl').write_text('old')
+    result, _ = _make(root, tmp_path, 'wheelhouse', WHEELS='')
+    assert result.returncode == 0, result.stderr
+    assert list(wheelhouse.iterdir()) == []
 
 
 # --- make secrets (#518) ----------------------------------------------------
@@ -316,3 +411,73 @@ def test_secrets_mounts_the_common_git_dir_from_a_linked_worktree(tmp_path):
     assert result.returncode == 0, result.stderr
     common = str((main / '.git').resolve())
     assert _gitleaks_mounts(calls) == [f'{linked}:/repo:ro', f'{common}:{common}:ro']
+
+
+# --- make sandbox-images ----------------------------------------------------
+
+
+def _sandbox_checkout(tmp_path: Path) -> tuple[Path, Path]:
+    root = _checkout(tmp_path)
+    sandbox = root / 'infra' / 'sandbox'
+    sandbox.mkdir()
+    (sandbox / 'TAG').write_text('2030-01-01.1\n')
+    return root, sandbox
+
+
+def test_sandbox_images_builds_both_images_at_the_tag_and_records_the_freezes(tmp_path):
+    """One TAG file names both images; the data image's Python and R packages are committed."""
+    root, sandbox = _sandbox_checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_OUT_DOCKER='pandas==9.9.9')
+    assert result.returncode == 0, result.stderr
+    image = 'local-llm/sandbox-data:2030-01-01.1'
+    docker = [c['argv'] for c in calls if c['tool'] == 'docker']
+    assert docker[:2] == [
+        ['build', '-f', f'{sandbox}/Dockerfile.data', '-t', image, str(sandbox)],
+        ['build', '-f', f'{sandbox}/Dockerfile.web', '-t', 'local-llm/sandbox-web:2030-01-01.1', str(sandbox)],
+    ]
+    assert docker[2] == [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '-e',
+        'PIP_USER=0',
+        image,
+        'pip',
+        'list',
+        '--format=freeze',
+        '--disable-pip-version-check',
+    ]
+    assert docker[3][:6] == ['run', '--rm', '--network', 'none', image, 'Rscript']
+    assert len(docker) == 4
+    # The stub prints its canned output for every docker call, so each freeze
+    # file holds its run's output (the builds' go to the terminal, not to it).
+    assert (sandbox / 'image-freeze.txt').read_text() == 'pandas==9.9.9\n'
+    assert (sandbox / 'image-freeze-r.txt').read_text() == 'pandas==9.9.9\n'
+    assert not list(sandbox.glob('*.tmp'))
+
+
+def test_sandbox_images_refuses_without_a_tag(tmp_path):
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'sandbox-images')
+    assert result.returncode != 0
+    assert 'infra/sandbox/TAG' in result.stderr
+    assert calls == []
+
+
+def test_sandbox_images_stops_at_a_failed_build_and_keeps_the_committed_freezes(tmp_path):
+    root, sandbox = _sandbox_checkout(tmp_path)
+    (sandbox / 'image-freeze.txt').write_text('committed==1\n')
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_EXIT_DOCKER_BUILD='1')
+    assert result.returncode != 0
+    assert [c['argv'][0] for c in calls if c['tool'] == 'docker'] == ['build']
+    assert (sandbox / 'image-freeze.txt').read_text() == 'committed==1\n'
+
+
+def test_sandbox_images_keeps_the_committed_freeze_when_recording_it_fails(tmp_path):
+    root, sandbox = _sandbox_checkout(tmp_path)
+    (sandbox / 'image-freeze.txt').write_text('committed==1\n')
+    result, calls = _make(root, tmp_path, 'sandbox-images', STUB_EXIT_DOCKER_RUN='1')
+    assert result.returncode != 0
+    assert (sandbox / 'image-freeze.txt').read_text() == 'committed==1\n'
+    assert not list(sandbox.glob('*.tmp'))

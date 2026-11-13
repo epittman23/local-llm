@@ -48,3 +48,33 @@ export function isAllowedPermission(
 	if (permission === 'media') return mediaTypes.length > 0 && mediaTypes.every((type) => type === 'audio');
 	return true;
 }
+
+/** Whether a URL is a document of the page's own making: `about:srcdoc` (an iframe's `srcdoc`) or `about:blank`. */
+function isInlineDocument(url: string): boolean {
+	const parsed = parse(url);
+	const path = parsed?.pathname.toLowerCase();
+	return parsed?.protocol === 'about:' && (path === 'srcdoc' || path === 'blank');
+}
+
+/**
+ * Whether a sub-frame may navigate. A frame showing an inline document (a
+ * sandbox output's HTML is an `about:srcdoc` iframe; an iframe starts as
+ * `about:blank`) may go only to another inline document, unless the app's own
+ * page starts the navigation, as when an iframe's `src` loads. Otherwise
+ * model-written script in the frame could send what it holds to any URL by
+ * navigating itself, which neither the iframe's `sandbox` flags nor the
+ * document's content-security policy stop (docs/guides/sandbox.md, "Outputs").
+ * This covers navigation only: WebRTC from the frame is beyond both it and CSP.
+ * `frameUrl` is the frame's current URL, empty before its first document;
+ * `initiatorOrigin` is the origin of the frame that started the navigation, if
+ * any (a sandboxed frame's is "null").
+ */
+export function isAllowedFrameNavigation(
+	frameUrl: string,
+	url: string,
+	initiatorOrigin: string | null,
+	appOrigin: string
+): boolean {
+	if (frameUrl !== '' && !isInlineDocument(frameUrl)) return true;
+	return isInlineDocument(url) || initiatorOrigin === appOrigin;
+}

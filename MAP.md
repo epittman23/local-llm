@@ -118,7 +118,9 @@ Start here for "how do I run/use this."
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
-  sign-in on through environment variables).
+  sign-in on through environment variables), `sandbox.md` (the per-chat
+  microVM sandbox under construction; so far its Kata host setup, images
+  and backend).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -179,9 +181,20 @@ Infrastructure this repo runs but does not write.
   (the code interpreter's engine) and **SearXNG** (web search), each on its
   own network so neither can reach Postgres or Redis; see
   `docs/guides/assistant-tools.md`.
+  It also runs the code sandbox's **`sandbox-mirror`** (nginx serving the
+  wheelhouse) on the `internal` `sandbox` network at a fixed address; see
+  `docs/guides/sandbox.md` "Mirror and wheelhouse".
 - **`searxng/settings.yml`** — SearXNG's settings: only what differs from
   its defaults (JSON output on, limiter off). Its secret comes from
   `infra/.env`.
+- **`sandbox/`** — the code sandbox's two images (`Dockerfile.data`,
+  `Dockerfile.web`), the files they share (`common/`), per-image inputs
+  (`data/`, `web/`), the image tag (`TAG`) and the data image's package
+  list (`image-freeze.txt`, `image-freeze-r.txt`). Built by `make sandbox-images`;
+  `docs/guides/sandbox.md` "Images". Also the package allowlist
+  (`allowlist.in`), its hash-locked wheel list (`requirements.lock`; `make
+  wheelhouse` downloads it) and the mirror's nginx configuration
+  (`mirror/nginx.conf`); `docs/guides/sandbox.md` "Mirror and wheelhouse".
 - **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the
@@ -215,7 +228,21 @@ fork's pre-import history is kept read-only at
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
   models, including `models/benchmarks/`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
-  real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
+  real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, `sandbox/`
+  (the per-chat microVM sandbox, under construction on the sandbox branch:
+  so far its core types, the `SandboxBackend` protocol, the fixed limits,
+  command wrapping and output capping, the in-memory `FakeBackend` for
+  tests, the `SandboxManager` (per-chat lifecycle, slots, sweeps), and
+  `workspace.py`, the file tools' path confinement and guest helpers, whose
+  in-guest half is `infra/sandbox/common/lllm-path`; its four tools,
+  `bash`, `view`, `write_file` and `str_replace` in `tools/builtin.py`, are
+  offered under the `sandbox` engine; `kata.py`, `KataDockerBackend`, the
+  backend that runs each chat in a Kata microVM through Docker, with its
+  fixed-size workspace volumes; `lifespan.py`, which `main.py`'s
+  lifespan uses to start and stop the manager; and `outputs.py`, which
+  attaches the files a `bash` call leaves in `/workspace/outputs` to the
+  message, renders PDF previews, and puts the policy in front of an HTML
+  output for `routers/sandbox.py`'s `/outputs/{id}/html`), and
   **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
@@ -398,6 +425,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   chat list, folders, search). Its pure rules are in `src/lib/chat/`
   (history tree, request body, sources, attachments, import) and its
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
+  `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
+  (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

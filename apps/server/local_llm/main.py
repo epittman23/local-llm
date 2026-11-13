@@ -79,6 +79,7 @@ from local_llm.env import (
     AUDIT_INCLUDED_PATHS,
     AUDIT_LOG_LEVEL,
     BYPASS_MODEL_ACCESS_CONTROL,
+    DATA_DIR,
     DEPLOYMENT_ID,
     ENABLE_ADMIN_CHAT_ACCESS,
     ENABLE_AUDIT_GET_REQUESTS,
@@ -165,6 +166,7 @@ from local_llm.routers import (
     pipelines,
     prompts,
     retrieval,
+    sandbox,
     scim,
     skills,
     tasks,
@@ -179,6 +181,8 @@ from local_llm.routers.retrieval import (
     get_reranking_function,
     get_rf,
 )
+from local_llm.sandbox import lifespan as sandbox_lifespan
+from local_llm.sandbox.kata import KataDockerBackend
 from local_llm.socket.main import (
     MODELS,
     get_event_emitter,
@@ -478,6 +482,10 @@ async def lifespan(app: FastAPI):
     # orphan; close it before Serve, Tune or Tests can start beside it.
     await benchmarks.startup()
 
+    # The code sandbox (docs/guides/sandbox.md): the app starts whether or not
+    # this host can run sandboxes; the admin page and each call say why not.
+    await sandbox_lifespan.start(app, KataDockerBackend(DATA_DIR / 'sandbox' / 'volumes'), DATA_DIR / 'sandbox')
+
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')
@@ -503,6 +511,11 @@ async def _shutdown(app) -> None:
         await benchmarks.shutdown()
     else:
         await benchmarks.stop_prescreen()
+
+    # After the chat replies, whose commands each end with their kill; running
+    # sandboxes outlive a restart unless LLLM_STOP_JOBS_ON_SHUTDOWN is set, and
+    # the next start's sweep stops them.
+    await sandbox_lifespan.stop(app, stop_running=LLLM_STOP_JOBS_ON_SHUTDOWN)
 
     # Shutdown: clean up shared resources
     from local_llm.utils.session_pool import close_session
@@ -544,6 +557,8 @@ app.state.oauth_client_manager = oauth_client_manager
 
 app.state.instance_id = None
 app.state.redis = None
+# The code sandbox's manager, set by the lifespan when this process runs one.
+app.state.sandbox = None
 
 app.state.LLLM_NAME = LLLM_NAME
 app.state.EXTERNAL_PWA_MANIFEST_URL = EXTERNAL_PWA_MANIFEST_URL
@@ -914,6 +929,7 @@ if ENABLE_ADMIN_ANALYTICS:
 app.include_router(utils.router, prefix='/api/v1/utils', tags=['utils'])
 app.include_router(terminals.router, prefix='/api/v1/terminals', tags=['terminals'])
 app.include_router(automations.router, prefix='/api/v1/automations', tags=['automations'])
+app.include_router(sandbox.router, prefix='/api/v1/sandbox', tags=['sandbox'])
 app.include_router(benchmarks.router, prefix='/api/v1/benchmarks', tags=['benchmarks'])
 app.include_router(calendar.router, prefix='/api/v1/calendars', tags=['calendars'])
 

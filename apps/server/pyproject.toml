@@ -154,6 +154,9 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.63b1",
     "opentelemetry-instrumentation-aiohttp-client==0.63b1",
     "opentelemetry-instrumentation-system-metrics==0.63b1",
+
+    # The code sandbox's Kata backend (local_llm/sandbox/kata.py) talks to the Docker daemon.
+    "docker==7.2.0",
 ]
 requires-python = ">= 3.12, < 3.13.0a1"
 version = "0.11.3"

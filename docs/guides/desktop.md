@@ -109,7 +109,7 @@ If it started the stack, the dialog shows the shutdown:
    chat reply still being written, saving what arrived (up to 10 s more), then
    benchmark jobs and the served model.
 4. **The Makefile's trap brings the Compose services down** (Postgres,
-   Redis, Jupyter and SearXNG). It brings down only what its own run
+   Redis, Jupyter, SearXNG and the sandbox mirror). It brings down only what its own run
    started: any already running when `make backend` began are left up. The
    app starts its stack only with none running, so this is all of them.
 
@@ -194,6 +194,18 @@ storage with the login.
 - **The windows:**
   - the app window runs sandboxed, with context isolation and no Node;
   - navigation off the server's origin goes to the system browser;
+  - a sub-frame showing `about:srcdoc` or `about:blank` (a sandbox output's
+    HTML frame, the chat's artifact preview) may navigate only to another of
+    those, unless the app's own page starts the navigation, as an iframe's
+    `src` does, and a navigation the handler cannot check is refused
+    (`will-frame-navigate`). This stops model-written script sending what it
+    holds to a URL by navigating its frame. It does not stop WebRTC: a
+    script in an HTML output can still reach the network through a STUN or
+    TURN host it names, which neither this rule nor the frame's
+    content-security policy covers, and so leak what the model wrote, what
+    the user types into the output, and the user's IP. The owner accepted
+    this (docs/guides/sandbox.md, "Outputs"). A link clicked in an artifact
+    preview goes nowhere in the desktop app;
   - only the server's origin gets the permissions the app uses
     (notifications, clipboard, microphone, fullscreen). The rules are in
     `src/policy.ts`.
@@ -229,7 +241,8 @@ and an unpacked package. The unit tests cover:
 - `src/main.ts`'s start and stop: a Cancel during startup, a quit while the
   window loads, Retry during a stop, the "Leave it" offer, services left
   after a stop, a stack an earlier launch left running or was stopping, and
-  a login shell that cannot be spawned, run against a fake Electron in
+  a login shell that cannot be spawned, and the sub-frame navigation
+  handler's wiring, run against a fake Electron in
   `src/main.stop.test.ts`.
 
 Launching, closing and attaching the real stack are checked by hand: see

@@ -43,6 +43,7 @@ from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.routers.audio import transcribe
 from local_llm.routers.knowledge import delete_file_chunks
 from local_llm.routers.retrieval import ProcessFileForm, process_file, process_file_for
+from local_llm.sandbox.outputs import SERVED_POLICY, is_sandbox_output, served_type
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
@@ -883,7 +884,13 @@ async def get_file_content_by_id(
                 encoded_filename = quote(filename)
                 headers = {}
 
-                if attachment:
+                if is_sandbox_output(file.meta):
+                    # Written by a model in the sandbox: downloaded, never rendered on this origin, whatever its type.
+                    headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+                    headers['X-Content-Type-Options'] = 'nosniff'
+                    headers['Content-Security-Policy'] = SERVED_POLICY
+                    content_type = served_type(content_type)
+                elif attachment:
                     headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
                 else:
                     if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
@@ -935,6 +942,14 @@ async def get_html_file_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db):
+        # This route renders HTML on the app's origin; a sandbox output's HTML is shown only through
+        # GET /api/v1/sandbox/outputs/{id}/html, with a policy, in a sandboxed frame. Checked once access is
+        # established, so a caller without access gets the same 404 as for a missing file.
+        if is_sandbox_output(file.meta):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
         try:
             file_path = await asyncio.to_thread(Storage.get_file, file.path)
             file_path = Path(file_path)
@@ -983,6 +998,12 @@ async def get_file_content_by_id_and_name(
         filename = file.meta.get('name', file.filename)
         encoded_filename = quote(filename)  # RFC5987 encoding
         headers = {'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}"}
+        # A sandbox output's type as the route above serves it; None for other files, so FileResponse guesses as before.
+        media_type = None
+        if is_sandbox_output(file.meta):
+            headers['X-Content-Type-Options'] = 'nosniff'
+            headers['Content-Security-Policy'] = SERVED_POLICY
+            media_type = served_type((file.meta or {}).get('content_type'))
 
         if file_path:
             file_path = await asyncio.to_thread(Storage.get_file, file_path)
@@ -990,7 +1011,7 @@ async def get_file_content_by_id_and_name(
 
             # Check if the file already exists in the cache
             if file_path.is_file():
-                return FileResponse(file_path, headers=headers)
+                return FileResponse(file_path, headers=headers, media_type=media_type)
             else:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

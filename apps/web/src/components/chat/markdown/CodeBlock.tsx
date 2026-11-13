@@ -1,10 +1,14 @@
 import hljs from 'highlight.js/lib/common';
+import latex from 'highlight.js/lib/languages/latex';
 import { Check, ChevronDown, ChevronUp, Copy, Eye, Play } from 'lucide-react';
 import 'highlight.js/styles/github-dark.min.css';
 import { useEffect, useMemo, useState } from 'react';
 import { cn, copyToClipboard } from '@/lib/utils';
 
 const COLLAPSED_LINES = 5;
+
+// The common set has no LaTeX, which `.tex` sandbox outputs (components/chat/SandboxOutputs.tsx) are shown in.
+hljs.registerLanguage('latex', latex);
 
 let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
 const loadMermaid = () => {
