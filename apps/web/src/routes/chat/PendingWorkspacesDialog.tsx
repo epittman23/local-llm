@@ -33,6 +33,17 @@ const title = (t: string | null | undefined) => t || 'Untitled chat';
  */
 const isolated = (t: string) => `\u2068${t}\u2069`;
 
+/** The most of a chat title an <option> shows: an option cannot wrap, and a native <select> grows to its longest one. */
+export const OPTION_TITLE_MAX = 60;
+
+/** A chat title as a <select> option shows it: isolated, and cut at OPTION_TITLE_MAX characters with an ellipsis. */
+export const optionTitle = (t: string | null | undefined) => {
+	const chars = Array.from(title(t));
+	return isolated(
+		chars.length > OPTION_TITLE_MAX ? `${chars.slice(0, OPTION_TITLE_MAX - 1).join('')}\u2026` : chars.join('')
+	);
+};
+
 /** Why this workspace waits, in the user's terms. */
 function reasonText(item: PendingWorkspace, data: PendingWorkspaces): string {
 	if (item.reason === 'expired') {
@@ -136,36 +147,36 @@ function PendingItem({
 
 	return (
 		<section
-			className="space-y-2 rounded-lg border p-3"
+			className="min-w-0 space-y-2 rounded-lg border p-3"
 			aria-label={`Workspace of ${title(item.chat_title)}`}
 			data-testid="pending-workspace"
 		>
 			<div className="flex flex-wrap items-baseline justify-between gap-2">
-				<h3 className="text-sm font-medium">
+				<h3 className="min-w-0 text-sm font-medium break-words">
 					<bdi>{title(item.chat_title)}</bdi>
 				</h3>
 				<span className="text-muted-foreground text-xs">
 					{item.reason === 'cap' ? 'Workspace limit reached' : 'Unused'}
 				</span>
 			</div>
-			<p className="text-xs">{reasonText(item, data)}</p>
+			<p className="text-xs break-words">{reasonText(item, data)}</p>
 			<Contents item={item} />
 			{others.length > 0 && (
-				<label className="flex flex-col gap-1 text-xs">
+				<label className="flex min-w-0 flex-col gap-1 text-xs">
 					<span className="font-medium">Workspace to remove</span>
 					<select
-						className="border-input bg-background rounded-md border px-2 py-1 text-xs"
+						className="border-input bg-background w-full max-w-full min-w-0 truncate rounded-md border px-2 py-1 text-xs"
 						value={target}
 						onChange={(e) => setTarget(e.target.value)}
 						disabled={busy}
 						aria-label="Workspace to remove"
 					>
 						<option value={item.id}>
-							{isolated(title(item.chat_title))} (last used {formatSecondsTimestamp(item.last_used_at)})
+							{optionTitle(item.chat_title)} (last used {formatSecondsTimestamp(item.last_used_at)})
 						</option>
 						{others.map((w) => (
 							<option key={w.id} value={w.id}>
-								{isolated(title(w.chat_title))} (last used {formatSecondsTimestamp(w.last_used_at)})
+								{optionTitle(w.chat_title)} (last used {formatSecondsTimestamp(w.last_used_at)})
 							</option>
 						))}
 					</select>
@@ -274,7 +285,7 @@ export function PendingWorkspacesDialog() {
 						</Button>
 					</div>
 				) : (
-					<div className="space-y-3">
+					<div className="min-w-0 space-y-3">
 						{details.data.pending.map((item) => (
 							<PendingItem key={item.id} item={item} data={details.data} onAnswered={answered} onFailed={failed} />
 						))}

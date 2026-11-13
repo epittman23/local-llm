@@ -155,3 +155,27 @@ test('a Run that hit the workspace limit opens the dialog too', async ({ page })
 	await page.getByTestId('code-block').getByRole('button', { name: 'Run' }).click();
 	await expect(dialog.getByRole('region', { name: 'Workspace of Sales analysis' })).toBeVisible();
 });
+
+test('a very long chat title does not make the dialog scroll sideways, and its buttons stay in view', async ({
+	page
+}) => {
+	// Untitled chats show their whole first message as the title; a native <select> grew to fit it (found on the
+	// real stack, 2026-11-13).
+	const long = 'Using the code interpreter, run one Python block that imports pandas and matplotlib, '.repeat(3);
+	await page.setViewportSize({ width: 900, height: 900 });
+	await mockChat(page, { chats: [savedChat('c1', 'Code', [])] });
+	await mockPending(page, {
+		ids: [W1],
+		pending: [{ ...cap, chat_title: long, workspaces: [{ ...cap.workspaces[0], chat_title: long }] }]
+	});
+	await page.goto('/');
+
+	const dialog = page.getByRole('dialog', { name: 'Code workspaces waiting for your answer' });
+	await expect(dialog).toBeVisible();
+	const sideways = await dialog.evaluate((el) => el.scrollWidth - el.clientWidth);
+	expect(sideways).toBeLessThanOrEqual(0);
+	const remove = dialog.getByRole('button', { name: /^Remove workspace of / });
+	await expect(remove).toBeInViewport();
+	const option = dialog.getByRole('combobox', { name: 'Workspace to remove' }).locator('option').first();
+	expect(Array.from((await option.textContent()) ?? '').length).toBeLessThan(120);
+});

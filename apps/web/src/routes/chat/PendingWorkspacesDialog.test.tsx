@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENDING_WORKSPACE_IDS_KEY, type PendingWorkspace } from '@/lib/apis/sandbox';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { PendingWorkspacesDialog } from './PendingWorkspacesDialog';
+import { OPTION_TITLE_MAX, optionTitle, PendingWorkspacesDialog } from './PendingWorkspacesDialog';
 
 const toastError = vi.hoisted(() => vi.fn());
 const toastSuccess = vi.hoisted(() => vi.fn());
@@ -267,5 +267,18 @@ describe('PendingWorkspacesDialog', () => {
 		expect(cells.every((c) => c.tagName === 'BDI')).toBe(true);
 		expect(within(region).getAllByText('(name shortened)')).toHaveLength(2);
 		expect(errors.mock.calls.some((c) => String(c[0]).includes('same key'))).toBe(false);
+	});
+});
+
+describe('optionTitle', () => {
+	it('isolates a title and cuts one longer than OPTION_TITLE_MAX with an ellipsis, by character', () => {
+		expect(optionTitle('Sales')).toBe('\u2068Sales\u2069');
+		expect(optionTitle(null)).toBe('\u2068Untitled chat\u2069');
+		const long = '\u{1F600}'.repeat(OPTION_TITLE_MAX + 5);
+		const shown = Array.from(optionTitle(long));
+		expect(shown).toHaveLength(OPTION_TITLE_MAX + 2);
+		expect(shown.at(-2)).toBe('\u2026');
+		expect(Array.from(optionTitle('x'.repeat(OPTION_TITLE_MAX)))).toHaveLength(OPTION_TITLE_MAX + 2);
+		expect(optionTitle('x'.repeat(OPTION_TITLE_MAX))).not.toContain('\u2026');
 	});
 });
