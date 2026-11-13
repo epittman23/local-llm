@@ -305,6 +305,7 @@ Every question the proposal raised was decided by the owner.
 | Outputs from paths other than `bash` | Every path that runs code in the sandbox (the tag path, the Run endpoint, a sub-agent) collects `/workspace/outputs` itself, with the same listing and caps; Run outputs are stored and shown under the block but not added to the saved message; a sub-agent's attach to its own message and count against the parent chat's cap (Q25) | 2026-11-12 |
 | The Run button's permission | Under the `sandbox` engine the Run endpoint also requires the `features.code_interpreter` permission (admins always hold it), and the frontend hides Run from a user without it; Jupyter unchanged until it is removed (Q26) | 2026-11-13 |
 | The Run button and the global switch | Under the `sandbox` engine the Run endpoint also requires the code interpreter to be switched on for the server (`code_interpreter.enable`), for admins too, and the frontend hides Run while it is off, as on every other path into the workspace (Q29) | 2026-11-13 |
+| A command that takes the whole microVM down | Counts as a sandbox failure for the harness, not the model's; on the laptop no model-written command took the VM down (Q27) | 2026-11-13 |
 
 ## Sources
 
