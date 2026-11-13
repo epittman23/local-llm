@@ -702,7 +702,9 @@ SDK, and covers `kata.py` and `lifespan.py` completely.
 sandbox (VM boundary, network fence, cross-chat isolation, persistence and
 image switching, read-only uploads, timeout and background children,
 cancellation, output flood, memory, fork bomb, PID 1, path confinement
-against a real symlink, restart sweep, the fixed-size volume), on a host
+against a real symlink, restart sweep, the fixed-size volume, and the
+keep-or-remove dialog's listing of a stopped and of a running workspace
+through the helper), on a host
 with Kata, both images, udisks and the loop-device permission above:
 
 ```sh
@@ -714,7 +716,11 @@ LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
 They skip without `LLLM_TEST_KATA=1` (CI has no `/dev/kvm`). Without the
 `local-llm_sandbox` network they create it with the backend's subnet and
 remove it afterwards, and they remove every container, volume and image
-file they make. About three minutes, most of it the PID 1 test's 300 calls.
+file they make. About three minutes, most of it the PID 1 test's 300 calls;
+with `test_sandbox_uploads_kata.py` and `test_sandbox_outputs_kata.py`,
+362 s on the laptop (2026-11-13). The two mirror tests need the
+`sandbox-mirror` container, which `make backend` starts; without it they
+fail.
 
 ## Operations
 
@@ -1330,9 +1336,14 @@ Tests: `tests/test_sandbox_workspaces.py` (the cap, expiry, answers,
 routes, both stores), the listing cases in `tests/test_sandbox_kata_unit.py`
 (fixed helper options, output checks, and `LIST_SCRIPT` run on a real
 directory), `PendingWorkspacesDialog.test.tsx`, and
-`e2e/sandbox-workspaces.spec.ts`. Still to verify on the laptop (docker,
-kvm): the real listing of a stopped volume through the Kata helper, and
-one cap round trip in the browser.
+`e2e/sandbox-workspaces.spec.ts`, and on real Kata
+`test_list_workspace_lists_a_stopped_volume_through_the_helper` and
+`test_list_workspace_lists_a_running_sandbox_read_only_beside_it` in
+`tests/test_sandbox_kata.py`. Checked on the laptop on 2026-11-13: both
+listing tests pass, and a cap round trip in the browser ran end to end (a
+call at the cap created nothing and opened the dialog with the waiting
+workspace's files, a removal let the waiting chat's next call create its
+workspace, and Keep deleted nothing).
 
 ## Package telemetry
 
@@ -1515,16 +1526,18 @@ ORDER BY users DESC, chats DESC, events DESC;
 **After changing the hooks.** They are in the data image, so a change to
 `data/sitecustomize.py` or `data/Rprofile.site` needs a new tag and
 `make sandbox-images` ([Rebuilding and the tag](#rebuilding-and-the-tag)).
-T21 bumped the tag to `2026-11-12.1`: until the owner rebuilds with
-`make sandbox-images` (which also rewrites the image-freeze files), the
-backend reports the images missing and refuses to start sandboxes. On the
-rebuilt image, check that the hook is the one Python loads:
+T21 bumped the tag to `2026-11-12.1` (built on the laptop on 2026-11-13;
+the image-freeze files did not change). A host without the images for the
+current tag reports them missing and refuses to start sandboxes until
+`make sandbox-images` builds them. On a rebuilt image, check that the hook
+is the one Python loads:
 
 ```sh
 docker run --rm local-llm/sandbox-data:2026-11-12.1 python -c 'import sitecustomize; print(sitecustomize.__file__)'
 ```
 
-which prints a path under `/opt/conda/lib/python3.*/site-packages/`.
+which prints a path under `/opt/conda/lib/python3.*/site-packages/`
+(`/opt/conda/lib/python3.13/site-packages/sitecustomize.py` on 2026-11-13).
 
 Tests: `tests/test_sandbox_telemetry.py` (the parsers, the miss matchers,
 the collection through `FakeBackend` (address reuse, back-off, a read
@@ -1533,6 +1546,9 @@ cap, a sub-agent's rows on its parent chat, failures and a slow daemon
 leaving the result unchanged), the truncation helper against real bash,
 the Kata backend's log read against a mocked SDK, the retention, `sitecustomize.py`
 run in a subprocess, `Rprofile.site` run when R is installed and checked
-statically otherwise, the table, the report and its route). Still to verify
-on the laptop (docker, kvm): the proposal's acceptance test "Telemetry"
-with the rebuilt data image.
+statically otherwise, the table, the report and its route). The
+proposal's acceptance test "Telemetry" passed on the laptop on 2026-11-13
+with the `2026-11-12.1` data image (an import with its version, a module
+miss, a command miss, and a mirror install credited to the right chat),
+except its harness part, which needs the harness on the sandbox engine
+(T30).
