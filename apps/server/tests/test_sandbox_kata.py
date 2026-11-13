@@ -1178,6 +1178,8 @@ def test_list_workspace_lists_a_running_sandbox_read_only_beside_it(
     listing = asyncio.run(backend.list_workspace(key, 300))
     assert listing is not None
     assert _listed(listing).get('seen.txt') == 3
+    # Nothing here is unreadable, so the stopped-volume test's `complete is False` comes from its `shut` directory.
+    assert listing.complete is True
     assert client.containers.list(all=True, filters={'name': list_helper_name(key)}) == []
     after = sh(backend, key, 'printf more >> seen.txt && cat seen.txt')
     assert (after.returncode, after.stdout) == (0, 'abcmore')

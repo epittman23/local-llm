@@ -36,9 +36,22 @@ const isolated = (t: string) => `\u2068${t}\u2069`;
 /** The most of a chat title an <option> shows: an option cannot wrap, and a native <select> grows to its longest one. */
 export const OPTION_TITLE_MAX = 60;
 
-/** A chat title as a <select> option shows it: isolated, and cut at OPTION_TITLE_MAX characters with an ellipsis. */
+// Direction controls a title may carry (embeddings, overrides, isolates): dropped from an option, so a cut cannot
+// leave one open and our own isolate always closes what it opened.
+const BIDI_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/g;
+
+const graphemes = (t: string): string[] =>
+	typeof Intl.Segmenter === 'function'
+		? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(t), (g) => g.segment)
+		: Array.from(t);
+
+/**
+ * A chat title as a <select> option shows it: without direction controls, cut at OPTION_TITLE_MAX characters as the
+ * reader sees them (grapheme clusters, so an emoji sequence or a letter and its accents stay whole) with an ellipsis,
+ * and isolated.
+ */
 export const optionTitle = (t: string | null | undefined) => {
-	const chars = Array.from(title(t));
+	const chars = graphemes(title(t).replace(BIDI_CONTROLS, ''));
 	return isolated(
 		chars.length > OPTION_TITLE_MAX ? `${chars.slice(0, OPTION_TITLE_MAX - 1).join('')}\u2026` : chars.join('')
 	);

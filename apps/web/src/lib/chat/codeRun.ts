@@ -1,4 +1,5 @@
 import { type CodeRunResult, executeCode } from '@/lib/apis/utils';
+import { canUseFeature } from '@/lib/chat/attachments';
 import type { SessionUser } from '@/lib/stores/authStore';
 import type { BackendConfig } from '@/lib/stores/configStore';
 
@@ -24,8 +25,7 @@ export function codeRunner(
 	run: typeof executeCode = executeCode
 ): CodeRunner | undefined {
 	if (!config?.features?.enable_code_execution) return undefined;
-	const features = (user?.permissions as { features?: Record<string, boolean | undefined> } | undefined)?.features;
-	if (user?.role !== 'admin' && !features?.code_interpreter) return undefined;
+	if (!canUseFeature(user, 'code_interpreter')) return undefined;
 	const engine = (config.code as { engine?: unknown } | undefined)?.engine;
 	return engine === 'sandbox' ? (code, chatId) => run(token, code, chatId) : undefined;
 }

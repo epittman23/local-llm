@@ -652,7 +652,11 @@ def endpoint(monkeypatch):
     world = {'user': _user(), 'engine': 'sandbox', 'enable': True, 'chats': {}, 'runs': [], 'may': True, 'asked': []}
 
     async def get(key, default=None):
-        return {'code_execution.enable': world['enable'], 'code_execution.engine': world['engine']}.get(key, default)
+        return {
+            'code_execution.enable': world['enable'],
+            'code_execution.engine': world['engine'],
+            'user.permissions': world.get('permissions'),
+        }.get(key, default)
 
     async def get_chat_by_id(chat_id, db=None):
         return world['chats'].get(chat_id)
@@ -723,6 +727,24 @@ def test_the_run_endpoint_refuses_a_user_without_the_code_interpreter_permission
     assert response.status_code == 403
     assert endpoint['asked'] == [('u1', 'features.code_interpreter')]
     assert endpoint['runs'] == []
+
+
+@pytest.mark.parametrize(('group_grants', 'allowed'), [(True, True), (False, False)], ids=['a group grants', 'none'])
+def test_the_run_endpoint_asks_the_real_permission_rule(monkeypatch, endpoint, group_grants, allowed):
+    # Through access_control.has_permission itself: the defaults deny, so only a group can grant.
+    from local_llm.utils import access_control
+
+    async def groups(user_id, db=None):
+        grant = {'features': {'code_interpreter': True}}
+        return [SimpleNamespace(permissions=grant)] if group_grants else []
+
+    monkeypatch.setattr(utils_router, 'has_permission', access_control.has_permission)
+    monkeypatch.setattr(access_control.Groups, 'get_groups_by_member_id', groups)
+    endpoint['permissions'] = {'features': {'code_interpreter': False}}
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'x', 'chat_id': CHAT})
+    assert response.status_code == (200 if allowed else 403)
+    assert len(endpoint['runs']) == (1 if allowed else 0)
 
 
 def test_the_run_endpoint_lets_an_admin_run_without_asking_for_the_permission(endpoint):

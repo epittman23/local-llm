@@ -108,7 +108,8 @@ choosing `sandbox` is an admin's decision per server.
   admin's report (never its code or data; sandbox.md "Package
   telemetry").
 - **Run button.** Under the `sandbox` Code Execution engine, a Python block
-  in a reply has Run, which runs it in the chat's sandbox.
+  in a reply has Run, which runs it in the chat's sandbox, for a user with
+  the code interpreter permission (admins always have it).
 
 **Settings** (Admin Settings > Code Execution): set the engine to
 `sandbox`; the sandbox fields (default image, command timeout, how many

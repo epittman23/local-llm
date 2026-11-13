@@ -281,4 +281,13 @@ describe('optionTitle', () => {
 		expect(Array.from(optionTitle('x'.repeat(OPTION_TITLE_MAX)))).toHaveLength(OPTION_TITLE_MAX + 2);
 		expect(optionTitle('x'.repeat(OPTION_TITLE_MAX))).not.toContain('\u2026');
 	});
+
+	it('keeps an emoji sequence whole at the cut and drops direction controls', () => {
+		const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}';
+		const shown = optionTitle(`${'x'.repeat(OPTION_TITLE_MAX - 2)}${family}${family}${family}`);
+		expect(shown).toBe(`\u2068${'x'.repeat(OPTION_TITLE_MAX - 2)}${family}\u2026\u2069`);
+		expect(optionTitle('a\u2067b\u202Ec')).toBe('\u2068abc\u2069');
+		const cut = optionTitle(`\u2067${'y'.repeat(OPTION_TITLE_MAX + 10)}\u2069`);
+		expect(cut.match(/[\u2066-\u2069]/g)).toEqual(['\u2068', '\u2069']);
+	});
 });
