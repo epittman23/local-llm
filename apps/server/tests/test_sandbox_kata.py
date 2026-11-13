@@ -60,6 +60,7 @@ from local_llm.sandbox.kata import (
     VERIFY_SCRIPT,
     KataDockerBackend,
     container_name,
+    list_helper_name,
     network_is_fenced,
 )
 from local_llm.sandbox.manager import SandboxManager, SandboxSettings
@@ -1130,3 +1131,54 @@ def test_the_guard_refuses_a_guest_with_ipv6(
         asyncio.run(backend.create(key, SandboxSpec(key, 'data')))
     with pytest.raises(docker.errors.NotFound):
         client.containers.get(container_name(key))
+
+
+# Listing a workspace without its sandbox (T24).
+
+WORKSPACE_FILES = (
+    'mkdir -p a/b && printf hello > a/b/x.txt && head -c 3000 /dev/zero > big.bin'
+    ' && ln -s /etc/passwd link && mkfifo pipe && mkdir -m 000 shut'
+)
+
+
+def _listed(listing: Any) -> dict[str, int]:
+    return {e.path: e.size for e in listing.entries}
+
+
+def test_list_workspace_lists_a_stopped_volume_through_the_helper(
+    backend: KataDockerBackend, keys: Keys, client: docker.DockerClient
+) -> None:
+    """The keep-or-remove dialog's listing on the real thing: regular files only (no symlink, no FIFO followed or
+    listed), sizes from the volume, an unreadable directory marking it incomplete, and no helper left behind."""
+    key = started(backend, keys)
+    result = sh(backend, key, WORKSPACE_FILES)
+    assert result.returncode == 0, result.stderr
+    asyncio.run(backend.stop(key))
+    listing = asyncio.run(backend.list_workspace(key, 300))
+    assert listing is not None
+    files = _listed(listing)
+    assert files['a/b/x.txt'] == 5 and files['big.bin'] == 3000
+    assert not {'link', 'pipe'} & files.keys()
+    assert listing.files >= 2 and listing.bytes >= 3005
+    assert listing.complete is False
+    assert client.containers.list(all=True, filters={'name': list_helper_name(key)}) == []
+    # The stopped sandbox starts again on its volume afterwards: the helper held nothing.
+    asyncio.run(backend.create(key, SandboxSpec(key, 'data')))
+    assert sh(backend, key, 'cat a/b/x.txt').stdout == 'hello'
+    asyncio.run(backend.stop(key))
+
+
+def test_list_workspace_lists_a_running_sandbox_read_only_beside_it(
+    backend: KataDockerBackend, keys: Keys, client: docker.DockerClient
+) -> None:
+    """The reviewer's open question: listing while the sandbox runs, its volume mounted read-write in the VM and
+    read-only in the helper's. The listing sees what the running sandbox wrote, and the sandbox keeps writing."""
+    key = started(backend, keys)
+    assert sh(backend, key, 'printf abc > seen.txt').returncode == 0
+    listing = asyncio.run(backend.list_workspace(key, 300))
+    assert listing is not None
+    assert _listed(listing).get('seen.txt') == 3
+    assert client.containers.list(all=True, filters={'name': list_helper_name(key)}) == []
+    after = sh(backend, key, 'printf more >> seen.txt && cat seen.txt')
+    assert (after.returncode, after.stdout) == (0, 'abcmore')
+    asyncio.run(backend.stop(key))
