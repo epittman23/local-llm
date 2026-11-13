@@ -256,7 +256,7 @@ All must pass on the laptop before the PR is marked ready for review; each recor
 - [ ] **Parallel sessions:** four chats run CPU-bound commands at once; each completes, none sees another's files, and results match a serial run; a fifth waits in the queue.
 - [ ] **Start latency and overhead:** record cold-start time to the first command's output and host memory per idle sandbox, with hardware, Kata and Cloud Hypervisor versions; these numbers decide whether the Firecracker backend is needed.
 - [ ] **Restart:** after a backend restart, orphan containers and their microVM processes are found by label and removed, and the chat's files remain.
-- [ ] **Harness:** a full HumanEval+ harness run completes on the sandbox engine, and its spec SHA differs from Jupyter-era runs.
+- [ ] **Harness:** a full HumanEval+ harness run completes on the sandbox engine, and its spec SHA differs from Jupyter-era runs. (Narrowed by the owner on 2026-11-13, Q30: a `smoke`-tier harness run, compared with a one-item Jupyter-engine harness run.)
 
 ## Decisions
 
@@ -306,6 +306,7 @@ Every question the proposal raised was decided by the owner.
 | The Run button's permission | Under the `sandbox` engine the Run endpoint also requires the `features.code_interpreter` permission (admins always hold it), and the frontend hides Run from a user without it; Jupyter unchanged until it is removed (Q26) | 2026-11-13 |
 | The Run button and the global switch | Under the `sandbox` engine the Run endpoint also requires the code interpreter to be switched on for the server (`code_interpreter.enable`), for admins too, and the frontend hides Run while it is off, as on every other path into the workspace (Q29) | 2026-11-13 |
 | A command that takes the whole microVM down | Counts as a sandbox failure for the harness, not the model's; on the laptop no model-written command took the VM down (Q27) | 2026-11-13 |
+| The harness baseline on the sandbox engine (T31) | A `smoke`-tier harness run on `qwen38` instead of a full HumanEval+ run, which is not needed to show the harness works; a one-item HumanEval+ harness run on the Jupyter engine records the Jupyter-era spec sha it is compared with (Q30) | 2026-11-13 |
 
 ## Sources
 

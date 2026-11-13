@@ -408,7 +408,55 @@ the sandbox engine are not comparable with sandbox runs from before T21
 run's `suite_run_id` as `harness_run_id` (the runner sets it on the
 harness request), and `GET /api/v1/sandbox/packages` leaves them out
 unless `include_harness=true`, so a benchmark run does not skew the
-package report. That has not yet been checked end to end on the laptop.
+package report (checked on the laptop on 2026-11-13, T30).
+
+**First runs on the sandbox engine (T31, 2026-11-13).** One `smoke`
+harness run on the sandbox engine, the owner's choice over a full
+HumanEval+ run (Q30 in the sandbox plan): suite run
+`20261113T184249Z-a5bd34`, 24 items (HumanEval+, MBPP+ and DS-1000, 8
+each, seed 20260830; LiveCodeBench left out without a date window),
+through the Workspace entry `harness-qwen38` (base `qwen3.8-27b` on
+`http://127.0.0.1:8090/v1`, the `assistant.txt` prompt, native function
+calling), `harness_sha` `b8a5ad9285bc`, `config_id` `928cb960`.
+Configuration: the laptop (12th Gen Intel Core i9-12900H, 62 GiB, NVIDIA
+GeForce RTX 3060 Laptop GPU with 6 GB, driver 615.71.09, Fedora 44 kernel
+7.2.8-200.fc44); profile `qwen38`, `Qwen3.8-27B-UD-Q3_K_XL.gguf`,
+llama.cpp build 11875 (`f0fb5984b`), `-ngl 20`, `-c 16384`, `-t 12`,
+`--parallel 1`, `-fit off`, flash attention on, q8_0 K and V cache,
+batch and ubatch 512, `-ot output\.weight=CUDA0,blk\.64\..*=CUDA0`,
+`--spec-type draft-mtp --spec-draft-n-max 2`, reasoning `medium`,
+`--jinja`, `--metrics`, `-lv 4`, samplers temp 1.0, top-p 0.95, top-k 20,
+min-p 0 (the harness sends
+temperature 0 and `max_tokens` 2048 per item, which win), 5,586 MiB of
+VRAM; Kata 4.3.1 runtime-rs with Cloud Hypervisor, sandbox images
+`2026-11-12.1` (data image
+`sha256:8f81055aa23d7d2ba0f34a79fbc7b6ff68c60922c95ac6664976af22a2323493`).
+
+| Benchmark | Items | Passed | Minutes | Mean s/item | Items that ran code | Code runs |
+|---|---|---|---|---|---|---|
+| HumanEval+ | 8 | 6 | 60.8 | 456 | 8 | 8 |
+| MBPP+ | 8 | 6 | 41.1 | 308 | 7 | 7 |
+| DS-1000 | 8 | 5 | 44.7 | 336 | 6 | 10 |
+| All | 24 | 17 | 146.6 | 367 | 21 | 25 |
+
+That is 0.116 passes per minute. The failures were four `fail_assert`,
+two `fail_error` from the model's own answers (DS-1000 102, an
+`IndentationError`; DS-1000 229, a `SyntaxError`) and one item that ran out of the 900 s item timeout (HumanEval/163). Every
+item's sandbox was released after it (none left, no release logged as
+failed, no item refused for a replaced sandbox), and 91
+`sandbox_package_events` rows over 21 item chats carry the run's id. A
+model that "verified" its answer in the sandbox can still fail the hidden
+tests: on Mbpp/102 it ran its own three asserts (all passed) and then failed
+MBPP+'s first extra input, `'___python_program'`, which its function
+mishandled. These numbers are not comparable with the bare runs above
+(another mode) or with Jupyter runs (another engine, tools and system
+message); they are the first sandbox-engine harness numbers. The Jupyter
+spec they are compared with is `23f1179b8ecb`, from a one-item run on the
+Jupyter engine through the same entry the same day
+(`20261113T183842Z-6c10fd`, HumanEval/1, passed without running code):
+engine `jupyter`, tool `execute_code`, no image. Even the two specs'
+`system_sha` differ (`8e0e2749c142` and `2da32069fd89`), since each engine
+appends its own code interpreter prompt to the entry's.
 
 **Kept apart.** Compare and Report leave harness rows out for now, until
 they group and label by `harness_sha` (PR 2). A resume continues only a run
