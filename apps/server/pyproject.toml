@@ -54,7 +54,7 @@ dependencies = [
 
     "openai==3.41.0",
     "anthropic==2.3.0",
-    "google-genai==2.34.0",
+    "google-genai==3.0.0",
 
     "langchain==1.4.7",
     "langchain-community==0.4.2",
