@@ -311,7 +311,7 @@ export function ChatPage() {
 	const actions = useMessageActions(session);
 	const [citation, setCitation] = useState<Citation | null>(null);
 	const queryClient = useQueryClient();
-	const runner = codeRunner(config, token);
+	const runner = codeRunner(config, token, user);
 	const handlers: MessageHandlers = {
 		...actions,
 		onBranch,

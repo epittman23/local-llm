@@ -303,6 +303,7 @@ Every question the proposal raised was decided by the owner.
 | The sandbox network's host fence | `internal: true`, plus `inhibit_ipv4` (no IPv4 on the bridge), plus no IPv6: disabled in each guest by sysctl, and on the bridge (named `lllm-sandbox`) by a udev rule at host setup, since an internal network alone leaves the host reachable through the bridge's own addresses | 2026-11-11 |
 | A terminal server and the sandbox in one chat | Never both: a chat request with an Open Terminal server selected while the code interpreter runs on engine `sandbox` is refused with an error asking the user to turn one off, since both offer a `write_file` acting on different machines (Q24) | 2026-11-12 |
 | Outputs from paths other than `bash` | Every path that runs code in the sandbox (the tag path, the Run endpoint, a sub-agent) collects `/workspace/outputs` itself, with the same listing and caps; Run outputs are stored and shown under the block but not added to the saved message; a sub-agent's attach to its own message and count against the parent chat's cap (Q25) | 2026-11-12 |
+| The Run button's permission | Under the `sandbox` engine the Run endpoint also requires the `features.code_interpreter` permission (admins always hold it), and the frontend hides Run from a user without it; Jupyter unchanged until it is removed (Q26) | 2026-11-13 |
 
 ## Sources
 

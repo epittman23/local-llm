@@ -103,17 +103,6 @@ to the decision.
 
 **Open:**
 
-- **Q26 (found in T20, 2026-11-12). Should the Run endpoint require the
-  `features.code_interpreter` permission?** `POST /api/v1/utils/code/execute`
-  (the Run button) checks only that code execution is enabled
-  (`code_execution.enable`), as it always has for Jupyter, so a user whom
-  an admin denied the code interpreter can still run a block of a reply
-  in the chat's sandbox. Options: (a) leave it, Code Execution and Code
-  Interpreter stay separate switches; (b) also require the
-  `features.code_interpreter` permission under the `sandbox` engine only;
-  (c) require it under every engine. Recommended: (b), since under the
-  sandbox the Run button reaches the same persistent workspace the code
-  interpreter uses, while Jupyter's behaviour is left as it is until T44.
 - **Q27 (found in T20, 2026-11-12). How should a command that takes the
   whole microVM down count for the harness?** It surfaces as
   `SandboxNotRunning`, which `note_code_run` records as the sandbox's own
@@ -127,6 +116,18 @@ to the decision.
   reports.
 
 **Answered:**
+
+- **Q26 (found in T20, 2026-11-12). Answered 2026-11-13: (b), under the
+  sandbox engine only.** `POST /api/v1/utils/code/execute` (the Run
+  button) checked only that code execution is enabled, so a user denied
+  the code interpreter could still run a reply's block in the chat's
+  persistent sandbox. Under the `sandbox` engine it now also requires the
+  `features.code_interpreter` permission (admins always hold it), answering
+  403 without it, and the frontend offers no Run button to such a user
+  (`codeRunner` takes the user). Jupyter's path is unchanged until it is
+  removed (T44). Rejected: (a) leaving the two switches separate, which
+  let the Run button reach the workspace the permission denies; (c) every
+  engine, which would change the Jupyter path the plan keeps as it is.
 
 - **Q1 (from the proposal). Answered 2026-11-10: yes, add the schema
   note.** The harness spec changes
@@ -609,6 +610,7 @@ The PR will trip the gate; the local session lists every finding under
 | Fewer tests in `CodeExecution.test.tsx` and `e2e/admin-settings.spec.ts` (`:187-222`) | T42 | The Jupyter and Pyodide engine choices are removed; the sandbox cases from T19 remain |
 | A file whose diff GitHub did not return ("too large"), so the gate could not inspect it | T12-T19 (Q21) | The PR outgrew GitHub's per-file diff limit in its API; the gate fails closed on such files. Each is listed under `## Gate changes`, with a local grep of its added lines for skip, xfail, `.only`, `noqa`, `type: ignore`, `biome-ignore`, `@ts-expect-error` and `pragma` (none but the Q3 Kata skips), and the owner reviews them at T49 |
 | Edited golden file `tests/fixtures/tool_loading.json` | T12 | It records the `Config.get_many` key list in `get_builtin_tools` and the offered tools (around `:1910-1925`); adding the engine key and the sandbox tools changes it. The test still checks the same thing, against the new list |
+| `docs/decisions.md`: "existing entries were changed or removed" | T23 | GitHub's API returned no patch for the file (it reports 0 additions and 0 deletions, the same per-PR diff limit as the "too large" files, Q21), and the gate fails closed on a missing patch. Locally `git diff origin/main --numstat -- docs/decisions.md` shows additions only (`90 0` on 2026-11-13): one new top entry, no existing entry touched. The owner agreed on 2026-11-13 to record it here and under `## Gate changes` |
 
 If a task produces a finding not listed here, add a row in the same commit
 **and** add it to the "Open" list in "Owner questions": AGENTS.md's tripwire rule is to

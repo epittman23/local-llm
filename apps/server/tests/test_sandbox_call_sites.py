@@ -649,7 +649,7 @@ def test_terminal_events_go_out_for_terminal_tools_only(tool_type, sent):
 
 @pytest.fixture
 def endpoint(monkeypatch):
-    world = {'user': _user(), 'engine': 'sandbox', 'enable': True, 'chats': {}, 'runs': []}
+    world = {'user': _user(), 'engine': 'sandbox', 'enable': True, 'chats': {}, 'runs': [], 'may': True, 'asked': []}
 
     async def get(key, default=None):
         return {'code_execution.enable': world['enable'], 'code_execution.engine': world['engine']}.get(key, default)
@@ -661,7 +661,12 @@ def endpoint(monkeypatch):
         world['runs'].append({'code': code, **kwargs})
         return {'stdout': 'ran\n', 'stderr': '', 'result': '', 'outputs': [], 'files': []}
 
+    async def has_permission(user_id, key, permissions):
+        world['asked'].append((user_id, key))
+        return world['may']
+
     monkeypatch.setattr(utils_router.Config, 'get', get)
+    monkeypatch.setattr(utils_router, 'has_permission', has_permission)
     monkeypatch.setattr(chats_model.Chats, 'get_chat_by_id', get_chat_by_id)
     monkeypatch.setattr(builtin, 'run_code_in_sandbox', run_code_in_sandbox)
     app = FastAPI()
@@ -708,6 +713,32 @@ def test_the_run_endpoint_refuses_a_chat_the_user_may_not_run_code_in(
     response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
     assert response.status_code == (200 if allowed else 404)
     assert len(endpoint['runs']) == (1 if allowed else 0)
+
+
+def test_the_run_endpoint_refuses_a_user_without_the_code_interpreter_permission(endpoint):
+    # Q26: under the sandbox engine the Run button reaches the chat's persistent workspace.
+    endpoint['may'] = False
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 403
+    assert endpoint['asked'] == [('u1', 'features.code_interpreter')]
+    assert endpoint['runs'] == []
+
+
+def test_the_run_endpoint_lets_an_admin_run_without_asking_for_the_permission(endpoint):
+    endpoint['may'] = False
+    endpoint['user'] = _user('a1', 'admin')
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='a1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 200
+    assert endpoint['asked'] == [] and len(endpoint['runs']) == 1
+
+
+def test_the_run_endpoint_asks_for_the_permission_only_under_the_sandbox_engine(endpoint):
+    endpoint['may'] = False
+    endpoint['engine'] = 'pyodide'
+    assert endpoint['client'].post('/code/execute', json={'code': 'x', 'chat_id': CHAT}).status_code == 400
+    assert endpoint['asked'] == []
 
 
 def test_the_run_endpoint_runs_an_unsaved_chat_in_the_users_own_sandbox(endpoint):
