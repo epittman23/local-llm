@@ -1148,15 +1148,17 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   or an admin while `ENABLE_ADMIN_CHAT_ACCESS` is on; Q14), and 403 for a
   user without the `features.code_interpreter` permission (admins always
   hold it), since the run reaches the workspace the code interpreter uses
-  (Q26). Its outputs are
+  (Q26), and for everyone while the code interpreter is switched off for
+  the server (`code_interpreter.enable`, Q29). Its outputs are
   stored and count toward the chat's 1 GiB, come back under `files` for the
   block to show, and are linked to no message: pressing Run is the user's
   act, not part of the reply. It does not sync the chat's attachments,
   which it does not know, so `/workspace/uploads` stays as the chat's last
   call left it.
 - **The Run button** (`apps/web`, T22). A Python code block in a reply
-  shows Run when code execution is on with the `sandbox` engine and the
-  user holds the code interpreter permission (`lib/chat/codeRun.ts`); it
+  shows Run when code execution is on with the `sandbox` engine, the code
+  interpreter is switched on, and the user holds its permission
+  (`lib/chat/codeRun.ts`); it
   sends the block with its chat's id. The other
   engines show none: Jupyter is left as it was until its removal (T40),
   and Pyodide ran in the browser, which this app has no runner for. The

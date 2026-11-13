@@ -656,6 +656,7 @@ def endpoint(monkeypatch):
             'code_execution.enable': world['enable'],
             'code_execution.engine': world['engine'],
             'user.permissions': world.get('permissions'),
+            'code_interpreter.enable': world.get('interpreter', True),
         }.get(key, default)
 
     async def get_chat_by_id(chat_id, db=None):
@@ -745,6 +746,17 @@ def test_the_run_endpoint_asks_the_real_permission_rule(monkeypatch, endpoint, g
     response = endpoint['client'].post('/code/execute', json={'code': 'x', 'chat_id': CHAT})
     assert response.status_code == (200 if allowed else 403)
     assert len(endpoint['runs']) == (1 if allowed else 0)
+
+
+@pytest.mark.parametrize('role', ['user', 'admin'])
+def test_the_run_endpoint_refuses_everyone_while_the_code_interpreter_is_switched_off(endpoint, role):
+    # Q29: the global switch counts too, for admins as well, as it does on every other path into the workspace.
+    endpoint['interpreter'] = False
+    endpoint['user'] = _user('u1', role)
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'x', 'chat_id': CHAT})
+    assert response.status_code == 403
+    assert endpoint['runs'] == []
 
 
 def test_the_run_endpoint_lets_an_admin_run_without_asking_for_the_permission(endpoint):

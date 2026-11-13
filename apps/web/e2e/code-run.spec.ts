@@ -16,7 +16,7 @@ const reply = (content: string) =>
 
 // The user holds the code interpreter permission, which the Run button needs under the sandbox engine (Q26).
 const sandbox = {
-	features: { enable_code_execution: true },
+	features: { enable_code_execution: true, enable_code_interpreter: true },
 	config: { code: { engine: 'sandbox' } },
 	featurePermissions: { code_interpreter: true }
 };
@@ -76,7 +76,10 @@ test("Run shows the endpoint's refusal", async ({ page }) => {
 test('a Python block has no Run button under Pyodide', async ({ page }) => {
 	await mockChat(page, {
 		chats: [reply('```python\nprint(1)\n```\n')],
-		user: { features: { enable_code_execution: true }, config: { code: { engine: 'pyodide' } } }
+		user: {
+			features: { enable_code_execution: true, enable_code_interpreter: true },
+			config: { code: { engine: 'pyodide' } }
+		}
 	});
 	await page.goto('/c/c1');
 	await expect(page.getByTestId('code-block')).toBeVisible();
@@ -87,6 +90,19 @@ test('a user without the code interpreter permission gets no Run button under th
 	await mockChat(page, {
 		chats: [reply('Here:\n\n```python\nprint("hi")\n```\n')],
 		user: { ...sandbox, featurePermissions: {} }
+	});
+	await page.goto('/c/c1');
+	const block = page.getByTestId('code-block');
+	await expect(block).toBeVisible();
+	await expect(block.getByRole('button', { name: 'Run' })).toHaveCount(0);
+});
+
+test('no Run button while the code interpreter is switched off for the server, even with the permission', async ({
+	page
+}) => {
+	await mockChat(page, {
+		chats: [reply('Here:\n\n```python\nprint("hi")\n```\n')],
+		user: { ...sandbox, features: { enable_code_execution: true, enable_code_interpreter: false } }
 	});
 	await page.goto('/c/c1');
 	const block = page.getByTestId('code-block');

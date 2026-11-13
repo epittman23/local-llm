@@ -136,7 +136,7 @@ test('a Run that hit the workspace limit opens the dialog too', async ({ page })
 			])
 		],
 		user: {
-			features: { enable_code_execution: true },
+			features: { enable_code_execution: true, enable_code_interpreter: true },
 			config: { code: { engine: 'sandbox' } },
 			featurePermissions: { code_interpreter: true }
 		}

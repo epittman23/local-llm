@@ -88,7 +88,8 @@ async def _execute_in_sandbox(request: Request, form_data: CodeForm, user) -> di
     a 404, the same answer as for a chat that does not exist. The user must
     also hold the `features.code_interpreter` permission (admins always do),
     since the run reaches the chat's persistent workspace that the code
-    interpreter uses (Q26); without it the answer is 403. An unsaved
+    interpreter uses (Q26); without it the answer is 403, as it is while the
+    code interpreter is switched off for everyone (Q29). An unsaved
     chat's sandbox is the user's own (Q12). The outputs are stored and
     counted in the chat's cap, returned under `files` for the block to show,
     and linked to no message (Q25). The chat's attachments are not synced:
@@ -99,6 +100,8 @@ async def _execute_in_sandbox(request: Request, form_data: CodeForm, user) -> di
     from local_llm.tools.builtin import run_code_in_sandbox
     from local_llm.utils.chat_id import is_saved_chat_id
 
+    if not await Config.get('code_interpreter.enable'):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Code interpreter is disabled')
     if user.role != 'admin' and not await has_permission(
         user.id, 'features.code_interpreter', await Config.get('user.permissions')
     ):

@@ -5,10 +5,10 @@ import type { SessionUser } from '@/lib/stores/authStore';
 import type { BackendConfig } from '@/lib/stores/configStore';
 import { codeRunner } from './codeRun';
 
-const config = (enabled: boolean, engine?: string): BackendConfig => ({
+const config = (enabled: boolean, engine?: string, interpreter = true): BackendConfig => ({
 	name: 'x',
 	version: '1',
-	features: { enable_code_execution: enabled },
+	features: { enable_code_execution: enabled, enable_code_interpreter: interpreter },
 	...(engine ? { code: { engine } } : {})
 });
 
@@ -37,6 +37,11 @@ describe('codeRunner', () => {
 		expect(codeRunner(config(true, 'sandbox'), 'tok', member(false))).toBeUndefined();
 		expect(codeRunner(config(true, 'sandbox'), 'tok', member())).toBeUndefined();
 		expect(codeRunner(config(true, 'sandbox'), 'tok', null)).toBeUndefined();
+	});
+
+	it('offers no runner while the code interpreter is switched off for the server, even to an admin (Q29)', () => {
+		expect(codeRunner(config(true, 'sandbox', false), 'tok', admin)).toBeUndefined();
+		expect(codeRunner(config(true, 'sandbox', false), 'tok', member(true))).toBeUndefined();
 	});
 
 	it('offers no runner for Jupyter, Pyodide, an unknown engine, disabled code execution or no config', () => {

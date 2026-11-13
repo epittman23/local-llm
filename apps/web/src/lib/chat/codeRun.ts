@@ -16,7 +16,8 @@ export type CodeRunner = (code: string, chatId: string) => Promise<CodeRunResult
  * which this app has no runner for. The user must also hold the code
  * interpreter permission (`features.code_interpreter`; an admin always does),
  * which the endpoint checks too, since the run reaches the same persistent
- * workspace (owner decision Q26).
+ * workspace (owner decision Q26), and the code interpreter must be switched on
+ * for the server (`features.enable_code_interpreter`, Q29).
  */
 export function codeRunner(
 	config: BackendConfig | null,
@@ -24,7 +25,7 @@ export function codeRunner(
 	user: SessionUser | null,
 	run: typeof executeCode = executeCode
 ): CodeRunner | undefined {
-	if (!config?.features?.enable_code_execution) return undefined;
+	if (!config?.features?.enable_code_execution || !config.features.enable_code_interpreter) return undefined;
 	if (!canUseFeature(user, 'code_interpreter')) return undefined;
 	const engine = (config.code as { engine?: unknown } | undefined)?.engine;
 	return engine === 'sandbox' ? (code, chatId) => run(token, code, chatId) : undefined;

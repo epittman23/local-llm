@@ -94,7 +94,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   questions"): an unsaved chat's sandbox is per chat and user; a full
   server evicts an idle sandbox, with a 2-minute deadline; only the chat's
   owner, or an admin while `ENABLE_ADMIN_CHAT_ACCESS` is on, runs code in
-  it; the Run button also needs the code interpreter permission; and each
+  it; the Run button also needs the code interpreter switched on and its
+  permission; and each
   user keeps at most 20 workspaces, none deleted for the cap or
   for the 7-day expiry without the user's answer in a dialog.
 - **2026-11-10**: **The Jupyter and Pyodide code interpreters are to be
