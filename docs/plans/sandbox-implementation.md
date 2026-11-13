@@ -2033,6 +2033,10 @@ deleted next; this is the last point where both engines can be compared.
 
 ## Step 3: remove Jupyter and Pyodide
 
+Layer 4 of the stack: built on `feat/sandbox-remove-jupyter`, in its own
+PR (the ledger header's table). Its work starts after T39, the step 2
+gate; until then this layer holds only the commit that opened its PR.
+
 ### T40: remove the Jupyter backend code and tests
 
 *Author: any. Verify: any. Depends: T39.*
