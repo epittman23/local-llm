@@ -51,7 +51,7 @@ to top; never rebase or force-push a layer. Each PR's diff, and so its
 `PR gate` findings, covers only its own layer. T49 applies to each PR in
 turn, bottom first.
 
-**Active session:** none
+**Active session:** local, 2026-11-13T17:14Z, T30, T31, T39
 **`main` last merged in at:** `64c977f1` (branch created from it by T00)
 
 ### Statuses
