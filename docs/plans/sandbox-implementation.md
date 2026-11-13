@@ -51,7 +51,7 @@ to top; never rebase or force-push a layer. Each PR's diff, and so its
 `PR gate` findings, covers only its own layer. T49 applies to each PR in
 turn, bottom first.
 
-**Active session:** none
+**Active session:** local, 2026-11-13T23:12Z, T40-T48
 **`main` last merged in at:** `0f70f7dc` (2026-11-13 22:17 UTC, by the owner's rebase of `feat/sandbox-engine` onto `main`; `20ee5337` merged in T39 before, `64c977f1` before that)
 
 **Rebased 2026-11-13 (22:17-22:26 UTC).** The owner used GitHub's "Update branch" with rebase on #886, #888 and #889, so `feat/sandbox-engine`, `feat/sandbox-harness` and `feat/sandbox-remove-jupyter` were force-pushed with new shas; #884 (`feat/sandbox-code-interpreter`) was brought up to date by a merge instead (`9a6ef512`), so it still contains the old layer 1 commits, and the layer 1 shas in this ledger stay reachable through it. The layer 3 shas here were updated to their rebased equivalents (same patches): `4e1d9c36` to `77f2c502`, `c01eff98` to `481a63d2` (T30), `11cb630a` to `3b7026b5` (T31), `6df950cd` to `aaa5abe6` (T39). Sessions still never rebase or force-push themselves; before working, reset a local layer branch to its remote (`git branch -f <branch> origin/<branch>`).
