@@ -2,8 +2,8 @@
 
 > **To start a session**, give the cloud agent this prompt: "Resume the
 > sandbox work by following `docs/plans/sandbox-sessions-cloud.md` on the
-> `feat/sandbox-code-interpreter` branch. Do not open or edit any pull
-> request."
+> `feat/sandbox-harness` branch. Do not open or edit any pull request."
+> From T40 on, name `feat/sandbox-remove-jupyter` instead.
 
 How an agent session in the cloud (Claude Code on the web, or any hosted
 agent that clones this repository) picks up the sandbox work where the last
@@ -62,8 +62,8 @@ branch; then read the branch's copies.
 
 | Thing | Value |
 |---|---|
-| Feature branch | `feat/sandbox-code-interpreter` |
-| Pull request | one draft PR from that branch into `main`; its number is in the ledger header. Read it, never write to it |
+| Feature branch | the branch of the layer the next task belongs to, from the ledger header's table: `feat/sandbox-harness` for T30-T39, `feat/sandbox-remove-jupyter` for T40-T49 (`<feature-branch>` in the commands below) |
+| Pull request | that layer's draft PR, one of four stacked PRs; each number is in the ledger header's table. Read it, never write to it |
 | Owner's git identity | `Eli Pittman <123281783+epittman23@users.noreply.github.com>` (the identity on the owner's squash commits on `main`; not "the newest commit", which can be Dependabot's or a cloud session's) |
 
 ## Session start
@@ -71,8 +71,8 @@ branch; then read the branch's copies.
 1. **Get on the feature branch.**
    ```sh
    git fetch origin --prune
-   git switch feat/sandbox-code-interpreter 2>/dev/null \
-     || git switch -c feat/sandbox-code-interpreter --track origin/feat/sandbox-code-interpreter
+   git switch <feature-branch> 2>/dev/null \
+     || git switch -c <feature-branch> --track origin/<feature-branch>
    git log --oneline -5
    ```
    If the branch does not exist yet, the draft PR has not been opened (task
@@ -84,7 +84,7 @@ branch; then read the branch's copies.
    --show-current` before switching) and the platform's instructions. If
    the platform requires its own branch, create that branch from the
    feature branch's tip (`git switch -C <platform branch>
-   origin/feat/sandbox-code-interpreter`) and work there. That is a
+   origin/<feature-branch>`) and work there. That is a
    **hand-off branch**: a local session merges it later.
 
 2. **Set the owner's identity before any commit.** A cloud session's
@@ -208,7 +208,7 @@ Before every push, check that nothing the gate or the commit policy forbids
 is in the new commits:
 
 ```sh
-base=origin/feat/sandbox-code-interpreter
+base=origin/<feature-branch>
 git log "$base"..HEAD --format='%an <%ae>' | sort -u \
   | grep -v -x 'Eli Pittman <123281783+epittman23@users.noreply.github.com>' \
   && echo 'WRONG AUTHOR: FIX BEFORE PUSHING' || echo 'authors ok'
@@ -220,7 +220,7 @@ git log "$base"..HEAD --format='%B' \
 Every author line must be exactly the owner's identity in "Fixed names".
 If not, fix the unpushed commits before pushing. For the last commit
 alone: `git commit --amend --reset-author --no-edit`. For several:
-`git reset --soft origin/feat/sandbox-code-interpreter` (or the hand-off
+`git reset --soft origin/<feature-branch>` (or the hand-off
 branch's remote tip), then commit the work again under the right identity,
 one commit per task as before. Neither rewrites anything already pushed,
 which is the history the no-rebase rule protects.
@@ -228,7 +228,7 @@ which is the history the no-rebase rule protects.
 Then push to the feature branch:
 
 ```sh
-git push origin HEAD:feat/sandbox-code-interpreter
+git push origin HEAD:<feature-branch>
 ```
 
 If the platform refuses that ref, push the hand-off branch instead

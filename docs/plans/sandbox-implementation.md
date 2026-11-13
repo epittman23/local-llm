@@ -30,8 +30,25 @@ records. It is the only record of progress: the oh-my-claudecode state on
 the laptop is a local working copy and loses to this section when they
 disagree.
 
-**Pull request:** #884 (draft)
-**Feature branch:** `feat/sandbox-code-interpreter`
+**Pull requests:** four stacked drafts, one per layer of tasks, split
+from the single PR #884 on 2026-11-13 with `gh stack` (stack #887).
+Each layer's branch is based on the one below it, and only the bottom
+one targets `main`:
+
+| Layer | Tasks | Branch | PR | Based on |
+|---|---|---|---|---|
+| 1 | T00-T19 (setup, spike and the engine's parts) | `feat/sandbox-engine` | #886 | `main` |
+| 2 | T20-T29 (call sites, Run button, telemetry, workspace cap, step 1 gate) | `feat/sandbox-code-interpreter` | #884 | layer 1 |
+| 3 | T30-T39 (step 2: the harness) | `feat/sandbox-harness` | opened by the commit that added this table; its number is recorded by the next commit that touches the ledger | layer 2 |
+| 4 | T40-T49 (step 3: remove Jupyter and Pyodide) | `feat/sandbox-remove-jupyter` | opened with layer 3; number recorded as above | layer 3 |
+
+A task's commits go on its layer's branch, and "the PR" in a task means
+that layer's PR. A fix to an earlier layer goes on that layer's branch
+and is then merged up into each branch above it with `git merge`, bottom
+to top; never rebase or force-push a layer. Each PR's diff, and so its
+`PR gate` findings, covers only its own layer. T49 applies to each PR in
+turn, bottom first.
+
 **Active session:** none
 **`main` last merged in at:** `64c977f1` (branch created from it by T00)
 
@@ -469,6 +486,7 @@ One line per session, newest last:
 - 2026-11-12 | cloud | T20, T21, T22, T23, T24 | Probe: no `/dev/kvm`, no Docker; uv, bun and node present; PyPI and npm answered 200; tests ran against a native Postgres 16 with pgvector 0.6.0 on :55432 (root, so 6 permission tests fail; as a non-root user they pass). Branch `feat/sandbox-code-interpreter` had `main` merged at `64c977f1`, 0 commits ahead of it on main's side; work pushed to both `feat/sandbox-code-interpreter` and the hand-off branch `claude/bold-heisenberg-u4a3kv`, kept at the same commit. Owner answered Q24 (terminal plus sandbox refused, option d) and Q25 (outputs from every path, as recommended). All five tasks built, each reviewed (T21 and T24 by a separate security review and the `reviewer` agent, every finding applied) and left `needs-local-verify`: T20 call sites, T21 package telemetry (data image tag bumped to `2026-11-12.1`), T22 the Run button, T23 the step 1 docs (sandbox.md "Operations" added), T24 the workspace cap and keep-or-remove dialog. New migrations `8bede0d9f5c2` (`sandbox_workspace`) and `5d1e9c3a7b42` (`sandbox_package_events`), applied so far only to this session's throwaway database. New open questions Q26 (Run endpoint permission) and Q27 (a whole-VM failure's classification). Commit subjects `wip(sandbox): ...` on the branch are snapshots taken before review; the squash title replaces them. | Next (laptop): `make sandbox-images` for tag `2026-11-12.1`, then T20's, T21's and T24's local checks (`make test-backend`, `make test-boot`, acceptance tests "Tag path" and "Telemetry", the Kata listing of a stopped and a running workspace, one cap round trip in the browser); with T20 `done`, T22 and T23 move to `done` too. Then T29 (laptop) and T30 (harness on the sandbox engine, any machine, Q27 first).
 - 2026-11-13 | local | T20, T21, T22, T23, T24 | Merged nothing: the hand-off branch `claude/bold-heisenberg-u4a3kv` was already contained in the feature branch (`5241a54f`), so it can be deleted; `main` had not moved (0 commits). `make pr-gate PR=884` found one finding not expected in advance, `docs/decisions.md` (GitHub returned no patch for it); the owner agreed to record it, and it is in "Expected PR gate findings". The owner answered Q26 (b), built in `7bc9df33`. `make sandbox-images` built tag `2026-11-12.1`; `make check`'s targets all passed (backend 7,202 passed, 0 failed); the Kata suite 37 passed, with two new real-Kata listing tests (`8e4f0f42`); the first `make backend` applied migrations `8bede0d9f5c2` and `5d1e9c3a7b42` to the laptop's database. Acceptance tests "Tag path" and "Telemetry" (its harness part moved to T30), a real Run, and the workspace cap round trip (remove and keep) passed on the real stack in Chrome, with OpenRouter models only (Qwen3.6 27B, then Qwen3.8 Flash at the owner's request; no local model); the cap check found the dialog overflowing on long chat titles, fixed in `6ab9be22`. Q27 probed (memory exhaustion never stopped the VM) and left open with its evidence and a revised recommendation, (a). A separate code review and security review of this session's code found nothing blocking; their fixes are in `4bf13636`, and the owner answered Q28 (record the decisions.md gate finding) and Q29 (Run also needs the global code interpreter switch), built after. All five tasks `done`. Settings restored afterwards: both engines `jupyter`, cap 20. Test chats left in the owner's account: "Using the code interpreter..." (tag path), "Sandbox Command Test", "Bash Command Test", "Bash Echo Test"; their workspaces are kept (the cap test removed only the tag-path chat's). Unrelated, seen at startup: the Hugging Face cache's `BAAI/bge-m3` snapshot lacks its ONNX files (the backend falls back to the cached commit). OMC's plan was not checkpointed: the owner's `/goal` this session was not a story objective; it was rebuilt from the ledger's unfinished rows. | Next: T29 (step 1 gate; laptop, needs the owner) and T30 (harness on the sandbox engine; any machine, after the owner answers Q27) are both unblocked now that T10-T24 are `done`; T29 first, since it is the gate for step 1. Rebuild nothing in OMC first: the plan was rebuilt this session.
 - 2026-11-13 (later) | local | T29 | The owner answered Q27 (a) and, present, asked for T29. Each acceptance test of step 1 was audited clause by clause against what a test asserts, and the gaps run: the mirror container's own egress, the sdist refusal (a probe sdist in the wheelhouse, removed after), start latency and memory, fork-bomb responsiveness, persistence after the idle reaper, image switching with a Playwright screenshot inline, LaTeX, the `RTCPeerConnection` probe against a local UDP listener (no outside server), and restart with the real backend; parallel sessions became a Kata test (`63ba2b46`). All passed; `make check` and the Kata suite (38) at `63ba2b46` too. Settings restored; the probe chat "Sandbox Image Test" stays in the owner's account with its workspace. OMC was not used for T29 (its `complete-goals` would have replaced the owner's `/goal`). | Next: T30 (harness on the sandbox engine; any machine; Q27 answered), then T31 (harness baseline, laptop, GPU, owner). Step 1 is complete.
+- 2026-11-13 (later) | local | none | At the owner's request the single PR #884 was split into four stacked draft PRs with `gh stack` (stack #887), one per layer of tasks (T0x and T1x, T2x, T3x, T4x), without rewriting any commit: the commits already ran T00-T19 then T20-T29 in order, so `feat/sandbox-engine` was created at `e1d7c286` (PR #886, into `main`) and #884 kept `feat/sandbox-code-interpreter` at `5f4153f8`, retargeted onto it and retitled. This commit starts layer 3 (`feat/sandbox-harness`) and the next starts layer 4 (`feat/sandbox-remove-jupyter`), so both PRs could be opened; the ledger header and both session plans now name a branch per layer. Each PR's `## Gate changes` covers only its own layer's findings. | Next: record the layer 3 and 4 PR numbers in the ledger header, then T30 on `feat/sandbox-harness`.
 
 ---
 
@@ -1930,6 +1948,9 @@ ledger row before anything else.
 ---
 
 ## Step 2: move the harness
+
+Layer 3 of the stack: built on `feat/sandbox-harness`, in its own PR
+(the ledger header's table).
 
 ### T30: harness on the sandbox engine
 
