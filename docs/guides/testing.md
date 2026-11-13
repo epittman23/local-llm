@@ -158,24 +158,28 @@ on purpose.
   (`auto-merge.yml`). Forks never qualify. Dependabot's PRs keep their own
   rule (`dependabot-automerge.yml`: everything but major bumps).
 - **When.** GitHub squash-merges once the main ruleset's required checks
-  (`CI passed`, `PR gate`, CodeQL) pass on a branch that is up to date with
-  `main`. A gated PR waits, because `PR gate` fails until the owner adds
+  (`CI passed`, `PR gate`, CodeQL) pass. Since 2026-11-13 the branch need
+  not be up to date with `main` (the owner turned that rule off; see the
+  decisions log), so checks that passed before `main` moved still count.
+  A gated PR waits, because `PR gate` fails until the owner adds
   `gate-change-approved`. With auto-merge on, that label is the merge
-  button: adding it to a green, up-to-date PR merges it.
+  button: adding it to a green PR merges it.
 - **Holding a PR back.** Open it as a draft, or turn auto-merge off on the
   PR page. Later pushes do not turn auto-merge back on; only reopening or
   marking it ready for review does.
-- **Branch updates.** The ruleset requires a branch to be up to date, so
-  `update-branches.yml` merges `main` into each auto-merge PR that is
-  behind: on every push to `main`, every 30 minutes, and on demand
+- **Branch updates.** The ruleset no longer requires a branch to be up to
+  date, but `update-branches.yml` still merges `main` into each auto-merge
+  PR that is behind, so its CI runs against current `main` (two PRs that
+  pass alone and break together are otherwise caught only after both
+  merge, by CI on `main`): on every push to `main`, every 30 minutes, and on demand
   (Actions > Auto-merge and branch updates > Run workflow). It uses a merge
   commit, never a rebase or a force-push, and CI runs on the result. A PR
   with a conflict is skipped with a warning and needs a hand merge.
   Dependabot's PRs are left to Dependabot, which rebases them itself.
 - **An update removes an approval.** An update is a new commit, so
   `pr-gate.yml` removes `gate-change-approved` from a gated PR it updates,
-  and the owner approves again (one approval per commit). Approve a gated
-  PR when it is up to date.
+  and the owner approves again (one approval per commit). A gated PR
+  approved while behind can merge before an update reaches it.
 - **After a Dependabot merge.** Those merges use `GITHUB_TOKEN`, so they
   start no workflow, and other PRs are updated on the next half-hourly run.
 

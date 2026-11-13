@@ -90,6 +90,7 @@ timeline
       2026-11-08 : The desktop app refuses to start a second make backend beside one that holds the port or the services without answering : make backend's exit brings down only the services it started : a refused connection with the services down still starts the stack
       2026-11-09 : Attached chat files merged by rank when one file's search fell back (hybrid to vector, or a failed reranker) : sorted by score across files otherwise, as before : the fallback is marked on the search result
       2026-11-10 : Per-chat microVM sandbox (Kata Containers with Cloud Hypervisor) proposed to replace the Jupyter and Pyodide code interpreters : every design question decided by the owner : to be built in one draft PR from docs/plans/sandbox-implementation.md : nothing built
+      2026-11-13 : A pull request no longer has to be up to date with main to merge : the main ruleset's up-to-date rule turned off at the owner's request : behind PRs are still updated, but a merge no longer waits for it
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs
