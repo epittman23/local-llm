@@ -1184,3 +1184,83 @@ def test_list_workspace_lists_a_running_sandbox_read_only_beside_it(
     after = sh(backend, key, 'printf more >> seen.txt && cat seen.txt')
     assert (after.returncode, after.stdout) == (0, 'abcmore')
     asyncio.run(backend.stop(key))
+
+
+# Parallel sessions (acceptance test "Parallel sessions", T29).
+
+PARALLEL_ROUNDS = 3_000_000
+PARALLEL_JOB = (
+    'python3 -c \'import hashlib\nh = b"lllm"\nfor _ in range({n}): h = hashlib.sha256(h).digest()\nprint(h.hex())\''
+)
+
+
+def _hash_chain(rounds: int) -> str:
+    import hashlib
+
+    h = b'lllm'
+    for _ in range(rounds):
+        h = hashlib.sha256(h).digest()
+    return h.hex()
+
+
+def test_four_sessions_run_at_once_and_a_fifth_waits_for_a_slot(backend: KataDockerBackend, keys: Keys) -> None:
+    """Four chats run a CPU-bound job together under `max_running=4`; each result matches a serial run, none sees
+    another's files, each running sandbox is one cloud-hypervisor process, and a fifth chat starts only once one
+    of the four has finished (busy sandboxes are never evicted)."""
+    chats = [keys.new(backend) for _ in range(5)]
+    expected = _hash_chain(PARALLEL_ROUNDS)
+
+    class Chats:
+        async def usable(self, chat_id: str, user: Any) -> bool:
+            return chat_id in chats
+
+        async def updated_at(self, chat_ids: list[str]) -> dict[str, int]:
+            return {c: int(time.time()) for c in chat_ids}
+
+    async def settings() -> SandboxSettings:
+        return SandboxSettings(max_running=4)
+
+    manager = SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats())
+    user = SimpleNamespace(id='kata-test-user', role='user')
+
+    def hypervisors() -> int:
+        found = subprocess.run(['pgrep', '-c', '-x', 'cloud-hyperviso'], capture_output=True, text=True).stdout
+        return int(found or 0)
+
+    before = hypervisors()
+    entered: dict[int, float] = {}
+    left: dict[int, float] = {}
+    outputs: dict[int, ExecResult] = {}
+    seen_running: list[int] = []
+
+    async def one(i: int, all_in: asyncio.Event | None) -> None:
+        async with manager.session(chats[i], user) as session:
+            entered[i] = time.monotonic()
+            if all_in is not None:
+                if len(entered) == 4:
+                    seen_running.append(hypervisors() - before)
+                    all_in.set()
+                await asyncio.wait_for(all_in.wait(), 120)
+            command = f'echo {i} > /workspace/mine.txt && {PARALLEL_JOB.format(n=PARALLEL_ROUNDS)} && ls -A /workspace'
+            outputs[i] = await session.exec(wrap_command(command, 180), 180)
+            left[i] = time.monotonic()
+
+    async def check() -> None:
+        all_in = asyncio.Event()
+        four = [asyncio.ensure_future(one(i, all_in)) for i in range(4)]
+        await asyncio.wait_for(all_in.wait(), 180)
+        fifth = asyncio.ensure_future(one(4, None))
+        await asyncio.gather(*four, fifth)
+        await manager.shutdown(stop_running=True)
+
+    asyncio.run(check())
+    assert seen_running == [4]
+    for i in range(5):
+        result = outputs[i]
+        assert result.returncode == 0, result.stderr
+        digest, *listing = result.stdout.split('\n')
+        assert digest == expected
+        # `uploads` is the mount point; `.telemetry` is the data image's own hook directory (T21).
+        assert [name for name in listing if name and name not in {'uploads', '.telemetry'}] == ['mine.txt']
+    assert entered[4] >= min(left[i] for i in range(4))
+    assert max(entered[i] for i in range(4)) < min(left[i] for i in range(4))
