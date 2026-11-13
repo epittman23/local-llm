@@ -41,7 +41,7 @@ under way; always read the copies on the feature branch.
 |---|---|
 | Feature branch | the branch of the layer the next task belongs to, from the ledger header's table: `feat/sandbox-harness` for T30-T39, `feat/sandbox-remove-jupyter` for T40-T49 (`<feature-branch>` in the commands below) |
 | Pull request | that layer's draft PR, one of four stacked PRs (split from the single PR #884 on 2026-11-13); each number is in the ledger header's table |
-| PR title | `feat(sandbox): replace the Jupyter and Pyodide code interpreters with per-chat microVM sandboxes` |
+| PR titles | one per layer, as the PRs carry them; each PR's body has the layer table. Never retitle a PR to the single-PR title used before the split |
 | OMC ultragoal plan id | `sandbox` (pass `--plan-id sandbox` to every `omc ultragoal` command) |
 | Ultragoal goal mode | `per-story` (one `/goal` per task, so a session can stop when its task is done) |
 
