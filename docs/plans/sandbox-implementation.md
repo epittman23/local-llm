@@ -1952,7 +1952,12 @@ the Jupyter ones (the `app_with` fixture at `:93-137` grows an engine
 parameter and patches the new probe); the spec carries the engine and the
 image digest; a sandbox-engine spec sha differs from a Jupyter one.
 
-**Verify:** `make test-backend`; `make test-types`.
+**Verify:** `make test-backend`; `make test-types`; and, moved here from
+T21 (2026-11-13, since only this task makes it reachable), on the laptop:
+a harness item run through the sandbox engine writes its
+`sandbox_package_events` rows with `harness_run_id` set to the run's
+`suite_run_id`, and `GET /api/v1/sandbox/packages` leaves them out unless
+`include_harness=true`.
 
 ### T31: harness baseline on the sandbox engine
 
