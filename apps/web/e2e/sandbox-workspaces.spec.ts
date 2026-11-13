@@ -135,7 +135,11 @@ test('a Run that hit the workspace limit opens the dialog too', async ({ page })
 				}
 			])
 		],
-		user: { features: { enable_code_execution: true }, config: { code: { engine: 'sandbox' } } }
+		user: {
+			features: { enable_code_execution: true },
+			config: { code: { engine: 'sandbox' } },
+			featurePermissions: { code_interpreter: true }
+		}
 	});
 	const state = { ids: [] as string[], pending: [] as unknown[] };
 	await mockPending(page, state);

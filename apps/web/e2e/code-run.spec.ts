@@ -14,7 +14,12 @@ const reply = (content: string) =>
 		{ id: 'a1', role: 'assistant', content, model: 'qwen', modelName: 'Qwen', done: true }
 	]);
 
-const sandbox = { features: { enable_code_execution: true }, config: { code: { engine: 'sandbox' } } };
+// The user holds the code interpreter permission, which the Run button needs under the sandbox engine (Q26).
+const sandbox = {
+	features: { enable_code_execution: true },
+	config: { code: { engine: 'sandbox' } },
+	featurePermissions: { code_interpreter: true }
+};
 
 test("Run executes a reply's Python block in the chat's sandbox and shows its output and files", async ({ page }) => {
 	await mockChat(page, { chats: [reply('Here:\n\n```python\nprint("hi")\n```\n')], user: sandbox });
@@ -76,4 +81,15 @@ test('a Python block has no Run button under Pyodide', async ({ page }) => {
 	await page.goto('/c/c1');
 	await expect(page.getByTestId('code-block')).toBeVisible();
 	await expect(page.getByTestId('code-block').getByRole('button', { name: 'Run' })).toHaveCount(0);
+});
+
+test('a user without the code interpreter permission gets no Run button under the sandbox engine', async ({ page }) => {
+	await mockChat(page, {
+		chats: [reply('Here:\n\n```python\nprint("hi")\n```\n')],
+		user: { ...sandbox, featurePermissions: {} }
+	});
+	await page.goto('/c/c1');
+	const block = page.getByTestId('code-block');
+	await expect(block).toBeVisible();
+	await expect(block.getByRole('button', { name: 'Run' })).toHaveCount(0);
 });
