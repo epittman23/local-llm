@@ -1,7 +1,9 @@
 """Starting and stopping the sandbox manager with the app, from main.py's lifespan.
 
 `start` puts a SandboxManager on `app.state.sandbox` (None when it does not
-run), sweeps up after the previous process, and starts the maintenance loop;
+run) and the package telemetry beside it on `app.state.sandbox_telemetry`
+(sandbox/telemetry.py), sweeps up after the previous process, and starts the
+maintenance loop;
 `stop` ends the loop and the manager. The app starts whatever the sandbox's
 state: when the backend reports a reason it cannot run sandboxes (no Kata on
 the host, say), the reason is logged, the admin page shows it
@@ -29,6 +31,7 @@ from typing import IO, Any, Final
 
 from local_llm.sandbox.backend import SandboxBackend
 from local_llm.sandbox.manager import SandboxManager
+from local_llm.sandbox.telemetry import PackageTelemetry
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +142,8 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
         data_dir: The sandbox's directory under DATA_DIR, which holds the lock file.
     """
     app.state.sandbox = None
+    app.state.sandbox_telemetry = None
+    app.state.sandbox_telemetry_task = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = backend
@@ -171,6 +176,10 @@ async def start(app: Any, backend: SandboxBackend, data_dir: Path) -> None:
         lock.close()
         return
     app.state.sandbox = manager
+    telemetry = PackageTelemetry()
+    app.state.sandbox_telemetry = telemetry
+    # Prunes events past the retention every hour (PACKAGE_EVENTS_RETENTION_DAYS).
+    app.state.sandbox_telemetry_task = asyncio.create_task(telemetry.maintenance_loop())
     app.state.sandbox_lock = lock
     app.state.sandbox_maintenance = asyncio.create_task(_maintain(manager, sweep))
 
@@ -189,6 +198,19 @@ async def stop(app: Any, *, stop_running: bool) -> None:
             pass
         except Exception:
             log.exception('the sandbox maintenance task had failed')
+    telemetry_task = getattr(app.state, 'sandbox_telemetry_task', None)
+    if telemetry_task is not None:
+        telemetry_task.cancel()
+        try:
+            await telemetry_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            log.exception('the package telemetry task had failed')
+    telemetry = getattr(app.state, 'sandbox_telemetry', None)
+    if telemetry is not None:
+        # Events still being recorded are dropped, not waited for.
+        await telemetry.close()
     manager = getattr(app.state, 'sandbox', None)
     if manager is not None:
         try:
@@ -206,6 +228,8 @@ async def stop(app: Any, *, stop_running: bool) -> None:
         except Exception:
             log.exception('the sandbox backend could not release its threads')
     app.state.sandbox = None
+    app.state.sandbox_telemetry = None
+    app.state.sandbox_telemetry_task = None
     app.state.sandbox_maintenance = None
     app.state.sandbox_lock = None
     app.state.sandbox_backend = None

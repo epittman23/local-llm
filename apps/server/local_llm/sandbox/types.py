@@ -174,11 +174,35 @@ class FileEntry:
         path: Relative to the directory that was listed.
         size: Size in bytes.
         mtime: Modification time, in seconds since the epoch.
+        truncated: The path was cut short for showing (a workspace listing keeps a bounded part of each name).
     """
 
     path: str
     size: int
     mtime: float
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class WorkspaceListing:
+    """What a chat's workspace volume holds, listed without its sandbox running (SandboxBackend.list_workspace).
+
+    Attributes:
+        entries: Regular files, at most the `max_entries` asked for, each with
+            its path relative to `/workspace`; the first ones the walk found,
+            not the largest. A name that is not UTF-8 has its bad bytes
+            replaced.
+        files: How many regular files the walk found, listed or not.
+        bytes: Their total size, in bytes.
+        complete: False when part of the workspace could not be read (a
+            directory UID 1000 may not search) or the walk ran out of time,
+            so the totals may be short.
+    """
+
+    entries: tuple[FileEntry, ...]
+    files: int
+    bytes: int
+    complete: bool
 
 
 @dataclass(frozen=True)
@@ -208,6 +232,21 @@ class SandboxInfo:
     ephemeral: bool
     last_used: dt.datetime | None
     ip: str | None
+
+
+@dataclass(frozen=True)
+class MirrorLine:
+    """One line of the pip mirror's access log, as the daemon recorded it (SandboxBackend.mirror_log).
+
+    Attributes:
+        at_ns: When the daemon received the line, in nanoseconds since the epoch: the cursor the next read
+            continues after.
+        line: The line, without its newline, decoded as UTF-8 with bad bytes replaced. A sandbox chooses the URI
+            and user agent the mirror logs, so it is hostile text: parse it, never trust it.
+    """
+
+    at_ns: int
+    line: str
 
 
 @dataclass(frozen=True)

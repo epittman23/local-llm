@@ -119,8 +119,8 @@ Start here for "how do I run/use this."
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
   sign-in on through environment variables), `sandbox.md` (the per-chat
-  microVM sandbox under construction; so far its Kata host setup, images
-  and backend).
+  microVM sandbox under construction; so far its Kata host setup, images,
+  backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -189,7 +189,8 @@ Infrastructure this repo runs but does not write.
   `infra/.env`.
 - **`sandbox/`** — the code sandbox's two images (`Dockerfile.data`,
   `Dockerfile.web`), the files they share (`common/`), per-image inputs
-  (`data/`, `web/`), the image tag (`TAG`) and the data image's package
+  (`data/`, `web/`; `data/sitecustomize.py` and `data/Rprofile.site` are
+  the package-telemetry hooks), the image tag (`TAG`) and the data image's package
   list (`image-freeze.txt`, `image-freeze-r.txt`). Built by `make sandbox-images`;
   `docs/guides/sandbox.md` "Images". Also the package allowlist
   (`allowlist.in`), its hash-locked wheel list (`requirements.lock`; `make
@@ -242,7 +243,17 @@ fork's pre-import history is kept read-only at
   lifespan uses to start and stop the manager; and `outputs.py`, which
   attaches the files a `bash` call leaves in `/workspace/outputs` to the
   message, renders PDF previews, and puts the policy in front of an HTML
-  output for `routers/sandbox.py`'s `/outputs/{id}/html`), and
+  output for `routers/sandbox.py`'s `/outputs/{id}/html`; and `runs.py`,
+  where the tag path's `<code_interpreter>` blocks and the Run endpoint's
+  code are written, `/workspace/.runs/<n>.py`, before
+  `tools/builtin.py`'s `run_code_in_sandbox` runs them; and
+  `workspaces.py`, the record of each chat's persistent workspace (owner,
+  last use, a pending keep-or-remove request) that the per-user cap and
+  the retention sweep read, stored in `models/sandbox.py`'s
+  `sandbox_workspace` table; and `telemetry.py`, which collects the
+  packages a chat imports, installs or misses into
+  `sandbox_package_events` for the admin report at
+  `/api/v1/sandbox/packages`), and
   **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
@@ -427,6 +438,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
   `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
   (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
+  `src/routes/chat/PendingWorkspacesDialog.tsx`, mounted by `AppShell`,
+  asks the user to keep or remove a sandbox workspace that expired or
+  stands in the way of the per-user cap.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

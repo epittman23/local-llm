@@ -21,6 +21,8 @@ from local_llm.config import (
     CODE_INTERPRETER_BLOCKED_MODULES,
     CODE_INTERPRETER_JUPYTER_PROMPT,
     CODE_INTERPRETER_PYODIDE_PROMPT,
+    CODE_INTERPRETER_SANDBOX_PROMPT,
+    CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
     DEFAULT_CODE_INTERPRETER_PROMPT,
     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
     DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
@@ -1127,14 +1129,17 @@ async def terminal_event_handler(
     tool_function_params: dict,
     tool_result,
     event_emitter,
+    *,
+    tool_type: str,
 ):
-    """Emit terminal:* events for Open Terminal tools.
+    """Emit terminal:* events for Open Terminal tools, and for no other tool of the same name (the sandbox's
+    `write_file` among them).
 
     - display_file  → emits 'terminal:display_file' to open the file preview.
     - write_file / replace_file_content → emits 'terminal:write_file' to refresh.
     - run_command → emits 'terminal:run_command' with cwd to refresh if relevant.
     """
-    if not event_emitter:
+    if not event_emitter or tool_type != 'terminal':
         return
 
     if tool_function_name == 'display_file':
@@ -1332,6 +1337,7 @@ async def chat_completion_tools_handler(
                         tool_function_params,
                         tool_result,
                         event_emitter,
+                        tool_type=tool_type,
                     )
 
                     if tool_result_files:
@@ -2539,6 +2545,35 @@ async def _may_use_feature(user, feature_key: str) -> bool:
     )
 
 
+# Each engine's environment notes: for the tag path (legacy function calling), which runs `<code_interpreter>`
+# blocks, and for native function calling, whose tools differ by engine (the sandbox's four tools, or execute_code).
+_CODE_INTERPRETER_TAG_PROMPTS = {
+    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
+    'sandbox': CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
+}
+_CODE_INTERPRETER_TOOL_PROMPTS = {
+    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
+    'sandbox': CODE_INTERPRETER_SANDBOX_PROMPT,
+}
+
+
+def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str:
+    """What a sandbox run's stdout gains for the model on the tag path: which files from /workspace/outputs were
+    attached to the reply (stored: they have a `file_id`), which were not and why, which were only listed (a
+    benchmark run stores none), and whether the run was stopped at its timeout."""
+    lines = []
+    if timed_out:
+        lines.append('[The code was stopped at its time limit.]')
+    attached = [item['path'] for item in outputs if 'file_id' in item]
+    listed = [item['path'] for item in outputs if 'file_id' not in item and 'reason' not in item]
+    if attached:
+        lines.append(f'[Attached to the reply: {", ".join(attached)}]')
+    if listed:
+        lines.append(f'[New in /workspace/outputs, not attached: {", ".join(listed)}]')
+    lines.extend(f'[Not attached: {item["path"]} ({item["reason"]})]' for item in outputs if 'reason' in item)
+    return ''.join(f'\n{line}' for line in lines)
+
+
 async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
     engine = await Config.get('code_interpreter.engine', 'pyodide')
 
@@ -2549,7 +2584,7 @@ async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
         prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
 
         # Append the engine's own environment and filesystem notes
-        prompt += CODE_INTERPRETER_JUPYTER_PROMPT if engine == 'jupyter' else CODE_INTERPRETER_PYODIDE_PROMPT
+        prompt += _CODE_INTERPRETER_TAG_PROMPTS.get(engine, CODE_INTERPRETER_PYODIDE_PROMPT)
 
         form_data['messages'] = add_or_update_user_message(
             prompt,
@@ -2563,7 +2598,7 @@ async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
         # providers with prefix caching don't re-bill the full
         # conversation on every turn.
         form_data['messages'] = add_or_update_system_message(
-            CODE_INTERPRETER_JUPYTER_PROMPT if engine == 'jupyter' else CODE_INTERPRETER_PYODIDE_PROMPT,
+            _CODE_INTERPRETER_TOOL_PROMPTS.get(engine, CODE_INTERPRETER_PYODIDE_PROMPT),
             form_data['messages'],
             append=True,
         )
@@ -2604,6 +2639,48 @@ async def _apply_features(request, form_data: dict, user, model: dict, metadata:
     if features.get('code_interpreter'):
         await _apply_code_interpreter(form_data, metadata)
     return form_data
+
+
+#: Why a request with a terminal and the sandbox engine is refused (owner decision Q24).
+TERMINAL_WITH_SANDBOX = (
+    'This chat has a terminal selected and the Code Interpreter on, which runs in the sandbox. Both give the model '
+    'files and commands, on different machines, so they cannot be used in one chat: turn one of them off and send '
+    'the message again.'
+)
+
+
+async def _refuse_terminal_with_sandbox(user, model: dict, metadata: dict, terminal_id, features: dict) -> None:
+    """Refuse (an HTTPException 400) a request that would get both a terminal's tools and the sandbox's (Q24).
+
+    Both offer a `write_file`, writing on different machines, and a model
+    told to write a file and run it would do the two on different machines;
+    so the user turns one off rather than the server guessing which. The
+    check mirrors when each is in effect: a terminal the model may use
+    (_add_terminal_tools), and the code interpreter on the sandbox engine
+    with its gates passed (feature, setting, model capability and
+    permission), on the tag path (legacy function calling) or as builtin
+    tools on the native path (a session, and the model's `builtin_tools`
+    capability, as process_chat_payload's `use_builtin_tools`). An API
+    caller gets the 400; in the chat it shows as the message's error.
+    """
+    meta = model.get('info', {}).get('meta', {})
+    capabilities = meta.get('capabilities') or {}
+    legacy = metadata.get('params', {}).get('function_calling') == 'legacy'
+    if not (
+        terminal_id
+        and capabilities.get('terminal', True)
+        and features.get('code_interpreter')
+        and capabilities.get('code_interpreter', True)
+        and (meta.get('builtinTools') or {}).get('code_interpreter', True)
+        and (legacy or (bool(metadata.get('session_id')) and capabilities.get('builtin_tools', True)))
+    ):
+        return
+    if (
+        await Config.get('code_interpreter.enable')
+        and await Config.get('code_interpreter.engine') == 'sandbox'
+        and await _may_use_feature(user, 'code_interpreter')
+    ):
+        raise HTTPException(status_code=400, detail=TERMINAL_WITH_SANDBOX)
 
 
 async def _note_chat_files(chat, user, files):
@@ -3051,6 +3128,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     features = form_data.pop('features', None) or {}
     extra_params['__features__'] = features
+    # Before any feature runs (memory, a forced web search): a refused request does nothing.
+    await _refuse_terminal_with_sandbox(user, model, metadata, form_data.get('terminal_id'), features)
     form_data = await _apply_features(request, form_data, user, model, metadata, extra_params, features)
 
     tool_ids = form_data.pop('tool_ids', None)
@@ -3299,7 +3378,7 @@ async def execute_tool_call_for_output(request, form_data, user, metadata, event
         user,
     )
 
-    await terminal_event_handler(name, params, result, event_emitter)
+    await terminal_event_handler(name, params, result, event_emitter, tool_type=tool_type)
 
     return {
         'tool_call_id': tool_call.get('id', ''),
@@ -6091,6 +6170,10 @@ class _StreamingReply:
     async def _execute_code(self, ci_item: dict):
         # Sanitize code (strips ANSI codes and markdown fences)
         code = sanitize_code(ci_item.get('code', ''))
+        ci_engine = await Config.get('code_interpreter.engine')
+        if ci_engine == 'sandbox':
+            # The block runs in the chat's own sandbox, where nothing needs blocking: no preamble.
+            return await self._execute_code_in_sandbox(code)
 
         if CODE_INTERPRETER_BLOCKED_MODULES:
             blocking_code = textwrap.dedent(f"""
@@ -6112,7 +6195,6 @@ class _StreamingReply:
             """)
             code = blocking_code + '\n' + code
 
-        ci_engine = await Config.get('code_interpreter.engine')
         if ci_engine == 'pyodide':
             ci_output = await self.event_caller(
                 {
@@ -6157,6 +6239,42 @@ class _StreamingReply:
         if isinstance(ci_output, dict):
             await self._inline_output_images(ci_output)
         return ci_output
+
+    async def _execute_code_in_sandbox(self, code: str) -> dict:
+        """A `<code_interpreter>` block run in the chat's sandbox (tools/builtin.py run_code_in_sandbox).
+
+        Its outputs attach to this reply as a `bash` call's do (owner decision
+        Q25), so they render under it. The model is shown only stdout
+        (utils/misc.py), so the block's stderr, a sandbox failure and the
+        names of its outputs all go there.
+        """
+        from local_llm.tools.builtin import run_code_in_sandbox
+
+        run = await run_code_in_sandbox(
+            code,
+            request=self.request,
+            user=self.user.model_dump() if isinstance(self.user, UserModel) else None,
+            chat_id=self.metadata.get('chat_id'),
+            message_id=self.metadata.get('message_id'),
+            metadata=self.metadata,
+            event_emitter=self.event_emitter,
+            what='the code block',
+        )
+        if 'error' in run:
+            return {'stdout': run['error'], 'stderr': '', 'result': ''}
+        # The model is shown a block's stdout only, so stderr (a traceback, pip's "no matching distribution", the
+        # upload and output notes) goes there too, after it, as a terminal would show it.
+        return {
+            'stdout': ''.join(
+                [
+                    run['stdout'],
+                    f'\n[stderr]\n{run["stderr"]}' if run['stderr'] else '',
+                    sandbox_outputs_note(run['outputs'], timed_out=run['timed_out']),
+                ]
+            ),
+            'stderr': '',
+            'result': '',
+        }
 
     async def _inline_output_images(self, ci_output: dict) -> None:
         """Replace base64 image lines in stdout and the result with uploaded images."""
@@ -6434,6 +6552,7 @@ class _ToolCallRounds:
             tool_function_params,
             tool_result,
             reply.event_emitter,
+            tool_type=tool_type,
         )
 
         # Extract citation sources from tool results

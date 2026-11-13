@@ -31,6 +31,9 @@ const perm = (user: SessionUser | null, group: 'chat' | 'features', key: string,
 	user?.role === 'admin' ||
 	((user?.permissions as Record<string, Record<string, boolean | undefined>> | undefined)?.[group]?.[key] ?? fallback);
 
+/** Whether the user may use a feature (`permissions.features.<key>`): an admin always, anyone else only when it is set. */
+export const canUseFeature = (user: SessionUser | null, key: string) => perm(user, 'features', key, false);
+
 export const canUploadFiles = (user: SessionUser | null) => perm(user, 'chat', 'file_upload', true);
 export const canUploadWeb = (user: SessionUser | null) => perm(user, 'chat', 'web_upload', true);
 
@@ -44,7 +47,7 @@ export function featureButtons(
 	features: Record<string, unknown>
 ): FeatureButtons {
 	const show = (flag: string, permKey: string, cap: Capability) =>
-		Boolean(features[flag]) && perm(user, 'features', permKey, false) && allCapable(selected, models, cap);
+		Boolean(features[flag]) && canUseFeature(user, permKey) && allCapable(selected, models, cap);
 	return {
 		webSearch: show('enable_web_search', 'web_search', 'web_search'),
 		imageGeneration: show('enable_image_generation', 'image_generation', 'image_generation'),

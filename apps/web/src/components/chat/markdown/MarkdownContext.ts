@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { CodeRunResult } from '@/lib/apis/utils';
 
 /** What every token in one message needs, passed down once instead of through each level. */
 export type MarkdownEnv = {
@@ -11,7 +12,8 @@ export type MarkdownEnv = {
 	sourceIds: string[];
 	onSourceClick?: (id: string | number) => void;
 	onPreview?: (code: string) => void;
-	onRun?: (code: string) => void;
+	/** A python code block's Run button: the code's output, shown under the block. */
+	onRun?: (code: string) => Promise<CodeRunResult>;
 	onToolCallResolved?: (res: unknown) => void;
 	expandDetails: boolean;
 	collapseCodeBlocks: boolean;

@@ -18,8 +18,16 @@ lists and file contents.
 import posixpath
 from typing import Protocol, runtime_checkable
 
-from local_llm.sandbox.limits import WORKSPACE
-from local_llm.sandbox.types import ExecResult, FileStat, SandboxInfo, SandboxSpec, validate_chat_id
+from local_llm.sandbox.limits import LIST_MAX_ENTRIES, MIRROR_LOG_MAX_BYTES, WORKSPACE
+from local_llm.sandbox.types import (
+    ExecResult,
+    FileStat,
+    MirrorLine,
+    SandboxInfo,
+    SandboxSpec,
+    WorkspaceListing,
+    validate_chat_id,
+)
 
 # The longest file name Linux filesystems accept (NAME_MAX), in bytes.
 _NAME_MAX_BYTES = 255
@@ -113,6 +121,35 @@ def validate_get_files(paths: list[str], max_bytes: int) -> None:
         raise TypeError(f'get_files: max_bytes must be an int, not {type(max_bytes).__name__}')
     if max_bytes < 0:
         raise ValueError(f'get_files: max_bytes {max_bytes} is negative')
+
+
+def validate_list_workspace(max_entries: int) -> None:
+    """Check `list_workspace`'s `max_entries` against the contract, before anything is listed.
+
+    Raises:
+        TypeError: `max_entries` is not an int (a bool is refused).
+        ValueError: `max_entries` is outside 1..LIST_MAX_ENTRIES.
+    """
+    if type(max_entries) is not int:
+        raise TypeError(f'list_workspace: max_entries must be an int, not {type(max_entries).__name__}')
+    if not 1 <= max_entries <= LIST_MAX_ENTRIES:
+        raise ValueError(f'list_workspace: max_entries {max_entries} is outside 1..{LIST_MAX_ENTRIES}')
+
+
+def validate_mirror_log(since_ns: int, max_bytes: int) -> None:
+    """Check `mirror_log` arguments against the contract, before the log is read.
+
+    Raises:
+        TypeError: Either is not an int (a bool is refused).
+        ValueError: `since_ns` is negative, or `max_bytes` is outside 1..MIRROR_LOG_MAX_BYTES.
+    """
+    for name, value in (('since_ns', since_ns), ('max_bytes', max_bytes)):
+        if type(value) is not int:
+            raise TypeError(f'mirror_log: {name} must be an int, not {type(value).__name__}')
+    if since_ns < 0:
+        raise ValueError(f'mirror_log: since_ns {since_ns} is negative')
+    if not 1 <= max_bytes <= MIRROR_LOG_MAX_BYTES:
+        raise ValueError(f'mirror_log: max_bytes {max_bytes} is outside 1..{MIRROR_LOG_MAX_BYTES}')
 
 
 def validate_sandbox_path(path: str, *, allow_workspace: bool = False) -> str:
@@ -346,6 +383,39 @@ class SandboxBackend(Protocol):
         """
         ...
 
+    async def list_workspace(self, chat_id: str, max_entries: int) -> WorkspaceListing | None:
+        """The regular files on the chat's workspace volume, whether or not its sandbox runs; None when it has none.
+
+        For the workspace deletion dialog (T24), which shows a stopped
+        workspace's contents before the user decides. It never starts the
+        chat's sandbox and runs nothing from the workspace: the Kata backend
+        lists the volume from a short-lived helper container of fixed
+        options (the volume mounted read-only, no network, UID 1000, a fixed
+        script), and nothing a caller or the model chose reaches those
+        options. Symlinks are not followed and not listed; a directory UID
+        1000 may not search is skipped, and the listing marked incomplete.
+        At most `max_entries` files are listed, and `files` and `bytes`
+        count them all (WorkspaceListing).
+
+        Raises:
+            ValueError, TypeError: `max_entries` breaks
+                validate_list_workspace's rules.
+            SandboxError: The volume could not be listed.
+        """
+        ...
+
+    async def remove_helpers(self) -> None:
+        """Remove every short-lived helper (list_workspace's) a previous process left behind; for the startup sweep.
+
+        A helper mounts its workspace's volume, so one left behind would keep
+        the volume from being destroyed. `stop` and `destroy` remove the
+        key's own helper too.
+
+        Raises:
+            SandboxError: The helpers could not be listed or removed.
+        """
+        ...
+
     async def stop(self, chat_id: str) -> None:
         """Remove the chat's container and keep its volume. A no-op when nothing is running."""
         ...
@@ -360,6 +430,26 @@ class SandboxBackend(Protocol):
         Each SandboxInfo carries what `create` recorded as labels: the
         container's image (None once only the volume is left) and the
         ephemeral flag (from the volume too, so it is known while stopped).
+        """
+        ...
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        """The pip mirror's access log lines recorded after `since_ns`, oldest first, for the package telemetry (T21).
+
+        The arguments must pass validate_mirror_log. Only lines the daemon
+        recorded strictly after `since_ns` (nanoseconds since the epoch) are
+        returned, each with its own time, so a caller that passes the last
+        line's `at_ns` next time reads every line once. At most `max_bytes`
+        bytes of lines are returned: the read stops before the line that
+        would pass it, which the next read returns (a single line longer
+        than `max_bytes` is returned cut to it, so the cursor still moves).
+        The log is the mirror's own (its JSON access log on stdout); what is
+        in a line is the sandboxes' choice, so the caller parses it as
+        hostile text.
+
+        Raises:
+            ValueError, TypeError: The arguments break validate_mirror_log's rules.
+            SandboxError: The mirror's log could not be read (the mirror is not there, the daemon failed).
         """
         ...
 

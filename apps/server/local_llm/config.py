@@ -510,6 +510,27 @@ CODE_INTERPRETER_SANDBOX_PROMPT = """
   TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in
   headless Chromium with Playwright; `/workspace` carries over when you switch."""
 
+# The sandbox engine on the tag path (legacy function calling): the model has no tools, only `<code_interpreter>`
+# blocks, each run as a Python file in the same per-chat sandbox (tools/builtin.py run_code_in_sandbox).
+CODE_INTERPRETER_SANDBOX_TAG_PROMPT = """
+
+##### Sandbox Environment
+
+- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A
+  block ends every process it started, so variables do not carry over to the next block: save what you need to files.
+- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to
+  the next.
+- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.
+- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with
+  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the
+  output names them; do not repeat them as links.
+- Print what you want returned: the block's output comes back to you, shortened when long.
+- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with
+  `subprocess.run(['pip', 'install', 'name'])`; if it answers "no matching distribution", tell the user the package is
+  not available instead of working around it.
+- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live
+  and the DuckDB CLI, which a block can run with `subprocess`."""
+
 
 ####################################
 # Vector Database
@@ -2663,6 +2684,7 @@ DEFAULT_CONFIG = {
     'code_interpreter.sandbox.max_running': 4,
     'code_interpreter.sandbox.idle_minutes': 30,
     'code_interpreter.sandbox.retention_days': 7,
+    'code_interpreter.sandbox.max_workspaces': 20,
     'google_drive.enable': ENABLE_GOOGLE_DRIVE_INTEGRATION,
     'google_drive.client_id': GOOGLE_DRIVE_CLIENT_ID,
     'google_drive.api_key': GOOGLE_DRIVE_API_KEY,

@@ -64,6 +64,8 @@ from local_llm.sandbox.fake import (
     interpret,
     lllm_path,
 )
+from local_llm.sandbox.limits import TIMEOUT_DEFAULT_S
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.tools import builtin
 
 REPO = Path(__file__).resolve().parents[3]
@@ -560,14 +562,21 @@ class _Rig:
         self.backend = FakeBackend()
         state = SimpleNamespace()
         if manager:
-            state.sandbox = SandboxManager(self.backend, chats=_Chats(), settings=_settings)
+            state.sandbox = SandboxManager(
+                self.backend, workspaces=MemoryWorkspaces(), chats=_Chats(), settings=_settings
+            )
         self.request = SimpleNamespace(app=SimpleNamespace(state=state))
         self.events: list[dict] = []
 
         async def get_user_by_id(user_id, db=None):
             return SimpleNamespace(id=user_id, role='user') if user_id == 'u1' else None
 
+        async def configured_timeout() -> int:
+            return TIMEOUT_DEFAULT_S
+
         monkeypatch.setattr(Users, 'get_user_by_id', get_user_by_id)
+        # The admin's timeout setting, as on a fresh install: the test database is shared, and other tests store it.
+        monkeypatch.setattr(builtin, 'configured_timeout', configured_timeout)
 
     async def call(self, tool: Callable, chat_id: str = CHAT, **kwargs) -> dict | str:
         async def emit(event: dict) -> None:
@@ -1132,7 +1141,7 @@ def test_view_returns_an_image_at_the_limits():
 def test_resolve_without_the_read_check_runs_lllm_path_alone_through_the_fake():
     async def go():
         backend = FakeBackend()
-        manager = SandboxManager(backend, chats=_Chats(), settings=_settings)
+        manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=_Chats(), settings=_settings)
         async with manager.session(CHAT, SimpleNamespace(id='u1', role='user')) as session:
             return await workspace.resolve(session, 'a/../b'), backend
 

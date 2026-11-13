@@ -60,6 +60,7 @@ from local_llm.sandbox.kata import (
     VERIFY_SCRIPT,
     KataDockerBackend,
     container_name,
+    list_helper_name,
     network_is_fenced,
 )
 from local_llm.sandbox.manager import SandboxManager, SandboxSettings
@@ -71,6 +72,7 @@ from local_llm.sandbox.types import (
     SandboxUnavailable,
     volume_name,
 )
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 
 MIRROR_REASON = 'The sandbox-mirror container is not running; make backend starts it'
 
@@ -586,7 +588,7 @@ def test_path_confinement_against_a_real_symlink(backend: KataDockerBackend, key
     async def settings() -> SandboxSettings:
         return SandboxSettings()
 
-    manager = SandboxManager(backend, settings=settings, chats=Chats())
+    manager = SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats())
     user = SimpleNamespace(id='kata-test-user', role='user')
 
     async def check() -> None:
@@ -619,7 +621,9 @@ def test_restart_sweep(backend: KataDockerBackend, keys: Keys) -> None:
             return {c: int(time.time()) for c in chat_ids}
 
     # A new process's manager: everything it lists belongs to the previous one.
-    asyncio.run(SandboxManager(backend, settings=settings, chats=Chats()).startup_sweep())
+    asyncio.run(
+        SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats()).startup_sweep()
+    )
     infos = {i.chat_id: i for i in asyncio.run(backend.list_sandboxes())}
     assert saved in infos and infos[saved].running is False
     assert ephemeral not in infos
@@ -1127,3 +1131,136 @@ def test_the_guard_refuses_a_guest_with_ipv6(
         asyncio.run(backend.create(key, SandboxSpec(key, 'data')))
     with pytest.raises(docker.errors.NotFound):
         client.containers.get(container_name(key))
+
+
+# Listing a workspace without its sandbox (T24).
+
+WORKSPACE_FILES = (
+    'mkdir -p a/b && printf hello > a/b/x.txt && head -c 3000 /dev/zero > big.bin'
+    ' && ln -s /etc/passwd link && mkfifo pipe && mkdir -m 000 shut'
+)
+
+
+def _listed(listing: Any) -> dict[str, int]:
+    return {e.path: e.size for e in listing.entries}
+
+
+def test_list_workspace_lists_a_stopped_volume_through_the_helper(
+    backend: KataDockerBackend, keys: Keys, client: docker.DockerClient
+) -> None:
+    """The keep-or-remove dialog's listing on the real thing: regular files only (no symlink, no FIFO followed or
+    listed), sizes from the volume, an unreadable directory marking it incomplete, and no helper left behind."""
+    key = started(backend, keys)
+    result = sh(backend, key, WORKSPACE_FILES)
+    assert result.returncode == 0, result.stderr
+    asyncio.run(backend.stop(key))
+    listing = asyncio.run(backend.list_workspace(key, 300))
+    assert listing is not None
+    files = _listed(listing)
+    assert files['a/b/x.txt'] == 5 and files['big.bin'] == 3000
+    assert not {'link', 'pipe'} & files.keys()
+    assert listing.files >= 2 and listing.bytes >= 3005
+    assert listing.complete is False
+    assert client.containers.list(all=True, filters={'name': list_helper_name(key)}) == []
+    # The stopped sandbox starts again on its volume afterwards: the helper held nothing.
+    asyncio.run(backend.create(key, SandboxSpec(key, 'data')))
+    assert sh(backend, key, 'cat a/b/x.txt').stdout == 'hello'
+    asyncio.run(backend.stop(key))
+
+
+def test_list_workspace_lists_a_running_sandbox_read_only_beside_it(
+    backend: KataDockerBackend, keys: Keys, client: docker.DockerClient
+) -> None:
+    """The reviewer's open question: listing while the sandbox runs, its volume mounted read-write in the VM and
+    read-only in the helper's. The listing sees what the running sandbox wrote, and the sandbox keeps writing."""
+    key = started(backend, keys)
+    assert sh(backend, key, 'printf abc > seen.txt').returncode == 0
+    listing = asyncio.run(backend.list_workspace(key, 300))
+    assert listing is not None
+    assert _listed(listing).get('seen.txt') == 3
+    # Nothing here is unreadable, so the stopped-volume test's `complete is False` comes from its `shut` directory.
+    assert listing.complete is True
+    assert client.containers.list(all=True, filters={'name': list_helper_name(key)}) == []
+    after = sh(backend, key, 'printf more >> seen.txt && cat seen.txt')
+    assert (after.returncode, after.stdout) == (0, 'abcmore')
+    asyncio.run(backend.stop(key))
+
+
+# Parallel sessions (acceptance test "Parallel sessions", T29).
+
+PARALLEL_ROUNDS = 3_000_000
+PARALLEL_JOB = (
+    'python3 -c \'import hashlib\nh = b"lllm"\nfor _ in range({n}): h = hashlib.sha256(h).digest()\nprint(h.hex())\''
+)
+
+
+def _hash_chain(rounds: int) -> str:
+    import hashlib
+
+    h = b'lllm'
+    for _ in range(rounds):
+        h = hashlib.sha256(h).digest()
+    return h.hex()
+
+
+def test_four_sessions_run_at_once_and_a_fifth_waits_for_a_slot(backend: KataDockerBackend, keys: Keys) -> None:
+    """Four chats run a CPU-bound job together under `max_running=4`; each result matches a serial run, none sees
+    another's files, each running sandbox is one cloud-hypervisor process, and a fifth chat starts only once one
+    of the four has finished (busy sandboxes are never evicted)."""
+    chats = [keys.new(backend) for _ in range(5)]
+    expected = _hash_chain(PARALLEL_ROUNDS)
+
+    class Chats:
+        async def usable(self, chat_id: str, user: Any) -> bool:
+            return chat_id in chats
+
+        async def updated_at(self, chat_ids: list[str]) -> dict[str, int]:
+            return {c: int(time.time()) for c in chat_ids}
+
+    async def settings() -> SandboxSettings:
+        return SandboxSettings(max_running=4)
+
+    manager = SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats())
+    user = SimpleNamespace(id='kata-test-user', role='user')
+
+    def hypervisors() -> int:
+        found = subprocess.run(['pgrep', '-c', '-x', 'cloud-hyperviso'], capture_output=True, text=True).stdout
+        return int(found or 0)
+
+    before = hypervisors()
+    entered: dict[int, float] = {}
+    left: dict[int, float] = {}
+    outputs: dict[int, ExecResult] = {}
+    seen_running: list[int] = []
+
+    async def one(i: int, all_in: asyncio.Event | None) -> None:
+        async with manager.session(chats[i], user) as session:
+            entered[i] = time.monotonic()
+            if all_in is not None:
+                if len(entered) == 4:
+                    seen_running.append(hypervisors() - before)
+                    all_in.set()
+                await asyncio.wait_for(all_in.wait(), 120)
+            command = f'echo {i} > /workspace/mine.txt && {PARALLEL_JOB.format(n=PARALLEL_ROUNDS)} && ls -A /workspace'
+            outputs[i] = await session.exec(wrap_command(command, 180), 180)
+            left[i] = time.monotonic()
+
+    async def check() -> None:
+        all_in = asyncio.Event()
+        four = [asyncio.ensure_future(one(i, all_in)) for i in range(4)]
+        await asyncio.wait_for(all_in.wait(), 180)
+        fifth = asyncio.ensure_future(one(4, None))
+        await asyncio.gather(*four, fifth)
+        await manager.shutdown(stop_running=True)
+
+    asyncio.run(check())
+    assert seen_running == [4]
+    for i in range(5):
+        result = outputs[i]
+        assert result.returncode == 0, result.stderr
+        digest, *listing = result.stdout.split('\n')
+        assert digest == expected
+        # `uploads` is the mount point; `.telemetry` is the data image's own hook directory (T21).
+        assert [name for name in listing if name and name not in {'uploads', '.telemetry'}] == ['mine.txt']
+    assert entered[4] >= min(left[i] for i in range(4))
+    assert max(entered[i] for i in range(4)) < min(left[i] for i in range(4))

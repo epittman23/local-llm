@@ -51,8 +51,8 @@ from typing import cast
 
 import pytest
 
-import local_llm.env as env_module
 import local_llm.models as models_pkg
+import local_llm.models.chats as chats_model
 import local_llm.sandbox.manager as manager_module
 from local_llm.internal.db import Base, async_engine, get_async_db_context
 from local_llm.models.chats import Chat, Chats
@@ -73,6 +73,7 @@ from local_llm.sandbox import (
 )
 from local_llm.sandbox.fake import FakeBackend
 from local_llm.sandbox.manager import EVICT_IDLE_S, MAX_UNSAVED_CHAT_ID_LEN, SETTING_KEYS, SLOT_WAIT_TIMEOUT_S
+from local_llm.sandbox.workspaces import MemoryWorkspaces, WorkspaceRecord
 
 for _module in pkgutil.iter_modules(models_pkg.__path__):
     importlib.import_module(f'local_llm.models.{_module.name}')
@@ -185,10 +186,12 @@ class Rig:
             max_running=max_running, idle_minutes=idle_minutes, retention_days=retention_days
         )
         self.settings_reads = 0
+        self.workspaces = MemoryWorkspaces(default_owner='u1')
         self.manager = SandboxManager(
             self.backend,
             settings=self._read_settings,
             chats=self.chats,
+            workspaces=self.workspaces,
             clock=self.clock,
             wall_clock=lambda: self.wall,
             wait_notice_s=0.05,
@@ -1336,12 +1339,23 @@ def test_the_reaper_keeps_a_sandbox_used_while_it_was_stopping_an_earlier_one(ch
 # The retention sweep.
 
 
-def test_the_sweep_destroys_expired_and_orphaned_stopped_volumes_and_keeps_the_rest():
+def record(key: str, last_used: int, *, owner: str = 'u1', created: int | None = None) -> WorkspaceRecord:
+    """A workspace record of `key`, as the manager would have written it."""
+    return WorkspaceRecord(key, owner, key, last_used if created is None else created, last_used)
+
+
+def test_the_sweep_marks_expired_destroys_orphaned_stopped_volumes_and_keeps_the_rest():
     async def scenario():
         rig = Rig(retention_days=7)
         expired, orphan, live, running, ephemeral = FIVE
         cutoff = WALL_NOW - 7 * DAY
-        rig.chats.rows = {expired: cutoff - 1, live: cutoff + 1, running: cutoff - 1}
+        # The chats' own `updated_at` judges nothing: an imported chat dated a year ahead still expires (T24).
+        rig.chats.rows = {expired: WALL_NOW + 365 * DAY, live: cutoff - 1, running: cutoff - 1}
+        rig.workspaces.records = {
+            expired: record(expired, cutoff - 1),
+            live: record(live, cutoff + 1),
+            running: record(running, cutoff - 1),
+        }
         await rig.make_volume(expired)
         await rig.make_volume(orphan)
         await rig.make_volume(live)
@@ -1351,26 +1365,40 @@ def test_the_sweep_destroys_expired_and_orphaned_stopped_volumes_and_keeps_the_r
         return rig, (expired, orphan, live, running, ephemeral)
 
     rig, (expired, orphan, live, running, ephemeral) = run(scenario())
-    assert sorted(rig.keys('destroy')) == sorted([expired, orphan])
-    # Once for every candidate, then again for the doomed ones just before destroying them.
+    # Only the deleted chat's volume goes; the expired one waits for its user's answer, with its files.
+    assert rig.keys('destroy') == [orphan]
+    assert set(rig.backend.sandboxes) == {expired, live, running, ephemeral}
+    marked = rig.workspaces.records[expired]
+    assert (marked.pending_reason, marked.pending_since, marked.pending_for) == ('expired', WALL_NOW, None)
+    assert rig.workspaces.records[live].pending_reason is None
+    assert rig.workspaces.records[running].pending_reason is None
+    # Once for every candidate, then again for the orphans just before destroying them.
     assert len(rig.chats.updated_calls) == 2
     assert sorted(rig.chats.updated_calls[0]) == sorted([expired, orphan, live])
-    assert sorted(rig.chats.updated_calls[1]) == sorted([expired, orphan])
-    assert set(rig.backend.sandboxes) == {live, running, ephemeral}
+    assert rig.chats.updated_calls[1] == [orphan]
 
 
-def test_a_volume_updated_exactly_retention_days_ago_is_kept():
+def test_a_workspace_last_used_exactly_retention_days_ago_is_not_marked_and_never_destroyed():
     async def scenario():
         rig = Rig(retention_days=7)
-        rig.chats.rows = {CHAT_A: WALL_NOW - 7 * DAY}
+        rig.chats.rows = {CHAT_A: WALL_NOW}
+        rig.workspaces.records = {CHAT_A: record(CHAT_A, WALL_NOW - 7 * DAY)}
         await rig.make_volume(CHAT_A)
         await rig.manager.sweep_retention()
-        kept = CHAT_A in rig.backend.sandboxes
+        first = rig.workspaces.records[CHAT_A].pending_reason
         rig.wall += 1
         await rig.manager.sweep_retention()
-        return kept, CHAT_A in rig.backend.sandboxes
+        second = rig.workspaces.records[CHAT_A].pending_reason
+        # A later pass leaves a pending one as it is: still there, still waiting since the first time.
+        rig.wall += DAY
+        await rig.manager.sweep_retention()
+        return rig, first, second
 
-    assert run(scenario()) == (True, False)
+    rig, first, second = run(scenario())
+    assert (first, second) == (None, 'expired')
+    assert rig.workspaces.records[CHAT_A].pending_since == WALL_NOW + 1
+    assert CHAT_A in rig.backend.sandboxes
+    assert rig.names('destroy') == []
 
 
 def test_the_sweep_makes_no_updated_at_call_when_nothing_is_a_candidate():
@@ -1445,7 +1473,7 @@ def test_a_failing_destroy_in_the_sweep_is_logged_and_the_others_are_still_destr
     with caplog.at_level(logging.ERROR, logger='local_llm.sandbox.manager'):
         rig = run(scenario())
     assert set(rig.backend.sandboxes) == {CHAT_A}
-    assert f'could not destroy expired sandbox volume {CHAT_A}' in caplog.text
+    assert f'could not destroy sandbox volume {CHAT_A} of a deleted chat' in caplog.text
 
 
 def test_a_failing_listing_makes_the_sweep_raise():
@@ -1496,14 +1524,15 @@ def test_the_sweep_destroys_a_stopped_ephemeral_volume_nobody_maps_and_keeps_one
     [(4, 1, False), (4, 4, True), (3, 0, True)],
     ids=['most missing', 'exactly half missing', 'only three missing'],
 )
-def test_the_sweep_destroys_no_orphan_when_most_chats_are_missing_and_still_destroys_expired_ones(
+def test_the_sweep_destroys_no_orphan_when_most_chats_are_missing_and_still_marks_expired_ones(
     caplog, missing, present, orphans_destroyed
 ):
     async def scenario():
         rig = Rig(retention_days=7)
         orphans = [str(uuid.UUID(int=300 + n)) for n in range(missing)]
         expired = [str(uuid.UUID(int=400 + n)) for n in range(present)]
-        rig.chats.rows = {key: WALL_NOW - 30 * DAY for key in expired}
+        rig.chats.rows = {key: WALL_NOW for key in expired}
+        rig.workspaces.records = {key: record(key, WALL_NOW - 30 * DAY) for key in expired}
         for key in orphans + expired:
             await rig.make_volume(key)
         await rig.manager.sweep_retention()
@@ -1511,7 +1540,8 @@ def test_the_sweep_destroys_no_orphan_when_most_chats_are_missing_and_still_dest
 
     with caplog.at_level(logging.ERROR, logger='local_llm.sandbox.manager'):
         rig, orphans, expired = run(scenario())
-    assert not set(expired) & set(rig.backend.sandboxes)
+    assert set(expired) <= set(rig.backend.sandboxes)
+    assert all(rig.workspaces.records[key].pending_reason == 'expired' for key in expired)
     if orphans_destroyed:
         assert not set(orphans) & set(rig.backend.sandboxes)
         assert 'destroying none of those' not in caplog.text
@@ -1520,19 +1550,18 @@ def test_the_sweep_destroys_no_orphan_when_most_chats_are_missing_and_still_dest
         assert f'the chats of {missing} of {missing + present} stopped sandbox volumes were not found' in caplog.text
 
 
-def test_the_sweep_asks_again_before_destroying_and_keeps_a_volume_whose_chat_was_updated_meanwhile(caplog):
+def test_the_sweep_asks_again_before_destroying_and_keeps_a_volume_whose_chat_came_back_meanwhile(caplog):
     async def scenario():
         rig = Rig(retention_days=7)
-        rig.chats.rows = {CHAT_A: WALL_NOW - 30 * DAY, CHAT_B: WALL_NOW - 30 * DAY}
+        rig.chats.rows = {}
         await rig.make_volume(CHAT_A)
         await rig.make_volume(CHAT_B)
         real = rig.chats.updated_at
 
         async def updated_at(ids):
             result = await real(ids)
-            # Between the two lookups, A's chat is used again and B's deleted.
+            # Between the two lookups, A's chat comes back (a restore, an import); B's stays deleted.
             rig.chats.rows[CHAT_A] = WALL_NOW
-            rig.chats.rows.pop(CHAT_B, None)
             return result
 
         rig.chats.updated_at = updated_at
@@ -1575,7 +1604,7 @@ def test_the_startup_sweep_leaves_a_sandbox_this_manager_already_runs():
         return rig
 
     rig = run(scenario())
-    assert rig.names() == ['list_sandboxes']
+    assert rig.names() == ['remove_helpers', 'list_sandboxes']
     assert rig.backend.sandboxes[CHAT_A].running
 
 
@@ -2095,7 +2124,7 @@ def test_a_failed_start_keeps_the_mapping_while_another_session_on_the_same_key_
 
 
 def test_the_settings_defaults_are_the_documented_ones():
-    assert SandboxSettings() == SandboxSettings('data', 4, 30, 7)
+    assert SandboxSettings() == SandboxSettings('data', 4, 30, 7, 20)
 
 
 @pytest.mark.parametrize(
@@ -2110,6 +2139,9 @@ def test_the_settings_defaults_are_the_documented_ones():
         {'idle_minutes': 0},
         {'retention_days': 0},
         {'retention_days': 1.5},
+        {'max_workspaces': 0},
+        {'max_workspaces': True},
+        {'max_workspaces': None},
     ],
 )
 def test_invalid_settings_are_refused(kwargs):
@@ -2119,7 +2151,15 @@ def test_invalid_settings_are_refused(kwargs):
 
 @pytest.mark.parametrize(
     'kwargs',
-    [{'max_running': 1}, {'max_running': 16}, {'idle_minutes': 1}, {'retention_days': 365}, {'default_image': 'web'}],
+    [
+        {'max_running': 1},
+        {'max_running': 16},
+        {'idle_minutes': 1},
+        {'retention_days': 365},
+        {'default_image': 'web'},
+        {'max_workspaces': 1},
+        {'max_workspaces': 500},
+    ],
 )
 def test_settings_inside_their_bounds_are_accepted(kwargs):
     assert SandboxSettings(**kwargs)
@@ -2148,7 +2188,7 @@ def test_settings_from_config_reads_every_key_with_one_get_many(monkeypatch):
     )
     assert run(settings_from_config()) == SandboxSettings('web', 2, 5, 3)
     assert set(spy.keys) == set(SETTING_KEYS)
-    assert len(spy.keys) == 4
+    assert len(spy.keys) == 5
 
 
 def test_settings_from_config_uses_defaults_for_missing_and_none(monkeypatch):
@@ -2182,7 +2222,7 @@ def test_a_manager_without_settings_reads_them_from_config(monkeypatch):
 
     async def scenario():
         backend = FakeBackend()
-        manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+        manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}))
         async with manager.session(CHAT_A, USER):
             pass
         return backend
@@ -2346,7 +2386,7 @@ def test_a_manager_without_a_chat_lookup_uses_the_database():
 def test_database_chats_lets_an_admin_use_another_users_existing_chat_only_as_the_chat_endpoint_does(
     monkeypatch, enabled
 ):
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
 
     async def scenario():
         chat_id = str(uuid.uuid4())
@@ -2359,7 +2399,7 @@ def test_database_chats_lets_an_admin_use_another_users_existing_chat_only_as_th
 
 
 def test_database_chats_refuses_an_admin_when_the_chat_lookup_fails_and_logs_it(monkeypatch, caplog):
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', True)
 
     async def broken(self, chat_ids):
         raise RuntimeError('database is down')
@@ -2381,11 +2421,10 @@ def test_database_chats_refuses_an_admin_when_the_chat_lookup_fails_and_logs_it(
 @pytest.mark.parametrize('enabled', [True, False], ids=['admin chat access on', 'admin chat access off'])
 @pytest.mark.parametrize('role', ['admin', 'user'])
 def test_database_chats_admin_rule_agrees_with_the_chat_endpoints(monkeypatch, role, enabled):
-    # DatabaseChats.usable mirrors main.py's rule rather than importing it; this keeps the two in step.
+    # DatabaseChats.usable and main.py's chat endpoints share models/chats.py's admin_reaches_other_chats.
     from local_llm import main
 
-    monkeypatch.setattr(main, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
-    monkeypatch.setattr(env_module, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
+    monkeypatch.setattr(chats_model, 'ENABLE_ADMIN_CHAT_ACCESS', enabled)
     user = SimpleNamespace(id=f'{role}-{uuid.uuid4().hex}', role=role)
 
     async def scenario():
@@ -2394,7 +2433,7 @@ def test_database_chats_admin_rule_agrees_with_the_chat_endpoints(monkeypatch, r
         await _add_chat(chat_id, f'o-{uuid.uuid4().hex}', created=1, updated=2)
         return await DatabaseChats().usable(chat_id, user)
 
-    assert _db(scenario) == main._admin_reaches_other_chats(user) == (role == 'admin' and enabled)
+    assert _db(scenario) == main.admin_reaches_other_chats(user) == (role == 'admin' and enabled)
 
 
 def test_database_chats_refuses_a_folder_reader_the_chat_read_rule_lets_in():
@@ -2489,7 +2528,7 @@ def test_a_cancelled_put_read_or_stat_keeps_the_lock_until_the_backend_call_has_
     # R1: the daemon may still be untarring into /workspace when the user presses Stop.
     log: list[str] = []
     backend = _HeldBackend(log)
-    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}))
 
     async def go():
         async def first_call():
@@ -2531,7 +2570,7 @@ def test_a_cancelled_session_exec_raises_cancelled_error_whatever_the_backend_en
     # B1: whatever the backend's exec ends in once cancelled, the caller gets CancelledError; a sandbox the backend
     # stopped (its kill failed) is cleaned up when the session ends, freeing its slot.
     backend = _HeldBackend([], cancelled_outcome=outcome)
-    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}))
 
     async def go():
         async def call():
@@ -2578,7 +2617,7 @@ def test_the_session_keeps_the_lock_through_a_second_cancellation_while_the_back
     # session still waits until that kill has run. The old `return await backend.exec(...)` fails this.
     log: list[str] = []
     backend = _InterruptibleKillBackend(log)
-    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}))
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}))
 
     async def go():
         async def first_call():
@@ -2605,7 +2644,7 @@ def test_a_cancelled_call_that_never_ends_is_given_up_after_the_bound_and_the_sa
     # next session may use it, and the abandoned call is kept until it ends.
     log: list[str] = []
     backend = _HeldBackend(log, ignore_cancel=True)
-    manager = SandboxManager(backend, chats=FakeChats({CHAT_A: 1}), cancel_wait_s=0.05)
+    manager = SandboxManager(backend, workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}), cancel_wait_s=0.05)
 
     async def go():
         async def first_call():
@@ -2638,7 +2677,7 @@ def test_a_backend_call_that_ends_cancelled_on_its_own_is_a_sandbox_error_not_an
         async def stat(self, chat_id, path):
             raise asyncio.CancelledError
 
-    manager = SandboxManager(_SelfCancelling(), chats=FakeChats({CHAT_A: 1}))
+    manager = SandboxManager(_SelfCancelling(), workspaces=MemoryWorkspaces(), chats=FakeChats({CHAT_A: 1}))
 
     async def go():
         async with manager.session(CHAT_A, USER) as session:
@@ -2647,3 +2686,22 @@ def test_a_backend_call_that_ends_cancelled_on_its_own_is_a_sandbox_error_not_an
     with pytest.raises(SandboxError) as caught:
         asyncio.run(go())
     assert caught.value.public == 'the sandbox call was interrupted; try again'
+
+
+def test_the_startup_sweep_removes_leftover_helpers_first_and_a_failure_there_is_only_logged(caplog):
+    async def scenario():
+        rig = Rig()
+        await rig.make_volume(CHAT_A, running=True)
+
+        async def broken():
+            rig.backend.calls.append(('remove_helpers', {}))
+            raise SandboxError('docker is down')
+
+        rig.backend.remove_helpers = broken
+        await rig.manager.startup_sweep()
+        return rig
+
+    with caplog.at_level(logging.ERROR, logger='local_llm.sandbox.manager'):
+        rig = run(scenario())
+    assert rig.names() == ['remove_helpers', 'list_sandboxes', 'stop']
+    assert 'could not remove the listing helpers' in caplog.text

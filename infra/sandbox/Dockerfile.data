@@ -46,6 +46,19 @@ COPY --chown=root:root --chmod=0755 common/lllm-path /usr/local/bin/lllm-path
 # tree on PATH, so this wrapper is the one latexmk finds.
 COPY --chown=root:root --chmod=0755 data/biber /usr/local/bin/biber
 
+# Package telemetry (docs/guides/sandbox.md, "Package telemetry"): Python's
+# sitecustomize and R's site profile record what each process imports or
+# loads, and Python's uncaught ModuleNotFoundError, in
+# /workspace/.telemetry/events.jsonl, which the backend reads after each call.
+# The build refuses a base that already has a sitecustomize, which this one
+# would replace.
+COPY data/sitecustomize.py data/Rprofile.site /tmp/sandbox/
+RUN site="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
+    && test ! -e "$site/sitecustomize.py" \
+    && install -m 0644 -o root -g root /tmp/sandbox/sitecustomize.py "$site/sitecustomize.py" \
+    && cat /tmp/sandbox/Rprofile.site >> "$(R RHOME)/etc/Rprofile.site" \
+    && rm /tmp/sandbox/sitecustomize.py /tmp/sandbox/Rprofile.site
+
 # The image's own directories first; /workspace/.local/bin LAST, so a
 # model-written file cannot shadow `timeout`, `bash` or what the manager runs.
 # That protection rests on the read-only root filesystem the backend runs the

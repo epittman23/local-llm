@@ -201,8 +201,11 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   Node ≥ 22.12, and **uv**, which builds the backend venv from
   `apps/server/pyproject.toml` + `uv.lock` and supplies Python 3.12
   (the system `python3` is 3.14). Local serving also needs llama.cpp built
-  with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`). Packaging the desktop
-  app as an `.rpm` needs `rpm-build` and `libxcrypt-compat`.
+  with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`). The code sandbox
+  (the `sandbox` engine, under construction) also needs `/dev/kvm`, Kata
+  Containers 4.3.1 registered with Docker as `kata-clh`, udisks2 with its
+  polkit rule, and the host steps in `docs/guides/sandbox.md`. Packaging the
+  desktop app as an `.rpm` needs `rpm-build` and `libxcrypt-compat`.
 
 ## Agent tooling
 

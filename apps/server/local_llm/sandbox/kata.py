@@ -48,6 +48,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -75,6 +76,8 @@ import urllib3.exceptions
 from local_llm.sandbox.backend import (
     validate_create,
     validate_get_files,
+    validate_list_workspace,
+    validate_mirror_log,
     validate_put_files,
     validate_put_uploads,
     validate_sandbox_path,
@@ -84,6 +87,9 @@ from local_llm.sandbox.limits import (
     CAP_DROP,
     HOST_DEADLINE_SLACK_S,
     KILL_GRACE_S,
+    LIST_MAX_ENTRIES,
+    LIST_PATH_MAX_BYTES,
+    MAX_PATH_BYTES,
     MEMORY_LIMIT,
     NANO_CPUS,
     NPROC_LIMIT,
@@ -98,13 +104,16 @@ from local_llm.sandbox.limits import (
 )
 from local_llm.sandbox.types import (
     ExecResult,
+    FileEntry,
     FileStat,
     ImageKey,
+    MirrorLine,
     SandboxError,
     SandboxInfo,
     SandboxNotRunning,
     SandboxSpec,
     SandboxUnavailable,
+    WorkspaceListing,
     validate_chat_id,
     volume_name,
 )
@@ -112,7 +121,7 @@ from local_llm.sandbox.types import (
 log = logging.getLogger(__name__)
 
 #: The images' tag; infra/sandbox/TAG holds the same value, and a test checks they agree.
-SANDBOX_IMAGE_TAG: Final = '2026-11-11.2'
+SANDBOX_IMAGE_TAG: Final = '2026-11-12.1'
 #: The image each key runs.
 IMAGES: Final[Mapping[ImageKey, str]] = MappingProxyType(
     {
@@ -154,6 +163,8 @@ KILL_TIMEOUT_S: Final = 10.0
 KILL_STOP_TIMEOUT_S: Final = 10.0
 #: Seconds put_files, get_files or stat may take in all.
 FILES_TIMEOUT_S: Final = 120.0
+#: Seconds a read of the mirror's log may take (SandboxBackend.mirror_log), the request's socket timeout too.
+MIRROR_LOG_TIMEOUT_S: Final = 5.0
 #: The most bytes of the guest's listing the guest-view check reads; a longer one never matches, so it times out.
 GUEST_VIEW_MAX_BYTES: Final = 65536
 #: Seconds the guest may take to see files put_files wrote (virtio-fs caches attributes for a second).
@@ -256,6 +267,70 @@ while :; do
   /usr/bin/sleep 0.05
 done
 """
+
+# Lists a workspace for the deletion dialog (T24), in a helper container that mounts the volume read-only
+# (list_helper_options): every regular file's path, size and modification time, the first `limit` of them kept and
+# all of them counted, as one line of JSON on stdout. It walks with lstat, so it follows no symlink; skips, and
+# notes, what it may not read; and stops at its time budget. Run with `python -I -S` from `/`, so nothing on the
+# volume is imported. Its arguments are the limit, the budget in seconds, the directory and the most UTF-8 bytes a
+# listed path keeps, all fixed by the backend. A name that is not UTF-8 has its bad bytes replaced (U+FFFD), then a
+# path over the byte budget is cut at a character boundary, ending in an ellipsis, and marked as cut, so no name the
+# model chose can make the output too long for parse_listing. The output is UTF-8 JSON, written as bytes.
+LIST_SCRIPT: Final = """\
+import json, os, stat, sys, time
+limit, end, top = int(sys.argv[1]), time.monotonic() + float(sys.argv[2]), sys.argv[3]
+budget = int(sys.argv[4])
+entries, files, size, complete = [], 0, 0, True
+def shown(path):
+    raw = path.encode('utf-8', 'surrogateescape').decode('utf-8', 'replace').encode('utf-8')
+    if len(raw) <= budget:
+        return raw.decode('utf-8'), False
+    return raw[: budget - 3].decode('utf-8', 'ignore') + '\\u2026', True
+stack = ['']
+while stack:
+    if time.monotonic() > end:
+        complete = False
+        break
+    rel = stack.pop()
+    try:
+        with os.scandir(top + '/' + rel if rel else top) as found:
+            items = sorted(found, key=lambda e: e.name)
+    except OSError:
+        complete = False
+        continue
+    below = []
+    for item in items:
+        path = rel + '/' + item.name if rel else item.name
+        try:
+            info = item.stat(follow_symlinks=False)
+        except OSError:
+            complete = False
+            continue
+        if stat.S_ISDIR(info.st_mode):
+            below.append(path)
+        elif stat.S_ISREG(info.st_mode):
+            files += 1
+            size += info.st_size
+            if len(entries) < limit:
+                name, cut = shown(path)
+                entries.append([name, info.st_size, info.st_mtime, cut])
+    stack.extend(reversed(below))
+out = {'entries': entries, 'files': files, 'bytes': size, 'complete': complete}
+sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode('utf-8'))
+"""
+
+#: The listing helper's interpreter, in the `data` image.
+LIST_PYTHON: Final = '/opt/conda/bin/python3'
+#: Seconds the listing script walks before it stops and reports the listing incomplete.
+LIST_WALK_S: Final = 20
+#: Seconds the backend waits for the listing helper to exit.
+LIST_TIMEOUT_S: Final = 60.0
+#: The most the listing helper may print, in bytes: LIST_MAX_ENTRIES entries whose path, at most LIST_PATH_MAX_BYTES,
+#: JSON escapes six bytes per byte at worst (a control character as `\u0001`), with room for the numbers.
+LIST_OUTPUT_MAX_BYTES: Final = LIST_MAX_ENTRIES * (LIST_PATH_MAX_BYTES * 6 + 128) + 4096
+#: The listing helper's memory and process limits: it runs one Python process.
+LIST_MEMORY_LIMIT: Final = '512m'
+LIST_PIDS_LIMIT: Final = 16
 
 # Fixed texts: what an error says never comes from the SDK.
 _NOT_RUNNING: Final = 'the sandbox is not running'
@@ -465,6 +540,110 @@ def volume_options(key: str) -> dict[str, str]:
     return {'type': 'ext4', 'device': f'/dev/disk/by-uuid/{validate_chat_id(key)}', 'o': 'nosuid,nodev'}
 
 
+def list_helper_name(key: str) -> str:
+    """The name of the key's listing helper, `lllm-sandbox-list-<key>`; the key is validated first."""
+    return f'lllm-sandbox-list-{validate_chat_id(key)}'
+
+
+def list_helper_options(key: str, *, scope: str, max_entries: int) -> dict[str, Any]:
+    """The keyword arguments for `containers.run` of the key's listing helper: fixed, apart from the validated key,
+    scope and entry limit.
+
+    The volume is mounted read-only, with no network, every capability
+    dropped, a read-only root and UID 1000, so the helper sees what the
+    sandbox's commands would and can change nothing. It runs LIST_SCRIPT
+    under the same Kata runtime as the sandboxes, since it reads names the
+    model wrote. It carries no `lllm.chat` label, so list_sandboxes never
+    reports it as a sandbox.
+
+    Raises:
+        ValueError, TypeError: `key` is not a canonical UUID, `scope` is not
+            what scope_of makes, or `max_entries` breaks
+            validate_list_workspace's rules.
+    """
+    key = validate_chat_id(key)
+    validate_list_workspace(max_entries)
+    return {
+        'image': IMAGES['data'],
+        'runtime': KATA_RUNTIME,
+        'name': list_helper_name(key),
+        'labels': {'lllm.scope': _check_scope(scope), 'lllm.helper': 'list', 'lllm.workspace': key},
+        'user': SANDBOX_USER,
+        'entrypoint': [LIST_PYTHON],
+        'command': [
+            '-I',
+            '-S',
+            '-c',
+            LIST_SCRIPT,
+            str(max_entries),
+            str(LIST_WALK_S),
+            WORKSPACE,
+            str(LIST_PATH_MAX_BYTES),
+        ],
+        'environment': {},
+        'cap_drop': list(CAP_DROP),
+        'security_opt': list(SECURITY_OPT),
+        'read_only': True,
+        'network_mode': 'none',
+        'mem_limit': LIST_MEMORY_LIMIT,
+        'nano_cpus': NANO_CPUS // 2,
+        'pids_limit': LIST_PIDS_LIMIT,
+        'volumes': {volume_name(key): {'bind': WORKSPACE, 'mode': 'ro'}},
+        'working_dir': '/',
+        'healthcheck': {'test': ['NONE']},
+        'detach': True,
+        'auto_remove': False,
+    }
+
+
+def parse_listing(raw: object, max_entries: int) -> WorkspaceListing:
+    """The listing helper's output as a WorkspaceListing, checked field by field; it reads names the model wrote.
+
+    One entry that is not what LIST_SCRIPT prints (not a list of a path, a
+    size, a time and a cut flag of those types; a path empty, holding NUL or
+    over MAX_PATH_BYTES) is dropped and the listing marked incomplete, so a
+    name the model chose cannot hide the rest.
+
+    Raises:
+        SandboxError: The output as a whole is not what LIST_SCRIPT prints:
+            too long, not JSON, a top-level field missing or of the wrong
+            type, more entries than asked for, or totals smaller than the
+            entries listed.
+    """
+    bad = SandboxError('the workspace listing was malformed')
+    if not isinstance(raw, bytes) or len(raw) > LIST_OUTPUT_MAX_BYTES:
+        raise bad
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        raise bad from None
+    if not isinstance(data, dict):
+        raise bad
+    entries, files, size, complete = (data.get(k) for k in ('entries', 'files', 'bytes', 'complete'))
+    if not isinstance(entries, list) or len(entries) > max_entries or type(complete) is not bool:
+        raise bad
+    if type(files) is not int or type(size) is not int or files < len(entries) or size < 0:
+        raise bad
+    parsed = [entry for entry in map(_listed_entry, entries) if entry is not None]
+    if len(parsed) < len(entries):
+        complete = False
+    if sum(e.size for e in parsed) > size:
+        raise bad
+    return WorkspaceListing(tuple(parsed), files, size, complete)
+
+
+def _listed_entry(entry: object) -> FileEntry | None:
+    """One entry of LIST_SCRIPT's output as a FileEntry, or None when it is not one."""
+    if not isinstance(entry, list) or len(entry) != 4:
+        return None
+    path, length, mtime, cut = entry
+    if type(path) is not str or not path or '\0' in path or len(path.encode('utf-8', 'replace')) > MAX_PATH_BYTES:
+        return None
+    if type(length) is not int or length < 0 or type(mtime) not in (int, float) or type(cut) is not bool:
+        return None
+    return FileEntry(path, length, float(mtime), truncated=cut)
+
+
 def _labels(key: str, *, ephemeral: bool, scope: str) -> dict[str, str]:
     labels = {'lllm.chat': key, 'lllm.scope': _check_scope(scope)}
     if ephemeral:
@@ -571,6 +750,84 @@ def _recv_exactly(raw: Any, n: int) -> bytes | None:
             return None
         data += chunk
     return data
+
+
+# A daemon log timestamp (`timestamps=1`): RFC 3339 with up to nine fraction digits, as Go's RFC3339Nano writes it.
+_LOG_TIME: Final = re.compile(r'(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)')
+
+
+def log_time_ns(text: str) -> int | None:
+    """A daemon log timestamp as nanoseconds since the epoch; None when it is not one."""
+    match = _LOG_TIME.fullmatch(text)
+    if match is None:
+        return None
+    try:
+        when = dt.datetime.fromisoformat(match[1] + ('+00:00' if match[3] == 'Z' else match[3]))
+    except ValueError:
+        return None
+    return int(when.timestamp()) * 1_000_000_000 + int((match[2] or '').ljust(9, '0'))
+
+
+def _read_exactly(raw: Any, n: int) -> bytes | None:
+    """`n` bytes of a response body, or None when it ends first."""
+    data = b''
+    while len(data) < n:
+        chunk = raw.read(n - len(data))
+        if not chunk:
+            return None
+        data += chunk
+    return data
+
+
+def _read_frame_body(raw: Any, length: int, keep: int) -> bytes | None:
+    """A frame's body, of which at most `keep` bytes are kept and the rest read past; None when the body ends first."""
+    kept = b''
+    while length:
+        chunk = raw.read(min(length, 65536))
+        if not chunk:
+            return None
+        length -= len(chunk)
+        if len(kept) < keep:
+            kept += chunk[: keep - len(kept)]
+    return kept
+
+
+def read_log_lines(raw: Any, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+    """The stdout lines of a multiplexed `docker logs` body (`timestamps=1`) recorded after `since_ns`.
+
+    Each frame is one log message: an 8-byte header (stream number, three
+    zero bytes, a big-endian length), then `<timestamp> <line>` and a newline. A
+    message without a readable timestamp, or at or before `since_ns`, is
+    skipped; stderr frames too. Reading stops before the line that would
+    take the lines past `max_bytes` (each counted with its newline), so the
+    next read, after the last line returned, gets it; a first line longer
+    than that is returned cut to `max_bytes - 1` bytes.
+    """
+    lines: list[MirrorLine] = []
+    size = 0
+    while True:
+        header = _read_exactly(raw, 8)
+        if header is None:
+            return lines
+        kind, length = struct.unpack('>BxxxL', header)
+        # The timestamp (at most 35 bytes) and a space come before the line.
+        body = _read_frame_body(raw, length, max_bytes + 64)
+        if body is None:
+            return lines
+        if kind != 1:
+            continue
+        stamp, _, rest = body.rstrip(b'\n').partition(b' ')
+        at = log_time_ns(stamp.decode('ascii', 'replace'))
+        if at is None or at <= since_ns:
+            continue
+        cost = len(rest) + 1
+        if lines and size + cost > max_bytes:
+            return lines
+        if cost > max_bytes:
+            lines.append(MirrorLine(at, rest[: max_bytes - 1].decode('utf-8', 'replace')))
+            return lines
+        lines.append(MirrorLine(at, rest.decode('utf-8', 'replace')))
+        size += cost
 
 
 def write_stdin(raw: Any, data: bytes) -> None:
@@ -803,6 +1060,47 @@ class KataDockerBackend:
             return self._docker().containers.get(name)
         except docker.errors.NotFound:
             return None
+
+    async def mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        """The `sandbox-mirror` container's access log lines after `since_ns` (SandboxBackend.mirror_log).
+
+        Read through the daemon's logs endpoint (`docker logs --since
+        --timestamps`, stdout only), streamed, and closed once `max_bytes`
+        of lines are in hand. The daemon is asked from one second before
+        `since_ns`, since it reads `since` in whole seconds here, and every
+        line is then filtered by its own timestamp. The mirror must run
+        without a TTY (Compose gives it none), so its log is multiplexed.
+        """
+        validate_mirror_log(since_ns, max_bytes)
+        return await self._call(
+            'read the sandbox mirror log', self._mirror_log, since_ns, max_bytes, limit_s=MIRROR_LOG_TIMEOUT_S
+        )
+
+    def _mirror_log(self, since_ns: int, max_bytes: int) -> list[MirrorLine]:
+        container = self._container_named(MIRROR_CONTAINER)
+        if container is None:
+            raise SandboxError('the sandbox-mirror container does not exist')
+        if (container.attrs.get('Config') or {}).get('Tty'):
+            raise SandboxError('the sandbox-mirror container runs with a TTY, so its log cannot be read line by line')
+        api = self._docker().api
+        url = f'{api.base_url}/v{api.api_version}/containers/{container.id}/logs'
+        params = {
+            'stdout': '1',
+            'stderr': '0',
+            'timestamps': '1',
+            'follow': '0',
+            # 0 would mean the whole log; a cursor is never that old.
+            'since': str(max(since_ns // 1_000_000_000 - 1, 1)),
+        }
+        # The request's own timeout, so the worker thread ends soon after the caller stops waiting for it.
+        response = api.get(
+            url, params=params, stream=True, headers={'Accept-Encoding': 'identity'}, timeout=MIRROR_LOG_TIMEOUT_S
+        )
+        try:
+            response.raise_for_status()
+            return read_log_lines(response.raw, since_ns, max_bytes)
+        finally:
+            response.close()
 
     async def ready(self) -> str | None:
         """None when sandboxes can run, else why not: the daemon, the runtime, the images, the network, the volume
@@ -1086,6 +1384,9 @@ class KataDockerBackend:
                     container.remove(force=True)
                 except docker.errors.NotFound:
                     pass
+            # A listing helper left by a listing cut short also mounts the volume, which no destroy could then
+            # remove.
+            self._remove_helper(key)
             # Uploads are put again at every start, so a stopped sandbox keeps none on the host's disk, outside the
             # workspace's cap (T13's security re-review, N-b).
             uploads = self._uploads_path(key)
@@ -1118,6 +1419,36 @@ class KataDockerBackend:
         # Gone for good (N3): a later call for the key makes a new lock; a waiter keeps its own reference.
         with self._setup_lock:
             self._key_locks.pop(key, None)
+
+    def _remove_helper(self, key: str) -> bool:
+        """Remove the key's listing helper if this backend made it; False when one of another scope has its name."""
+        helper = self._container_named(list_helper_name(key))
+        if helper is None:
+            return True
+        if not self._ours(helper.labels):
+            log.warning('the listing helper of %s belongs to another app instance; leaving it alone', key)
+            return False
+        try:
+            helper.remove(force=True)
+        except docker.errors.NotFound:
+            pass
+        return True
+
+    async def remove_helpers(self) -> None:
+        """Remove every listing helper of this scope (SandboxBackend.remove_helpers), each under its key's lock."""
+        await self._call('remove the listing helpers', self._remove_helpers)
+
+    def _remove_helpers(self) -> None:
+        scope = self._scope
+        found = self._docker().containers.list(
+            all=True, filters={'label': ['lllm.helper=list', f'lllm.scope={scope}']}, ignore_removed=True
+        )
+        for helper in found:
+            key = _key_of({'lllm.chat': (helper.labels or {}).get('lllm.workspace', ''), 'lllm.scope': scope}, scope)
+            if key is None:
+                continue
+            with self._key_lock(key):
+                self._remove_helper(key)
 
     async def list_sandboxes(self) -> list[SandboxInfo]:
         """Every chat with a sandbox container or volume (SandboxBackend.list_sandboxes)."""
@@ -1183,6 +1514,49 @@ class KataDockerBackend:
                 'ip': None,
             }
         return [SandboxInfo(chat_id=key, **entry) for key, entry in found.items()]
+
+    async def list_workspace(self, chat_id: str, max_entries: int) -> WorkspaceListing | None:
+        """The files on the chat's workspace volume (SandboxBackend.list_workspace), from a short-lived helper.
+
+        Holds the key's lock, so no create, stop or destroy of the key runs
+        meanwhile. A volume of another app instance, or one whose image file
+        is gone, counts as none. The image is attached first (a reboot
+        detaches it), then the helper (list_helper_options) runs to its end,
+        its output is read and it is removed, whatever happened; a helper
+        left by an earlier listing cut short is removed before.
+        """
+        key = validate_chat_id(chat_id)
+        validate_list_workspace(max_entries)
+        return await self._call(
+            'list the workspace', self._list_workspace, key, max_entries, limit_s=LIST_TIMEOUT_S + API_TIMEOUT_S
+        )
+
+    def _list_workspace(self, key: str, max_entries: int) -> WorkspaceListing | None:
+        with self._key_lock(key):
+            client = self._docker()
+            try:
+                volume = client.volumes.get(volume_name(key))
+            except docker.errors.NotFound:
+                return None
+            path = self._image_path(key)
+            if not self._ours(volume.attrs.get('Labels')) or not path.exists():
+                return None
+            self._attach(path, key)
+            if self._container_named(list_helper_name(key)) is not None and not self._remove_helper(key):
+                raise SandboxError('a listing helper of another app instance has this name')
+            # Created, then started, so the removal below covers a start that fails too: a helper left behind would
+            # hold the volume, and no destroy could remove it.
+            helper = client.containers.create(**list_helper_options(key, scope=self._scope, max_entries=max_entries))
+            try:
+                helper.start()
+                status = helper.wait(timeout=LIST_TIMEOUT_S)
+                raw = helper.logs(stdout=True, stderr=False)
+            finally:
+                helper.remove(force=True)
+            if (status or {}).get('StatusCode') != 0:
+                log.warning('the workspace listing helper of %s exited with %r', key, status)
+                raise SandboxError('the workspace listing helper failed')
+            return parse_listing(raw, max_entries)
 
     # Commands.
 

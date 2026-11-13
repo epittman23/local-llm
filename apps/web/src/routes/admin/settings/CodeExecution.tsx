@@ -90,8 +90,17 @@ function SandboxFields({ config, set }: { config: Config; set: (patch: Config) =
 				set={set}
 				name={name('RETENTION_DAYS')}
 				label="Sandbox Retention Days"
-				description="Days a stopped chat's files are kept before they are deleted. Empty uses 7."
+				description="Days a stopped chat's files may go unused before its user is asked whether to delete them; nothing is deleted without an answer. Empty uses 7."
 				placeholder="e.g. 7"
+				min={1}
+			/>
+			<BoundNumber
+				config={config}
+				set={set}
+				name={name('MAX_WORKSPACES')}
+				label="Sandbox Workspaces per User"
+				description="Saved chats' workspaces one user may keep, at least 1. At the limit, a chat that needs a new one gets none until its user removes one. Empty uses 20."
+				placeholder="e.g. 20"
 				min={1}
 			/>
 		</>

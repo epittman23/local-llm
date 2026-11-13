@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { EyeOff, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -9,7 +9,9 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { getFolderById } from '@/lib/apis/folders';
 import { updateChatById } from '@/lib/apis/chats';
+import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import type { ChatFile, History } from '@/lib/chat/history';
+import { codeRunner } from '@/lib/chat/codeRun';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
@@ -308,6 +310,8 @@ export function ChatPage() {
 
 	const actions = useMessageActions(session);
 	const [citation, setCitation] = useState<Citation | null>(null);
+	const queryClient = useQueryClient();
+	const runner = codeRunner(config, token, user);
 	const handlers: MessageHandlers = {
 		...actions,
 		onBranch,
@@ -319,6 +323,13 @@ export function ChatPage() {
 			setControlsOpen(false);
 			setPreview(code);
 		},
+		// A run may have hit the workspace limit: the deletion dialog asks for the waiting workspaces again.
+		onRun:
+			runner &&
+			((code, chatId) =>
+				runner(code, chatId).finally(
+					() => void queryClient.invalidateQueries({ queryKey: PENDING_WORKSPACE_IDS_KEY })
+				)),
 		// A citation `[n]` (or `n#chunk`) is the n-th grouped source, 1-based.
 		onSourceClick: (m, id) => setCitation(citationsOf(m.sources)[citationIndex(id)] ?? null)
 	};

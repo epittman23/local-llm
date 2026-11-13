@@ -81,6 +81,10 @@ CANCEL_WAIT_S: Final = 30
 MAX_PATH_BYTES: Final = 4096
 # Timeout of each guest helper the file tools run (lllm-path, the read check, the listing, the write), in seconds.
 HELPER_TIMEOUT_S: Final = 30
+# The workspace listing the deletion dialog shows (T24): at most this many files are listed, with a total of all.
+LIST_MAX_ENTRIES: Final = 300
+# The most UTF-8 bytes of a path the listing shows; a longer one is cut, ending in an ellipsis, and marked as cut.
+LIST_PATH_MAX_BYTES: Final = 1024
 # Largest file `view` or `str_replace` reads, in bytes (10 MiB).
 VIEW_MAX_BYTES: Final = 10 * 1024 * 1024
 # Largest image `view` returns, in bytes: its data URI is stored with the chat and sent with every later request.
@@ -89,6 +93,13 @@ IMAGE_MAX_BYTES: Final = 2 * 1024 * 1024
 IMAGE_MAX_SIDE: Final = 8192
 # Most pixels an image `view` returns may have, by its header, so a small file cannot decode to a huge picture.
 IMAGE_MAX_PIXELS: Final = 40_000_000
+
+# The package telemetry's limits (sandbox/telemetry.py, T21).
+
+# Most bytes one read of the pip mirror's access log returns (SandboxBackend.mirror_log); the rest waits for the next.
+MIRROR_LOG_MAX_BYTES: Final = 1024 * 1024
+# Days a package telemetry event is kept; older rows are deleted every hour (sandbox/lifespan.py).
+PACKAGE_EVENTS_RETENTION_DAYS: Final = 180
 
 # The fixed container options.
 

@@ -132,7 +132,7 @@ from local_llm.events import (
 from local_llm.internal.db import engine, get_async_session
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
-from local_llm.models.chats import ChatForm, Chats
+from local_llm.models.chats import ChatForm, Chats, admin_reaches_other_chats
 from local_llm.models.config import Config
 from local_llm.models.files import Files
 from local_llm.models.functions import Functions
@@ -1556,21 +1556,11 @@ async def _link_assistant_messages(chat_id: str, user_message_id, all_assistant_
         )
 
 
-def _admin_reaches_other_chats(user) -> bool:
-    """Whether this user may act on chats other users own.
-
-    An admin may only when ENABLE_ADMIN_CHAT_ACCESS is on: the same rule the
-    chat routers apply to reading, here applied to posting completions into a
-    chat and to listing or stopping its tasks.
-    """
-    return user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS
-
-
 async def _persist_follow_up(request: Request, user, metadata: dict, message_ids: list[dict], chat_variables: dict):
     """Save a follow-up in an existing chat: its fields, user message, files and assistant placeholders."""
     chat_id = metadata['chat_id']
     # Existing chat — verify ownership
-    if not await Chats.is_chat_owner(chat_id, user.id) and not _admin_reaches_other_chats(user):
+    if not await Chats.is_chat_owner(chat_id, user.id) and not admin_reaches_other_chats(user):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.DEFAULT(),
@@ -2247,7 +2237,7 @@ async def verify_chat_ownership(chat_id: str | None, user) -> None:
             detail='Channel chats are not supported on this endpoint',
         )
 
-    if not _admin_reaches_other_chats(user) and not await Chats.is_chat_owner(chat_id, user.id):
+    if not admin_reaches_other_chats(user) and not await Chats.is_chat_owner(chat_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.DEFAULT(),
@@ -2311,11 +2301,11 @@ async def list_tasks_by_chat_id_endpoint(request: Request, chat_id: str, user=De
     socket_id = get_temporary_chat_session_id(chat_id)
     if socket_id:
         owner_id = get_user_id_from_session_pool(socket_id)
-        if owner_id != user.id and not _admin_reaches_other_chats(user):
+        if owner_id != user.id and not admin_reaches_other_chats(user):
             return {'task_ids': []}
     else:
         chat = await Chats.get_chat_by_id(chat_id)
-        if chat is None or (chat.user_id != user.id and not _admin_reaches_other_chats(user)):
+        if chat is None or (chat.user_id != user.id and not admin_reaches_other_chats(user)):
             return {'task_ids': []}
 
     task_ids = await list_task_ids_by_item_id(request.app.state.redis, chat_id)
@@ -2330,11 +2320,11 @@ async def stop_tasks_by_chat_id_endpoint(request: Request, chat_id: str, user=De
     chat = None
     if socket_id:
         owner_id = get_user_id_from_session_pool(socket_id)
-        if owner_id != user.id and not _admin_reaches_other_chats(user):
+        if owner_id != user.id and not admin_reaches_other_chats(user):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
     else:
         chat = await Chats.get_chat_by_id(chat_id)
-        if chat is None or (chat.user_id != user.id and not _admin_reaches_other_chats(user)):
+        if chat is None or (chat.user_id != user.id and not admin_reaches_other_chats(user)):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
     result = await stop_item_tasks(request.app.state.redis, chat_id)
 

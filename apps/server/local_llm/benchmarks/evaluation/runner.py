@@ -656,8 +656,15 @@ async def context(
         manifest = dataset_identity(b) or {}
         revisions[b] = manifest.get('revision') or manifest.get('content_sha256', '')
 
+    suite_run_id = suite_run_id or f'{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}-{uuid.uuid4().hex[:6]}'
+    harness_request = hctx.get('request') if isinstance(hctx, dict) else None
+    if harness_request is not None:
+        # The sandbox's package telemetry (sandbox/telemetry.py) tags this run's events with it, so its reports can
+        # leave harness runs out.
+        harness_request.state.harness_run_id = suite_run_id
+
     return {
-        'suite_run_id': suite_run_id or f'{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}-{uuid.uuid4().hex[:6]}',
+        'suite_run_id': suite_run_id,
         'run_id': active.run_id if active else None,
         'model': model,
         'profile': prof,

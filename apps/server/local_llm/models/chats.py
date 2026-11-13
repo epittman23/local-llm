@@ -50,6 +50,17 @@ ACTIVE_CHAT_GAP_SECONDS = 30 * 60
 CHAT_SEARCH_FILTER_PREFIXES = ('tag:', 'folder:', 'pinned:', 'archived:', 'shared:')
 
 
+def admin_reaches_other_chats(user) -> bool:
+    """Whether `user` is an admin who may use other users' chats: only while ENABLE_ADMIN_CHAT_ACCESS is on.
+
+    The one rule for it: the chat completion and task routes (main.py),
+    routers/chats.py's can_access_chat, and the sandbox's DatabaseChats.usable
+    all call this, so they cannot disagree. The setting is read from this
+    module on each call.
+    """
+    return getattr(user, 'role', None) == 'admin' and ENABLE_ADMIN_CHAT_ACCESS
+
+
 def chat_search_content_query(text: str) -> str:
     words = sanitize_text_for_db(text).lower().strip().split()
     return ' '.join(word for word in words if not word.startswith(CHAT_SEARCH_FILTER_PREFIXES)).strip()

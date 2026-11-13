@@ -28,6 +28,7 @@ from local_llm.models.chats import (
     ChatsImportForm,
     ChatTitleIdResponse,
     ChatUsageStatsListResponse,
+    admin_reaches_other_chats,
     chat_search_content_query,
     chat_search_terms,
 )
@@ -117,7 +118,7 @@ def can_access_chat(user, chat) -> bool:
     Every route that reads or changes another user's chat goes through this
     rule, so turning admin chat access off keeps admins out of all of them.
     """
-    return chat.user_id == user.id or (user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS)
+    return chat.user_id == user.id or admin_reaches_other_chats(user)
 
 
 async def can_read_shared_chat(user, shared, db: AsyncSession) -> bool:

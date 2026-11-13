@@ -83,6 +83,7 @@ def run(monkeypatch):
         agent.request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(CHAT_COMPLETION_HANDLER=handler)))
         agent.user = SimpleNamespace(id='u1')
         agent.chat_id, agent.assistant_message_id = 'c1', 'm1'
+        agent.parent_chat_id = 'parent-1'
         agent.max_iterations, agent.max_output = max_iterations, max_output
         agent._completion_form = lambda: {}
         agent.release = release

@@ -3,9 +3,11 @@
 > **Under construction.** The sandbox described in
 > [docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md)
 > is being built on the `feat/sandbox-code-interpreter` branch (PR #884).
-> Nothing in the app uses it yet: the code interpreter is still Jupyter.
-> This guide grows with the build; so far it covers the host setup, the
-> images and the backend.
+> The app uses it only where an admin sets the engine to `sandbox` in
+> Admin Settings > Code Execution; Jupyter stays the code interpreter until
+> then. It covers the host setup, the images, the mirror, the backend and
+> its tests, operations, uploads, outputs, the call sites, the workspace
+> cap and the package telemetry.
 
 Each chat's code runs in its own microVM: a Kata Containers container whose
 runtime boots a Cloud Hypervisor VM with its own guest kernel, started by
@@ -369,6 +371,12 @@ Notes on the build:
   with a message if the directory cannot be made). It does not depend on
   what the image put in `/workspace`. The first biber run leaves about
   121 MB there, which counts toward the workspace cap.
+- The data image's Python has a `sitecustomize.py` and its R an
+  `Rprofile.site` addition (`data/sitecustomize.py`, `data/Rprofile.site`)
+  that record what each process imports, for the
+  [package telemetry](#package-telemetry). The build refuses a base whose
+  Python already has a `sitecustomize.py`, which this one would replace.
+  The web image has no Python and no hooks.
 - `MPLCONFIGDIR` and `XDG_CACHE_HOME` point into `/tmp` in the data image,
   so matplotlib and fontconfig print no cache warnings on a read-only home.
 - The web image links `/node_modules` to `/opt/sandbox-web/node_modules`,
@@ -394,7 +402,7 @@ make sandbox-images
 ```
 
 builds both and rewrites `infra/sandbox/image-freeze.txt` and `image-freeze-r.txt`. The tag is the
-one line in `infra/sandbox/TAG` (`2026-11-11.2`: the date, then a counter
+one line in `infra/sandbox/TAG` (`2026-11-12.1`: the date, then a counter
 for that day). Any change to an image bumps it, because the tag is what
 the manager starts and what benchmark runs record. The backend holds the
 same value in a constant, so bump both together. Pre-existing containers keep their old image until they are
@@ -488,8 +496,14 @@ older version of a listed package.
   capability dropped, and it answers `GET` and `HEAD` for files only, with
   short timeouts and at most 8 connections per sandbox address. Its log is
   one JSON line per request on stdout (`docker logs local-llm-sandbox-mirror`),
-  capped at three 10 MB files, because a sandbox chooses what it requests;
-  the package telemetry (T21) that reads it must keep up with that rotation.
+  capped at three 10 MB files, because a sandbox chooses what it requests.
+  The package telemetry reads it after every `bash` call, from where its
+  last read stopped, at most 1 MiB a read (see
+  [Package telemetry](#package-telemetry)). So it keeps up with that
+  rotation only while each call has at most about 1 MiB of new lines to
+  read: a backlog that grows faster (many installs between calls, or a
+  sandbox requesting junk) falls behind by the difference each call, and
+  lines rotated away before they are read are lost.
 - `docker compose down` with sandboxes attached exits 0 but leaves the
   network ("Resource is still in use"); that is expected. The next `up`
   reuses it.
@@ -688,7 +702,10 @@ SDK, and covers `kata.py` and `lifespan.py` completely.
 sandbox (VM boundary, network fence, cross-chat isolation, persistence and
 image switching, read-only uploads, timeout and background children,
 cancellation, output flood, memory, fork bomb, PID 1, path confinement
-against a real symlink, restart sweep, the fixed-size volume), on a host
+against a real symlink, restart sweep, the fixed-size volume, and the
+keep-or-remove dialog's listing of a stopped and of a running workspace
+through the helper, and four chats running at once under `max_running=4`
+while a fifth waits for a slot), on a host
 with Kata, both images, udisks and the loop-device permission above:
 
 ```sh
@@ -700,7 +717,89 @@ LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
 They skip without `LLLM_TEST_KATA=1` (CI has no `/dev/kvm`). Without the
 `local-llm_sandbox` network they create it with the backend's subnet and
 remove it afterwards, and they remove every container, volume and image
-file they make. About three minutes, most of it the PID 1 test's 300 calls.
+file they make. About three minutes, most of it the PID 1 test's 300 calls;
+with `test_sandbox_uploads_kata.py` and `test_sandbox_outputs_kata.py`,
+38 tests in 366 s on the laptop (2026-11-13). The two mirror tests need the
+`sandbox-mirror` container, which `make backend` starts; without it they
+fail.
+
+## Operations
+
+Everything below is on the host running the backend. `DATA_DIR` is
+`apps/server/data` under `make backend`.
+
+**Where things are.** A chat's sandbox is known by its key, the manager's
+UUID for the chat (not the chat id); the table `sandbox_workspace` maps
+each persistent key to its owner and chat (`key`, `user_id`, `chat_id`).
+
+| What | Where |
+|---|---|
+| Container | `lllm-sandbox-<key>`, labels `lllm.chat=<key>`, `lllm.scope`, `lllm.image` (and `lllm.ephemeral=1` for an unsaved chat) |
+| Workspace volume | Docker volume `lllm-sandbox-<key>` over the image file `DATA_DIR/sandbox/volumes/<key>.img`, attached to a loop device |
+| Uploads | `DATA_DIR/sandbox/uploads/<key>`, bound read-only at `/workspace/uploads` |
+| Listing helper | `lllm-sandbox-list-<key>`, label `lllm.helper=list`, alive only while the keep-or-remove dialog lists a workspace |
+| Scope id | `DATA_DIR/sandbox/volumes/scope`; another app instance on the same daemon has its own |
+| Images and mirror | `local-llm/sandbox-data:<TAG>`, `local-llm/sandbox-web:<TAG>`; the `local-llm-sandbox-mirror` container |
+
+**Looking at them.**
+
+```sh
+scope=$(cat apps/server/data/sandbox/volumes/scope)
+docker ps -a --filter label=lllm.scope=$scope \
+  --format '{{.Names}}\t{{.Status}}\t{{.Label "lllm.image"}}'
+docker volume ls --filter label=lllm.scope=$scope
+ls -lsh apps/server/data/sandbox/volumes/     # allocated vs. apparent size
+udisksctl status; losetup -l                  # the attached loop devices
+psql "$DATABASE_URL" -c 'select key, user_id, chat_id, to_timestamp(last_used_at), pending_reason from sandbox_workspace order by last_used_at'
+```
+
+**Removing them.** Use the app wherever possible: deleting a chat
+destroys its workspace at the next hourly sweep, and the keep-or-remove
+dialog removes one the user chooses. Both go through `destroy`, which
+removes, in order, the container, the loop device, the image file and
+the volume, so a destroy cut short is finished by a later sweep. By
+hand, with the backend stopped, the same order is:
+
+```sh
+docker rm -f lllm-sandbox-<key> lllm-sandbox-list-<key>
+udisksctl loop-delete -b /dev/loopN          # the device losetup -l shows for <key>.img
+rm apps/server/data/sandbox/volumes/<key>.img
+docker volume rm lllm-sandbox-<key>
+rm -rf apps/server/data/sandbox/uploads/<key>
+```
+
+Its `sandbox_workspace` row is dropped by the next sweep once the volume
+is gone (after an hour, `PRUNE_AFTER_S`). Never remove a volume of
+another scope: it belongs to another app instance.
+
+**What runs on its own** (`sandbox/lifespan.py`, `manager.py`):
+
+- **Startup sweep**, before the app serves: removes listing helpers left
+  behind, stops every running sandbox and destroys every ephemeral one a
+  previous process left; persistent volumes are kept.
+- **Idle reaper**, every minute: stops a sandbox idle for
+  `code_interpreter.sandbox.idle_minutes` (default 30) and not in use; an
+  ephemeral one is destroyed with its volume. A stopped persistent
+  sandbox keeps its volume and starts again on the next call.
+- **Retention sweep**, hourly (the first with the first reap): destroys
+  the volumes of deleted chats, with the safeguards in "Workspace cap and
+  deletion"; marks a workspace unused for
+  `code_interpreter.sandbox.retention_days` (default 7) `expired`, which
+  the user is asked about and nothing deletes without their answer;
+  records volumes without a row and drops rows without a volume.
+- **Telemetry prune**, at startup and hourly: deletes
+  `sandbox_package_events` rows older than 180 days.
+
+A failed pass is logged and the loop goes on. With
+`LLLM_STOP_JOBS_ON_SHUTDOWN=true`, shutdown stops every running sandbox
+and destroys the ephemeral ones; otherwise running sandboxes are left for
+the next startup sweep, so a `--reload` restart kills no command.
+
+**Status.** `GET /api/v1/sandbox/status` (admin) answers
+`{"ready": bool, "reason": str | null}`: the first failing check of
+"Checks" above, the same text each refused call gets, shown on Admin
+Settings > Code Execution. `GET /api/v1/sandbox/packages` (admin) is the
+package report, "Package telemetry" below.
 
 ## Uploads
 
@@ -1017,3 +1116,442 @@ cd apps/server
 LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
   uv run --frozen python -m pytest tests/test_sandbox_outputs_kata.py -v -s
 ```
+
+## Call sites
+
+Everything that runs code under the `sandbox` engine goes through the chat's
+sandbox, one per chat (owner decision Q6 for sub-agents), and every path
+collects `/workspace/outputs` itself, with the same comparison, listing and
+caps as `bash` (Q25), so the next `bash` call never attaches them again.
+
+- **Native function calling.** The model gets the four tools (`bash`,
+  `view`, `write_file`, `str_replace`) in place of `execute_code`, and
+  `CODE_INTERPRETER_SANDBOX_PROMPT` is appended to the system message.
+  `bash`'s `timeout_s`, left out, is the admin's
+  `code_interpreter.sandbox.timeout` (a cleared or invalid setting means
+  60, `configured_timeout` in `tools/builtin.py`).
+- **The tag path** (legacy function calling,
+  `utils/middleware.py` `_execute_code_in_sandbox`). Each
+  `<code_interpreter>` block is written to `/workspace/.runs/<n>.py` (`n`
+  one more than the highest plain number there, which a fixed script prints
+  as one number, `sandbox/runs.py`) and run with `python` from `/workspace`
+  on the `data` image, with the configured timeout and without the Jupyter
+  path's blocked-modules preamble. Its outputs attach to the reply as a
+  `bash` call's do. The model is shown only a block's stdout
+  (`utils/misc.py`), so the block's stderr (after a `[stderr]` line), a
+  sandbox failure, and lines naming the files attached, not attached (with
+  why) or only listed all go into stdout.
+  `CODE_INTERPRETER_SANDBOX_TAG_PROMPT` describes this environment.
+- **The Run endpoint** (`POST /api/v1/utils/code/execute`, with
+  `code_execution.engine` set to `sandbox`). It needs the block's
+  `chat_id`, runs the code as the tag path does in that chat's sandbox,
+  and answers 404 for a saved chat the user may not run code in (the owner,
+  or an admin while `ENABLE_ADMIN_CHAT_ACCESS` is on; Q14), and 403 for a
+  user without the `features.code_interpreter` permission (admins always
+  hold it), since the run reaches the workspace the code interpreter uses
+  (Q26), and for everyone while the code interpreter is switched off for
+  the server (`code_interpreter.enable`, Q29). Its outputs are
+  stored and count toward the chat's 1 GiB, come back under `files` for the
+  block to show, and are linked to no message: pressing Run is the user's
+  act, not part of the reply. It does not sync the chat's attachments,
+  which it does not know, so `/workspace/uploads` stays as the chat's last
+  call left it.
+- **The Run button** (`apps/web`, T22). A Python code block in a reply
+  shows Run when code execution is on with the `sandbox` engine, the code
+  interpreter is switched on, and the user holds its permission
+  (`lib/chat/codeRun.ts`); it
+  sends the block with its chat's id. The other
+  engines show none: Jupyter is left as it was until its removal (T40),
+  and Pyodide ran in the browser, which this app has no runner for. The
+  block's stdout, stderr and result, an error (the endpoint's refusal, or
+  the sandbox's own failure), a non-zero exit code, a note when the output
+  was cut, and the files the run left in `/workspace/outputs` (as
+  `SandboxOutputs` shows a reply's) appear under the block until it is
+  closed; they are not saved with the chat, so a reload, or a chat reload
+  while the run is in flight, loses them. A screen reader hears only the
+  run's status.
+- **Sub-agents** (`utils/subagents.py`). A sub-agent's request carries its
+  parent chat (`request.state.sandbox_chat_id`, set only by the server), so
+  its tools use the parent's sandbox; a sub-agent of a sub-agent keeps the
+  outermost chat's, and so does the parent's continuation after a
+  background sub-agent. Such a request never syncs `/workspace/uploads`
+  (`shares_parent_sandbox`): the files it carries are a few of the parent's
+  or a snapshot from an earlier turn, and a sync makes the uploads hold
+  exactly what it is given, so it would remove what the parent attached
+  since. It uses the uploads the parent's own calls synced. The chat's lock
+  serializes their calls, and one slot serves them all. A sub-agent's outputs attach to its
+  own message and count against the parent chat's cap. Background
+  sub-agents keep the code interpreter under the `sandbox` engine, as under
+  Jupyter.
+- **A terminal server in the same chat is refused** (Q24). An Open
+  Terminal server offers its own `write_file`, acting on its own machine,
+  so a chat request with a terminal selected while the code interpreter is
+  on with the `sandbox` engine is refused, asking the user to turn one of
+  them off: a 400 for an API caller, the message's error in the chat. It is
+  refused only when the sandbox would really be in play (the code
+  interpreter's gates, and the tag path or builtin tools on the native
+  path), and before any feature runs. `terminal:*` events go out for
+  terminal tools only.
+- **The harness.** `request.state.benchmark_harness` keeps every path's
+  outputs listed in the result but stored nowhere. Each `bash` call and
+  each run is recorded with `note_code_run`, as failed only when the
+  sandbox itself failed (unavailable, refused, a backend error), never for
+  the model's command failing, timing out or being refused as malformed,
+  so one model mistake never refuses a whole harness run. `view`,
+  `write_file` and `str_replace` record only the sandbox's failures, so a
+  model that gives up after one is not scored as having made the mistake.
+  A harness request is internal, which drops the sub-agent tools
+  (`benchmarks/evaluation/harness.py`), so no sub-agent runs inside one.
+
+`tests/test_sandbox_call_sites.py` covers all of these on the FakeBackend,
+including the `.runs` listing against the real script.
+
+## Workspace cap and deletion
+
+Owner decision Q15 (T24): each user keeps at most
+`code_interpreter.sandbox.max_workspaces` persistent workspaces (default
+20, at least 1; Admin Settings > Code Execution, "Sandbox Workspaces per
+User"), and no workspace is deleted for that cap or for the retention
+expiry without the user's answer. Ephemeral sandboxes (unsaved chats,
+the harness) do not count and are not asked about.
+
+**The record.** The table `sandbox_workspace` (`models/sandbox.py`,
+migration `8bede0d9f5c2`) holds one row per persistent volume: the
+backend key, the owning user (the chat's owner, also when an admin runs
+code in it, Q14), the chat id, when it was recorded and last used, and a
+pending deletion: `pending_reason` (`cap` or `expired`), `pending_since`
+and, for `cap`, `pending_for_chat_id`, the chat whose new workspace
+waits. The manager reaches it only through `sandbox/workspaces.py`
+(`DatabaseWorkspaces`; tests use `MemoryWorkspaces`). A row is added
+before a volume's first create, under the key's lock and one claim lock,
+so two chats of one user cannot both take the last place. Both locks are
+in the memory of the one backend process (the sandbox refuses to run
+under more than one uvicorn or gunicorn worker, `sandbox/lifespan.py`),
+so the cap holds within that process only, which is the only kind of
+deployment the sandbox supports. A row is dropped
+when the volume is destroyed (`release`, a deleted chat, the user's
+answer). Every session moves `last_used_at` when it ends, and that use
+also clears an `expired` request.
+
+**The cap.** When a session would create a user's
+(`max_workspaces` + 1)th volume, it creates nothing, takes no slot (the
+check comes before the slot wait, so nothing is evicted for it), records a
+`cap` request on the user's least recently used workspace not already
+asked about for another chat (once per waiting chat, however often the
+model retries), and raises a `SandboxError` whose public text tells the
+model that the user's workspace limit is reached and that the user has
+been asked in the app to remove one. When every workspace is already
+asked about for other chats, nothing new is recorded, and the text says
+instead that the user must first answer the requests the app already
+shows. A volume the backend already holds for the chat (made before the
+records existed) is recorded at the cap instead of refused, since
+refusing it would create nothing; the backend is listed for that only
+at the cap. Once a workspace is removed, the
+waiting chat's next call creates its workspace and clears any request
+made for it. A database error while checking fails closed, with a fixed
+message for the model.
+
+**Expiry.** The hourly retention sweep no longer destroys a stopped
+workspace unused for `retention_days`: it marks it `expired`, judged by
+the record's `last_used_at`, not the chat row's `updated_at` (which the
+chat import takes from the client). It keeps its disk until the user
+answers. A volume whose chat was deleted is still destroyed without
+asking, with the same safeguards as before (none when most chats looked
+up are missing; a second lookup just before). A volume with no record
+(made before T24) is given one, last used now; a record whose volume the
+listing does not show, made over an hour ago and not in use, is dropped.
+
+**Contents.** `SandboxBackend.list_workspace(key, max_entries)` lists a
+volume's regular files (path, size, modified time) without its sandbox
+running, at most `LIST_MAX_ENTRIES` (300) listed, with the count and
+total size of all of them, and `complete` false when a directory could
+not be read or the walk ran out of time. The Kata backend runs a
+short-lived helper container `lllm-sandbox-list-<key>` with fixed
+options (`list_helper_options`): the `data` image under `kata-clh`, the
+volume mounted read-only at `/workspace`, `network_mode=none`, UID 1000,
+every capability dropped, a read-only root, 512 MiB and 16 processes.
+It runs a fixed script (`LIST_SCRIPT`) with `python -I -S` from `/`, which
+walks with `lstat` (no symlink is followed) and stops after 20 seconds.
+A name that is not UTF-8 has its bad bytes replaced (U+FFFD), and a path
+over `LIST_PATH_MAX_BYTES` (1,024 UTF-8 bytes) is cut at a character
+boundary, ends in an ellipsis and is marked `truncated`, so the output is
+bounded (`LIST_OUTPUT_MAX_BYTES` allows six bytes per path byte, JSON's
+worst escape) whatever names the model wrote. The backend waits at most
+60 seconds, reads its stdout and checks every field (`parse_listing`):
+an entry that is not what the script prints is dropped and the listing
+marked incomplete, and only a malformed whole is refused. Nothing a
+caller or the model chose reaches its options. It holds the key's
+backend lock, attaches the image first (a reboot detaches it), and
+carries no `lllm.chat` label, so the sweeps never take it for a sandbox.
+
+The helper is created, then started, and removed in a `finally` that
+covers a failed start too, since a helper left behind mounts the volume
+and would keep every later destroy from removing it. `stop` and
+`destroy` also remove the key's helper (this scope's only) before the
+volume, and the startup sweep first removes every `lllm.helper=list`
+container of this scope (`SandboxBackend.remove_helpers`), each under
+its key's lock; a failure there is logged. At most two listings run at
+once; a stopped workspace's listing is kept by (key, last use), up to
+`LISTING_CACHE_SIZE` (128) of them, since nothing changes a stopped
+volume until a session uses it, and a running one is listed afresh.
+
+**API** (`routers/sandbox.py`; each route reads the records by the
+caller's id, so another user's workspace is the same 404 as a missing
+one):
+
+- `GET /api/v1/sandbox/pending/ids`: the ids of the caller's waiting
+  workspaces, one query, which the app asks on load and after each reply.
+- `GET /api/v1/sandbox/pending`: each waiting workspace with its chat's
+  title, reason, `since`, times and contents (or why they could not be
+  listed), and for `cap` the waiting chat and the caller's other
+  workspaces; plus `max_workspaces` and `retention_days`. One at a time
+  per user: a second while the first runs is 429. 503 when the records,
+  the settings or the chat titles cannot be read.
+- `POST /api/v1/sandbox/pending/{id}` with
+  `{"action": "remove"|"keep", "since": <the request's since>}` and, for
+  `cap`, an optional `workspace` naming another of the caller's
+  workspaces to remove instead. `keep` on `expired` moves the last use to
+  now, so it is not asked about again until it expires again; `keep` on
+  `cap` leaves the waiting chat without a workspace. A request whose
+  `since` differs from the one shown (answered, cleared or replaced
+  meanwhile) is 409; a removal reads the request again under the lock of
+  the workspace to remove, just before it goes, and is 409 if it changed
+  then. 400 for an answer that does not fit, 409 also while the workspace
+  to remove is running code, 502 when the backend could not destroy it
+  (it stays) or its record could not be dropped afterwards, 503 when the
+  records cannot be read or written.
+
+**The dialog** (`apps/web/src/routes/chat/PendingWorkspacesDialog.tsx`,
+mounted in the app shell): opens when the ids list has one the user has
+not dismissed, lists each workspace's chat, reason and files with Remove
+and Keep (and, for `cap`, which workspace to remove), and "Decide later"
+hides it until a new request arrives or the app loads again. A finished
+reply in a saved chat, or a Run, asks for the ids again, so a call that
+hit the cap opens it at once. It sends the `since` it showed with each
+answer, refetches the ids and the list after a refused answer, drops a
+removed workspace from the other items' choices, offers Retry when the
+list cannot be read, labels each button with its workspace's chat, and
+shows chat titles and file names isolated (`<bdi>`, or U+2068/U+2069 in
+the choices), so a right-to-left override in a name cannot reorder the
+text around it.
+
+Tests: `tests/test_sandbox_workspaces.py` (the cap, expiry, answers,
+routes, both stores), the listing cases in `tests/test_sandbox_kata_unit.py`
+(fixed helper options, output checks, and `LIST_SCRIPT` run on a real
+directory), `PendingWorkspacesDialog.test.tsx`, and
+`e2e/sandbox-workspaces.spec.ts`, and on real Kata
+`test_list_workspace_lists_a_stopped_volume_through_the_helper` and
+`test_list_workspace_lists_a_running_sandbox_read_only_beside_it` in
+`tests/test_sandbox_kata.py`. Checked on the laptop on 2026-11-13: both
+listing tests pass, and a cap round trip in the browser ran end to end (a
+call at the cap created nothing and opened the dialog with the waiting
+workspace's files, a removal let the waiting chat's next call create its
+workspace, and Keep deleted nothing).
+
+## Package telemetry
+
+T21 (the proposal's
+[Package telemetry](../proposals/sandbox-code-interpreter.md#package-telemetry)):
+which packages the sandboxes use, and which they miss, so the wheelhouse
+allowlist (`infra/sandbox/allowlist.in`) and the images grow from use, not
+guesses. It is advisory: code in a sandbox can delete or forge its own
+events, `atexit` does not run in a process killed by a timeout, the OOM
+killer or `os._exit`, so those undercount, and only Python and R are seen
+per package; other languages appear only as misses.
+
+**Signals.** Each becomes one row of `sandbox_package_events`:
+
+| `kind` | Recorded by | `name` | `version` |
+|---|---|---|---|
+| `import` | the data image's `sitecustomize.py`, at each Python process's exit: the top-level names in `sys.modules`, the standard library dropped (`sys.stdlib_module_names`), mapped with `importlib.metadata.packages_distributions()` | the distribution, PEP 503 normalised | its installed version |
+| `r_import` | the data image's `Rprofile.site`, at each R session's exit (a finalizer run on exit): `loadedNamespaces()` without base R's own | the namespace | `packageVersion()` |
+| `module_miss` | `sitecustomize.py`'s `sys.excepthook`, for an uncaught `ModuleNotFoundError` whose top-level package did not import | the top-level module | |
+| `install` | the mirror's access log: a `GET` answered 200 for a `.whl` | the distribution, from the wheel's file name | from the file name |
+| `pip_miss` | stderr: pip's "No matching distribution found for" | the requirement's name, normalised | |
+| `command_miss` | stderr: bash's "`<name>`: command not found" | the command | |
+| `r_miss` | stderr: R's "there is no package called" | the package | |
+| `latex_miss` | stdout or stderr (pdflatex prints its errors on stdout): LaTeX's "File \`...' not found" | the file | |
+
+The hooks append one JSON line per event
+(`{"kind","name","version","ts"}`) to `/workspace/.telemetry/events.jsonl`,
+and never raise (everything is in `try/except Exception: pass`, or R's
+`try(silent = TRUE)` with warnings suppressed); Python's previous
+`excepthook` still prints the traceback. `packages_distributions()` reads
+every installed distribution's metadata (about half a second for a few
+hundred), so `sitecustomize.py` keeps its answer in
+`/workspace/.telemetry/distributions.json`, keyed by the site directories'
+modification times, which an install or removal changes; after the first
+process, an exit costs a few milliseconds.
+
+**Collection** (`sandbox/telemetry.py`, `PackageTelemetry`, on
+`app.state.sandbox_telemetry`, made by `sandbox/lifespan.py` with the
+manager). After each `bash` call and each `run_code_in_sandbox` (the tag
+path and the Run endpoint), inside the session, once the command and its
+outputs are done, for at most 3 seconds in all (`COLLECT_TIMEOUT_S`; a
+daemon call already under way is still waited for, as every session call
+is, so the sandbox's lock is never handed on mid-call):
+
+- The events file is read through the daemon and emptied, only when the
+  daemon's stat (which does not follow a symlink) shows
+  `/workspace/.telemetry` a directory and the file a regular file. An empty
+  or missing file costs no exec. The read is `get_files`, which never goes
+  through a symlink (the Kata backend checks each directory on the way); a
+  file over 256 KiB is emptied unread. The emptying is a fixed helper
+  (`TRUNCATE_SCRIPT`) that runs `lllm-path` and empties the file as UID
+  1000 only when it resolves to exactly `/workspace/.telemetry/events.jsonl`.
+  Nothing changes the file between the stat and the emptying: the session
+  holds the sandbox's lock, and the post-exec kill has ended every process
+  the command started. Every line is checked as hostile: at most 2,000
+  lines of at most 1,024 bytes, a JSON object with only those four fields,
+  a kind the hooks write, a name of at most 128 characters from a fixed
+  alphabet per kind, a version of at most 64 (dropped, not the line, when
+  invalid), and a timestamp within 30 days of the collection's, else the
+  collection's. Anything else is dropped.
+- The output's misses are matched, each kind and name once per call, at
+  most 50.
+- The sandbox's address is learnt, once per container start: the manager
+  records each start and stop of a sandbox (`AddressWindow`: key, start
+  and stop in epoch nanoseconds, at most 4,096 kept), and the first
+  telemetry call in it fills in its address from `list_sandboxes()`.
+
+A call's rows are then deduplicated on (kind, name, version), the
+earliest kept, and capped at 200 (`ROWS_PER_CALL`), misses included: a
+loop that runs Python a thousand times records each package once, so
+`imports` counts calls that imported a package, not processes.
+
+The rest runs in a background task after the session (`finish`), so the
+call returns without waiting for it; the app's shutdown cancels what is
+left (`close`), dropping those rows. It has 30 seconds in all:
+
+- The mirror's log is read from its cursor on, through the backend
+  (`SandboxBackend.mirror_log(since_ns, max_bytes)`: the Kata backend reads
+  the daemon's logs endpoint for `local-llm-sandbox-mirror`, stdout with
+  timestamps, at most 1 MiB a read and 5 seconds, the request's own socket
+  timeout too; what is left waits for the next call). The cursor starts
+  when the backend starts, and moves past the lines only once they are
+  credited, so a failure reads them again. One read runs at a time: a call
+  that finds one under way skips its own rather than wait. After a failed
+  read none is tried for 60 seconds, doubling with each failure up to 15
+  minutes; the failure is logged when the back-off starts. Each install is
+  credited to the sandbox whose address window holds the line's time and
+  address, and to that sandbox's latest call: its chat, image and harness
+  run, even when another chat's call read the line. A line no window
+  holds (a gap between two sandboxes that had the same address, an
+  address never learnt, or a time before the earliest start recorded) is
+  dropped.
+- Each row is credited to a user: an unsaved chat's caller (its sandbox is
+  theirs, Q12), or the saved chat's owner, looked up once per chat (an
+  admin running code in another user's chat counts for the owner).
+- The rows are written.
+
+Every step's failure is logged and swallowed: the tool's result is the
+same with telemetry failing, slow, or off.
+
+Two edge cases of the daemon's log. A read stops before the line that
+would pass its 1 MiB, and the next read continues strictly after the last
+line returned; a line the daemon stamped with exactly the same nanosecond
+as that last one, left out by the cap, is then skipped. And the daemon
+splits a log line longer than 16 KiB into parts; each part fails to parse
+as JSON and is dropped, which loses only requests whose URI and user agent
+together exceed that, never a real wheel download.
+
+**What each row carries.** `ts` (epoch seconds), `chat_id` (the sandbox's
+chat: a sub-agent's parent; an unsaved chat's own id, such as the
+harness's `temporary:benchmark-<hex>`, for an ephemeral sandbox, which is
+recorded like any other), `user_id` (above; None when the lookup failed),
+`image_digest` (the image id the backend last saw
+for the session's image, `KataDockerBackend.image_ids`, set by `ready` and
+`create`; `''` when unknown), `lock_sha` (SHA-256 of
+`infra/sandbox/requirements.lock` in the checkout the backend runs from,
+read again when its size or modification time changes; `''` when
+unreadable; it is the lock `make wheelhouse` downloads, so it identifies the
+wheelhouse as long as the wheelhouse was rebuilt after the lock last
+changed), and `harness_run_id`: the benchmark runner puts its suite run id
+on the harness request (`request.state.harness_run_id`), and a harness
+request without one is marked `harness`, so reports leave both out.
+
+**The table.** `sandbox_package_events` (`models/sandbox.py`, migration
+`5d1e9c3a7b42`): `event_id` integer primary key, `ts`, `chat_id`,
+`user_id` (nullable), `kind`, `name`, `version` (nullable), `image_digest`,
+`lock_sha`, `harness_run_id` (nullable), indexed on `(name, kind)` and on
+`ts`. Rows are never changed; those older than 180 days
+(`PACKAGE_EVENTS_RETENTION_DAYS` in `sandbox/limits.py`) are deleted at
+startup and every hour after (`PackageTelemetry.maintenance_loop`, started
+by `sandbox/lifespan.py`). No index serves the harness filter: the report
+aggregates every non-harness row anyway.
+
+**The report.** `GET /api/v1/sandbox/packages` (admins; 403 for anyone
+else signed in, 503 when the events cannot be read), with
+`include_harness=true` to count harness rows and `limit` (default 500):
+
+- `packages`: per language (`python` for `import` and `install`, `r` for
+  `r_import`) and name, `users` and `chats` (distinct), `imports`,
+  `installs`, `last_used`, and `source`: `image` when
+  `infra/sandbox/image-freeze.txt` (R: `image-freeze-r.txt`) lists it,
+  `wheelhouse` when only `requirements.lock` does, `other` otherwise (a
+  dependency vendored inside another, or a list that is out of date). Most
+  users first.
+- `misses`: per kind and name, `users` and `chats` (distinct), `events` and
+  `last_seen`, most users first: the review queue for `allowlist.in` and the
+  Dockerfiles. Ranking by users rather than chats keeps one user (or one
+  model looping in many chats) from steering it alone. It is a request
+  signal, not vetting: a miss says something was wanted, never that the
+  package is safe, maintained or worth its size; each addition is still
+  reviewed as T16's "Adding a package" describes, and a forged event can
+  only add to the queue.
+
+The same from `psql`:
+
+```sql
+-- Packages in use, harness runs left out.
+SELECT CASE kind WHEN 'r_import' THEN 'r' ELSE 'python' END AS language, name,
+       count(DISTINCT user_id) AS users,
+       count(DISTINCT chat_id) AS chats,
+       count(*) FILTER (WHERE kind IN ('import', 'r_import')) AS imports,
+       count(*) FILTER (WHERE kind = 'install') AS installs,
+       to_timestamp(max(ts)) AS last_used
+FROM sandbox_package_events
+WHERE kind IN ('import', 'r_import', 'install') AND harness_run_id IS NULL
+GROUP BY 1, 2
+ORDER BY users DESC, chats DESC, imports DESC;
+
+-- Misses ranked by the users who met them.
+SELECT kind, name, count(DISTINCT user_id) AS users, count(DISTINCT chat_id) AS chats,
+       count(*) AS events,
+       to_timestamp(max(ts)) AS last_seen
+FROM sandbox_package_events
+WHERE kind IN ('module_miss', 'pip_miss', 'command_miss', 'latex_miss', 'r_miss')
+  AND harness_run_id IS NULL
+GROUP BY kind, name
+ORDER BY users DESC, chats DESC, events DESC;
+```
+
+**After changing the hooks.** They are in the data image, so a change to
+`data/sitecustomize.py` or `data/Rprofile.site` needs a new tag and
+`make sandbox-images` ([Rebuilding and the tag](#rebuilding-and-the-tag)).
+T21 bumped the tag to `2026-11-12.1` (built on the laptop on 2026-11-13;
+the image-freeze files did not change). A host without the images for the
+current tag reports them missing and refuses to start sandboxes until
+`make sandbox-images` builds them. On a rebuilt image, check that the hook
+is the one Python loads:
+
+```sh
+docker run --rm local-llm/sandbox-data:2026-11-12.1 python -c 'import sitecustomize; print(sitecustomize.__file__)'
+```
+
+which prints a path under `/opt/conda/lib/python3.*/site-packages/`
+(`/opt/conda/lib/python3.13/site-packages/sitecustomize.py` on 2026-11-13).
+
+Tests: `tests/test_sandbox_telemetry.py` (the parsers, the miss matchers,
+the collection through `FakeBackend` (address reuse, back-off, a read
+under way skipped, the cursor kept on a failure, deduplication and the
+cap, a sub-agent's rows on its parent chat, failures and a slow daemon
+leaving the result unchanged), the truncation helper against real bash,
+the Kata backend's log read against a mocked SDK, the retention, `sitecustomize.py`
+run in a subprocess, `Rprofile.site` run when R is installed and checked
+statically otherwise, the table, the report and its route). The
+proposal's acceptance test "Telemetry" passed on the laptop on 2026-11-13
+with the `2026-11-12.1` data image (an import with its version, a module
+miss, a command miss, and a mirror install credited to the right chat),
+except its harness part, which needs the harness on the sandbox engine
+(T30).

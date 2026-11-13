@@ -7,7 +7,8 @@ the app's database (Admin Settings), not in a repo file.
 
 ## Code interpreter: Jupyter
 
-The app's code interpreter has two engines.
+The app's code interpreter has three engines; the third, `sandbox`, has
+its own section below.
 
 - **Pyodide** (the inherited default) runs Python in the browser. The
   backend only relays the code to the page and waits, so nothing runs
@@ -72,6 +73,53 @@ so.
 interpreter's and code execution's engine to `jupyter`, the URL to
 `http://127.0.0.1:8888`, authentication to `token`, and the token to
 `JUPYTER_TOKEN`'s value.
+
+## Code interpreter: sandbox
+
+The `sandbox` engine (built 2026-11-10 to 12 on the sandbox branch, PR
+#884) runs each chat's code in its own Kata Containers microVM, with a
+`/workspace` that persists for the chat. Jupyter stays the engine in use
+until the sandbox replaces it (step 3 of
+[the proposal](../proposals/sandbox-code-interpreter.md)); until then,
+choosing `sandbox` is an admin's decision per server.
+
+- **What the model gets.** With native function calling, four tools:
+  `bash` (a command, 1 to 300 seconds, the default from the admin's
+  setting), `view`, `write_file` and `str_replace`, all confined to
+  `/workspace`. On the tag path (legacy function calling), each
+  `<code_interpreter>` block runs as a Python file in the same sandbox. The
+  prompts are `CODE_INTERPRETER_SANDBOX_PROMPT` and
+  `CODE_INTERPRETER_SANDBOX_TAG_PROMPT` in `config.py`.
+- **Files.** The chat's attachments are in `/workspace/uploads`, read-only.
+  Whatever the code leaves in `/workspace/outputs` is attached to the
+  reply and shown under it: images, a sandboxed frame for HTML, PDF page
+  previews, highlighted text and CSV tables, and a download link for
+  everything.
+- **State.** Files, installed packages and data persist for the whole chat
+  (a fixed 10 GiB per workspace); nothing keeps running between calls. An
+  idle sandbox stops after 30 minutes and starts again on the next call.
+  A workspace unused for 7 days, or one standing in the way of a new
+  chat's past the per-user cap (20), is deleted only when the user
+  answers the app's keep-or-remove dialog.
+- **Packages.** No internet: `pip install` reaches only the reviewed
+  wheelhouse (`make wheelhouse`), and the images carry the scientific
+  Python stack, R, TeX Live and Node.js tooling. The names and versions
+  of the packages a chat imports, installs or lacks are recorded for the
+  admin's report (never its code or data; sandbox.md "Package
+  telemetry").
+- **Run button.** Under the `sandbox` Code Execution engine, a Python block
+  in a reply has Run, which runs it in the chat's sandbox, while the code
+  interpreter is switched on and for a user with its permission (admins
+  always have it).
+
+**Settings** (Admin Settings > Code Execution): set the engine to
+`sandbox`; the sandbox fields (default image, command timeout, how many
+run at once, idle minutes, retention days, workspaces per user) and a
+status line saying
+whether the host can run sandboxes are on the same page. The host needs
+KVM, Kata registered as `kata-clh`, the images (`make sandbox-images`) and
+the wheelhouse; setup, operations and tests are in
+[sandbox.md](sandbox.md).
 
 ## Web search: SearXNG
 

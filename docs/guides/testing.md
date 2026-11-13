@@ -383,6 +383,33 @@ checkout path with a space or a quote stays one argument. Nothing real
 starts, so it needs neither Docker nor a network. A change to a recipe's
 failure path belongs there.
 
+### Sandbox tests
+
+The code sandbox's tests (`tests/test_sandbox_*.py`) run everywhere against
+`FakeBackend`, an in-memory stand-in for the Kata backend whose guest
+helpers are checked against the real scripts, and against a mocked Docker
+SDK for `KataDockerBackend` (`test_sandbox_kata_unit.py`). Some of them run
+the guest helper scripts with real bash on a temporary directory and rely
+on running as a user other than root, as CI's runners do: root ignores
+`chmod 000`, so the unreadable and unwritable cases fail under root.
+
+The acceptance tests against real microVMs are the files ending in
+`_kata.py` (`test_sandbox_kata.py`, `test_sandbox_uploads_kata.py`,
+`test_sandbox_outputs_kata.py`). They need `/dev/kvm`, Kata registered as
+`kata-clh`, the sandbox images and the host setup in
+[sandbox.md](sandbox.md), so they skip at module level unless
+`LLLM_TEST_KATA=1` is set, and never fail for being skipped under `CI`:
+GitHub's hosted runners have no KVM (owner decision Q3 on the sandbox
+branch; their `pytest.skip` is a PR gate finding justified in the PR
+body). Run them on the laptop:
+
+```bash
+cd apps/server
+LLLM_TEST_KATA=1 LLLM_SECRET_KEY=$(python3 -c 'print("x"*40)') \
+  uv run --frozen python -m pytest tests/test_sandbox_kata.py tests/test_sandbox_uploads_kata.py \
+  tests/test_sandbox_outputs_kata.py -v
+```
+
 ## Boot smoke: the real backend, started and used
 
 `tests/boot_smoke.py` (`make test-boot`, CI's Boot job) starts the backend

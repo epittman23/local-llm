@@ -36,6 +36,7 @@ from local_llm.models.users import Users
 from local_llm.sandbox import SandboxError, SandboxManager, SandboxNotRunning, SandboxSettings, uploads, wrap_command
 from local_llm.sandbox.backend import validate_put_files
 from local_llm.sandbox.fake import FakeBackend, FakeExecRequest, FakeFile, FakeRun, FakeWorkspace, interpret
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 from local_llm.tools import builtin
 
 OWNER = SimpleNamespace(id='owner')
@@ -227,7 +228,7 @@ class _Rig:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.backend = FakeBackend()
-        self.manager = SandboxManager(self.backend, chats=_Chats(), settings=_settings)
+        self.manager = SandboxManager(self.backend, workspaces=MemoryWorkspaces(), chats=_Chats(), settings=_settings)
         self.request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(sandbox=self.manager)))
 
         async def get_user_by_id(user_id, db=None):

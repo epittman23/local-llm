@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ServerUnreachableError } from '@/lib/apis/errors';
-import { getSandboxOutputHtml, getSandboxOutputText } from './index';
+import {
+	answerPendingWorkspace,
+	getPendingWorkspaceIds,
+	getPendingWorkspaces,
+	getSandboxOutputHtml,
+	getSandboxOutputText
+} from './index';
 
 const stubFetch = (respond: (url: string, init?: RequestInit) => Response | Promise<Response>) => {
 	const fetch = vi.fn(async (url: string, init?: RequestInit) => respond(url, init));
@@ -89,5 +95,48 @@ describe('getSandboxOutputText', () => {
 		await expect(getSandboxOutputText('t', 'f', 3)).rejects.toEqual({ detail: 'Not found' });
 		stubFetch(() => Promise.reject(new TypeError('failed')));
 		await expect(getSandboxOutputText('t', 'f', 3)).rejects.toBeInstanceOf(ServerUnreachableError);
+	});
+});
+
+describe('the pending workspace routes', () => {
+	it('reads the pending ids, and a body without them as none', async () => {
+		const fetch = stubFetch(() => Response.json({ ids: ['a', 3, 'b'] }));
+		expect(await getPendingWorkspaceIds('tok')).toEqual(['a', 'b']);
+		const [url, init] = fetch.mock.calls[0];
+		expect(url).toBe('/api/v1/sandbox/pending/ids');
+		expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer tok');
+		stubFetch(() => Response.json({ items: [], total: 0 }));
+		expect(await getPendingWorkspaceIds('tok')).toEqual([]);
+		stubFetch(() => new Response('not json'));
+		expect(await getPendingWorkspaceIds('tok')).toEqual([]);
+	});
+	it('reads the pending workspaces, filling what a body leaves out', async () => {
+		const item = { id: 'w1', reason: 'expired' };
+		const fetch = stubFetch(() => Response.json({ pending: [item], max_workspaces: 20, retention_days: 7 }));
+		expect(await getPendingWorkspaces('tok')).toEqual({ pending: [item], max_workspaces: 20, retention_days: 7 });
+		expect(fetch.mock.calls[0][0]).toBe('/api/v1/sandbox/pending');
+		stubFetch(() => Response.json({}));
+		expect(await getPendingWorkspaces('tok')).toEqual({ pending: [], max_workspaces: null, retention_days: null });
+	});
+	it('posts an answer, naming another workspace only when it is another', async () => {
+		const fetch = stubFetch(() => Response.json({ ok: true }));
+		await answerPendingWorkspace('tok', 'w/1', 'remove', 7, 'w2');
+		await answerPendingWorkspace('tok', 'w1', 'remove', 7, 'w1');
+		await answerPendingWorkspace('tok', 'w1', 'keep', 8);
+		expect(fetch.mock.calls.map(([url, init]) => [url, init?.method, JSON.parse(String(init?.body))])).toEqual([
+			['/api/v1/sandbox/pending/w%2F1', 'POST', { action: 'remove', since: 7, workspace: 'w2' }],
+			['/api/v1/sandbox/pending/w1', 'POST', { action: 'remove', since: 7 }],
+			['/api/v1/sandbox/pending/w1', 'POST', { action: 'keep', since: 8 }]
+		]);
+	});
+	it('throws a refusal body and an unreachable server', async () => {
+		stubFetch(() => Response.json({ detail: 'busy' }, { status: 409 }));
+		await expect(answerPendingWorkspace('t', 'w', 'remove', 1)).rejects.toEqual({ detail: 'busy' });
+		await expect(getPendingWorkspaces('t')).rejects.toEqual({ detail: 'busy' });
+		await expect(getPendingWorkspaceIds('t')).rejects.toEqual({ detail: 'busy' });
+		stubFetch(() => Promise.reject(new TypeError('failed')));
+		await expect(answerPendingWorkspace('t', 'w', 'keep', 1)).rejects.toBeInstanceOf(ServerUnreachableError);
+		await expect(getPendingWorkspaces('t')).rejects.toBeInstanceOf(ServerUnreachableError);
+		await expect(getPendingWorkspaceIds('t')).rejects.toBeInstanceOf(ServerUnreachableError);
 	});
 });

@@ -41,6 +41,7 @@ import os
 import socket
 import struct
 import subprocess
+import sys
 import tarfile
 import threading
 import time
@@ -78,6 +79,7 @@ from local_llm.sandbox.types import (
     SandboxSpec,
     SandboxUnavailable,
 )
+from local_llm.sandbox.workspaces import MemoryWorkspaces
 
 CID = '0b9a5f3e-6c1d-4f7a-9e2b-3c4d5e6f7a8b'
 SCOPE = '0123456789abcdef'
@@ -1565,7 +1567,7 @@ def test_exec_as_called_by_a_session_cancelled_by_the_user(
 
         return SandboxSettings()
 
-    manager = SandboxManager(backend, settings=settings, chats=Chats())
+    manager = SandboxManager(backend, settings=settings, workspaces=MemoryWorkspaces(), chats=Chats())
 
     async def scenario() -> None:
         async with manager.session(CID, SimpleNamespace(id='u')) as session:
@@ -3146,3 +3148,431 @@ def test_ready_reads_the_configuration_daemon_json_names(
     daemon.write_text(json.dumps({'runtimes': {'kata-clh': {'options': {'ConfigPath': str(other)}}}}))
     monkeypatch.setattr(kata, 'DAEMON_JSON', daemon)
     assert asyncio.run(backend.ready()) == 'Kata runs guests without seccomp (docs/guides/sandbox.md, "Guest seccomp")'
+
+
+# The workspace listing (T24): a short-lived helper with the volume mounted read-only, fixed options.
+
+
+class FakeHelper:
+    """The listing helper container: `start` (or raises `start_error`), `wait` gives `status` (or raises
+    `wait_error`), `logs` gives `output`; it is in the daemon's containers until removed."""
+
+    def __init__(
+        self,
+        daemon: FakeDocker,
+        output: bytes,
+        status: dict[str, Any],
+        wait_error: Exception | None,
+        start_error: Exception | None,
+        scope: str,
+    ) -> None:
+        self.daemon = daemon
+        self.output = output
+        self.status = status
+        self.wait_error = wait_error
+        self.start_error = start_error
+        self.name = kata.list_helper_name(CID)
+        self.labels = {'lllm.scope': scope, 'lllm.helper': 'list', 'lllm.workspace': CID}
+        self.calls: list[tuple[str, Any]] = []
+
+    def start(self) -> None:
+        self.calls.append(('start', None))
+        if self.start_error is not None:
+            raise self.start_error
+
+    def wait(self, timeout: float) -> dict[str, Any]:
+        self.calls.append(('wait', timeout))
+        if self.wait_error is not None:
+            raise self.wait_error
+        return self.status
+
+    def logs(self, stdout: bool, stderr: bool) -> bytes:
+        self.calls.append(('logs', (stdout, stderr)))
+        return self.output
+
+    def remove(self, force: bool = False) -> None:
+        assert force
+        self.calls.append(('remove', force))
+        self.daemon.removed.append(self.name)
+        self.daemon.containers_by_name.pop(self.name, None)
+
+
+def listing_output(entries: list[list[Any]], files: int | None = None, size: int | None = None) -> bytes:
+    return json.dumps(
+        {
+            'entries': entries,
+            'files': len(entries) if files is None else files,
+            'bytes': sum(e[1] for e in entries) if size is None else size,
+            'complete': True,
+        }
+    ).encode()
+
+
+@pytest.fixture
+def workspace(backend: KataDockerBackend, docker_client: FakeDocker, tmp_path: Path) -> Path:
+    """A stopped workspace: the volume, and its image file, not attached (as after a reboot)."""
+    docker_client.add_volume()
+    image = tmp_path / 'volumes' / f'{CID}.img'
+    image.parent.mkdir(exist_ok=True)
+    image.write_bytes(b'kept')
+    return image
+
+
+def helper_runs(
+    docker_client: FakeDocker,
+    output: bytes = b'',
+    status: dict[str, Any] | None = None,
+    wait_error: Exception | None = None,
+    start_error: Exception | None = None,
+) -> list[tuple[dict[str, Any], FakeHelper]]:
+    """Make containers.create make a FakeHelper; returns the list of (kwargs, helper) it fills."""
+    runs: list[tuple[dict[str, Any], FakeHelper]] = []
+
+    def create(**kwargs: Any) -> FakeHelper:
+        helper = FakeHelper(
+            docker_client,
+            output,
+            {'StatusCode': 0} if status is None else status,
+            wait_error,
+            start_error,
+            kwargs['labels']['lllm.scope'],
+        )
+        docker_client.containers_by_name[helper.name] = helper
+        runs.append((kwargs, helper))
+        return helper
+
+    docker_client.containers.create = create
+    return runs
+
+
+def leftover_helper(docker_client: FakeDocker, scope: str) -> FakeContainer:
+    name = kata.list_helper_name(CID)
+    container = FakeContainer(
+        docker_client, name, 'exited', {'lllm.scope': scope, 'lllm.helper': 'list', 'lllm.workspace': CID}, {}
+    )
+    docker_client.containers_by_name[name] = container
+    return container
+
+
+def test_list_helper_options_are_fixed() -> None:
+    options = kata.list_helper_options(CID, scope=SCOPE, max_entries=300)
+    assert options == {
+        'image': IMAGES['data'],
+        'runtime': 'kata-clh',
+        'name': f'lllm-sandbox-list-{CID}',
+        'labels': {'lllm.scope': SCOPE, 'lllm.helper': 'list', 'lllm.workspace': CID},
+        'user': '1000:1000',
+        'entrypoint': ['/opt/conda/bin/python3'],
+        'command': ['-I', '-S', '-c', kata.LIST_SCRIPT, '300', str(kata.LIST_WALK_S), '/workspace', '1024'],
+        'environment': {},
+        'cap_drop': ['ALL'],
+        'security_opt': ['no-new-privileges'],
+        'read_only': True,
+        'network_mode': 'none',
+        'mem_limit': '512m',
+        'nano_cpus': 1_000_000_000,
+        'pids_limit': 16,
+        'volumes': {f'lllm-sandbox-{CID}': {'bind': '/workspace', 'mode': 'ro'}},
+        'working_dir': '/',
+        'healthcheck': {'test': ['NONE']},
+        'detach': True,
+        'auto_remove': False,
+    }
+    # No `lllm.chat` label: the sweeps never take the helper for a sandbox.
+    assert 'lllm.chat' not in options['labels']
+
+
+@pytest.mark.parametrize(
+    'key, scope, limit',
+    [('not-a-uuid', SCOPE, 10), (CID.upper(), SCOPE, 10), (CID, 'short', 10), (CID, SCOPE, 0), (CID, SCOPE, 301)],
+)
+def test_list_helper_options_refuse_what_is_not_fixed(key: str, scope: str, limit: int) -> None:
+    with pytest.raises(ValueError):
+        kata.list_helper_options(key, scope=scope, max_entries=limit)
+
+
+def test_list_workspace_creates_starts_and_removes_the_helper_and_parses_its_output(
+    backend: KataDockerBackend, docker_client: FakeDocker, host: Host, workspace: Path
+) -> None:
+    runs = helper_runs(
+        docker_client, listing_output([['a.csv', 3, 1.5, False], ['dir/b.txt', 4, 2, True]], files=9, size=70)
+    )
+    listing = asyncio.run(backend.list_workspace(CID, 300))
+    assert listing is not None
+    assert [(e.path, e.size, e.mtime, e.truncated) for e in listing.entries] == [
+        ('a.csv', 3, 1.5, False),
+        ('dir/b.txt', 4, 2.0, True),
+    ]
+    assert (listing.files, listing.bytes, listing.complete) == (9, 70, True)
+    [(kwargs, helper)] = runs
+    assert kwargs == kata.list_helper_options(CID, scope=docker_client.scope, max_entries=300)
+    assert helper.calls == [
+        ('start', None),
+        ('wait', kata.LIST_TIMEOUT_S),
+        ('logs', (True, False)),
+        ('remove', True),
+    ]
+    assert kata.list_helper_name(CID) not in docker_client.containers_by_name
+    # Attached first, as a reboot leaves it detached; nothing else ran on the host, nothing was written.
+    assert host.runs == [
+        ['/usr/sbin/udisksctl', 'loop-setup', '--no-user-interaction', '--no-partition-scan', '-f', str(workspace)]
+    ]
+    assert workspace.read_bytes() == b'kept'
+    assert docker_client.volume_creates == []
+
+
+def test_list_workspace_without_a_volume_or_its_image_or_of_another_scope_is_none(
+    backend: KataDockerBackend, docker_client: FakeDocker, workspace: Path
+) -> None:
+    runs = helper_runs(docker_client, listing_output([]))
+    assert asyncio.run(backend.list_workspace(OTHER, 10)) is None
+    workspace.unlink()
+    assert asyncio.run(backend.list_workspace(CID, 10)) is None
+    workspace.write_bytes(b'kept')
+    docker_client.volumes_by_name[f'lllm-sandbox-{CID}'].attrs['Labels']['lllm.scope'] = 'f' * 16
+    assert asyncio.run(backend.list_workspace(CID, 10)) is None
+    assert runs == []
+
+
+def test_list_workspace_removes_a_leftover_helper_first_and_refuses_another_scope_s(
+    backend: KataDockerBackend, docker_client: FakeDocker, workspace: Path
+) -> None:
+    name = kata.list_helper_name(CID)
+    leftover_helper(docker_client, docker_client.scope)
+    runs = helper_runs(docker_client, listing_output([]))
+    assert asyncio.run(backend.list_workspace(CID, 10)) is not None
+    assert docker_client.removed[0] == name and len(runs) == 1
+    leftover_helper(docker_client, 'f' * 16)
+    with pytest.raises(SandboxError, match='another app instance'):
+        asyncio.run(backend.list_workspace(CID, 10))
+    assert len(runs) == 1
+
+
+@pytest.mark.parametrize(
+    'status, wait_error, start_error, message',
+    [
+        ({'StatusCode': 1}, None, None, 'the workspace listing helper failed'),
+        ({}, None, None, 'the workspace listing helper failed'),
+        (
+            None,
+            requests.ReadTimeout('http+docker://localhost/secret'),
+            None,
+            'the sandbox backend could not list the workspace',
+        ),
+        (
+            None,
+            None,
+            docker.errors.APIError('kata: cannot start /var/lib/secret'),
+            'the sandbox backend could not list the workspace',
+        ),
+    ],
+)
+def test_list_workspace_failures_are_fixed_text_and_the_helper_is_removed(
+    backend: KataDockerBackend,
+    docker_client: FakeDocker,
+    workspace: Path,
+    status: dict[str, Any] | None,
+    wait_error: Exception | None,
+    start_error: Exception | None,
+    message: str,
+) -> None:
+    runs = helper_runs(
+        docker_client,
+        b'{}',
+        status=status if status is not None else {'StatusCode': 0},
+        wait_error=wait_error,
+        start_error=start_error,
+    )
+    with pytest.raises(SandboxError) as raised:
+        asyncio.run(backend.list_workspace(CID, 10))
+    assert str(raised.value) == message
+    # Removed whatever failed, a failed start included: a helper left behind would hold the volume.
+    assert runs[0][1].calls[-1] == ('remove', True)
+    assert kata.list_helper_name(CID) not in docker_client.containers_by_name
+
+
+def test_stop_and_destroy_remove_a_leftover_helper_of_their_scope_only(
+    backend: KataDockerBackend, docker_client: FakeDocker, workspace: Path
+) -> None:
+    name = kata.list_helper_name(CID)
+    leftover_helper(docker_client, docker_client.scope)
+    asyncio.run(backend.stop(CID))
+    assert name in docker_client.removed and name not in docker_client.containers_by_name
+    leftover_helper(docker_client, docker_client.scope)
+    asyncio.run(backend.destroy(CID))
+    assert docker_client.removed.count(name) == 2
+    # The helper is gone before the volume goes.
+    assert docker_client.volume_removed == [f'lllm-sandbox-{CID}']
+    leftover_helper(docker_client, 'f' * 16)
+    asyncio.run(backend.stop(CID))
+    assert name in docker_client.containers_by_name
+
+
+def test_remove_helpers_removes_every_helper_of_its_scope(
+    backend: KataDockerBackend, docker_client: FakeDocker
+) -> None:
+    mine = leftover_helper(docker_client, docker_client.scope)
+    other_name = f'lllm-sandbox-list-{OTHER}'
+    other = FakeContainer(docker_client, other_name, 'exited', {'lllm.scope': docker_client.scope}, {})
+    seen: list[dict[str, Any]] = []
+
+    def listing(all: bool, filters: dict[str, Any], ignore_removed: bool) -> list[Any]:
+        seen.append(filters)
+        # The daemon filters by label; a helper without a valid workspace label is skipped.
+        return [mine, other]
+
+    docker_client.containers.list = listing
+    asyncio.run(backend.remove_helpers())
+    assert seen == [{'label': ['lllm.helper=list', f'lllm.scope={docker_client.scope}']}]
+    assert kata.list_helper_name(CID) in docker_client.removed
+    assert other_name not in docker_client.removed
+
+
+def test_remove_helpers_wraps_errors(backend: KataDockerBackend, docker_client: FakeDocker) -> None:
+    def broken(**kwargs: Any) -> list[Any]:
+        raise requests.ConnectionError('unix:///var/run/docker.sock')
+
+    docker_client.containers.list = broken
+    with pytest.raises(SandboxError) as raised:
+        asyncio.run(backend.remove_helpers())
+    assert str(raised.value) == 'the sandbox backend could not remove the listing helpers'
+
+
+def test_list_workspace_validates_first(backend: KataDockerBackend, docker_client: FakeDocker) -> None:
+    runs = helper_runs(docker_client)
+    with pytest.raises(ValueError):
+        asyncio.run(backend.list_workspace('../x', 10))
+    with pytest.raises(TypeError):
+        asyncio.run(backend.list_workspace(CID, True))
+    assert runs == []
+
+
+@pytest.mark.parametrize(
+    'raw',
+    [
+        'not bytes',
+        b'x' * (kata.LIST_OUTPUT_MAX_BYTES + 1),
+        b'not json',
+        b'[]',
+        b'{"entries": [], "files": 0, "bytes": 0}',
+        b'{"entries": {}, "files": 0, "bytes": 0, "complete": true}',
+        b'{"entries": [], "files": "0", "bytes": 0, "complete": true}',
+        b'{"entries": [], "files": 0, "bytes": -1, "complete": true}',
+        b'{"entries": [["a", 1, 1, false]], "files": 0, "bytes": 1, "complete": true}',
+        b'{"entries": [["a", 5, 1, false]], "files": 1, "bytes": 4, "complete": true}',
+        b'{"entries": [["a", 1, 1, false], ["b", 1, 1, false], ["c", 1, 1, false]], "files": 3, "bytes": 3, '
+        b'"complete": true}',
+        b'{"entries": [], "files": 0, "bytes": 0, "complete": 1}',
+    ],
+)
+def test_parse_listing_refuses_what_the_script_would_not_print(raw: Any) -> None:
+    with pytest.raises(SandboxError, match='malformed'):
+        kata.parse_listing(raw, 2)
+
+
+@pytest.mark.parametrize(
+    'bad',
+    [
+        ['a', 1, 1],
+        'a',
+        ['', 1, 1, False],
+        ['a\u0000b', 1, 1, False],
+        [1, 1, 1, False],
+        ['a', -1, 1, False],
+        ['a', True, 1, False],
+        ['a', 1, '1', False],
+        ['a', 1, 1, 'no'],
+        ['a' * (kata.MAX_PATH_BYTES + 1), 1, 1, False],
+    ],
+)
+def test_parse_listing_drops_one_bad_entry_and_marks_the_listing_incomplete(bad: Any) -> None:
+    raw = json.dumps({'entries': [bad, ['ok.txt', 2, 3, False]], 'files': 2, 'bytes': 3, 'complete': True}).encode()
+    listing = kata.parse_listing(raw, 2)
+    assert [(e.path, e.size) for e in listing.entries] == [('ok.txt', 2)]
+    assert (listing.files, listing.bytes, listing.complete) == (2, 3, False)
+
+
+def test_parse_listing_accepts_the_longest_path() -> None:
+    listing = kata.parse_listing(listing_output([['a' * kata.MAX_PATH_BYTES, 1, 1, False]]), 2)
+    assert listing.files == 1 and listing.complete
+
+
+def run_list_script(top: Path, limit: int, budget: float = 20, path_bytes: int = kata.LIST_PATH_MAX_BYTES):
+    """LIST_SCRIPT run by this Python on a directory, its output read by parse_listing, as the backend does."""
+    done = subprocess.run(
+        [sys.executable, '-I', '-S', '-c', kata.LIST_SCRIPT, str(limit), str(budget), str(top), str(path_bytes)],
+        capture_output=True,
+        check=True,
+        timeout=60,
+        env={'PATH': '/usr/bin:/bin'},
+    )
+    return done.stdout, kata.parse_listing(done.stdout, limit)
+
+
+def test_the_list_script_itself_walks_lists_and_counts(tmp_path: Path) -> None:
+    top = tmp_path / 'workspace'
+    (top / 'b' / 'deep').mkdir(parents=True)
+    (top / 'a.txt').write_bytes(b'12345')
+    (top / 'b' / 'deep' / 'c.bin').write_bytes(b'x' * 10)
+    (top / 'b' / 'z.csv').write_bytes(b'1,2\n')
+    os.symlink('/etc/passwd', top / 'link')
+    os.mkfifo(top / 'fifo')
+    os.utime(top / 'a.txt', (1000, 1000))
+    bad_name = os.fsencode(top) + b'/caf\xe9.txt'
+    with open(bad_name, 'wb') as handle:
+        handle.write(b'!')
+
+    _, full = run_list_script(top, 10)
+    assert [e.path for e in full.entries] == ['a.txt', 'caf�.txt', 'b/z.csv', 'b/deep/c.bin']
+    assert not any(e.truncated for e in full.entries)
+    assert (full.files, full.bytes, full.complete) == (4, 20, True)
+    assert full.entries[0].mtime == 1000.0
+    _, capped = run_list_script(top, 2)
+    assert [e.path for e in capped.entries] == ['a.txt', 'caf�.txt']
+    assert (capped.files, capped.bytes) == (4, 20)
+    assert not run_list_script(top, 10, budget=-1)[1].complete
+
+
+def test_the_list_script_cuts_a_path_of_invalid_bytes_that_would_grow_past_the_path_limit(tmp_path: Path) -> None:
+    """Six nested directories of 240 `\\xff` bytes: each byte becomes a 3-byte U+FFFD, about 4.3 KB of path."""
+    top = tmp_path / 'workspace'
+    deep = os.fsencode(top)
+    for _ in range(6):
+        deep += b'/' + b'\xff' * 240
+    os.makedirs(deep)
+    with open(deep + b'/f', 'wb') as handle:
+        handle.write(b'data')
+    raw, listing = run_list_script(top, 300)
+    [entry] = listing.entries
+    assert entry.truncated and entry.size == 4
+    assert len(entry.path.encode()) <= kata.LIST_PATH_MAX_BYTES
+    assert entry.path.startswith('�') and entry.path.endswith('…')
+    assert listing.complete and len(raw) <= kata.LIST_OUTPUT_MAX_BYTES
+
+
+def test_the_list_script_output_stays_within_its_limit_with_names_full_of_control_bytes(tmp_path: Path) -> None:
+    """300 files under a deep path of `\\x01` bytes, which JSON writes six bytes each (`\\u0001`)."""
+    top = tmp_path / 'workspace'
+    deep = os.fsencode(top)
+    for _ in range(4):
+        deep += b'/' + b'\x01' * 250
+    os.makedirs(deep)
+    for n in range(300):
+        with open(deep + b'/' + b'\x01' * 200 + str(n).encode(), 'wb') as handle:
+            handle.write(b'x')
+    raw, listing = run_list_script(top, 300)
+    assert len(listing.entries) == 300 and listing.files == 300 and listing.complete
+    assert all(e.truncated and len(e.path.encode()) <= kata.LIST_PATH_MAX_BYTES for e in listing.entries)
+    assert len(raw) <= kata.LIST_OUTPUT_MAX_BYTES
+
+
+def test_a_helper_gone_before_its_removal_is_not_an_error(
+    backend: KataDockerBackend, docker_client: FakeDocker
+) -> None:
+    helper = leftover_helper(docker_client, docker_client.scope)
+
+    def gone(force: bool = False) -> None:
+        raise docker.errors.NotFound('no such container')
+
+    helper.remove = gone
+    asyncio.run(backend.stop(CID))

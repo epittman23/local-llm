@@ -16,6 +16,8 @@ from local_llm.sandbox.manager import (
     SandboxRefused,
     SandboxSession,
     SandboxSettings,
+    WorkspaceBusy,
+    WorkspaceNotFound,
     settings_from_config,
 )
 from local_llm.sandbox.types import (
@@ -28,14 +30,17 @@ from local_llm.sandbox.types import (
     SandboxNotRunning,
     SandboxSpec,
     SandboxUnavailable,
+    WorkspaceListing,
     validate_chat_id,
     volume_name,
 )
+from local_llm.sandbox.workspaces import DatabaseWorkspaces, WorkspaceRecord, WorkspaceStore
 
 __all__ = [
     'SETTING_KEYS',
     'ChatLookup',
     'DatabaseChats',
+    'DatabaseWorkspaces',
     'ExecResult',
     'FileEntry',
     'FileStat',
@@ -51,6 +56,11 @@ __all__ = [
     'SandboxSpec',
     'SandboxUnavailable',
     'StreamCap',
+    'WorkspaceBusy',
+    'WorkspaceListing',
+    'WorkspaceNotFound',
+    'WorkspaceRecord',
+    'WorkspaceStore',
     'clamp_timeout',
     'require_wrapped',
     'result_from',

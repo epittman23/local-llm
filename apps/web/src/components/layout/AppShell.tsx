@@ -14,6 +14,7 @@ import { useShortcuts } from '@/lib/useShortcuts';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { useCalendarAlerts } from '@/routes/calendar/useCalendarAlerts';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
+import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { cn } from '@/lib/utils';
 import { SidebarContent } from './Sidebar';
@@ -116,6 +117,7 @@ export function AppShell() {
 				</main>
 				<SettingsModal />
 				<SearchChatsDialog open={searchOpen} onOpenChange={setSearchOpen} />
+				<PendingWorkspacesDialog />
 			</div>
 		</div>
 	);

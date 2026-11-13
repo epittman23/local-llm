@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { chatAction, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
+import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import { getAndUpdateUserLocation } from '@/lib/apis/users';
 import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
 import { generateTags } from '@/lib/apis';
@@ -275,7 +276,11 @@ export function useChatSession({
 				switch (e.kind) {
 					case 'done':
 						if (latest.current.settings?.responseAutoCopy) void copyToClipboard(e.content);
-						if (chatIdRef.current && !isTemporaryChatId(chatIdRef.current)) void refreshList();
+						if (chatIdRef.current && !isTemporaryChatId(chatIdRef.current)) {
+							void refreshList();
+							// A code call in the reply may have hit the workspace limit: the deletion dialog asks again.
+							void queryClient.invalidateQueries({ queryKey: PENDING_WORKSPACE_IDS_KEY });
+						}
 						break;
 					case 'error':
 						toast.error(e.text);
@@ -338,7 +343,7 @@ export function useChatSession({
 				}
 			}
 		},
-		[token, loadChat, refreshList, markRead, setDialog]
+		[token, queryClient, loadChat, refreshList, markRead, setDialog]
 	);
 
 	useEffect(() => {
