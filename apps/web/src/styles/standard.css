@@ -356,3 +356,69 @@ html[data-ui="standard"] :is(table, [data-numeric]) {
 		scroll-behavior: auto;
 	}
 }
+
+/*
+ * CNT-2: one code theme, from the tokens, in every app theme. These are
+ * highlight.js's token classes; the scope's specificity beats whichever
+ * highlight.js stylesheet a page has loaded.
+ */
+html[data-ui="standard"] :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-doctag) {
+	color: var(--series-3);
+}
+html[data-ui="standard"] :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-bullet) {
+	color: var(--series-4);
+}
+html[data-ui="standard"] :is(.hljs-number, .hljs-symbol, .hljs-deletion) {
+	color: var(--series-5);
+}
+html[data-ui="standard"] :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+	color: var(--series-1);
+}
+html[data-ui="standard"]
+	:is(.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-params) {
+	color: var(--series-2);
+}
+html[data-ui="standard"] :is(.hljs-meta, .hljs-link, .hljs-code) {
+	color: var(--series-6);
+}
+html[data-ui="standard"] :is(.hljs-comment, .hljs-quote) {
+	color: var(--foreground-muted);
+}
+html[data-ui="standard"] .hljs-strong {
+	font-weight: 650;
+}
+html[data-ui="standard"] .hljs-emphasis {
+	font-style: italic;
+}
+
+/*
+ * CNV-6: the editor is the source view with a caret. The textarea lies over
+ * the highlighted text with the same face, size and line height, shows only
+ * its caret and selection, and the surface, not the textarea, carries the
+ * focus indicator.
+ */
+html[data-ui="standard"] textarea[data-code-editor] {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background-color: transparent;
+	color: transparent;
+	caret-color: var(--foreground-strong);
+	font: inherit;
+	letter-spacing: inherit;
+	tab-size: inherit;
+	outline: none;
+}
+html[data-ui="standard"] textarea[data-code-editor]::selection {
+	background-color: color-mix(in oklch, var(--brand), transparent 65%);
+}
+html[data-ui="standard"] .code-surface:has(textarea[data-code-editor]:focus-visible) {
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
+}
+@media (pointer: coarse) {
+	html[data-ui="standard"] .code-surface {
+		font-size: var(--text-reading); /* TYP-4 */
+	}
+}

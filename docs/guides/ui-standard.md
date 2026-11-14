@@ -415,7 +415,8 @@ Markdown and one set of prose styles (`.rich-text`), at `text-reading` and
 within TYP-5.
 
 **CNT-2. Code blocks have one theme, built from the tokens, in both app
-themes.** The block sits on `--surface-1` with an edge; its header names the
+themes.** Code is highlighted by highlight.js and coloured by the `.hljs-*`
+rules in `standard.css`; no highlight.js stylesheet supplies colours. The block sits on `--surface-1` with an edge; its header names the
 language and offers Copy and Wrap lines. Long lines scroll inside the block.
 Inline code is the monospaced face on `--surface-3`.
 
@@ -466,7 +467,9 @@ not altered.
 
 **CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
 document, then a bar with "Unsaved changes", Discard changes and Save
-document. Entering the editor moves focus into it; saving or discarding
+document. The editor is the Source view with a caret: the same face, size,
+line numbers and highlighting, updated as you type, so nothing moves or
+changes colour when editing starts. Entering the editor moves focus into it; saving or discarding
 moves focus back to the document's heading. Closing the canvas, switching
 document or leaving the chat with unsaved changes asks first.
 

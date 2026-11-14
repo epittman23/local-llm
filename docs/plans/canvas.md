@@ -3,9 +3,8 @@
 > **Status: planned (2026-11-14). Nothing here is built** except the
 > interface design, which is shown on `/ui` ("Canvas") and specified by the
 > CNV rules in [docs/guides/ui-standard.md](../guides/ui-standard.md). This
-> file is the implementation plan. Of its five decisions, the owner settled
-> the first four on 2026-11-14 by accepting the defaults; the fifth (the
-> preview frame's permissions) is still open, and only C11 depends on it.
+> file is the implementation plan. The owner settled all five of its
+> decisions on 2026-11-14; none is open.
 
 ## What the owner asked for
 
@@ -100,8 +99,7 @@ on every token.
 
 ## Decisions
 
-Decisions 1 to 4 were settled by the owner on 2026-11-14, as written here.
-Decision 5 is open; the tasks assume its default.
+All five were settled by the owner on 2026-11-14, as written here.
 
 1. **Which HTML goes to the canvas?** *Decided: every fenced `html` or `svg`
    block of a complete document or of more than 15 lines; shorter snippets
@@ -120,11 +118,14 @@ Decision 5 is open; the tasks assume its default.
    card and opens full size in the canvas.* A plot is often the whole answer,
    so hiding it entirely behind a card would cost a click on most
    data-analysis replies.
-5. **(Open.) Do `ArtifactPanel`'s wider frame permissions survive?** *Default: no.
+5. **Do `ArtifactPanel`'s wider frame permissions survive?** *Decided: no.
    One frame, `allow-scripts` only, for every HTML document that is
-   previewed, as sandbox outputs have today.* Forms and modal dialogs inside
-   a preview stop working; the five unported "Artifacts" settings
-   (`detectArtifacts` and the four `iframeSandboxAllow*`) are removed.
+   previewed, as sandbox outputs have today.* A real form submission and
+   `alert()`, `confirm()` and `prompt()` stop working inside a preview;
+   scripts, inputs and event handlers work as before. The five unported
+   "Artifacts" settings (`detectArtifacts` and the four
+   `iframeSandboxAllow*`) are removed. So that models write pages that work
+   under this, the system prompt gains one line (task C11a).
 
 ## Phases and tasks
 
@@ -180,6 +181,23 @@ Fixes #901 on its own, before any canvas exists.
   replacing the five unported "Artifacts" rows.
 - **C11.** Delete `ArtifactPanel.tsx` and the Preview button's plumbing
   (decision 5).
+- **C11a.** The system prompt line (decision 5), added in the same pull
+  request as C11, because it is only true once every preview is
+  scripts-only:
+
+  > HTML you write is previewed in a sandboxed frame that runs scripts but
+  > does not submit forms or show `alert`, `confirm` or `prompt` dialogs.
+  > Handle input with event listeners and show messages in the page.
+
+  The prompt is configured in the app, not in a file: the owner adds the
+  line to the system prompt of each entry under Workspace > Models (README
+  "Model setup"). The same change copies it into
+  `apps/server/local_llm/benchmarks/data/prompts/assistant.txt`, as AGENTS.md
+  requires. That file is append-only for the PR gate and is identified by
+  the sha of its bytes, so that pull request trips the gate and needs the
+  owner's approval under a `## Gate changes` heading, and benchmark runs
+  made after it carry a new system-prompt sha and are not comparable with
+  earlier ones.
 - **C12.** Tests: Vitest for `documents.ts` (every kind, hostile shapes,
   branch switches) and each renderer; the existing
   `e2e/sandbox-outputs.spec.ts` cases re-pointed at the canvas, since they
@@ -189,9 +207,21 @@ Fixes #901 on its own, before any canvas exists.
 
 ### Phase 3: the canvas as a text editor
 
-- **C13.** Edit mode for Markdown, text and code: CodeMirror (already a
-  dependency) with the standard's code theme (CNT-2), line numbers, and
-  wrapping on for prose kinds.
+- **C13.** Edit mode for Markdown, text and code. The owner's requirement
+  (2026-11-14): the editor looks identical to the Source view and is
+  highlighted as the chat's code blocks are. So it is not a separate editor
+  component: Source and the editor are one code surface, highlighted by
+  highlight.js (what `CodeBlock` uses) with the standard's token colours
+  (CNT-2), with a transparent `<textarea>` laid exactly over the highlighted
+  text while editing. `apps/web/src/routes/ui/CodeSurface.tsx` is the working
+  model; on `/ui` screenshots of the two states are pixel-identical in dark
+  and light. It moves to `components/chat/` and `CodeBlock` adopts the same
+  token colours, which also retires the `github-dark` theme (#1064). Tab
+  inserts indentation only after the editor has been typed in, so Tab still
+  leaves it for keyboard users (Escape, then Tab, always leaves). Editing is
+  offered up to the 256 KiB the Source view fetches; a larger file is
+  download only. CodeMirror, already a dependency, is the fallback if
+  re-highlighting on each keystroke proves slow at that size.
 - **C14.** Backend, for decision 2's default: `POST
   /api/v1/files/{id}/versions` creating a new `File` row with
   `meta.version_of` and the same message link, under the same ownership check

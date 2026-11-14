@@ -142,7 +142,9 @@ describe('UiStandardPage (/ui)', () => {
 
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
 		expect(canvas().querySelector('iframe')).toBeNull();
-		expect(within(canvas()).getByText('<!doctype html>')).toBeTruthy();
+		expect(canvas().querySelector('pre')?.textContent).toContain('<!doctype html>');
+		// Highlighted by highlight.js, as the chat's code blocks are.
+		expect(canvas().querySelector('pre .hljs-name')?.textContent).toBe('html');
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Preview' }));
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Reload the page' }));
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Expand to the full width' }));
@@ -151,12 +153,13 @@ describe('UiStandardPage (/ui)', () => {
 		// A script has no preview: source only, and no view switch.
 		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
 		expect(within(canvas()).queryByRole('button', { name: 'Preview' })).toBeNull();
-		expect(within(canvas()).getByText(/def standard_error/)).toBeTruthy();
+		expect(canvas().querySelector('pre')?.textContent).toContain('def standard_error');
+		expect(canvas().querySelector('pre .hljs-keyword')?.textContent).toBe('import');
 
 		fireEvent.click(screen.getByRole('button', { name: /summary\.csv/ }));
 		expect(within(canvas()).getByRole('columnheader', { name: 'Standard error' })).toBeTruthy();
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
-		expect(within(canvas()).getByText('n,standard_error')).toBeTruthy();
+		expect(canvas().querySelector('pre')?.textContent).toContain('n,standard_error');
 
 		fireEvent.click(screen.getByRole('button', { name: /method-notes\.md/ }));
 		expect(canvas().textContent).toContain('Quadrupling the sample halves the standard error.');
@@ -170,7 +173,11 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
 		const editor = within(canvas()).getByLabelText('Edit method-notes.md');
 		expect(within(canvas()).getByText('Editing. No changes yet')).toBeTruthy();
+		// The editor is the source view with a caret: same text, highlighted, under the textarea.
+		expect(canvas().querySelector('pre')?.textContent).toContain('## Method notes');
+		expect(canvas().querySelector('pre .hljs-section')).toBeTruthy();
 		fireEvent.change(editor, { target: { value: '## Changed heading' } });
+		expect(canvas().querySelector('pre .hljs-section')?.textContent).toBe('## Changed heading');
 		expect(within(canvas()).getByText('Unsaved changes')).toBeTruthy();
 
 		expect(document.activeElement).toBe(editor);
@@ -192,7 +199,7 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
 		ask = screen.getByRole('alertdialog');
 		fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
-		expect(within(canvas()).getByText(/def standard_error/)).toBeTruthy();
+		expect(canvas().querySelector('pre')?.textContent).toContain('def standard_error');
 
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Discard changes' }));

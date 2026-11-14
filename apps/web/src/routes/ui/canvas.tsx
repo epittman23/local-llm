@@ -38,8 +38,8 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CodeSurface } from './CodeSurface';
 import { Example, Section } from './parts';
 
 // /ui, "Canvas": the design of the document panel beside a chat (CNV rules;
@@ -121,6 +121,9 @@ const DOCUMENTS: DemoDocument[] = [
 	{ id: 'summary', name: 'summary.csv', kind: 'CSV', size: '50 B', icon: TableIcon, text: CSV }
 ];
 
+/** highlight.js's name for each kind's source. */
+const LANGUAGE: Record<Kind, string> = { HTML: 'xml', Markdown: 'markdown', Python: 'python', CSV: 'plaintext' };
+
 /** CNV-4: which kinds have a Preview as well as a Source, and which can be edited. */
 const HAS_PREVIEW: Record<Kind, boolean> = { HTML: true, Markdown: true, Python: false, CSV: true };
 const EDITABLE: Record<Kind, boolean> = { HTML: false, Markdown: true, Python: true, CSV: false };
@@ -158,25 +161,6 @@ function DocumentCard({
 				</span>
 			</span>
 		</button>
-	);
-}
-
-/** CNV-4, CNT-2: source with line numbers, on a panel, scrolling inside its own box. */
-function SourceView({ text }: { text: string }) {
-	const lines = text.split('\n').map((line, i) => ({ number: i + 1, line }));
-	return (
-		<pre className="text-dense h-full overflow-auto py-3 leading-relaxed">
-			<code className="grid grid-cols-[auto_1fr] gap-x-4 bg-transparent p-0">
-				{lines.map(({ number, line }) => (
-					<span key={number} className="contents">
-						<span aria-hidden className="text-foreground-muted pl-3 text-right select-none">
-							{number}
-						</span>
-						<span className="pr-3 whitespace-pre">{line || ' '}</span>
-					</span>
-				))}
-			</code>
-		</pre>
 	);
 }
 
@@ -289,7 +273,7 @@ export function CanvasSection() {
 		>
 			<Example
 				title="A reply with four documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. Not shown in this box: the resize handle and remembered width of CNV-2, and the real breakpoints, which are wider than a demo inside a page can use."
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. Not shown in this box: the resize handle and remembered width of CNV-2, and the real breakpoints, which are wider than a demo inside a page can use."
 			>
 				<div
 					ref={frame}
@@ -443,12 +427,11 @@ export function CanvasSection() {
 
 							<div className="bg-background min-h-0 flex-1">
 								{editing ? (
-									<Textarea
-										ref={editor}
-										aria-label={`Edit ${doc.name}`}
-										value={draft}
-										onChange={(e) => setDraft(e.target.value)}
-										className="text-dense h-full resize-none rounded-none border-0 font-mono leading-relaxed"
+									// CNV-6: the same surface as Source, with a caret.
+									<CodeSurface
+										code={draft}
+										language={LANGUAGE[doc.kind]}
+										edit={{ label: `Edit ${doc.name}`, onChange: setDraft, inputRef: editor }}
 									/>
 								) : showPreview && doc.kind === 'HTML' ? (
 									// CNV-5: scripts only, an opaque origin, filled through srcdoc; the surround is themed.
@@ -468,7 +451,7 @@ export function CanvasSection() {
 								) : showPreview && doc.kind === 'CSV' ? (
 									<CsvView text={text} />
 								) : (
-									<SourceView text={text} />
+									<CodeSurface code={text} language={LANGUAGE[doc.kind]} />
 								)}
 							</div>
 

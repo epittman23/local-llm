@@ -469,7 +469,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   contrast ratios the standard promises. **`src/lib/ui/contrast.ts`** is
   the WCAG arithmetic both use. **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of the
-  planned canvas (`docs/plans/canvas.md`), not the feature.
+  planned canvas (`docs/plans/canvas.md`), not the feature, and
+  `CodeSurface.tsx` is the one highlighted surface it reads and edits code on.
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
   `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a

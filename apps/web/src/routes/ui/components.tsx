@@ -52,6 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { highlight } from './CodeSurface';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 
 // The second half of /ui: the shared components (components/ui) under the
@@ -642,24 +643,10 @@ export function StatesSection() {
 	);
 }
 
-const CODE_PARTS: Array<[string, string | null]> = [
-	['def ', '--series-3'],
-	['summarize', '--series-1'],
-	['(x: np.ndarray) -> dict[str, float]:\n    ', null],
-	['"""Mean, unbiased variance and standard error of x."""', '--series-4'],
-	['\n    n = ', null],
-	['len', '--series-2'],
-	['(x)\n    ', null],
-	['return ', '--series-3'],
-	['{', null],
-	['"mean"', '--series-4'],
-	[': x.mean(), ', null],
-	['"var"', '--series-4'],
-	[': x.var(ddof=', null],
-	['1', '--series-5'],
-	[')}', null]
-];
-const CODE = CODE_PARTS.map(([text, color], i) => ({ key: `part-${i}`, text, color }));
+const SAMPLE_CODE = `def summarize(x: np.ndarray) -> dict[str, float]:
+    """Mean, unbiased variance and standard error of x."""
+    n = len(x)
+    return {"mean": x.mean(), "var": x.var(ddof=1), "se": x.std(ddof=1) / np.sqrt(n)}`;
 
 export function ContentSection() {
 	const [wrap, setWrap] = useState(false);
@@ -695,13 +682,7 @@ export function ContentSection() {
 						<pre
 							className={`text-dense p-3 leading-relaxed ${wrap ? 'break-words whitespace-pre-wrap' : 'overflow-x-auto'}`}
 						>
-							<code>
-								{CODE.map((part) => (
-									<span key={part.key} style={part.color ? { color: `var(${part.color})` } : undefined}>
-										{part.text}
-									</span>
-								))}
-							</code>
+							<code>{highlight(SAMPLE_CODE, 'python')}</code>
 						</pre>
 					</figure>
 				</div>

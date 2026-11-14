@@ -26,8 +26,13 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     shorter snippets stay inline; saving an edit makes a new version in the
     app and can be attached to the next message; the canvas opens by itself
     for a single new document on a wide screen, with a setting; an image
-    keeps a thumbnail on its card. One is open: whether the preview frame
-    keeps forms and modal dialogs.
+    keeps a thumbnail on its card; every previewed page runs in one frame
+    with scripts only, so form submission and `alert`/`confirm`/`prompt` stop
+    working in previews, and the system prompt will gain a line saying so
+    when that ships. The owner also required the text editor to look
+    identical to the source view, highlighted as the chat's code blocks are;
+    `/ui` shows it as one code surface with a transparent textarea over the
+    highlighted text.
 - **2026-11-14** (later still): **The interface has a written standard,
   shown on `/ui`; it is not the app's default look yet.** A UX/UI review of
   the whole app the same day filed 215 issues (#901 to #1115, indexed in
