@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import type { Channel, ChannelMessage } from './channelModel';
 import { type ComposerHandle, MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
@@ -36,14 +37,9 @@ export function ThreadPanel({
 		<div className="bg-muted/30 flex h-full w-full flex-col" aria-label="Thread">
 			<div className="flex items-center justify-between px-3.5 py-3">
 				<h2 className="text-lg">Thread</h2>
-				<button
-					type="button"
-					aria-label="Close thread"
-					className="text-muted-foreground hover:text-foreground p-2"
-					onClick={onClose}
-				>
+				<Button type="button" variant="ghost" size="icon-sm" aria-label="Close thread" onClick={onClose}>
 					<X className="size-4" />
-				</button>
+				</Button>
 			</div>
 			<div className="min-h-0 flex-1 overflow-y-auto pt-7">
 				{feed.messages === null ? (

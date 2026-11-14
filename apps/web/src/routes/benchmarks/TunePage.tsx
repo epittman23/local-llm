@@ -559,8 +559,8 @@ export function TunePage() {
 				<h3 className="flex items-center gap-2 text-sm font-medium">
 					Status
 					{streaming && (
-						<span className="flex items-center gap-1 text-xs font-normal text-green-600 dark:text-green-400">
-							<span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+						<span className="flex items-center gap-1 text-xs font-normal text-success">
+							<span className="size-1.5 animate-pulse rounded-full bg-success" />
 							Live
 						</span>
 					)}
@@ -571,8 +571,8 @@ export function TunePage() {
 			</div>
 
 			{status?.current_visit && (
-				<div className="flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-400">
-					<span className="size-1.5 animate-pulse rounded-full bg-yellow-500" />
+				<div className="flex items-center gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+					<span className="size-1.5 animate-pulse rounded-full bg-warning" />
 					Running {status.current_visit.label ?? status.current_visit.candidate_sha} —{' '}
 					{fmtElapsed(status.current_visit.elapsed_seconds)}
 					{status.current_visit.tokens_per_second ? (
@@ -669,20 +669,20 @@ export function TunePage() {
 											key={c.candidate_sha ?? candidateName(c)}
 											className={
 												live
-													? 'bg-yellow-500/10'
+													? 'bg-warning/10'
 													: c.status === 'winner'
-														? 'bg-green-500/10'
+														? 'bg-success/10'
 														: c.is_baseline
-															? 'bg-blue-500/5'
+															? 'bg-brand/5'
 															: undefined
 											}
 										>
 											<TableCell>
 												{candidateName(c)}{' '}
 												{c.status === 'winner' ? (
-													<span className="text-green-600 dark:text-green-400">★ winner</span>
+													<span className="text-success">★ winner</span>
 												) : c.is_baseline ? (
-													<span className="text-blue-600 dark:text-blue-400">(baseline)</span>
+													<span className="text-brand">(baseline)</span>
 												) : null}
 											</TableCell>
 											<TableCell className="text-right">{fmtNum(c.score)}</TableCell>
@@ -690,7 +690,7 @@ export function TunePage() {
 											<TableCell className="text-right">{c.paired_items ?? '—'}</TableCell>
 											<TableCell>
 												{live ? (
-													<span className="text-yellow-700 dark:text-yellow-400">
+													<span className="text-warning">
 														● running — {fmtElapsed(live.elapsed_seconds)}
 														{live.tokens_per_second ? ` · ${fmtNum(live.tokens_per_second, 1)} tok/s` : ' · loading'}
 													</span>
@@ -785,7 +785,7 @@ export function TunePage() {
 						<div>
 							<div className="mb-1 px-0.5 text-xs">Design audit</div>
 							<div
-								className="prose dark:prose-invert bg-muted/50 max-w-none rounded-lg p-3 text-sm"
+								className="prose bg-muted/50 max-w-none rounded-lg p-3 text-sm"
 								dangerouslySetInnerHTML={{ __html: designAuditHtml }}
 							/>
 						</div>
@@ -840,7 +840,7 @@ export function TunePage() {
 
 function StatTile({ label, value, warn }: { label: string; value: React.ReactNode; warn?: boolean }) {
 	return (
-		<div className={`rounded-lg p-2.5 ${warn ? 'bg-red-500/10' : 'bg-muted/50'}`}>
+		<div className={`rounded-lg p-2.5 ${warn ? 'bg-danger/10' : 'bg-muted/50'}`}>
 			<div className="text-muted-foreground text-xs">{label}</div>
 			<div className="truncate font-medium">{value}</div>
 		</div>

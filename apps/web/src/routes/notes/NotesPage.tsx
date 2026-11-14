@@ -23,16 +23,16 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import {
-	type NoteListItem,
 	contentFromMarkdown,
 	groupNotes,
 	importableNote,
+	type NoteListItem,
 	nextSort,
 	openLinkedNote,
 	safeFileName
 } from './notesModel';
 
-const filterSelect = 'bg-transparent px-1.5 text-[0.8125rem] outline-hidden [&>option]:bg-popover';
+const filterSelect = 'bg-transparent px-1.5 text-dense [&>option]:bg-popover';
 
 /** Creates a note and returns its id (title defaults to today's date, as in the original). */
 export async function createNote(token: string, title = dayjs().format('YYYY-MM-DD'), md = '') {
@@ -159,14 +159,15 @@ function Notes() {
 	const menu = (n: NoteListItem) => (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<button
+				<Button
 					type="button"
+					variant="ghost"
+					size="icon-sm"
 					aria-label={`Note menu for ${n.title}`}
-					className="hover:bg-muted rounded-lg p-1"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<MoreHorizontal className="size-4" />
-				</button>
+				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuItem onSelect={() => download(n, 'md')}>
@@ -363,7 +364,7 @@ function Notes() {
 												<p className="text-muted-foreground mt-1 line-clamp-4 min-h-[4rem] text-xs whitespace-pre-wrap">
 													{n.data?.content?.md || 'No content'}
 												</p>
-												<div className="text-muted-foreground mt-2 flex justify-between text-[0.6875rem]">
+												<div className="text-muted-foreground mt-2 flex justify-between text-caption">
 													<span className="truncate">{author(n)}</span>
 													<span>{dayjs(n.updated_at / 1_000_000).fromNow()}</span>
 												</div>

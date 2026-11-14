@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
 import { ChevronLeft, Copy, Download, Link2, Lock, MoreHorizontal, Pin, PinOff, Sparkles, Trash2 } from 'lucide-react';
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import type { EditorContentValue } from '@/components/common/RichTextEditor';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -17,8 +18,8 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { deleteNoteById, getNoteById, toggleNotePinnedStatusById, updateNoteById } from '@/lib/apis/notes';
+import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
@@ -26,8 +27,8 @@ import { copyToClipboard } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { initialModel } from '@/routes/playground/playgroundModel';
 import {
-	type NoteContent,
 	editorContent,
+	type NoteContent,
 	noteAccessProps,
 	parseGeneratedTitle,
 	safeFileName,
@@ -242,7 +243,7 @@ function NoteEditor() {
 					<ChevronLeft className="size-4" />
 				</Link>
 				<input
-					className="placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-lg outline-hidden"
+					className="placeholder:text-foreground-muted min-w-0 flex-1 bg-transparent text-lg"
 					aria-label="Title"
 					placeholder={generating ? 'Generating...' : 'Title'}
 					value={generating ? '' : title}
@@ -251,25 +252,26 @@ function NoteEditor() {
 				/>
 				{editable && (
 					<Tip content="Generate title">
-						<button
+						<Button
 							type="button"
+							variant="ghost"
+							size="icon-sm"
 							aria-label="Generate title"
-							className={iconButton}
 							disabled={generating}
 							onClick={generateTitle}
 						>
 							{generating ? <Spinner className="size-4" /> : <Sparkles className="size-4" />}
-						</button>
+						</Button>
 					</Tip>
 				)}
-				<span className="text-muted-foreground hidden w-12 text-right text-[0.6875rem] sm:block" aria-live="polite">
+				<span className="text-muted-foreground hidden w-12 text-right text-caption sm:block" aria-live="polite">
 					{saving ? 'Saving…' : ''}
 				</span>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<button type="button" aria-label="Note menu" className={iconButton}>
+						<Button type="button" variant="ghost" size="icon-sm" aria-label="Note menu">
 							<MoreHorizontal className="size-4" />
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onSelect={() => download('md')}>
@@ -324,7 +326,7 @@ function NoteEditor() {
 					/>
 				</Suspense>
 			</div>
-			<div className="text-muted-foreground shrink-0 px-4 pb-2 text-right text-[0.6875rem] md:px-8">
+			<div className="text-muted-foreground shrink-0 px-4 pb-2 text-right text-caption md:px-8">
 				{wordCount(text)} words · {text.length} characters
 			</div>
 		</div>

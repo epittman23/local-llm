@@ -1,19 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	checkServe,
 	getServeProfile,
 	getServeProfiles,
 	parseBenchmarksEventStream,
+	type ServeStartForm,
 	startServe,
 	stopServe,
-	streamServe,
-	type ServeStartForm
+	streamServe
 } from '@/lib/apis/benchmarks';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ProfilesPanel } from './ProfilesPanel';
 
@@ -348,9 +348,9 @@ export function ServePage() {
 				<div className="text-sm">Log{streaming ? ' (streaming…)' : ''}</div>
 				<div
 					ref={logContainerRef}
-					className="h-72 overflow-y-auto rounded-lg bg-neutral-950 p-2.5 font-mono text-xs break-all whitespace-pre-wrap text-neutral-100"
+					className="h-72 overflow-y-auto rounded-lg bg-surface-3 p-2.5 font-mono text-xs break-all whitespace-pre-wrap text-foreground"
 				>
-					{logLines.length === 0 && <div className="text-neutral-500">No log output yet</div>}
+					{logLines.length === 0 && <div className="text-foreground-muted">No log output yet</div>}
 					{logLines.map((line, i) => (
 						<div key={i}>{line}</div>
 					))}

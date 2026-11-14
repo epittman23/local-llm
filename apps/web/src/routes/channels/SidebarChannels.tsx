@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { createNewChannel, updateChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useSocket } from '@/lib/socket/SocketProvider';
@@ -53,24 +54,27 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 	return (
 		<div className="mt-3">
 			<div className="text-muted-foreground flex items-center px-2 text-xs font-medium">
-				<button
+				<Button
 					type="button"
-					className="hover:text-foreground flex flex-1 items-center gap-1 py-1"
+					variant="ghost"
+					size="xs"
+					className="flex-1 justify-start"
 					aria-expanded={open}
 					onClick={() => setOpen((o) => !o)}
 				>
 					{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
 					Channels
-				</button>
+				</Button>
 				<Tip content="Create Channel">
-					<button
+					<Button
 						type="button"
-						className="hover:text-foreground rounded p-0.5"
+						variant="ghost"
+						size="icon-xs"
 						aria-label="Create Channel"
 						onClick={() => setCreating(true)}
 					>
 						<Plus className="size-3.5" />
-					</button>
+					</Button>
 				</Tip>
 			</div>
 			{open && (
@@ -158,7 +162,7 @@ function ChannelItem({
 								<span
 									className={cn(
 										'border-background absolute -right-0.5 -bottom-0.5 size-2 rounded-full border',
-										members[0].is_active ? 'bg-green-500' : 'bg-gray-400'
+										members[0].is_active ? 'bg-success' : 'bg-foreground-muted'
 									)}
 								/>
 							)}
@@ -174,7 +178,7 @@ function ChannelItem({
 				<span className="truncate">{channelTitle(channel, me?.id)}</span>
 				{!joined && (
 					<span
-						className="ml-auto rounded border px-1 text-[0.625rem] font-medium"
+						className="ml-auto rounded border px-1 text-caption font-medium"
 						title="Not joined: opening it joins it"
 					>
 						Join
@@ -182,7 +186,7 @@ function ChannelItem({
 				)}
 				{joined && unread > 0 && (
 					<span
-						className="bg-foreground text-background ml-auto rounded-full px-1.5 text-[0.625rem] font-medium"
+						className="bg-foreground text-background ml-auto rounded-full px-1.5 text-caption font-medium"
 						title="Unread"
 					>
 						{formatUnread(unread)}
@@ -190,24 +194,28 @@ function ChannelItem({
 				)}
 			</NavLink>
 			{channel.type === 'dm' ? (
-				<button
+				<Button
 					type="button"
+					variant="ghost"
+					size="icon-xs"
 					aria-label="Hide conversation"
-					className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block"
+					className="absolute top-1 right-1 hidden group-hover:inline-flex"
 					onClick={() => void hideDm()}
 				>
 					<X className="size-3.5" />
-				</button>
+				</Button>
 			) : (
 				canEdit && (
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="icon-xs"
 						aria-label={`Edit ${channel.name}`}
-						className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block"
+						className="absolute top-1 right-1 hidden group-hover:inline-flex"
 						onClick={() => setEditing(true)}
 					>
 						<Settings className="size-3.5" />
-					</button>
+					</Button>
 				)
 			)}
 			{canEdit && channel.type !== 'dm' && (

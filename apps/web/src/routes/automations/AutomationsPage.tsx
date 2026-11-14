@@ -74,7 +74,7 @@ export function AutomationsHeader({ itemName, actions }: { itemName?: string; ac
 				<span className="text-muted-foreground text-sm">{total.data ?? ''}</span>
 				{itemName && (
 					<>
-						<span className="text-muted-foreground/50 px-2 text-sm">/</span>
+						<span className="text-foreground-muted px-2 text-sm">/</span>
 						<h1 className="min-w-0 flex-1 truncate text-sm">{itemName}</h1>
 					</>
 				)}
@@ -234,7 +234,7 @@ function Automations() {
 				>
 					<select
 						aria-label="Status"
-						className="bg-transparent px-1.5 text-[0.8125rem] outline-hidden [&>option]:bg-popover"
+						className="bg-transparent px-1.5 text-dense [&>option]:bg-popover"
 						value={status}
 						onChange={(e) => {
 							setStatus(e.target.value);
@@ -247,12 +247,9 @@ function Automations() {
 					</select>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<button
-								type="button"
-								className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 px-1.5 text-[0.8125rem]"
-							>
+							<Button type="button" variant="ghost" size="sm">
 								Actions <ChevronDown className="size-3" />
-							</button>
+							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
 							<DropdownMenuItem onSelect={() => bulkToggle(true)}>Enable All</DropdownMenuItem>
@@ -296,13 +293,9 @@ function Automations() {
 								</Link>
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
-										<button
-											type="button"
-											aria-label={`More actions for ${a.name}`}
-											className="hover:bg-muted rounded-lg p-1"
-										>
+										<Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${a.name}`}>
 											<MoreHorizontal className="size-4" />
-										</button>
+										</Button>
 									</DropdownMenuTrigger>
 									<DropdownMenuContent align="end">
 										<DropdownMenuItem onSelect={() => navigate(`/automations/${a.id}`)}>

@@ -18,16 +18,16 @@ import { cn } from '@/lib/utils';
 import {
 	CUSTOM_REPEAT,
 	type EventFields,
-	SCHEDULED_TASKS_ID,
 	eventFields,
 	eventPayload,
+	reminderOptions,
 	repeatFromRrule,
-	reminderOptions
+	SCHEDULED_TASKS_ID
 } from './calendarModel';
 
-const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
+const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const label = 'text-muted-foreground mb-1 text-xs';
-const select = 'w-full cursor-pointer bg-transparent text-sm outline-hidden [&>option]:bg-popover';
+const select = 'w-full cursor-pointer bg-transparent text-sm [&>option]:bg-popover';
 
 const REPEATS: [string, string][] = [
 	['', 'No Repeat'],
@@ -175,7 +175,7 @@ export function EventDialog({
 								<input
 									type="date"
 									aria-label="Start date"
-									className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+									className="bg-transparent"
 									value={f.startDate}
 									onChange={(e) => set({ startDate: e.target.value })}
 								/>
@@ -183,7 +183,7 @@ export function EventDialog({
 									<input
 										type="time"
 										aria-label="Start time"
-										className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+										className="bg-transparent"
 										value={f.startTime}
 										onChange={(e) => set({ startTime: e.target.value })}
 									/>
@@ -192,7 +192,7 @@ export function EventDialog({
 								<input
 									type="date"
 									aria-label="End date"
-									className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+									className="bg-transparent"
 									value={f.endDate}
 									onChange={(e) => set({ endDate: e.target.value })}
 								/>
@@ -200,7 +200,7 @@ export function EventDialog({
 									<input
 										type="time"
 										aria-label="End time"
-										className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+										className="bg-transparent"
 										value={f.endTime}
 										onChange={(e) => set({ endTime: e.target.value })}
 									/>
@@ -208,7 +208,7 @@ export function EventDialog({
 								<label className="text-muted-foreground ml-auto flex cursor-pointer items-center gap-1.5 text-xs">
 									<input
 										type="checkbox"
-										className="accent-blue-500"
+										className="accent-brand"
 										checked={f.allDay}
 										onChange={(e) => set({ allDay: e.target.checked })}
 									/>
@@ -386,13 +386,15 @@ export function CreateCalendarDialog({
 						<div className={label}>Color</div>
 						<div className="flex flex-wrap items-center gap-2">
 							{PRESET_COLORS.map((c) => (
-								<button
+								<Button
 									key={c}
 									type="button"
+									variant="ghost"
+									size="icon-xs"
 									aria-label={c}
 									aria-pressed={color === c}
 									className={cn(
-										'size-6 rounded-full border-2 transition-all',
+										'rounded-full border-2 transition-all',
 										color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
 									)}
 									style={{ backgroundColor: c }}

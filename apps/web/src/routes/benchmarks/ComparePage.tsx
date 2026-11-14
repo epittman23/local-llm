@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+	type CompareBy,
+	type CompareConfigResponse,
 	exportAnswers,
 	getCompare,
-	getTestOptions,
-	type CompareBy,
-	type CompareConfigResponse
+	getTestOptions
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { CompareBlocks } from './CompareBlocks';
@@ -149,7 +149,7 @@ export function ComparePage() {
 									key={i}
 									className={
 										isWarningNote(note)
-											? 'w-fit rounded-sm bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 dark:text-yellow-200'
+											? 'w-fit rounded-sm bg-warning/20 px-2 py-1 text-xs text-warning'
 											: 'text-muted-foreground text-xs'
 									}
 								>
@@ -179,7 +179,7 @@ export function ComparePage() {
 						{exportMutation.isPending ? 'Exporting…' : 'Export'}
 					</Button>
 					{exportMutation.isSuccess && (
-						<span className="text-xs text-green-700 dark:text-green-300">
+						<span className="text-xs text-success">
 							Exported {exportMutation.data.exported} answers to {exportMutation.data.directory}
 						</span>
 					)}

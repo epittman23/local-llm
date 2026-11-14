@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { dayjs } from '@/lib/utils/dates';
-import { type Channel, type ChannelMessage, channelTitle, showsAuthor } from './channelModel';
 import { ChannelMessageView, type MessageActions } from './ChannelMessageView';
+import { type Channel, type ChannelMessage, channelTitle, showsAuthor } from './channelModel';
 
 /**
  * Ports channel/Messages.svelte: the messages oldest-first, a loader at the
@@ -41,9 +42,9 @@ export function MessageList({
 			{!top && failed ? (
 				<div className="text-muted-foreground flex items-center justify-center gap-2 py-1 text-xs">
 					<span>Couldn't load {list.length > 0 ? 'older ' : ''}messages.</span>
-					<button type="button" className="hover:text-foreground underline" onClick={onLoadMore}>
+					<Button type="button" variant="link" size="xs" onClick={onLoadMore}>
 						Retry
-					</button>
+					</Button>
 				</div>
 			) : !top ? (
 				<InfiniteLoader onVisible={onLoadMore}>
