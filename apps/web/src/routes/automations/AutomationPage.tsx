@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
 	deleteAutomationById,
@@ -26,7 +27,6 @@ import { useAutomationResults } from './useAutomationResults';
 import { useDestinations } from './useDestinations';
 
 const RUNS_PAGE = 50;
-const iconButton = 'hover:bg-muted rounded-lg p-1.5 transition disabled:opacity-50';
 
 const formatWhen = (ns: number | null | undefined, empty: string) => {
 	if (!ns) return empty;
@@ -37,7 +37,7 @@ const formatWhen = (ns: number | null | undefined, empty: string) => {
 function Row({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<div className="flex h-7 items-center px-3">
-			<span className="text-muted-foreground w-24 shrink-0 text-[0.6875rem]">{label}</span>
+			<span className="text-muted-foreground w-24 shrink-0 text-caption">{label}</span>
 			<span className="min-w-0 truncate text-xs">{children}</span>
 		</div>
 	);
@@ -133,19 +133,32 @@ function Automation() {
 							</span>
 						</Tip>
 						<Tip content="Run now">
-							<button type="button" aria-label="Run now" className={iconButton} disabled={running} onClick={runNow}>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Run now"
+								disabled={running}
+								onClick={runNow}
+							>
 								<Play className="size-4" />
-							</button>
+							</Button>
 						</Tip>
 						<Tip content="Edit">
-							<button type="button" aria-label="Edit" className={iconButton} onClick={() => setEditing(true)}>
+							<Button type="button" variant="ghost" size="icon-sm" aria-label="Edit" onClick={() => setEditing(true)}>
 								<Pencil className="size-4" />
-							</button>
+							</Button>
 						</Tip>
 						<Tip content="Delete">
-							<button type="button" aria-label="Delete" className={iconButton} onClick={() => setConfirmDelete(true)}>
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Delete"
+								onClick={() => setConfirmDelete(true)}
+							>
 								<Trash2 className="size-4" />
-							</button>
+							</Button>
 						</Tip>
 					</div>
 				}
@@ -171,12 +184,7 @@ function Automation() {
 			>
 				<div className="px-1 pb-1">
 					<Row label="Status">
-						<span
-							className={cn(
-								'flex items-center gap-1.5',
-								a.is_active ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'
-							)}
-						>
+						<span className={cn('flex items-center gap-1.5', a.is_active ? 'text-success' : 'text-muted-foreground')}>
 							<span className="size-1.5 rounded-full bg-current" />
 							{a.is_active ? 'Active' : 'Paused'}
 						</span>
@@ -189,18 +197,18 @@ function Automation() {
 				</div>
 				<hr className="my-1.5" />
 				<div className="px-4 py-2">
-					<div className="text-muted-foreground mb-2 text-[0.6875rem]">Prompt</div>
+					<div className="text-muted-foreground mb-2 text-caption">Prompt</div>
 					<div className="text-sm whitespace-pre-wrap">{a.data.prompt}</div>
 				</div>
 				<hr className="my-1.5" />
 				<div className="px-4 py-2">
-					<div className="text-muted-foreground mb-1 text-[0.6875rem]">Runs</div>
+					<div className="text-muted-foreground mb-1 text-caption">Runs</div>
 					{runs.isLoading ? (
 						<div className="flex justify-center py-8">
 							<Spinner className="size-4" />
 						</div>
 					) : allRuns.length === 0 ? (
-						<div className="text-muted-foreground/70 py-2 text-[0.6875rem]">No runs yet</div>
+						<div className="text-foreground-muted py-2 text-caption">No runs yet</div>
 					) : (
 						<ul>
 							{allRuns.map((run) => (
@@ -208,7 +216,7 @@ function Automation() {
 									<span
 										className={cn(
 											'size-1.5 shrink-0 rounded-full',
-											run.status === 'success' ? 'bg-emerald-500' : 'bg-red-400'
+											run.status === 'success' ? 'bg-success' : 'bg-danger'
 										)}
 										aria-label={run.status}
 									/>
@@ -230,7 +238,7 @@ function Automation() {
 										</Link>
 									)}
 									{run.error && (
-										<span className="truncate text-[0.6875rem] text-red-400" title={run.error}>
+										<span className="truncate text-caption text-danger" title={run.error}>
 											{run.error}
 										</span>
 									)}

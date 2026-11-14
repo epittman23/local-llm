@@ -113,26 +113,26 @@ export function LivePage() {
 			) : (
 				<>
 					{warning && (
-						<div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs font-medium text-yellow-800 dark:text-yellow-200">
+						<div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs font-medium text-warning">
 							⚠ {warning}
 						</div>
 					)}
 
 					<div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-xs">
 						<span>
-							<span className="text-muted-foreground/70">Model:</span>{' '}
+							<span className="text-foreground-muted">Model:</span>{' '}
 							<span className="text-foreground">{String(run.model ?? '-')}</span>
 						</span>
 						<span>
-							<span className="text-muted-foreground/70">Config:</span>{' '}
+							<span className="text-foreground-muted">Config:</span>{' '}
 							<span className="text-foreground">{String(run.config_id ?? '-')}</span>
 						</span>
 						<span>
-							<span className="text-muted-foreground/70">Port:</span>{' '}
+							<span className="text-foreground-muted">Port:</span>{' '}
 							<span className="text-foreground">{String(run.port ?? '-')}</span>
 						</span>
 						<span>
-							<span className="text-muted-foreground/70">Requests:</span>{' '}
+							<span className="text-foreground-muted">Requests:</span>{' '}
 							<span className="text-foreground">{requests}</span>
 						</span>
 					</div>
@@ -142,7 +142,7 @@ export function LivePage() {
 						<div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9.5rem, 1fr))' }}>
 							{Object.entries(summary).map(([key, value]) => (
 								<div key={key} className="flex flex-col gap-0.5 rounded-lg border px-2.5 py-2">
-									<span className="text-muted-foreground truncate text-[0.6875rem]">{key}</span>
+									<span className="text-muted-foreground truncate text-caption">{key}</span>
 									<span className="text-sm">{formatValue(value)}</span>
 								</div>
 							))}

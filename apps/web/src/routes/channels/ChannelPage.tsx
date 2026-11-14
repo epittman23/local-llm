@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { getChannelById, joinChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -19,9 +20,6 @@ import { MessageList } from './MessageList';
 import { ThreadPanel } from './ThreadPanel';
 import { CHANNELS_KEY, useMarkChannelRead, useOpenChannelStore } from './useChannels';
 import { useMessageFeed } from './useMessageFeed';
-
-const headerButton =
-	'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-xl border px-1.5 py-1 text-sm transition';
 
 function useLargeScreen() {
 	const query = '(min-width: 1024px)';
@@ -176,7 +174,7 @@ function ChannelView({ id }: { id: string }) {
 										))}
 										{members.length === 1 && (
 											<span
-												className={`border-background absolute right-0 bottom-0 size-2 rounded-full border ${members[0].is_active ? 'bg-green-500' : 'bg-gray-400'}`}
+												className={`border-background absolute right-0 bottom-0 size-2 rounded-full border ${members[0].is_active ? 'bg-success' : 'bg-foreground-muted'}`}
 												aria-label={members[0].is_active ? 'Active' : 'Away'}
 											/>
 										)}
@@ -191,26 +189,28 @@ function ChannelView({ id }: { id: string }) {
 							)}
 							<h1 className="line-clamp-1 flex-1 text-sm font-medium">{channelTitle(channel, me?.id)}</h1>
 							<Tip content="Pinned Messages">
-								<button
+								<Button
 									type="button"
-									className={headerButton}
+									variant="outline"
+									size="sm"
 									aria-label="Pinned Messages"
 									onClick={() => setShowPinned(true)}
 								>
 									<Pin className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 							{channel.user_count !== undefined && (
 								<Tip content="Users">
-									<button
+									<Button
 										type="button"
-										className={headerButton}
+										variant="outline"
+										size="sm"
 										aria-label="User Count"
 										onClick={() => setShowInfo(true)}
 									>
 										<User className="size-4" />
 										{channel.user_count}
-									</button>
+									</Button>
 								</Tip>
 							)}
 						</>

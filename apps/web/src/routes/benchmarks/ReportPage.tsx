@@ -225,7 +225,7 @@ export function ReportPage() {
 						</div>
 					)}
 					<div
-						className="prose dark:prose-invert max-w-none text-sm"
+						className="prose max-w-none text-sm"
 						// See this file's own docstring for the trust boundary this relies on.
 						dangerouslySetInnerHTML={{ __html: markdownHtml }}
 					/>

@@ -17,15 +17,15 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
-import { CalendarViews } from './CalendarViews';
 import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
+import { CalendarViews } from './CalendarViews';
 import {
-	type CalendarViewMode,
-	MONTH_NAMES,
 	automationTarget,
+	type CalendarViewMode,
 	defaultCalendarId,
 	headerText,
 	isSameDay,
+	MONTH_NAMES,
 	monthGrid,
 	stepDate,
 	visibleRange
@@ -57,73 +57,71 @@ function CalendarSidebar({
 		<div className="flex flex-col gap-4">
 			<div>
 				<div className="mt-1.5 mb-1.5 flex items-center justify-between px-1">
-					<div className="text-[0.6875rem]">
+					<div className="text-caption">
 						{MONTH_NAMES[mini.getMonth()]} {mini.getFullYear()}
 					</div>
 					<div className="flex items-center gap-0.5">
-						<button
+						<Button
 							type="button"
+							variant="ghost"
+							size="icon-xs"
 							aria-label="Previous month"
-							className="hover:bg-muted rounded p-0.5"
 							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() - 1, 1))}
 						>
 							<ChevronLeft className="size-3" />
-						</button>
-						<button
+						</Button>
+						<Button
 							type="button"
+							variant="ghost"
+							size="icon-xs"
 							aria-label="Next month"
-							className="hover:bg-muted rounded p-0.5"
 							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() + 1, 1))}
 						>
 							<ChevronRight className="size-3" />
-						</button>
+						</Button>
 					</div>
 				</div>
-				<div className="text-muted-foreground grid grid-cols-7 text-center text-[0.625rem]">
+				<div className="text-muted-foreground grid grid-cols-7 text-center text-caption">
 					{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
 						<div key={i} className="py-0.5">
 							{d}
 						</div>
 					))}
 				</div>
-				<div className="grid grid-cols-7 text-center text-[0.625rem]">
+				<div className="grid grid-cols-7 text-center text-caption">
 					{monthGrid(mini).map((day) => (
-						<button
+						<Button
 							key={day.toISOString()}
 							type="button"
+							variant={isSameDay(day, today) ? 'default' : isSameDay(day, date) ? 'secondary' : 'ghost'}
+							size="icon-xs"
 							aria-label={day.toDateString()}
-							className={cn(
-								'flex size-6 items-center justify-center rounded-full transition',
-								day.getMonth() !== mini.getMonth() && 'text-muted-foreground/50',
-								isSameDay(day, today)
-									? 'bg-blue-500 text-white'
-									: isSameDay(day, date)
-										? 'bg-muted'
-										: 'hover:bg-muted/60'
-							)}
+							className={cn('rounded-full text-caption', day.getMonth() !== mini.getMonth() && 'text-foreground-muted')}
 							onClick={() => onSelectDate(day)}
 						>
 							{day.getDate()}
-						</button>
+						</Button>
 					))}
 				</div>
 			</div>
 			<div>
 				<div className="mb-1 flex items-center justify-between px-1">
-					<div className="text-muted-foreground text-[0.6875rem] tracking-wider uppercase">Calendars</div>
-					<button type="button" aria-label="New calendar" className="hover:bg-muted rounded p-0.5" onClick={onCreate}>
+					<div className="text-muted-foreground text-caption tracking-wider uppercase">Calendars</div>
+					<Button type="button" variant="ghost" size="icon-xs" aria-label="New calendar" onClick={onCreate}>
 						<Plus className="size-3.5" />
-					</button>
+					</Button>
 				</div>
 				<ul>
 					{calendars.map((c) => {
 						const shown = !hidden.has(c.id);
 						return (
 							<li key={c.id} className="group flex items-center">
-								<button
+								<Button
 									type="button"
+									variant="ghost"
+									size="sm"
 									aria-pressed={shown}
-									className="hover:bg-muted/60 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition"
+									className="min-w-0 flex-1 justify-start gap-2 text-left"
 									onClick={() => onToggle(c.id)}
 								>
 									<span
@@ -131,16 +129,18 @@ function CalendarSidebar({
 										style={{ backgroundColor: c.color || '#3b82f6', opacity: shown ? 1 : 0.25 }}
 									/>
 									<span className={cn('flex-1 truncate', !shown && 'text-muted-foreground')}>{c.name}</span>
-								</button>
+								</Button>
 								{!c.is_default && !c.is_system && (
-									<button
+									<Button
 										type="button"
+										variant="ghost"
+										size="icon-xs"
 										aria-label={`Delete calendar ${c.name}`}
-										className="text-muted-foreground hover:text-foreground rounded p-0.5 opacity-0 transition group-hover:opacity-100 focus:opacity-100"
+										className="opacity-0 group-hover:opacity-100 focus:opacity-100"
 										onClick={() => onDelete(c)}
 									>
 										<X className="size-3" />
-									</button>
+									</Button>
 								)}
 							</li>
 						);
@@ -248,22 +248,24 @@ function Calendar() {
 
 			<nav className="flex shrink-0 items-center gap-1 px-3 py-2">
 				<h1 className="px-1 text-sm">{headerText(view, date)}</h1>
-				<button
+				<Button
 					type="button"
+					variant="ghost"
+					size="icon-sm"
 					aria-label="Previous"
-					className="hover:bg-muted rounded-lg p-1"
 					onClick={() => setDate(stepDate(view, date, -1))}
 				>
 					<ChevronLeft className="text-muted-foreground size-3.5" />
-				</button>
-				<button
+				</Button>
+				<Button
 					type="button"
+					variant="ghost"
+					size="icon-sm"
 					aria-label="Next"
-					className="hover:bg-muted rounded-lg p-1"
 					onClick={() => setDate(stepDate(view, date, 1))}
 				>
 					<ChevronRight className="text-muted-foreground size-3.5" />
-				</button>
+				</Button>
 				<div className="ml-auto flex items-center gap-1">
 					<Button
 						type="button"
@@ -276,7 +278,7 @@ function Calendar() {
 					</Button>
 					<select
 						aria-label="View"
-						className="bg-transparent px-2 py-1 text-xs outline-hidden [&>option]:bg-popover"
+						className="bg-transparent px-2 py-1 text-xs [&>option]:bg-popover"
 						value={view}
 						onChange={(e) => setView(e.target.value as CalendarViewMode)}
 					>

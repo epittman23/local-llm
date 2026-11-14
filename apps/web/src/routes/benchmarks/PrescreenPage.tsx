@@ -23,8 +23,8 @@ import {
 	getPrescreenSweep,
 	getPrescreenSweeps,
 	getServeProfiles,
-	parseBenchmarksEventStream,
 	type PrescreenStartForm,
+	parseBenchmarksEventStream,
 	startPrescreen,
 	startPrescreenDashboard,
 	stopPrescreenDashboard,
@@ -120,12 +120,12 @@ const flagsText = (overrides: Overrides | undefined): string =>
 		.join(', ');
 
 const statusTone: Record<string, string> = {
-	ok: 'text-green-600 dark:text-green-400',
-	oom: 'text-red-600 dark:text-red-400',
+	ok: 'text-success',
+	oom: 'text-danger',
 	pruned: 'text-muted-foreground',
 	invalid: 'text-muted-foreground',
 	repeat: 'text-muted-foreground',
-	running: 'text-yellow-700 dark:text-yellow-400'
+	running: 'text-warning'
 };
 
 /**
@@ -508,16 +508,16 @@ export function PrescreenPage() {
 					</Select>
 				</div>
 				{streaming && (
-					<span className="flex items-center gap-1 pb-2 text-xs text-green-600 dark:text-green-400">
-						<span className="size-1.5 animate-pulse rounded-full bg-green-500" />
+					<span className="flex items-center gap-1 pb-2 text-xs text-success">
+						<span className="size-1.5 animate-pulse rounded-full bg-success" />
 						Live
 					</span>
 				)}
 			</div>
 
 			{running && active?.current && (
-				<div className="flex items-center gap-1.5 rounded-lg bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-400">
-					<span className="size-1.5 animate-pulse rounded-full bg-yellow-500" />
+				<div className="flex items-center gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+					<span className="size-1.5 animate-pulse rounded-full bg-warning" />
 					{active.current.phase === 'ctx_check' ? 'Load-checking' : 'Measuring'} point {active.current.point_id}:{' '}
 					{flagsText(active.current.overrides)}
 				</div>
@@ -562,11 +562,11 @@ export function PrescreenPage() {
 							</TableHeader>
 							<TableBody>
 								{candidates.map((c) => (
-									<TableRow key={c.point_id} className={c.is_baseline ? 'bg-blue-500/5' : undefined}>
+									<TableRow key={c.point_id} className={c.is_baseline ? 'bg-brand/5' : undefined}>
 										<TableCell className="text-muted-foreground text-right">{c.rank}</TableCell>
 										<TableCell>
 											{changesText(c.changes)}
-											{c.is_baseline && <span className="text-blue-600 dark:text-blue-400"> (baseline)</span>}
+											{c.is_baseline && <span className="text-brand"> (baseline)</span>}
 										</TableCell>
 										<TableCell className="text-right">{fmtNum(c.tg, 2)}</TableCell>
 										<TableCell className="text-right">{fmtNum(c.pp, 1)}</TableCell>
@@ -619,7 +619,7 @@ export function PrescreenPage() {
 										<TableCell>{p.phase === 'remeasure' ? `again (${p.remeasure_of})` : p.phase}</TableCell>
 										<TableCell className="text-xs">{flagsText(p.overrides)}</TableCell>
 										<TableCell>
-											<span className={statusTone[p.status] ?? 'text-red-600 dark:text-red-400'}>{p.status}</span>
+											<span className={statusTone[p.status] ?? 'text-danger'}>{p.status}</span>
 											{p.reason && <span className="text-muted-foreground text-xs"> — {p.reason}</span>}
 										</TableCell>
 										<TableCell className="text-right">

@@ -12,26 +12,24 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import {
 	type AutomationFields,
-	type Channel,
-	type Folder,
-	type Frequency,
-	type Schedule,
-	WEEKDAYS,
 	automationFields,
 	automationPayload,
+	type Channel,
 	channelOptions,
+	type Folder,
+	type Frequency,
 	folderOptions,
 	folderPath,
 	localDate,
+	type Schedule,
 	timeFromInput,
+	WEEKDAYS,
 	withFrequency,
 	withoutMissingDestinations
 } from './automationModel';
 import { useDestinations } from './useDestinations';
 
-const chip =
-	'text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-xs transition';
-const small = 'bg-transparent text-[0.8125rem] outline-hidden dark:[color-scheme:dark]';
+const small = 'bg-transparent text-dense';
 
 function Picker({
 	icon,
@@ -47,11 +45,11 @@ function Picker({
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
-				<button type="button" className={chip} aria-label={ariaLabel}>
+				<Button type="button" variant="ghost" size="sm" className="rounded-2xl" aria-label={ariaLabel}>
 					{icon}
 					<span className="max-w-32 truncate whitespace-nowrap">{label}</span>
 					<ChevronDown className="size-3" />
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-72 p-1.5">
 				{children}
@@ -79,11 +77,11 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 			label={FREQUENCIES.find(([k]) => k === value.frequency)?.[1] ?? 'Schedule'}
 			ariaLabel="Schedule"
 		>
-			<div className="text-muted-foreground px-2 pt-0.5 text-[0.6875rem]">Schedule</div>
+			<div className="text-muted-foreground px-2 pt-0.5 text-caption">Schedule</div>
 			<div className="px-1.5 py-0.5">
 				<select
 					aria-label="Frequency"
-					className="w-full bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+					className="w-full bg-transparent text-sm [&>option]:bg-popover"
 					value={value.frequency}
 					onChange={(e) => onChange(withFrequency(value, e.target.value as Frequency))}
 				>
@@ -98,7 +96,7 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 				<div className="px-2 pb-2">
 					{/* A textarea: a DTSTART line is followed by a newline, which an input strips. */}
 					<textarea
-						className="w-full rounded-lg border bg-transparent px-2 py-1 font-mono text-xs outline-hidden"
+						className="w-full rounded-lg border bg-transparent px-2 py-1 font-mono text-xs"
 						aria-label="Custom RRULE"
 						placeholder="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0"
 						rows={2}
@@ -159,19 +157,18 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 					{WEEKDAYS.map((d) => {
 						const on = value.days.includes(d);
 						return (
-							<button
+							<Button
 								key={d}
 								type="button"
+								variant={on ? 'secondary' : 'ghost'}
+								size="sm"
 								aria-pressed={on}
-								className={cn(
-									'flex-1 rounded-xl py-1 text-xs transition',
-									on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
-								)}
+								className="flex-1 rounded-xl"
 								onClick={() => set({ days: on ? value.days.filter((x) => x !== d) : [...value.days, d] })}
 							>
 								{d[0]}
 								{d[1].toLowerCase()}
-							</button>
+							</Button>
 						);
 					})}
 				</div>
@@ -200,7 +197,7 @@ function ModelField({ value, onChange }: { value: string; onChange: (id: string)
 			ariaLabel="Model"
 		>
 			<input
-				className="mb-1 w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden"
+				className="mb-1 w-full rounded-lg border bg-transparent px-2 py-1 text-xs"
 				aria-label="Search models"
 				placeholder="Search models"
 				value={search}
@@ -213,15 +210,17 @@ function ModelField({ value, onChange }: { value: string; onChange: (id: string)
 					</div>
 				)}
 				{shown.map((m) => (
-					<button
+					<Button
 						key={m.id}
 						type="button"
-						className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+						variant="ghost"
+						size="sm"
+						className="w-full justify-start text-left"
 						onClick={() => onChange(m.id)}
 					>
 						<span className="truncate">{m.name}</span>
 						{m.id === value && <Check className="ml-auto size-3.5 shrink-0" />}
-					</button>
+					</Button>
 				))}
 			</div>
 		</Picker>
@@ -253,7 +252,7 @@ function DestinationField({
 				: 'Choose channel'
 			: (selectedFolder?.name ?? 'New chat');
 	const q = search.trim().toLowerCase();
-	const row = 'hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs';
+	const row = 'w-full justify-start gap-2 text-left';
 	return (
 		<Picker
 			icon={
@@ -270,35 +269,33 @@ function DestinationField({
 		>
 			{tab === '' ? (
 				<>
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="sm"
 						className={row}
 						onClick={() => set({ targetType: 'chat', folderId: '', channelId: '' })}
 					>
 						<MessageSquare className="size-3.5" /> New chat{' '}
 						{f.targetType === 'chat' && !f.folderId && <Check className="ml-auto size-3.5" />}
-					</button>
-					<button type="button" className={row} onClick={() => setTab('folders')}>
+					</Button>
+					<Button type="button" variant="ghost" size="sm" className={row} onClick={() => setTab('folders')}>
 						<FolderIcon className="size-3.5" /> In a folder…{' '}
 						{f.targetType === 'chat' && f.folderId && <Check className="ml-auto size-3.5" />}
-					</button>
-					<button type="button" className={row} onClick={() => setTab('channels')}>
+					</Button>
+					<Button type="button" variant="ghost" size="sm" className={row} onClick={() => setTab('channels')}>
 						<Hash className="size-3.5" /> In a channel…{' '}
 						{f.targetType === 'channel' && <Check className="ml-auto size-3.5" />}
-					</button>
+					</Button>
 				</>
 			) : (
 				<>
 					<div className="mb-1 flex items-center gap-1">
-						<button
-							type="button"
-							className="text-muted-foreground hover:text-foreground px-1 text-xs"
-							onClick={() => setTab('')}
-						>
+						<Button type="button" variant="ghost" size="xs" onClick={() => setTab('')}>
 							‹ Back
-						</button>
+						</Button>
 						<input
-							className="w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden"
+							className="w-full rounded-lg border bg-transparent px-2 py-1 text-xs"
 							aria-label={`Search ${tab}`}
 							placeholder={`Search ${tab}`}
 							value={search}
@@ -312,9 +309,11 @@ function DestinationField({
 									.map((x) => {
 										const path = folderPath(x, folderList);
 										return (
-											<button
+											<Button
 												key={x.id}
 												type="button"
+												variant="ghost"
+												size="sm"
 												className={row}
 												onClick={() => set({ targetType: 'chat', folderId: x.id, channelId: '' })}
 											>
@@ -325,15 +324,17 @@ function DestinationField({
 												{f.targetType === 'chat' && f.folderId === x.id && (
 													<Check className="ml-auto size-3.5 shrink-0" />
 												)}
-											</button>
+											</Button>
 										);
 									})
 							: channelList
 									.filter((x) => !q || x.name.toLowerCase().includes(q))
 									.map((x) => (
-										<button
+										<Button
 											key={x.id}
 											type="button"
+											variant="ghost"
+											size="sm"
 											className={row}
 											onClick={() => set({ targetType: 'channel', channelId: x.id, folderId: '' })}
 										>
@@ -341,7 +342,7 @@ function DestinationField({
 											{f.targetType === 'channel' && f.channelId === x.id && (
 												<Check className="ml-auto size-3.5 shrink-0" />
 											)}
-										</button>
+										</Button>
 									))}
 					</div>
 				</>
@@ -424,7 +425,7 @@ export function AutomationDialog({
 					}}
 				>
 					<input
-						className="placeholder:text-muted-foreground/50 w-full bg-transparent text-lg outline-hidden"
+						className="placeholder:text-foreground-muted w-full bg-transparent text-lg"
 						aria-label="Automation title"
 						placeholder="Automation title"
 						value={f.name}
@@ -436,7 +437,7 @@ export function AutomationDialog({
 						</label>
 						<textarea
 							id="automation-prompt"
-							className="placeholder:text-muted-foreground/50 w-full resize-none bg-transparent text-sm outline-hidden"
+							className="placeholder:text-foreground-muted w-full resize-none bg-transparent text-sm"
 							rows={8}
 							placeholder="Enter prompt here."
 							value={f.prompt}
