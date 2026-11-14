@@ -31,7 +31,10 @@ server running after Ctrl-C unless you `astro dev stop` it yourself.
 `/` (`FRONTEND_BUILD_DIR` in `apps/server/local_llm/env.py`
 defaults to this `dist/`), so after a build `make backend` alone serves the
 whole app on `:4000`. At boot the backend copies `dist/static/` into its own
-static directory, which is where `/static/favicon.png` and friends come from.
+static directory, which is where `/static/user-import.csv` comes from. The
+mark (`favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-512.png`)
+sits at the root of `public/`, so the build serves it at `/`; `favicon.svg`
+is its source, and the others are rendered from it.
 
 ## Testing
 
