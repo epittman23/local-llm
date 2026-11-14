@@ -138,7 +138,7 @@ export function ToolkitEditor({
 					<span>Back</span>
 				</Button>
 
-				<div className="flex shrink-0 items-start gap-2 px-1 pb-3">
+				<div className="flex shrink-0 flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-start">
 					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
 						<div className="flex min-w-0 flex-col gap-1.5">
 							<Label htmlFor="tool-name">Tool name</Label>
@@ -187,7 +187,7 @@ export function ToolkitEditor({
 							/>
 						</div>
 					</div>
-					<div className="mt-6 flex shrink-0 items-center gap-1 pr-0.5">
+					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
 						<AccessButton onClick={() => setShowAccess(true)} />
 					</div>
 				</div>

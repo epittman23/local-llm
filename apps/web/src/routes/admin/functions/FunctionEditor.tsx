@@ -130,7 +130,7 @@ export function FunctionEditor({
 					<span>Back</span>
 				</Button>
 
-				<div className="flex shrink-0 items-start gap-2 px-1 pb-3">
+				<div className="flex shrink-0 flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-start">
 					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
 						<div className="flex min-w-0 flex-col gap-1.5">
 							<Label htmlFor="function-name">Function name</Label>
@@ -179,7 +179,7 @@ export function FunctionEditor({
 							/>
 						</div>
 					</div>
-					<div className="mt-6 flex shrink-0 items-center gap-1">
+					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto">
 						{!edit && (
 							<select
 								className="h-7 rounded-lg border bg-transparent px-2 text-xs"
