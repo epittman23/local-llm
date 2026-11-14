@@ -146,3 +146,13 @@ def test_a_webhooks_picture_is_still_served(client, monkeypatch):
     response = client.get('/channels/webhooks/w1/profile/image')
     assert response.status_code == 200
     assert response.headers['content-type'] == 'image/png'
+
+
+def test_a_missing_mark_file_is_a_404_not_a_500(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(channels_router, 'WEBHOOK_FALLBACK_IMAGE', tmp_path / 'icon-512.png')
+    webhook_with(monkeypatch, None)
+    response = client.get('/channels/webhooks/w1/profile/image')
+    assert response.status_code == 404
+    assert response.json() == {'detail': 'No profile image'}
+    webhook_with(monkeypatch, None, exists=False)
+    assert client.get('/channels/webhooks/w1/profile/image').status_code == 404

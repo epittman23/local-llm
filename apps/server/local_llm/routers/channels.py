@@ -2030,13 +2030,20 @@ async def delete_message_by_id(
 ############################
 
 
+def _webhook_fallback_image():
+    # The copy of the mark in the static directory is made at startup and can be missing.
+    if not WEBHOOK_FALLBACK_IMAGE.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No profile image')
+    return FileResponse(WEBHOOK_FALLBACK_IMAGE)
+
+
 @router.get('/webhooks/{webhook_id}/profile/image')
 async def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_user)):
     """Get webhook profile image by webhook ID."""
     webhook = await Channels.get_webhook_by_id(webhook_id)
     if not webhook:
         # The mark, not Open WebUI's favicon (decision D1, 2026-11-14); the status is unchanged.
-        return FileResponse(WEBHOOK_FALLBACK_IMAGE)
+        return _webhook_fallback_image()
 
     if webhook.profile_image_url:
         # Check if it's url or base64
@@ -2061,7 +2068,7 @@ async def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_u
                 pass
 
     # No picture of its own: the mark (decision D1, 2026-11-14).
-    return FileResponse(WEBHOOK_FALLBACK_IMAGE)
+    return _webhook_fallback_image()
 
 
 @router.get('/{id}/webhooks', response_model=list[ChannelWebhookModel])
