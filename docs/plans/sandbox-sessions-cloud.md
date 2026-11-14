@@ -1,5 +1,10 @@
 # Sandbox implementation: running a cloud session
 
+> **Complete (2026-11-14).** The sandbox work is finished: #889, the last
+> of its four pull requests, merged as `305874f5`. There are no more
+> sessions to start; this file is kept as the record of how the cloud
+> sessions ran.
+
 > **To start a session**, give the cloud agent this prompt: "Resume the
 > sandbox work by following `docs/plans/sandbox-sessions-cloud.md` on the
 > `feat/sandbox-harness` branch. Do not open or edit any pull request."

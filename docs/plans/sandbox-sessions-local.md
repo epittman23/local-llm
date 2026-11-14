@@ -1,5 +1,10 @@
 # Sandbox implementation: running a local session
 
+> **Complete (2026-11-14).** The sandbox work is finished: #889, the last
+> of its four pull requests, merged as `305874f5`. There are no more
+> sessions to start; this file is kept as the record of how the local
+> sessions ran.
+
 > **To start a session**, open Claude Code in `~/local-llm` and say:
 > "Resume the sandbox work by following `docs/plans/sandbox-sessions-local.md`
 > on the `feat/sandbox-harness` branch." From T40 on, name
