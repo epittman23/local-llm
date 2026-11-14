@@ -237,21 +237,13 @@
 }
 
 /*
- * FRM-1, LAY-2: fields have a 3:1 edge, a filled surface and the standard
- * height. Only the shared components: a raw <input> may be the inside of a
+ * FRM-1: fields have a 3:1 edge and a filled surface (their height and type,
+ * LAY-2, are in the components). Only the shared components: a raw <input> may be the inside of a
  * composite field that draws its own edge (FRM-4 says to use the shared ones).
  */
 :root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
 	border-color: var(--border-control);
 	background-color: var(--surface-1);
-	font-size: var(--text-body);
-}
-:root :is([data-slot="input"], [data-slot="select-trigger"]) {
-	height: var(--control);
-	padding-inline: 0.75rem;
-}
-:root [data-slot="textarea"] {
-	padding: 0.5rem 0.75rem;
 }
 :root :is([data-slot="input"], [data-slot="textarea"])::placeholder {
 	color: var(--foreground-muted); /* COL-2: placeholders are text; 4.5:1 */
@@ -274,27 +266,12 @@
 }
 
 /*
- * ACT-1, LAY-2: buttons. Matched by element and data-variant, not
+ * ACT-1, ACT-3: button colours. Matched by element and data-variant, not
  * data-slot="button": a Button used as a dialog or menu trigger (asChild)
- * takes the trigger's data-slot.
+ * takes the trigger's data-slot. Sizes and type (LAY-2) are in
+ * components/ui/button.tsx itself, so a caller's own height (a card or a
+ * row that is a Button, `h-auto`) still wins.
  */
-:root :is(button, a)[data-variant] {
-	font-size: var(--text-body);
-	font-weight: 550;
-	transition-duration: var(--motion-fast); /* MOT-1 */
-}
-:root :is(button, a)[data-variant]:is([data-size="default"], [data-size="lg"]) {
-	height: var(--control);
-	padding-inline: 0.75rem;
-}
-:root :is(button, a)[data-variant][data-size="icon"] {
-	width: var(--control);
-	height: var(--control);
-}
-:root :is(button, a)[data-variant]:is([data-size="sm"], [data-size="xs"]) {
-	height: var(--control-compact);
-	font-size: var(--text-dense);
-}
 :root :is(button, a)[data-variant="outline"] {
 	border-color: var(--border-control);
 	background-color: transparent;
