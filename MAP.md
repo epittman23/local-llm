@@ -131,8 +131,8 @@ Start here for "how do I run/use this."
   against this machine: fit, tool calls, uncensored variants, the exact
   Hugging Face file for each; analysis for the owner's decision);
   `sandbox-implementation.md` (the task-by-task build of the sandbox
-  design, with the committed ledger every session resumes from), and the
-  two session procedures that drive it: `sandbox-sessions-local.md` (the
+  design and its ledger, complete 2026-11-14 when #889 merged), and the
+  two session procedures that drove it: `sandbox-sessions-local.md` (the
   owner's laptop, with the oh-my-claudecode plugin) and
   `sandbox-sessions-cloud.md` (a hosted session from a fresh clone).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
