@@ -253,8 +253,9 @@ and an unpacked package. The unit tests cover:
 - `src/main.ts`'s start and stop: a Cancel during startup, a quit while the
   window loads, Retry during a stop, the "Leave it running" offer, services left
   after a stop, a stack an earlier launch left running or was stopping, and
-  a login shell that cannot be spawned, and the sub-frame navigation
-  handler's wiring, run against a fake Electron in
+  a login shell that cannot be spawned, the sub-frame navigation
+  handler's wiring, and Help > About and the menu layout, run against a
+  fake Electron in
   `src/main.stop.test.ts`.
 
 Launching, closing and attaching the real stack are checked by hand: see

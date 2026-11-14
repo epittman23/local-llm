@@ -88,6 +88,16 @@ describe('startup', () => {
 		expect(p.error).toBe('Nothing answered at https://llm.example.com.');
 	});
 
+	it('keeps the cause current when the log’s last lines arrive after the failure', () => {
+		let p = createProgress('startup', 't', STARTUP_OWN, 0);
+		p = reduce(p, { type: 'fail', message: 'make backend stopped (exit code 2)', at: 5 });
+		expect(p.cause).toBeUndefined();
+		p = feed(p, fixture('failed-start.log'), 6);
+		expect(p.cause).toMatch(/^\/tmp\/scratch\/norepo\/infra\/\.env not found/);
+		p = feed(p, ['INFO:     Shutting down'], 9);
+		expect(p.cause).toMatch(/infra\/\.env not found/);
+	});
+
 	it('leaves a failed stop to its own message', () => {
 		let p = feed(createProgress('shutdown', 't', SHUTDOWN, 0), ['ERROR:    Exception in ASGI application']);
 		p = reduce(p, { type: 'fail', message: 'The services did not stop.', at: 9 });

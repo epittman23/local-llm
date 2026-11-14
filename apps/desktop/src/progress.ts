@@ -286,8 +286,14 @@ export function reduce(progress: Progress, event: ProgressEvent): Progress {
 				endedAt: event.at
 			};
 		}
-		case 'line':
-			return onLine(progress, event.text, event.at);
+		case 'line': {
+			const next = onLine(progress, event.text, event.at);
+			// The tail reads the log every 200 ms, so a failed start's last lines (the
+			// traceback, make's own message) can arrive after the failure: keep the cause current.
+			return next.error && next.kind === 'startup' && next.log !== progress.log
+				? { ...next, cause: errorLine(next.log) ?? next.cause }
+				: next;
+		}
 		case 'offer-stop-llama':
 			return { ...progress, offerStopLlama: true };
 		case 'complete':
