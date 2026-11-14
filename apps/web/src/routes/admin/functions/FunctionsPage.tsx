@@ -299,7 +299,7 @@ export function FunctionsPage() {
 				<div className="mb-1 flex w-full items-center justify-between">
 					<div className="flex shrink-0 items-center gap-1.5 px-0.5 text-sm font-normal md:self-center">
 						<div>Functions</div>
-						{!failed && <div className="text-muted-foreground text-sm font-normal opacity-60">{items.length}</div>}
+						{!failed && <div className="text-muted-foreground text-sm font-normal">{items.length}</div>}
 					</div>
 					<div className="flex w-full justify-end">
 						<SplitCreateButton
