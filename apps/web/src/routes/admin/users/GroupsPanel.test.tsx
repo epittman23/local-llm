@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
@@ -135,5 +135,16 @@ describe('GroupsPanel when a load fails (STA-4, #981)', () => {
 
 		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load groups");
 		expect(screen.queryByRole('button', { name: 'New Group' })).toBeNull();
+	});
+
+	it('shows an offline load as a failure, not a spinner that never ends', async () => {
+		onlineManager.setOnline(false);
+		try {
+			renderFailing();
+			expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load groups");
+			expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		} finally {
+			onlineManager.setOnline(true);
+		}
 	});
 });

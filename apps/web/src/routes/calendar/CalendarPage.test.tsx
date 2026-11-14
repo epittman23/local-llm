@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
@@ -124,5 +124,16 @@ describe('a calendar that cannot load (STA-4, #981)', () => {
 		getCalendarEvents.mockResolvedValue([]);
 		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 		await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+	});
+
+	it('shows an offline load as a failure, not an empty calendar', async () => {
+		onlineManager.setOnline(false);
+		try {
+			show();
+			expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load calendars");
+			expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		} finally {
+			onlineManager.setOnline(true);
+		}
 	});
 });
