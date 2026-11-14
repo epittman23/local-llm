@@ -160,6 +160,12 @@ together with `src/progress.ts`.
   attaching to a running backend waits 5 minutes in all for `/ready`.
 - **Repository folder.** The checkout whose `make backend` it runs.
 
+Opened from the menu once the app is running, its **Back** reads
+**Close**. **Help > About local-llm** shows the app's version, the commit it
+was built from (recorded by `scripts/build-info.mjs`), its Electron version
+and the server URL in use. Reload and the developer tools are under
+**View > Developer**.
+
 Moving to the dedicated server means setting the server URL to its
 `https://` address and restarting the app. Nothing else changes. Use a real
 certificate (Tailscale serve, Caddy); a self-signed one is not handled.

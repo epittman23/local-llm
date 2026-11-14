@@ -1003,6 +1003,27 @@ function applyPolicy(): void {
 	);
 }
 
+/** The build's commit, recorded by scripts/build-info.mjs; absent in an older build. */
+function buildCommit(): string | undefined {
+	try {
+		return JSON.parse(readFileSync(join(__dirname, 'build-info.json'), 'utf8')).commit;
+	} catch {
+		return undefined;
+	}
+}
+
+function showAbout(): void {
+	const lines = [
+		`Version ${app.getVersion()}`,
+		`Build ${buildCommit() ?? 'not recorded'}`,
+		`Electron ${process.versions.electron ?? 'unknown'}`,
+		`Server ${config.serverUrl}`
+	];
+	const parent = mainWindow ?? statusWindow;
+	const options = { type: 'info' as const, title: 'About local-llm', message: 'local-llm', detail: lines.join('\n') };
+	void (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
+}
+
 function buildMenu(): void {
 	Menu.setApplicationMenu(
 		Menu.buildFromTemplate([
@@ -1015,8 +1036,24 @@ function buildMenu(): void {
 				]
 			},
 			{ role: 'editMenu' },
-			{ role: 'viewMenu' },
-			{ role: 'windowMenu' }
+			{
+				label: 'View',
+				// Zoom stays: with the menu bar hidden, an accelerator works only while its item exists.
+				submenu: [
+					{ role: 'resetZoom' },
+					{ role: 'zoomIn' },
+					{ role: 'zoomOut' },
+					{ type: 'separator' },
+					{ role: 'togglefullscreen' },
+					{ type: 'separator' },
+					{
+						label: 'Developer',
+						submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }]
+					}
+				]
+			},
+			{ role: 'windowMenu' },
+			{ label: 'Help', submenu: [{ label: 'About local-llm', click: showAbout }] }
 		])
 	);
 }
