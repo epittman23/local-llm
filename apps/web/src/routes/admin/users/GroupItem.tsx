@@ -71,13 +71,13 @@ export function GroupItem({
 					<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 						<div className="flex min-w-0 items-center gap-2">
 							<div className="line-clamp-1 text-sm font-normal group-hover:underline">{group.name}</div>
-							<div className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] leading-none font-normal">
+							<div className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-caption leading-none font-normal">
 								{group.member_count ?? 0} members
 							</div>
 						</div>
 						<div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
 							<div className="line-clamp-1 min-w-0">{group.description || 'No description'}</div>
-							<div className="text-muted-foreground/50 shrink-0">/</div>
+							<div className="text-foreground-muted shrink-0">/</div>
 							<div className="shrink-0">{hasCustomPermissions ? 'Custom permissions' : 'Uses defaults'}</div>
 						</div>
 					</div>

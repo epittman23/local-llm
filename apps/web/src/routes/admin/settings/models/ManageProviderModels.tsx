@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	deleteProviderModel,
 	downloadProviderModel,
@@ -16,19 +17,17 @@ import {
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import {
-	type ProviderModel,
 	displayNameOf,
 	modelIdOf,
 	normalizeCatalog,
+	type ProviderModel,
 	statusClass,
 	statusOf,
 	unloadIdOf
 } from './providerModels';
 
 const inputClass =
-	'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs outline-hidden transition-colors disabled:opacity-50';
-const iconButtonClass =
-	'bg-muted/40 hover:bg-muted inline-flex h-7 items-center justify-center rounded-lg border px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+	'bg-muted/40 placeholder:text-foreground-muted focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs transition-colors disabled:opacity-50';
 
 /** Ports admin/Settings/Models/Manage/ManageProviderModels.svelte: download, load, unload and delete models on a llama.cpp or LM Studio connection. */
 export function ManageProviderModels({
@@ -84,15 +83,16 @@ export function ManageProviderModels({
 			<div className="flex items-center justify-between">
 				<div className="text-sm font-normal">{label || provider}</div>
 				<Tip content="Refresh">
-					<button
+					<Button
+						variant="ghost"
+						size="icon-sm"
 						type="button"
 						aria-label="Refresh"
-						className={iconButtonClass}
 						onClick={() => void refresh()}
 						disabled={loading}
 					>
 						<RefreshCw className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 			</div>
 
@@ -118,14 +118,15 @@ export function ManageProviderModels({
 					onChange={(e) => setModelRef(e.target.value)}
 				/>
 				<Tip content="Download Model">
-					<button
+					<Button
+						variant="ghost"
+						size="icon-sm"
 						type="submit"
 						aria-label="Download Model"
-						className={iconButtonClass}
 						disabled={busy !== '' || modelRef.trim() === ''}
 					>
 						<Download className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 			</form>
 
@@ -145,32 +146,32 @@ export function ManageProviderModels({
 							<div key={id} className="flex items-center justify-between gap-2 border-b px-2 py-2 last:border-b-0">
 								<div className="min-w-0 flex-1">
 									<div className="truncate text-xs font-medium">{name}</div>
-									{name !== id && <div className="text-muted-foreground truncate text-[0.65rem]">{id}</div>}
+									{name !== id && <div className="text-muted-foreground truncate text-caption">{id}</div>}
 									<div className="mt-1 flex items-center gap-1.5">
-										<span className={cn('rounded-full px-1.5 py-0.5 text-[0.65rem]', statusClass(status))}>
-											{status}
-										</span>
+										<span className={cn('rounded-full px-1.5 py-0.5 text-caption', statusClass(status))}>{status}</span>
 									</div>
 								</div>
 								<div className="flex shrink-0 gap-1">
 									<Tip content="Load Model">
-										<button
+										<Button
+											variant="ghost"
+											size="icon-sm"
 											type="button"
 											aria-label={`Load ${name}`}
-											className={iconButtonClass}
 											disabled={busy !== '' || status === 'loaded' || status === 'loading'}
 											onClick={() =>
 												void act(id, () => loadProviderModel(token, urlIdx, id), 'Model loaded successfully')
 											}
 										>
 											<Play className="size-4" />
-										</button>
+										</Button>
 									</Tip>
 									<Tip content="Unload Model">
-										<button
+										<Button
+											variant="ghost"
+											size="icon-sm"
 											type="button"
 											aria-label={`Unload ${name}`}
-											className={iconButtonClass}
 											disabled={busy !== '' || status === 'unloaded'}
 											onClick={() =>
 												void act(
@@ -181,19 +182,20 @@ export function ManageProviderModels({
 											}
 										>
 											<X className="size-4" />
-										</button>
+										</Button>
 									</Tip>
 									{supportsDelete && (
 										<Tip content="Delete Model">
-											<button
+											<Button
+												variant="ghost"
+												size="icon-sm"
 												type="button"
 												aria-label={`Delete ${name}`}
-												className={iconButtonClass}
 												disabled={busy !== ''}
 												onClick={() => setToDelete(id)}
 											>
 												<Trash2 className="size-4" />
-											</button>
+											</Button>
 										</Tip>
 									)}
 								</div>

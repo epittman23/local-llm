@@ -7,15 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { addUser } from '@/lib/apis/auths';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { generateInitialsImage } from '@/lib/utils/auth-helpers';
 import { cn } from '@/lib/utils';
+import { generateInitialsImage } from '@/lib/utils/auth-helpers';
 import { parseUserCsv } from './userCsv';
 
 const blank = { name: '', email: '', password: '', role: 'user' };
 const BATCH_SIZE = 10;
-
-const tabClass = (active: boolean) =>
-	cn('min-w-fit p-1.5 text-sm transition', active ? '' : 'text-muted-foreground/60 hover:text-foreground');
 
 /**
  * Ports admin/Users/UserList/AddUserModal.svelte: a form for one user, or a
@@ -100,7 +97,7 @@ export function AddUserModal({
 		onSaved();
 	};
 
-	const field = 'w-full bg-transparent text-sm outline-hidden';
+	const field = 'w-full bg-transparent text-sm';
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
@@ -116,12 +113,22 @@ export function AddUserModal({
 					}}
 				>
 					<div className="-mt-2 mb-1.5 flex w-fit gap-1 overflow-x-auto text-center text-sm font-normal">
-						<button type="button" className={tabClass(tab === 'form')} onClick={() => setTab('form')}>
+						<Button
+							variant={tab === 'form' ? 'secondary' : 'ghost'}
+							size="sm"
+							type="button"
+							onClick={() => setTab('form')}
+						>
 							Form
-						</button>
-						<button type="button" className={tabClass(tab === 'import')} onClick={() => setTab('import')}>
+						</Button>
+						<Button
+							variant={tab === 'import' ? 'secondary' : 'ghost'}
+							size="sm"
+							type="button"
+							onClick={() => setTab('import')}
+						>
 							CSV Import
-						</button>
+						</Button>
 					</div>
 
 					<div className="px-1">
@@ -195,13 +202,15 @@ export function AddUserModal({
 										accept=".csv"
 										onChange={(e) => setFile(e.target.files?.[0] ?? null)}
 									/>
-									<button
+									<Button
+										variant="outline"
+										size="sm"
+										className="w-full"
 										type="button"
-										className="hover:bg-muted w-full rounded-xl border border-dashed bg-transparent py-3 text-center text-sm font-normal"
 										onClick={() => fileInput.current?.click()}
 									>
 										{file ? '1 document(s) selected.' : 'Click here to select a csv file.'}
-									</button>
+									</Button>
 								</div>
 								<div className="text-muted-foreground text-xs">
 									ⓘ Ensure your CSV file includes 4 columns in this order: Name, Email, Password, Role.{' '}

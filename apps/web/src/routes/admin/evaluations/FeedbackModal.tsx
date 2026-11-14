@@ -115,7 +115,7 @@ export function FeedbackModal({
 						{feedback.data?.tags && feedback.data.tags.length > 0 && (
 							<div className="-mx-1 mb-2 mt-1 flex flex-wrap gap-1">
 								{feedback.data.tags.map((tag) => (
-									<span key={tag} className="bg-muted rounded-full px-2 py-0.5 text-[0.5625rem]">
+									<span key={tag} className="bg-muted rounded-full px-2 py-0.5 text-caption">
 										{tag}
 									</span>
 								))}

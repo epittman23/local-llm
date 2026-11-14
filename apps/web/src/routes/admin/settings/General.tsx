@@ -3,7 +3,6 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
-import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
 import {
 	SettingField,
 	SettingInput,
@@ -11,10 +10,12 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
+import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
+import { Button } from '@/components/ui/button';
 import { getAdminConfig, updateAdminConfig } from '@/lib/apis/auths';
 import { getBanners, setBanners } from '@/lib/apis/configs';
 import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '@/lib/constants';
@@ -63,7 +64,7 @@ function Toggle({
 	muted?: boolean;
 }) {
 	return (
-		<SettingRow label={label} description={description} labelClassName={muted ? 'text-muted-foreground/70' : undefined}>
+		<SettingRow label={label} description={description} labelClassName={muted ? 'text-foreground-muted' : undefined}>
 			{(id) => <SettingSwitch checked={config[name]} onChange={(v) => patch({ [name]: v })} labelledBy={id} />}
 		</SettingRow>
 	);
@@ -96,41 +97,46 @@ export function DefaultInterfaceSettings({
 	return (
 		<div>
 			<div className="flex w-full items-start justify-between gap-4">
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="h-auto min-w-0 flex-1 justify-start whitespace-normal text-left"
 					type="button"
-					className="text-muted-foreground hover:text-foreground min-w-0 flex-1 text-left text-xs transition"
 					aria-expanded={open}
 					onClick={() => setOpen((v) => !v)}
 				>
 					<div>Default Interface Settings</div>
-					<div className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">
+					<div className="text-foreground-muted mt-1.5 text-caption">
 						Set system-wide interface defaults for every account. Personal settings override these defaults.
 					</div>
-				</button>
-				<button
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="shrink-0"
 					type="button"
 					aria-label={`${open ? 'Close' : 'Configure'} Default Interface Settings`}
-					className="text-muted-foreground hover:text-foreground shrink-0 text-[0.6875rem] transition"
 					onClick={() => setOpen((v) => !v)}
 				>
 					{open ? 'Close' : 'Configure'}
-				</button>
+				</Button>
 			</div>
 			{open && (
 				<div className="mt-2 space-y-2">
 					<div className="flex items-center justify-between gap-4">
-						<div className="text-muted-foreground/70 text-[0.6875rem]">{count} settings configured</div>
+						<div className="text-foreground-muted text-caption">{count} settings configured</div>
 						{count > 0 && (
-							<button
+							<Button
+								variant="ghost"
+								size="sm"
 								type="button"
-								className="text-muted-foreground hover:text-foreground text-[0.6875rem] transition"
 								onClick={() => {
 									onChange({});
 									setCleared((n) => n + 1);
 								}}
 							>
 								Clear
-							</button>
+							</Button>
 						)}
 					</div>
 					<div className="max-h-[28rem] overflow-y-auto rounded-lg border p-3">
@@ -261,7 +267,7 @@ export default function General() {
 							<SettingRow
 								label="Model Response Mode"
 								description="Choose where model responses to root-level channel mentions are posted."
-								labelClassName="text-muted-foreground/70"
+								labelClassName="text-foreground-muted"
 							>
 								<SettingSelect
 									value={admin.CHANNEL_MODEL_RESPONSE_MODE}
@@ -337,18 +343,20 @@ export default function General() {
 							<div className="mb-2 flex w-full items-start justify-between gap-4">
 								<div className="min-w-0">
 									<div className="text-muted-foreground text-xs">Banners</div>
-									<p className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">
+									<p className="text-foreground-muted mt-1.5 text-caption">
 										Create announcements shown to users in the app.
 									</p>
 								</div>
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									className="justify-center"
 									type="button"
 									aria-label="Add banner"
-									className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 items-center justify-center rounded-lg transition-colors"
 									onClick={() => canAddBanner(draft.banners) && setBannerList([...draft.banners, newBanner()])}
 								>
 									<Plus className="size-4" />
-								</button>
+								</Button>
 							</div>
 							<Banners banners={draft.banners} onChange={setBannerList} />
 						</div>

@@ -21,18 +21,18 @@ import { getRAGConfig, updateRAGConfig } from '@/lib/apis/retrieval';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { ragSaveOutcome } from './documents';
 import {
-	type FieldSpec,
-	LOADER_ENGINES,
-	SEARCH_ENGINES,
-	SEARCH_ENGINE_FIELDS,
 	engineLabel,
+	type FieldSpec,
 	isDefaultLoader,
+	LOADER_ENGINES,
 	loaderFields,
 	prepareWebConfig,
+	SEARCH_ENGINE_FIELDS,
+	SEARCH_ENGINES,
 	toWebForm
 } from './webSearch';
-import { ragSaveOutcome } from './documents';
 
 type Rec = Record<string, any>;
 
@@ -88,7 +88,7 @@ function Fields({ fields, config, set }: { fields: FieldSpec[]; config: Rec; set
 								<Tip content={f.tip}>
 									<textarea
 										id={`web-${f.name}`}
-										className="bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring w-full rounded-lg border px-2 py-1.5 text-xs outline-hidden transition-colors"
+										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring w-full rounded-lg border px-2 py-1.5 text-xs transition-colors"
 										rows={4}
 										placeholder={f.placeholder}
 										value={config[f.name] ?? ''}

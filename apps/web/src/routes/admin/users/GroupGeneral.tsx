@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 type GroupData = { config?: { share?: boolean | string } } & Record<string, unknown>;
@@ -36,7 +37,7 @@ export function GroupGeneral({
 					</label>
 					<input
 						id="group-name"
-						className="placeholder:text-muted-foreground/50 w-full bg-transparent text-sm outline-hidden"
+						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
 						type="text"
 						value={name}
 						onChange={(e) => onNameChange(e.target.value)}
@@ -53,7 +54,7 @@ export function GroupGeneral({
 				</label>
 				<Textarea
 					id="group-description"
-					className="placeholder:text-muted-foreground/50 w-full resize-none border-0 bg-transparent px-0 text-sm shadow-none"
+					className="placeholder:text-foreground-muted w-full resize-none border-0 bg-transparent px-0 text-sm shadow-none"
 					rows={4}
 					value={description}
 					onChange={(e) => onDescriptionChange(e.target.value)}
@@ -72,7 +73,7 @@ export function GroupGeneral({
 					<div className="flex items-center gap-2 p-1">
 						<select
 							id="group-share"
-							className="rounded-lg bg-transparent px-2 text-sm outline-hidden"
+							className="rounded-lg bg-transparent px-2 text-sm"
 							value={toSelectValue(data?.config?.share)}
 							onChange={(e) =>
 								onDataChange({ ...data, config: { ...(data?.config ?? {}), share: fromSelectValue(e.target.value) } })
@@ -90,9 +91,9 @@ export function GroupGeneral({
 				<div className="mt-2 flex w-full flex-col">
 					<div className="text-muted-foreground mb-0.5 text-xs">Actions</div>
 					<div className="flex-1">
-						<button type="button" className="cursor-pointer bg-transparent text-xs hover:underline" onClick={onDelete}>
+						<Button variant="destructive" size="sm" type="button" onClick={onDelete}>
 							Delete
-						</button>
+						</Button>
 					</div>
 				</div>
 			)}

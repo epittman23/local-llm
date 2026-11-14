@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { getModels } from '@/lib/apis';
 import { getLeaderboard } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -12,12 +13,12 @@ import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { LeaderboardModal } from './LeaderboardModal';
 import {
+	buildRankedModels,
 	type LeaderboardEntry,
 	type LeaderboardSort,
 	type ModelInfo,
-	type RankedModel,
-	buildRankedModels,
 	percentOf,
+	type RankedModel,
 	rankById,
 	sortRanked
 } from './leaderboard';
@@ -85,21 +86,22 @@ export function Leaderboard() {
 						<div className="flex min-w-0 flex-1 items-center">
 							<Search className="mr-3 ml-1 size-3.5" />
 							<input
-								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
 								aria-label="Search"
 								placeholder="Search"
 							/>
 							{query && (
-								<button
+								<Button
+									variant="ghost"
+									size="icon-xs"
 									type="button"
-									className="hover:bg-muted rounded-full p-0.5 transition"
 									aria-label="Clear search"
 									onClick={() => setQuery('')}
 								>
 									<X className="size-3" strokeWidth={2} />
-								</button>
+								</Button>
 							)}
 						</div>
 					</div>
@@ -171,7 +173,7 @@ export function Leaderboard() {
 												</div>
 											</td>
 											<td className="text-foreground px-3 py-1.5 text-right font-normal">{model.rating}</td>
-											<td className="w-10 px-3 py-1.5 text-right font-normal text-green-500">
+											<td className="w-10 px-3 py-1.5 text-right font-normal text-success">
 												{model.stats.won === '-' ? (
 													'-'
 												) : (
@@ -183,7 +185,7 @@ export function Leaderboard() {
 													</>
 												)}
 											</td>
-											<td className="w-10 px-3 py-1.5 text-right font-normal text-red-500">
+											<td className="w-10 px-3 py-1.5 text-right font-normal text-danger">
 												{model.stats.lost === '-' ? (
 													'-'
 												) : (

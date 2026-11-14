@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { getConfig, updateConfig } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { toastSaved } from '@/lib/settings/useAdminSaved';
@@ -44,19 +45,21 @@ function ArenaModelRow({
 					/>
 					<div className="min-w-0">
 						<div className="truncate text-xs font-normal">{model.name}</div>
-						<div className="text-muted-foreground truncate text-[0.6875rem]">
+						<div className="text-muted-foreground truncate text-caption">
 							{(model.meta as { description?: string | null })?.description ?? model.id}
 						</div>
 					</div>
 				</div>
-				<button
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="shrink-0"
 					type="button"
 					aria-label={`Edit ${model.name}`}
-					className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1 transition"
 					onClick={() => setEditing(true)}
 				>
 					<Settings className="size-4" />
-				</button>
+				</Button>
 			</div>
 		</>
 	);
@@ -132,14 +135,15 @@ export default function Evaluations() {
 							<div className="flex items-center justify-between">
 								<div className="text-xs font-normal">Arena Models</div>
 								<Tip content="Add Arena Model">
-									<button
+									<Button
+										variant="ghost"
+										size="icon-sm"
 										type="button"
 										aria-label="Add Arena Model"
-										className="hover:bg-muted rounded p-1 transition"
 										onClick={() => setShowAdd(true)}
 									>
 										<Plus className="size-3.5" />
-									</button>
+									</Button>
 								</Tip>
 							</div>
 							<div className="flex flex-col gap-1">

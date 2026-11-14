@@ -5,9 +5,9 @@ import {
 	SettingField,
 	SettingRow,
 	SettingSelect,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
 import { getAdminConfig, getOAuthConfig, updateAdminConfig, updateOAuthConfig } from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
@@ -23,12 +23,11 @@ type Draft = {
 	oauth: Rec | null;
 };
 
-const linkClass = 'text-muted-foreground/70 hover:text-foreground mt-1 block text-[0.6875rem] underline';
+const linkClass = 'text-foreground-muted hover:text-foreground mt-1 block text-caption underline';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
 const grid = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
-const noteClass = 'text-muted-foreground block text-[0.75rem]';
-const warnClass =
-	'mt-1 block rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[0.6875rem] text-yellow-700 dark:text-yellow-200';
+const noteClass = 'text-muted-foreground block text-caption';
+const warnClass = 'mt-1 block rounded-lg bg-warning/15 px-2 py-1.5 text-caption text-warning';
 
 function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void; groups: Draft['groups'] }) {
 	return (
