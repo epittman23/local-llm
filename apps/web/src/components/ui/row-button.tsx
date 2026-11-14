@@ -17,7 +17,7 @@ function RowButton({ className, type = 'button', ...props }: React.ComponentProp
 			type={type}
 			data-slot="row-button"
 			className={cn(
-				'w-full min-w-0 cursor-pointer rounded-lg text-left text-body transition-colors duration-(--motion-fast) hover:bg-surface-3 aria-[current=true]:bg-surface-3 disabled:pointer-events-none disabled:text-foreground-disabled',
+				'w-full min-w-0 cursor-pointer rounded-lg text-left text-body transition-[color,background-color,border-color] duration-(--motion-fast) hover:bg-surface-3 aria-[current=true]:bg-surface-3 disabled:pointer-events-none disabled:text-foreground-disabled',
 				className
 			)}
 			{...props}
