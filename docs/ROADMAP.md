@@ -92,6 +92,7 @@ timeline
       2026-11-10 : Per-chat microVM sandbox (Kata Containers with Cloud Hypervisor) proposed to replace the Jupyter and Pyodide code interpreters : every design question decided by the owner : to be built in one draft PR from docs/plans/sandbox-implementation.md : nothing built
       2026-11-13 : A pull request no longer has to be up to date with main to merge : the main ruleset's up-to-date rule turned off at the owner's request : behind PRs are still updated, but a merge no longer waits for it
       2026-11-14 : Jupyter and Pyodide removed, the per-chat microVM sandbox is the only code interpreter : the benchmark harness runs on it (a smoke baseline on qwen38) : stored engine settings migrated to sandbox, the Jupyter service gone from the stack
+      2026-11-14 : Backend pytest runs across four pytest-xdist workers : 213 s against 435 s serially on 4 cores, coverage unchanged : tests must now hold in parallel
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

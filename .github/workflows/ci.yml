@@ -40,6 +40,10 @@ env:
   # BASEDPYRIGHT_VERSION is the same. A new version can change what it
   # reports, so bump it by hand and record the baseline with `make baselines`.
   BASEDPYRIGHT_VERSION: '1.40.2'
+  # pytest-xdist workers for the backend job; the Makefile's PYTEST_WORKERS
+  # is the same. ubuntu-latest has 4 vCPUs, and 4 workers measured faster
+  # than 6 on 4 cores.
+  PYTEST_WORKERS: '4'
   DIFF_COVER_FAIL_UNDER: '80'
   # The version .pre-commit-config.yaml's gitleaks hook pins, by digest; the
   # Makefile's GITLEAKS_IMAGE is the same string.
@@ -254,7 +258,7 @@ jobs:
       - name: Install
         run: uv sync --frozen --no-install-project --group dev
       - name: pytest
-        run: uv run --frozen python -m pytest tests -q --cov --cov-report=xml
+        run: uv run --frozen python -m pytest tests -q -n "$PYTEST_WORKERS" --cov --cov-report=xml
       - name: Coverage of the changed lines
         if: github.event_name == 'pull_request'
         env:

@@ -73,6 +73,10 @@ DIFF_COVER_FAIL_UNDER := 80
 DIFF_BASE ?= origin/main
 # Keep in sync with BASEDPYRIGHT_VERSION in .github/workflows/ci.yml.
 BASEDPYRIGHT_VERSION := 1.40.2
+# pytest-xdist workers for `make test-backend`. Keep in sync with
+# PYTEST_WORKERS in .github/workflows/ci.yml: 4 matches the runner's 4 vCPUs,
+# and measured faster there than 6 (docs/guides/testing.md).
+PYTEST_WORKERS ?= 4
 # Keep in sync with GITLEAKS_IMAGE in .github/workflows/ci.yml.
 GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
@@ -361,7 +365,7 @@ test-backend:
 	fi; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
-	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
+	uv run --frozen python -m pytest tests -q -n "$(PYTEST_WORKERS)" --cov --cov-report=xml; \
 	uvx "diff-cover@$(DIFF_COVER_VERSION)" coverage.xml \
 		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)"
 

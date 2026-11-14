@@ -945,7 +945,9 @@ def test_the_kata_mirror_log_stops_at_the_budget_and_cuts_a_line_longer_than_it(
 
 
 @pytest.mark.parametrize(
-    'client', [_Docker(b'', present=False), _Docker(b'', tty=True), _Docker(b'', status=500)], ids=str
+    'client',
+    [_Docker(b'', present=False), _Docker(b'', tty=True), _Docker(b'', status=500)],
+    ids=['absent', 'tty', 'status-500'],
 )
 def test_the_kata_mirror_log_fails_as_a_sandbox_error(tmp_path, client):
     with pytest.raises(SandboxError):

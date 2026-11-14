@@ -59,6 +59,9 @@ def test_a_44_character_secret_that_is_not_a_fernet_key_is_hashed(secret):
         # `openssl rand -base64 32`: the standard alphabet, which Fernet accepts too.
         base64.b64encode(bytes(range(200, 232))).decode(),
     ],
+    # Fixed ids: a generated key differs per process, and pytest-xdist needs
+    # every worker to collect the same test ids.
+    ids=['generated', 'standard-alphabet'],
 )
 def test_a_real_fernet_key_is_used_as_it_is(key):
     assert len(key) == 44

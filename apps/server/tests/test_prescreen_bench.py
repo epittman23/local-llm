@@ -231,7 +231,11 @@ def _run(bin_dir, *, point_timeout=30.0, cancel_after=None, **kw):
     return asyncio.run(scenario())
 
 
-def test_a_point_that_runs(binaries):
+def test_a_point_that_runs(binaries, monkeypatch):
+    # The peaks need at least one nvidia-smi sample, and the sampler stops when
+    # the bench exits. Without the delay a fast bench can finish before the
+    # fake nvidia-smi has answered once, which loaded CI runners hit.
+    monkeypatch.setenv('STUB_SLOW', '1')
     result, spawned = _run(binaries)
     assert result.status == 'ok', result.reason
     assert result.parsed['tg']['avg_ts'] > 0
