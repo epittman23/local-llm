@@ -1,7 +1,7 @@
-import { cn } from 'cn';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * The search box + filter cluster every workspace list opens with (the same

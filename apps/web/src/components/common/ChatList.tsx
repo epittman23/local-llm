@@ -1,10 +1,10 @@
-import { cn } from 'cn';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Link } from 'react-router';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { sharePath } from '@/routes/routePaths';
 

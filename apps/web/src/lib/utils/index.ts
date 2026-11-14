@@ -1,4 +1,19 @@
-export { cn } from 'cn';
+import { createCn } from 'cn/config';
+
+// The class merger every component uses. The stock `cn` knows only Tailwind's
+// own scales, so it took the standard's type steps (text-dense, ...) for
+// colours and dropped the colour beside them: a filled Button at size sm lost
+// text-primary-foreground. These are the utilities standard.css's @theme adds
+// (TYP-2 steps, TYP-3 weights, SHP-1 radius); a new one goes here too.
+export const cn = createCn({
+	extend: {
+		theme: {
+			text: ['caption', 'dense', 'body', 'reading', 'title', 'heading', 'display'],
+			'font-weight': ['strong', 'title'],
+			radius: ['panel']
+		}
+	}
+});
 
 // Ports d863707:apps/openwebui/src/lib/utils/index.ts's `formatNumber` (workspace tab
 // counts): 1234 -> "1.2k".

@@ -1,4 +1,3 @@
-import { cn } from 'cn';
 import { ChevronDown, ChevronUp, Clipboard, Link2Off, Search, Trash2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -12,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { deleteChatById } from '@/lib/apis/chats';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { sharePath } from '@/routes/routePaths';
 

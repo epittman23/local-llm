@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 
 /**
  * A whole row that is one click target (the interface standard, ACT-7): a
