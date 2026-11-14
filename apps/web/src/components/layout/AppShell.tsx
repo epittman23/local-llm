@@ -31,6 +31,11 @@ const CONTENT_ID = 'content';
  * layouts' page header). 0 everywhere else.
  */
 const SHORT_PHONE_INSET = 'max-md:[@media(max-height:520px)]:[--shell-menu-inset:2.25rem]';
+/** The phone bar folding away on a short screen, leaving its menu button floating at the top left. */
+const SHORT_PHONE_BAR = 'max-md:[@media(max-height:520px)]:contents';
+const SHORT_PHONE_MENU =
+	'max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:left-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:border';
+const SHORT_PHONE_NAME = '[@media(max-height:520px)]:hidden';
 
 /**
  * The persistent shell every React route renders inside (see AppRouter.tsx):
@@ -56,7 +61,7 @@ export function AppShell() {
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const searchOpen = useUIStore((state) => state.searchOpen);
 	const appName = useWebUIName();
-	const { page, heading } = useRouteTitle();
+	const { page, heading, foldsBar } = useRouteTitle();
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
@@ -106,20 +111,19 @@ export function AppShell() {
 				{sidebarOpen && <SidebarContent showCollapseToggle />}
 			</aside>
 
-			<div className={cn('flex min-w-0 flex-1 flex-col', SHORT_PHONE_INSET)}>
+			<div className={cn('flex min-w-0 flex-1 flex-col', foldsBar && SHORT_PHONE_INSET)}>
 				{/* A11Y-5: on a short phone screen (200% zoom, landscape) the bar folds
-				    away and only its menu button stays, floating at the top left; the
-				    page's first row leaves room for it (--shell-menu-inset). */}
-				<header
-					className={cn('flex items-center gap-2 border-b p-2 md:hidden', 'max-md:[@media(max-height:520px)]:contents')}
-				>
+				    away and only its menu button stays, floating at the top left, on
+				    routes whose handle says foldsBar: their first row leaves room for
+				    it (--shell-menu-inset). Other pages keep the bar. */}
+				<header className={cn('flex items-center gap-2 border-b p-2 md:hidden', foldsBar && SHORT_PHONE_BAR)}>
 					<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
 						<SheetTrigger asChild>
 							<Button
 								variant="ghost"
 								size="icon"
 								aria-label="Open navigation menu"
-								className="max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:left-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:border"
+								className={cn(foldsBar && SHORT_PHONE_MENU)}
 							>
 								<PanelLeft className="h-5 w-5" />
 							</Button>
@@ -129,7 +133,7 @@ export function AppShell() {
 							<SidebarContent onNavigate={() => setMobileOpen(false)} />
 						</SheetContent>
 					</Sheet>
-					<span className="text-body font-title [@media(max-height:520px)]:hidden">{appName}</span>
+					<span className={cn('text-body font-title', foldsBar && SHORT_PHONE_NAME)}>{appName}</span>
 				</header>
 
 				{!sidebarOpen && (

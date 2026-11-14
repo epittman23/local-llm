@@ -23,6 +23,12 @@ export type RouteHeading = 'layout' | 'page' | 'sr';
 export interface RouteHandle {
 	title?: string;
 	heading?: RouteHeading;
+	/**
+	 * The page's first row leaves room for the shell's floating menu button
+	 * (`--shell-menu-inset`), so on a short phone screen AppShell may fold the
+	 * phone bar away (A11Y-5). Pages without it keep the bar.
+	 */
+	foldsBar?: boolean;
 }
 
 /** `<page> · <name>`, or the name alone when there is no page. */
@@ -31,13 +37,14 @@ export function composeTitle(page: string | null | undefined, name: string): str
 	return trimmed ? `${trimmed}${TITLE_SEPARATOR}${name}` : name;
 }
 
-/** The deepest route's title and heading, each taken from the deepest route that sets it. */
+/** The deepest route's title, heading and foldsBar, each taken from the deepest route that sets it. */
 export function routeHandle(matches: readonly Pick<UIMatch, 'handle'>[]): RouteHandle {
 	const result: RouteHandle = {};
 	for (const match of matches) {
 		const handle = match.handle as RouteHandle | undefined;
 		if (handle?.title !== undefined) result.title = handle.title;
 		if (handle?.heading !== undefined) result.heading = handle.heading;
+		if (handle?.foldsBar !== undefined) result.foldsBar = handle.foldsBar;
 	}
 	return result;
 }
@@ -62,9 +69,9 @@ export function clearDynamicTitle(owner: object) {
 	if (usePageTitleStore.getState().owner === owner) usePageTitleStore.setState({ dynamic: null, owner: null });
 }
 
-/** The current page's name (the dynamic piece, else the route's title) and where its h1 comes from. */
-export function useRouteTitle(): { page: string | undefined; heading: RouteHeading | undefined } {
+/** The current page's name (the dynamic piece, else the route's title), where its h1 comes from, and foldsBar. */
+export function useRouteTitle(): { page: string | undefined; heading: RouteHeading | undefined; foldsBar: boolean } {
 	const handle = routeHandle(useMatches());
 	const dynamic = usePageTitleStore((s) => s.dynamic);
-	return { page: dynamic ?? handle.title, heading: handle.heading };
+	return { page: dynamic ?? handle.title, heading: handle.heading, foldsBar: handle.foldsBar === true };
 }

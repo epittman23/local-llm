@@ -31,7 +31,11 @@ function renderAt(path: string) {
 			{
 				element: <AppShell />,
 				children: [
-					{ path: '/c/:id', element: <button type="button">Send</button>, handle: { title: 'Chat', heading: 'sr' } },
+					{
+						path: '/c/:id',
+						element: <button type="button">Send</button>,
+						handle: { title: 'Chat', heading: 'sr', foldsBar: true }
+					},
 					{ path: '/notes', element: <h1>Notes</h1>, handle: { title: 'Notes', heading: 'page' } }
 				]
 			}
@@ -89,12 +93,20 @@ describe('AppShell', () => {
 		expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Notes']);
 	});
 
-	it('names the product in the phone bar, and keeps its menu button for short screens (A11Y-5)', () => {
-		renderAt('/notes');
-		expect(screen.getAllByText('local-llm').length).toBeGreaterThan(0);
+	it('folds the phone bar to a floating menu button on short screens where the page makes room (A11Y-5)', () => {
+		renderAt('/c/1');
 		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
 		expect(menu.className).toContain('max-md:[@media(max-height:520px)]:fixed');
 		expect(screen.getByRole('main').parentElement?.className).toContain('[--shell-menu-inset:2.25rem]');
+		expect(screen.getByText('local-llm').className).toContain('[@media(max-height:520px)]:hidden');
+	});
+
+	it('keeps the phone bar, with the product name, on pages that do not make room', () => {
+		renderAt('/notes');
+		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
+		expect(menu.className).not.toContain('520px');
+		expect(screen.getByRole('main').parentElement?.className).not.toContain('--shell-menu-inset');
+		expect(screen.getByText('local-llm').className).not.toContain('520px');
 	});
 
 	it('shows the boot splash, not the shell, while the session is loading (STA-2)', () => {

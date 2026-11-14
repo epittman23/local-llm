@@ -34,6 +34,11 @@ describe('routeHandle', () => {
 		expect(routeHandle(matches)).toEqual({ title: 'Models', heading: 'layout' });
 	});
 
+	it('takes foldsBar from the section route above the page', () => {
+		const matches = [{ handle: { foldsBar: true } }, { handle: { title: 'Serve', heading: 'layout' } }];
+		expect(routeHandle(matches)).toEqual({ title: 'Serve', heading: 'layout', foldsBar: true });
+	});
+
 	it('is empty for routes without handles, public or not', () => {
 		expect(routeHandle([{ handle: undefined }, { handle: null }])).toEqual({});
 		expect(routeHandle([])).toEqual({});

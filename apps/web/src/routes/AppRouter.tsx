@@ -58,6 +58,9 @@ import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 // when the page draws its own (lib/ui/pageTitle.ts).
 const layout = (title: string): RouteHandle => ({ title, heading: 'layout' });
 const page = (title: string): RouteHandle => ({ title, heading: 'page' });
+// The chat and the four section layouts, whose first row respects
+// --shell-menu-inset, so AppShell may fold the phone bar on a short screen.
+const folds: RouteHandle = { foldsBar: true };
 
 const router = createBrowserRouter(
 	[
@@ -77,6 +80,7 @@ const router = createBrowserRouter(
 							// One element for the three chat paths, so a new chat keeps its
 							// state when the server names it and the URL becomes /c/<id>.
 							element: <ChatPage />,
+							handle: folds,
 							children: [
 								{ path: routePaths.home, element: null, handle: page('New chat') },
 								{ path: 'c/:id', element: null, handle: { title: 'Chat', heading: 'sr' } },
@@ -86,6 +90,7 @@ const router = createBrowserRouter(
 						{
 							path: routePaths.workspace,
 							element: <WorkspaceLayout />,
+							handle: folds,
 							children: [
 								{ index: true, element: <WorkspaceIndexRedirect />, handle: layout('Workspace') },
 								{ path: 'models', element: <ModelsPage />, handle: layout('Models') },
@@ -119,6 +124,7 @@ const router = createBrowserRouter(
 						{
 							path: routePaths.admin,
 							element: <AdminLayout />,
+							handle: folds,
 							children: [
 								// Bare /admin and /admin/users are redirect pages in the Svelte app
 								// (onMount goto); ported as index routes.
@@ -149,6 +155,7 @@ const router = createBrowserRouter(
 						{
 							path: routePaths.playground,
 							element: <PlaygroundLayout />,
+							handle: folds,
 							children: [
 								{ index: true, element: <PlaygroundChat />, handle: layout('Playground') },
 								{ path: 'completions', element: <PlaygroundCompletions />, handle: layout('Completions') },
@@ -168,6 +175,7 @@ const router = createBrowserRouter(
 						{
 							path: routePaths.benchmarks,
 							element: <BenchmarksLayout />,
+							handle: folds,
 							children: [
 								// Bare /benchmarks redirects to /serve, matching the Svelte app's
 								// own (app)/benchmarks/+page.svelte (an onMount goto, ported here
