@@ -51,6 +51,28 @@ end users in any rolling thirty-day period. It is a personal, single-user
 deployment; exceeding that limit would require restoring the branding or
 one of clause 4's other permissions.
 
+Icon
+----
+The Sigma glyph in apps/web/public/favicon.svg, and the icons rendered from
+it (apps/web/public/favicon.ico, apple-touch-icon.png and icon-512.png, and
+the desktop app's icon), is from Lucide (https://lucide.dev), under the ISC
+License. It is the mark until a real one exists (docs/decisions.md).
+
+    Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
+    All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
+    IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 Benchmark data and evaluation code
 ----------------------------------
 The Benchmarks section vendors three datasets and ports part of one
