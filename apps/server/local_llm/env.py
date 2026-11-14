@@ -1115,12 +1115,6 @@ if OFFLINE_MODE:
     os.environ['HF_HUB_OFFLINE'] = '1'
 
 ####################################
-# Pyodide file persistence
-####################################
-
-ENABLE_PYODIDE_FILE_PERSISTENCE = os.getenv('ENABLE_PYODIDE_FILE_PERSISTENCE', 'false').lower() == 'true'
-
-####################################
 # Audit logging
 ####################################
 

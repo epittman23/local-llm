@@ -751,8 +751,8 @@ _code_interpreter_gates = _gated_tools(
 
 
 async def _code_interpreter_tools(ctx: _BuiltinToolContext) -> list[Callable]:
-    # Only the sandbox engine has tools. Any other stored engine value (pyodide, or a removed engine's until T43's
-    # migration rewrites it) offers none.
+    # Only the sandbox engine has tools. Any other stored engine value (a removed engine's, until T43's migration
+    # rewrites it) offers none.
     if ctx.config.get('code_interpreter.engine') != 'sandbox':
         return []
     return await _code_interpreter_gates(ctx)

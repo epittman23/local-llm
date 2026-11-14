@@ -382,8 +382,8 @@ except Exception:
 ####################################
 
 #: The live code engines: the values the Code Execution form and the config import accept, and the only ones that
-#: turn the code interpreter on. Pyodide is one until T42 removes it, after which only the sandbox is.
-CODE_ENGINES = ('sandbox', 'pyodide')
+#: turn the code interpreter on.
+CODE_ENGINES = ('sandbox',)
 
 
 def _code_engine_env(name: str, default: str) -> str:
@@ -397,7 +397,7 @@ def _code_engine_env(name: str, default: str) -> str:
 
 ENABLE_CODE_EXECUTION = os.getenv('ENABLE_CODE_EXECUTION', 'True').lower() == 'true'
 
-CODE_EXECUTION_ENGINE = _code_engine_env('CODE_EXECUTION_ENGINE', 'pyodide')
+CODE_EXECUTION_ENGINE = _code_engine_env('CODE_EXECUTION_ENGINE', 'sandbox')
 
 ENABLE_CODE_INTERPRETER = os.getenv('ENABLE_CODE_INTERPRETER', 'True').lower() == 'true'
 
@@ -408,7 +408,7 @@ MEMORIES_REVIEW_INTERVAL_TURNS = int_env('MEMORIES_REVIEW_INTERVAL_TURNS', 10)
 MEMORIES_USER_CHAR_LIMIT = int_env('MEMORIES_USER_CHAR_LIMIT', 2000)
 MEMORIES_CONTEXT_CHAR_LIMIT = int_env('MEMORIES_CONTEXT_CHAR_LIMIT', 2000)
 
-CODE_INTERPRETER_ENGINE = _code_engine_env('CODE_INTERPRETER_ENGINE', 'pyodide')
+CODE_INTERPRETER_ENGINE = _code_engine_env('CODE_INTERPRETER_ENGINE', 'sandbox')
 
 CODE_INTERPRETER_PROMPT_TEMPLATE = os.getenv('CODE_INTERPRETER_PROMPT_TEMPLATE', '')
 
@@ -417,8 +417,8 @@ DEFAULT_CODE_INTERPRETER_PROMPT = """
 
 You have access to a Python code interpreter via: `<code_interpreter type="code" lang="python"></code_interpreter>`
 
-- The Python shell runs directly in the user's browser for fast execution of analysis, calculations, or problem-solving. Use it in this response.
-- You can use a wide array of libraries for data manipulation, visualization, API calls, or any computational task. Think outside the box and harness Python's full potential.
+- The Python shell runs in this chat's sandbox for analysis, calculations, or problem-solving. Use it in this response.
+- You can use a wide array of libraries for data manipulation, visualization, or any computational task. Think outside the box and harness Python's full potential.
 - **You must enclose your code within `<code_interpreter type="code" lang="python">` XML tags** and stop right away. If you don't, the code won't execute.
 - Do NOT use triple backticks (```py ... ```) inside the XML tags — that is markdown formatting, not executable Python code.
 - **Always print meaningful outputs** (results, tables, summaries, visuals). Avoid implicit outputs; use explicit print statements.
@@ -427,25 +427,10 @@ You have access to a Python code interpreter via: `<code_interpreter type="code"
 - **If a link to an image, audio, or any file appears in the output, display it exactly as-is** in your response so the user can access it. Do not modify the link.
 - Respond in the chat's primary language. Default to English if multilingual.
 
-Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""  # noqa: E501 - prompt text, kept byte for byte
+Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""  # noqa: E501 - prompt text, one line per bullet
 
-# Appended to the code interpreter prompt only when engine is pyodide
-CODE_INTERPRETER_PYODIDE_PROMPT = """
-
-##### Pyodide Environment
-
-- This Python environment runs via Pyodide in the browser. **Do not install packages** — `pip install`, `subprocess`, and `micropip.install()` are not available.
-- If a required library is unavailable, use an alternative approach with available modules. Do not attempt to install anything.
-
-##### Persistent File System
-
-- User-uploaded files are available at `/mnt/uploads/`. When the user asks you to work with their files, read from this directory.
-- You can also write output files to `/mnt/uploads/` so the user can access and download them from the file browser.
-- The file system persists across code executions within the same session.
-- Use `import os; os.listdir('/mnt/uploads')` to discover available files."""  # noqa: E501 - prompt text, kept byte for byte
-
-# The sandbox engine's counterpart: the model works in a per-chat microVM
-# through four tools, and nothing is captured inline, so what it wants shown
+# The sandbox engine on native function calling: the model works in a per-chat
+# microVM through four tools, and nothing is captured inline, so what it wants shown
 # goes to /workspace/outputs.
 CODE_INTERPRETER_SANDBOX_PROMPT = """
 

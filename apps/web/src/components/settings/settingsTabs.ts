@@ -238,7 +238,7 @@ export const adminTabs: SettingsTab[] = [
 		id: 'admin:code-execution',
 		title: 'Code Execution',
 		group: 'Tools',
-		keywords: ['code execution', 'python', 'sandbox', 'compiler', 'jupyter', 'interpreter']
+		keywords: ['code execution', 'python', 'sandbox', 'compiler', 'interpreter']
 	},
 	{
 		id: 'admin:pipelines',

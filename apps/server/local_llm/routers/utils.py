@@ -51,8 +51,8 @@ async def execute_code(request: Request, form_data: CodeForm, user=Depends(get_v
             detail=ERROR_MESSAGES.FEATURE_DISABLED('Code execution'),
         )
 
-    # Only the sandbox runs code here (Pyodide runs in the browser); any other stored value, such as a removed
-    # engine's until T43's migration rewrites it, is refused.
+    # Only the sandbox runs code; any other stored value, such as a removed engine's until T43's migration rewrites
+    # it, is refused.
     if await Config.get('code_execution.engine') == 'sandbox':
         return await _execute_in_sandbox(request, form_data, user)
     raise HTTPException(

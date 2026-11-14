@@ -682,13 +682,21 @@ CASES_SPEC = [
     _case('form_without_messages', [[chunk('x'), DONE]], form={'messages': []}),
     # --- code interpreter (legacy)
     _case(
-        'code_interpreter_pyodide',
+        'code_interpreter_sandbox_stderr_and_outputs',
         [[chunk('Running: '), chunk(CI_CODE), DONE], [chunk('It printed 1'), DONE]],
         {'params': LEGACY_CI, 'features': CI_FEATURES, 'session_id': 'sess'},
         {
             'admin': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': [{'stdout': 'line\ndata:image/png;base64,AA', 'result': 'data:image/png;base64,BB\nplain'}],
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
+            'sandbox_runs': [
+                {
+                    'stdout': 'line',
+                    'stderr': 'a warning',
+                    'result': '',
+                    'timed_out': False,
+                    'outputs': [{'path': 'plot.png', 'file_id': 'f1'}, {'path': 'notes.txt'}],
+                }
+            ],
         },
     ),
     _case(
@@ -722,23 +730,31 @@ CASES_SPEC = [
         {'admin': True, 'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'cloud'}},
     ),
     _case(
-        'code_interpreter_error_output',
+        'code_interpreter_sandbox_stderr_and_timeout',
         [[chunk(CI_CODE), DONE], 'raise'],
         {'params': LEGACY_CI, 'features': CI_FEATURES},
         {
             'admin': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': [{'error': 'session disconnected'}],
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
+            'sandbox_runs': [
+                {
+                    'stdout': '',
+                    'stderr': 'Traceback: session disconnected',
+                    'result': '',
+                    'timed_out': True,
+                    'outputs': [],
+                }
+            ],
         },
     ),
     _case(
-        'code_interpreter_caller_raises',
+        'code_interpreter_sandbox_runner_raises',
         [[chunk(CI_CODE), DONE], [DONE]],
         {'params': LEGACY_CI, 'features': CI_FEATURES},
         {
             'admin': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': ['raise'],
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
+            'sandbox_runs': ['raise'],
         },
     ),
     _case(
@@ -767,8 +783,7 @@ CASES_SPEC = [
         {
             'admin': True,
             'filters': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': [{'stdout': 5}] * 6,
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
         },
     ),
     # --- cancellation and the fallback (no event emitter)
@@ -839,8 +854,7 @@ CASES_SPEC = [
         {'params': LEGACY_CI, 'features': CI_FEATURES},
         {
             'admin': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': ['plain string output'],
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
         },
     ),
     _case(
@@ -849,9 +863,16 @@ CASES_SPEC = [
         {'params': LEGACY_CI, 'features': CI_FEATURES},
         {
             'admin': True,
-            'ci_image_none': True,
-            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'pyodide'},
-            'ci_outputs': [{'stdout': 'data:image/png;base64,ZZ', 'result': {'not': 'text'}}],
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
+            'sandbox_runs': [
+                {
+                    'stdout': 'data:image/png;base64,ZZ',
+                    'stderr': '',
+                    'result': '',
+                    'timed_out': False,
+                    'outputs': [{'path': 'big.bin', 'reason': 'too large'}, {'path': 'a.csv', 'file_id': 'f2'}],
+                }
+            ],
         },
     ),
     _case(
@@ -1200,8 +1221,15 @@ def _install(m, world, log, continuations):
             return {'choices': []}
         return _stream_response(nxt, log, f'continuation-{len(continuations)}')
 
+    sandbox_runs = list(world.get('sandbox_runs', []))
+
     async def run_code_in_sandbox(code, *, chat_id, message_id, what, **kwargs):
         log.append(['run_code_in_sandbox', code, chat_id, message_id, what])
+        if sandbox_runs:
+            run = sandbox_runs.pop(0)
+            if run == 'raise':
+                raise RuntimeError('sandbox crashed')
+            return copy.deepcopy(run)
         return copy.deepcopy(
             world.get('sandbox_run')
             or {'stdout': 'sandbox ran', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
@@ -1224,9 +1252,7 @@ def _install(m, world, log, continuations):
             'convert_markdown_base64_images',
             lambda request, value, meta, user: value.replace('data:image/png;base64,AAA', '/files/converted'),
         ),
-        'get_image_url_from_base64': fake(
-            'get_image_url_from_base64', None if world.get('ci_image_none') else '/files/ci-image'
-        ),
+        'get_image_url_from_base64': fake('get_image_url_from_base64', '/files/ci-image'),
         'get_file_url_from_base64': fake('get_file_url_from_base64', '/files/mcp-image'),
         'pause_for_tool_approval': fake('pause_for_tool_approval'),
         'rag_template': fake(
@@ -1275,7 +1301,6 @@ def _ctx(world, metadata_spec, form, model, log):
         updated_at=1,
         created_at=1,
     )
-    ci_outputs = list(world.get('ci_outputs', []))
 
     async def event_emitter(event):
         log.append(['emit', _plain(event)])
@@ -1284,10 +1309,7 @@ def _ctx(world, metadata_spec, form, model, log):
         log.append(['call', _plain(event)])
         if event['type'] == 'execute:tool':
             return world.get('direct_result', {}).get(event['data']['name'])
-        output = ci_outputs.pop(0) if ci_outputs else {'stdout': ''}
-        if output == 'raise':
-            raise RuntimeError('pyodide crashed')
-        return copy.deepcopy(output)
+        return {'stdout': ''}
 
     metadata = {
         'message_id': 'a1',

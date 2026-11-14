@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import CodeExecution from './CodeExecution';
@@ -9,24 +9,20 @@ vi.mock('sonner', () => ({
 	toast: Object.assign(vi.fn(), { error: toastError, success: vi.fn(), info: vi.fn() })
 }));
 
-// What GET /configs/code_execution returns: both engines on Jupyter, so both
-// timeout boxes are on screen.
+// What GET /configs/code_execution returns: both sections on, with the six
+// sandbox settings the server stores.
 const CONFIG = {
 	ENABLE_CODE_EXECUTION: true,
-	CODE_EXECUTION_ENGINE: 'jupyter',
-	CODE_EXECUTION_JUPYTER_URL: 'http://jupyter:8888',
-	CODE_EXECUTION_JUPYTER_AUTH: '',
-	CODE_EXECUTION_JUPYTER_AUTH_TOKEN: '',
-	CODE_EXECUTION_JUPYTER_AUTH_PASSWORD: '',
-	CODE_EXECUTION_JUPYTER_TIMEOUT: 60,
+	CODE_EXECUTION_ENGINE: 'sandbox',
 	ENABLE_CODE_INTERPRETER: true,
-	CODE_INTERPRETER_ENGINE: 'jupyter',
+	CODE_INTERPRETER_ENGINE: 'sandbox',
 	CODE_INTERPRETER_PROMPT_TEMPLATE: '',
-	CODE_INTERPRETER_JUPYTER_URL: 'http://jupyter:8888',
-	CODE_INTERPRETER_JUPYTER_AUTH: '',
-	CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: '',
-	CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD: '',
-	CODE_INTERPRETER_JUPYTER_TIMEOUT: 120
+	CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'data',
+	CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
+	CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
+	CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
+	CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7,
+	CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES: 20
 };
 
 // The body of every POST, and what the server answers it with.
@@ -55,45 +51,34 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
-const renderTab = async () => {
+const renderSandbox = async (config: Record<string, unknown> = CONFIG) => {
+	served = config;
 	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	render(
 		<QueryClientProvider client={client}>
 			<CodeExecution />
 		</QueryClientProvider>
 	);
-	const boxes = await screen.findAllByPlaceholderText('e.g. 60');
-	expect(boxes).toHaveLength(2);
-	return boxes;
+	await screen.findByLabelText('Sandbox Maximum Running');
 };
 
 const save = () => fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
-describe('CodeExecution: a cleared Jupyter timeout', () => {
-	it('is sent as null for code execution, which the int | None field accepts', async () => {
-		const [execution] = await renderTab();
-		fireEvent.change(execution, { target: { value: '' } });
+describe('CodeExecution: a cleared sandbox timeout', () => {
+	it('is sent as null, which the int | None field accepts', async () => {
+		await renderSandbox();
+		fireEvent.change(screen.getByLabelText('Sandbox Command Timeout'), { target: { value: '' } });
 		save();
 		await waitFor(() => expect(posted).toHaveLength(1));
-		expect(posted[0].CODE_EXECUTION_JUPYTER_TIMEOUT).toBeNull();
-		expect(posted[0].CODE_INTERPRETER_JUPYTER_TIMEOUT).toBe(120);
-	});
-
-	it('is sent as null for the code interpreter too', async () => {
-		const [, interpreter] = await renderTab();
-		fireEvent.change(interpreter, { target: { value: '' } });
-		save();
-		await waitFor(() => expect(posted).toHaveLength(1));
-		expect(posted[0].CODE_INTERPRETER_JUPYTER_TIMEOUT).toBeNull();
-		expect(posted[0].CODE_EXECUTION_JUPYTER_TIMEOUT).toBe(60);
+		expect(posted[0].CODE_INTERPRETER_SANDBOX_TIMEOUT).toBeNull();
 	});
 
 	it('still sends a typed timeout as a number', async () => {
-		const [execution] = await renderTab();
-		fireEvent.change(execution, { target: { value: '90' } });
+		await renderSandbox();
+		fireEvent.change(screen.getByLabelText('Sandbox Command Timeout'), { target: { value: '90' } });
 		save();
 		await waitFor(() => expect(posted).toHaveLength(1));
-		expect(posted[0].CODE_EXECUTION_JUPYTER_TIMEOUT).toBe(90);
+		expect(posted[0].CODE_INTERPRETER_SANDBOX_TIMEOUT).toBe(90);
 	});
 });
 
@@ -103,48 +88,26 @@ describe('CodeExecution: a rejected save', () => {
 		answer = () =>
 			new Response(
 				JSON.stringify({
-					detail: [{ type: 'int_parsing', loc: ['body', 'CODE_EXECUTION_JUPYTER_TIMEOUT'], msg, input: '' }]
+					detail: [{ type: 'int_parsing', loc: ['body', 'CODE_INTERPRETER_SANDBOX_TIMEOUT'], msg, input: '' }]
 				}),
 				{ status: 422 }
 			);
-		await renderTab();
+		await renderSandbox();
 		save();
 		await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-		expect(toastError).toHaveBeenCalledWith(`CODE_EXECUTION_JUPYTER_TIMEOUT: ${msg}`);
+		expect(toastError).toHaveBeenCalledWith(`CODE_INTERPRETER_SANDBOX_TIMEOUT: ${msg}`);
 	});
 });
 
-// Both engines on the sandbox, with the six settings the server stores.
-const SANDBOX_CONFIG = {
-	...CONFIG,
-	CODE_EXECUTION_ENGINE: 'sandbox',
-	CODE_INTERPRETER_ENGINE: 'sandbox',
-	CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'data',
-	CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
-	CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
-	CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
-	CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7,
-	CODE_INTERPRETER_SANDBOX_MAX_WORKSPACES: 20
-};
+const section = (name: string) => screen.getByRole('region', { name });
 
-const renderSandbox = async (config: Record<string, unknown> = SANDBOX_CONFIG) => {
-	served = config;
-	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-	render(
-		<QueryClientProvider client={client}>
-			<CodeExecution />
-		</QueryClientProvider>
-	);
-	await screen.findByLabelText('Code Interpreter Engine');
-};
-
-describe('CodeExecution: the sandbox engine', () => {
-	it('offers sandbox as an engine for both sections', async () => {
-		await renderSandbox({ ...CONFIG });
-		for (const label of ['Code Execution Engine', 'Code Interpreter Engine']) {
-			const options = Array.from(screen.getByLabelText(label).querySelectorAll('option')).map((o) => o.value);
-			expect(options).toContain('sandbox');
-		}
+describe('CodeExecution: the sandbox, the only engine', () => {
+	it('shows no engine select and no Jupyter field', async () => {
+		await renderSandbox();
+		expect(screen.queryByLabelText('Code Execution Engine')).toBeNull();
+		expect(screen.queryByLabelText('Code Interpreter Engine')).toBeNull();
+		expect(screen.queryByText(/jupyter/i)).toBeNull();
+		expect(screen.queryByPlaceholderText(/jupyter/i)).toBeNull();
 	});
 
 	it('shows the six sandbox fields once, with the memory note', async () => {
@@ -156,36 +119,49 @@ describe('CodeExecution: the sandbox engine', () => {
 		expect(screen.getByLabelText('Sandbox Retention Days')).toHaveValue(7);
 		expect(screen.getByLabelText('Sandbox Workspaces per User')).toHaveValue(20);
 		expect(screen.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeTruthy();
-		expect(screen.queryByText('Jupyter URL')).toBeNull();
 	});
 
-	it('shows them under Code Execution when only that engine is the sandbox', async () => {
-		await renderSandbox({ ...SANDBOX_CONFIG, CODE_INTERPRETER_ENGINE: 'pyodide' });
-		expect(await screen.findAllByLabelText('Sandbox Maximum Running')).toHaveLength(1);
+	it('shows them under Code Interpreter, not Code Execution, when the interpreter is enabled', async () => {
+		await renderSandbox();
+		expect(within(section('Code Interpreter')).getByLabelText('Sandbox Maximum Running')).toBeTruthy();
+		expect(within(section('Code Execution')).queryByLabelText('Sandbox Maximum Running')).toBeNull();
 	});
 
-	it('shows them under Code Execution when the interpreter is off but both engines are the sandbox', async () => {
-		served = { ...SANDBOX_CONFIG, ENABLE_CODE_INTERPRETER: false };
+	it('shows them under Code Execution when the interpreter is off but code execution is on', async () => {
+		await renderSandbox({ ...CONFIG, ENABLE_CODE_INTERPRETER: false });
+		expect(within(section('Code Execution')).getByLabelText('Sandbox Maximum Running')).toBeTruthy();
+		expect(within(section('Code Interpreter')).queryByLabelText('Sandbox Maximum Running')).toBeNull();
+		expect(screen.queryByText('Code Interpreter Prompt Template')).toBeNull();
+	});
+
+	it('shows none of them when code execution is off and the interpreter is off', async () => {
+		served = { ...CONFIG, ENABLE_CODE_EXECUTION: false, ENABLE_CODE_INTERPRETER: false };
 		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 		render(
 			<QueryClientProvider client={client}>
 				<CodeExecution />
 			</QueryClientProvider>
 		);
-		expect(await screen.findAllByLabelText('Sandbox Maximum Running')).toHaveLength(1);
-		expect(screen.queryByLabelText('Code Interpreter Engine')).toBeNull();
+		await screen.findByRole('switch', { name: 'Enable Code Execution' });
+		expect(screen.queryByLabelText('Sandbox Maximum Running')).toBeNull();
 	});
+
+	it.each(['jupyter', 'pyodide'])(
+		'renders a stored legacy engine %s and saves sandbox for both engines',
+		async (legacy) => {
+			await renderSandbox({ ...CONFIG, CODE_EXECUTION_ENGINE: legacy, CODE_INTERPRETER_ENGINE: legacy });
+			expect(screen.queryByLabelText('Code Interpreter Engine')).toBeNull();
+			save();
+			await waitFor(() => expect(posted).toHaveLength(1));
+			expect(posted[0]).toMatchObject({ CODE_EXECUTION_ENGINE: 'sandbox', CODE_INTERPRETER_ENGINE: 'sandbox' });
+		}
+	);
 
 	it('shows the default image when none is stored, and no reason when none is given', async () => {
 		sandboxStatus = () => new Response(JSON.stringify({ ready: false, reason: null }), { status: 200 });
-		await renderSandbox({ ...SANDBOX_CONFIG, CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: null });
+		await renderSandbox({ ...CONFIG, CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: null });
 		expect(screen.getByLabelText('Sandbox Default Image')).toHaveValue('data');
 		expect((await screen.findByRole('status')).textContent).toBe('The sandbox is unavailable: no reason given');
-	});
-
-	it('shows none of them for another engine', async () => {
-		await renderSandbox({ ...SANDBOX_CONFIG, CODE_EXECUTION_ENGINE: 'pyodide', CODE_INTERPRETER_ENGINE: 'pyodide' });
-		expect(screen.queryByLabelText('Sandbox Maximum Running')).toBeNull();
 	});
 
 	it('says the sandbox is ready', async () => {
@@ -219,6 +195,7 @@ describe('CodeExecution: the sandbox engine', () => {
 		save();
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({
+			CODE_EXECUTION_ENGINE: 'sandbox',
 			CODE_INTERPRETER_ENGINE: 'sandbox',
 			CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'web',
 			CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,

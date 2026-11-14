@@ -302,7 +302,7 @@ CASES_SPEC = [
         'image_generation_not_permitted', {'messages': CHAT, 'features': {'image_generation': True}}, {'params': LEGACY}
     ),
     _case(
-        'code_interpreter_legacy_pyodide',
+        'code_interpreter_legacy_sandbox',
         {'messages': CHAT, 'features': {'code_interpreter': True}},
         {'params': LEGACY},
     ),
@@ -313,9 +313,10 @@ CASES_SPEC = [
         {'config': {'code_interpreter.engine': 'sandbox', 'code_interpreter.prompt_template': 'Use the workspace.'}},
     ),
     _case(
-        'code_interpreter_native_pyodide',
+        'code_interpreter_native_stored_pyodide',
         {'messages': CHAT, 'features': {'code_interpreter': True}},
         {'params': NATIVE},
+        {'config': {'code_interpreter.engine': 'pyodide'}},
     ),
     _case(
         'code_interpreter_native_sandbox',

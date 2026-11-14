@@ -246,13 +246,13 @@ def test_a_legacy_value_beside_a_current_one_is_not_read(tmp_path):
 @pytest.mark.parametrize(
     ('value', 'expected', 'warned'),
     [
-        (None, 'pyodide', False),
+        (None, 'sandbox', False),
         ('sandbox', 'sandbox', False),
-        ('pyodide', 'pyodide', False),
-        ('jupyter', 'pyodide', True),
+        ('pyodide', 'sandbox', True),
+        ('jupyter', 'sandbox', True),
     ],
 )
-def test_a_code_engine_setting_names_a_live_engine_or_falls_back_to_pyodide(
+def test_a_code_engine_setting_names_a_live_engine_or_falls_back_to_the_sandbox(
     monkeypatch, tmp_path, name, value, expected, warned
 ):
     monkeypatch.delenv('CODE_INTERPRETER_ENGINE', raising=False)

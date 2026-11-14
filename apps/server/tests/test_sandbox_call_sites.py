@@ -537,7 +537,7 @@ def _detects(monkeypatch, engine) -> bool:
 
 
 @pytest.mark.parametrize(
-    ('engine', 'detected'), [('sandbox', True), ('pyodide', True), ('jupyter', False), ('cloud', False)]
+    ('engine', 'detected'), [('sandbox', True), ('pyodide', False), ('jupyter', False), ('cloud', False)]
 )
 def test_the_tag_path_detects_code_blocks_only_under_a_live_engine(monkeypatch, engine, detected):
     assert _detects(monkeypatch, engine) is detected
@@ -551,32 +551,37 @@ def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ('engine', 'legacy', 'expected'),
+    ('legacy', 'expected', 'other'),
     [
-        ('sandbox', True, 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT'),
-        ('sandbox', False, 'CODE_INTERPRETER_SANDBOX_PROMPT'),
-        ('pyodide', True, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
-        ('pyodide', False, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
+        (True, 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT', 'CODE_INTERPRETER_SANDBOX_PROMPT'),
+        (False, 'CODE_INTERPRETER_SANDBOX_PROMPT', 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT'),
     ],
 )
-def test_each_engine_gets_its_own_prompt_on_each_path(monkeypatch, engine, legacy, expected):
+def test_the_sandbox_gets_its_tag_or_tool_prompt_on_each_path(monkeypatch, legacy, expected, other):
     async def get(key, default=None):
-        return {'code_interpreter.engine': engine, 'code_interpreter.prompt_template': ''}.get(key, default)
+        return {'code_interpreter.engine': 'sandbox', 'code_interpreter.prompt_template': ''}.get(key, default)
 
     monkeypatch.setattr(middleware.Config, 'get', get)
     form = {'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]}
     metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
     asyncio.run(middleware._apply_code_interpreter(form, metadata))
-    prompt = getattr(middleware, expected)
     added = form['messages'][-1 if legacy else 0]['content']
-    assert added.endswith(prompt)
-    others = {
-        'CODE_INTERPRETER_SANDBOX_TAG_PROMPT',
-        'CODE_INTERPRETER_SANDBOX_PROMPT',
-        'CODE_INTERPRETER_PYODIDE_PROMPT',
-    }
-    for other in others - {expected}:
-        assert getattr(middleware, other) not in added
+    assert added.endswith(getattr(middleware, expected))
+    assert getattr(middleware, other) not in added
+
+
+@pytest.mark.parametrize('legacy', [True, False])
+@pytest.mark.parametrize('engine', ['pyodide', 'jupyter', 'cloud'])
+def test_a_non_live_engine_gets_no_code_interpreter_prompt(monkeypatch, engine, legacy):
+    async def get(key, default=None):
+        return {'code_interpreter.engine': engine, 'code_interpreter.prompt_template': ''}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    messages = [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]
+    form = {'messages': [dict(m) for m in messages]}
+    metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
+    asyncio.run(middleware._apply_code_interpreter(form, metadata))
+    assert form['messages'] == messages
 
 
 def test_the_tag_prompt_speaks_of_code_blocks_and_the_tool_prompt_of_tools():

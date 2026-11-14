@@ -84,7 +84,7 @@ def _case(
     parent_chat_id='parent-1',
     user=USER,
     config=None,
-    ci_engine='pyodide',
+    ci_engine='jupyter',  # stands for any stored non-sandbox engine
     world=None,
 ):
     return (

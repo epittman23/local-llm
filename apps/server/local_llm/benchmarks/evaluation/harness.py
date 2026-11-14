@@ -16,8 +16,7 @@ The pipeline was built for a browser, so this module drives it by hand:
   * Code runs only on the streaming path with an emitter, which needs a chat
     id and a message id; builtin tools are only offered with a session id.
     A `temporary:` chat id writes no chat row, and a synthetic session id
-    never reaches a browser, because the sandbox engine needs no event caller
-    (Pyodide does, and is refused).
+    never reaches a browser, because the sandbox engine needs no event caller.
   * The pipeline offers about a dozen builtin tools. Some browse the user's
     notes, chats and knowledge, and ask_user would pause the reply and lose
     the answer. The tool list is cut down to the sandbox's code tools (D3):
@@ -156,9 +155,9 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     Every check here is one the pipeline would otherwise get past silently:
     a result answered by OpenRouter but filed under a local config_id, a
     fallback model standing in for a missing base model, a non-streaming
-    entry that never runs code, a Pyodide engine whose event call would wait
-    for a browser that is not there, a sandbox that cannot start or whose
-    `data` image has no known digest for the spec to name.
+    entry that never runs code, an engine with no code tools, a sandbox that
+    cannot start or whose `data` image has no known digest for the spec to
+    name.
     """
     from local_llm import main
     from local_llm.models.config import Config
@@ -424,8 +423,8 @@ async def _run_pipeline(hctx: dict, prompt: str, errors: list[str]) -> dict | No
             errors.append(error.get('content', str(error)) if isinstance(error, dict) else str(error))
 
     async def no_caller(event: dict):
-        # Only Pyodide and client-side tools call back into a browser, and
-        # prepare() refused both; the sandbox engine never does.
+        # Only client-side tools call back into a browser, and the tool list
+        # is cut down to the sandbox's; the sandbox engine never does.
         return {'error': 'no browser is attached to a benchmark request'}
 
     try:

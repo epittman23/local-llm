@@ -11,9 +11,8 @@ export type CodeRunner = (code: string, chatId: string) => Promise<CodeRunResult
  *
  * Code execution must be on (`features.enable_code_execution`) with the
  * `sandbox` engine: the code runs in its chat's sandbox (the endpoint needs
- * the chat id, owner decision Q2). The other engines get no button: Jupyter
- * stays as it was until it is removed (T40), and Pyodide ran in the browser,
- * which this app has no runner for. The user must also hold the code
+ * the chat id, owner decision Q2). `sandbox` is the only engine; a server
+ * still holding a legacy engine value gets no button. The user must also hold the code
  * interpreter permission (`features.code_interpreter`; an admin always does),
  * which the endpoint checks too, since the run reaches the same persistent
  * workspace (owner decision Q26), and the code interpreter must be switched on

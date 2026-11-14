@@ -73,18 +73,21 @@ test("Run shows the endpoint's refusal", async ({ page }) => {
 	await expect(page.getByTestId('code-run-output')).toContainText('could not find');
 });
 
-test('a Python block has no Run button under Pyodide', async ({ page }) => {
-	await mockChat(page, {
-		chats: [reply('```python\nprint(1)\n```\n')],
-		user: {
-			features: { enable_code_execution: true, enable_code_interpreter: true },
-			config: { code: { engine: 'pyodide' } }
-		}
+for (const legacy of ['pyodide', 'jupyter']) {
+	test(`a Python block has no Run button when the server still holds the legacy engine ${legacy}`, async ({ page }) => {
+		await mockChat(page, {
+			chats: [reply('```python\nprint(1)\n```\n')],
+			user: {
+				features: { enable_code_execution: true, enable_code_interpreter: true },
+				config: { code: { engine: legacy } },
+				featurePermissions: { code_interpreter: true }
+			}
+		});
+		await page.goto('/c/c1');
+		await expect(page.getByTestId('code-block')).toBeVisible();
+		await expect(page.getByTestId('code-block').getByRole('button', { name: 'Run' })).toHaveCount(0);
 	});
-	await page.goto('/c/c1');
-	await expect(page.getByTestId('code-block')).toBeVisible();
-	await expect(page.getByTestId('code-block').getByRole('button', { name: 'Run' })).toHaveCount(0);
-});
+}
 
 test('a user without the code interpreter permission gets no Run button under the sandbox engine', async ({ page }) => {
 	await mockChat(page, {

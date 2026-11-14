@@ -44,9 +44,10 @@ describe('codeRunner', () => {
 		expect(codeRunner(config(true, 'sandbox', false), 'tok', member(true))).toBeUndefined();
 	});
 
-	it('offers no runner for Jupyter, Pyodide, an unknown engine, disabled code execution or no config', () => {
+	it('offers no runner for a stored legacy engine (jupyter, pyodide), an unknown engine, disabled code execution or no config', () => {
 		expect(codeRunner(config(true, 'jupyter'), 'tok', admin)).toBeUndefined();
 		expect(codeRunner(config(true, 'pyodide'), 'tok', admin)).toBeUndefined();
+		expect(codeRunner(config(true, 'docker'), 'tok', admin)).toBeUndefined();
 		expect(codeRunner(config(true), 'tok', admin)).toBeUndefined();
 		expect(codeRunner(config(false, 'sandbox'), 'tok', admin)).toBeUndefined();
 		expect(codeRunner(null, 'tok', admin)).toBeUndefined();

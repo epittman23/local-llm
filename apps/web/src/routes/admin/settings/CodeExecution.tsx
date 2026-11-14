@@ -1,13 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { BoundNumber, BoundSelect } from '@/components/settings/boundFields';
 import {
 	SettingField,
-	SettingInput,
 	SettingRow,
-	SettingSelect,
 	SettingSwitch,
 	SettingTextarea,
 	SettingsForm,
@@ -20,11 +17,10 @@ import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 type Config = Record<string, any>;
-const ENGINES = ['pyodide', 'jupyter', 'sandbox'];
-const JUPYTER_WARNING =
-	'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.';
+/** The only engine; the form sends it for both engine fields, replacing any legacy stored value. */
+const ENGINE = 'sandbox';
 
-/** The sandbox settings live under the code interpreter's keys; the code execution engine shares them. */
+/** The sandbox settings live under the code interpreter's keys; code execution shares them. */
 function SandboxFields({ config, set }: { config: Config; set: (patch: Config) => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const status = useQuery({
@@ -107,105 +103,6 @@ function SandboxFields({ config, set }: { config: Config; set: (patch: Config) =
 	);
 }
 
-/**
- * The engine / Jupyter block that "Code Execution" and "Code Interpreter" each
- * carry: the Svelte tab spells it out twice, identical but for the config-key
- * prefix (`CODE_EXECUTION_` vs `CODE_INTERPRETER_`), so it is one component here.
- */
-function EngineFields({
-	config,
-	set,
-	prefix,
-	engineLabel,
-	engineHint,
-	urlHint
-}: {
-	config: Config;
-	set: (patch: Config) => void;
-	prefix: 'CODE_EXECUTION' | 'CODE_INTERPRETER';
-	engineLabel: string;
-	engineHint: string;
-	urlHint: string;
-}) {
-	const engine = config[`${prefix}_ENGINE`];
-	const auth = config[`${prefix}_JUPYTER_AUTH`];
-	const key = (suffix: string) => `${prefix}_${suffix}`;
-	// One set of sandbox fields: under the interpreter's engine when that is the sandbox, else under this one.
-	const interpreterShowsSandbox = config.ENABLE_CODE_INTERPRETER && config.CODE_INTERPRETER_ENGINE === 'sandbox';
-	const showSandbox = engine === 'sandbox' && (prefix === 'CODE_INTERPRETER' || !interpreterShowsSandbox);
-	return (
-		<>
-			<SettingRow label={engineLabel} description={engine === 'jupyter' ? JUPYTER_WARNING : engineHint}>
-				<SettingSelect
-					value={engine ?? ''}
-					onChange={(v) => set({ [key('ENGINE')]: v })}
-					required
-					aria-label={engineLabel}
-				>
-					<option disabled value="">
-						Select a engine
-					</option>
-					{ENGINES.map((e) => (
-						<option key={e} value={e}>
-							{e}
-							{e === 'jupyter' ? ' (Legacy)' : ''}
-						</option>
-					))}
-				</SettingSelect>
-			</SettingRow>
-			{showSandbox && <SandboxFields config={config} set={set} />}
-			{engine === 'jupyter' && (
-				<>
-					<SettingField label="Jupyter URL" description={urlHint}>
-						<SettingInput
-							type="text"
-							placeholder="Enter Jupyter URL"
-							value={config[key('JUPYTER_URL')] ?? ''}
-							onChange={(e) => set({ [key('JUPYTER_URL')]: e.target.value })}
-							autoComplete="off"
-						/>
-					</SettingField>
-					<SettingRow label="Jupyter Auth" description="Select how Local LLM authenticates with the Jupyter server.">
-						<SettingSelect
-							value={auth ?? ''}
-							onChange={(v) => set({ [key('JUPYTER_AUTH')]: v })}
-							aria-label="Jupyter Auth"
-						>
-							<option value="">None</option>
-							<option value="token">Token</option>
-							<option value="password">Password</option>
-						</SettingSelect>
-					</SettingRow>
-					{auth && (
-						<SettingField
-							label={auth === 'password' ? 'Jupyter Password' : 'Jupyter Token'}
-							description="Credentials used to authenticate with the Jupyter server."
-						>
-							<SensitiveInput
-								variant="settings"
-								placeholder={auth === 'password' ? 'Enter Jupyter Password' : 'Enter Jupyter Token'}
-								value={config[key(auth === 'password' ? 'JUPYTER_AUTH_PASSWORD' : 'JUPYTER_AUTH_TOKEN')] ?? ''}
-								onChange={(v) =>
-									set({ [key(auth === 'password' ? 'JUPYTER_AUTH_PASSWORD' : 'JUPYTER_AUTH_TOKEN')]: v })
-								}
-								autoComplete="off"
-							/>
-						</SettingField>
-					)}
-					<BoundNumber
-						config={config}
-						set={set}
-						name={key('JUPYTER_TIMEOUT')}
-						label="Code Execution Timeout"
-						description="Longest wait in seconds for any output before a run is stopped. Empty uses 60."
-						placeholder="e.g. 60"
-					/>
-				</>
-			)}
-		</>
-	);
-}
-
 /** Ports admin/Settings/CodeExecution.svelte. */
 export default function CodeExecution() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -220,7 +117,11 @@ export default function CodeExecution() {
 	const save = async () => {
 		setSaving(true);
 		try {
-			await setCodeExecutionConfig(token, config!);
+			await setCodeExecutionConfig(token, {
+				...config!,
+				CODE_EXECUTION_ENGINE: ENGINE,
+				CODE_INTERPRETER_ENGINE: ENGINE
+			});
 			await saved();
 		} catch (error) {
 			toast.error(`${error}`);
@@ -246,15 +147,9 @@ export default function CodeExecution() {
 								/>
 							)}
 						</SettingRow>
-						{config.ENABLE_CODE_EXECUTION && (
-							<EngineFields
-								config={config}
-								set={patch}
-								prefix="CODE_EXECUTION"
-								engineLabel="Code Execution Engine"
-								engineHint="Choose the runtime used for generated code blocks."
-								urlHint="Connect code execution to a Jupyter server endpoint."
-							/>
+						{/* One set of sandbox fields: under the interpreter when that is on, else here. */}
+						{config.ENABLE_CODE_EXECUTION && !config.ENABLE_CODE_INTERPRETER && (
+							<SandboxFields config={config} set={patch} />
 						)}
 					</SettingsSection>
 
@@ -273,14 +168,7 @@ export default function CodeExecution() {
 						</SettingRow>
 						{config.ENABLE_CODE_INTERPRETER && (
 							<>
-								<EngineFields
-									config={config}
-									set={patch}
-									prefix="CODE_INTERPRETER"
-									engineLabel="Code Interpreter Engine"
-									engineHint="Choose the runtime used by the code interpreter tool."
-									urlHint="Connect code interpreter to a Jupyter server endpoint."
-								/>
+								<SandboxFields config={config} set={patch} />
 								<SettingField
 									label="Code Interpreter Prompt Template"
 									description="Leave empty to use the default prompt, or enter a custom prompt."
