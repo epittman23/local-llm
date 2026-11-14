@@ -4,6 +4,8 @@
 // now, not the whole file for fields nothing here reads.
 
 import { WEBUI_BASE_URL } from '@/lib/constants';
+import { tokenHex } from '@/lib/ui/tokenColour';
+import { initials } from '@/lib/utils/initials';
 import { uuid } from '@/lib/utils/uuid';
 
 // Test a 1x1 pixel to potentially identify browser/plugin fingerprint
@@ -27,6 +29,12 @@ export const canvasPixelTest = (): boolean => {
 	return pixelValues.length === p.length && pixelValues.every((v, i) => v === p[i]);
 };
 
+/**
+ * A new user's picture: their initials, drawn as the avatar draws them (#989,
+ * decision D1b): `--foreground-strong` on `--surface-3`, read from the page in
+ * the current theme, since the drawing is saved as an image and cannot follow
+ * the tokens afterwards. The fallbacks are the dark theme's values.
+ */
 export const generateInitialsImage = (name: string): string => {
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d');
@@ -38,22 +46,15 @@ export const generateInitialsImage = (name: string): string => {
 		return `${WEBUI_BASE_URL}/user.png`;
 	}
 
-	ctx.fillStyle = '#F39C12';
+	ctx.fillStyle = tokenHex('--surface-3', '#2c3532');
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-	ctx.fillStyle = '#FFFFFF';
-	ctx.font = '40px Helvetica';
+	ctx.fillStyle = tokenHex('--foreground-strong', '#f1efe6');
+	ctx.font = `500 40px ${getComputedStyle(document.body).fontFamily || 'sans-serif'}`;
 	ctx.textAlign = 'center';
 	ctx.textBaseline = 'middle';
 
-	const sanitizedName = name.trim();
-	const initials =
-		sanitizedName.length > 0
-			? sanitizedName[0] +
-				(sanitizedName.split(' ').length > 1 ? sanitizedName[sanitizedName.lastIndexOf(' ') + 1] : '')
-			: '';
-
-	ctx.fillText(initials.toUpperCase(), canvas.width / 2, canvas.height / 2);
+	ctx.fillText(initials(name), canvas.width / 2, canvas.height / 2);
 
 	return canvas.toDataURL();
 };
