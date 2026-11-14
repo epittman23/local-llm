@@ -61,14 +61,16 @@ for web search (see [docs/guides/assistant-tools.md](docs/guides/assistant-tools
 and the code sandbox's package mirror (see below). The first run pulls
 their images, about 0.5 GB together.
 
-**The code sandbox (optional, under construction on PR #884).** A third
-code interpreter engine, `sandbox`, runs each chat's code in its own
-microVM. It needs hardware virtualization (`/dev/kvm`), Kata Containers
-registered with Docker as `kata-clh`, and a few root steps at host setup;
+**The code sandbox (the code interpreter).** The code interpreter runs
+each chat's code in its own microVM; it is the only engine (the Jupyter and
+Pyodide engines were removed). It needs hardware virtualization
+(`/dev/kvm`), Kata Containers registered with Docker as `kata-clh`, and a
+few root steps at host setup;
 then `make sandbox-images` builds its two images (about 11 GB, 20 minutes
 or more) and `make wheelhouse` downloads the reviewed Python wheels its
-package mirror serves. It is chosen in Admin Settings > Code Execution, by
-setting the engine to `sandbox`; nothing uses it otherwise. See
+package mirror serves. Without the images the interpreter is unavailable,
+and Admin Settings > Code Execution says why; without the wheelhouse,
+`pip install` in a sandbox finds nothing. See
 [docs/guides/sandbox.md](docs/guides/sandbox.md).
 
 > **The database.** Postgres data (accounts, chats, settings, benchmark
@@ -325,7 +327,7 @@ OpenAI-compatible endpoint.
 | Backend dependencies and the offline model cache | [docs/guides/dependencies.md](docs/guides/dependencies.md) |
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
 | The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
-| The code interpreter (Jupyter), web search (SearXNG), retrieval models | [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md) |
+| The code interpreter, web search (SearXNG), retrieval models | [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md) |
 | Turning OAuth sign-in on (environment variables only) | [docs/guides/oauth.md](docs/guides/oauth.md) |
 | Agent skills, the reviewer agent, codebase-memory-mcp | [docs/guides/agent-tooling.md](docs/guides/agent-tooling.md) |
 | Why things are the way they are | [docs/decisions.md](docs/decisions.md) |

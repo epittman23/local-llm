@@ -14,7 +14,7 @@ sessions follow [sandbox-sessions-cloud.md](sandbox-sessions-cloud.md)
 instead of this file.
 
 Written 2026-11-10, against OMC 5.7.14 (`omc --version`). The design being
-implemented is [docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md).
+implemented is [docs/history/sandbox-code-interpreter.md](../history/sandbox-code-interpreter.md).
 
 ## The three files and which one wins
 
@@ -136,7 +136,7 @@ one is how sessions continue on the wrong branch or redo finished work.
      the last story and carries OMC's final quality gate:
      ```sh
      omc ultragoal create-goals --plan-id sandbox --claude-goal-mode per-story \
-       --brief "Implement docs/proposals/sandbox-code-interpreter.md per docs/plans/sandbox-implementation.md" \
+       --brief "Implement docs/history/sandbox-code-interpreter.md per docs/plans/sandbox-implementation.md" \
        --goal "T10::T10 per docs/plans/sandbox-implementation.md: every Verify item has evidence and the ledger row is done or needs-local-verify" \
        --goal "T11::T11 per docs/plans/sandbox-implementation.md: ..."   # one per unfinished task
      ```

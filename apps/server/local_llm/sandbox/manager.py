@@ -5,7 +5,7 @@ nothing; the manager is the only code that calls it, and it decides
 everything around it: whether a chat may have a sandbox at all, which key
 the backend sees, how many run at once, one command at a time per chat, and
 when an idle or abandoned sandbox is stopped or its volume destroyed
-(docs/proposals/sandbox-code-interpreter.md, "Lifecycle").
+(docs/history/sandbox-code-interpreter.md, "Lifecycle").
 
 Keys. The backend only ever sees a key, a canonical UUID, never a raw chat
 id. A caller without a non-empty str user id is refused. A saved chat's key

@@ -50,7 +50,7 @@ Local models, all evaluation only, one serving profile each:
 |---|---|---|---|---|
 | `qwen38` | `Qwen3.8-27B-UD-Q3_K_XL.gguf` | dense | 12.24 GiB | partially offloaded (`-ngl 20`), MTP speculative decoding; on disk since 2026-10-09 |
 | `qwen36` | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` | MoE, ~3 B active | 20.81 GiB | `-ngl 99 --n-cpu-moe 34`; sparse MoE keeps per-token compute small with most weights in system RAM |
-| `qwen25c` | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf` | dense, 7.6 B | 4.36 GiB | the only model fully GPU-resident on the 6 GB card; coding only, not a thinking model; on disk since 2026-10-24; writes tool calls as fenced JSON text instead of structured calls, so the code interpreter never runs on it; unmeasured |
+| `qwen25c` | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf` | dense, 7.6 B | 4.36 GiB | the only model fully GPU-resident on the 6 GB card; coding only, not a thinking model; on disk since 2026-10-24; writes tool calls as fenced JSON text instead of structured calls, so the code interpreter never runs on it (seen with the since-removed Jupyter engine's `execute_code`; not re-checked against the sandbox's tools); unmeasured |
 | `qwen3c` | `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` | MoE | 17.87 GiB | copies `qwen36`'s shape as an unverified starting point; coding only; unmeasured |
 
 ## Local inference
@@ -91,7 +91,7 @@ been measured on either build yet.
   release-date window the run gives), against whatever is being served, either straight to
   `llama-server` or, with `harness_model` (a Workspace model entry; API only
   so far), through the app's own chat pipeline with the entry's prompt and
-  the code interpreter on the sandbox or Jupyter engine (`benchmarks/evaluation/harness.py`); Compare ranks configurations by
+  the code interpreter on the sandbox (`benchmarks/evaluation/harness.py`); Compare ranks configurations by
   pass rate and passes per minute; Report writes the statistical comparison,
   auditing the design first. Coding and data analysis are covered; math and
   statistics are not yet.
@@ -202,7 +202,7 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   `apps/server/pyproject.toml` + `uv.lock` and supplies Python 3.12
   (the system `python3` is 3.14). Local serving also needs llama.cpp built
   with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`). The code sandbox
-  (the `sandbox` engine, under construction) also needs `/dev/kvm`, Kata
+  (the code interpreter) also needs `/dev/kvm`, Kata
   Containers 4.3.1 registered with Docker as `kata-clh`, udisks2 with its
   polkit rule, and the host steps in `docs/guides/sandbox.md`. Packaging the
   desktop app as an `.rpm` needs `rpm-build` and `libxcrypt-compat`.
@@ -433,6 +433,6 @@ Code" footer, a Claude Code session link, or
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
 | [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling, assistant tools, features and the model harness |
-| [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server, the microVM sandbox that replaces the Jupyter code interpreter) |
-| [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings |
+| [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
+| [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings, the sandbox design that was built |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

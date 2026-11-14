@@ -101,7 +101,8 @@ All measured runs used llama.cpp b10597 with `-ngl 99 -c 16384 --cache-type-k q8
 unless a profile is named. The `smoke` tier is 24 items: 8 each of
 HumanEval, MBPP and DS-1000. "Through the app" means harness mode, PR #415:
 a Workspace model entry with the deployed `assistant.txt` prompt, and
-`execute_code` on the Jupyter engine.
+`execute_code` on the Jupyter engine (measured then; that engine and tool
+have since been removed in favor of the sandbox's tools).
 
 **Structured tool calls.** Each model got the exact `execute_code` spec the
 app sends, under three system prompts (the app's own, a one-line one, and
@@ -131,8 +132,8 @@ supports native calls only (plan D3), so this route is not available there.
 On 24 items, a difference of two is not evidence either way. What the runs
 do show:
 
-- **Tool calls work end to end** on both Qwen3 4B models: the call, Jupyter,
-  then a second round.
+- **Tool calls work end to end** on both Qwen3 4B models: the call, Jupyter
+  (since removed), then a second round.
 - **The code interpreter does not raise scores** on these code-writing
   items.
 - **Thinking costs time:** Qwen3.5-4B wrote about 2,700 characters of

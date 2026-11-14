@@ -664,7 +664,7 @@ async def ask_user(
 # =============================================================================
 #
 # The code interpreter's tools when its engine is `sandbox`: one microVM per
-# chat with a persistent /workspace (docs/proposals/sandbox-code-interpreter.md).
+# chat with a persistent /workspace (docs/history/sandbox-code-interpreter.md).
 # The manager on request.app.state.sandbox (sandbox/manager.py) gives the
 # chat its sandbox; sandbox/workspace.py confines and carries out the file
 # operations. Each tool does all its steps in one session, which holds the

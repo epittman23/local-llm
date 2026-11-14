@@ -15,7 +15,7 @@ the owner's laptop follow [sandbox-sessions-local.md](sandbox-sessions-local.md)
 instead of this file.
 
 Written 2026-11-10. The design being implemented is
-[docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md).
+[docs/history/sandbox-code-interpreter.md](../history/sandbox-code-interpreter.md).
 
 ## What a cloud session is for
 

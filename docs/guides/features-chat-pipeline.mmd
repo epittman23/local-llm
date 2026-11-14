@@ -27,7 +27,7 @@ flowchart TB
 
   subgraph TOOLS["Builtin tools, run on the server"]
     direction TB
-    tCode["execute_code: Jupyter kernel, chat files copied in"]
+    tCode["bash, view, write_file, str_replace: the chat's sandbox microVM"]
     tWeb["search_web, fetch_url: SearXNG"]
     tKnow["knowledge and chat-file search: pgvector + reranker"]
     tMem["memory, notes, chats, channels, calendar, automations"]

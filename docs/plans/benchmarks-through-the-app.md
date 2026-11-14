@@ -6,7 +6,8 @@ section 3 accepted as written.** PR 1 (section 4) is under way.
 Scope: an optional mode for the Benchmarks Tests page, and later Tune, in
 which each scored item is answered by the assistant as deployed: a
 Workspace model entry, its system prompt, and the code interpreter on the
-Jupyter engine. Today every item goes straight to `llama-server`'s
+Jupyter engine (the plan's wording of 2026-10-24: Jupyter has since been
+removed, and the harness runs the code interpreter on the sandbox). Today every item goes straight to `llama-server`'s
 `/v1/chat/completions` (`benchmarks/evaluation/runner.py`, `ask()`), so the
 benchmarks measure the bare model, never the assistant.
 
@@ -70,8 +71,9 @@ For one item:
 5. Record the result under the usual keys plus a new `harness_sha` (D5).
 
 The whole item runs under the existing per-item timeout
-(`LLAMA_TEST_TIMEOUT`). Jupyter's own timeout only limits silence between
-kernel messages.
+(`LLAMA_TEST_TIMEOUT`). (Written for Jupyter, whose own timeout only
+limited silence between kernel messages; the sandbox's `bash` calls have a
+timeout of their own.)
 
 ## 3. Decisions for the owner
 
