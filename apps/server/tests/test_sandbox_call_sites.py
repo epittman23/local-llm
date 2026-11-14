@@ -14,7 +14,7 @@ Pins, without Docker or Kata (SandboxManager on a FakeBackend):
   linked to nothing without one (the Run endpoint), owner decision Q25;
 - the FakeBackend lists /workspace/.runs as the real script does;
 - the tag path runs a `<code_interpreter>` block there with its code
-  unchanged, answers "not configured" under a stored `jupyter` engine, and tells the model which files were attached;
+  sanitized (ANSI codes and markdown fences stripped) and tells the model which files were attached;
 - each engine gets its own prompt on each function-calling path;
 - a request with both a terminal and the sandbox engine is refused (Q24),
   and terminal events go out for terminal tools only;
@@ -514,12 +514,14 @@ def test_the_tag_path_shows_the_model_a_sandbox_failure(monkeypatch):
     assert out == {'stdout': 'The sandbox is not available on this server', 'stderr': '', 'result': ''}
 
 
-def test_execute_code_itself_answers_not_configured_for_a_stored_jupyter_engine_and_runs_nothing(monkeypatch):
-    # Detection no longer lets a block reach this function under such an engine; it stays the inert last resort.
-    reply, calls = _reply(monkeypatch, 'jupyter')
-    out = asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': 'print(1)'}))
-    assert out['stdout'] == 'Code interpreter engine not configured.'
-    assert calls == []
+def test_execute_code_sanitizes_the_block_before_the_sandbox_runs_it(monkeypatch):
+    reply, calls = _reply(
+        monkeypatch, 'sandbox', {'stdout': '', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
+    )
+    block = '```python\n\x1b[31mprint(1)\x1b[0m\n```'
+    asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': block}))
+    (call,) = calls
+    assert call['code'] == 'print(1)'
 
 
 def _detects(monkeypatch, engine) -> bool:
@@ -568,6 +570,21 @@ def test_the_sandbox_gets_its_tag_or_tool_prompt_on_each_path(monkeypatch, legac
     added = form['messages'][-1 if legacy else 0]['content']
     assert added.endswith(getattr(middleware, expected))
     assert getattr(middleware, other) not in added
+
+
+@pytest.mark.parametrize('legacy', [True, False])
+def test_a_missing_engine_key_gets_the_sandbox_prompt(monkeypatch, legacy):
+    async def get(key, default=None):
+        return {'code_interpreter.prompt_template': ''}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    form = {'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]}
+    metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
+    asyncio.run(middleware._apply_code_interpreter(form, metadata))
+    added = form['messages'][-1 if legacy else 0]['content']
+    assert added.endswith(
+        middleware.CODE_INTERPRETER_SANDBOX_TAG_PROMPT if legacy else middleware.CODE_INTERPRETER_SANDBOX_PROMPT
+    )
 
 
 @pytest.mark.parametrize('legacy', [True, False])
@@ -678,17 +695,23 @@ def test_terminal_events_go_out_for_terminal_tools_only(tool_type, sent):
 # --- the Run endpoint --------------------------------------------------------------------------------------------
 
 
+MISSING = object()  # an engine key the config has no row for
+
+
 @pytest.fixture
 def endpoint(monkeypatch):
     world = {'user': _user(), 'engine': 'sandbox', 'enable': True, 'chats': {}, 'runs': [], 'may': True, 'asked': []}
 
     async def get(key, default=None):
-        return {
+        stored = {
             'code_execution.enable': world['enable'],
             'code_execution.engine': world['engine'],
             'user.permissions': world.get('permissions'),
             'code_interpreter.enable': world.get('interpreter', True),
-        }.get(key, default)
+        }
+        if world['engine'] is MISSING:
+            del stored['code_execution.engine']
+        return stored.get(key, default)
 
     async def get_chat_by_id(chat_id, db=None):
         return world['chats'].get(chat_id)
@@ -727,6 +750,14 @@ def test_the_run_endpoint_answers_400_under_any_engine_but_the_sandbox(endpoint,
     assert response.status_code == 400
     assert 'engine not supported' in response.json()['detail']
     assert endpoint['runs'] == []
+
+
+def test_the_run_endpoint_runs_under_a_missing_engine_key_as_it_does_for_the_sandbox(endpoint):
+    endpoint['engine'] = MISSING
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 200, response.text
+    assert [run['code'] for run in endpoint['runs']] == ['print(1)']
 
 
 def test_the_run_endpoint_runs_in_the_owners_chat_without_a_message_or_an_upload_sync(endpoint):

@@ -98,6 +98,11 @@ class ImportConfigForm(BaseModel):
     config: dict
 
 
+#: Settings of the removed Jupyter engine, credentials among them. The migration that retired it deleted their rows,
+#: and an import drops them, so an older export cannot write them back.
+REMOVED_ENGINE_PREFIXES = ('code_interpreter.jupyter.', 'code_execution.jupyter.')
+
+
 def without_null_settings(config: dict) -> dict:
     """An imported config with a null tool-server `config`, arena model `meta` or connection config stored as `{}`.
 
@@ -126,6 +131,7 @@ def without_null_settings(config: dict) -> dict:
 
 @router.post('/import', response_model=dict)
 async def import_config(request: Request, form_data: ImportConfigForm, user=Depends(get_admin_user)):
+    form_data.config = {k: v for k, v in form_data.config.items() if not k.startswith(REMOVED_ENGINE_PREFIXES)}
     # The same check as the admin form: an imported unusable JWT expiry
     # would lock everyone out (#242).
     if 'auth.jwt_expiry' in form_data.config and (error := jwt_expiry_error(form_data.config['auth.jwt_expiry'])):

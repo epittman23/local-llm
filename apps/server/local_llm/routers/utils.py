@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from starlette.responses import FileResponse
 
-from local_llm.config import ENABLE_ADMIN_EXPORT
+from local_llm.config import CODE_ENGINES, ENABLE_ADMIN_EXPORT
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.chats import ChatTitleMessagesForm
 from local_llm.models.config import Config
@@ -51,9 +51,9 @@ async def execute_code(request: Request, form_data: CodeForm, user=Depends(get_v
             detail=ERROR_MESSAGES.FEATURE_DISABLED('Code execution'),
         )
 
-    # Only the sandbox runs code; any other stored value, such as a removed engine's until T43's migration rewrites
-    # it, is refused.
-    if await Config.get('code_execution.engine') == 'sandbox':
+    # Only a live engine (the sandbox) runs code. A stored value outside CODE_ENGINES (only possible by editing the
+    # row by hand: the form, the import and the migration all write `sandbox`) is refused.
+    if await Config.get('code_execution.engine', 'sandbox') in CODE_ENGINES:
         return await _execute_in_sandbox(request, form_data, user)
     raise HTTPException(
         status_code=400,

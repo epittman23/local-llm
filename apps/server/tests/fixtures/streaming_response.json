@@ -30394,10 +30394,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -30932,10 +30928,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -31044,10 +31036,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -31492,10 +31480,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -32445,10 +32429,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -32904,10 +32884,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -33008,10 +32984,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -34568,10 +34540,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -34740,10 +34708,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -34956,10 +34920,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -35214,10 +35174,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -35514,10 +35470,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -38473,10 +38425,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "x = 1",
     "",
@@ -38583,10 +38531,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",
@@ -39028,10 +38972,6 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
     "run_code_in_sandbox",
     "print(1)",
     "",
@@ -39140,10 +39080,6 @@
       ]
      }
     }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
    ],
    [
     "run_code_in_sandbox",

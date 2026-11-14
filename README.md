@@ -47,7 +47,10 @@ SEARXNG_SECRET=
 
 An `infra/.env` written before the Jupyter code interpreter was removed
 also has a `JUPYTER_TOKEN=` line. Nothing reads it any more; it is
-harmless, and can be deleted.
+harmless, and can be deleted. Such a machine may also still have the
+Jupyter container and volume, and a leftover container makes the desktop
+app refuse to start its stack: see "Leftovers from the Jupyter engine" in
+[docs/guides/sandbox.md](docs/guides/sandbox.md#operations).
 
 The backend refuses to start when `LLLM_SECRET_KEY` is shorter than 32 bytes
 (the command above gives 32 characters) or starts or ends with whitespace,

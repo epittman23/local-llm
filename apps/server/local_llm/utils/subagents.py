@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from starlette.datastructures import Headers
 
+from local_llm.config import CODE_ENGINES
 from local_llm.internal.db import get_async_db
 from local_llm.models.chat_messages import ChatMessages
 from local_llm.models.chats import Chat, ChatForm, Chats
@@ -305,14 +306,15 @@ def _subagent_limits(config: dict) -> tuple[int, int, int | None, int | None]:
 async def _run_settings(metadata: dict, background: bool) -> dict:
     """What the sub-agent inherits from the parent's request.
 
-    In the background it gets no tool servers, and no code interpreter unless the engine is the sandbox: any other
-    stored engine value (a removed engine's, until T43's migration rewrites it) leaves the code interpreter off.
+    In the background it gets no tool servers, and no code interpreter unless the engine is a live one: a stored
+    value outside CODE_ENGINES (only possible by editing the row by hand: the form, the import and the migration all
+    write `sandbox`) leaves the code interpreter off.
     """
     features = copy.deepcopy(metadata.get('features') or {})
     if (
         background
         and features.get('code_interpreter')
-        and await Config.get('code_interpreter.engine', 'sandbox') != 'sandbox'
+        and await Config.get('code_interpreter.engine', 'sandbox') not in CODE_ENGINES
     ):
         features.pop('code_interpreter')
     return {

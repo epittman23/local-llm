@@ -215,7 +215,16 @@ def test_an_entry_on_a_non_openai_connection_is_refused(app_with):
 # ---------------------------------------------------------------------------
 # asking: the guard during the call, errors, the spec
 # ---------------------------------------------------------------------------
-HCTX = {'model_entry': 'coder', 'base_model': 'qwen25c', 'port': PORT, 'timeout': 5, 'max_tokens': 2048}
+HCTX = {
+    'model_entry': 'coder',
+    'base_model': 'qwen25c',
+    'port': PORT,
+    'timeout': 5,
+    'max_tokens': 2048,
+    'engine': 'sandbox',
+    'tools': ['bash', 'view', 'write_file', 'str_replace'],
+    'sandbox': FakeSandbox(),
+}
 
 BODY = {
     'model': 'qwen25c',
@@ -857,10 +866,11 @@ def test_a_removed_engine_is_refused_without_asking_the_sandbox(app_with, engine
 # Computed from the harness before the sandbox engine (`git show HEAD:` of harness.py, T30's parent) for HCTX and BODY.
 # It pins Jupyter-era shas: a change that moves it renames every earlier Jupyter run's harness.
 JUPYTER_ERA_SHA = '8b71b99938eb'
+JUPYTER_HCTX = {**HCTX, 'engine': 'jupyter', 'tools': None, 'sandbox': None}
 
 
 def test_a_jupyter_spec_keeps_the_sha_it_had_before_the_sandbox_engine():
-    assert harness.spec_sha(harness.spec_from_request(HCTX, BODY)) == JUPYTER_ERA_SHA
+    assert harness.spec_sha(harness.spec_from_request(JUPYTER_HCTX, BODY)) == JUPYTER_ERA_SHA
 
 
 def test_a_jupyter_spec_has_no_sandbox_key_even_with_a_manager_in_the_context():
@@ -1055,7 +1065,7 @@ def test_a_sandbox_context_without_a_manager_is_refused_as_having_no_digest(monk
 def test_a_jupyter_item_never_releases_a_sandbox(monkeypatch):
     _released_pipeline(monkeypatch)
     manager = FakeSandbox()
-    asyncio.run(harness.ask({**HCTX, 'sandbox': manager}, 'item'))
+    asyncio.run(harness.ask({**JUPYTER_HCTX, 'sandbox': manager}, 'item'))
 
     assert manager.released == []
 

@@ -207,7 +207,7 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
         raise HarnessRefused(f"'{model_entry}' sets max_completion_tokens, which would replace the item's token cap")
 
     ci = await Config.get_many('code_interpreter.enable', 'code_interpreter.engine')
-    engine = ci.get('code_interpreter.engine')
+    engine = ci.get('code_interpreter.engine', 'sandbox')
     if not ci.get('code_interpreter.enable') or engine not in ENGINE_TOOLS:
         raise HarnessRefused('the code interpreter must be on, on the sandbox engine (Admin Settings > Code Execution)')
     manager = getattr(request.app.state, 'sandbox', None)
@@ -274,21 +274,20 @@ def _sha(value) -> str:
 
 
 def _engine(hctx: dict) -> str:
-    """The run's code interpreter engine; the removed Jupyter engine's when the hctx has no `engine`.
+    """The run's code interpreter engine, which prepare() always sets, to the sandbox.
 
-    prepare() always sets it, to the sandbox. The default is for a context
-    built by hand without one (tests): spec_from_request then gives the
-    Jupyter-era spec, so the sha the stored Jupyter runs are filed under can
-    still be computed and pinned.
+    A context that names the removed `jupyter` engine (built by hand, as a
+    test does) makes spec_from_request give the Jupyter-era spec, so the sha
+    the stored Jupyter runs are filed under can still be computed and pinned.
     """
-    return hctx.get('engine') or 'jupyter'
+    return hctx['engine']
 
 
 def spec_from_request(hctx: dict, body: dict) -> dict:
     """The part of the first upstream request every item shares: what the harness sha names.
 
-    A Jupyter spec (only a context without `engine` gives one now, see
-    _engine) has the same keys and values it had before the sandbox engine,
+    A Jupyter spec (only a context naming the `jupyter` engine gives one now,
+    see _engine) has the same keys and values it had before the sandbox engine,
     so every Jupyter-era sha still names its stored runs. A sandbox spec
     adds `sandbox_image`, read again for every item: the `data` image's id
     as the backend last saw it (refreshed by ready() and by every create,

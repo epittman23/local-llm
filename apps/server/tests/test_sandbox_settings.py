@@ -291,6 +291,33 @@ class TestConfigForm:
         assert r.status_code == 200, r.text
         assert _run(Config.get(key)) == 'sandbox'
 
+    def test_the_config_import_drops_the_removed_jupyter_keys_and_keeps_the_rest(self, client, people, monkeypatch):
+        events = []
+
+        async def publish_event(request, name, **kwargs):
+            events.append((name, kwargs))
+
+        monkeypatch.setattr(configs_router, 'publish_event', publish_event)
+        config = {
+            'code_interpreter.jupyter.url': 'http://jupyter.invalid',
+            'code_interpreter.jupyter.auth_token': 'secret',
+            'code_execution.jupyter.timeout': 60,
+            'code_interpreter.jupyterx': 'kept',
+            'code_execution.jupyter_url': 'kept too',
+            'code_interpreter.sandbox.max_running': 3,
+        }
+        r = client.post('/configs/import', json={'config': config}, headers=people.admin.headers)
+        assert r.status_code == 200, r.text
+        dropped = [k for k in config if k.startswith(configs_router.REMOVED_ENGINE_PREFIXES)]
+        assert len(dropped) == 3
+        for key in dropped:
+            assert _run(Config.get(key)) is None
+        assert _run(Config.get('code_interpreter.jupyterx')) == 'kept'
+        assert _run(Config.get('code_execution.jupyter_url')) == 'kept too'
+        assert _run(Config.get('code_interpreter.sandbox.max_running')) == 3
+        ((_, kwargs),) = events
+        assert sorted(kwargs['data']['keys']) == sorted(k for k in config if k not in dropped)
+
     def test_a_non_admin_cannot_read_or_write_it(self, client, people):
         assert client.get('/configs/code_execution', headers=people.member.headers).status_code == 401
         r = client.post('/configs/code_execution', json=_form(), headers=people.member.headers)

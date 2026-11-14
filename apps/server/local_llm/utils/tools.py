@@ -25,7 +25,7 @@ from langchain_core.utils.function_calling import (
 )
 from pydantic import BaseModel, Field, create_model
 
-from local_llm.config import BYPASS_ADMIN_ACCESS_CONTROL
+from local_llm.config import BYPASS_ADMIN_ACCESS_CONTROL, CODE_ENGINES
 from local_llm.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
     AIOHTTP_CLIENT_SESSION_SSL,
@@ -751,9 +751,9 @@ _code_interpreter_gates = _gated_tools(
 
 
 async def _code_interpreter_tools(ctx: _BuiltinToolContext) -> list[Callable]:
-    # Only the sandbox engine has tools. Any other stored engine value (a removed engine's, until T43's migration
-    # rewrites it) offers none.
-    if ctx.config.get('code_interpreter.engine') != 'sandbox':
+    # Only a live engine (the sandbox) has tools. A stored value outside CODE_ENGINES (only possible by editing the
+    # row by hand: the form, the import and the migration all write `sandbox`) offers none.
+    if ctx.config.get('code_interpreter.engine', 'sandbox') not in CODE_ENGINES:
         return []
     return await _code_interpreter_gates(ctx)
 

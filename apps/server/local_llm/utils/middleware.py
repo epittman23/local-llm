@@ -2559,7 +2559,8 @@ def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str
 
 
 async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
-    # A removed engine's value (until T43's migration rewrites it) leaves the code interpreter off: no prompt.
+    # A stored value outside CODE_ENGINES (only possible by editing the row by hand: the form, the import and the
+    # migration all write `sandbox`) leaves the code interpreter off: no prompt.
     if await Config.get('code_interpreter.engine', 'sandbox') not in CODE_ENGINES:
         return
 
@@ -2663,7 +2664,7 @@ async def _refuse_terminal_with_sandbox(user, model: dict, metadata: dict, termi
         return
     if (
         await Config.get('code_interpreter.enable')
-        and await Config.get('code_interpreter.engine') == 'sandbox'
+        and await Config.get('code_interpreter.engine', 'sandbox') in CODE_ENGINES
         and await _may_use_feature(user, 'code_interpreter')
     ):
         raise HTTPException(status_code=400, detail=TERMINAL_WITH_SANDBOX)
@@ -5043,8 +5044,8 @@ class _StreamingReply:
 
     async def _detect_code_interpreter(self) -> bool:
         # Legacy tool-calling only: native FC gets the sandbox's tools as builtin tools.
-        # Same five authz gates as utils/tools.py get_builtin_tools, and a live engine: a removed engine's value
-        # (until T43's migration rewrites it) leaves the code interpreter off.
+        # Same five authz gates as utils/tools.py get_builtin_tools, and a live engine: a stored value outside
+        # CODE_ENGINES (only possible by editing the row by hand) leaves the code interpreter off.
         features = self.metadata.get('features', {}) or {}
         model_capabilities = self.model.get('info', {}).get('meta', {}).get('capabilities') or {}
         builtin_tools_meta = self.model.get('info', {}).get('meta', {}).get('builtinTools', {})
@@ -6157,14 +6158,8 @@ class _StreamingReply:
 
     async def _execute_code(self, ci_item: dict):
         # Sanitize code (strips ANSI codes and markdown fences)
-        code = sanitize_code(ci_item.get('code', ''))
-        if await Config.get('code_interpreter.engine', 'sandbox') in CODE_ENGINES:
-            # The block runs in the chat's own sandbox.
-            return await self._execute_code_in_sandbox(code)
-
-        # The detection gate parses blocks only on a live engine; a block that gets here on any other is answered,
-        # not run.
-        return {'stdout': 'Code interpreter engine not configured.'}
+        # The block runs in the chat's own sandbox: _detect_code_interpreter parses blocks only on a live engine.
+        return await self._execute_code_in_sandbox(sanitize_code(ci_item.get('code', '')))
 
     async def _execute_code_in_sandbox(self, code: str) -> dict:
         """A `<code_interpreter>` block run in the chat's sandbox (tools/builtin.py run_code_in_sandbox).

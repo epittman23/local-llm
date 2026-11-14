@@ -246,9 +246,13 @@ def test_the_four_tools_are_offered_in_the_order_the_model_is_to_see_them(monkey
     assert names == SANDBOX_TOOLS
 
 
-@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', None, '', 'SANDBOX', 'sandbox ', 'other'])
+@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', '', 'SANDBOX', 'sandbox ', 'other'])
 def test_any_other_engine_offers_no_code_tool(monkeypatch, engine):
     assert _offered(monkeypatch, engine=engine) == set()
+
+
+def test_a_missing_engine_key_behaves_as_the_sandbox_engine(monkeypatch):
+    assert _offered(monkeypatch, engine=None) == set(SANDBOX_TOOLS)
 
 
 def test_the_engine_is_read_in_the_same_config_batch_as_the_other_keys(monkeypatch):

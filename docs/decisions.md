@@ -43,7 +43,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 
   **`sandbox` is the only engine value.** `code_interpreter.engine` and
   `code_execution.engine` stay as settings and default to `sandbox`. The
-  admin form and the config import refuse any other value (422), and an
+  admin form and the config import refuse any other value (422), the
+  import drops any old `*.jupyter.*` setting it is given, and an
   environment variable naming a removed engine is ignored with a warning.
   A stored value naming one leaves the code interpreter off everywhere (no
   prompt, no tool, no `<code_interpreter>` parsing, no sub-agent

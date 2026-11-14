@@ -307,6 +307,7 @@ Every question the proposal raised was decided by the owner.
 | The Run button and the global switch | Under the `sandbox` engine the Run endpoint also requires the code interpreter to be switched on for the server (`code_interpreter.enable`), for admins too, and the frontend hides Run while it is off, as on every other path into the workspace (Q29) | 2026-11-13 |
 | A command that takes the whole microVM down | Counts as a sandbox failure for the harness, not the model's; on the laptop no model-written command took the VM down (Q27) | 2026-11-13 |
 | The harness baseline on the sandbox engine (T31) | A `smoke`-tier harness run on `qwen38` instead of a full HumanEval+ run, which is not needed to show the harness works; a one-item HumanEval+ harness run on the Jupyter engine records the Jupyter-era spec sha it is compared with (Q30) | 2026-11-13 |
+| Old Jupyter settings in a config import (T48) | The config import silently drops keys under `code_interpreter.jupyter.` and `code_execution.jupyter.`, so an export taken before step 3 cannot write back the Jupyter rows, credentials included, that revision `807e3e98e4af` deleted; the engine check (422 for a removed engine) is unchanged (Q34) | 2026-11-13 |
 
 ## Sources
 
