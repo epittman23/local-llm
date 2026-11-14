@@ -1,3 +1,4 @@
+import { cn } from 'cn';
 import { ChevronDown, ChevronUp, Clipboard, Link2Off, Search, Trash2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -6,6 +7,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { deleteChatById } from '@/lib/apis/chats';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -116,12 +118,18 @@ export function ChatsModal({
 	};
 
 	const sortHeader = (key: string, label: string, className: string) => (
-		<button type="button" className={className} onClick={() => setSortKey(key)}>
+		<Button
+			variant="ghost"
+			size="sm"
+			className={cn('justify-start', className)}
+			type="button"
+			onClick={() => setSortKey(key)}
+		>
 			<div className="flex items-center gap-1.5">
 				{label}
 				<SortMark active={orderBy === key} direction={direction} />
 			</div>
-		</button>
+		</Button>
 	);
 
 	return (
@@ -149,14 +157,9 @@ export function ChatsModal({
 							)}
 						</DialogTitle>
 						<DialogDescription className="sr-only">A list of chats.</DialogDescription>
-						<button
-							type="button"
-							className="text-muted-foreground hover:bg-muted rounded-lg p-1 transition"
-							aria-label="Close"
-							onClick={() => onOpenChange(false)}
-						>
+						<Button variant="ghost" size="icon-sm" type="button" aria-label="Close" onClick={() => onOpenChange(false)}>
 							<X className="size-4" />
-						</button>
+						</Button>
 					</div>
 
 					<div className="flex w-full flex-col px-5 pb-4">
@@ -165,7 +168,7 @@ export function ChatsModal({
 								<div className="flex flex-1 items-center">
 									<Search className="mr-3 ml-1 size-4" />
 									<input
-										className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+										className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 										value={query}
 										onChange={(e) => onQueryChange(e.target.value)}
 										placeholder="Search Chats"
@@ -173,14 +176,16 @@ export function ChatsModal({
 										maxLength={500}
 									/>
 									{query && (
-										<button
+										<Button
+											variant="ghost"
+											size="icon-xs"
+											className="mr-1"
 											type="button"
-											className="hover:bg-muted mr-1 rounded-full p-0.5 transition"
 											aria-label="Clear search"
 											onClick={() => onQueryChange('')}
 										>
 											<X className="size-3" strokeWidth={2} />
-										</button>
+										</Button>
 									)}
 								</div>
 							</div>
@@ -258,22 +263,26 @@ export function ChatsModal({
 														<div className="flex justify-end pl-2.5">
 															{unarchiveHandler && (
 																<Tip content="Unarchive Chat">
-																	<button
+																	<Button
+																		variant="ghost"
+																		size="icon-sm"
+																		className="self-center"
 																		type="button"
 																		aria-label="Unarchive Chat"
-																		className="w-fit self-center px-1 text-sm"
 																		onClick={() => unarchiveHandler(chat.id)}
 																	>
 																		<ArchiveRestoreIcon />
-																	</button>
+																	</Button>
 																</Tip>
 															)}
 															{unshareHandler && chat.share_id && (
 																<Tip content="Copy Share Link">
-																	<button
+																	<Button
+																		variant="ghost"
+																		size="icon-sm"
+																		className="self-center"
 																		type="button"
 																		aria-label="Copy Share Link"
-																		className="w-fit self-center px-1 text-sm"
 																		onClick={async () => {
 																			await navigator.clipboard.writeText(
 																				`${window.location.origin}/s/${chat.share_id}`
@@ -282,14 +291,16 @@ export function ChatsModal({
 																		}}
 																	>
 																		<Clipboard className="size-4" strokeWidth={1.5} />
-																	</button>
+																	</Button>
 																</Tip>
 															)}
 															<Tip content={unshareHandler ? 'Unshare Chat' : 'Delete Chat'}>
-																<button
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
+																	className="self-center"
 																	type="button"
 																	aria-label={unshareHandler ? 'Unshare Chat' : 'Delete Chat'}
-																	className="w-fit self-center px-1 text-sm"
 																	onClick={() => (unshareHandler ? unshareHandler(chat.id) : setDeleteId(chat.id))}
 																>
 																	{unshareHandler ? (
@@ -297,7 +308,7 @@ export function ChatsModal({
 																	) : (
 																		<Trash2 className="size-4" strokeWidth={1.5} />
 																	)}
-																</button>
+																</Button>
 															</Tip>
 														</div>
 													)}

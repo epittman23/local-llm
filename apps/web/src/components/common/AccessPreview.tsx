@@ -57,7 +57,7 @@ export function AccessPreview({
 				<Spinner className="size-5" />
 			</div>
 		);
-	if (error) return <div className="py-4 text-center text-xs text-red-500">{error}</div>;
+	if (error) return <div className="py-4 text-center text-xs text-danger">{error}</div>;
 	if (!preview) return null;
 	const rule = <hr className="my-1" />;
 	return (

@@ -50,12 +50,7 @@ export function ManifestModal({
 					<div className="my-2">
 						Support this plugin:{' '}
 						{link ? (
-							<a
-								href={link}
-								target="_blank"
-								rel="noreferrer noopener"
-								className="text-blue-500 underline hover:text-blue-400"
-							>
+							<a href={link} target="_blank" rel="noreferrer noopener" className="text-brand underline">
 								{link}
 							</a>
 						) : (

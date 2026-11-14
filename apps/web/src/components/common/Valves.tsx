@@ -1,6 +1,7 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 
@@ -15,7 +16,7 @@ export type ValveProperty = {
 export type ValvesSpec = { properties?: Record<string, ValveProperty>; required?: string[] } | null;
 export type ValveValues = Record<string, unknown>;
 
-const fieldClass = 'border-border bg-background w-full rounded-lg border px-3 py-2 text-sm outline-hidden';
+const fieldClass = 'border-border bg-background w-full rounded-lg border px-3 py-2 text-sm';
 
 /** The enum entry a `<select>`'s text stands for, with its own type: `'2'` is `2` in `[1, 2, 3]`. */
 export const enumOption = (options: ReadonlyArray<unknown>, text: string): unknown =>
@@ -49,10 +50,10 @@ function SecretInput({
 }) {
 	const [shown, setShown] = useState(false);
 	return (
-		<div className={`${fieldClass} flex items-center gap-2`}>
+		<div className={`${fieldClass} flex items-center gap-2`} data-composite-field>
 			<input
 				id={id}
-				className="w-full bg-transparent outline-hidden"
+				className="w-full bg-transparent"
 				type={shown ? 'text' : 'password'}
 				value={value}
 				placeholder={placeholder}
@@ -60,9 +61,15 @@ function SecretInput({
 				autoComplete="off"
 				onChange={(e) => onChange(e.target.value)}
 			/>
-			<button type="button" aria-label={shown ? 'Hide value' : 'Show value'} onClick={() => setShown((s) => !s)}>
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				type="button"
+				aria-label={shown ? 'Hide value' : 'Show value'}
+				onClick={() => setShown((s) => !s)}
+			>
 				{shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -249,16 +256,17 @@ export function Valves({
 								{p.title ?? name}
 								{isRequired && <span className="text-muted-foreground"> *required</span>}
 							</div>
-							<button
+							<Button
+								variant="ghost"
+								size="sm"
 								type="button"
-								className="hover:bg-muted/70 flex rounded-lg px-2 py-1 text-xs transition"
 								aria-label={`${p.title ?? name}: ${value === null ? (isRequired ? 'None' : 'Default') : 'Custom'}`}
 								onClick={() => toggleCustom(name)}
 							>
 								<span className="ml-2 self-center">
 									{value === null ? (isRequired ? 'None' : 'Default') : 'Custom'}
 								</span>
-							</button>
+							</Button>
 						</div>
 						{field && <div className="mt-0.5 mb-0.5 min-w-0">{field}</div>}
 						{p.description != null && <SafeMarkdown text={p.description} className="text-muted-foreground" />}

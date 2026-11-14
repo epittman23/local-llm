@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { getGroups } from '@/lib/apis/groups';
@@ -131,17 +132,12 @@ export function MemberSelector({
 	};
 
 	const chip = (key: string, label: string, extra: string | undefined, onRemove: () => void) => (
-		<button
-			key={key}
-			type="button"
-			className="bg-muted inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
-			onClick={onRemove}
-		>
+		<Button variant="secondary" size="sm" key={key} type="button" onClick={onRemove}>
 			<span>
 				{label} {extra && <span className="text-muted-foreground">{extra}</span>}
 			</span>
 			<X className="size-3" />
-		</button>
+		</Button>
 	);
 
 	const nothingToShow = filteredUsers.length === 0 && filteredGroups.length === 0;
@@ -195,10 +191,11 @@ export function MemberSelector({
 							<div className="text-muted-foreground mx-1 mb-1 text-xs">Groups</div>
 							<div className="mb-3">
 								{filteredGroups.map((group) => (
-									<button
+									<Button
+										variant="ghost"
+										className="h-auto w-full justify-between rounded-none p-0 text-xs font-normal"
 										key={group.id}
 										type="button"
-										className="flex w-full items-center justify-between text-xs"
 										onClick={() => toggleGroup(group)}
 									>
 										<span className="flex flex-1 items-center gap-1 px-3 py-1.5 font-normal">
@@ -208,7 +205,7 @@ export function MemberSelector({
 										<span className="px-3 py-1">
 											<Checkbox checked={groupIds.includes(group.id)} tabIndex={-1} aria-label={group.name} />
 										</span>
-									</button>
+									</Button>
 								))}
 							</div>
 						</>
@@ -218,10 +215,11 @@ export function MemberSelector({
 							<div className="text-muted-foreground mx-1 mb-1 text-xs">Users</div>
 							<div>
 								{filteredUsers.map((user) => (
-									<button
+									<Button
+										variant="ghost"
+										className="h-auto w-full justify-between rounded-none p-0 text-xs font-normal"
 										key={user.id}
 										type="button"
-										className="flex w-full items-center justify-between text-xs"
 										onClick={() => toggleUser(user)}
 									>
 										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
@@ -235,15 +233,15 @@ export function MemberSelector({
 											</Tip>
 											{user.is_active && (
 												<span className="relative flex size-1.5">
-													<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-													<span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
+													<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+													<span className="relative inline-flex size-1.5 rounded-full bg-success" />
 												</span>
 											)}
 										</span>
 										<span className="px-3 py-1">
 											<Checkbox checked={userIds.includes(user.id)} tabIndex={-1} aria-label={user.name} />
 										</span>
-									</button>
+									</Button>
 								))}
 							</div>
 						</>

@@ -17,7 +17,7 @@ import { getUserVariables, updateUserVariables } from '@/lib/apis/users';
 import { signOut } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { SettingField, SettingInput, SettingTextarea, SettingsForm, SettingsSection } from '../controls';
+import { SettingField, SettingInput, SettingsForm, SettingsSection, SettingTextarea } from '../controls';
 import { type VariableRow, variableRows, variablesPayload } from './personalSettings';
 
 type Profile = {
@@ -242,16 +242,12 @@ export default function Account() {
 									aria-label="Upload profile image"
 									onChange={(e) => void onImage(e)}
 								/>
-								<button type="button" className="underline" onClick={() => fileRef.current?.click()}>
+								<Button variant="link" size="xs" type="button" onClick={() => fileRef.current?.click()}>
 									Upload image
-								</button>
-								<button
-									type="button"
-									className="text-muted-foreground underline"
-									onClick={() => set({ profile_image_url: '/user.png' })}
-								>
+								</Button>
+								<Button variant="link" size="xs" type="button" onClick={() => set({ profile_image_url: '/user.png' })}>
 									Remove
-								</button>
+								</Button>
 							</div>
 						</div>
 						<SettingField label="Name" htmlFor="account-name">

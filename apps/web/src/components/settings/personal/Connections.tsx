@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { AddConnectionModal } from '@/components/settings/AddConnectionModal';
 import type { Connection } from '@/components/settings/connectionModel';
+import { Button } from '@/components/ui/button';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { SettingsForm, SettingsSection } from '../controls';
 
@@ -54,10 +55,7 @@ export default function Connections() {
 
 	return (
 		<SettingsForm title="Connections" footer={false} loading={!settings}>
-			<p
-				role="note"
-				className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400"
-			>
+			<p role="note" className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
 				Not yet available in chat: connections added here are saved, but their models are not listed and chat with them
 				does not work in this version.
 			</p>
@@ -65,28 +63,30 @@ export default function Connections() {
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAI compatible API endpoints.</p>
 					<Tip content="Add Connection">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Add Connection"
-							className="hover:bg-muted rounded-md p-1"
 							onClick={() => setAdding(true)}
 						>
 							<Plus className="size-4" />
-						</button>
+						</Button>
 					</Tip>
 				</div>
 				<ul className="flex flex-col gap-1" aria-label="Direct connections">
 					{list.map((c, i) => (
 						<li key={i} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
 							<span className="min-w-0 flex-1 truncate">{c.url}</span>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label={`Edit ${c.url}`}
-								className="hover:bg-muted rounded p-1"
 								onClick={() => setEditing(i)}
 							>
 								<Pencil className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>

@@ -71,7 +71,7 @@ export function ImportUrlModal({
 				>
 					<div className="text-muted-foreground mb-1 text-xs">URL</div>
 					<input
-						className="w-full bg-transparent text-sm outline-hidden"
+						className="w-full bg-transparent text-sm"
 						type="url"
 						aria-label="URL"
 						value={url}

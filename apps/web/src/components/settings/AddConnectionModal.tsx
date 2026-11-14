@@ -13,10 +13,10 @@ import { verifyOllamaConnection } from '@/lib/apis/ollama';
 import { verifyOpenAIConnection } from '@/lib/apis/openai';
 import { useAuthStore } from '@/lib/stores/authStore';
 import {
-	type Connection,
-	type ConnectionFields,
 	blankFields,
 	buildConnection,
+	type Connection,
+	type ConnectionFields,
 	fieldsFromConnection,
 	isAzure,
 	parseHeaders,
@@ -34,7 +34,7 @@ const SUGGESTIONS = [
 	'https://api.x.ai/v1'
 ];
 
-const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
+const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const label = 'text-muted-foreground text-xs';
 
 /**
@@ -184,13 +184,14 @@ export function AddConnectionModal({
 						{!direct && (
 							<div className="flex items-center justify-between">
 								<div className={label}>Connection Type</div>
-								<button
+								<Button
+									variant="link"
+									size="xs"
 									type="button"
-									className="text-xs underline-offset-2 hover:underline"
 									onClick={() => set({ connectionType: f.connectionType === 'local' ? 'external' : 'local' })}
 								>
 									{f.connectionType === 'local' ? 'Local' : 'External'}
-								</button>
+								</Button>
 							</div>
 						)}
 
@@ -219,14 +220,16 @@ export function AddConnectionModal({
 								)}
 							</div>
 							<Tip content="Verify Connection">
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									className="mb-0.5"
 									type="button"
 									aria-label="Verify Connection"
-									className="hover:bg-muted mb-0.5 rounded p-1 transition"
 									onClick={verify}
 								>
 									<Check className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 							<div className="mb-0.5 flex items-center" title={f.enable ? 'Enabled' : 'Disabled'}>
 								<label className="sr-only" htmlFor="toggle-connection">
@@ -243,7 +246,7 @@ export function AddConnectionModal({
 							<div className="flex items-center gap-2">
 								<select
 									id="select-bearer-or-session"
-									className="bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover"
+									className="bg-transparent pr-5 text-sm [&>option]:bg-popover"
 									value={f.authType}
 									onChange={(e) => set({ authType: e.target.value })}
 								>
@@ -291,25 +294,28 @@ export function AddConnectionModal({
 								<label className={label} htmlFor="api-type-toggle">
 									API Type
 								</label>
-								<button
+								<Button
+									variant="link"
+									size="xs"
 									id="api-type-toggle"
 									type="button"
-									className="text-xs underline-offset-2 hover:underline"
 									onClick={() => set({ apiType: f.apiType === 'responses' ? '' : 'responses' })}
 								>
 									{f.apiType === 'responses' ? 'Responses' : 'Chat Completions'}
-								</button>
+								</Button>
 							</div>
 						)}
 
-						<button
+						<Button
+							variant="ghost"
+							size="xs"
+							className="w-fit"
 							type="button"
-							className="text-muted-foreground hover:text-foreground w-fit text-xs"
 							aria-expanded={showAdvanced}
 							onClick={() => setShowAdvanced((v) => !v)}
 						>
 							{showAdvanced ? '▾' : '▸'} Advanced
-						</button>
+						</Button>
 
 						{showAdvanced && (
 							<>
@@ -370,7 +376,7 @@ export function AddConnectionModal({
 										</label>
 										<select
 											id="provider-select"
-											className="block bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+											className="block bg-transparent text-sm [&>option]:bg-popover"
 											value={f.provider}
 											onChange={(e) => set({ provider: e.target.value })}
 										>
@@ -406,14 +412,15 @@ export function AddConnectionModal({
 											{f.modelIds.map((id) => (
 												<li key={id} className="flex items-center justify-between text-xs">
 													<div className="min-w-0 truncate">{id}</div>
-													<button
+													<Button
+														variant="ghost"
+														size="icon-xs"
 														type="button"
 														aria-label={`Remove ${id} from list.`}
-														className="hover:bg-muted rounded p-0.5"
 														onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== id) })}
 													>
 														<Minus className="size-3.5" strokeWidth={2} />
-													</button>
+													</Button>
 												</li>
 											))}
 										</ul>
@@ -445,9 +452,9 @@ export function AddConnectionModal({
 										}}
 										placeholder="Add a model ID"
 									/>
-									<button type="button" aria-label="Add" className="hover:bg-muted rounded p-1" onClick={addModel}>
+									<Button variant="ghost" size="icon-xs" type="button" aria-label="Add" onClick={addModel}>
 										<Plus className="size-3.5" strokeWidth={2} />
-									</button>
+									</Button>
 								</div>
 								<div>
 									<div className={label}>Tags</div>

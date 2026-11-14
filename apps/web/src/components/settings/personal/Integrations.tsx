@@ -6,6 +6,7 @@ import { AddTerminalServerModal } from '@/components/settings/AddTerminalServerM
 import { AddToolServerModal } from '@/components/settings/AddToolServerModal';
 import type { TerminalConnection } from '@/components/settings/terminalServerModel';
 import type { ToolServerConnection } from '@/components/settings/toolServerModel';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { SettingsForm, SettingsSection } from '../controls';
@@ -33,10 +34,7 @@ export default function Integrations() {
 
 	return (
 		<SettingsForm title="Integrations" footer={false} loading={!settings}>
-			<p
-				role="note"
-				className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400"
-			>
+			<p role="note" className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
 				Not yet available in chat: servers added here are saved, but chats do not use personal tool or terminal servers
 				in this version. Admin-configured tool servers are unaffected.
 			</p>
@@ -44,14 +42,15 @@ export default function Integrations() {
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAPI compatible external tool servers.</p>
 					<Tip content="Add Connection">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Add Tool Server"
-							className="hover:bg-muted rounded-md p-1"
 							onClick={() => setToolModal('new')}
 						>
 							<Plus className="size-4" />
-						</button>
+						</Button>
 					</Tip>
 				</div>
 				<ul className="flex flex-col gap-1" aria-label="Tool servers">
@@ -69,14 +68,15 @@ export default function Integrations() {
 									})
 								}
 							/>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label={`Edit ${t.url}`}
-								className="hover:bg-muted rounded p-1"
 								onClick={() => setToolModal(i)}
 							>
 								<Pencil className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>
@@ -85,14 +85,15 @@ export default function Integrations() {
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to a terminal server the model can use.</p>
 					<Tip content="Add Connection">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Add Terminal"
-							className="hover:bg-muted rounded-md p-1"
 							onClick={() => setTermModal('new')}
 						>
 							<Plus className="size-4" />
-						</button>
+						</Button>
 					</Tip>
 				</div>
 				<ul className="flex flex-col gap-1" aria-label="Terminal servers">
@@ -110,14 +111,15 @@ export default function Integrations() {
 									})
 								}
 							/>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label={`Edit ${t.name || t.url}`}
-								className="hover:bg-muted rounded p-1"
 								onClick={() => setTermModal(i)}
 							>
 								<Pencil className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>

@@ -11,9 +11,9 @@ import { cn } from '@/lib/utils';
 // are ported here, with the input classes that every tab copies.
 
 export const settingInputClass =
-	'h-7 w-full rounded-lg border bg-muted/40 px-2 text-xs outline-hidden transition-colors placeholder:text-muted-foreground/50 focus:border-ring disabled:opacity-50';
+	'h-7 w-full rounded-lg border bg-muted/40 px-2 text-xs transition-colors placeholder:text-foreground-muted focus:border-ring disabled:opacity-50';
 export const settingTextareaClass =
-	'w-full rounded-lg border bg-muted/40 px-2 py-1.5 text-xs outline-hidden transition-colors placeholder:text-muted-foreground/50 focus:border-ring';
+	'w-full rounded-lg border bg-muted/40 px-2 py-1.5 text-xs transition-colors placeholder:text-foreground-muted focus:border-ring';
 
 /**
  * A settings tab: heading, scrolling body, and (unless `footer` is false) a
@@ -129,7 +129,7 @@ export function SettingRow({
 				</div>
 				<div className="min-w-0">{typeof children === 'function' ? children(labelId) : children}</div>
 			</div>
-			{description && <p className="text-muted-foreground/70 -mt-1 text-[0.6875rem]">{description}</p>}
+			{description && <p className="text-foreground-muted -mt-1 text-caption">{description}</p>}
 		</>
 	);
 }
@@ -156,7 +156,7 @@ export function SettingField({
 				</label>
 			)}
 			<div className={label ? 'mt-1' : ''}>{children}</div>
-			{description && <p className="text-muted-foreground/70 mt-0.5 text-[0.6875rem]">{description}</p>}
+			{description && <p className="text-foreground-muted mt-0.5 text-caption">{description}</p>}
 		</div>
 	);
 }
@@ -200,7 +200,7 @@ export function SettingSelect({
 				{...rest}
 				value={String(value ?? '')}
 				onChange={(e) => onChange(e.target.value)}
-				className="bg-muted/40 focus:border-ring h-7 w-full max-w-full appearance-none truncate rounded-lg border ps-2.5 pe-8 text-left text-xs outline-hidden transition-colors [field-sizing:content] disabled:opacity-50"
+				className="bg-muted/40 focus:border-ring h-7 w-full max-w-full appearance-none truncate rounded-lg border ps-2.5 pe-8 text-left text-xs transition-colors [field-sizing:content] disabled:opacity-50"
 			>
 				{children}
 			</select>

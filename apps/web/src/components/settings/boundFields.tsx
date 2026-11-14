@@ -26,7 +26,7 @@ const fieldId = ({ idPrefix = 'field', name }: Pick<Bound, 'idPrefix' | 'name'>)
 /** A labelled on/off row. */
 export function BoundToggle({ config, set, name, label, description, muted }: Bound & Described & { muted?: boolean }) {
 	return (
-		<SettingRow label={label} description={description} labelClassName={muted ? 'text-muted-foreground/70' : undefined}>
+		<SettingRow label={label} description={description} labelClassName={muted ? 'text-foreground-muted' : undefined}>
 			{(id) => <SettingSwitch checked={Boolean(config[name])} onChange={(v) => set({ [name]: v })} labelledBy={id} />}
 		</SettingRow>
 	);

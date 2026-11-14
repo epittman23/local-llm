@@ -2,30 +2,29 @@ import { Minus, Plus } from 'lucide-react';
 import { Fragment, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingRow, SettingSwitch, SettingsSection, settingInputClass } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { updateUserInfo } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { getUserPosition } from '@/lib/utils/api-helpers';
 import { cn } from '@/lib/utils';
+import { getUserPosition } from '@/lib/utils/api-helpers';
 import { normalizeAppFontFamily, setAppFontFamily, setTextScale } from '@/lib/utils/textScale';
 import { type CompressionSize, FloatingActionsDialog, ImageCompressionDialog } from './InterfaceManageDialogs';
 import {
 	BACKGROUND_IMAGE_TYPES,
 	type CycleDef,
+	cycleState,
 	type FloatingAction,
 	type InterfaceValues,
+	isInherited,
+	isShown,
 	ROWS,
+	readSetting,
 	type Section,
 	type SettingsContext,
 	type SwitchDef,
-	cycleState,
-	isInherited,
-	isShown,
-	readSetting,
 	settingPatch,
 	stepTextScale
 } from './interfaceSettingDefs';
-
-const action = 'text-muted-foreground hover:text-foreground text-xs transition-colors';
 
 /**
  * Ports common/InterfaceSettings.svelte: every interface preference, grouped
@@ -136,16 +135,17 @@ export function InterfaceSettings({
 				{(id) => (
 					<div className="flex items-center gap-1.5">
 						{manage && (
-							<button
+							<Button
+								variant="ghost"
+								size="xs"
 								type="button"
-								className={action}
 								aria-label={
 									def.special === 'floatingActions' ? 'Manage Floating Quick Actions' : 'Manage Image Compression'
 								}
 								onClick={manage}
 							>
 								Manage
-							</button>
+							</Button>
 						)}
 						<span
 							className={cn(inherited(def.key) && 'opacity-60')}
@@ -164,15 +164,16 @@ export function InterfaceSettings({
 		return (
 			<SettingRow key={def.key} label={def.label} description={def.description}>
 				{(id) => (
-					<button
+					<Button
+						variant="ghost"
+						size="xs"
 						type="button"
-						className={action}
 						aria-labelledby={id}
 						aria-description={option.label}
 						onClick={() => set(def.key, next)}
 					>
 						{option.label}
-					</button>
+					</Button>
 				)}
 			</SettingRow>
 		);
@@ -183,9 +184,10 @@ export function InterfaceSettings({
 			return (
 				<div key={id}>
 					<SettingRow label="UI Scale" description="Set a local zoom level for the app interface.">
-						<button
+						<Button
+							variant="ghost"
+							size="xs"
 							type="button"
-							className={action}
 							aria-label={`UI Scale: ${scaleIsDefault ? 'Default' : `${textScale}x`}`}
 							onClick={() => {
 								if (scaleIsDefault) {
@@ -199,18 +201,19 @@ export function InterfaceSettings({
 							}}
 						>
 							{scaleIsDefault ? 'Default' : `${textScale}x`}
-						</button>
+						</Button>
 					</SettingRow>
 					{!scaleIsDefault && textScale !== null && (
 						<div className="flex items-center gap-2 px-1 pt-1.5">
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
-								className="hover:bg-muted rounded-lg p-1"
 								aria-label="Decrease UI Scale"
 								onClick={() => setScale(stepTextScale(textScale, -0.1))}
 							>
 								<Minus className="size-3.5" />
-							</button>
+							</Button>
 							<input
 								className="flex-1"
 								type="range"
@@ -224,14 +227,15 @@ export function InterfaceSettings({
 									set('textScale', Number(e.target.value));
 								}}
 							/>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
-								className="hover:bg-muted rounded-lg p-1"
 								aria-label="Increase UI Scale"
 								onClick={() => setScale(stepTextScale(textScale, 0.1))}
 							>
 								<Plus className="size-3.5" />
-							</button>
+							</Button>
 						</div>
 					)}
 				</div>
@@ -241,9 +245,10 @@ export function InterfaceSettings({
 			return (
 				<div key={id}>
 					<SettingRow label="Font Family" description="Use a local font family for the app interface.">
-						<button
+						<Button
+							variant="ghost"
+							size="xs"
 							type="button"
-							className={action}
 							aria-label={`Font Family: ${fontIsDefault ? 'Default' : 'Custom'}`}
 							onClick={() => {
 								if (fontIsDefault) {
@@ -260,7 +265,7 @@ export function InterfaceSettings({
 							}}
 						>
 							{fontIsDefault ? 'Default' : 'Custom'}
-						</button>
+						</Button>
 					</SettingRow>
 					{!fontIsDefault && (
 						<input
@@ -290,14 +295,15 @@ export function InterfaceSettings({
 				label="Chat Background Image"
 				description="Upload or reset the image shown behind chat content."
 			>
-				<button
+				<Button
+					variant="ghost"
+					size="xs"
 					type="button"
-					className={action}
 					aria-label={backgroundImageUrl ? 'Reset Chat Background Image' : 'Upload Chat Background Image'}
 					onClick={() => (backgroundImageUrl ? set('backgroundImageUrl', null) : fileInput.current?.click())}
 				>
 					{backgroundImageUrl ? 'Reset' : 'Upload'}
-				</button>
+				</Button>
 			</SettingRow>
 		);
 	};

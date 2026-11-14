@@ -1,5 +1,7 @@
+import { cn } from 'cn';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { Button } from '@/components/ui/button';
 
 /**
  * The search box + filter cluster every workspace list opens with (the same
@@ -22,21 +24,16 @@ export function ListSearchBar({
 			<div className="flex min-w-0 flex-1 items-center">
 				<Search className="text-muted-foreground mr-3 ml-1 size-3.5" />
 				<input
-					className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+					className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
 					aria-label={placeholder}
 					placeholder={placeholder}
 				/>
 				{value && (
-					<button
-						type="button"
-						className="hover:bg-muted rounded-full p-0.5 transition"
-						aria-label="Clear search"
-						onClick={() => onChange('')}
-					>
+					<Button variant="ghost" size="icon-xs" type="button" aria-label="Clear search" onClick={() => onChange('')}>
 						<X className="size-3" strokeWidth={2} />
-					</button>
+					</Button>
 				)}
 			</div>
 			<div className="flex max-w-[55%] shrink-0 overflow-x-auto">
@@ -61,10 +58,10 @@ export function SortHeaderButton({
 	className: string;
 }) {
 	return (
-		<button type="button" className={className} onClick={onClick}>
+		<Button variant="ghost" size="sm" className={cn('justify-start', className)} type="button" onClick={onClick}>
 			{label}
 			{active && (direction === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" />)}
-		</button>
+		</Button>
 	);
 }
 
