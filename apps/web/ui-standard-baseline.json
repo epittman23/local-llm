@@ -119,7 +119,6 @@
 			"src/components/settings/personal/Personalization.tsx": 1,
 			"src/routes/admin/analytics/ChartLine.tsx": 1,
 			"src/routes/admin/evaluations/Leaderboard.tsx": 1,
-			"src/routes/admin/functions/FunctionsPage.tsx": 1,
 			"src/routes/admin/settings/ArenaModelModal.tsx": 1,
 			"src/routes/admin/settings/Authentication.tsx": 1,
 			"src/routes/admin/settings/Connections.tsx": 1,

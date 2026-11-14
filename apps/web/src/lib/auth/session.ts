@@ -81,10 +81,16 @@ const stopTokenTimer = () => {
 	}
 };
 
-/** Clears the session and signs out, as if the token had expired server-side. */
+/**
+ * Clears the session and signs out, as if the token had expired server-side.
+ * Also while the session is still being restored: a stored token the server
+ * refuses on a cold load is a session that ran out too, and the sign-in page
+ * says so (FBK-1). Someone who never signed in has no token, so never sees it.
+ */
 export const clearExpiredSession = () => {
 	// Already signed out (e.g. several 401s at once): nothing left to clear.
-	if (useAuthStore.getState().status !== 'authenticated') return;
+	const { status } = useAuthStore.getState();
+	if (status === 'anonymous' || (status === 'pending' && !localStorage.getItem('token'))) return;
 
 	stopTokenTimer();
 	// Before the session is cleared: clearing it is what wakes the route gate.

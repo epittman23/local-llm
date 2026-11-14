@@ -89,6 +89,47 @@ describe('a session that runs out (#1061)', () => {
 		expect(sessionEndReason()).toBeNull();
 	});
 
+	it('marks a saved token the server refuses on a cold load as an expired session', async () => {
+		// A fresh page load: no session yet, and no reason left from an earlier one.
+		await signOut();
+		localStorage.setItem('token', 'saved-token');
+		useAuthStore.setState({ status: 'pending', token: null, user: null });
+		route(async () => json({ detail: 'Your session has expired or the token is invalid.' }, 401));
+
+		await initAuth();
+
+		expect(sessionEndReason()).toBe('expired');
+		expect(useAuthStore.getState().status).toBe('anonymous');
+		expect(localStorage.getItem('token')).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('says nothing about expiry to someone who never signed in', async () => {
+		await signOut();
+		localStorage.clear();
+		useAuthStore.setState({ status: 'pending', token: null, user: null });
+		route(async () => json({ detail: 'Not authenticated' }, 401));
+
+		await initAuth();
+
+		expect(sessionEndReason()).toBeNull();
+		expect(useAuthStore.getState().status).toBe('anonymous');
+	});
+
+	it('does not call a server it could not reach an expired session', async () => {
+		await signOut();
+		localStorage.setItem('token', 'saved-token');
+		useAuthStore.setState({ status: 'pending', token: null, user: null });
+		route(async () => {
+			throw new TypeError('Failed to fetch');
+		});
+
+		await initAuth();
+
+		expect(sessionEndReason()).toBeNull();
+		expect(localStorage.getItem('token')).toBe('saved-token');
+	});
+
 	it('marks a request refused for an expired session, through the fetch guard', async () => {
 		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
 		await initAuth();

@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ListSearchBar } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -111,6 +112,8 @@ function Automations() {
 	});
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ['automations'] });
 	const items = list.data?.items ?? [];
+	// A list that did not load is a failure, not an empty list (STA-4).
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 
 	const toggle = async (a: AutomationResponse) => {
 		const res = await toggleAutomationById(token, a.id).catch((err) => void toast.error(`${err}`));
@@ -258,7 +261,9 @@ function Automations() {
 					</DropdownMenu>
 				</ListSearchBar>
 
-				{list.isLoading ? (
+				{failed ? (
+					<LoadFailed what="automations" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+				) : list.isLoading ? (
 					<div className="flex min-h-[calc(100dvh-13rem)] items-center justify-center">
 						<Spinner className="size-5" />
 					</div>
