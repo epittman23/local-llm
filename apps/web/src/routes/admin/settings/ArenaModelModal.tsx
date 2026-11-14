@@ -15,6 +15,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
 import { type ArenaModel, arenaIdFromName, buildArenaModel } from './arenaModels';
 
+// The stored value that means "no picture of its own"; the avatar draws the initials for it.
 const FALLBACK_IMAGE = `${WEBUI_BASE_URL}/favicon.png`;
 
 type ModelInfo = { id: string; name: string; owned_by?: string };

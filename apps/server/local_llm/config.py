@@ -109,8 +109,8 @@ except Exception:
     pass
 
 # Fork change: fall back to the frontend's source public/static when there is
-# no build yet (`make backend` + `make frontend` in a fresh clone), so
-# /static/favicon.png -- the model-avatar fallback -- still exists
+# no build yet (`make backend` + `make frontend` in a fresh clone), so what it
+# holds (the user-import CSV template) is served even then
 # (docs/history/bug-review-2026-09-27.md L14). FRONTEND_BUILD_DIR is apps/web/dist.
 FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR / 'static'
 if not FRONTEND_STATIC_DIR.exists() and (FRONTEND_BUILD_DIR.parent / 'public' / 'static').exists():
@@ -125,24 +125,10 @@ for file_path in FRONTEND_STATIC_DIR.glob('**/*'):
         except Exception as e:
             logging.error(f'An error occurred: {e}')
 
-# The default avatar (profile/image falls back to {STATIC_DIR}/user.png) lives
-# at the frontend's root, not under static/, so the loop above never copied it
-# and every default avatar was a 500 (#299). The build first, then the source.
-for default_avatar in (FRONTEND_BUILD_DIR / 'user.png', FRONTEND_BUILD_DIR.parent / 'public' / 'user.png'):
-    if default_avatar.exists():
-        try:
-            shutil.copyfile(default_avatar, STATIC_DIR / 'user.png')
-        except Exception as e:
-            logging.error(f'An error occurred: {e}')
-        break
-
-frontend_favicon = FRONTEND_STATIC_DIR / 'favicon.png'
-
-if frontend_favicon.exists():
-    try:
-        shutil.copyfile(frontend_favicon, STATIC_DIR / 'favicon.png')
-    except Exception as e:
-        logging.error(f'An error occurred: {e}')
+# There is no default avatar or model picture to copy: since decision D1
+# (2026-11-14) the picture endpoints answer 404 for a model or user without
+# one, and the frontend draws initials, so Open WebUI's user.png and
+# favicon.png are gone.
 
 frontend_splash = FRONTEND_STATIC_DIR / 'splash.png'
 
