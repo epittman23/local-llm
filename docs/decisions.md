@@ -7,7 +7,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-11-13** (later): **Jupyter and Pyodide are removed; the per-chat
+- **2026-11-14**: **Jupyter and Pyodide are removed; the per-chat
   microVM sandbox is the only code interpreter (step 3 of
   [the sandbox proposal](history/sandbox-code-interpreter.md), PR #889,
   after steps 1 and 2 merged as #886, #884 and #888).** This entry adds
