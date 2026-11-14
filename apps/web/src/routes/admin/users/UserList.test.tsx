@@ -79,7 +79,7 @@ describe('UserList', () => {
 
 	it('opens the edit dialog from the role button', async () => {
 		await renderList();
-		fireEvent.click(screen.getAllByRole('button', { name: 'Change User Role' })[1]);
+		fireEvent.click(screen.getByRole('button', { name: 'Role: user, change' }));
 		expect(await screen.findByText('Edit User', { selector: '[role="dialog"] *' })).toBeTruthy();
 	});
 
@@ -105,5 +105,27 @@ describe('UserList', () => {
 		fireEvent.change(box, { target: { value: 'be' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 		expect(box.value).toBe('');
+	});
+});
+
+describe('UserList table (#987, #1062)', () => {
+	it('names each role button by the role it shows and what it does', async () => {
+		await renderList();
+		expect(screen.getByRole('button', { name: 'Role: admin, change' })).toHaveTextContent('admin');
+		expect(screen.getByRole('button', { name: 'Role: user, change' })).toHaveTextContent('user');
+	});
+
+	it('gives the actions column a header a screen reader can read', async () => {
+		await renderList();
+		expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
+	});
+
+	it('sits in the shared table container, labelled, with the dates left out on a phone', async () => {
+		await renderList();
+		const table = screen.getByRole('table', { name: 'Users' });
+		expect(table.parentElement).toHaveAttribute('data-slot', 'table-container');
+		expect(screen.getByRole('columnheader', { name: /Last Active/ }).className).toContain('hidden md:table-cell');
+		expect(screen.getByRole('columnheader', { name: /Created at/ }).className).toContain('hidden md:table-cell');
+		expect(screen.getByRole('columnheader', { name: /Name/ }).className).not.toContain('hidden');
 	});
 });

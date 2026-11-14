@@ -8,11 +8,13 @@ import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Table } from '@/components/ui/table';
 import { deleteUserById, getUsers } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { AddUserModal } from './AddUserModal';
@@ -26,6 +28,9 @@ const roleClass = (role: string) =>
 	role === 'admin' ? 'text-brand' : role === 'user' ? 'text-foreground' : 'text-muted-foreground';
 
 type UserRow = AdminUser & { id: string };
+
+/** The columns a phone leaves out (DAT-6). */
+const LOW_PRIORITY = new Set(['last_active_at', 'created_at']);
 
 /**
  * Ports admin/Users/UserList.svelte: the paginated, sortable, searchable user
@@ -162,143 +167,149 @@ export function UserList() {
 						</div>
 					</div>
 
-					<div className="relative max-w-full overflow-x-auto whitespace-nowrap">
-						<table className="text-muted-foreground w-full max-w-full table-auto text-left text-sm">
-							<thead className="text-foreground bg-transparent text-xs uppercase">
-								<tr className="border-b">
-									{(
-										[
-											['name', 'Name'],
-											['role', 'Role'],
-											['email', 'Email'],
-											['last_active_at', 'Last Active'],
-											['created_at', 'Created at']
-										] as const
-									).map(([key, label]) => (
-										<th key={key} scope="col" className={th} aria-sort={sortState(key)}>
-											<SortHeaderButton
-												label={label}
-												active={orderBy === key}
-												direction={direction}
-												className={thButton}
-												onClick={() => setSortKey(key)}
-											/>
-										</th>
-									))}
-									<th scope="col" className="px-2.5 py-1.5 text-right font-normal" />
-								</tr>
-							</thead>
-							<tbody>
-								{users.map((user) => (
-									<tr key={user.id} className="text-xs">
-										<td className="text-foreground max-w-48 px-3 py-1 font-normal">
-											<div className="flex items-center gap-2">
-												<img
-													className="size-5.5 shrink-0 rounded-full object-cover"
-													src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-													alt="user"
-													onError={(e) => {
-														e.currentTarget.src = '/favicon.png';
-													}}
-												/>
-												<div className="truncate font-normal">{user.name}</div>
-												{user.last_active_at && Date.now() / 1000 - user.last_active_at < 180 && (
-													<span className="relative flex size-1.5" title="Active now">
-														<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-														<span className="relative inline-flex size-1.5 rounded-full bg-success" />
-													</span>
-												)}
-											</div>
-										</td>
-										<td className="w-20 min-w-[5rem] px-3 py-1">
-											<Button
-												variant="ghost"
-												size="xs"
-												className={`capitalize ${roleClass(user.role)}`}
-												type="button"
-												aria-label="Change User Role"
-												onClick={() => {
-													setSelected(user);
-													setShowEdit(true);
+					<Table aria-label="Users" className="text-muted-foreground max-w-full table-auto text-left whitespace-nowrap">
+						<thead className="text-foreground bg-transparent text-xs uppercase">
+							<tr className="border-b">
+								{(
+									[
+										['name', 'Name'],
+										['role', 'Role'],
+										['email', 'Email'],
+										['last_active_at', 'Last Active'],
+										['created_at', 'Created at']
+									] as const
+								).map(([key, label]) => (
+									<th
+										key={key}
+										scope="col"
+										// On a phone the dates give way to the name, role and actions (DAT-6).
+										className={cn(th, LOW_PRIORITY.has(key) && 'hidden md:table-cell')}
+										aria-sort={sortState(key)}
+									>
+										<SortHeaderButton
+											label={label}
+											active={orderBy === key}
+											direction={direction}
+											className={thButton}
+											onClick={() => setSortKey(key)}
+										/>
+									</th>
+								))}
+								<th scope="col" className="px-2.5 py-1.5 text-right font-normal">
+									<span className="sr-only">Actions</span>
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{users.map((user) => (
+								<tr key={user.id} className="text-xs">
+									<td className="text-foreground max-w-48 px-3 py-1 font-normal">
+										<div className="flex items-center gap-2">
+											<img
+												className="size-5.5 shrink-0 rounded-full object-cover"
+												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
+												alt="user"
+												onError={(e) => {
+													e.currentTarget.src = '/favicon.png';
 												}}
-											>
-												{user.role}
-											</Button>
-										</td>
-										<td className="max-w-48 truncate px-3 py-1">{user.email}</td>
-										<td className="px-3 py-1">{dayjs(user.last_active_at * 1000).fromNow()}</td>
-										<td className="px-3 py-1">{dayjs(user.created_at * 1000).format('LL')}</td>
-										<td className="px-3 py-1 text-right">
-											<div className="flex w-full justify-end">
-												{config?.features?.enable_admin_chat_access && user.role !== 'admin' && (
-													<Tip content="Chats">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															type="button"
-															aria-label="Chats"
-															onClick={() => {
-																setSelected(user);
-																setShowChats(true);
-															}}
-														>
-															<MessageSquare className="size-3.5" />
-														</Button>
-													</Tip>
-												)}
-												{user.role !== 'admin' && (
-													<Tip content="Preview Access">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															type="button"
-															aria-label="Preview Access"
-															onClick={() => {
-																setSelected(user);
-																setShowPreview(true);
-															}}
-														>
-															<Eye className="size-3.5" />
-														</Button>
-													</Tip>
-												)}
-												<Tip content="Edit User">
+											/>
+											<div className="truncate font-normal">{user.name}</div>
+											{user.last_active_at && Date.now() / 1000 - user.last_active_at < 180 && (
+												<span className="relative flex size-1.5" title="Active now">
+													<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+													<span className="relative inline-flex size-1.5 rounded-full bg-success" />
+												</span>
+											)}
+										</div>
+									</td>
+									<td className="w-20 min-w-[5rem] px-3 py-1">
+										<Button
+											variant="ghost"
+											size="xs"
+											className={`capitalize ${roleClass(user.role)}`}
+											type="button"
+											aria-label={`Role: ${user.role}, change`}
+											onClick={() => {
+												setSelected(user);
+												setShowEdit(true);
+											}}
+										>
+											{user.role}
+										</Button>
+									</td>
+									<td className="max-w-48 truncate px-3 py-1">{user.email}</td>
+									<td className="hidden px-3 py-1 md:table-cell">{dayjs(user.last_active_at * 1000).fromNow()}</td>
+									<td className="hidden px-3 py-1 md:table-cell">{dayjs(user.created_at * 1000).format('LL')}</td>
+									<td className="px-3 py-1 text-right">
+										<div className="flex w-full justify-end">
+											{config?.features?.enable_admin_chat_access && user.role !== 'admin' && (
+												<Tip content="Chats">
 													<Button
 														variant="ghost"
 														size="icon-sm"
 														type="button"
-														aria-label="Edit User"
+														aria-label="Chats"
 														onClick={() => {
 															setSelected(user);
-															setShowEdit(true);
+															setShowChats(true);
 														}}
 													>
-														<Pencil className="size-3.5" />
+														<MessageSquare className="size-3.5" />
 													</Button>
 												</Tip>
-												{user.role !== 'admin' && (
-													<Tip content="Delete User">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															type="button"
-															aria-label="Delete User"
-															onClick={() => {
-																setSelected(user);
-																setShowDelete(true);
-															}}
-														>
-															<Trash2 className="size-3.5" />
-														</Button>
-													</Tip>
-												)}
-											</div>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+											)}
+											{user.role !== 'admin' && (
+												<Tip content="Preview Access">
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														type="button"
+														aria-label="Preview Access"
+														onClick={() => {
+															setSelected(user);
+															setShowPreview(true);
+														}}
+													>
+														<Eye className="size-3.5" />
+													</Button>
+												</Tip>
+											)}
+											<Tip content="Edit User">
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													type="button"
+													aria-label="Edit User"
+													onClick={() => {
+														setSelected(user);
+														setShowEdit(true);
+													}}
+												>
+													<Pencil className="size-3.5" />
+												</Button>
+											</Tip>
+											{user.role !== 'admin' && (
+												<Tip content="Delete User">
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														type="button"
+														aria-label="Delete User"
+														onClick={() => {
+															setSelected(user);
+															setShowDelete(true);
+														}}
+													>
+														<Trash2 className="size-3.5" />
+													</Button>
+												</Tip>
+											)}
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</Table>
 
 					<div className="text-muted-foreground mt-1.5 text-right text-xs">
 						ⓘ Click on the user role button to change a user's role.
