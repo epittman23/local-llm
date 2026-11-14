@@ -7,6 +7,21 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (later): **The backend pytest suite runs across four
+  pytest-xdist workers.** CI's "Backend (pytest)" job took 6 to 9.5 minutes,
+  almost all of it pytest on one process; the owner asked for 5 or less.
+  `pytest -n 4` (`PYTEST_WORKERS` in `ci.yml` and the Makefile) now runs it in
+  CI and `make test-backend`.
+  - Measured on 2026-11-14 with coverage, on a fresh Postgres and pinned to
+    4 cores like the `ubuntu-latest` runner: 435 s serially, 213 s at
+    `-n 4`, 224 s at `-n 6`. Half the serial wall time was spent waiting
+    (subprocess timeouts, sleeps), which is why it scales past 2x.
+  - Coverage holds: 40,965 lines covered in parallel against 40,948 serially,
+    of 61,509, so diff-cover's 80% bar on changed lines is unaffected.
+  - Tests must now hold in parallel: the same collected ids in every worker,
+    nothing mutable shared, no race a loaded machine loses (docs/guides/
+    testing.md). Two parametrize ids generated at collection time and one
+    sampler race were fixed to get there.
 - **2026-11-14**: **Jupyter and Pyodide are removed; the per-chat
   microVM sandbox is the only code interpreter (step 3 of
   [the sandbox proposal](history/sandbox-code-interpreter.md), PR #889,

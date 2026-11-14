@@ -21,7 +21,7 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
 | `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history); from a linked git worktree it also mounts the common git dir, so the scan sees the full history |
 | `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
-| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
+| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage, across `PYTEST_WORKERS` (4) pytest-xdist workers, and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check` (through `.github/scripts/astro_check.py`, which also fails a run that printed no summary: `astro check` exits 0 when it cannot load its checker), `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `CI=1 bun run test:e2e`: CI's command, with the `CI` variable CI sets (two retries, `test.only` fails the run) |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
@@ -323,6 +323,24 @@ LLLM_SECRET_KEY=<any string of 32 bytes or more> .venv/bin/python -m pytest test
 The package imports from the working directory, and refuses to load without
 a secret key. pytest comes from `pyproject.toml`'s `dev` dependency group,
 which `make backend`'s `uv sync` installs by default.
+
+CI and `make test-backend` run the suite across four pytest-xdist workers
+(`-n 4`; `PYTEST_WORKERS` in `ci.yml` and the Makefile). On 2026-11-14,
+with coverage, on a fresh Postgres and pinned to 4 cores (`taskset -c 0-3`,
+the `ubuntu-latest` runner's vCPU count), the suite took 213 s at `-n 4`,
+224 s at `-n 6` and 435 s serially. Since then the tests must hold in
+parallel:
+
+- **Collect the same ids in every process.** xdist refuses a run whose
+  workers collected different tests, so a parametrize id must not come from
+  a value generated at collection time (a fresh key, an object's default
+  `repr`). Give such cases fixed `ids=`.
+- **Share nothing mutable.** Tests on `TEST_DATABASE_URL` create their own
+  database or use rows keyed by a fresh uuid, and any of them can run
+  before, or during, `test_the_app_imports`'s migration of the shared one.
+- **Don't race a loaded machine.** Four workers on four cores slow every
+  subprocess down; a test that needs a background sampler or timer to fire
+  before a fake process exits has to make that process wait for it.
 
 One test, `test_imports.py::test_the_app_imports`, imports the whole app,
 which connects the default vector store (pgvector) and runs migrations. It
