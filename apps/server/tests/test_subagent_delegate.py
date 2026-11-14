@@ -84,7 +84,7 @@ def _case(
     parent_chat_id='parent-1',
     user=USER,
     config=None,
-    ci_engine='pyodide',
+    ci_engine='jupyter',  # stands for any stored non-sandbox engine
     world=None,
 ):
     return (
@@ -171,10 +171,17 @@ CASES = [
     # --- background ---
     _case('background_dispatched', background=True, config=ENABLED, world={'parent': DONE_PARENT}),
     _case(
-        'background_keeps_code_interpreter_on_jupyter',
+        'background_drops_code_interpreter_on_stored_jupyter',
         background=True,
         config=ENABLED,
         ci_engine='jupyter',
+        world={'parent': DONE_PARENT},
+    ),
+    _case(
+        'background_keeps_code_interpreter_on_sandbox',
+        background=True,
+        config=ENABLED,
+        ci_engine='sandbox',
         world={'parent': DONE_PARENT},
     ),
     _case('background_parent_busy', background=True, config=ENABLED, world={'parent': DONE_PARENT, 'active': True}),

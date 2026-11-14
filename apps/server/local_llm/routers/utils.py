@@ -7,13 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from starlette.responses import FileResponse
 
-from local_llm.config import ENABLE_ADMIN_EXPORT
+from local_llm.config import CODE_ENGINES, ENABLE_ADMIN_EXPORT
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.chats import ChatTitleMessagesForm
 from local_llm.models.config import Config
 from local_llm.utils.access_control import has_permission
 from local_llm.utils.auth import get_admin_user, get_verified_user
-from local_llm.utils.code_interpreter import execute_code_jupyter
 from local_llm.utils.misc import get_gravatar_url
 from local_llm.utils.pdf_generator import PDFGenerator
 
@@ -29,7 +28,7 @@ async def get_gravatar(email: str, user=Depends(get_verified_user)):
 
 class CodeForm(BaseModel):
     code: str
-    # The chat whose sandbox runs the code; required when the engine is `sandbox`, ignored otherwise.
+    # The chat whose sandbox runs the code: required by /code/execute (400 without it), ignored by /code/format.
     chat_id: str | None = None
 
 
@@ -52,32 +51,14 @@ async def execute_code(request: Request, form_data: CodeForm, user=Depends(get_v
             detail=ERROR_MESSAGES.FEATURE_DISABLED('Code execution'),
         )
 
-    engine = await Config.get('code_execution.engine')
-    if engine == 'sandbox':
+    # Only a live engine (the sandbox) runs code. A stored value outside CODE_ENGINES (only possible by editing the
+    # row by hand: the form, the import and the migration all write `sandbox`) is refused.
+    if await Config.get('code_execution.engine', 'sandbox') in CODE_ENGINES:
         return await _execute_in_sandbox(request, form_data, user)
-    if engine == 'jupyter':
-        output = await execute_code_jupyter(
-            await Config.get('code_execution.jupyter.url'),
-            form_data.code,
-            (
-                await Config.get('code_execution.jupyter.auth_token')
-                if await Config.get('code_execution.jupyter.auth') == 'token'
-                else None
-            ),
-            (
-                await Config.get('code_execution.jupyter.auth_password')
-                if await Config.get('code_execution.jupyter.auth') == 'password'
-                else None
-            ),
-            await Config.get('code_execution.jupyter.timeout'),
-        )
-
-        return output
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=ERROR_MESSAGES.DEFAULT('Code execution engine not supported'),
-        )
+    raise HTTPException(
+        status_code=400,
+        detail=ERROR_MESSAGES.DEFAULT('Code execution engine not supported'),
+    )
 
 
 async def _execute_in_sandbox(request: Request, form_data: CodeForm, user) -> dict:

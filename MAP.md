@@ -36,7 +36,7 @@ local-llm/
 │   ├── web/                   Astro + React + shadcn/ui frontend
 │   └── desktop/               Electron desktop app (Linux), loading the backend's pages
 ├── docs/                      decisions log, roadmap, guides, proposals, history
-└── infra/                     docker-compose for Postgres + pgvector, Redis, Jupyter and SearXNG
+└── infra/                     docker-compose for Postgres + pgvector, Redis, SearXNG and the sandbox mirror
 ```
 
 `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
@@ -116,10 +116,10 @@ Start here for "how do I run/use this."
   venv and offline model cache), `frontend.md` (`apps/web` dev server,
   build, rough edges), `model-downloads.md` (`hf download` commands for the
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
-  agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
+  agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter in brief,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
   sign-in on through environment variables), `sandbox.md` (the per-chat
-  microVM sandbox under construction; so far its Kata host setup, images,
+  microVM sandbox, the code interpreter: its Kata host setup, images,
   backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
@@ -131,26 +131,27 @@ Start here for "how do I run/use this."
   against this machine: fit, tool calls, uncensored variants, the exact
   Hugging Face file for each; analysis for the owner's decision);
   `sandbox-implementation.md` (the task-by-task build of the sandbox
-  proposal, with the committed ledger every session resumes from), and the
+  design, with the committed ledger every session resumes from), and the
   two session procedures that drive it: `sandbox-sessions-local.md` (the
   owner's laptop, with the oh-my-claudecode plugin) and
   `sandbox-sessions-cloud.md` (a hosted session from a fresh clone).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
-  server. `sandbox-code-interpreter.md`, the design for replacing
-  the Jupyter and Pyodide code interpreters with a per-chat microVM shell
-  sandbox (Kata Containers with Cloud Hypervisor), its images, package
-  mirror, telemetry and output rendering; every design question decided,
-  nothing built.
+  server. The sandbox proposal is built and lives in `history/` now;
+  `sandbox-code-interpreter.md` here is only a notice pointing there, kept
+  because the never-edited decisions entries and an applied migration link
+  to this path.
 - **`history/`** — completed records, kept because code comments cite them
   and not updated any more: `migration-plan.md` (the monorepo /
   shell-removal / Astro-frontend migration, complete 2026-09-27),
   `bug-review-2026-09-27.md` and `code-review.md` (reviews with a "Status"
   section mapping each finding to its fix), and the migration-era mapping
   docs `common-components-mapping.md` (where each SvelteKit `common/`
-  component landed) and `icons-mapping.md`; and `restructure-plan.md`, the
+  component landed) and `icons-mapping.md`; `restructure-plan.md`, the
   2026-10 restructure into one project (plan, decisions, and each phase's
-  PRs and verification).
+  PRs and verification); and `sandbox-code-interpreter.md`, the design of
+  the per-chat microVM sandbox that replaced the Jupyter and Pyodide code
+  interpreters (built; `docs/guides/sandbox.md` describes what exists).
 - **`audit/`** — the 2026-10-19 full-repository bug audit of `7a4088b`:
   `COVERAGE.md` (review units and what was covered), `FINDINGS.md` (each
   non-security finding with its issue number), `FIX_PLAN.md` (batches and
@@ -177,10 +178,10 @@ Infrastructure this repo runs but does not write.
   project name, so the pin keeps the data in `local-llm_postgres-data`
   however the directory moves. Role and database are both `local_llm`. (It
   was pinned as `open-web-ui` from 2026-09-14 until the 2026-10-10 rename;
-  see the file's own comment.) Since 2026-10-24 it also runs **Jupyter**
-  (the code interpreter's engine) and **SearXNG** (web search), each on its
-  own network so neither can reach Postgres or Redis; see
-  `docs/guides/assistant-tools.md`.
+  see the file's own comment.) Since 2026-10-24 it also runs **SearXNG** (web search) on its own network
+  so it cannot reach Postgres or Redis; see
+  `docs/guides/assistant-tools.md`. It ran **Jupyter** (the code
+  interpreter's engine) too until 2026-11-13.
   It also runs the code sandbox's **`sandbox-mirror`** (nginx serving the
   wheelhouse) on the `internal` `sandbox` network at a fixed address; see
   `docs/guides/sandbox.md` "Mirror and wheelhouse".
@@ -230,14 +231,13 @@ fork's pre-import history is kept read-only at
   models, including `models/benchmarks/`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, `sandbox/`
-  (the per-chat microVM sandbox, under construction on the sandbox branch:
-  so far its core types, the `SandboxBackend` protocol, the fixed limits,
+  (the per-chat microVM sandbox, the code interpreter: its core types, the `SandboxBackend` protocol, the fixed limits,
   command wrapping and output capping, the in-memory `FakeBackend` for
   tests, the `SandboxManager` (per-chat lifecycle, slots, sweeps), and
   `workspace.py`, the file tools' path confinement and guest helpers, whose
   in-guest half is `infra/sandbox/common/lllm-path`; its four tools,
   `bash`, `view`, `write_file` and `str_replace` in `tools/builtin.py`, are
-  offered under the `sandbox` engine; `kata.py`, `KataDockerBackend`, the
+  the code interpreter's tools; `kata.py`, `KataDockerBackend`, the
   backend that runs each chat in a Kata microVM through Docker, with its
   fixed-size workspace volumes; `lifespan.py`, which `main.py`'s
   lifespan uses to start and stop the manager; and `outputs.py`, which

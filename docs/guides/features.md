@@ -212,7 +212,7 @@ flowchart TB
 
   subgraph TOOLS["Builtin tools, run on the server"]
     direction TB
-    tCode["execute_code: Jupyter kernel, chat files copied in"]
+    tCode["bash, view, write_file, str_replace: the chat's sandbox microVM"]
     tWeb["search_web, fetch_url: SearXNG"]
     tKnow["knowledge and chat-file search: pgvector + reranker"]
     tMem["memory, notes, chats, channels, calendar, automations"]
@@ -254,11 +254,11 @@ flowchart TB
 - **Legacy function calling** (a per-model setting) instead runs web search
   and image generation up front, and lets a task model pick tool calls
   before the main request.
-- **The code interpreter** runs on the Jupyter engine (`127.0.0.1:8888`), in
-  a fresh kernel per block with the chat's uploaded files copied in. The
-  inherited Pyodide engine does not work in this app.
-  [assistant-tools.md](assistant-tools.md) covers Jupyter's sandbox,
-  SearXNG and the retrieval models.
+- **The code interpreter** runs in the chat's own sandbox microVM, which
+  keeps `/workspace` between calls and holds the chat's uploaded files
+  read-only. It is the only engine. [assistant-tools.md](assistant-tools.md)
+  covers it briefly, with SearXNG and the retrieval models;
+  [sandbox.md](sandbox.md) has the detail.
 
 ## The model harness
 
@@ -273,7 +273,7 @@ sequenceDiagram
   participant P as Chat pipeline
   participant G as upstream_trace guard
   participant L as llama-server :8090
-  participant C as Code interpreter: sandbox or Jupyter
+  participant C as Code interpreter: sandbox
   participant DB as Postgres
 
   T->>R: tier run or one item, with harness_model
@@ -282,8 +282,8 @@ sequenceDiagram
     L-->>R: answer and llama.cpp timings
   else harness_model set
     R->>H: prepare(model entry, port)
-    H->>C: sandbox manager ready and data image digest, or Jupyter liveness check
-    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or the engine is not ready
+    H->>C: sandbox manager ready and data image digest
+    H-->>R: HarnessRefused if the entry is not served by this llama-server, streams off, legacy calling, max_completion_tokens, or the sandbox is not ready
     R->>H: ask(item prompt)
     H->>P: process_chat_payload with the item's own temporary chat id and native calling
     P-->>H: tools offered
@@ -292,11 +292,11 @@ sequenceDiagram
       P->>G: upstream request
       G->>L: sent only if its host is 127.0.0.1 on the served port
       L-->>P: streamed reply, maybe a tool call
-      P->>C: bash, view, write_file or str_replace in the item's sandbox on the data image, or execute_code in a fresh Jupyter kernel
+      P->>C: bash, view, write_file or str_replace in the item's sandbox on the data image
       C-->>P: the tool's result
     end
     P-->>H: assistant message
-    H->>C: on the sandbox engine, release the item's ephemeral sandbox
+    H->>C: release the item's ephemeral sandbox
     H-->>R: text after the last code run, full output, harness_stats
     R->>R: spec read from the first upstream request, its sha is harness_sha
     R-->>T: run stops if the spec changes between items
@@ -313,22 +313,19 @@ A Tests run measures either the bare model or the assistant as deployed.
 - **Harness mode.** With `harness_model` set to a Workspace model entry,
   `benchmarks/evaluation/harness.py` sends each item through the chat
   pipeline above: the entry's system prompt and params, native function
-  calling, and the code interpreter on its configured engine, the sandbox
-  or (until it is removed) Jupyter. Each item gets its own `temporary:`
+  calling, and the code interpreter on the sandbox. Each item gets its own `temporary:`
   chat id, so no chat, title or memory is written, and the tools offered
-  are cut to the engine's code tools: `bash`, `view`, `write_file` and
-  `str_replace` on the sandbox, which runs every item on the `data` image
-  in an ephemeral sandbox released when the item ends; `execute_code` on
-  Jupyter. It measures the assistant.
+  are cut to the code tools: `bash`, `view`, `write_file` and
+  `str_replace`, run on the `data` image in an ephemeral sandbox released
+  when the item ends. It measures the assistant.
 
 What keeps a harness result trustworthy:
 
 - **It refuses before it starts** when the entry is not served by the
   `llama-server` being measured, its base model is missing, it turns
   streaming off, uses legacy function calling or sets
-  `max_completion_tokens`, or the engine is not ready: the sandbox has no
-  manager, is not ready or has no known `data` image digest, or Jupyter
-  does not answer.
+  `max_completion_tokens`, or the sandbox is not ready: no manager, not
+  ready, or no known `data` image digest.
 - **Every upstream request is checked** (`utils/upstream_trace.py`): one
   bound for anywhere but `127.0.0.1:<port>` is stopped before it is sent,
   and nothing is recorded.
@@ -351,9 +348,9 @@ Where it stands:
   and Compare and Report leave harness rows out until they group by
   `harness_sha`; both are planned in PR 2 of
   [the plan](../plans/benchmarks-through-the-app.md).
-- It needs a model that makes structured tool calls. On Jupyter
-  (2026-10-24), `qwen25c` wrote its `execute_code` call as JSON text, so no
-  code ran and a harness run on it measured the bare model plus the entry's
+- It needs a model that makes structured tool calls. On 2026-10-24, on
+  the Jupyter engine (since removed), `qwen25c` wrote its `execute_code`
+  call as JSON text, so no code ran and a harness run on it measured the bare model plus the entry's
   prompt; `qwen38` made the structured call. `harness_stats.code_runs`
   tells the two apart.
 

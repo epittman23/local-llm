@@ -290,7 +290,7 @@ def test_network_fence(backend: KataDockerBackend, keys: Keys) -> None:
         '        print("closed", t, e)\n'
         '    finally:\n'
         '        s.close()\n'
-        'for n in ("pypi.org", "postgres", "redis", "jupyter", "host.docker.internal"):\n'
+        'for n in ("pypi.org", "postgres", "redis", "host.docker.internal"):\n'
         '    try:\n'
         '        print("RESOLVED", n, socket.gethostbyname(n))\n'
         '    except OSError:\n'

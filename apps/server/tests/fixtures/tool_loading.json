@@ -2180,12 +2180,50 @@
     ]
    ],
    [
-    "execute_code",
-    "builtin:execute_code",
+    "bash",
+    "builtin:bash",
     "builtin",
     [
      "__chat_id__",
-     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view",
+    "builtin:view",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_file",
+    "builtin:write_file",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "str_replace",
+    "builtin:str_replace",
+    "builtin",
+    [
+     "__chat_id__",
      "__event_emitter__",
      "__message_id__",
      "__metadata__",
@@ -5121,12 +5159,50 @@
     ]
    ],
    [
-    "execute_code",
-    "builtin:execute_code",
+    "bash",
+    "builtin:bash",
     "builtin",
     [
      "__chat_id__",
-     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view",
+    "builtin:view",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_file",
+    "builtin:write_file",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "str_replace",
+    "builtin:str_replace",
+    "builtin",
+    [
+     "__chat_id__",
      "__event_emitter__",
      "__message_id__",
      "__metadata__",
@@ -5568,12 +5644,50 @@
     ]
    ],
    [
-    "execute_code",
-    "builtin:execute_code",
+    "bash",
+    "builtin:bash",
     "builtin",
     [
      "__chat_id__",
-     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view",
+    "builtin:view",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_file",
+    "builtin:write_file",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "str_replace",
+    "builtin:str_replace",
+    "builtin",
+    [
+     "__chat_id__",
      "__event_emitter__",
      "__message_id__",
      "__metadata__",

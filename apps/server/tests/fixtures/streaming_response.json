@@ -30258,7 +30258,7 @@
    ]
   ]
  },
- "stream:code_interpreter_pyodide": {
+ "stream:code_interpreter_sandbox_stderr_and_outputs": {
   "returned": null,
   "assistant_message": {
    "content": "Running: <code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>It printed 1",
@@ -30288,8 +30288,9 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "line\n![Output Image](/files/ci-image)",
-      "result": "![Output Image](/files/ci-image)\nplain"
+      "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+      "stderr": "",
+      "result": ""
      },
      "started_at": 1000.0,
      "ended_at": 1003.0,
@@ -30297,7 +30298,7 @@
     },
     {
      "type": "message",
-     "id": "msg_000000000000000000000005",
+     "id": "msg_000000000000000000000004",
      "status": "completed",
      "role": "assistant",
      "content": [
@@ -30335,6 +30336,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -30389,62 +30394,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "print(1)",
-      "session_id": "sess",
-      "files": []
-     }
-    }
-   ],
-   [
-    "get_image_url_from_base64",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     "data:image/png;base64,AA",
-     {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "session_id": "sess",
-      "tools": {}
-     },
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "get_image_url_from_base64",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     "data:image/png;base64,BB",
-     {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "session_id": "sess",
-      "tools": {}
-     },
-     "<user u1>"
-    ],
-    {}
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -30477,8 +30431,9 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "line\n![Output Image](/files/ci-image)",
-         "result": "![Output Image](/files/ci-image)\nplain"
+         "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+         "stderr": "",
+         "result": ""
         },
         "started_at": 1000.0,
         "ended_at": 1003.0,
@@ -30486,7 +30441,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -30511,7 +30466,7 @@
       },
       {
        "role": "assistant",
-       "content": "Running: \n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nline\n![Output Image](/files/ci-image)\n</code_interpreter_output>"
+       "content": "Running: \n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nline\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -30536,7 +30491,7 @@
      "type": "response:completion",
      "data": {
       "type": "response.output_text.delta",
-      "item_id": "msg_000000000000000000000005",
+      "item_id": "msg_000000000000000000000004",
       "output_index": 2,
       "content_index": 0,
       "delta": "It printed 1"
@@ -30596,8 +30551,9 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "line\n![Output Image](/files/ci-image)",
-        "result": "![Output Image](/files/ci-image)\nplain"
+        "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+        "stderr": "",
+        "result": ""
        },
        "started_at": 1000.0,
        "ended_at": 1003.0,
@@ -30605,7 +30561,7 @@
       },
       {
        "type": "message",
-       "id": "msg_000000000000000000000005",
+       "id": "msg_000000000000000000000004",
        "status": "completed",
        "role": "assistant",
        "content": [
@@ -30651,8 +30607,9 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "line\n![Output Image](/files/ci-image)",
-         "result": "![Output Image](/files/ci-image)\nplain"
+         "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+         "stderr": "",
+         "result": ""
         },
         "started_at": 1000.0,
         "ended_at": 1003.0,
@@ -30660,7 +30617,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "completed",
         "role": "assistant",
         "content": [
@@ -30740,8 +30697,9 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "line\n![Output Image](/files/ci-image)",
-          "result": "![Output Image](/files/ci-image)\nplain"
+          "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+          "stderr": "",
+          "result": ""
          },
          "started_at": 1000.0,
          "ended_at": 1003.0,
@@ -30749,7 +30707,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000005",
+         "id": "msg_000000000000000000000004",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -30830,8 +30788,9 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "line\n![Output Image](/files/ci-image)",
-          "result": "![Output Image](/files/ci-image)\nplain"
+          "stdout": "line\n[stderr]\na warning\n[Attached to the reply: plot.png]\n[New in /workspace/outputs, not attached: notes.txt]",
+          "stderr": "",
+          "result": ""
          },
          "started_at": 1000.0,
          "ended_at": 1003.0,
@@ -30839,7 +30798,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000005",
+         "id": "msg_000000000000000000000004",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -30857,7 +30816,7 @@
    ]
   ]
  },
- "stream:code_interpreter_jupyter_token": {
+ "stream:code_interpreter_sandbox": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -30875,7 +30834,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "jupyter ran",
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -30937,6 +30897,10 @@
     {}
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -30964,55 +30928,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_token"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     "http://jup.test",
-     "\nimport builtins\n\nBLOCKED_MODULES = ['os']\n\n_real_import = builtins.__import__\ndef restricted_import(name, globals=None, locals=None, fromlist=(), level=0):\n    if name.split('.')[0] in BLOCKED_MODULES:\n        importer_name = globals.get('__name__') if globals else None\n        if importer_name == '__main__':\n            raise ImportError(\n                f\"Direct import of module {name} is restricted.\"\n            )\n    return _real_import(name, globals, locals, fromlist, level)\n\nbuiltins.__import__ = restricted_import\n\nprint(1)",
-     "tok",
-     null,
-     30
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31033,7 +30953,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31067,7 +30988,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31104,7 +31025,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31116,55 +31038,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_token"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     "http://jup.test",
-     "\nimport builtins\n\nBLOCKED_MODULES = ['os']\n\n_real_import = builtins.__import__\ndef restricted_import(name, globals=None, locals=None, fromlist=(), level=0):\n    if name.split('.')[0] in BLOCKED_MODULES:\n        importer_name = globals.get('__name__') if globals else None\n        if importer_name == '__main__':\n            raise ImportError(\n                f\"Direct import of module {name} is restricted.\"\n            )\n    return _real_import(name, globals, locals, fromlist, level)\n\nbuiltins.__import__ = restricted_import\n\nprint(1)",
-     "tok",
-     null,
-     30
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31185,7 +31063,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31219,7 +31098,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31277,7 +31156,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "jupyter ran",
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -31320,7 +31200,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31396,7 +31277,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31473,7 +31355,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31500,7 +31383,7 @@
    ]
   ]
  },
- "stream:code_interpreter_jupyter_password": {
+ "stream:code_interpreter_sandbox_failure": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -31518,7 +31401,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "jupyter ran",
+      "stdout": "The sandbox is not available on this server",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -31567,6 +31451,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -31594,55 +31482,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_password"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     null,
-     "print(1)",
-     null,
-     "pw",
-     null
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31663,7 +31507,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "The sandbox is not available on this server",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31697,7 +31542,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nThe sandbox is not available on this server\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31766,7 +31611,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "jupyter ran",
+        "stdout": "The sandbox is not available on this server",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -31809,7 +31655,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "The sandbox is not available on this server",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31885,7 +31732,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "The sandbox is not available on this server",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31962,7 +31810,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "The sandbox is not available on this server",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31989,7 +31838,499 @@
    ]
   ]
  },
+ "stream:code_interpreter_stored_jupyter_engine": {
+  "returned": null,
+  "assistant_message": {
+   "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+   "output": [
+    {
+     "type": "message",
+     "id": "msg_000000000000000000000001",
+     "status": "completed",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+      }
+     ]
+    }
+   ]
+  },
+  "calls": [
+   [
+    "get_system_oauth_token",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "get_filter_functions",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     {
+      "id": "m1",
+      "info": {
+       "meta": {}
+      }
+     },
+     []
+    ],
+    {}
+   ],
+   [
+    "config_get",
+    "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
+    "emit",
+    {
+     "type": "response:completion",
+     "data": {
+      "type": "response.output_text.delta",
+      "item_id": "msg_000000000000000000000001",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+     }
+    }
+   ],
+   [
+    "clear_response_stream",
+    [
+     "<redis>",
+     "a1"
+    ],
+    {}
+   ],
+   [
+    "publish_chat_finished_event",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>",
+     {
+      "message_id": "a1",
+      "chat_id": "",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "features": {
+       "code_interpreter": true
+      },
+      "tools": {}
+     },
+     "",
+     "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+     [
+      {
+       "type": "message",
+       "id": "msg_000000000000000000000001",
+       "status": "completed",
+       "role": "assistant",
+       "content": [
+        {
+         "type": "output_text",
+         "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+        }
+       ]
+      }
+     ]
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:completion",
+     "data": {
+      "done": true,
+      "output": [
+       {
+        "type": "message",
+        "id": "msg_000000000000000000000001",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "output_text",
+          "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+         }
+        ]
+       }
+      ],
+      "title": ""
+     }
+    }
+   ],
+   [
+    "outlet_filter_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ],
+   [
+    "background_tasks_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ]
+  ]
+ },
  "stream:code_interpreter_unconfigured_engine": {
+  "returned": null,
+  "assistant_message": {
+   "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+   "output": [
+    {
+     "type": "message",
+     "id": "msg_000000000000000000000001",
+     "status": "completed",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+      }
+     ]
+    }
+   ]
+  },
+  "calls": [
+   [
+    "get_system_oauth_token",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "get_filter_functions",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     {
+      "id": "m1",
+      "info": {
+       "meta": {}
+      }
+     },
+     []
+    ],
+    {}
+   ],
+   [
+    "config_get",
+    "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
+    "emit",
+    {
+     "type": "response:completion",
+     "data": {
+      "type": "response.output_text.delta",
+      "item_id": "msg_000000000000000000000001",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+     }
+    }
+   ],
+   [
+    "clear_response_stream",
+    [
+     "<redis>",
+     "a1"
+    ],
+    {}
+   ],
+   [
+    "publish_chat_finished_event",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>",
+     {
+      "message_id": "a1",
+      "chat_id": "",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "features": {
+       "code_interpreter": true
+      },
+      "tools": {}
+     },
+     "",
+     "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+     [
+      {
+       "type": "message",
+       "id": "msg_000000000000000000000001",
+       "status": "completed",
+       "role": "assistant",
+       "content": [
+        {
+         "type": "output_text",
+         "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+        }
+       ]
+      }
+     ]
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:completion",
+     "data": {
+      "done": true,
+      "output": [
+       {
+        "type": "message",
+        "id": "msg_000000000000000000000001",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "output_text",
+          "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+         }
+        ]
+       }
+      ],
+      "title": ""
+     }
+    }
+   ],
+   [
+    "outlet_filter_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ],
+   [
+    "background_tasks_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ]
+  ]
+ },
+ "stream:code_interpreter_sandbox_stderr_and_timeout": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -32007,7 +32348,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "Code interpreter engine not configured.",
+      "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -32056,6 +32398,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -32083,8 +32429,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -32105,7 +32454,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "Code interpreter engine not configured.",
+         "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -32139,452 +32489,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nCode interpreter engine not configured.\n</code_interpreter_output>"
-      }
-     ],
-     "stream": true,
-     "metadata": {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     }
-    },
-    true
-   ],
-   [
-    "clear_response_stream",
-    [
-     "<redis>",
-     "a1"
-    ],
-    {}
-   ],
-   [
-    "publish_chat_finished_event",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     "<user u1>",
-     {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     },
-     "",
-     "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
-     [
-      {
-       "type": "open_webui:code_interpreter",
-       "id": "ci_000000000000000000000002",
-       "status": "completed",
-       "start_tag": "<code_interpreter>",
-       "end_tag": "</code_interpreter>",
-       "attributes": {
-        "type": "code",
-        "lang": "python"
-       },
-       "lang": "python",
-       "code": "print(1)",
-       "output": {
-        "stdout": "Code interpreter engine not configured.",
-        "result": ""
-       },
-       "started_at": 1000.0,
-       "ended_at": 1003.0,
-       "duration": 3
-      },
-      {
-       "type": "message",
-       "id": "msg_000000000000000000000004",
-       "status": "completed",
-       "role": "assistant",
-       "content": [
-        {
-         "type": "output_text",
-         "text": ""
-        }
-       ]
-      }
-     ]
-    ],
-    {}
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "done": true,
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": "Code interpreter engine not configured.",
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
-        "type": "message",
-        "id": "msg_000000000000000000000004",
-        "status": "completed",
-        "role": "assistant",
-        "content": [
-         {
-          "type": "output_text",
-          "text": ""
-         }
-        ]
-       }
-      ],
-      "title": ""
-     }
-    }
-   ],
-   [
-    "outlet_filter_handler",
-    [
-     {
-      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-      "form_data": {
-       "model": "m1",
-       "messages": [
-        {
-         "role": "user",
-         "content": "q?"
-        }
-       ]
-      },
-      "user": "<user u1>",
-      "model": {
-       "id": "m1",
-       "info": {
-        "meta": {}
-       }
-      },
-      "metadata": {
-       "message_id": "a1",
-       "chat_id": "",
-       "params": {
-        "function_calling": "legacy"
-       },
-       "features": {
-        "code_interpreter": true
-       },
-       "tools": {}
-      },
-      "events": [],
-      "event_emitter": "<callable event_emitter>",
-      "event_caller": "<callable event_caller>",
-      "tasks": {},
-      "assistant_message": {
-       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
-       "output": [
-        {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000002",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": "Code interpreter engine not configured.",
-          "result": ""
-         },
-         "started_at": 1000.0,
-         "ended_at": 1003.0,
-         "duration": 3
-        },
-        {
-         "type": "message",
-         "id": "msg_000000000000000000000004",
-         "status": "completed",
-         "role": "assistant",
-         "content": [
-          {
-           "type": "output_text",
-           "text": ""
-          }
-         ]
-        }
-       ]
-      }
-     }
-    ],
-    {}
-   ],
-   [
-    "background_tasks_handler",
-    [
-     {
-      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-      "form_data": {
-       "model": "m1",
-       "messages": [
-        {
-         "role": "user",
-         "content": "q?"
-        }
-       ]
-      },
-      "user": "<user u1>",
-      "model": {
-       "id": "m1",
-       "info": {
-        "meta": {}
-       }
-      },
-      "metadata": {
-       "message_id": "a1",
-       "chat_id": "",
-       "params": {
-        "function_calling": "legacy"
-       },
-       "features": {
-        "code_interpreter": true
-       },
-       "tools": {}
-      },
-      "events": [],
-      "event_emitter": "<callable event_emitter>",
-      "event_caller": "<callable event_caller>",
-      "tasks": {},
-      "assistant_message": {
-       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
-       "output": [
-        {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000002",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": "Code interpreter engine not configured.",
-          "result": ""
-         },
-         "started_at": 1000.0,
-         "ended_at": 1003.0,
-         "duration": 3
-        },
-        {
-         "type": "message",
-         "id": "msg_000000000000000000000004",
-         "status": "completed",
-         "role": "assistant",
-         "content": [
-          {
-           "type": "output_text",
-           "text": ""
-          }
-         ]
-        }
-       ]
-      }
-     }
-    ],
-    {}
-   ]
-  ]
- },
- "stream:code_interpreter_error_output": {
-  "returned": null,
-  "assistant_message": {
-   "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
-   "output": [
-    {
-     "type": "open_webui:code_interpreter",
-     "id": "ci_000000000000000000000002",
-     "status": "completed",
-     "start_tag": "<code_interpreter>",
-     "end_tag": "</code_interpreter>",
-     "attributes": {
-      "type": "code",
-      "lang": "python"
-     },
-     "lang": "python",
-     "code": "print(1)",
-     "output": {
-      "stderr": "session disconnected",
-      "stdout": "",
-      "result": ""
-     },
-     "started_at": 1000.0,
-     "ended_at": 1003.0,
-     "duration": 3
-    },
-    {
-     "type": "message",
-     "id": "msg_000000000000000000000005",
-     "status": "completed",
-     "role": "assistant",
-     "content": [
-      {
-       "type": "output_text",
-       "text": ""
-      }
-     ]
-    }
-   ]
-  },
-  "calls": [
-   [
-    "get_system_oauth_token",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "get_filter_functions",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     {
-      "id": "m1",
-      "info": {
-       "meta": {}
-      }
-     },
-     []
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.enable"
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "in_progress",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": null,
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       }
-      ]
-     }
-    }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stderr": "session disconnected",
-         "stdout": "",
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
-        "type": "message",
-        "id": "msg_000000000000000000000005",
-        "status": "in_progress",
-        "role": "assistant",
-        "content": [
-         {
-          "type": "output_text",
-          "text": ""
-         }
-        ]
-       }
-      ]
-     }
-    }
-   ],
-   [
-    "generate_chat_completion",
-    {
-     "model": "m1",
-     "messages": [
-      {
-       "role": "user",
-       "content": "q?"
-      },
-      {
-       "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -32653,8 +32558,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stderr": "session disconnected",
-        "stdout": "",
+        "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -32663,7 +32568,7 @@
       },
       {
        "type": "message",
-       "id": "msg_000000000000000000000005",
+       "id": "msg_000000000000000000000004",
        "status": "completed",
        "role": "assistant",
        "content": [
@@ -32697,8 +32602,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stderr": "session disconnected",
-         "stdout": "",
+         "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -32707,7 +32612,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "completed",
         "role": "assistant",
         "content": [
@@ -32774,8 +32679,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stderr": "session disconnected",
-          "stdout": "",
+          "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -32784,7 +32689,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000005",
+         "id": "msg_000000000000000000000004",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -32852,8 +32757,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stderr": "session disconnected",
-          "stdout": "",
+          "stdout": "\n[stderr]\nTraceback: session disconnected\n[The code was stopped at its time limit.]",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -32862,7 +32767,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000005",
+         "id": "msg_000000000000000000000004",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -32880,7 +32785,7 @@
    ]
   ]
  },
- "stream:code_interpreter_caller_raises": {
+ "stream:code_interpreter_sandbox_runner_raises": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -32898,7 +32803,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "",
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -32907,7 +32813,7 @@
     },
     {
      "type": "message",
-     "id": "msg_000000000000000000000007",
+     "id": "msg_000000000000000000000005",
      "status": "completed",
      "role": "assistant",
      "content": [
@@ -32947,6 +32853,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -32974,20 +32884,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -33007,14 +32908,14 @@
         },
         "lang": "python",
         "code": "print(1)",
-        "output": "pyodide crashed",
+        "output": "sandbox crashed",
         "started_at": 1000.0,
         "ended_at": 1003.0,
         "duration": 3
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -33039,7 +32940,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\npyodide crashed\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox crashed\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -33075,7 +32976,7 @@
         },
         "lang": "python",
         "code": "print(1)",
-        "output": "pyodide crashed",
+        "output": "sandbox crashed",
         "started_at": 1000.0,
         "ended_at": 1003.0,
         "duration": 3
@@ -33085,20 +32986,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000006')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -33119,7 +33011,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -33128,7 +33021,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -33153,7 +33046,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -33211,7 +33104,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "",
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -33220,7 +33114,7 @@
       },
       {
        "type": "message",
-       "id": "msg_000000000000000000000007",
+       "id": "msg_000000000000000000000005",
        "status": "completed",
        "role": "assistant",
        "content": [
@@ -33254,7 +33148,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -33263,7 +33158,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "completed",
         "role": "assistant",
         "content": [
@@ -33330,7 +33225,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -33339,7 +33235,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -33407,7 +33303,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -33416,7 +33313,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -33495,6 +33392,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -34456,7 +34357,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": 5,
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -34465,7 +34367,7 @@
     },
     {
      "type": "open_webui:code_interpreter",
-     "id": "ci_000000000000000000000006",
+     "id": "ci_000000000000000000000005",
      "status": "completed",
      "start_tag": "<code_interpreter>",
      "end_tag": "</code_interpreter>",
@@ -34476,7 +34378,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": 5,
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1006.0,
@@ -34485,7 +34388,7 @@
     },
     {
      "type": "open_webui:code_interpreter",
-     "id": "ci_00000000000000000000000a",
+     "id": "ci_000000000000000000000008",
      "status": "completed",
      "start_tag": "<code_interpreter>",
      "end_tag": "</code_interpreter>",
@@ -34496,11 +34399,33 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": 5,
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1012.0,
      "ended_at": 1015.0,
+     "duration": 3
+    },
+    {
+     "type": "open_webui:code_interpreter",
+     "id": "ci_00000000000000000000000b",
+     "status": "completed",
+     "start_tag": "<code_interpreter>",
+     "end_tag": "</code_interpreter>",
+     "attributes": {
+      "type": "code",
+      "lang": "python"
+     },
+     "lang": "python",
+     "code": "print(1)",
+     "output": {
+      "stdout": "sandbox ran",
+      "stderr": "",
+      "result": ""
+     },
+     "started_at": 1018.0,
+     "ended_at": 1021.0,
      "duration": 3
     },
     {
@@ -34516,27 +34441,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": 5,
-      "result": ""
-     },
-     "started_at": 1018.0,
-     "ended_at": 1021.0,
-     "duration": 3
-    },
-    {
-     "type": "open_webui:code_interpreter",
-     "id": "ci_000000000000000000000012",
-     "status": "completed",
-     "start_tag": "<code_interpreter>",
-     "end_tag": "</code_interpreter>",
-     "attributes": {
-      "type": "code",
-      "lang": "python"
-     },
-     "lang": "python",
-     "code": "print(1)",
-     "output": {
-      "stdout": 5,
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1024.0,
@@ -34545,7 +34451,7 @@
     },
     {
      "type": "open_webui:code_interpreter",
-     "id": "ci_000000000000000000000016",
+     "id": "ci_000000000000000000000011",
      "status": "completed",
      "start_tag": "<code_interpreter>",
      "end_tag": "</code_interpreter>",
@@ -34590,6 +34496,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "filter",
     "stream",
     {
@@ -34630,20 +34540,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -34664,7 +34565,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -34673,7 +34575,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -34699,7 +34601,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -34727,7 +34629,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -34778,7 +34680,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -34787,7 +34690,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "in_progress",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -34807,20 +34710,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000008')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -34841,7 +34735,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -34850,7 +34745,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -34861,7 +34756,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -34870,7 +34766,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000009",
+        "id": "msg_000000000000000000000007",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -34896,7 +34792,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -34924,7 +34820,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -34975,7 +34871,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -34984,7 +34881,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -34995,7 +34892,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -35004,7 +34902,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
+        "id": "ci_000000000000000000000008",
         "status": "in_progress",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35024,19 +34922,167 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
-    "call",
+    "emit",
     {
-     "type": "execute:python",
+     "type": "chat:completion",
      "data": {
-      "id": "namespace(hex='00000000000000000000000c')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
+      "output": [
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000002",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1000.0,
+        "ended_at": 1003.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000005",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1006.0,
+        "ended_at": 1009.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000008",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1012.0,
+        "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "message",
+        "id": "msg_00000000000000000000000a",
+        "status": "in_progress",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "output_text",
+          "text": ""
+         }
+        ]
+       }
+      ]
      }
+    }
+   ],
+   [
+    "filter",
+    "request",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "role": "user",
+       "content": "q?"
+      },
+      {
+       "role": "assistant",
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
+      }
+     ],
+     "stream": true,
+     "metadata": {
+      "message_id": "a1",
+      "chat_id": "",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "features": {
+       "code_interpreter": true
+      },
+      "tools": {}
+     }
+    }
+   ],
+   [
+    "generate_chat_completion",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "role": "user",
+       "content": "q?"
+      },
+      {
+       "role": "assistant",
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
+      }
+     ],
+     "stream": true,
+     "metadata": {
+      "message_id": "a1",
+      "chat_id": "",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "features": {
+       "code_interpreter": true
+      },
+      "tools": {}
+     },
+     "filtered": "request"
+    },
+    true
+   ],
+   [
+    "filter",
+    "stream",
+    {
+     "choices": [
+      {
+       "delta": {
+        "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+       }
+      }
+     ]
     }
    ],
    [
@@ -35058,7 +35104,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -35067,7 +35114,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35078,7 +35125,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -35087,7 +35135,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
+        "id": "ci_000000000000000000000008",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35098,11 +35146,130 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1012.0,
         "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_00000000000000000000000b",
+        "status": "in_progress",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": null,
+        "started_at": 1018.0,
+        "ended_at": 1021.0,
+        "duration": 3
+       }
+      ]
+     }
+    }
+   ],
+   [
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:completion",
+     "data": {
+      "output": [
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000002",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1000.0,
+        "ended_at": 1003.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000005",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1006.0,
+        "ended_at": 1009.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_000000000000000000000008",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1012.0,
+        "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_00000000000000000000000b",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1018.0,
+        "ended_at": 1021.0,
         "duration": 3
        },
        {
@@ -35133,7 +35300,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -35161,7 +35328,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -35212,7 +35379,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -35221,7 +35389,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35232,7 +35400,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -35241,7 +35410,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
+        "id": "ci_000000000000000000000008",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35252,11 +35421,33 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1012.0,
         "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_00000000000000000000000b",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1018.0,
+        "ended_at": 1021.0,
         "duration": 3
        },
        {
@@ -35272,8 +35463,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": null,
-        "started_at": 1018.0,
-        "ended_at": 1021.0,
+        "started_at": 1024.0,
+        "ended_at": 1027.0,
         "duration": 3
        }
       ]
@@ -35281,20 +35472,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000010')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -35315,7 +35497,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -35324,7 +35507,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35335,7 +35518,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -35344,7 +35528,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
+        "id": "ci_000000000000000000000008",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35355,11 +35539,33 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1012.0,
         "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_00000000000000000000000b",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1018.0,
+        "ended_at": 1021.0,
         "duration": 3
        },
        {
@@ -35375,16 +35581,17 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
-        "started_at": 1018.0,
-        "ended_at": 1021.0,
+        "started_at": 1024.0,
+        "ended_at": 1027.0,
         "duration": 3
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000011",
+        "id": "msg_000000000000000000000010",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -35410,7 +35617,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -35438,324 +35645,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
-      }
-     ],
-     "stream": true,
-     "metadata": {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     },
-     "filtered": "request"
-    },
-    true
-   ],
-   [
-    "filter",
-    "stream",
-    {
-     "choices": [
-      {
-       "delta": {
-        "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
-       }
-      }
-     ]
-    }
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1006.0,
-        "ended_at": 1009.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1012.0,
-        "ended_at": 1015.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000e",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1018.0,
-        "ended_at": 1021.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000012",
-        "status": "in_progress",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": null,
-        "started_at": 1024.0,
-        "ended_at": 1027.0,
-        "duration": 3
-       }
-      ]
-     }
-    }
-   ],
-   [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000014')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1006.0,
-        "ended_at": 1009.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1012.0,
-        "ended_at": 1015.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000e",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1018.0,
-        "ended_at": 1021.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000012",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1024.0,
-        "ended_at": 1027.0,
-        "duration": 3
-       },
-       {
-        "type": "message",
-        "id": "msg_000000000000000000000015",
-        "status": "in_progress",
-        "role": "assistant",
-        "content": [
-         {
-          "type": "output_text",
-          "text": ""
-         }
-        ]
-       }
-      ]
-     }
-    }
-   ],
-   [
-    "filter",
-    "request",
-    {
-     "model": "m1",
-     "messages": [
-      {
-       "role": "user",
-       "content": "q?"
-      },
-      {
-       "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
-      }
-     ],
-     "stream": true,
-     "metadata": {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     }
-    }
-   ],
-   [
-    "generate_chat_completion",
-    {
-     "model": "m1",
-     "messages": [
-      {
-       "role": "user",
-       "content": "q?"
-      },
-      {
-       "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n5\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>\n<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -35827,7 +35717,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": 5,
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -35836,7 +35727,7 @@
       },
       {
        "type": "open_webui:code_interpreter",
-       "id": "ci_000000000000000000000006",
+       "id": "ci_000000000000000000000005",
        "status": "completed",
        "start_tag": "<code_interpreter>",
        "end_tag": "</code_interpreter>",
@@ -35847,7 +35738,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": 5,
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1006.0,
@@ -35856,7 +35748,7 @@
       },
       {
        "type": "open_webui:code_interpreter",
-       "id": "ci_00000000000000000000000a",
+       "id": "ci_000000000000000000000008",
        "status": "completed",
        "start_tag": "<code_interpreter>",
        "end_tag": "</code_interpreter>",
@@ -35867,11 +35759,33 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": 5,
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1012.0,
        "ended_at": 1015.0,
+       "duration": 3
+      },
+      {
+       "type": "open_webui:code_interpreter",
+       "id": "ci_00000000000000000000000b",
+       "status": "completed",
+       "start_tag": "<code_interpreter>",
+       "end_tag": "</code_interpreter>",
+       "attributes": {
+        "type": "code",
+        "lang": "python"
+       },
+       "lang": "python",
+       "code": "print(1)",
+       "output": {
+        "stdout": "sandbox ran",
+        "stderr": "",
+        "result": ""
+       },
+       "started_at": 1018.0,
+       "ended_at": 1021.0,
        "duration": 3
       },
       {
@@ -35887,27 +35801,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": 5,
-        "result": ""
-       },
-       "started_at": 1018.0,
-       "ended_at": 1021.0,
-       "duration": 3
-      },
-      {
-       "type": "open_webui:code_interpreter",
-       "id": "ci_000000000000000000000012",
-       "status": "completed",
-       "start_tag": "<code_interpreter>",
-       "end_tag": "</code_interpreter>",
-       "attributes": {
-        "type": "code",
-        "lang": "python"
-       },
-       "lang": "python",
-       "code": "print(1)",
-       "output": {
-        "stdout": 5,
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1024.0,
@@ -35916,7 +35811,7 @@
       },
       {
        "type": "open_webui:code_interpreter",
-       "id": "ci_000000000000000000000016",
+       "id": "ci_000000000000000000000011",
        "status": "completed",
        "start_tag": "<code_interpreter>",
        "end_tag": "</code_interpreter>",
@@ -35955,7 +35850,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -35964,7 +35860,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000006",
+        "id": "ci_000000000000000000000005",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35975,7 +35871,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1006.0,
@@ -35984,7 +35881,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_00000000000000000000000a",
+        "id": "ci_000000000000000000000008",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -35995,11 +35892,33 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1012.0,
         "ended_at": 1015.0,
+        "duration": 3
+       },
+       {
+        "type": "open_webui:code_interpreter",
+        "id": "ci_00000000000000000000000b",
+        "status": "completed",
+        "start_tag": "<code_interpreter>",
+        "end_tag": "</code_interpreter>",
+        "attributes": {
+         "type": "code",
+         "lang": "python"
+        },
+        "lang": "python",
+        "code": "print(1)",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
+        "started_at": 1018.0,
+        "ended_at": 1021.0,
         "duration": 3
        },
        {
@@ -36015,27 +35934,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": 5,
-         "result": ""
-        },
-        "started_at": 1018.0,
-        "ended_at": 1021.0,
-        "duration": 3
-       },
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000012",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": 5,
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1024.0,
@@ -36044,7 +35944,7 @@
        },
        {
         "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000016",
+        "id": "ci_000000000000000000000011",
         "status": "completed",
         "start_tag": "<code_interpreter>",
         "end_tag": "</code_interpreter>",
@@ -36116,7 +36016,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -36125,7 +36026,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000006",
+         "id": "ci_000000000000000000000005",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -36136,7 +36037,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1006.0,
@@ -36145,7 +36047,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_00000000000000000000000a",
+         "id": "ci_000000000000000000000008",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -36156,11 +36058,33 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1012.0,
          "ended_at": 1015.0,
+         "duration": 3
+        },
+        {
+         "type": "open_webui:code_interpreter",
+         "id": "ci_00000000000000000000000b",
+         "status": "completed",
+         "start_tag": "<code_interpreter>",
+         "end_tag": "</code_interpreter>",
+         "attributes": {
+          "type": "code",
+          "lang": "python"
+         },
+         "lang": "python",
+         "code": "print(1)",
+         "output": {
+          "stdout": "sandbox ran",
+          "stderr": "",
+          "result": ""
+         },
+         "started_at": 1018.0,
+         "ended_at": 1021.0,
          "duration": 3
         },
         {
@@ -36176,27 +36100,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
-          "result": ""
-         },
-         "started_at": 1018.0,
-         "ended_at": 1021.0,
-         "duration": 3
-        },
-        {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000012",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1024.0,
@@ -36205,7 +36110,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000016",
+         "id": "ci_000000000000000000000011",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -36278,7 +36183,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -36287,7 +36193,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000006",
+         "id": "ci_000000000000000000000005",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -36298,7 +36204,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1006.0,
@@ -36307,7 +36214,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_00000000000000000000000a",
+         "id": "ci_000000000000000000000008",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -36318,11 +36225,33 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1012.0,
          "ended_at": 1015.0,
+         "duration": 3
+        },
+        {
+         "type": "open_webui:code_interpreter",
+         "id": "ci_00000000000000000000000b",
+         "status": "completed",
+         "start_tag": "<code_interpreter>",
+         "end_tag": "</code_interpreter>",
+         "attributes": {
+          "type": "code",
+          "lang": "python"
+         },
+         "lang": "python",
+         "code": "print(1)",
+         "output": {
+          "stdout": "sandbox ran",
+          "stderr": "",
+          "result": ""
+         },
+         "started_at": 1018.0,
+         "ended_at": 1021.0,
          "duration": 3
         },
         {
@@ -36338,27 +36267,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": 5,
-          "result": ""
-         },
-         "started_at": 1018.0,
-         "ended_at": 1021.0,
-         "duration": 3
-        },
-        {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000012",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": 5,
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1024.0,
@@ -36367,7 +36277,7 @@
         },
         {
          "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000016",
+         "id": "ci_000000000000000000000011",
          "status": "completed",
          "start_tag": "<code_interpreter>",
          "end_tag": "</code_interpreter>",
@@ -38409,7 +38319,8 @@
      "lang": "python",
      "code": "x = 1",
      "output": {
-      "stdout": "",
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -38418,7 +38329,7 @@
     },
     {
      "type": "message",
-     "id": "msg_000000000000000000000007",
+     "id": "msg_000000000000000000000005",
      "status": "completed",
      "role": "assistant",
      "content": [
@@ -38456,6 +38367,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -38510,20 +38425,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "x = 1",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "x = 1",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -38542,14 +38448,18 @@
         },
         "lang": "python",
         "code": "x = 1",
-        "output": "plain string output",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
         "started_at": 1000.0,
         "ended_at": 1003.0,
         "duration": 3
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -38574,7 +38484,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nx = 1\n</code_interpreter>\n<code_interpreter_output>\nplain string output\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nx = 1\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -38609,7 +38519,11 @@
         },
         "lang": "python",
         "code": "x = 1",
-        "output": "plain string output",
+        "output": {
+         "stdout": "sandbox ran",
+         "stderr": "",
+         "result": ""
+        },
         "started_at": 1000.0,
         "ended_at": 1003.0,
         "duration": 3
@@ -38619,20 +38533,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000006')",
-      "code": "x = 1",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "x = 1",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -38652,7 +38557,8 @@
         "lang": "python",
         "code": "x = 1",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -38661,7 +38567,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -38686,7 +38592,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nx = 1\n</code_interpreter>"
+       "content": "<code_interpreter>\nx = 1\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -38743,7 +38649,8 @@
        "lang": "python",
        "code": "x = 1",
        "output": {
-        "stdout": "",
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -38752,7 +38659,7 @@
       },
       {
        "type": "message",
-       "id": "msg_000000000000000000000007",
+       "id": "msg_000000000000000000000005",
        "status": "completed",
        "role": "assistant",
        "content": [
@@ -38785,7 +38692,8 @@
         "lang": "python",
         "code": "x = 1",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -38794,7 +38702,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "completed",
         "role": "assistant",
         "content": [
@@ -38860,7 +38768,8 @@
          "lang": "python",
          "code": "x = 1",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -38869,7 +38778,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -38936,7 +38845,8 @@
          "lang": "python",
          "code": "x = 1",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -38945,7 +38855,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -38981,7 +38891,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "",
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -38990,7 +38901,7 @@
     },
     {
      "type": "message",
-     "id": "msg_000000000000000000000007",
+     "id": "msg_000000000000000000000005",
      "status": "completed",
      "role": "assistant",
      "content": [
@@ -39030,6 +38941,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -39057,40 +38972,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000004')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
-   ],
-   [
-    "get_image_url_from_base64",
-    [
-     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
-     "data:image/png;base64,ZZ",
-     {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     },
-     "<user u1>"
-    ],
-    {}
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -39111,10 +38997,9 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "data:image/png;base64,ZZ",
-         "result": {
-          "not": "text"
-         }
+         "stdout": "data:image/png;base64,ZZ\n[Attached to the reply: a.csv]\n[Not attached: big.bin (too large)]",
+         "stderr": "",
+         "result": ""
         },
         "started_at": 1000.0,
         "ended_at": 1003.0,
@@ -39122,7 +39007,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000005",
+        "id": "msg_000000000000000000000004",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -39147,7 +39032,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\ndata:image/png;base64,ZZ\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\ndata:image/png;base64,ZZ\n[Attached to the reply: a.csv]\n[Not attached: big.bin (too large)]\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -39184,10 +39069,9 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "data:image/png;base64,ZZ",
-         "result": {
-          "not": "text"
-         }
+         "stdout": "data:image/png;base64,ZZ\n[Attached to the reply: a.csv]\n[Not attached: big.bin (too large)]",
+         "stderr": "",
+         "result": ""
         },
         "started_at": 1000.0,
         "ended_at": 1003.0,
@@ -39198,20 +39082,11 @@
     }
    ],
    [
-    "config_get",
-    "code_interpreter.engine"
-   ],
-   [
-    "call",
-    {
-     "type": "execute:python",
-     "data": {
-      "id": "namespace(hex='000000000000000000000006')",
-      "code": "print(1)",
-      "session_id": null,
-      "files": []
-     }
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -39232,7 +39107,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -39241,7 +39117,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "in_progress",
         "role": "assistant",
         "content": [
@@ -39266,7 +39142,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -39324,7 +39200,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "",
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -39333,7 +39210,7 @@
       },
       {
        "type": "message",
-       "id": "msg_000000000000000000000007",
+       "id": "msg_000000000000000000000005",
        "status": "completed",
        "role": "assistant",
        "content": [
@@ -39367,7 +39244,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -39376,7 +39254,7 @@
        },
        {
         "type": "message",
-        "id": "msg_000000000000000000000007",
+        "id": "msg_000000000000000000000005",
         "status": "completed",
         "role": "assistant",
         "content": [
@@ -39443,7 +39321,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -39452,7 +39331,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [
@@ -39520,7 +39399,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -39529,7 +39409,7 @@
         },
         {
          "type": "message",
-         "id": "msg_000000000000000000000007",
+         "id": "msg_000000000000000000000005",
          "status": "completed",
          "role": "assistant",
          "content": [

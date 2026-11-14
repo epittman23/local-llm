@@ -142,7 +142,7 @@ backend:
 		echo "make backend: infra/.env is missing:$$missing (WEBUI_SECRET_KEY was renamed LLLM_SECRET_KEY on 2026-10-10)" >&2; \
 		exit 1; \
 	fi; \
-	for key in JUPYTER_TOKEN SEARXNG_SECRET; do \
+	for key in SEARXNG_SECRET; do \
 		if ! grep -q "^$$key=." "$$envfile"; then \
 			[ -z "$$(tail -c1 "$$envfile")" ] || echo >> "$$envfile"; \
 			echo "$$key=$$(openssl rand -hex 32)" >> "$$envfile"; \
@@ -152,24 +152,24 @@ backend:
 	set -a; source "$$envfile"; set +a; \
 	already="$$($(COMPOSE) ps --services --status running 2>/dev/null || true)"; \
 	started=""; \
-	for svc in postgres redis jupyter searxng sandbox-mirror; do \
+	for svc in postgres redis searxng sandbox-mirror; do \
 		case " $$(echo $$already) " in *" $$svc "*) ;; *) started="$$started $$svc" ;; esac; \
 	done; \
 	stop_services() { \
 		if [ -z "$$already" ]; then \
-			echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down; \
+			echo "==> Stopping Postgres and Redis, SearXNG and the sandbox mirror"; $(COMPOSE) down; \
 		elif [ -n "$$started" ]; then \
 			echo "make backend: stopping only the services this run started:$$started"; \
 			$(COMPOSE) rm -f -s $$started; \
 		else \
-			echo "make backend: leaving Postgres, Redis, Jupyter and SearXNG running; they were running before this run"; \
+			echo "make backend: leaving Postgres, Redis, SearXNG and the sandbox mirror running; they were running before this run"; \
 		fi; \
 	}; \
 	trap stop_services EXIT; \
 	mkdir -p "$(DATA_DIR)/sandbox/wheelhouse"; \
 	export LLLM_SANDBOX_WHEELHOUSE="$(DATA_DIR)/sandbox/wheelhouse"; \
-	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
-	$(COMPOSE) up -d postgres redis jupyter searxng sandbox-mirror; \
+	echo "==> Starting Postgres and Redis, SearXNG and the sandbox mirror"; \
+	$(COMPOSE) up -d postgres redis searxng sandbox-mirror; \
 	$(COMPOSE) up -d --wait --wait-timeout 120 postgres; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \

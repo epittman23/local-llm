@@ -2990,7 +2990,252 @@
    }
   }
  },
- "background_keeps_code_interpreter_on_jupyter": {
+ "background_drops_code_interpreter_on_stored_jupyter": {
+  "returned": "{\"status\": \"dispatched\", \"delegation_id\": \"deleg_00000000\", \"subagent_chat_id\": \"00000000-0000-0000-0000-000000000002\", \"mode\": \"background\", \"task\": \"Summarize the report\"}",
+  "background_task": [
+   {
+    "result": {
+     "status": "completed",
+     "summary": "The report says sales grew.",
+     "error": null
+    }
+   }
+  ],
+  "background_slots_left": [],
+  "semaphore_free": null,
+  "calls": [
+   [
+    "insert_chat",
+    "00000000-0000-0000-0000-000000000002",
+    "u1",
+    {
+     "id": "00000000-0000-0000-0000-000000000002",
+     "title": "Sub-agent: Summarize the report",
+     "models": [
+      "qwen"
+     ],
+     "history": {
+      "currentId": "00000000-0000-0000-0000-000000000004",
+      "messages": {
+       "00000000-0000-0000-0000-000000000003": {
+        "id": "00000000-0000-0000-0000-000000000003",
+        "parentId": null,
+        "childrenIds": [
+         "00000000-0000-0000-0000-000000000004"
+        ],
+        "role": "user",
+        "content": "Summarize the report",
+        "timestamp": 1000,
+        "models": [
+         "qwen"
+        ]
+       },
+       "00000000-0000-0000-0000-000000000004": {
+        "id": "00000000-0000-0000-0000-000000000004",
+        "parentId": "00000000-0000-0000-0000-000000000003",
+        "childrenIds": [],
+        "role": "assistant",
+        "content": "",
+        "done": false,
+        "model": "qwen",
+        "timestamp": 1000
+       }
+      }
+     },
+     "messages": [
+      {
+       "role": "user",
+       "content": "Summarize the report"
+      }
+     ],
+     "files": []
+    },
+    {
+     "internal": true,
+     "type": "subagent",
+     "parent_chat_id": "parent-1",
+     "parent_message_id": "pm-1",
+     "delegation_id": "deleg_00000000",
+     "mode": "background"
+    }
+   ],
+   [
+    "completion",
+    {
+     "internal": true,
+     "max_tool_call_iterations": 30,
+     "form_data": {
+      "model": "qwen",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Parent rules.\n\nYou are a sub-agent working on a specific task assigned by the lead agent.\n\nYou have full access to the workspace — you can read, write, edit files, and run commands.\nFocus exclusively on your assigned task. Do NOT work on anything outside your scope.\n\nWhen done, end with a clear summary:\n- What you did\n- What files you changed (if any)\n- Any issues or open questions\n"
+       },
+       {
+        "role": "user",
+        "content": "Summarize the report"
+       }
+      ],
+      "stream": true,
+      "chat_id": "00000000-0000-0000-0000-000000000002",
+      "id": "00000000-0000-0000-0000-000000000004",
+      "parent_id": null,
+      "user_message": {
+       "id": "00000000-0000-0000-0000-000000000003",
+       "parentId": null,
+       "childrenIds": [
+        "00000000-0000-0000-0000-000000000004"
+       ],
+       "role": "user",
+       "content": "Summarize the report",
+       "timestamp": 1000,
+       "models": [
+        "qwen"
+       ]
+      },
+      "session_id": "sess-1",
+      "background_tasks": {},
+      "tool_ids": [
+       "web"
+      ],
+      "skill_ids": [
+       "s1"
+      ],
+      "filter_ids": [
+       "flt"
+      ],
+      "features": {
+       "web_search": true
+      },
+      "files": [],
+      "variables": {
+       "{{X}}": "y"
+      },
+      "terminal_id": "term-1"
+     },
+     "user": "u1"
+    }
+   ],
+   [
+    "select_parent",
+    true
+   ],
+   [
+    "has_active_tasks",
+    "parent-1"
+   ],
+   [
+    "commit"
+   ],
+   [
+    "upsert_chat_message",
+    "00000000-0000-0000-0000-000000000005",
+    "parent-1",
+    "u1",
+    {
+     "id": "00000000-0000-0000-0000-000000000005",
+     "parentId": "a2",
+     "childrenIds": [],
+     "role": "user",
+     "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: completed   Duration: 0.0s\n--- RESULT ---\nThe report says sales grew.",
+     "model": "qwen",
+     "meta": {
+      "internal": true,
+      "type": "subagent",
+      "delegation_id": "deleg_00000000",
+      "subagent_chat_id": "00000000-0000-0000-0000-000000000002"
+     },
+     "timestamp": 1000
+    }
+   ],
+   [
+    "has_active_tasks",
+    "parent-1"
+   ],
+   [
+    "process_pending",
+    "parent-1",
+    "u1",
+    {
+     "model_id": "qwen",
+     "session_id": "sess-1",
+     "tool_ids": [
+      "web"
+     ],
+     "skill_ids": [
+      "s1"
+     ],
+     "system_prompt": "Parent rules.",
+     "tool_servers": [],
+     "filter_ids": [
+      "flt"
+     ],
+     "terminal_id": "term-1",
+     "features": {
+      "web_search": true
+     },
+     "files": [],
+     "variables": {
+      "{{X}}": "y"
+     },
+     "direct": false
+    }
+   ]
+  ],
+  "parent_after": {
+   "history": {
+    "messages": {
+     "m1": {
+      "id": "m1",
+      "role": "user",
+      "childrenIds": [
+       "a1"
+      ],
+      "timestamp": 1
+     },
+     "a1": {
+      "id": "a1",
+      "role": "assistant",
+      "done": true,
+      "childrenIds": [],
+      "timestamp": 2
+     },
+     "a2": {
+      "id": "a2",
+      "role": "assistant",
+      "done": true,
+      "childrenIds": [
+       "00000000-0000-0000-0000-000000000005"
+      ],
+      "timestamp": 5
+     },
+     "a3": {
+      "id": "a3",
+      "role": "assistant",
+      "done": false,
+      "childrenIds": [],
+      "timestamp": 9
+     },
+     "00000000-0000-0000-0000-000000000005": {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "parentId": "a2",
+      "childrenIds": [],
+      "role": "user",
+      "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: completed   Duration: 0.0s\n--- RESULT ---\nThe report says sales grew.",
+      "model": "qwen",
+      "meta": {
+       "internal": true,
+       "type": "subagent",
+       "delegation_id": "deleg_00000000",
+       "subagent_chat_id": "00000000-0000-0000-0000-000000000002"
+      },
+      "timestamp": 1000
+     }
+    }
+   }
+  }
+ },
+ "background_keeps_code_interpreter_on_sandbox": {
   "returned": "{\"status\": \"dispatched\", \"delegation_id\": \"deleg_00000000\", \"subagent_chat_id\": \"00000000-0000-0000-0000-000000000002\", \"mode\": \"background\", \"task\": \"Summarize the report\"}",
   "background_task": [
    {

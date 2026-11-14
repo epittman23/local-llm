@@ -13,8 +13,8 @@ Pins, without Docker or Kata (SandboxManager on a FakeBackend):
   does: linked to the message when there is one (the tag path), stored but
   linked to nothing without one (the Run endpoint), owner decision Q25;
 - the FakeBackend lists /workspace/.runs as the real script does;
-- the tag path runs a `<code_interpreter>` block there without the blocked
-  modules preamble, and tells the model which files were attached;
+- the tag path runs a `<code_interpreter>` block there with its code
+  sanitized (ANSI codes and markdown fences stripped) and tells the model which files were attached;
 - each engine gets its own prompt on each function-calling path;
 - a request with both a terminal and the sandbox engine is refused (Q24),
   and terminal events go out for terminal tools only;
@@ -472,7 +472,6 @@ def _reply(monkeypatch, engine: str, run: dict | None = None):
 
     monkeypatch.setattr(middleware.Config, 'get', get)
     monkeypatch.setattr(builtin, 'run_code_in_sandbox', run_code_in_sandbox)
-    monkeypatch.setattr(middleware, 'CODE_INTERPRETER_BLOCKED_MODULES', ['os'])
     reply = object.__new__(middleware._StreamingReply)
     reply.request = SimpleNamespace()
     reply.user = _user()
@@ -486,7 +485,7 @@ def _reply(monkeypatch, engine: str, run: dict | None = None):
     return reply, calls
 
 
-def test_the_tag_path_runs_a_block_in_the_sandbox_without_the_blocked_modules_preamble(monkeypatch):
+def test_the_tag_path_runs_a_block_in_the_sandbox_with_its_code_unchanged(monkeypatch):
     run = {
         'stdout': 'hi\n',
         'stderr': 'warning\n',
@@ -515,6 +514,37 @@ def test_the_tag_path_shows_the_model_a_sandbox_failure(monkeypatch):
     assert out == {'stdout': 'The sandbox is not available on this server', 'stderr': '', 'result': ''}
 
 
+def test_execute_code_sanitizes_the_block_before_the_sandbox_runs_it(monkeypatch):
+    reply, calls = _reply(
+        monkeypatch, 'sandbox', {'stdout': '', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
+    )
+    block = '```python\n\x1b[31mprint(1)\x1b[0m\n```'
+    asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': block}))
+    (call,) = calls
+    assert call['code'] == 'print(1)'
+
+
+def _detects(monkeypatch, engine) -> bool:
+    """Whether the tag path detects code blocks, with every authorization gate open and the engine as given."""
+
+    async def get(key, default=None):
+        return {'code_interpreter.enable': True, 'code_interpreter.engine': engine}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    reply = object.__new__(middleware._StreamingReply)
+    reply.user = SimpleNamespace(id='u1', role='admin')
+    reply.model = {'id': 'm', 'info': {'meta': {}}}
+    reply.metadata = {'params': {'function_calling': 'legacy'}, 'features': {'code_interpreter': True}}
+    return asyncio.run(middleware._StreamingReply._detect_code_interpreter(reply))
+
+
+@pytest.mark.parametrize(
+    ('engine', 'detected'), [('sandbox', True), ('pyodide', False), ('jupyter', False), ('cloud', False)]
+)
+def test_the_tag_path_detects_code_blocks_only_under_a_live_engine(monkeypatch, engine, detected):
+    assert _detects(monkeypatch, engine) is detected
+
+
 def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
     run = {'stdout': 'ok\n', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
     reply, _ = _reply(monkeypatch, 'sandbox', run)
@@ -523,34 +553,52 @@ def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ('engine', 'legacy', 'expected'),
+    ('legacy', 'expected', 'other'),
     [
-        ('sandbox', True, 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT'),
-        ('sandbox', False, 'CODE_INTERPRETER_SANDBOX_PROMPT'),
-        ('jupyter', True, 'CODE_INTERPRETER_JUPYTER_PROMPT'),
-        ('jupyter', False, 'CODE_INTERPRETER_JUPYTER_PROMPT'),
-        ('pyodide', True, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
-        ('pyodide', False, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
+        (True, 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT', 'CODE_INTERPRETER_SANDBOX_PROMPT'),
+        (False, 'CODE_INTERPRETER_SANDBOX_PROMPT', 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT'),
     ],
 )
-def test_each_engine_gets_its_own_prompt_on_each_path(monkeypatch, engine, legacy, expected):
+def test_the_sandbox_gets_its_tag_or_tool_prompt_on_each_path(monkeypatch, legacy, expected, other):
     async def get(key, default=None):
-        return {'code_interpreter.engine': engine, 'code_interpreter.prompt_template': ''}.get(key, default)
+        return {'code_interpreter.engine': 'sandbox', 'code_interpreter.prompt_template': ''}.get(key, default)
 
     monkeypatch.setattr(middleware.Config, 'get', get)
     form = {'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]}
     metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
     asyncio.run(middleware._apply_code_interpreter(form, metadata))
-    prompt = getattr(middleware, expected)
     added = form['messages'][-1 if legacy else 0]['content']
-    assert added.endswith(prompt)
-    others = {
-        'CODE_INTERPRETER_SANDBOX_TAG_PROMPT',
-        'CODE_INTERPRETER_SANDBOX_PROMPT',
-        'CODE_INTERPRETER_JUPYTER_PROMPT',
-    }
-    for other in others - {expected}:
-        assert getattr(middleware, other) not in added
+    assert added.endswith(getattr(middleware, expected))
+    assert getattr(middleware, other) not in added
+
+
+@pytest.mark.parametrize('legacy', [True, False])
+def test_a_missing_engine_key_gets_the_sandbox_prompt(monkeypatch, legacy):
+    async def get(key, default=None):
+        return {'code_interpreter.prompt_template': ''}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    form = {'messages': [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]}
+    metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
+    asyncio.run(middleware._apply_code_interpreter(form, metadata))
+    added = form['messages'][-1 if legacy else 0]['content']
+    assert added.endswith(
+        middleware.CODE_INTERPRETER_SANDBOX_TAG_PROMPT if legacy else middleware.CODE_INTERPRETER_SANDBOX_PROMPT
+    )
+
+
+@pytest.mark.parametrize('legacy', [True, False])
+@pytest.mark.parametrize('engine', ['pyodide', 'jupyter', 'cloud'])
+def test_a_non_live_engine_gets_no_code_interpreter_prompt(monkeypatch, engine, legacy):
+    async def get(key, default=None):
+        return {'code_interpreter.engine': engine, 'code_interpreter.prompt_template': ''}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    messages = [{'role': 'system', 'content': 'sys'}, {'role': 'user', 'content': 'hi'}]
+    form = {'messages': [dict(m) for m in messages]}
+    metadata = {'params': {'function_calling': 'legacy'}} if legacy else {}
+    asyncio.run(middleware._apply_code_interpreter(form, metadata))
+    assert form['messages'] == messages
 
 
 def test_the_tag_prompt_speaks_of_code_blocks_and_the_tool_prompt_of_tools():
@@ -581,7 +629,7 @@ def _config(monkeypatch, **values):
         ('t1', {'code_interpreter': True}, {'capabilities': {'code_interpreter': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {'builtinTools': {'code_interpreter': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {}, {'code_interpreter.enable': False}, False),
-        ('t1', {'code_interpreter': True}, {}, {'code_interpreter.engine': 'jupyter'}, False),
+        ('t1', {'code_interpreter': True}, {}, {'code_interpreter.engine': 'pyodide'}, False),
         ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {}, {'no session': True}, False),
         ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {'legacy': True}, True),
@@ -595,7 +643,7 @@ def _config(monkeypatch, **values):
         'model without code',
         'tool off',
         'code interpreter off',
-        'jupyter',
+        'another engine',
         'native without builtin tools',
         'native without a session',
         'tag path without builtin tools',
@@ -647,17 +695,23 @@ def test_terminal_events_go_out_for_terminal_tools_only(tool_type, sent):
 # --- the Run endpoint --------------------------------------------------------------------------------------------
 
 
+MISSING = object()  # an engine key the config has no row for
+
+
 @pytest.fixture
 def endpoint(monkeypatch):
     world = {'user': _user(), 'engine': 'sandbox', 'enable': True, 'chats': {}, 'runs': [], 'may': True, 'asked': []}
 
     async def get(key, default=None):
-        return {
+        stored = {
             'code_execution.enable': world['enable'],
             'code_execution.engine': world['engine'],
             'user.permissions': world.get('permissions'),
             'code_interpreter.enable': world.get('interpreter', True),
-        }.get(key, default)
+        }
+        if world['engine'] is MISSING:
+            del stored['code_execution.engine']
+        return stored.get(key, default)
 
     async def get_chat_by_id(chat_id, db=None):
         return world['chats'].get(chat_id)
@@ -686,6 +740,24 @@ def test_the_run_endpoint_needs_a_chat_under_the_sandbox_engine(endpoint):
     assert response.status_code == 400
     assert 'chat_id' in response.json()['detail']
     assert endpoint['runs'] == []
+
+
+@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', None, '', 'other'])
+def test_the_run_endpoint_answers_400_under_any_engine_but_the_sandbox(endpoint, engine):
+    endpoint['engine'] = engine
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 400
+    assert 'engine not supported' in response.json()['detail']
+    assert endpoint['runs'] == []
+
+
+def test_the_run_endpoint_runs_under_a_missing_engine_key_as_it_does_for_the_sandbox(endpoint):
+    endpoint['engine'] = MISSING
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 200, response.text
+    assert [run['code'] for run in endpoint['runs']] == ['print(1)']
 
 
 def test_the_run_endpoint_runs_in_the_owners_chat_without_a_message_or_an_upload_sync(endpoint):
@@ -932,8 +1004,8 @@ def test_a_sub_agents_completion_runs_on_a_request_sharing_the_parents_sandbox(m
     assert state.sandbox_chat_id == CHAT
 
 
-@pytest.mark.parametrize(('engine', 'kept'), [('sandbox', True), ('jupyter', True), ('pyodide', False)])
-def test_a_background_sub_agent_keeps_the_code_interpreter_on_a_server_engine(monkeypatch, engine, kept):
+@pytest.mark.parametrize(('engine', 'kept'), [('sandbox', True), ('jupyter', False), ('pyodide', False)])
+def test_a_background_sub_agent_keeps_the_code_interpreter_only_on_the_sandbox_engine(monkeypatch, engine, kept):
     async def get(key, default=None):
         return engine if key == 'code_interpreter.engine' else default
 

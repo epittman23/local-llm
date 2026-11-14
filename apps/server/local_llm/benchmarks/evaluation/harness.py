@@ -3,9 +3,8 @@
 The runner's bare mode (runner.ask) sends an item straight to llama-server,
 so it measures the model. This mode sends it the way a chat does: through a
 Workspace model entry, with that entry's system prompt and params, and with
-the code interpreter on the engine the app is configured with: the sandbox
-(its `data` image), or Jupyter until that engine is removed. It measures the
-assistant as deployed. The design, and the owner's decisions behind each
+the code interpreter on the sandbox engine (its `data` image). It measures
+the assistant as deployed. The design, and the owner's decisions behind each
 rule below, are in docs/plans/benchmarks-through-the-app.md (D1-D8).
 
 The pipeline was built for a browser, so this module drives it by hand:
@@ -17,13 +16,11 @@ The pipeline was built for a browser, so this module drives it by hand:
   * Code runs only on the streaming path with an emitter, which needs a chat
     id and a message id; builtin tools are only offered with a session id.
     A `temporary:` chat id writes no chat row, and a synthetic session id
-    never reaches a browser, because neither the sandbox nor the Jupyter
-    engine needs an event caller (Pyodide does, and is refused).
+    never reaches a browser, because the sandbox engine needs no event caller.
   * The pipeline offers about a dozen builtin tools. Some browse the user's
     notes, chats and knowledge, and ask_user would pause the reply and lose
-    the answer. The tool list is cut down to the engine's code tools (D3):
-    execute_code on Jupyter; bash, view, write_file and str_replace on the
-    sandbox.
+    the answer. The tool list is cut down to the sandbox's code tools (D3):
+    bash, view, write_file and str_replace.
   * On the sandbox engine each item gets its own ephemeral sandbox (its own
     `temporary:` chat id), released as soon as the item ends, so the next
     item starts clean and no idle sandbox holds a slot.
@@ -62,9 +59,9 @@ from local_llm.utils.upstream_trace import tracing
 log = logging.getLogger(__name__)
 
 #: The only tools offered to the model (D3), per code interpreter engine: the
-#: ones utils/tools.py's _code_interpreter_tools offers on that engine.
+#: ones utils/tools.py's _code_interpreter_tools offers on that engine, which
+#: only the sandbox has.
 ENGINE_TOOLS = {
-    'jupyter': ('execute_code',),
     'sandbox': ('bash', 'view', 'write_file', 'str_replace'),
 }
 #: The sandbox image every harness item runs on: tools/builtin.py's
@@ -90,9 +87,9 @@ class HarnessRefused(RuntimeError):
     """The harness cannot vouch for a result, so it records none.
 
     Raised before a run starts (a model entry not served by the measured
-    llama-server, a code interpreter engine other than the sandbox or
-    Jupyter, a sandbox or Jupyter server that is not ready) and during one (a
-    request that went somewhere else, a spec that changed between items).
+    llama-server, a code interpreter engine other than the sandbox, a sandbox
+    that is not ready) and during one (a request that went somewhere else, a
+    spec that changed between items).
     A router reports it like a SuiteLoadError: the run stops, nothing is
     filed under a key it does not describe.
     """
@@ -139,11 +136,9 @@ def _request_for(source: Request, user) -> Request:
     request.state.enable_api_keys = False
     request.state.internal = True
     request.state.max_tool_call_iterations = MAX_TOOL_ROUNDS
-    # Read by tools/builtin.py: on Jupyter a plot a code run prints is kept
-    # inline instead of being stored as a file in the owner's Files; on the
-    # sandbox, files written to /workspace/outputs are listed in the tool
-    # result but stored nowhere, and every sandbox call runs on the `data`
-    # image.
+    # Read by tools/builtin.py: files written to /workspace/outputs are listed
+    # in the tool result but stored nowhere, and every sandbox call runs on
+    # the `data` image.
     request.state.benchmark_harness = True
     return request
 
@@ -160,9 +155,9 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     Every check here is one the pipeline would otherwise get past silently:
     a result answered by OpenRouter but filed under a local config_id, a
     fallback model standing in for a missing base model, a non-streaming
-    entry that never runs code, a Pyodide engine whose event call would wait
-    for a browser that is not there, a sandbox that cannot start or whose
-    `data` image has no known digest for the spec to name.
+    entry that never runs code, an engine with no code tools, a sandbox that
+    cannot start or whose `data` image has no known digest for the spec to
+    name.
     """
     from local_llm import main
     from local_llm.models.config import Config
@@ -211,33 +206,19 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     if params.get('max_completion_tokens') is not None:
         raise HarnessRefused(f"'{model_entry}' sets max_completion_tokens, which would replace the item's token cap")
 
-    ci = await Config.get_many(
-        'code_interpreter.enable',
-        'code_interpreter.engine',
-        'code_interpreter.jupyter.url',
-        'code_interpreter.jupyter.auth',
-        'code_interpreter.jupyter.auth_token',
-    )
-    engine = ci.get('code_interpreter.engine')
+    ci = await Config.get_many('code_interpreter.enable', 'code_interpreter.engine')
+    engine = ci.get('code_interpreter.engine', 'sandbox')
     if not ci.get('code_interpreter.enable') or engine not in ENGINE_TOOLS:
-        raise HarnessRefused(
-            'the code interpreter must be on, on the sandbox or Jupyter engine (Admin Settings > Code Execution)'
-        )
-    manager = None
-    if engine == 'sandbox':
-        manager = getattr(request.app.state, 'sandbox', None)
-        if manager is None:
-            raise HarnessRefused(
-                'the code interpreter is on the sandbox engine, but this server has no sandbox running'
-            )
-        reason = await manager.ready()
-        if reason:
-            raise HarnessRefused(f'the sandbox is not ready: {reason}')
-        # Read after ready(), which is where the backend learns the image ids.
-        if not manager.image_digest(SANDBOX_IMAGE):
-            raise HarnessRefused(f"the sandbox's {SANDBOX_IMAGE} image has no known digest, so the spec cannot name it")
-    elif not await _jupyter_alive(ci):
-        raise HarnessRefused(f'the Jupyter server at {ci.get("code_interpreter.jupyter.url")} does not answer')
+        raise HarnessRefused('the code interpreter must be on, on the sandbox engine (Admin Settings > Code Execution)')
+    manager = getattr(request.app.state, 'sandbox', None)
+    if manager is None:
+        raise HarnessRefused('the code interpreter is on the sandbox engine, but this server has no sandbox running')
+    reason = await manager.ready()
+    if reason:
+        raise HarnessRefused(f'the sandbox is not ready: {reason}')
+    # Read after ready(), which is where the backend learns the image ids.
+    if not manager.image_digest(SANDBOX_IMAGE):
+        raise HarnessRefused(f"the sandbox's {SANDBOX_IMAGE} image has no known digest, so the spec cannot name it")
 
     return {
         'request': request,
@@ -251,7 +232,7 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
         'timeout': float_env('LLAMA_TEST_TIMEOUT', 900.0),
         'engine': engine,
         'tools': ENGINE_TOOLS[engine],
-        # The sandbox engine's manager; None on Jupyter.
+        # The sandbox engine's manager.
         'sandbox': manager,
     }
 
@@ -293,19 +274,21 @@ def _sha(value) -> str:
 
 
 def _engine(hctx: dict) -> str:
-    """The run's code interpreter engine; Jupyter's when the hctx has no `engine`.
+    """The run's code interpreter engine, which prepare() always sets, to the sandbox.
 
-    prepare() always sets it; the default exists only for contexts not built
-    by prepare() (tests that build one by hand).
+    A context that names the removed `jupyter` engine (built by hand, as a
+    test does) makes spec_from_request give the Jupyter-era spec, so the sha
+    the stored Jupyter runs are filed under can still be computed and pinned.
     """
-    return hctx.get('engine') or 'jupyter'
+    return hctx['engine']
 
 
 def spec_from_request(hctx: dict, body: dict) -> dict:
     """The part of the first upstream request every item shares: what the harness sha names.
 
-    A Jupyter spec has the same keys and values it had before the sandbox
-    engine, so every Jupyter-era sha still names its runs. A sandbox spec
+    A Jupyter spec (only a context naming the `jupyter` engine gives one now,
+    see _engine) has the same keys and values it had before the sandbox engine,
+    so every Jupyter-era sha still names its stored runs. A sandbox spec
     adds `sandbox_image`, read again for every item: the `data` image's id
     as the backend last saw it (refreshed by ready() and by every create,
     never cleared), not one read from the item's own container. After the
@@ -371,24 +354,6 @@ async def _server_alive(port: int) -> bool:
         return False
 
 
-async def _jupyter_alive(ci: dict) -> bool:
-    """Whether the configured Jupyter server answers, with its token when one is set."""
-    url = (ci.get('code_interpreter.jupyter.url') or '').rstrip('/')
-    if not url:
-        return False
-    params = {}
-    if ci.get('code_interpreter.jupyter.auth') == 'token' and ci.get('code_interpreter.jupyter.auth_token'):
-        params['token'] = ci['code_interpreter.jupyter.auth_token']
-    try:
-        async with (
-            aiohttp.ClientSession() as session,
-            session.get(f'{url}/api/status', params=params, timeout=aiohttp.ClientTimeout(total=5)) as resp,
-        ):
-            return resp.status == 200
-    except (aiohttp.ClientError, TimeoutError):
-        return False
-
-
 async def _run_pipeline(hctx: dict, prompt: str, errors: list[str]) -> dict | None:
     """process_chat_payload -> generate_chat_completion -> process_chat_response, as _process_chat runs them."""
     from local_llm import main
@@ -401,7 +366,9 @@ async def _run_pipeline(hctx: dict, prompt: str, errors: list[str]) -> dict | No
 
     request, user, model, model_info = hctx['request'], hctx['user'], hctx['model'], hctx['model_info']
     # prepare() sets `tools`; the fallback is for contexts not built by it (tests).
-    offered = hctx.get('tools') or ENGINE_TOOLS[_engine(hctx)]
+    offered = hctx.get('tools') or ENGINE_TOOLS.get(_engine(hctx))
+    if not offered:
+        raise HarnessRefused(f'the {_engine(hctx)!r} engine offers no tools; the harness runs on the sandbox engine')
     form_data = {
         'model': hctx['model_entry'],
         'messages': [{'role': 'user', 'content': prompt}],
@@ -455,8 +422,8 @@ async def _run_pipeline(hctx: dict, prompt: str, errors: list[str]) -> dict | No
             errors.append(error.get('content', str(error)) if isinstance(error, dict) else str(error))
 
     async def no_caller(event: dict):
-        # Only Pyodide and client-side tools call back into a browser, and
-        # prepare() refused both; the sandbox and Jupyter engines never do.
+        # Only client-side tools call back into a browser, and the tool list
+        # is cut down to the sandbox's; the sandbox engine never does.
         return {'error': 'no browser is attached to a benchmark request'}
 
     try:

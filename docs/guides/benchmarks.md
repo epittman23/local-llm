@@ -273,20 +273,17 @@ bare model. With `harness_model` set on a Tests run (`POST
 each item is answered the way a chat answers it instead:
 
 - through that model entry, with its system prompt and params;
-- with the code interpreter on the engine Admin Settings > Code Execution
-  selects, the sandbox or (until it is removed) Jupyter, and only that
-  engine's code tools offered: `bash`, `view`, `write_file` and
-  `str_replace` on the sandbox, `execute_code` on Jupyter (the builtin
-  tools that browse notes, chats and knowledge are cut);
+- with the code interpreter on the sandbox, the only engine, and only its
+  code tools offered: `bash`, `view`, `write_file` and `str_replace` (the
+  builtin tools that browse notes, chats and knowledge are cut);
 - through the app's own chat pipeline (`benchmarks/evaluation/harness.py`),
   with a `temporary:` chat id of its own for each item
   (`temporary:benchmark-<hex>`), so no chat row, title or memory is
-  written. On Jupyter a plot a code run prints stays inline rather than
-  being stored in the owner's Files; on the sandbox nothing printed is
-  captured as an image, and files written to `/workspace/outputs` are
-  listed in the tool result but not stored in the owner's Files.
+  written. Nothing printed is captured as an image, and files written
+  to `/workspace/outputs` are listed in the tool result but not stored in
+  the owner's Files.
 
-**On the sandbox engine** every item runs on the `data` image: a harness
+Every item runs on the `data` image: a harness
 request's sandbox calls are pinned to it (`_sandbox_session` in
 `tools/builtin.py`), so a `bash` call asking for `web` runs on `data` too,
 and its `stderr` tells the model so ("This benchmark run uses the 'data'
@@ -312,18 +309,18 @@ There is no switch on the Tests page yet (planned in PR 2 of
 
 **The model has to make structured tool calls** for the code interpreter to
 run. On 2026-10-24, `qwen25c` (Qwen2.5-Coder-7B) wrote its `execute_code`
-call as JSON text in a code fence instead, so `llama-server` never parsed
-it, no code ran, and a harness run on it measured the bare model plus the
-entry's system prompt. `qwen38` made a structured call; the code ran in
-Jupyter; and a second round answered. That one item took 452 s, partly
+call (the Jupyter engine's tool, since removed) as JSON text in a code
+fence instead, so `llama-server` never parsed it, no code ran, and a
+harness run on it measured the bare model plus the entry's system prompt.
+`qwen38` made a structured call; the code ran in Jupyter (historical: that
+engine no longer exists); and a second round answered. That one item took 452 s, partly
 offloaded and thinking. `harness_stats.code_runs` shows which case a run is.
 
 **What it needs.** The model entry has to be on an OpenAI-compatible
 connection that points at the `llama-server` being measured, for example
 `http://127.0.0.1:8090/v1` in Admin Settings > Connections. The code
-interpreter has to be on, on the sandbox or the Jupyter engine (Pyodide is
-refused: its code runs in a browser, and a harness request has none).
-Native function calling only.
+interpreter has to be on, on the sandbox (a removed engine value in the
+configuration leaves it off). Native function calling only.
 
 **What it refuses.** A result is recorded only when the harness can vouch
 for where it came from. The run stops, with `not recorded: ...`, when:
@@ -332,17 +329,16 @@ for where it came from. The run stops, with `not recorded: ...`, when:
 - it turns streaming off, uses legacy function calling, or sets
   `max_completion_tokens` (in its own params or in the global model
   defaults);
-- on the sandbox engine, this server has no sandbox manager running, the
+- this server has no sandbox manager running, the
   manager's `ready()` gives a reason it cannot run sandboxes (named in the
   refusal), or the `data` image's digest is unknown, so the spec could not
   name the image. The digest is read again for every item (the `data`
   image's id as the backend last saw it), and an unknown one stops the run
   on any item, the first included;
-- on the Jupyter engine, the Jupyter server does not answer;
 - a code run fails in the interpreter itself rather than in the code: on
   the sandbox, a sandbox that is unavailable, refuses the chat or fails in
   its backend, never the model's command failing or timing out;
-- on the sandbox engine, an item's calls ran in more than one sandbox: its
+- an item's calls ran in more than one sandbox: its
   sandbox was replaced between two calls, so its files were lost and the
   next call started on an empty `/workspace`. Between calls the sandbox is
   unlocked, so a session needing a slot while all `max_running` slots are
@@ -368,9 +364,9 @@ for where it came from. The run stops, with `not recorded: ...`, when:
   item's own container: after the image is rebuilt during a run, the next
   create, this run's or another chat's, changes it and the run stops.
   That includes a resume, which continues under the
-  spec its run was recorded with: a run started on Jupyter cannot resume
-  on the sandbox engine, or the other way round, since the two specs
-  differ. That is intended; start a new run instead.
+  spec its run was recorded with: a run started on Jupyter, before that
+  engine was removed, cannot resume, since a new request is built on
+  the sandbox and its spec differs. Start a new run instead.
 
 **What is recorded.**
 
@@ -381,9 +377,9 @@ for where it came from. The run stops, with `not recorded: ...`, when:
   rounds, no tool approval), plus `code_interpreter_engine` from the
   configuration and, on the sandbox engine only, `sandbox_image`: the
   `data` image's id as the backend last saw it, read again for every item.
-  A Jupyter spec has
-  exactly the keys it had before the sandbox engine, so Jupyter-era shas
-  still name their runs, and a sandbox-engine sha never equals one of
+  The harness can no longer start a Jupyter run, but a stored Jupyter spec
+  keeps exactly the keys it had before the sandbox engine, so Jupyter-era
+  shas still name their runs, and a sandbox-engine sha never equals one of
   them (migration `2c8cdc04929d` records this in `benchmark_schema_note`).
   `benchmark_harness` holds what each sha stands for. NULL means a bare
   request.
@@ -398,8 +394,8 @@ for where it came from. The run stops, with `not recorded: ...`, when:
   `fail_error`. A server that stopped answering raises, as in the bare
   mode, and records nothing.
 
-**The sandbox engine's telemetry.** With the code interpreter on the
-sandbox engine, every `bash` call also runs the package telemetry
+**The sandbox's telemetry.** With the code interpreter on, every `bash`
+call also runs the package telemetry
 ([sandbox guide](sandbox.md#package-telemetry)): a few daemon calls, and
 one more exec in the guest when the call ran Python or R, and the image's
 hooks add a little to each Python or R exit. So passes per minute under
@@ -450,8 +446,8 @@ tests: on Mbpp/102 it ran its own three asserts (all passed) and then failed
 MBPP+'s first extra input, `'___python_program'`, which its function
 mishandled. These numbers are not comparable with the bare runs above
 (another mode) or with Jupyter runs (another engine, tools and system
-message); they are the first sandbox-engine harness numbers. The Jupyter
-spec they are compared with is `23f1179b8ecb`, from a one-item run on the
+message); they are the first sandbox-engine harness numbers. Historical, as
+measured on 2026-11-13: the Jupyter spec they were compared with is `23f1179b8ecb`, from a one-item run on the
 Jupyter engine through the same entry the same day
 (`20261113T183842Z-6c10fd`, HumanEval/1, passed without running code):
 engine `jupyter`, tool `execute_code`, no image. Even the two specs'

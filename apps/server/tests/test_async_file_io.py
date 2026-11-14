@@ -5,8 +5,7 @@ Each moved check keeps its logic: the cache route still refuses a path
 outside the cache, the audio handlers still refuse a missing or oversized
 file, the legacy config is still imported and renamed, a report is still
 written beside its figures, the SSRF-safe connector still checks the host
-and passes aiohttp's arguments through, and the Jupyter runner's
-`idle_timeout` is still the per-message wait.
+and passes aiohttp's arguments through.
 
 Run from apps/server:
 
@@ -26,7 +25,6 @@ from local_llm import main
 from local_llm.retrieval.web import utils as web_utils
 from local_llm.routers import audio, ollama
 from local_llm.routers.benchmarks import report as report_router
-from local_llm.utils import code_interpreter
 
 # -- the cache route -------------------------------------------------------
 
@@ -228,34 +226,6 @@ def test_the_ssrf_safe_connector_checks_the_host_and_passes_everything_on(monkey
     assert asyncio.run(scenario()) == 'connection'
     assert checked == ['example.com']
     assert forwarded == [(req, (), {'traces': ['t'], 'timeout': 'timeout'})]
-
-
-# -- the Jupyter runner -----------------------------------------------------------------
-
-
-def test_execute_code_jupyter_passes_the_idle_timeout_to_the_executor(monkeypatch):
-    made = []
-
-    class Executor:
-        def __init__(self, base_url, code, token, password, timeout, files=None):
-            made.append((base_url, code, token, password, timeout))
-            self.failure = ''
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def run(self):
-            return code_interpreter.ResultModel(stdout='out')
-
-    monkeypatch.setattr(code_interpreter, 'JupyterCodeExecuter', Executor)
-
-    result = asyncio.run(code_interpreter.execute_code_jupyter('http://j.invalid', 'print(1)', 't', '', 7))
-
-    assert made == [('http://j.invalid', 'print(1)', 't', '', 7)]
-    assert result['stdout'] == 'out'
 
 
 def test_the_report_route_writes_the_report_under_its_run_directory(monkeypatch, tmp_path):

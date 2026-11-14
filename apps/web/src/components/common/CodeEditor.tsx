@@ -29,10 +29,10 @@ export type CodeEditorHandle = {
  * `onChange` reports every edit.
  *
  * Formatting: admins format through the backend (`/utils/code/format`). The
- * Svelte version formats for everyone else with `black` in a Pyodide worker;
- * that needs the Pyodide machinery Phase 10 builds, so here a non-admin's
- * format request returns false and callers save the code unformatted -- what
- * the original does whenever formatting fails.
+ * Svelte version formats for everyone else with `black` in a browser worker;
+ * this app has no such worker, so here a non-admin's format request returns
+ * false and callers save the code unformatted -- what the original does
+ * whenever formatting fails.
  *
  * This module pulls in CodeMirror (~hundreds of KB): import it with
  * `React.lazy`, so the pages that never edit code don't pay for it.

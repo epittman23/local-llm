@@ -69,7 +69,8 @@ libraries.
 
 Checked after the upgrade with `qwen38`'s exact argv, one tool-call probe
 on each build: both answered correctly and made a structured
-`execute_code` call, at about 1.1 tok/s generation on both. That speed
+`execute_code` call (the Jupyter engine's tool, removed 2026-11-13), at
+about 1.1 tok/s generation on both. That speed
 reflects the laptop's power-saving profile at the time, not either build,
 so it is not a measurement. Run `smoke` on `qwen38` under 11875 before
 recording new numbers.

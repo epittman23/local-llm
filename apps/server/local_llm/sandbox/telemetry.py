@@ -1,6 +1,6 @@
 """Package telemetry: which packages the sandboxes use, and which they miss (T21).
 
-docs/proposals/sandbox-code-interpreter.md, "Package telemetry". Three
+docs/history/sandbox-code-interpreter.md, "Package telemetry". Three
 signals, each turned into rows of `sandbox_package_events`
 (models/sandbox.py):
 

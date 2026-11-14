@@ -142,7 +142,7 @@ export function refuseMessage(held: Held, origin: string, port: number, repo: st
 		held === 'port'
 			? `Port ${port} is in use, but nothing answered at ${origin}/health. ` +
 				'A make backend may still be starting or reloading there, or another program holds the port.'
-			: `The local-llm services (Postgres, Redis, Jupyter and SearXNG) are already running, but nothing answers at ${origin}. ` +
+			: `The local-llm services (Postgres, Redis, SearXNG and the sandbox mirror) are already running, but nothing answers at ${origin}. ` +
 				'A make backend may still be starting in a terminal, or an earlier one left them running.';
 	const stop =
 		held === 'services'

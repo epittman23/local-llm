@@ -1,7 +1,7 @@
 # Plan: implement the per-chat microVM sandbox
 
 The one implementation plan for
-[docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md):
+[docs/history/sandbox-code-interpreter.md](../history/sandbox-code-interpreter.md):
 what to build, in what order, how to verify each piece, and the ledger
 that records how far the work has got. Every session follows this file,
 wherever it runs. How a session starts, works and hands off is in
@@ -52,7 +52,9 @@ to top; never rebase or force-push a layer. Each PR's diff, and so its
 turn, bottom first.
 
 **Active session:** none
-**`main` last merged in at:** `0f70f7dc` (2026-11-13 22:17 UTC, by the owner's rebase of `feat/sandbox-engine` onto `main`; `20ee5337` merged in T39 before, `64c977f1` before that)
+**`main` last merged in at:** `90eed435` (2026-11-13 23:00 UTC, the #888 squash, by the owner's rebase of `feat/sandbox-remove-jupyter` onto `main`; `0f70f7dc` before, by the rebase of `feat/sandbox-engine`; `20ee5337` merged in T39, `64c977f1` before that)
+
+**Layers 1-3 merged 2026-11-13.** #886 squash-merged into `main` as `2242c595` (22:41 UTC), #884 as `c33d6d30` (22:51) and #888 as `90eed435` (22:59); their branches are deleted, and #889 now targets `main` directly. The owner rebased `feat/sandbox-remove-jupyter` onto `90eed435` (its first commit is now `e1f2b490`); this session reset the local branch to it. The layer 1-3 shas in the Commit column below are on no branch any more; they stay reachable through each PR's ref (`git fetch origin pull/886/head`, `pull/884/head`, `pull/888/head`), and their patches are in the squash commits on `main`. With layers 1-3 on `main`, the 2026-11-12 decisions entry written for the PR in T23 is on `main` too, so from here it is never edited (see the ground rule below).
 
 **Rebased 2026-11-13 (22:17-22:26 UTC).** The owner used GitHub's "Update branch" with rebase on #886, #888 and #889, so `feat/sandbox-engine`, `feat/sandbox-harness` and `feat/sandbox-remove-jupyter` were force-pushed with new shas; #884 (`feat/sandbox-code-interpreter`) was brought up to date by a merge instead (`9a6ef512`), so it still contains the old layer 1 commits, and the layer 1 shas in this ledger stay reachable through it. The layer 3 shas here were updated to their rebased equivalents (same patches): `4e1d9c36` to `77f2c502`, `c01eff98` to `481a63d2` (T30), `11cb630a` to `3b7026b5` (T31), `6df950cd` to `aaa5abe6` (T39). Sessions still never rebase or force-push themselves; before working, reset a local layer branch to its remote (`git branch -f <branch> origin/<branch>`).
 
@@ -104,12 +106,12 @@ The same for every session:
 | T30 | Harness on the sandbox engine | any | any | T20 | done | `481a63d2` | 2026-11-13, laptop (local session, OMC story `G001-t30`): `benchmarks/evaluation/harness.py` takes engine `sandbox` and (until T40) `jupyter`, with the tool set per engine (`ENGINE_TOOLS`: `execute_code`, or `bash`, `view`, `write_file`, `str_replace`); on the sandbox engine `prepare()` refuses with no manager, a `ready()` reason, or no known `data` image digest, and never probes Jupyter; the spec's `code_interpreter_engine` comes from config and a sandbox spec adds `sandbox_image` (the `data` image id as the backend last saw it, read for every item; an unknown one refuses the item, the first included), while a Jupyter spec is byte-identical to before (a test pins its sha, `8b71b99938eb`, computed from the old code); each item gets its own `temporary:benchmark-<uuid>` chat and `ask()` releases its ephemeral sandbox in a `finally` outside the item's `wait_for` on every outcome (a 60 s deadline that cannot cut short a destroy under way; a failure is logged and leaves the outcome alone); `tools/builtin.py` `_harness_image` pins harness requests to `data` in `_sandbox_session` (all four tools; a `bash` call that named `web` is told so in its stderr); new `utils/upstream_trace.py` `note_sandbox` and `Trace.sandbox_keys`, and `ask()` refuses an item whose calls ran in more than one sandbox (evicted or reaped between calls, security review L1; a replacement under the same key after a failed eviction destroy is not detected, documented); schema note revision `2c8cdc04929d` after `5d1e9c3a7b42` via `new-migration` (note only; no `config_id` change); docs: benchmarks.md harness section (engines, tools, release, refusals, cold start in `wall_ms`, Jupyter-spec runs not resumable under the sandbox spec), sandbox.md, features.md and `features-harness.mmd` (still identical), AGENTS.md "Measuring", the proposal's harness row. Changed from the plan: the image pin is in `_sandbox_session`, not only `bash`, so the file tools and an admin `default_image` of `web` are covered too; the replaced-sandbox refusal and the empty-digest refusal are additions from review. Tests by a separate test-engineer: `tests/test_benchmark_harness.py` (37 to 66 tests), new `tests/test_benchmark_harness_sandbox.py` (18, a real `SandboxManager` over `FakeBackend`, including a sandbox released between two real `bash` calls refusing the item), `test_sandbox_tools_edges.py`'s fake session given a `key` (no test removed). Reviews: code review APPROVE (3 should-fix, applied), security review PASS (L1 and L2, applied), re-review APPROVE (one should-fix, the same-key case, applied by narrowing the claim). **Laptop check** (`make backend` with the built UI, images `2026-11-12.1`, data image `sha256:8f81055aa23d7d2ba0f34a79fbc7b6ff68c60922c95ac6664976af22a2323493`; Kata 4.3.1 runtime-rs; `qwen38` served from Benchmarks > Serve: `Qwen3.8-27B-UD-Q3_K_XL.gguf`, llama.cpp build 11875 `f0fb5984b`, the profile's flags (`-ngl 20`, ctx 16384, MTP `draft-mtp` n-max 2, q8_0 KV, flash attention), 5,586 MiB VRAM; a connection `http://127.0.0.1:8090/v1` and the Workspace entry `harness-qwen38` (base `qwen3.8-27b`, the `assistant.txt` prompt, native function calling), both made for the check; the harness refuses an OpenRouter entry by design (D4), so no OpenRouter model could be used, as the owner agreed): a one-item harness run (`smoke`, `ds1000`, slice `0:1`) on the final code, suite run `20261113T181128Z-81eed2`: DS-1000 item 102, `fail_error` (an `IndentationError` in the model's answer), 5 rounds, 4 code runs in one ephemeral `data` sandbox, released after the item (none left), 497 s; `harness_sha` `b8a5ad9285bc` (spec engine `sandbox`, the digest above, the four tools); 36 `sandbox_package_events` `import` rows (pandas 3.0.6, numpy 2.5.4, ...) with `harness_run_id` = `20261113T181128Z-81eed2`, none from a harness chat without it; `GET /api/v1/sandbox/packages` gave pandas 1 chat, 5 imports without `include_harness` (an earlier chat's) and 3 chats, 13 imports with `include_harness=true`. An earlier run on the pre-review code (`20261113T173718Z-e14509`) gave the same. The migration was applied to the laptop's database by that restart (so it is append-only from here); an earlier start had applied it before review and it was downgraded until review ended. On the final code: `make test-backend` exit 0 (7,268 passed, 24 skipped, 0 failed; diff coverage 99% over the stack, `harness.py`, `builtin.py` and `upstream_trace.py` 100%; `test_tune_probe.py::test_stop_returns_as_soon_as_the_server_exits_on_sigint` had failed twice in the test-engineer's runs while other suites and `llama-server` loaded the laptop, passed 3 of 3 alone and in this run); `make test-types` no new findings; `make pr-gate`'s prediction from the diff against #888's base: no findings |
 | T31 | Harness baseline on the sandbox engine | local | gpu, kvm, owner | T29, T30 | done | `3b7026b5` | 2026-11-13, laptop, with the owner (OMC story `G002-t31`), narrowed by Q30 (a `smoke` run on `qwen38`, not a full HumanEval+ run; a one-item Jupyter run for the sha). Found first: the laptop's database held no Jupyter-era harness run (`benchmark_harness` empty, no `benchmark_result` row with a `harness_sha` before T30's checks); the latest full Tests run is bare (`20261025T174650Z-55d951`, `qwen38`, tier `standard`, seed 20260830, 279 items). **Jupyter sha:** `20261113T183842Z-6c10fd`, one HumanEval+ item (HumanEval/1) through `harness-qwen38` on the Jupyter engine: passed in one round without running code (231 s); spec `23f1179b8ecb` (engine `jupyter`, tools `execute_code`, no image, `system_sha` `2da32069fd89`). **Sandbox baseline:** `20261113T184249Z-a5bd34`, tier `smoke` (24 items: HumanEval+, MBPP+, DS-1000, 8 each, seed 20260830; LiveCodeBench left out without a window), `harness_sha` `b8a5ad9285bc` (engine `sandbox`, the four sandbox tools, data image `sha256:8f81055aa23d...`, `system_sha` `8e0e2749c142`), so the sandbox spec differs from the Jupyter one, and even the system messages differ (each engine appends its own prompt). 17 of 24 passed (HumanEval+ 6/8, MBPP+ 6/8, DS-1000 5/8) in 146.6 minutes, 0.116 passes per minute, mean 367 s an item; 21 items ran code (25 runs); failures: four `fail_assert`, DS-1000 102 `IndentationError` and 229 `SyntaxError` in the model's answers, HumanEval/163 out of the 900 s timeout (its sandbox released at the timeout). Every item's sandbox released (none left, no release failure, no replaced-sandbox refusal); 91 `sandbox_package_events` rows over 21 item chats with `harness_run_id` = the suite run id. Context recorded with the numbers in benchmarks.md ("First runs on the sandbox engine"): i9-12900H, 62 GiB, RTX 3060 Laptop 6 GB (driver 615.71.09), Fedora 44 kernel 7.2.8-200.fc44; `Qwen3.8-27B-UD-Q3_K_XL.gguf`, llama.cpp build 11875 `f0fb5984b`, the served command's flags; Kata 4.3.1 runtime-rs (shim commit `03cf2ec0`) with Cloud Hypervisor; images `2026-11-12.1` and the data image digest. A note in the guide from the owner's question: on Mbpp/102 the model ran its own three asserts in the sandbox (all passed) and then failed MBPP+'s first extra input, `'___python_program'`, a fair failure, not a grading fault. |
 | T39 | Step 2 gate | local | docker, kvm | T31 | done | `aaa5abe6` | 2026-11-13, laptop (OMC story `G003-t39`; i9-12900H, 62 GiB, Fedora 44 kernel 7.2.8-200.fc44, Kata 4.3.1 runtime-rs, images `2026-11-12.1`). `main` had moved by one commit (`20ee5337`, #890, a dependency bump of `apps/desktop`'s `package.json` and `bun.lock`): merged into `feat/sandbox-engine` (`1337cba1`), then up into `feat/sandbox-code-interpreter` (`e4e3f7f1`) and `feat/sandbox-harness` (`f829f99d`, a merge commit the 22:26 UTC rebase dropped), no conflicts, one Alembic head on each layer (`e3a7c5f92b18`, `5d1e9c3a7b42`, `2c8cdc04929d`), each pushed; CI on #886, #884 and #888 all passed after it. At `f829f99d` (the same merge): `make check` exit 0 (lint; secrets, no leaks; backend 7,268 passed, 24 skipped, diff coverage 99%; types, no new findings; web 1,362 passed, coverage 96%; Playwright 403 passed; desktop 149 passed; boot smoke passed); the Kata suite (`LLLM_TEST_KATA=1`, `test_sandbox_kata.py`, `test_sandbox_uploads_kata.py`, `test_sandbox_outputs_kata.py`, with `make backend`'s mirror up) 38 passed in 372 s, no sandbox left. This was the last point where both engines can be compared: T31's Jupyter spec `23f1179b8ecb` and sandbox spec `b8a5ad9285bc` are recorded in benchmarks.md. Step 2 is complete. |
-| T40 | Remove the Jupyter backend code and tests | any | any | T39 | todo | | |
-| T41 | Remove the Jupyter service, Makefile wiring and desktop text | any | any; docker | T39 | todo | | |
-| T42 | Remove Pyodide | any | any | T39 | todo | | |
-| T43 | Migrate engine rows to `sandbox` | any | any | T40, T42 | todo | | |
-| T44 | Docs sweep | any | any | T40-T43 | todo | | |
-| T48 | Final verification | local | docker, kvm, owner | T44 | todo | | |
+| T40 | Remove the Jupyter backend code and tests | any | any | T39 | done | `c39c9aba` | 2026-11-13, laptop (local session, layer 4): `utils/code_interpreter.py` deleted; the `execute_code` builtin tool removed (its Pyodide branch and the blocked-modules preamble with it), so `_code_interpreter_tools` offers `bash`, `view`, `write_file` and `str_replace` behind the same four gates under engine `sandbox` and nothing under any other engine; the Run endpoint's Jupyter branch removed (a non-`sandbox` engine answers 400); the tag path's Jupyter branch, `CODE_INTERPRETER_BLOCKED_MODULES` and the `'jupyter'` prompt entries removed; every `CODE_EXECUTION_JUPYTER_*`/`CODE_INTERPRETER_JUPYTER_*` setting, its `DEFAULT_CONFIG` key and form field removed (the form ignores the old fields); `sandbox/uploads.py`'s Jupyter-only `chat_files` removed; the harness's `_jupyter_alive`, its Jupyter acceptance and `ENGINE_TOOLS['jupyter']` removed, keeping `_engine`'s default and the Jupyter spec shape so stored Jupyter-era runs keep their sha. **The engine rule:** `config.CODE_ENGINES` (`sandbox`, `pyodide` until T42) is the one list of live engines: the code-execution form and the config import refuse any other value (422), an env value outside it falls back with a warning, and a stored value outside it (a `jupyter` row before T43) leaves the code interpreter off everywhere (no prompt, no tag detection, no tool, no background sub-agent interpreter, the Run endpoint 400). Executor (opus), then a separate test-engineer: two Jupyter test files deleted, Jupyter cases removed or ported to the sandbox (`chat_files` tests onto `chat_uploads`), goldens `chat_payload.json`, `streaming_response.json`, `subagent_delegate.json` and `tool_loading.json` re-recorded and checked case by case, new tests for every clause of the engine rule, and a new pin `SANDBOX_ERA_SHA` = `3362f0c49d70` computed from the pre-T40 code beside the unedited `JUPYTER_ERA_SHA` `8b71b99938eb`; net 4 fewer `def test_` (Q31). Security review PASS (gates intact; L1, stale Jupyter credentials in the admin export, is removed by T43's revision; L2 fixed); code review REQUEST CHANGES (2 blocking: sub-agents and the prompt kept treating a stored `jupyter` as live; 3 should-fix), fixed by a fresh executor and test-engineer, re-review APPROVE (both pins recomputed from HEAD's harness). basedpyright baseline re-recorded by `make baselines` (shrink only: 8 entries gone, 17 lower, none grew). Verify: `grep -rni jupyter apps/server/local_llm` finds only migrations, the harness's reading of stored Jupyter-era specs and `sandbox/kata.py`'s base-image comment; `make test-backend` exit 0 (7,289 passed, 24 skipped, 0 failed; diff coverage 95%); `make test-types` exit 0. |
+| T41 | Remove the Jupyter service, Makefile wiring and desktop text | any | any; docker | T39 | done | `6639e5d7` | 2026-11-13, laptop (local session, layer 4): the `jupyter` service, its network and the `jupyter-work` volume gone from `infra/docker-compose.yml` (header comment fixed); the Makefile generates only `SEARXNG_SECRET` and starts `postgres redis searxng sandbox-mirror`, printing `==> Starting Postgres and Redis, SearXNG and the sandbox mirror` and `==> Stopping Postgres and Redis, SearXNG and the sandbox mirror` (the prefixes `progress.ts` matches kept); `JUPYTER_TOKEN` out of `infra/.env.example`; `progress.ts`'s comment and `stack.ts`'s message name the new services; README ("Running it", the env block with a note that an old `JUPYTER_TOKEN=` line is harmless, ports), AGENTS.md, MAP.md and desktop.md follow; `sandbox.md` "Operations" says how to remove a leftover `local-llm-jupyter` container (a Compose orphan that `docker compose ps` counts, so the desktop app would refuse to start: `down --remove-orphans`), its network and the `local-llm_jupyter-work` volume, which nothing removes automatically. Executor, then a separate test-engineer: `test_makefile.py`, `test_sandbox_compose.py` (new `test_the_compose_file_has_no_jupyter_service_network_or_volume`), `progress.test.ts` follow the new lines; the Kata name-resolution probe drops `jupyter` (the service no longer exists). Security review PASS (the `sandbox` network and `sandbox-mirror` blocks byte-identical; `docker compose config` renders differ only by the removed service, network and volume; ports still loopback); code review APPROVE with 1 should-fix and 5 nits, applied, re-review APPROVE. Verify: `pytest tests/test_makefile.py tests/test_sandbox_compose.py` 46 passed; `make test-desktop` 149 passed; (docker) `make backend` with `LLLM_UVICORN_FLAGS=` came up healthy with exactly postgres, redis, searxng and sandbox-mirror running, and one SIGINT to its process group brought it down in about 5 s with the new `==> Stopping` line and no container left; `make desktop` (its first run failed before any window: `require('electron')` printed "Downloading Electron binary..." into the captured path after the Electron bump; a pre-existing first-run issue in the `desktop` target, not T41's, reported to the owner; the retry worked): the startup dialog advanced through every stage (services 7.0 s) to the app, and one SIGINT closed it in about 10 s, stopping the stack it had started (0 containers left). Screenshots in the session's scratchpad. |
+| T42 | Remove Pyodide | any | any | T39 | done | `4b219842` | 2026-11-13, laptop (local session, layer 4): `config.CODE_ENGINES` is `('sandbox',)` and both engine defaults (and the env fallback) are `sandbox`, so a stored or configured `pyodide` is now a removed engine like `jupyter`: refused by the form and import (422), turning the interpreter off everywhere while stored. Removed: `CODE_INTERPRETER_PYODIDE_PROMPT` and the per-engine prompt maps (the sandbox prompts are used directly, same bytes), `_execute_code`'s Pyodide branch and `_inline_output_images`, `ENABLE_PYODIDE_FILE_PERSISTENCE` and the public config's `enable_pyodide_file_persistence` (no client read it); `DEFAULT_CODE_INTERPRETER_PROMPT` now says the shell runs in the chat's sandbox and no longer offers API calls (it feeds only the legacy tag path's user message, which the harness refuses, so no spec sha moves). Frontend: the Code Execution page has no engine select and no Jupyter settings, always saves `sandbox` for both engines (a stored legacy value loads and saves cleanly), and shows the sandbox settings once; 18 i18n keys only those parts used are gone; `settingsTabs.ts`'s `jupyter` keyword and stale comments fixed. Two executors (backend opus, frontend sonnet), then separate test-engineers for the web and backend tests: the six Pyodide streaming cases moved to the sandbox with a stubbed runner so filtering, retries, streaming into an item, odd outputs and a raising runner stay tested; `chat_payload.json` and `streaming_response.json` re-recorded and compared case by case; web tests for the engine-free page and stored legacy engines; test definitions: backend net +1, web unchanged. Code review REQUEST CHANGES (1 blocking: a line over 120 columns; 1 should-fix: "API calls" contradicted the no-internet sandbox), fixed, re-review APPROVE. Verify: `grep -rni pyodide apps/` outside migrations finds only tests of stored legacy values; `make test-backend` exit 0 (7,295 passed, 24 skipped, 0 failed; diff coverage 92%); `make test-types` no new findings; `make test-web` exit 0 (1,363 passed); `make test-e2e` exit 0 (404 passed); both sha pins unedited and passing. |
+| T43 | Migrate engine rows to `sandbox` | any | any | T40, T42 | done | `0ece4d7f` | 2026-11-13, laptop (local session, layer 4): revision `807e3e98e4af` (after `2c8cdc04929d`; written through the `new-migration` skill, no `config_id` change so no schema note): in `config`, `code_interpreter.engine` and `code_execution.engine` holding `jupyter` or `pyodide` become `sandbox` (values read and written through the column's JSON type, as the app does, `updated_at` set), and every row under `code_interpreter.jupyter.` or `code_execution.jupyter.` is deleted (prefix match with `_` escaped); any other value is left; re-running changes nothing; no `config` table or rows is a no-op; `downgrade()` sets `sandbox` engines back to `jupyter`, lossy and documented. It also removes the stale Jupyter token rows T40's security review saw in the admin export (L1). Executor (opus), then a separate test-engineer: `tests/test_migration_code_engines.py` (29 cases on a real throwaway Postgres, not skipped: each old value, unchanged values, absent keys, ten deleted keys, near-miss keys kept, `updated_at` only on updated rows, idempotence, downgrade). Code review APPROVE (no config cache can serve a stale value; one transaction; `config_old` unread) with 1 should-fix (the docstring cited the proposal's path, which Q32 moves) and a lossy-downgrade nit, both applied before it was ever run on a real database, re-review APPROVE. Verify: `make test-backend` with the throwaway database (7,295 passed at T42's head, the migration test included); on the laptop, before: alembic `2c8cdc04929d`, both engines `"jupyter"`, ten `*.jupyter.*` rows and no other Jupyter-shaped key; `make backend` (web rebuilt first) logged `Running upgrade 2c8cdc04929d -> 807e3e98e4af`, came up healthy, and after it alembic is `807e3e98e4af`, both engines `"sandbox"`, no `jupyter` row (startup seeding recreated none); Admin Settings > Code Execution shows "The sandbox is ready" with the sandbox settings and no engine choice or Jupyter field; one SIGINT stopped it cleanly. Settings before this session, restored or unchanged: idle 30, cap 20 (max running 4, timeout 60, image `data`, retention 7); both engines are now `sandbox` by this revision. Seen on the way, not T43's: every long admin settings page (Documents, Interface, General, Code Execution) scrolls sideways by 5 px when it scrolls vertically, from the switches' hidden inputs; reported to the owner. |
+| T44 | Docs sweep | any | any | T40-T43 | done | `b63aff03` | 2026-11-13, laptop (local session, layer 4): the proposal marked built (#886, #884, #888 merged 2026-11-13; #889) and moved to `docs/history/sandbox-code-interpreter.md` (Q32), every live link fixed (guides, plans, session files, four code comments), with a short notice left at the old path for the links that are never edited (the 2026-11-10 and 2026-11-12 decisions entries, applied migration `5d1e9c3a7b42`); `assistant-tools.md`'s code interpreter section rewritten for the sandbox only; `features.md` with `features-chat-pipeline.mmd` and `features-harness.mmd` (embedded copies byte-identical), `benchmarks.md` (sandbox only; T31's Jupyter-engine run kept as measured, marked historical), `sandbox.md` (built, the only engine), README, MAP.md, AGENTS.md (the qwen25c note now says where it was observed), `benchmarks-through-the-app.md` and `local-model-recommendations.md` brought up to date. **The layer's new decisions entry** "2026-11-13 (later)" at the top of `docs/decisions.md` (additions only: `git diff origin/main --numstat` 56 0): step 2's harness changes (correction 19), Q30, step 3's removals, the engine rule, revision `807e3e98e4af`, and what is left on existing machines; the 2026-11-12 entry, on `main`, untouched; the milestone added to `roadmap-timeline.mmd` and ROADMAP.md (identical), and the sandbox item removed from "Short-Term" and the planned table. Writer (sonnet) for the guides, plans and move; the decisions entry and roadmap by the orchestrator; review REQUEST CHANGES (1 blocking: the entry said Jupyter-era runs stay readable in Compare and Report, which leave every harness row out; 3 should-fix: README's wheelhouse claim, an env value only falling back, the Run button's two switches; 5 nits), all applied (the same correction in this plan's step 3 rule), re-review APPROVE. Verify: `grep -rniE 'jupyter|pyodide' docs README.md MAP.md AGENTS.md` outside history, audit, decisions and this plan's files shows only true history (T31's recorded run, the scipy-notebook base image, the leftovers note, qwen25c's 2026-10-24 observation, notes that the engines were removed); `docs-sync` checklist by the reviewer; pre-commit on every changed file passed. |
+| T48 | Final verification | local | docker, kvm, owner | T44 | done | `6c64e829`, `a6623b67` | 2026-11-13/14, laptop (i9-12900H, 62 GiB, Fedora 44 kernel 7.2.8-200.fc44, Kata 4.3.1 runtime-rs with Cloud Hypervisor v54.0 as at T01, images `2026-11-12.1`), with the owner for the desktop probe. `main` had not moved since `90eed435` (nothing to merge). **Final-gate reviews** at `b63aff03`, each a separate agent: the project `reviewer` (no blocking; 4 should-fix: the gate-change text said four `tool_loading` cases, three; two streaming cases unexplained; an old config export could write back the deleted Jupyter rows, the owner chose Q34; no real Save on record), the `review` skill's intent axis (APPROVE, every T40-T44 requirement met) with the reviewer as its standards axis, and `ai-slop-cleaner` review-only (1 required: comments narrating task ids; optional: one engine predicate, no `'jupyter'` default in the harness, the dead `_execute_code` fallback, all three done at the owner's word). Applied in `6c64e829` by an executor and a test-engineer (and the fallback test rewritten, not deleted), re-review APPROVE. **`make check`** exit 0 at `b63aff03` and again at `6c64e829` (backend 7,299 passed, 24 skipped, 0 failed, diff coverage 96%; types no new findings; web 1,363, coverage 100%; Playwright 404; desktop 149; boot smoke); CI green at `6c64e829` but `PR gate` (the label). **Kata suite** (`LLLM_TEST_KATA=1`, `test_sandbox_kata.py`, `_kata_edges.py`, `_uploads_kata.py`, `_outputs_kata.py`, `make backend` up for the mirror): 286 passed in 375 s. **Each acceptance test, on `6c64e829`** (real stack: `make backend` without `--reload`, the built UI, Chrome, OpenRouter `qwen/qwen3.8-flash`): - **Network fence:** `test_network_fence`, `test_the_fence_holds_over_ipv6`; inside `local-llm-sandbox-mirror`, `pypi.org` "bad address" and a public address "Network unreachable". - **VM boundary, cross-chat isolation, read-only uploads, timeout, memory, output flood, parallel sessions:** `test_vm_boundary`, `test_cross_chat_isolation`, `test_uploads_are_a_read_only_mount_*`, `test_timeout_leaves_no_process`, `test_memory_oom_inside_the_guest`, `test_output_flood_is_capped`, `test_four_sessions_run_at_once_and_a_fifth_waits_for_a_slot`. - **Persistence:** `test_persistence_across_stop_and_image_switch`; with idle 1 minute the reaper stopped chat "T48 Acceptance Checks"'s sandbox (`stopped idle sandbox e255f250…`) and its next call read `persist.txt` and still imported polars 2.1.0. - **Fork bomb:** `test_fork_bomb_is_contained`; with a bomb in one sandbox (through the backend's exec as UID 1000), another answered 12 of 12 calls (slowest 0.43 s) and `/health` 12 of 12 (slowest 0.01 s). - **Outputs:** a matplotlib figure rendered on the reply (640×480). - **Mirror installs:** polars 2.1.0 installed and imported a call later; an unlisted name "No matching distribution found"; a probe sdist put in the wheelhouse (removed after) refused by `pip install`, while `pip download --no-binary :all:` fetched it and tried to build it, so the mirror served it and the image's binary-only setting refuses it. - **Image switching:** on `data` dplyr 1.2.1 loaded; on `web` the chat's files were there, `tsc` 6.0.3, and a Playwright screenshot of a page in `/workspace` rendered on the reply (800×400); back on `data` it was listed. - **Output rendering:** an HTML output's own script and inline style ran, `document.cookie`, `parent.document`, `top.location` and `fetch('/api/v1/chats')` were blocked, the form submission reached nothing, `window.open` gave null, `window.lllmDesktop` undefined, in Chrome and in the desktop app (owner's screenshots, 2026-11-14); `RTCPeerConnection` sent STUN requests to a UDP listener on the laptop's LAN address (Q23, accepted); an SVG with `<script>` rendered only as an image; the raw download is `application/octet-stream`, attachment, `nosniff`, a sandboxing CSP, and `/content/html` refuses it (403); the frame is `sandbox="allow-scripts"`. - **LaTeX:** `latexmk -pdf` with `amsmath`, `biblatex` and `biber` (it ran), `tikz` and `listings`, exit 0, the `.tex` and the `.pdf` on the reply with a page preview (680×880); `\write18` created nothing; a missing package failed "File `lllmnotapackage.sty' not found" at line 3 and recorded a `latex_miss` row. - **Telemetry:** for the chat: `import pandas 3.0.6`, `module_miss notapkg`, `command_miss fakecmd`, `install polars 2.1.0` attributed to it, two `pip_miss`, `r_import dplyr 1.2.1`; 91 rows over 21 item chats carry the harness run's id. - **Tag path:** function calling Legacy, the block ran as `/workspace/.runs/1.py` and its chart rendered on the reply. - **Start latency and overhead:** cold start to the first command's output 1.33, 1.38, 1.29, 1.32, 1.33 s (median 1.33 s); idle host memory about 311 MiB a sandbox (4 sandboxes: MemAvailable fell 1,244 MiB). - **Restart:** one SIGINT left the chat's running sandbox ("leaving 1 running sandbox(es)"); the next `make backend`'s startup sweep removed it and its `cloud-hypervisor` process (0 left); the chat's next call read its files. - **Harness** (Q30): `smoke` run `20261114T035301Z-20035d` through `harness-qwen38` (`qwen38` served from Benchmarks > Serve, connection `http://127.0.0.1:8090/v1`): 17 of 24 passed (HumanEval+ 6/8, MBPP+ 6/8, DS-1000 5/8) in 125.2 minutes, mean 313 s an item, 21 items ran code (25 runs), spec `b8a5ad9285bc` (as T31's; the Jupyter-era spec is `23f1179b8ecb`), every sandbox released. Also: a real Save of Admin Settings > Code Execution (`POST /api/v1/configs/code_execution` 200, both engines stored `sandbox`). **Restored:** idle 30, cap 20 (unchanged: max running 4, timeout 60, image `data`, retention 7), both engines `sandbox` (T43); the `:8090` connection removed (OpenRouter only, key unchanged); `qwen38` stopped. Left for the owner: chats "T48 Acceptance Checks", "T48 Bash Check", "Tag Path Check" with their workspaces, harness run `20261114T035301Z-20035d`. The layer's decisions entry and milestone dated 2026-11-14. |
 | T49 | Owner marks the PR ready | owner | owner | T48 | todo | | |
 
 A task too big for one session is split in this table (T13a, T13b) before
@@ -125,6 +127,11 @@ to the decision.
 **Open:** none.
 
 **Answered:**
+
+- **Q34 (from T48's final review, 2026-11-13). Answered 2026-11-13: drop them silently.** `POST /api/v1/configs/import` wrote every key it was given, so an export taken before this PR, its engines edited to `sandbox`, would write back the `code_interpreter.jupyter.*` and `code_execution.jupyter.*` rows (the old Jupyter token and password included) that revision `807e3e98e4af` deleted. The import now skips keys under those two prefixes and imports the rest; the engine check stays. Rejected: refusing such an import with 422, and leaving the inert rows to come back.
+- **Q33 (found by `make pr-gate PR=889` at T43, 2026-11-13). Answered 2026-11-13: record and justify it.** T43's migration test adds one `pytest.skip(` (the gate's "1 new pytest.skip/xfail calls"), the same guard as the other database tests: it skips only without `TEST_DATABASE_URL`, and fails instead under CI. It is a row in "Expected PR gate findings" and a bullet under #889's `## Gate changes`. Rejected: moving the cases into `test_schema_drift.py` to reuse its guard, which would reshape the change to avoid the finding.
+- **Q31 (layer 4's start, 2026-11-13). Answered 2026-11-13: build on them.** Bringing T40-T44 up to date with the code T20-T30 left showed `PR gate` findings the table did not list: fewer test definitions in nine more files (the Jupyter and Pyodide cases T20-T30 added beside the sandbox ones), `tool_loading.json` edited again (T40 removes `execute_code`), and possibly "too large" or `docs/decisions.md` findings if GitHub omits a patch. They are rows in "Expected PR gate findings"; each is justified under #889's `## Gate changes`, and the owner reviews them at T49.
+- **Q32 (for T44, 2026-11-13). Answered 2026-11-13: move it.** The proposal `docs/proposals/sandbox-code-interpreter.md` is marked built with its PR numbers and moved to `docs/history/`, with every link to it fixed. Rejected: leaving it under `docs/proposals/` marked built. Done in T44, with one addition: a short notice stays at the old path, pointing to `docs/history/`, because the 2026-11-10 and 2026-11-12 decisions entries and the applied migration `5d1e9c3a7b42` link there and are never edited.
 
 - **Q30 (asked at T31, 2026-11-13). Answered 2026-11-13: a `smoke` run on `qwen38`, and a one-item Jupyter run for the sha.** The acceptance test "Harness" asked for a full HumanEval+ harness run (tier `full`, 164 items, about 8 to 22 hours on `qwen38` at the 500 s a harness item took in T30), and T31 for the Tests configuration of the last Jupyter-era harness baseline, which does not exist (the database held no harness run before T30). The owner: a full run is not needed to verify that the harness works on the sandbox engine; T31 runs the `smoke` tier (24 items: HumanEval+, MBPP+ and DS-1000, 8 each, seed 20260830; LiveCodeBench is left out without a date window) through `harness-qwen38` on the sandbox engine, and, for the clause "its spec SHA differs from Jupyter-era runs", one HumanEval+ item through the same entry on the Jupyter engine first, which records a real Jupyter-engine spec while Jupyter still exists (T40 removes it). Rejected: the full HumanEval+ run, a full Jupyter run beside it (16 to 44 hours), and comparing against the Jupyter sha the T30 tests pin from the old code, which no real run produced.
 
@@ -495,6 +502,7 @@ One line per session, newest last:
 - 2026-11-13 (later) | local | none | At the owner's request the single PR #884 was split into four stacked draft PRs with `gh stack` (stack #887), one per layer of tasks (T0x and T1x, T2x, T3x, T4x), without rewriting any commit: the commits already ran T00-T19 then T20-T29 in order, so `feat/sandbox-engine` was created at `e1d7c286` (PR #886, into `main`) and #884 kept `feat/sandbox-code-interpreter` at `5f4153f8`, retargeted onto it and retitled. This commit starts layer 3 (`feat/sandbox-harness`) and the next starts layer 4 (`feat/sandbox-remove-jupyter`), so both PRs could be opened; the ledger header and both session plans now name a branch per layer. Each PR's `## Gate changes` covers only its own layer's findings. Layers 3 and 4 opened as #888 and #889. Only #886 has `PR gate` findings, under its `## Gate changes`; #884's diff is clean against its base, but once #886 squash-merges, layer 1 shows again in #884's diff until `main` is merged into it, so re-run `make pr-gate PR=884` then. | Next: T30 on `feat/sandbox-harness`.
 - 2026-11-13 (evening) | local | T30, T31, T39 | Claimed at `77f2c502`; OMC's plan rebuilt from the ledger's unfinished rows (T30-T48), and each task run as an OMC story with the owner's `/goal`. **T30** (`481a63d2`): the harness on the sandbox engine, built by an executor, tests by a separate test-engineer, then a code review (APPROVE, 3 should-fix), a security review (PASS, L1 and L2) and a re-review (APPROVE, 1 should-fix), all applied; additions from review: the replaced-sandbox refusal (`note_sandbox`) and the empty-digest refusal. The owner's brief asked for the laptop check through an OpenRouter entry, which the harness refuses by design (D4); the owner chose to serve `qwen38` instead. The first `make backend` applied the then-unreviewed revision `2c8cdc04929d` to the laptop's database; it was downgraded at once (its downgrade deletes only its note) and applied again after review, so it is append-only from here. **T31** (`3b7026b5`): the owner narrowed it (Q30) to a `smoke` run on `qwen38` plus a one-item Jupyter run for the sha: 17 of 24 passed; specs `b8a5ad9285bc` (sandbox) and `23f1179b8ecb` (Jupyter); numbers with context in benchmarks.md. The owner asked about Mbpp/102 (the model said it verified its answer, yet it failed): its own asserts passed in the sandbox and MBPP+'s hidden input `'___python_program'` failed, a fair failure, noted in the guide. **T39** (`aaa5abe6`): `main` (`20ee5337`, #890) merged up through layers 1-3 and pushed; `make check` and the Kata suite (38) passed at `f829f99d`; then `feat/sandbox-harness` merged into `feat/sandbox-remove-jupyter`. #886 and #884 had been marked ready by the owner (17:15 UTC) and #886 carried `gate-change-approved`; the `main` merge push removed that label (21:19) and the owner re-added it (21:23); auto-merge stayed off on both. Check artifacts left for the owner: the Workspace entry `harness-qwen38` (kept at the owner's word; its base model is missing until `qwen38` is served on a `:8090` connection again), and four recorded harness suite runs, `20261113T173718Z-e14509` and `20261113T181128Z-81eed2` (T30, one DS-1000 item each), `20261113T183842Z-6c10fd` (T31's Jupyter item) and `20261113T184249Z-a5bd34` (T31's smoke run), with serving run 16 (closed as `killed` after the backend restart lost Serve's handle). Restored: both engines `jupyter`, idle 30, cap 20; the `:8090` connection removed (only OpenRouter, its key unchanged); `qwen38` stopped. Correction 19 records T30's changes for the PR's decisions entry (T44 or T48). The T39 `/goal` the owner typed was "complete T39", not the story objective, so OMC refused T39's checkpoint and `G003-t39` is left in progress there; the next session rebuilds OMC's plan from the ledger (T40-T48). | Next: T40 (remove the Jupyter backend code and tests) on `feat/sandbox-remove-jupyter`: rebuild OMC's plan from the ledger (`create-goals --force`, T40-T48), then `omc ultragoal complete-goals G001-t40 --plan-id sandbox`, then the owner types `/goal T40 per docs/plans/sandbox-implementation.md: every Verify item has evidence and the ledger row is done or needs-local-verify`.
 
+- 2026-11-13/14 | local | T40, T41, T42, T43, T44, T48 | Layers 1-3 (#886, #884, #888) had squash-merged into `main` on 2026-11-13 and the owner had rebased layer 4 onto `90eed435`; the local branch was reset to it. Claimed at `cda49c2a`; OMC's plan rebuilt in aggregate mode (one `/goal` for the session, no per-task checkpoints). The plan was brought up to date first (`36b385cb`: current file:line references, the step's engine rule, the stale up-to-date and decisions-entry text). Owner answers: Q31 (extra gate rows), Q32 (move the proposal), Q33 (the migration test's skip guard), Q34 (the import drops old Jupyter keys); the owner also had the anti-slop review's optional fixes done. Each task: an executor, a separate test-engineer, a code review (and a security review for T40 and T41), fixes, a re-review. T40 `c39c9aba`, T41 `6639e5d7`, T42 `4b219842`, T43 `0ece4d7f` (revision `807e3e98e4af`, applied to the laptop's database at 2026-11-14 01:08 UTC after review: both engines `sandbox`, the ten Jupyter rows gone), T44 `b63aff03`, the final review's fixes `6c64e829`, T48's record `a6623b67`. `make check` and CI green at `6c64e829` (`PR gate` waits for the label); the Kata suite 286 passed; every acceptance test re-run on `6c64e829`, the desktop probe by the owner; the `smoke` harness run 17 of 24 under spec `b8a5ad9285bc`. `docs/decisions.md` against `main`: 57 additions, 0 deletions (one more than T44's row, from the Q34 sentence). The owner added `gate-change-approved` once at `8b7d6cee` (2026-11-14 02:36 UTC) and agreed that later pushes drop it. Seen and reported, not changed: `make desktop`'s first run after an Electron bump fails (`require('electron')` prints "Downloading Electron binary..." into the captured path); every long admin settings page scrolls sideways by 5 px (the switches' hidden inputs); `infra/.env` is mode 0644. Restored: idle 30, cap 20, OpenRouter the only connection, `qwen38` stopped; engines `sandbox`. | Next: T49, the owner's alone: read #889's `## Gate changes`, mark #889 ready and add `gate-change-approved`. After it merges, a local session marks this plan complete on `main` in a small docs PR.
 ---
 
 ## Requirement tags
@@ -530,7 +538,13 @@ which checks need which tags.
   new dated entry at the top, written in T23 and kept current as tasks
   land: what was built, and every way the build differs from the
   proposal (start with "Corrections to the proposal" below). Never edit
-  the 2026-11-10 entry or any other existing entry.
+  the 2026-11-10 entry or any other existing entry. **Changed
+  2026-11-13:** that entry (dated 2026-11-12) reached `main` when #884
+  squash-merged, so it is now an existing entry and is never edited.
+  Layer 4 adds a second new dated entry at the top instead (T44), with
+  what the first lacks: correction 19 (T30's changes), Q30, and step 3's
+  removals. T48 sets that entry's date to the day it asks the owner to
+  approve #889; it is still the branch's own entry then, not one on `main`.
 - **Append-only schema.** New Alembic revisions only, written with the
   `new-migration` skill. The head at `9ee7fc39` is `e3a7c5f92b18`; check
   again before writing a revision, since `main` moves.
@@ -632,8 +646,9 @@ and goes into this PR's decisions entry.
     root steps at host setup that the proposal did not have; and the
     sandbox's first process runs as `nobody` (Q16).
 19. **The harness on the sandbox engine (T30, 2026-11-13)** differs
-    from the plan in four ways, which the PR's decisions entry picks up at
-    T44 or T48 (it lives on a lower layer, so T30 could not edit it):
+    from the plan in four ways, which layer 4's new decisions entry picks
+    up in T44 (the 2026-11-12 entry reached `main` with #884 and is never
+    edited):
     the `data` image is pinned in `_sandbox_session` for all four tools,
     not only `bash`, and a `bash` call that named `web` is told so; an
     item whose calls ran in more than one sandbox (evicted or reaped
@@ -655,8 +670,12 @@ The PR will trip the gate; the local session lists every finding under
 | Fewer tests in `test_makefile.py`, `progress.test.ts` (if a Jupyter-only case goes) | T41 | Same reason; the service-list assertions are rewritten, not dropped |
 | Fewer tests in `CodeExecution.test.tsx` and `e2e/admin-settings.spec.ts` (`:187-222`) | T42 | The Jupyter and Pyodide engine choices are removed; the sandbox cases from T19 remain |
 | A file whose diff GitHub did not return ("too large"), so the gate could not inspect it | T12-T19 (Q21) | The PR outgrew GitHub's per-file diff limit in its API; the gate fails closed on such files. Each is listed under `## Gate changes`, with a local grep of its added lines for skip, xfail, `.only`, `noqa`, `type: ignore`, `biome-ignore`, `@ts-expect-error` and `pragma` (none but the Q3 Kata skips), and the owner reviews them at T49 |
-| Edited golden file `tests/fixtures/tool_loading.json` | T12 | It records the `Config.get_many` key list in `get_builtin_tools` and the offered tools (around `:1910-1925`); adding the engine key and the sandbox tools changes it. The test still checks the same thing, against the new list |
+| Edited golden file `tests/fixtures/tool_loading.json` | T12, T40 | It records the `Config.get_many` key list in `get_builtin_tools` and the offered tools (around `:1910-1925`); adding the engine key and the sandbox tools changes it, and T40's removal of `execute_code` changes the tools a non-`sandbox` engine is offered (none). The test still checks the same thing, against the new list |
 | `docs/decisions.md`: "existing entries were changed or removed" | T23 | GitHub's API returned no patch for the file (it reports 0 additions and 0 deletions, the same per-PR diff limit as the "too large" files, Q21), and the gate fails closed on a missing patch. Locally `git diff origin/main --numstat -- docs/decisions.md` shows additions only (`91 0` at `c9fef9d6`): one new top entry, no existing entry touched. The owner agreed on 2026-11-13 to record it here and under `## Gate changes` |
+| Fewer test definitions in files beyond the rows above: `test_sandbox_call_sites.py`, `test_sandbox_settings.py`, `test_sandbox_tools_registration.py`, `test_sandbox_uploads.py`, `test_async_file_io.py`, `test_numeric_env_settings.py`, `test_benchmark_harness.py`, `apps/web/src/lib/chat/codeRun.test.ts`, `apps/web/e2e/code-run.spec.ts` | T40, T42 | Added 2026-11-13 at layer 4's start, when the plan was brought up to date: T20-T30 added Jupyter and Pyodide cases beside the sandbox ones (engine selection, prompts, settings forms, the Run gating, the `chat_files` wrapper). Those cases test engines that no longer exist; each sandbox case beside them stays, and new cases test that a non-`sandbox` engine value is refused or leaves the interpreter off. The gate counts one PR-wide total, so these share one finding with the rows above |
+| A file whose diff GitHub did not return ("too large") in #889 | T40-T44 | Possible for the large golden fixtures and docs the layer rewrites (Q21's limit). Handled as the T12-T19 row: listed under `## Gate changes` with a local grep of its added lines for skip, xfail, `.only`, `noqa`, `type: ignore`, `biome-ignore`, `@ts-expect-error` and `pragma` |
+| `docs/decisions.md`: "existing entries were changed or removed" in #889 | T44 | Only if GitHub returns no patch for the file again; the layer adds one new top entry and edits no existing one, shown by `git diff origin/main --numstat -- docs/decisions.md` (additions only), as in the T23 row |
+| New `pytest.skip(` in `tests/test_migration_code_engines.py` | T43 (Q33) | The fixture guard every database test here uses (`test_schema_drift.py`, `test_prescreen_optuna_schema.py`, `test_imports.py`): it skips only where `TEST_DATABASE_URL` is unset, and under CI (`CI` set) it calls `pytest.fail` instead, so CI always runs the 29 migration cases against its throwaway Postgres. Found by `make pr-gate PR=889` at `0ece4d7f`; the owner agreed on 2026-11-13 to record it |
 
 If a task produces a finding not listed here, add a row in the same commit
 **and** add it to the "Open" list in "Owner questions": AGENTS.md's tripwire rule is to
@@ -2033,93 +2052,162 @@ deleted next; this is the last point where both engines can be compared.
 
 ## Step 3: remove Jupyter and Pyodide
 
+Layer 4 of the stack: built on `feat/sandbox-remove-jupyter`, in its own
+PR (the ledger header's table). Its work starts after T39, the step 2
+gate; until then this layer holds only the commit that opened its PR.
+
+**Brought up to date 2026-11-13** (session start of layer 4, at `main`
+`90eed435`): the file:line references in T40-T44 are from that commit,
+not `9ee7fc39`, and T40 and T42 name the places T20-T30 added since
+(the Run endpoint's Jupyter branch, the tool selector, the uploads
+wrapper, the frontend's Run gating). Rules every task in this step keeps:
+
+- **After step 3, `sandbox` is the only engine value** (the proposal's
+  "Pyodide" row). `code_interpreter.engine` and `code_execution.engine`
+  stay as keys; their defaults become `sandbox`, the admin form and the
+  config import refuse any other value (422), and a stored value other
+  than `sandbox` (only possible before T43's revision runs) leaves the
+  code interpreter off and the Run endpoint answering 400, never a
+  removed code path or a crash.
+- **Jupyter-era benchmark runs stay stored.** Remove the ability to
+  start a Jupyter harness run, not the stored ones: the runs with spec
+  `23f1179b8ecb` (`20261113T183842Z-6c10fd`) keep their sha (Compare and
+  Report leave every harness row out until they group by `harness_sha`,
+  corrected 2026-11-13 at T44's review), and the sandbox spec sha
+  (`b8a5ad9285bc` for T31's baseline) does not change; its pinned test
+  passes unedited.
+- **What legitimately keeps the word Jupyter:** the data image is built
+  on `jupyter/scipy-notebook` (`infra/sandbox/Dockerfile.data`,
+  `image-freeze.txt`, the health-check comment at `sandbox/kata.py:490`),
+  T31's recorded Jupyter-engine run in `docs/guides/benchmarks.md`, the
+  sandbox guide's history notes, migration history and
+  `benchmarks/data/prompts/`. The Verify greps below allow these.
+
 ### T40: remove the Jupyter backend code and tests
 
-*Author: any. Verify: any. Depends: T39.*
+*Author: any. Verify: any. Depends: T39.* **security** (it changes the
+code interpreter's tool selection and the uploads module).
 
 - Delete `utils/code_interpreter.py` (`JupyterCodeExecuter`,
   `execute_code_jupyter`, `ResultModel`, `UPLOADS_DIR`,
-  `DEFAULT_IDLE_TIMEOUT`, the re-export from T13) and its imports at
-  `tools/builtin.py:738-744` and `utils/middleware.py:81`.
-- `execute_code` (`builtin.py:640-812`) and its registration: remove
-  (the sandbox tools replace it), or keep only if the tag path needs it
-  (it does not; T20 calls the manager directly).
-- `utils/middleware.py`: the Jupyter branch of `_execute_code`; the
-  blocked-modules preamble (`:6095-6113`) and `builtin.py:672-698`, with
-  `CODE_INTERPRETER_BLOCKED_MODULES` (`config.py:431`); `_inline_output_images`
-  if the sandbox branch no longer needs it.
+  `DEFAULT_IDLE_TIMEOUT`, the `chat_files` re-export from T13) and its
+  imports at `tools/builtin.py:761`, `utils/middleware.py:83` and
+  `routers/utils.py:16`; and `chat_files` in `sandbox/uploads.py:265-286`
+  (Jupyter's only user; `chat_uploads` stays).
+- `execute_code` (`tools/builtin.py:668-836`) and its registration in
+  `utils/tools.py:64, :743-761`: remove it (the sandbox tools replace it;
+  the tag path and the Run endpoint call `run_code_in_sandbox`, `:1345`).
+  `_code_interpreter_tools` then offers the four sandbox tools when the
+  gates pass and the engine is `sandbox`, and nothing otherwise; the
+  gates keep their four checks (`_gated_tools` needs a tool list: give it
+  the sandbox's four).
+- `routers/utils.py:48-80`: the Run endpoint's Jupyter branch
+  (`code_execution.jupyter.*`); any engine but `sandbox` answers 400 as
+  an unknown one does today.
+- `utils/middleware.py`: the Jupyter branch of `_execute_code`
+  (`:6170-6241`); the blocked-modules preamble (`:6178-6195`) and
+  `builtin.py:695-715`, with `CODE_INTERPRETER_BLOCKED_MODULES`
+  (`config.py:432-434`, imported at `middleware.py:21`);
+  `_inline_output_images` (`:6279`) if the sandbox branch no longer needs
+  it; the `'jupyter'` entries of `_CODE_INTERPRETER_TAG_PROMPTS` and
+  `_CODE_INTERPRETER_TOOL_PROMPTS` (`:2550-2557`).
 - `config.py`: all `CODE_EXECUTION_JUPYTER_*` and `CODE_INTERPRETER_JUPYTER_*`
-  settings (`:387-396`, `:411-429`), `CODE_INTERPRETER_JUPYTER_PROMPT`
-  (`:470-482`), their `DEFAULT_CONFIG` keys (`:2612-2632`), and the same
-  in `routers/configs.py` (`:49-65`, `:717-732`).
-- `harness.py`: `_jupyter_alive` and the `jupyter` acceptance in
-  `prepare()`.
+  settings (`:388-397`, `:412-430`), `CODE_INTERPRETER_JUPYTER_PROMPT`
+  (`:468-482`), their `DEFAULT_CONFIG` keys (`:2663-2667`, `:2677-2681`),
+  and the same in `routers/configs.py` (`:53-57`, `:61-65`, `:733-737`,
+  `:741-745`). The engine fields refuse a value other than `sandbox`
+  (see the step's rules).
+- `harness.py`: `_jupyter_alive` (`:374`), the `jupyter` acceptance in
+  `prepare()` (`:210-240`) and `ENGINE_TOOLS['jupyter']` (`:67`). Keep
+  what reads a stored Jupyter run (`_engine`'s default for an hctx
+  without `engine`, `:296-301`, and the spec's Jupyter shape) if Compare,
+  Report or any re-computation of a stored spec still uses it; the
+  docstrings at `:7`, `:20-25`, `:94`, `:142`, `:458` say what is left.
 - Tests: delete `tests/test_jupyter_chat_files.py` and
   `tests/test_jupyter_idle_timeout.py`; remove the Jupyter cases from
   `test_async_file_io.py:233-255`, `test_benchmark_harness.py`,
-  `test_numeric_env_settings.py:110-111, 226-232`; replace the Jupyter
-  cases in `test_chat_payload.py`, `test_streaming_response.py` and
+  `test_numeric_env_settings.py:110-111, 226-232`,
+  `test_sandbox_call_sites.py`, `test_sandbox_settings.py`,
+  `test_sandbox_tools_registration.py` and `test_sandbox_uploads.py:200`
+  (the `chat_files` wrapper); replace the Jupyter cases in
+  `test_chat_payload.py`, `test_streaming_response.py` and
   `test_subagent_delegate.py` and their goldens
   (`tests/fixtures/chat_payload.json`, `streaming_response.json`,
-  `subagent_delegate.json`) with sandbox cases, moving T20's
-  `sandbox_*.json` fixtures in if that reads better. Every one of these
-  is an expected gate finding.
+  `subagent_delegate.json`) with sandbox cases. New tests: the config
+  form and import refuse a non-`sandbox` engine; a stored `jupyter`
+  engine offers no code interpreter tool and the Run endpoint answers
+  400. Every removal is an expected gate finding.
 
-**Verify:** `grep -rni jupyter apps/server/local_llm` finds only the
-migration history and `benchmarks/data/prompts/` (unrelated data, never
-edited); `make test-backend`; `make test-types` (the basedpyright
-baseline may shrink: `make baselines`).
+**Verify:** `grep -rni jupyter apps/server/local_llm` finds only
+migration history, `benchmarks/data/prompts/`, `sandbox/kata.py`'s
+health-check comment and what reads stored Jupyter-era runs;
+`make test-backend`; `make test-types` (the basedpyright baseline may
+shrink: `make baselines`); the sandbox spec sha's pinned test unedited.
 
 ### T41: remove the Jupyter service, Makefile wiring and desktop text
 
-*Author: any. Verify: any; docker. Depends: T39.*
+*Author: any. Verify: any; docker. Depends: T39.* A security review
+confirms the `sandbox` network and `sandbox-mirror` blocks of
+`infra/docker-compose.yml` are byte-for-byte unchanged.
 
-- `infra/docker-compose.yml`: the `jupyter` service (`:68-102`), its
-  network (`:130-132`) and the `jupyter-work` volume (`:134-137`); fix the
-  stale header comment (`:1-9`).
-- `Makefile`: `JUPYTER_TOKEN` generation (`:139-145`, keep
-  `SEARXNG_SECRET`), `jupyter` in the service lists (`:149`, `:164`), the
-  `==> ` lines and messages (`:154`, `:156`, `:159`, `:163`) naming the
-  services now running; keep the prefixes `'==> Starting Postgres and
+- `infra/docker-compose.yml`: the `jupyter` service, its network and the
+  `jupyter-work` volume; fix the stale header comment.
+- `Makefile`: `JUPYTER_TOKEN` generation (keep `SEARXNG_SECRET`),
+  `jupyter` in the service lists, the `==> ` lines and messages naming
+  the services now running; keep the prefixes `'==> Starting Postgres and
   Redis'` and `'==> Stopping Postgres and Redis'` that
-  `apps/desktop/src/progress.ts:69, :127` match.
-- `tests/test_makefile.py` (`:54, :221, :248, :254, :259, :268, :281`) and
-  `apps/desktop/src/progress.test.ts:169-176` follow the new strings;
-  `progress.ts:67-68`'s comment and `stack.ts:145`'s message name the
-  right services.
+  `apps/desktop/src/progress.ts` matches.
+- `tests/test_makefile.py`, `tests/test_sandbox_compose.py:149-150` and
+  `apps/desktop/src/progress.test.ts` follow the new strings;
+  `progress.ts`'s comment and `stack.ts`'s message name the right
+  services. `test_sandbox_kata.py:293` probes that the name `jupyter`
+  does not resolve in a guest; keep it (a name that should never
+  resolve is still a fair probe) or drop it, saying which.
 - `infra/.env.example`: drop `JUPYTER_TOKEN`. An existing `infra/.env`
   keeps a harmless extra line; say so in README.
 - `jupyter-work` on existing machines: document `docker volume rm
   local-llm_jupyter-work` in the guide; do not remove it automatically.
+  A `jupyter` container left running from before is an orphan once the
+  service is gone: the guide says how to stop it.
+- README's "Running it" and AGENTS.md's `make backend` service lists
+  change in this commit (the maintenance policy), not in T44.
 
 **Verify:** `make test-backend` (test_makefile), `make test-desktop`;
 (docker) `make backend` starts and stops cleanly with the new service
-list, and the desktop app's progress dialog still advances (`make
-desktop`).
+list (one SIGINT), and the desktop app's progress dialog still advances
+(`make desktop`). Both run before T43's revision exists in the tree,
+since startup applies new revisions to the laptop's database.
 
 ### T42: remove Pyodide
 
-*Author: any. Verify: any. Depends: T39.*
+*Author: any. Verify: any. Depends: T39 (in practice after T40, which
+shares its files).*
 
-The `pyodide` branches in `tools/builtin.py:701-734` (gone with
-`execute_code` in T40 if removed there), `utils/middleware.py:6116-6127`
-and `:2542-2569`, `utils/subagents.py:303-320`; `CODE_INTERPRETER_PYODIDE_PROMPT`
-(`config.py:453-465`); `DEFAULT_CODE_INTERPRETER_PROMPT`'s "runs in the
-user's browser" wording (`:435-450`); `ENABLE_PYODIDE_FILE_PERSISTENCE`
-(`env.py:1118-1121`, `main.py:92`, `:2489`); the `'pyodide'` defaults at
-`builtin.py:700`, `middleware.py:2543`, `subagents.py`, `config.py:385,
-:407` (become `'sandbox'`); the event-caller comments at
-`middleware.py:3214-3216, :6651-6652`; `utils/sanitize.py:14, :49` and
-`upstream_trace.py:7, :37` docstrings; the harness comments. Frontend:
-`CodeExecution.tsx` engine choice (`ENGINES` becomes `['sandbox']`, or
-the select goes), the i18n keys only it used (find them with `grep -n -i -E
-'jupyter|pyodide' apps/web/src/lib/i18n/locales/en-US/translation.json`
-and check each has no other user), `CodeEditor.tsx:31-35`'s
-comment, `settingsTabs.ts:241`'s `'jupyter'` keyword (remove it; `'sandbox'` is
-already there), `CodeExecution.test.tsx` and
-`e2e/admin-settings.spec.ts:187-222`.
+The `pyodide` branches in `tools/builtin.py:723-758` (gone with
+`execute_code` in T40), `utils/middleware.py:6198-6209` and
+`:2578-2601` (the `CODE_INTERPRETER_PYODIDE_PROMPT` fallbacks),
+`utils/subagents.py:303-320`; `CODE_INTERPRETER_PYODIDE_PROMPT`
+(`config.py:453-466`); `DEFAULT_CODE_INTERPRETER_PROMPT`'s "runs
+directly in the user's browser" wording (`:436-451`; it feeds only the
+tag path's user message, not the system message the harness hashes, so
+`system_sha` does not move); `ENABLE_PYODIDE_FILE_PERSISTENCE`
+(`env.py:1118-1121`, `main.py:93`, `:2495`); the `'pyodide'` defaults at
+`middleware.py:2578`, `subagents.py:315`, `config.py:386, :408` (become
+`'sandbox'`); the event-caller comments at `middleware.py:3294, :6771`;
+`utils/sanitize.py:14, :49`, `upstream_trace.py:38` and `utils/tools.py`
+comments; the harness comments. Frontend: `CodeExecution.tsx` engine
+choice (`ENGINES` becomes `['sandbox']`, or the select goes), the i18n
+keys only it used (find them with `grep -n -i -E 'jupyter|pyodide'
+apps/web/src/lib/i18n/locales/en-US/translation.json` and check each has
+no other user), `CodeEditor.tsx`'s comment, `settingsTabs.ts`'s
+`'jupyter'` keyword (remove it; `'sandbox'` is already there),
+`lib/chat/codeRun.ts:14-16`'s comment and `codeRun.test.ts:47-49`,
+`e2e/code-run.spec.ts:76-81` (the Pyodide case), `CodeExecution.test.tsx`
+and `e2e/admin-settings.spec.ts`.
 
-**Verify:** `grep -rni pyodide apps/` finds nothing outside migrations;
+**Verify:** `grep -rni pyodide apps/` finds nothing outside migrations
+and tests whose case is a stored legacy value (a `pyodide` row before
+T43's revision runs must leave the interpreter off);
 `make test-backend`, `make test-web`, `make test-e2e`.
 
 ### T43: migrate engine rows to `sandbox`
@@ -2135,47 +2223,60 @@ Values are JSON: match the stored representation the existing rows use
 Idempotent. `downgrade()` cannot restore deleted values; it sets the two
 engine rows back to `"jupyter"` and says in its docstring that the
 Jupyter keys come back from defaults only on a Jupyter-era backend.
+The head before it is `2c8cdc04929d` (applied on the laptop; never
+edited).
 
 **Tests:** a migration test on a database with each old value (the
 pattern in `test_schema_drift.py`'s `TEST_DATABASE_URL` tests).
 
 **Verify:** `make test-backend` with `TEST_DATABASE_URL`; on the laptop,
-the backend starts on the existing database and the admin page shows the
-sandbox engine.
+the backend starts on the existing database (both engines `jupyter`
+before it) and the admin page shows the sandbox engine. `make backend`
+does not start until the revision has passed review, since startup
+applies it; rebuild `apps/web` first (`make backend` serves the last
+build).
 
 ### T44: docs sweep
 
 *Author: any. Verify: any. Depends: T40-T43.*
 
 Rewrite `docs/guides/assistant-tools.md`'s code interpreter section for
-the sandbox only; update `docs/guides/features.md` (`:215, :257-260,
-:276, :286, :315, :324`) and its canonical diagrams
-`features-chat-pipeline.mmd:30` and `features-harness.mmd:9, :19` (the
+the sandbox only; update `docs/guides/features.md` and its canonical
+diagrams `features-chat-pipeline.mmd` and `features-harness.mmd` (the
 `.md` embeds them; keep them identical); `docs/guides/benchmarks.md`
-(`:276-308`); `docs/guides/desktop.md:111-113`; README (`:45`, `:56-59`,
-`:91`, `:262-264`, `:314`); MAP.md (`:39`, `:119-120`, `:173-176`, the
-proposals entry: built, and where); AGENTS.md (`:94`, `:127`, `:163`, the
-qwen25c note at `:53`, the proposals row at `:430`);
-`docs/plans/benchmarks-through-the-app.md` (`:9`, `:73`);
-`docs/plans/local-model-recommendations.md` (`:104`, `:134`). Leave
-`docs/history/`, `docs/audit/` and existing decisions entries as written.
-Finish the PR's decisions entry. Mark the proposal's header "built" with
-the PR number, and move it to `docs/history/` only if the owner wants
-(ask).
+(the harness's engine notes; T31's recorded Jupyter-engine run stays as
+measured); `docs/guides/desktop.md`; README; MAP.md (the proposals
+entry: built, and where); AGENTS.md (the qwen25c note, the proposals
+row); `docs/plans/benchmarks-through-the-app.md`;
+`docs/plans/local-model-recommendations.md`. Find each place with
+`grep -rniE 'jupyter|pyodide'`; the line numbers of `9ee7fc39` no
+longer hold. Leave `docs/history/`, `docs/audit/` and existing
+decisions entries as written.
+
+Add the layer's **new** dated entry at the top of `docs/decisions.md`
+(the 2026-11-12 entry is on `main` and is never edited; see the ground
+rule): step 3's removals, correction 19 (T30's changes), Q30, and the
+engine-row migration; and the matching milestone in
+`docs/roadmap-timeline.mmd` and ROADMAP.md. Mark the proposal's header
+"built" with the PR numbers, and move it to `docs/history/` only if the
+owner wants (ask).
 
 **Verify:** `grep -rniE 'jupyter|pyodide' docs README.md MAP.md AGENTS.md`
-shows only history, audit, decisions, the proposal and this plan;
-`docs-sync`; pre-commit.
+shows only history, audit, decisions, the proposal, this plan and its
+session files, the sandbox guide's base-image notes and T31's recorded
+run; `docs-sync`; pre-commit.
 
 ### T48: final verification
 
 *Author: local. Verify: docker, kvm, owner. Depends: T44.*
 
-Merge `main` in (the branch must be up to date with `main` when the
-owner approves); every ledger row `done`; `make check`; the Kata suite;
-every acceptance test re-run on the final head and recorded; the roadmap
-milestone and timeline updated (T23's note); the local session plan's
-"The final gate" in full.
+Merge `main` in, so CI runs on current `main` (the ruleset stopped
+requiring an up-to-date branch on 2026-11-13, but a current branch is
+still what the checks should run on); every ledger row `done`; `make
+check`; the Kata suite; every acceptance test re-run on the final head
+and recorded; the layer's decisions entry dated the day T48 asks the
+owner to approve; the roadmap milestone and timeline updated (T23's note); the
+local session plan's "The final gate" in full.
 
 ### T49: owner marks the PR ready
 
@@ -2186,8 +2287,9 @@ The owner reads `## Gate changes`, marks the PR ready and adds
 `update-branches.yml` merges `main` into the branch whenever `main`
 moves; each such commit removes the label, so the owner re-approves after
 any update, and if the update brought code, a local session re-runs the
-checks it touches first. The PR then auto-merges once green and up to
-date. This task is not an OMC story (the local session plan leaves it
-out, so T48 carries OMC's final quality gate).
+checks it touches first. The PR then auto-merges once its required
+checks are green (the ruleset no longer requires it to be up to date,
+since 2026-11-13). This task is not an OMC story (the local session
+plan leaves it out, so T48 carries OMC's final quality gate).
 After it merges, a local session marks this plan complete in its header
 and the ledger, on `main`, in a small docs PR.

@@ -1,11 +1,10 @@
 # The code sandbox
 
-> **Under construction.** The sandbox described in
-> [docs/proposals/sandbox-code-interpreter.md](../proposals/sandbox-code-interpreter.md)
-> is being built on the `feat/sandbox-code-interpreter` branch (PR #884).
-> The app uses it only where an admin sets the engine to `sandbox` in
-> Admin Settings > Code Execution; Jupyter stays the code interpreter until
-> then. It covers the host setup, the images, the mirror, the backend and
+> **Built, and the only code interpreter.** The sandbox described in
+> [docs/history/sandbox-code-interpreter.md](../history/sandbox-code-interpreter.md)
+> merged in PRs #886, #884 and #888 on 2026-11-13, and PR #889 removed
+> Jupyter and Pyodide, so `sandbox` is the only engine value the settings
+> accept. This guide covers the host setup, the images, the mirror, the backend and
 > its tests, operations, uploads, outputs, the call sites, the workspace
 > cap and the package telemetry.
 
@@ -315,7 +314,7 @@ sudo mv /opt/kata/share/defaults/kata-containers/runtime-rs/configuration-clh-ru
 Two images, both built from `infra/sandbox/` by `make sandbox-images` and
 tagged `local-llm/sandbox-<key>:<tag>`. The model chooses between them per
 chat (`data` is the default); see the proposal's
-[Images](../proposals/sandbox-code-interpreter.md#images) section.
+[Images](../history/sandbox-code-interpreter.md#images) section.
 
 | Image | Base | Contains | Size (2026-11-11) |
 |---|---|---|---|
@@ -801,6 +800,25 @@ the next startup sweep, so a `--reload` restart kills no command.
 Settings > Code Execution. `GET /api/v1/sandbox/packages` (admin) is the
 package report, "Package telemetry" below.
 
+**Leftovers from the Jupyter engine.** The sandbox replaced the Jupyter
+code interpreter, and the Compose file no longer has a `jupyter` service
+or its `jupyter-work` volume. A machine that ran the stack before keeps
+both until they are removed by hand; nothing removes them automatically.
+A `local-llm-jupyter` container still running (left up by a `make backend`
+from before, or brought back by `restart: unless-stopped` after a reboot)
+is an orphan of the Compose project, and `docker compose ps` counts
+orphans: the desktop app then finds services running and refuses to
+start its own stack, and `make backend` treats the stack as already up.
+Remove the leftovers with the stack stopped:
+
+```sh
+docker compose -f infra/docker-compose.yml down --remove-orphans   # stops the stack and the orphan
+docker network rm local-llm_jupyter       # if it outlived the container
+docker volume rm local-llm_jupyter-work   # Jupyter's scratch space; nothing reads it
+```
+
+A `JUPYTER_TOKEN=` line left in `infra/.env` is harmless.
+
 ## Uploads
 
 `apps/server/local_llm/sandbox/uploads.py`. Before every `bash` and `view`
@@ -849,9 +867,6 @@ result's stderr says the attached files could not be copied and that
 `/workspace/uploads` may be missing files or hold an older set (`view`
 adds that to its error, if it fails). The one exception is a sandbox that
 stops during the copy, which fails the call as any stopped sandbox does.
-
-The Jupyter engine uses the same selection (`chat_files`, re-exported by
-`utils/code_interpreter.py` until that engine is removed).
 
 `tests/test_sandbox_uploads.py` runs everywhere, against the FakeBackend.
 `tests/test_sandbox_uploads_kata.py` is acceptance test "Read-only
@@ -1135,8 +1150,7 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   `<code_interpreter>` block is written to `/workspace/.runs/<n>.py` (`n`
   one more than the highest plain number there, which a fixed script prints
   as one number, `sandbox/runs.py`) and run with `python` from `/workspace`
-  on the `data` image, with the configured timeout and without the Jupyter
-  path's blocked-modules preamble. Its outputs attach to the reply as a
+  on the `data` image, with the configured timeout. Its outputs attach to the reply as a
   `bash` call's do. The model is shown only a block's stdout
   (`utils/misc.py`), so the block's stderr (after a `[stderr]` line), a
   sandbox failure, and lines naming the files attached, not attached (with
@@ -1160,10 +1174,7 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   shows Run when code execution is on with the `sandbox` engine, the code
   interpreter is switched on, and the user holds its permission
   (`lib/chat/codeRun.ts`); it
-  sends the block with its chat's id. The other
-  engines show none: Jupyter is left as it was until its removal (T40),
-  and Pyodide ran in the browser, which this app has no runner for. The
-  block's stdout, stderr and result, an error (the endpoint's refusal, or
+  sends the block with its chat's id. The block's stdout, stderr and result, an error (the endpoint's refusal, or
   the sandbox's own failure), a non-zero exit code, a note when the output
   was cut, and the files the run left in `/workspace/outputs` (as
   `SandboxOutputs` shows a reply's) appear under the block until it is
@@ -1181,8 +1192,7 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   since. It uses the uploads the parent's own calls synced. The chat's lock
   serializes their calls, and one slot serves them all. A sub-agent's outputs attach to its
   own message and count against the parent chat's cap. Background
-  sub-agents keep the code interpreter under the `sandbox` engine, as under
-  Jupyter.
+  sub-agents keep the code interpreter.
 - **A terminal server in the same chat is refused** (Q24). An Open
   Terminal server offers its own `write_file`, acting on its own machine,
   so a chat request with a terminal selected while the code interpreter is
@@ -1367,7 +1377,7 @@ workspace, and Keep deleted nothing).
 ## Package telemetry
 
 T21 (the proposal's
-[Package telemetry](../proposals/sandbox-code-interpreter.md#package-telemetry)):
+[Package telemetry](../history/sandbox-code-interpreter.md#package-telemetry)):
 which packages the sandboxes use, and which they miss, so the wheelhouse
 allowlist (`infra/sandbox/allowlist.in`) and the images grow from use, not
 guesses. It is advisory: code in a sandbox can delete or forge its own

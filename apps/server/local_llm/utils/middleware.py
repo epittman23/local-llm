@@ -8,7 +8,6 @@ import os
 import random
 import re
 import sys
-import textwrap
 import time
 from typing import Any
 from uuid import uuid4
@@ -18,9 +17,7 @@ from fastapi.responses import HTMLResponse
 from starlette.responses import JSONResponse, StreamingResponse
 
 from local_llm.config import (
-    CODE_INTERPRETER_BLOCKED_MODULES,
-    CODE_INTERPRETER_JUPYTER_PROMPT,
-    CODE_INTERPRETER_PYODIDE_PROMPT,
+    CODE_ENGINES,
     CODE_INTERPRETER_SANDBOX_PROMPT,
     CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
     DEFAULT_CODE_INTERPRETER_PROMPT,
@@ -80,7 +77,6 @@ from local_llm.utils.access_control.folders import has_folder_access
 from local_llm.utils.ask_user import stage_ask_user_tool_calls
 from local_llm.utils.chat import generate_chat_completion
 from local_llm.utils.chat_id import is_saved_chat_id
-from local_llm.utils.code_interpreter import chat_files, execute_code_jupyter
 from local_llm.utils.context_compaction import compact_messages_for_request
 from local_llm.utils.files import (
     convert_markdown_base64_images,
@@ -2545,18 +2541,6 @@ async def _may_use_feature(user, feature_key: str) -> bool:
     )
 
 
-# Each engine's environment notes: for the tag path (legacy function calling), which runs `<code_interpreter>`
-# blocks, and for native function calling, whose tools differ by engine (the sandbox's four tools, or execute_code).
-_CODE_INTERPRETER_TAG_PROMPTS = {
-    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
-    'sandbox': CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
-}
-_CODE_INTERPRETER_TOOL_PROMPTS = {
-    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
-    'sandbox': CODE_INTERPRETER_SANDBOX_PROMPT,
-}
-
-
 def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str:
     """What a sandbox run's stdout gains for the model on the tag path: which files from /workspace/outputs were
     attached to the reply (stored: they have a `file_id`), which were not and why, which were only listed (a
@@ -2575,16 +2559,19 @@ def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str
 
 
 async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
-    engine = await Config.get('code_interpreter.engine', 'pyodide')
+    # A stored value outside CODE_ENGINES (only possible by editing the row by hand: the form, the import and the
+    # migration all write `sandbox`) leaves the code interpreter off: no prompt.
+    if await Config.get('code_interpreter.engine', 'sandbox') not in CODE_ENGINES:
+        return
 
     # Skip XML-tag prompt injection when native FC is enabled —
-    # execute_code will be injected as a builtin tool instead
+    # the sandbox's tools are injected as builtin tools instead
     if metadata.get('params', {}).get('function_calling') == 'legacy':
         ci_prompt_template = await Config.get('code_interpreter.prompt_template')
         prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
 
-        # Append the engine's own environment and filesystem notes
-        prompt += _CODE_INTERPRETER_TAG_PROMPTS.get(engine, CODE_INTERPRETER_PYODIDE_PROMPT)
+        # Append the sandbox's environment notes for `<code_interpreter>` blocks
+        prompt += CODE_INTERPRETER_SANDBOX_TAG_PROMPT
 
         form_data['messages'] = add_or_update_user_message(
             prompt,
@@ -2592,13 +2579,13 @@ async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
         )
     else:
         # Native FC: tool docstring can't be dynamic, so inject the
-        # engine's environment and filesystem notes into the system
+        # sandbox's environment and filesystem notes into the system
         # message.  Appending to the system prompt (instead of the
         # user message) keeps it in the stable cached prefix so
         # providers with prefix caching don't re-bill the full
         # conversation on every turn.
         form_data['messages'] = add_or_update_system_message(
-            _CODE_INTERPRETER_TOOL_PROMPTS.get(engine, CODE_INTERPRETER_PYODIDE_PROMPT),
+            CODE_INTERPRETER_SANDBOX_PROMPT,
             form_data['messages'],
             append=True,
         )
@@ -2677,7 +2664,7 @@ async def _refuse_terminal_with_sandbox(user, model: dict, metadata: dict, termi
         return
     if (
         await Config.get('code_interpreter.enable')
-        and await Config.get('code_interpreter.engine') == 'sandbox'
+        and await Config.get('code_interpreter.engine', 'sandbox') in CODE_ENGINES
         and await _may_use_feature(user, 'code_interpreter')
     ):
         raise HTTPException(status_code=400, detail=TERMINAL_WITH_SANDBOX)
@@ -3291,7 +3278,7 @@ async def get_event_emitter_and_caller(metadata):
         event_emitter = await get_event_emitter(metadata)
 
     # event_caller needs session_id — it calls back to a specific
-    # websocket session (used by direct tools, pyodide code interpreter).
+    # websocket session (used by direct tools).
     if metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
         event_caller = await get_event_call(metadata)
 
@@ -5056,8 +5043,9 @@ class _StreamingReply:
                 output.pop()
 
     async def _detect_code_interpreter(self) -> bool:
-        # Legacy tool-calling only: native FC gets execute_code as a builtin tool.
-        # Same five authz gates as utils/tools.py get_builtin_tools.
+        # Legacy tool-calling only: native FC gets the sandbox's tools as builtin tools.
+        # Same five authz gates as utils/tools.py get_builtin_tools, and a live engine: a stored value outside
+        # CODE_ENGINES (only possible by editing the row by hand) leaves the code interpreter off.
         features = self.metadata.get('features', {}) or {}
         model_capabilities = self.model.get('info', {}).get('meta', {}).get('capabilities') or {}
         builtin_tools_meta = self.model.get('info', {}).get('meta', {}).get('builtinTools', {})
@@ -5075,6 +5063,7 @@ class _StreamingReply:
                     await Config.get('user.permissions'),
                 )
             )
+            and await Config.get('code_interpreter.engine', 'sandbox') in CODE_ENGINES
         )
 
     def _reasoning_tags(self) -> list:
@@ -6169,76 +6158,8 @@ class _StreamingReply:
 
     async def _execute_code(self, ci_item: dict):
         # Sanitize code (strips ANSI codes and markdown fences)
-        code = sanitize_code(ci_item.get('code', ''))
-        ci_engine = await Config.get('code_interpreter.engine')
-        if ci_engine == 'sandbox':
-            # The block runs in the chat's own sandbox, where nothing needs blocking: no preamble.
-            return await self._execute_code_in_sandbox(code)
-
-        if CODE_INTERPRETER_BLOCKED_MODULES:
-            blocking_code = textwrap.dedent(f"""
-                import builtins
-
-                BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
-
-                _real_import = builtins.__import__
-                def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
-                    if name.split('.')[0] in BLOCKED_MODULES:
-                        importer_name = globals.get('__name__') if globals else None
-                        if importer_name == '__main__':
-                            raise ImportError(
-                                f"Direct import of module {{name}} is restricted."
-                            )
-                    return _real_import(name, globals, locals, fromlist, level)
-
-                builtins.__import__ = restricted_import
-            """)
-            code = blocking_code + '\n' + code
-
-        if ci_engine == 'pyodide':
-            ci_output = await self.event_caller(
-                {
-                    'type': 'execute:python',
-                    'data': {
-                        'id': str(uuid4()),
-                        'code': code,
-                        'session_id': self.metadata.get('session_id', None),
-                        'files': self.metadata.get('files', []),
-                    },
-                }
-            )
-        elif ci_engine == 'jupyter':
-            files, notes = await chat_files(self.metadata.get('files'), self.user)
-            ci_output = await execute_code_jupyter(
-                await Config.get('code_interpreter.jupyter.url'),
-                code,
-                (
-                    await Config.get('code_interpreter.jupyter.auth_token')
-                    if await Config.get('code_interpreter.jupyter.auth') == 'token'
-                    else None
-                ),
-                (
-                    await Config.get('code_interpreter.jupyter.auth_password')
-                    if await Config.get('code_interpreter.jupyter.auth') == 'password'
-                    else None
-                ),
-                await Config.get('code_interpreter.jupyter.timeout'),
-                files=files,
-                notes=notes,
-            )
-        else:
-            ci_output = {'stdout': 'Code interpreter engine not configured.'}
-
-        log.debug('Code interpreter output: %s', ci_output)
-
-        # Handle error responses from event_caller
-        # (e.g. session disconnected, timeout)
-        if isinstance(ci_output, dict) and ci_output.get('error'):
-            ci_output = {'stderr': ci_output['error']}
-
-        if isinstance(ci_output, dict):
-            await self._inline_output_images(ci_output)
-        return ci_output
+        # The block runs in the chat's own sandbox: _detect_code_interpreter parses blocks only on a live engine.
+        return await self._execute_code_in_sandbox(sanitize_code(ci_item.get('code', '')))
 
     async def _execute_code_in_sandbox(self, code: str) -> dict:
         """A `<code_interpreter>` block run in the chat's sandbox (tools/builtin.py run_code_in_sandbox).
@@ -6275,27 +6196,6 @@ class _StreamingReply:
             'stderr': '',
             'result': '',
         }
-
-    async def _inline_output_images(self, ci_output: dict) -> None:
-        """Replace base64 image lines in stdout and the result with uploaded images."""
-        stdout = ci_output.get('stdout', '')
-        if isinstance(stdout, str):
-            stdout_lines = stdout.split('\n')
-            for idx, line in enumerate(stdout_lines):
-                if re.match(r'data:image/\w+;base64', line):
-                    image_url = await get_image_url_from_base64(self.request, line, self.metadata, self.user)
-                    if image_url:
-                        stdout_lines[idx] = f'![Output Image]({image_url})'
-            ci_output['stdout'] = '\n'.join(stdout_lines)
-
-        result = ci_output.get('result', '')
-        if isinstance(result, str):
-            result_lines = result.split('\n')
-            for idx, line in enumerate(result_lines):
-                if re.match(r'data:image/\w+;base64', line):
-                    image_url = await get_image_url_from_base64(self.request, line, self.metadata, self.user)
-                    result_lines[idx] = f'![Output Image]({image_url})'
-            ci_output['result'] = '\n'.join(result_lines)
 
     async def _continue_after_code(self) -> bool:
         """Ask the model to carry on from the code's output. False when the reply ends here."""
@@ -6767,8 +6667,8 @@ async def streaming_chat_response_handler(response, ctx):
     )
 
     # Standard streaming response handler
-    # event_caller is optional — only needed for direct (client-side) tools
-    # and pyodide code interpreter. Server-side tools work without it.
+    # event_caller is optional — only needed for direct (client-side) tools.
+    # Server-side tools and the code interpreter work without it.
     if ctx['event_emitter']:
         return await _StreamingReply(ctx, extra_params, filter_functions).run(response, ctx['events'])
 

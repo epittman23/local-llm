@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2190,
+	"total": 2113,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -58,13 +58,13 @@
 			"reportOptionalMemberAccess": 1
 		},
 		"apps/server/local_llm/config.py": {
-			"reportArgumentType": 11
+			"reportArgumentType": 1
 		},
 		"apps/server/local_llm/constants.py": {
-			"reportSelfClsParameterName": 18
+			"reportSelfClsParameterName": 17
 		},
 		"apps/server/local_llm/env.py": {
-			"reportArgumentType": 5,
+			"reportArgumentType": 1,
 			"reportPrivateImportUsage": 1
 		},
 		"apps/server/local_llm/events.py": {
@@ -103,7 +103,7 @@
 			"reportGeneralTypeIssues": 2
 		},
 		"apps/server/local_llm/models/automations.py": {
-			"reportArgumentType": 3,
+			"reportArgumentType": 2,
 			"reportAttributeAccessIssue": 16,
 			"reportGeneralTypeIssues": 3,
 			"reportOptionalMemberAccess": 1,
@@ -172,7 +172,7 @@
 			"reportOptionalMemberAccess": 23
 		},
 		"apps/server/local_llm/models/folders.py": {
-			"reportArgumentType": 5,
+			"reportArgumentType": 4,
 			"reportAssignmentType": 1,
 			"reportAttributeAccessIssue": 9,
 			"reportGeneralTypeIssues": 3,
@@ -388,7 +388,7 @@
 			"reportArgumentType": 5,
 			"reportIncompatibleVariableOverride": 1,
 			"reportOptionalIterable": 1,
-			"reportOptionalMemberAccess": 25
+			"reportOptionalMemberAccess": 24
 		},
 		"apps/server/local_llm/routers/chats.py": {
 			"reportArgumentType": 8,
@@ -419,14 +419,12 @@
 			"reportArgumentType": 6
 		},
 		"apps/server/local_llm/routers/images.py": {
-			"reportArgumentType": 12,
+			"reportArgumentType": 11,
 			"reportAttributeAccessIssue": 7,
-			"reportCallIssue": 1,
 			"reportOptionalSubscript": 1
 		},
 		"apps/server/local_llm/routers/knowledge.py": {
 			"reportArgumentType": 15,
-			"reportCallIssue": 1,
 			"reportIncompatibleVariableOverride": 1,
 			"reportOptionalMemberAccess": 6,
 			"reportReturnType": 1
@@ -441,7 +439,7 @@
 		},
 		"apps/server/local_llm/routers/notes.py": {
 			"reportArgumentType": 7,
-			"reportOptionalMemberAccess": 18
+			"reportOptionalMemberAccess": 14
 		},
 		"apps/server/local_llm/routers/ollama.py": {
 			"reportArgumentType": 14,
@@ -463,8 +461,7 @@
 		},
 		"apps/server/local_llm/routers/pipelines.py": {
 			"reportArgumentType": 5,
-			"reportCallIssue": 1,
-			"reportPossiblyUnboundVariable": 8
+			"reportCallIssue": 1
 		},
 		"apps/server/local_llm/routers/prompts.py": {
 			"reportArgumentType": 24
@@ -474,8 +471,7 @@
 			"reportAttributeAccessIssue": 2,
 			"reportCallIssue": 1,
 			"reportGeneralTypeIssues": 4,
-			"reportOptionalMemberAccess": 7,
-			"reportOptionalSubscript": 3,
+			"reportOptionalMemberAccess": 5,
 			"reportPossiblyUnboundVariable": 1
 		},
 		"apps/server/local_llm/routers/scim.py": {
@@ -485,7 +481,7 @@
 			"reportOptionalMemberAccess": 5
 		},
 		"apps/server/local_llm/routers/skills.py": {
-			"reportArgumentType": 5
+			"reportArgumentType": 4
 		},
 		"apps/server/local_llm/routers/tasks.py": {
 			"reportArgumentType": 15
@@ -500,7 +496,7 @@
 			"reportArgumentType": 8
 		},
 		"apps/server/local_llm/routers/utils.py": {
-			"reportArgumentType": 3,
+			"reportArgumentType": 1,
 			"reportPrivateImportUsage": 1
 		},
 		"apps/server/local_llm/socket/main.py": {
@@ -521,10 +517,10 @@
 			"reportReturnType": 2
 		},
 		"apps/server/local_llm/tools/builtin.py": {
-			"reportArgumentType": 213,
+			"reportArgumentType": 203,
 			"reportAssignmentType": 1,
 			"reportAttributeAccessIssue": 9,
-			"reportGeneralTypeIssues": 7,
+			"reportGeneralTypeIssues": 5,
 			"reportOptionalIterable": 2,
 			"reportOptionalMemberAccess": 15
 		},
@@ -553,12 +549,9 @@
 			"reportArgumentType": 2
 		},
 		"apps/server/local_llm/utils/automations.py": {
-			"reportArgumentType": 5,
+			"reportArgumentType": 3,
 			"reportAttributeAccessIssue": 13,
 			"reportOptionalMemberAccess": 6
-		},
-		"apps/server/local_llm/utils/calendar.py": {
-			"reportArgumentType": 1
 		},
 		"apps/server/local_llm/utils/chat.py": {
 			"reportArgumentType": 2,
@@ -570,9 +563,6 @@
 		},
 		"apps/server/local_llm/utils/chat_variables.py": {
 			"reportArgumentType": 2
-		},
-		"apps/server/local_llm/utils/code_interpreter.py": {
-			"reportInvalidTypeForm": 1
 		},
 		"apps/server/local_llm/utils/context_compaction.py": {
 			"reportArgumentType": 1,
@@ -602,7 +592,7 @@
 			"reportOptionalMemberAccess": 1
 		},
 		"apps/server/local_llm/utils/middleware.py": {
-			"reportArgumentType": 35,
+			"reportArgumentType": 33,
 			"reportAttributeAccessIssue": 27,
 			"reportIndexIssue": 8,
 			"reportOperatorIssue": 2,
@@ -658,10 +648,6 @@
 			"reportGeneralTypeIssues": 3,
 			"reportOptionalMemberAccess": 3
 		},
-		"apps/server/local_llm/utils/task.py": {
-			"reportArgumentType": 6,
-			"reportAssignmentType": 1
-		},
 		"apps/server/local_llm/utils/telemetry/instrumentors.py": {
 			"reportArgumentType": 3,
 			"reportAttributeAccessIssue": 3
@@ -686,7 +672,7 @@
 		},
 		"apps/server/local_llm/utils/tool_approval.py": {
 			"reportGeneralTypeIssues": 2,
-			"reportOptionalMemberAccess": 12
+			"reportOptionalMemberAccess": 1
 		},
 		"apps/server/local_llm/utils/tools.py": {
 			"reportArgumentType": 3,

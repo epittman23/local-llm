@@ -6,8 +6,9 @@ capabilities); the tests pin that:
 - each of bash, view, write_file and str_replace has a spec the real generator builds from its docstring, with
   the dunder parameters left out;
 - no built-in tool shares a name with another, and each spec is named after its function;
-- the sandbox engine offers the four and not execute_code, any other engine offers execute_code and not the
-  four, and each of the four gates (config switch, model capability, chat feature, user permission) still blocks
+- the sandbox engine offers the four, any other engine (a stored 'jupyter' included) offers no code tool, and
+  `execute_code` is offered under no engine, and each of the four gates (config switch, model capability, chat
+  feature, user permission) still blocks
   under the sandbox engine.
 
 Run from apps/server:
@@ -209,7 +210,7 @@ def test_no_selector_offers_a_name_another_selector_offers(everything_on, engine
     everything_on.config['code_interpreter.engine'] = engine
     names = [func.__name__ for select in tools._BUILTIN_TOOL_SELECTORS for func in asyncio.run(select(everything_on))]
     assert len(names) == len(set(names))
-    assert set(names) & ALL_CODE_TOOLS == ({*SANDBOX_TOOLS} if engine == 'sandbox' else {'execute_code'})
+    assert set(names) & ALL_CODE_TOOLS == ({*SANDBOX_TOOLS} if engine == 'sandbox' else set())
 
 
 # Which engine offers which tools.
@@ -217,6 +218,10 @@ def test_no_selector_offers_a_name_another_selector_offers(everything_on, engine
 
 def test_the_sandbox_engine_offers_the_four_tools_and_not_execute_code(monkeypatch):
     assert _offered(monkeypatch, engine='sandbox') == set(SANDBOX_TOOLS)
+
+
+def test_the_builtin_module_has_no_execute_code_tool():
+    assert not hasattr(builtin, 'execute_code')
 
 
 def test_the_four_tools_are_offered_in_the_order_the_model_is_to_see_them(monkeypatch):
@@ -241,9 +246,13 @@ def test_the_four_tools_are_offered_in_the_order_the_model_is_to_see_them(monkey
     assert names == SANDBOX_TOOLS
 
 
-@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', None, '', 'SANDBOX', 'sandbox ', 'other'])
-def test_any_other_engine_offers_execute_code_and_none_of_the_four(monkeypatch, engine):
-    assert _offered(monkeypatch, engine=engine) == {'execute_code'}
+@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', '', 'SANDBOX', 'sandbox ', 'other'])
+def test_any_other_engine_offers_no_code_tool(monkeypatch, engine):
+    assert _offered(monkeypatch, engine=engine) == set()
+
+
+def test_a_missing_engine_key_behaves_as_the_sandbox_engine(monkeypatch):
+    assert _offered(monkeypatch, engine=None) == set(SANDBOX_TOOLS)
 
 
 def test_the_engine_is_read_in_the_same_config_batch_as_the_other_keys(monkeypatch):
@@ -265,7 +274,6 @@ def test_the_engine_is_read_in_the_same_config_batch_as_the_other_keys(monkeypat
     assert 'code_interpreter.enable' in asked[0]
 
 
-@pytest.mark.parametrize('engine', ['sandbox', 'jupyter', 'pyodide', None])
 @pytest.mark.parametrize(
     ('gate', 'blocked'),
     [
@@ -279,14 +287,14 @@ def test_the_engine_is_read_in_the_same_config_batch_as_the_other_keys(monkeypat
         ('category switched off', {'meta': {'builtinTools': {'code_interpreter': False}}}),
     ],
 )
-def test_each_gate_still_blocks_every_tool_under_any_engine(monkeypatch, engine, gate, blocked):
-    assert _offered(monkeypatch, engine=engine, **blocked) == set(), gate
+def test_each_gate_blocks_every_tool_on_the_sandbox_engine(monkeypatch, gate, blocked):
+    # The engine is the sandbox, so only the gate under test can be what empties the list.
+    assert _offered(monkeypatch, engine='sandbox', **blocked) == set(), gate
 
 
-@pytest.mark.parametrize('engine', ['sandbox', 'jupyter'])
-def test_an_admin_passes_the_permission_gate_without_the_grant(monkeypatch, engine):
-    offered = _offered(monkeypatch, engine=engine, permitted=[], role='admin')
-    assert offered == (set(SANDBOX_TOOLS) if engine == 'sandbox' else {'execute_code'})
+def test_an_admin_passes_the_permission_gate_without_the_grant(monkeypatch):
+    offered = _offered(monkeypatch, engine='sandbox', permitted=[], role='admin')
+    assert offered == set(SANDBOX_TOOLS)
 
 
 def test_the_capability_defaults_on_when_the_model_does_not_name_it(monkeypatch):

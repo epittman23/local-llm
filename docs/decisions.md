@@ -7,6 +7,63 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14**: **Jupyter and Pyodide are removed; the per-chat
+  microVM sandbox is the only code interpreter (step 3 of
+  [the sandbox proposal](history/sandbox-code-interpreter.md), PR #889,
+  after steps 1 and 2 merged as #886, #884 and #888).** This entry adds
+  what the 2026-11-12 entry, written before steps 2 and 3, could not say.
+  The task-by-task record is the ledger in
+  [docs/plans/sandbox-implementation.md](plans/sandbox-implementation.md).
+
+  **Step 2: the benchmark harness on the sandbox.** Harness runs use the
+  sandbox's four tools, with these differences from the plan: the `data`
+  image is pinned for all four tools, not only `bash` (a `bash` call naming
+  `web` is told so); an item whose calls ran in more than one sandbox
+  (evicted or reaped between calls) is refused rather than scored; an
+  unknown `data` image digest refuses the item; and schema note
+  `2c8cdc04929d` records that harness specs now carry the engine and image,
+  so sandbox runs get a new spec sha and never mix with Jupyter-era runs.
+  The owner narrowed the baseline (2026-11-13): a `smoke`-tier run on
+  `qwen38` instead of a full HumanEval+ run, which is not needed to show the
+  harness works, plus a one-item Jupyter-engine run that recorded the
+  Jupyter-era spec sha it is compared with. Its numbers, with their
+  context, are in [benchmarks.md](guides/benchmarks.md).
+
+  **Step 3: what is gone.** The Jupyter code interpreter
+  (`utils/code_interpreter.py`), the `execute_code` tool the sandbox's
+  `bash`, `view`, `write_file` and `str_replace` replace, the `jupyter`
+  Compose service with its network, volume and generated `JUPYTER_TOKEN`,
+  every Jupyter setting, `CODE_INTERPRETER_BLOCKED_MODULES` (an import hook
+  a shell bypasses), and Pyodide everywhere: its branches, prompt,
+  `ENABLE_PYODIDE_FILE_PERSISTENCE` and the public config flag (Pyodide had
+  never run in this frontend). Admin Settings > Code Execution has no
+  engine choice any more. The legacy `<code_interpreter>` prompt now says
+  the code runs in the chat's sandbox, not the browser, and no longer
+  offers API calls, since the sandbox has no internet.
+
+  **`sandbox` is the only engine value.** `code_interpreter.engine` and
+  `code_execution.engine` stay as settings and default to `sandbox`. The
+  admin form and the config import refuse any other value (422), the
+  import drops any old `*.jupyter.*` setting it is given, and an
+  environment variable naming a removed engine is ignored with a warning.
+  A stored value naming one leaves the code interpreter off everywhere (no
+  prompt, no tool, no `<code_interpreter>` parsing, no sub-agent
+  interpreter, and the Run endpoint answering 400) rather than reaching a
+  removed path. Revision `807e3e98e4af` sets stored `jupyter` and `pyodide`
+  engine rows to `sandbox` and deletes the `code_interpreter.jupyter.*` and
+  `code_execution.jupyter.*` rows, the Jupyter token included; its
+  `downgrade()` sets the engines back to `jupyter` but cannot restore the
+  deleted rows. The harness refuses every engine but `sandbox`. Stored
+  Jupyter-era harness runs stay in the database under their own spec sha
+  (Compare and Report leave every harness row out until they group by
+  `harness_sha`), and one cannot be resumed.
+
+  **Left for the owner on existing machines.** Nothing removes the
+  `local-llm_jupyter-work` volume, a `local-llm-jupyter` container still
+  running from before (a Compose orphan, which makes the desktop app refuse
+  to start its stack), or a `JUPYTER_TOKEN=` line in `infra/.env`; the
+  sandbox guide's "Operations" says how. The proposal moved to
+  `docs/history/` now that it is built.
 - **2026-11-13**: **A pull request no longer has to be up to date with
   `main` to merge.** The owner turned off the main ruleset's "require
   branches to be up to date" setting (`strict_required_status_checks_policy`,

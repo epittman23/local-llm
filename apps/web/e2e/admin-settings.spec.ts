@@ -185,72 +185,61 @@ test.describe('settings: Sub-agents limits (#602)', () => {
 });
 
 test.describe('settings: Code Execution', () => {
+	// A server that last saved before the sandbox became the only engine.
 	const cfg = {
 		ENABLE_CODE_EXECUTION: true,
-		CODE_EXECUTION_ENGINE: 'pyodide',
+		CODE_EXECUTION_ENGINE: 'jupyter',
 		ENABLE_CODE_INTERPRETER: true,
 		CODE_INTERPRETER_ENGINE: 'pyodide',
-		CODE_INTERPRETER_PROMPT_TEMPLATE: ''
+		CODE_INTERPRETER_PROMPT_TEMPLATE: '',
+		CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'data',
+		CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
+		CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
+		CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
+		CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7
 	};
 
-	test('Jupyter reveals its URL/auth fields, warns, masks the token, and saves the whole config', async ({ page }) => {
+	test('there is no engine to choose and no Jupyter field, whatever engine is stored', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockConfigApi(page, '/configs', { '/configs/code_execution': cfg });
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByText('Jupyter URL')).toHaveCount(0);
-		await m.getByLabel('Code Execution Engine').selectOption('jupyter');
-		await expect(m.getByText(/Jupyter execution enables arbitrary code execution/)).toBeVisible();
-		await m.getByPlaceholder('Enter Jupyter URL').first().fill('http://jupyter:8888');
-		await m.getByLabel('Jupyter Auth').first().selectOption('token');
-		const token = m.getByPlaceholder('Enter Jupyter Token');
-		await token.fill('s3cret');
-		// A credential is masked until the eye is pressed (the Svelte tab shows it in the clear).
-		await expect(token).toHaveAttribute('type', 'password');
-		await m.getByRole('button', { name: 'Make password visible in the user interface' }).first().click();
-		await expect(token).toHaveAttribute('type', 'text');
+		await expect(m.getByLabel('Sandbox Maximum Running')).toBeVisible();
+		await expect(m.getByLabel('Code Execution Engine')).toHaveCount(0);
+		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
+		await expect(m.getByText(/jupyter/i)).toHaveCount(0);
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
-			.toMatchObject({
-				CODE_EXECUTION_ENGINE: 'jupyter',
-				CODE_EXECUTION_JUPYTER_URL: 'http://jupyter:8888',
-				CODE_EXECUTION_JUPYTER_AUTH: 'token',
-				CODE_EXECUTION_JUPYTER_AUTH_TOKEN: 's3cret',
-				CODE_INTERPRETER_ENGINE: 'pyodide'
-			});
+			.toMatchObject({ CODE_EXECUTION_ENGINE: 'sandbox', CODE_INTERPRETER_ENGINE: 'sandbox' });
 	});
 
-	test('the interpreter section has its own engine and prompt template', async ({ page }) => {
+	test('the interpreter section has the prompt template, and the sandbox settings move with its switch', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/code_execution': cfg });
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByLabel('Code Interpreter Engine')).toBeVisible();
 		await expect(m.getByText('Code Interpreter Prompt Template')).toBeVisible();
+		await expect(
+			m.getByRole('region', { name: 'Code Interpreter' }).getByLabel('Sandbox Maximum Running')
+		).toBeVisible();
 		await m.getByRole('switch', { name: 'Enable Code Interpreter' }).click();
-		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
+		await expect(m.getByText('Code Interpreter Prompt Template')).toHaveCount(0);
+		await expect(m.getByRole('region', { name: 'Code Execution' }).getByLabel('Sandbox Maximum Running')).toBeVisible();
+		await m.getByRole('switch', { name: 'Enable Code Execution' }).click();
+		await expect(m.getByLabel('Sandbox Maximum Running')).toHaveCount(0);
 	});
 
-	test('the sandbox engine shows its settings and status, and saves them', async ({ page }) => {
+	test('the sandbox shows its settings and status, and saves them', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		const { calls } = await mockConfigApi(page, '/configs', {
-			'/configs/code_execution': {
-				...cfg,
-				CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'data',
-				CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,
-				CODE_INTERPRETER_SANDBOX_MAX_RUNNING: 4,
-				CODE_INTERPRETER_SANDBOX_IDLE_MINUTES: 30,
-				CODE_INTERPRETER_SANDBOX_RETENTION_DAYS: 7
-			}
-		});
+		const { calls } = await mockConfigApi(page, '/configs', { '/configs/code_execution': cfg });
 		await page.route('**/api/v1/sandbox/status', (route) =>
 			json(route, { ready: false, reason: 'the kata-clh runtime is not registered with Docker' })
 		);
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByLabel('Sandbox Maximum Running')).toHaveCount(0);
-		await m.getByLabel('Code Interpreter Engine').selectOption('sandbox');
 		await expect(m.getByRole('status')).toHaveText(
 			'The sandbox is unavailable: the kata-clh runtime is not registered with Docker'
 		);
@@ -261,6 +250,7 @@ test.describe('settings: Code Execution', () => {
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
 			.toMatchObject({
+				CODE_EXECUTION_ENGINE: 'sandbox',
 				CODE_INTERPRETER_ENGINE: 'sandbox',
 				CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: 'web',
 				CODE_INTERPRETER_SANDBOX_TIMEOUT: 60,

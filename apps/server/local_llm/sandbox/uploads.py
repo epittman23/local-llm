@@ -12,8 +12,7 @@ left out. Each gets its base name made safe for the sandbox (safe_name: no
 UTF-8) and unique as `name (n).ext`, so a name can never make the copy fail.
 It decides from the database alone (the size and hash recorded at upload)
 wherever it can, so a call whose files have not changed fetches nothing from
-storage. The Jupyter engine uses the same selection through `chat_files`
-(re-exported by utils/code_interpreter.py until T40).
+storage.
 
 The sync (`sync_uploads`) runs inside the tool's session, so under the
 sandbox's lock. The backend's `put_uploads` makes `/workspace/uploads`, a
@@ -263,28 +262,6 @@ async def _local_path(upload: Upload) -> str:
     from local_llm.storage.provider import Storage
 
     return await asyncio.to_thread(Storage.get_file, upload.stored)
-
-
-async def chat_files(
-    items: list | None,
-    user: Any,
-    *,
-    max_file_bytes: int | None = None,
-    max_total_bytes: int | None = None,
-) -> tuple[list[tuple[str, str]], list[str]]:
-    """The chat's uploaded files this user may read, as (name, local path) pairs, and a note for each left out.
-
-    chat_uploads with each file fetched from storage, for the Jupyter engine.
-    """
-    uploads, notes = await chat_uploads(items, user, max_file_bytes=max_file_bytes, max_total_bytes=max_total_bytes)
-    files: list[tuple[str, str]] = []
-    for upload in uploads:
-        try:
-            files.append((upload.name, await _local_path(upload)))
-        except Exception as err:
-            log.warning('chat file %s is not readable: %s', upload.file_id, err)
-            notes.append(f'{upload.name}: could not be read')
-    return files, notes
 
 
 def _read_at_most(path: str, limit: int) -> bytes:

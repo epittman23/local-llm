@@ -1,4 +1,4 @@
-"""Run model-written code in one microVM per chat (docs/proposals/sandbox-code-interpreter.md).
+"""Run model-written code in one microVM per chat (docs/history/sandbox-code-interpreter.md).
 
 The manager (sandbox/manager.py) is the only code that talks to a backend;
 this package's root exports it and the interface it codes against. The fixed

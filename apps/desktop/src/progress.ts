@@ -64,8 +64,9 @@ export const STARTUP_OWN: StepDef[] = [
 	{
 		id: 'services',
 		label: 'Start the services',
-		// A prefix: since 2026-10-24 the line goes on to name Jupyter and
-		// SearXNG, and the recorded fixtures keep the older, shorter one.
+		// A prefix: since 2026-10-24 the line goes on to name further services
+		// (now SearXNG and the sandbox mirror), and the recorded fixtures keep
+		// the older, shorter one.
 		marker: '==> Starting Postgres and Redis',
 		hint: { afterMs: 30_000, text: 'Docker may be pulling images on a first run.' }
 	},

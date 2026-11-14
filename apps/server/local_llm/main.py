@@ -90,7 +90,6 @@ from local_llm.env import (
     ENABLE_OTEL,
     ENABLE_PLUGINS,
     ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
-    ENABLE_PYODIDE_FILE_PERSISTENCE,
     ENABLE_SCIM,
     ENABLE_SIGNUP_PASSWORD_CONFIRMATION,
     ENABLE_STAR_SESSIONS_MIDDLEWARE,
@@ -2492,7 +2491,6 @@ async def get_app_config(request: Request):
                 {
                     'enable_api_keys': config.get('auth.enable_api_keys'),
                     'enable_password_change_form': config.get('ui.enable_password_change_form'),
-                    'enable_pyodide_file_persistence': ENABLE_PYODIDE_FILE_PERSISTENCE,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
                     'enable_direct_connections': config.get('direct.enable'),

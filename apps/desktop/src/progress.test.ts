@@ -166,12 +166,14 @@ describe('lines', () => {
 		expect(cleanLine('Loading 10%\rLoading 100%  ')).toBe('Loading 100%');
 	});
 
-	it('matches the longer service lines make backend prints since Jupyter and SearXNG joined', () => {
+	it('matches the longer service lines make backend prints since SearXNG and the sandbox mirror joined', () => {
 		let p = feed(createProgress('startup', 't', STARTUP_OWN, 0), [
-			'==> Starting Postgres and Redis, Jupyter and SearXNG'
+			'==> Starting Postgres and Redis, SearXNG and the sandbox mirror'
 		]);
 		expect(states(p)).toMatchObject({ services: 'running' });
-		p = feed(createProgress('shutdown', 't', SHUTDOWN, 0), ['==> Stopping Postgres and Redis, Jupyter and SearXNG']);
+		p = feed(createProgress('shutdown', 't', SHUTDOWN, 0), [
+			'==> Stopping Postgres and Redis, SearXNG and the sandbox mirror'
+		]);
 		expect(states(p)).toMatchObject({ services: 'running' });
 	});
 
