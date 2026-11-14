@@ -20,11 +20,11 @@ export function ListSearchBar({
 	children?: ReactNode;
 }) {
 	return (
-		<div className="flex w-full items-center gap-2">
+		<div className="flex w-full flex-wrap items-center gap-2">
 			{/* FRM-1, A11Y-1: the box is the field (edge, fill, focus outline); the input inside is bare. */}
 			<div
 				data-composite-field
-				className="border-border-control bg-surface-1 flex h-(--control) min-w-0 flex-1 items-center gap-2 rounded-lg border ps-2.5 pe-1 pointer-coarse:h-(--control-touch)"
+				className="border-border-control bg-surface-1 flex h-(--control) min-w-48 flex-1 items-center gap-2 rounded-lg border ps-2.5 pe-1 pointer-coarse:h-(--control-touch)"
 			>
 				<Search aria-hidden className="text-muted-foreground size-3.5 shrink-0" />
 				<input
@@ -40,7 +40,7 @@ export function ListSearchBar({
 					</Button>
 				)}
 			</div>
-			<div className="flex max-w-[55%] shrink-0 overflow-x-auto">
+			<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
 				<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
 			</div>
 		</div>
