@@ -32,3 +32,10 @@ describe('ChatPlaceholder suggestions', () => {
 		expect(screen.queryByRole('button')).toBeNull();
 	});
 });
+
+describe('ChatPlaceholder heading', () => {
+	it('shows the model name on the standard’s heading step (TYP-2)', () => {
+		render(<ChatPlaceholder model={model} temporary={false} onSelect={vi.fn()} />);
+		expect(screen.getByRole('heading', { level: 1, name: 'Coder' }).className).toContain('text-heading');
+	});
+});

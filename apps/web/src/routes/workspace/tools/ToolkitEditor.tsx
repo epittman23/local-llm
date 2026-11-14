@@ -6,8 +6,9 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import type { CodeEditorHandle } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -137,51 +138,56 @@ export function ToolkitEditor({
 					<span>Back</span>
 				</Button>
 
-				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
-					<div className="min-w-0 flex-1">
-						<Tip content="e.g. My Tools" side="top">
-							<input
-								className="w-full bg-transparent text-sm"
+				<div className="flex shrink-0 flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-start">
+					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+						<div className="flex min-w-0 flex-col gap-1.5">
+							<Label htmlFor="tool-name">Tool name</Label>
+							<Input
+								id="tool-name"
 								type="text"
-								placeholder="Tool Name"
-								aria-label="Tool Name"
+								placeholder="e.g. My Tools"
 								value={name}
 								required
 								onChange={(e) => onNameChange(e.target.value)}
 							/>
-						</Tip>
-						<div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-2 text-xs">
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
-								<div className="shrink-0 truncate font-mono" title={id}>
-									{id}
-								</div>
+								<>
+									{/* Fixed once created: shown as text, not a field. */}
+									<span className="text-sm leading-none font-medium">Tool ID</span>
+									<span className="flex h-9 min-w-0 items-center truncate font-mono text-dense" title={id}>
+										{id}
+									</span>
+								</>
 							) : (
-								<Tip content="e.g. my_tools" side="top">
-									<input
-										className="min-w-32 flex-1 bg-transparent font-mono"
+								<>
+									<Label htmlFor="tool-id">Tool ID</Label>
+									<Input
+										id="tool-id"
+										className="font-mono"
 										type="text"
-										placeholder="Tool ID"
-										aria-label="Tool ID"
+										placeholder="e.g. my_tools"
 										value={id}
 										required
 										onChange={(e) => setId(e.target.value)}
 									/>
-								</Tip>
+								</>
 							)}
-							<Tip content="e.g. Tools for performing various operations" side="top">
-								<input
-									className="min-w-0 flex-1 bg-transparent"
-									type="text"
-									placeholder="Tool Description"
-									aria-label="Tool Description"
-									value={meta.description}
-									required
-									onChange={(e) => setMeta({ ...meta, description: e.target.value })}
-								/>
-							</Tip>
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+							<Label htmlFor="tool-description">Tool description</Label>
+							<Input
+								id="tool-description"
+								type="text"
+								placeholder="e.g. Tools for performing various operations"
+								value={meta.description}
+								required
+								onChange={(e) => setMeta({ ...meta, description: e.target.value })}
+							/>
 						</div>
 					</div>
-					<div className="flex shrink-0 items-center gap-1 pr-0.5">
+					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
 						<AccessButton onClick={() => setShowAccess(true)} />
 					</div>
 				</div>

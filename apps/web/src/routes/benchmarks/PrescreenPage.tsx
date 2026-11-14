@@ -548,7 +548,7 @@ export function PrescreenPage() {
 						<div className="mb-1 px-0.5 text-xs font-medium">
 							Candidates, raw llama-bench throughput (not a serving measurement): confirm with a full Tests run
 						</div>
-						<Table>
+						<Table aria-label="Candidates">
 							<TableHeader>
 								<TableRow>
 									<TableHead className="text-right">#</TableHead>
@@ -598,7 +598,7 @@ export function PrescreenPage() {
 
 					<div>
 						<div className="mb-1 px-0.5 text-xs">Points ({points.length})</div>
-						<Table>
+						<Table aria-label="Points">
 							<TableHeader>
 								<TableRow>
 									<TableHead className="text-right">Point</TableHead>

@@ -48,7 +48,7 @@ export function ChatPlaceholder({
 						onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
 					/>
 				)}
-				<h1 className="line-clamp-1 text-2xl">{model?.name ?? `Hello, ${name ?? ''}`}</h1>
+				<h1 className="line-clamp-1 text-heading">{model?.name ?? `Hello, ${name ?? ''}`}</h1>
 			</div>
 			{description && (
 				<SafeMarkdown text={description} className="text-muted-foreground mt-1 line-clamp-2 max-w-xl text-sm" />

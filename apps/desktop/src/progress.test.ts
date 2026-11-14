@@ -4,13 +4,18 @@ import { describe, expect, it } from 'vitest';
 import {
 	cleanLine,
 	createProgress,
+	errorLine,
 	LOG_LINES,
 	type Progress,
 	type ProgressEvent,
 	reduce,
 	SHUTDOWN,
-	STARTUP_OWN
+	STARTUP_ATTACH,
+	STARTUP_OWN,
+	startupRemote
 } from './progress';
+
+const startupRemoteDefs = startupRemote('https://llm.example.com');
 
 const fixture = (name: string) => readFileSync(join(__dirname, '..', 'test', 'fixtures', name), 'utf8').split('\n');
 
@@ -67,6 +72,77 @@ describe('startup', () => {
 		expect(p.error).toBe('make backend stopped (exit code 2)');
 		expect(states(p).services).toBe('failed');
 		expect(p.log.join('\n')).toContain('infra/.env not found');
+		// The alert leads with the Makefile's own line, not make's `***` wrapper.
+		expect(p.cause).toBe(
+			'/tmp/scratch/norepo/infra/.env not found -- copy infra/.env.example and fill in OPENROUTER_API_KEY, POSTGRES_PASSWORD, LLLM_SECRET_KEY'
+		);
+	});
+
+	it('gives no cause when the log says nothing went wrong', () => {
+		const p = reduce(createProgress('startup', 't', startupRemoteDefs, 0), {
+			type: 'fail',
+			message: 'Nothing answered at https://llm.example.com.',
+			at: 5
+		});
+		expect(p.cause).toBeUndefined();
+		expect(p.error).toBe('Nothing answered at https://llm.example.com.');
+	});
+
+	it('keeps the cause current when the log’s last lines arrive after the failure', () => {
+		let p = createProgress('startup', 't', STARTUP_OWN, 0);
+		p = reduce(p, { type: 'fail', message: 'make backend stopped (exit code 2)', at: 5 });
+		expect(p.cause).toBeUndefined();
+		p = feed(p, fixture('failed-start.log'), 6);
+		expect(p.cause).toMatch(/^\/tmp\/scratch\/norepo\/infra\/\.env not found/);
+		p = feed(p, ['INFO:     Shutting down'], 9);
+		expect(p.cause).toMatch(/infra\/\.env not found/);
+	});
+
+	it('leaves a failed stop to its own message', () => {
+		let p = feed(createProgress('shutdown', 't', SHUTDOWN, 0), ['ERROR:    Exception in ASGI application']);
+		p = reduce(p, { type: 'fail', message: 'The services did not stop.', at: 9 });
+		expect(p.cause).toBeUndefined();
+	});
+
+	it('marks output lines, not a begin event’s detail, as replaceable by the hint', () => {
+		let p = run(createProgress('startup', 't', STARTUP_ATTACH, 0), [
+			{ type: 'begin', step: 'check', at: 1, detail: 'found a running backend at http://127.0.0.1:4000' }
+		]);
+		expect(p.steps[0]).toMatchObject({
+			detail: 'found a running backend at http://127.0.0.1:4000',
+			detailIsOutput: false
+		});
+		p = feed(p, ['INFO:     Waiting for application startup.']);
+		expect(p.steps[0]).toMatchObject({ detail: 'INFO:     Waiting for application startup.', detailIsOutput: true });
+	});
+});
+
+describe('errorLine', () => {
+	it('passes over uvicorn’s sign-off for the exception before it, without its class names', () => {
+		expect(
+			errorLine([
+				'==> Starting the backend on 127.0.0.1:4000',
+				'INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.',
+				'sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "127.0.0.1", port 5432 failed: Connection refused',
+				'ERROR:    Application startup failed. Exiting.'
+			])
+		).toBe('Connection to server at "127.0.0.1", port 5432 failed: Connection refused');
+	});
+
+	it('strips a logger prefix and ignores routine lines that mention an error', () => {
+		expect(
+			errorLine([
+				'ERROR:    [Errno 98] error while attempting to bind on address (127.0.0.1, 4000): address already in use',
+				'INFO:     127.0.0.1:50000 - "GET /missing HTTP/1.1" 404 Not Found',
+				'make: *** [Makefile:82: backend] Error 1',
+				''
+			])
+		).toBe('[Errno 98] error while attempting to bind on address (127.0.0.1, 4000): address already in use');
+	});
+
+	it('gives nothing for a log without an error line', () => {
+		expect(errorLine(['==> Syncing the backend environment', 'Resolved 412 packages in 3ms'])).toBeUndefined();
+		expect(errorLine([])).toBeUndefined();
 	});
 });
 

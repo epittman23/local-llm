@@ -42,9 +42,14 @@ signals it again).
 ## What happens when it opens
 
 A progress dialog lists each step as it runs, with its time, the latest line
-of output, and **Show details** for the whole log. The dialog has a fixed
-size, which tiling compositors such as Hyprland and sway take as a cue to
-float it rather than tile it. What it does depends on what is already
+of output (replaced by a hint when a step runs long), and **Show log** for
+the whole log. If the start fails, the finished steps fold into one line, the
+alert leads with the log's last error line in plain words, and Retry is the
+primary button. The dialog has a fixed size, which tiling compositors such as
+Hyprland and sway take as a cue to float it rather than tile it; its log
+scrolls inside it, so nothing is drawn over the buttons. It uses the
+interface standard's dark colours and its fonts, Atkinson Hyperlegible Next
+and Mono, bundled under `static/fonts/` with their OFL licences. What it does depends on what is already
 running:
 
 | Found | It does | On close |
@@ -122,8 +127,9 @@ dialog stays open with the log and Quit, since `docker compose down` did not
 work or could not be confirmed. Otherwise, past the budget, it offers to stop
 the `llama-server` this stack served, if it is still running. That server runs
 in its own session, outside the group, so it is offered rather than killed
-unasked: "Stop llama-server" stops it and quits, while "Leave it", closing the
-dialog or quitting leaves it running and quits. While the stack runs, the app
+unasked: the dialog says "A llama-server is still running and holding GPU
+memory. Stop it?", and "Stop it" stops it and quits, while "Leave it running",
+closing the dialog or quitting leaves it running and quits. While the stack runs, the app
 asks the backend's `/check` (as the admin signed in in its window, every 10 s
 and once more just before the stop) for the served model's port, and records
 the process listening there, by pid and start time, in `owned.json`. Only
@@ -153,6 +159,12 @@ together with `src/progress.ts`.
   without progress (the backend log not growing), rather than waiting forever;
   attaching to a running backend waits 5 minutes in all for `/ready`.
 - **Repository folder.** The checkout whose `make backend` it runs.
+
+Opened from the menu once the app is running, its **Back** reads
+**Close**. **Help > About local-llm** shows the app's version, the commit it
+was built from (recorded by `scripts/build-info.mjs`), its Electron version
+and the server URL in use. Reload and the developer tools are under
+**View > Developer**.
 
 Moving to the dedicated server means setting the server URL to its
 `https://` address and restarting the app. Nothing else changes. Use a real
@@ -239,10 +251,11 @@ and an unpacked package. The unit tests cover:
 - `src/progress.ts`, replayed against logs from real runs in
   `test/fixtures/`;
 - `src/main.ts`'s start and stop: a Cancel during startup, a quit while the
-  window loads, Retry during a stop, the "Leave it" offer, services left
+  window loads, Retry during a stop, the "Leave it running" offer, services left
   after a stop, a stack an earlier launch left running or was stopping, and
-  a login shell that cannot be spawned, and the sub-frame navigation
-  handler's wiring, run against a fake Electron in
+  a login shell that cannot be spawned, the sub-frame navigation
+  handler's wiring, and Help > About and the menu layout, run against a
+  fake Electron in
   `src/main.stop.test.ts`.
 
 Launching, closing and attaching the real stack are checked by hand: see

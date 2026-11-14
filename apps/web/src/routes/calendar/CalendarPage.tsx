@@ -18,7 +18,7 @@ import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
-import { CalendarViews } from './CalendarViews';
+import { CalendarViews, dayName } from './CalendarViews';
 import {
 	automationTarget,
 	type CalendarViewMode,
@@ -95,7 +95,7 @@ function CalendarSidebar({
 							type="button"
 							variant={isSameDay(day, today) ? 'default' : isSameDay(day, date) ? 'secondary' : 'ghost'}
 							size="icon-xs"
-							aria-label={day.toDateString()}
+							aria-label={dayName(day)}
 							className={cn('rounded-full text-caption', day.getMonth() !== mini.getMonth() && 'text-foreground-muted')}
 							onClick={() => onSelectDate(day)}
 						>
@@ -278,7 +278,7 @@ function Calendar() {
 					</Button>
 					<select
 						aria-label="View"
-						className="bg-transparent px-2 py-1 text-xs [&>option]:bg-popover"
+						className="bg-transparent px-2 py-1 text-xs"
 						value={view}
 						onChange={(e) => setView(e.target.value as CalendarViewMode)}
 					>

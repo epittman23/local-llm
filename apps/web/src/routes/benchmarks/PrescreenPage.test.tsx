@@ -136,6 +136,10 @@ describe('PrescreenPage', () => {
 		expect(screen.getByText('f0fb5984b (11875)')).toBeTruthy();
 		expect(screen.getByText('— needs more VRAM than point 2, which ran out')).toBeTruthy();
 		expect(screen.getByText('Points (3)')).toBeTruthy();
+		// Both tables scroll in the shared, labelled container on a narrow screen (#1062).
+		for (const name of ['Candidates', 'Points']) {
+			expect(screen.getByRole('table', { name }).parentElement?.getAttribute('data-slot')).toBe('table-container');
+		}
 		expect(api.streamPrescreen).not.toHaveBeenCalled();
 	});
 

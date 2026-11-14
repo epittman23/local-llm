@@ -164,7 +164,7 @@ test.describe('admin users', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Change User Role' }).click();
+		await page.getByRole('button', { name: 'Role: user, change' }).click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('Group 1')).toBeVisible();
 		await dialog.getByLabel('Role').selectOption('admin');

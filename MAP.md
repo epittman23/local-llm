@@ -517,10 +517,12 @@ structural summary.
   seam for future native features. **`src/status-preload.ts`** is the
   dialog's bridge.
 - **`static/`**: `status.html`/`.css`/`.js`, the progress and settings
-  dialog.
+  dialog; `static/fonts/` holds its Atkinson Hyperlegible Next and Mono
+  (latin woff2) with their OFL licences.
 - **`test/fixtures/`**: `make backend` logs the progress tests replay.
 - **`electron-builder.yml`**: the `.rpm` and its fuses.
-  **`scripts/build-info.mjs`** records the checkout a build came from.
+  **`scripts/build-info.mjs`** records the checkout and commit a build came
+  from.
   `tsconfig.json` type-checks everything and `tsconfig.build.json` emits
   the app.
 

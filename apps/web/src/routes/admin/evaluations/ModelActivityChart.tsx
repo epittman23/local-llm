@@ -1,6 +1,40 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { type ActivityDay, activityBuckets, isEmptyActivity } from './activityChart';
+
+const TOKENS = {
+	won: '--series-1',
+	lost: '--series-2',
+	text: '--foreground',
+	muted: '--foreground-muted',
+	grid: '--border-divider',
+	surface: '--surface-2',
+	font: '--font-ui'
+} as const;
+
+export type ChartTokens = Record<keyof typeof TOKENS, string>;
+
+/**
+ * The standard's colours for a canvas chart, read from the page (COL-1,
+ * COL-8): chart.js draws pixels, so it cannot follow CSS variables itself.
+ */
+export function readChartTokens(root: Element = document.documentElement): ChartTokens {
+	const style = getComputedStyle(root);
+	return Object.fromEntries(
+		Object.entries(TOKENS).map(([key, name]) => [key, style.getPropertyValue(name).trim()])
+	) as ChartTokens;
+}
+
+/** The chart tokens, read again whenever the theme changes the root element's class or data-theme. */
+export function useChartTokens(): ChartTokens {
+	const [tokens, setTokens] = useState(readChartTokens);
+	useEffect(() => {
+		const observer = new MutationObserver(() => setTokens(readChartTokens()));
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+		return () => observer.disconnect();
+	}, []);
+	return tokens;
+}
 
 /**
  * Ports Evaluations/ModelActivityChart.svelte: a diverging bar chart, wins up
@@ -21,6 +55,7 @@ export function ModelActivityChart({
 	const empty = isEmptyActivity(history);
 	const buckets = useMemo(() => activityBuckets(history, weekly), [history, weekly]);
 	const show = !loading && !empty;
+	const tokens = useChartTokens();
 
 	useEffect(() => {
 		if (!show || !canvas.current) return;
@@ -38,7 +73,7 @@ export function ModelActivityChart({
 						{
 							label: 'Won',
 							data: buckets.map((b) => b.won),
-							backgroundColor: '#5ba3c8',
+							backgroundColor: tokens.won,
 							borderRadius: 2,
 							barPercentage,
 							categoryPercentage
@@ -47,7 +82,7 @@ export function ModelActivityChart({
 						{
 							label: 'Lost',
 							data: buckets.map((b) => -b.lost),
-							backgroundColor: '#d97c5a',
+							backgroundColor: tokens.lost,
 							borderRadius: 2,
 							barPercentage,
 							categoryPercentage
@@ -61,10 +96,10 @@ export function ModelActivityChart({
 					plugins: {
 						legend: { display: false },
 						tooltip: {
-							backgroundColor: 'rgba(17, 24, 39, 0.9)',
-							titleColor: '#f3f4f6',
-							bodyColor: '#d1d5db',
-							borderColor: 'rgba(75, 85, 99, 0.3)',
+							backgroundColor: tokens.surface,
+							titleColor: tokens.text,
+							bodyColor: tokens.muted,
+							borderColor: tokens.grid,
 							borderWidth: 1,
 							padding: 8,
 							displayColors: true,
@@ -77,10 +112,10 @@ export function ModelActivityChart({
 						x: { stacked: true, grid: { display: false }, ticks: { display: false }, border: { display: false } },
 						y: {
 							stacked: true,
-							grid: { color: 'rgba(107, 114, 128, 0.1)', drawTicks: false },
+							grid: { color: tokens.grid, drawTicks: false },
 							ticks: {
-								color: '#6b7280',
-								font: { size: 10 },
+								color: tokens.muted,
+								font: { size: 12, family: tokens.font },
 								padding: 8,
 								stepSize: 1,
 								precision: 0,
@@ -97,7 +132,7 @@ export function ModelActivityChart({
 			cancelled = true;
 			chart?.destroy();
 		};
-	}, [show, buckets, weekly]);
+	}, [show, buckets, weekly, tokens]);
 
 	return (
 		<div className="w-full">

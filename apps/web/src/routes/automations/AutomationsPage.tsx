@@ -234,7 +234,7 @@ function Automations() {
 				>
 					<select
 						aria-label="Status"
-						className="bg-transparent px-1.5 text-dense [&>option]:bg-popover"
+						className="bg-transparent px-1.5 text-dense"
 						value={status}
 						onChange={(e) => {
 							setStatus(e.target.value);

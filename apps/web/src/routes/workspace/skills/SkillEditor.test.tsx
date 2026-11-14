@@ -59,7 +59,7 @@ describe('SkillEditor', () => {
 		const onSubmit = vi.fn(async (_: SkillDraft) => {});
 		renderEditor({ skill, edit: true, onSubmit });
 
-		fireEvent.change(screen.getByLabelText('Skill Instructions'), { target: { value: 'new' } });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'new' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -73,8 +73,8 @@ describe('SkillEditor', () => {
 		const onSubmit = vi.fn(async (_: SkillDraft) => {});
 		renderEditor({ skill: null, onSubmit });
 
-		fireEvent.change(screen.getByLabelText('Skill Name'), { target: { value: 'My Skill' } });
-		fireEvent.change(screen.getByLabelText('Skill Instructions'), { target: { value: 'body' } });
+		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'My Skill' } });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'body' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save & Create' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
@@ -152,13 +152,44 @@ describe('SkillEditor access dialog (#676)', () => {
 
 		send([grant('a')]);
 		await waitFor(() => expect(shown()).toBe('a'));
-		fireEvent.change(screen.getByLabelText('Skill Name'), { target: { value: 'New' } });
-		fireEvent.change(screen.getByLabelText('Skill Instructions'), { target: { value: 'body' } });
+		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'New' } });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'body' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save & Create' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ access_grants: [grant('a')] });
 		expect(updateSkillAccessGrants).not.toHaveBeenCalled();
 		expect(success).not.toHaveBeenCalled();
+	});
+});
+
+describe('SkillEditor fields (#1057, #983)', () => {
+	const skill: SkillDraft = {
+		id: 'review',
+		name: 'Review',
+		description: 'Reviews code',
+		content: 'Read the diff.',
+		is_active: true,
+		meta: { tags: [] },
+		access_grants: []
+	};
+
+	it('labels every field visibly, the instructions included, on the shared input', () => {
+		renderEditor({ skill: null, onSubmit: vi.fn() });
+		expect(screen.getByLabelText('Skill name')).toHaveAttribute('data-slot', 'input');
+		expect(screen.getByLabelText('Skill ID')).toHaveAttribute('placeholder', 'e.g. code-review-guidelines');
+		expect(screen.getByLabelText('Skill description')).not.toBeRequired();
+		expect(screen.getByText('Skill instructions').tagName).toBe('LABEL');
+		expect(screen.getByLabelText('Skill instructions').tagName).toBe('TEXTAREA');
+	});
+
+	it('read-only, keeps the labels as text over disabled fields and the instructions as text', () => {
+		renderEditor({ skill, edit: true, disabled: true, onSubmit: vi.fn() });
+		expect(screen.getByLabelText('Skill name')).toBeDisabled();
+		expect(screen.getByLabelText('Skill description')).toBeDisabled();
+		expect(screen.queryByLabelText('Skill instructions')).toBeNull();
+		expect(screen.getByText('Skill instructions')).toBeInTheDocument();
+		expect(screen.getByText('Read the diff.')).toBeInTheDocument();
+		expect(screen.queryByLabelText('Skill ID')).toBeNull();
 	});
 });

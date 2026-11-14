@@ -97,3 +97,29 @@ describe('ModelEditor toggles and reset', () => {
 		expect(screen.getByAltText('model profile').getAttribute('src')).not.toBe('data:image/png;base64,AAAA');
 	});
 });
+
+describe('ModelEditor fields (#1057, #983)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'jwt', user: { id: 'u1', role: 'admin' } } as never);
+	});
+
+	it('labels the name, id, system prompt and voice visibly, on the shared fields', async () => {
+		renderEditor();
+		const name = await screen.findByLabelText('Model name');
+		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveValue('My model');
+		expect(screen.getByText('Model name').tagName).toBe('LABEL');
+		const id = screen.getByLabelText('Model ID');
+		expect(id).toBeDisabled();
+		expect(id).toHaveClass('font-mono');
+		expect(screen.getByLabelText('System prompt')).toHaveAttribute('data-slot', 'textarea');
+		expect(screen.getByLabelText('System prompt').getAttribute('placeholder')).toMatch(/^e\.g\. /);
+		expect(screen.getByLabelText('TTS voice')).toHaveAttribute('list', 'tts-voices');
+	});
+
+	it('ties the Description label to its field once a custom description is on', async () => {
+		renderEditor({ description: 'Explains statistics' });
+		expect(await screen.findByLabelText('Description')).toHaveValue('Explains statistics');
+		expect(screen.getByLabelText('Description')).toHaveAttribute('data-slot', 'textarea');
+	});
+});

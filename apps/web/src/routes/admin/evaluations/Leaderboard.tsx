@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Table } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
 import { getLeaderboard } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -107,7 +108,7 @@ export function Leaderboard() {
 					</div>
 				</div>
 
-				<div className="relative max-w-full min-h-[6.25rem] overflow-x-auto rounded-sm whitespace-nowrap">
+				<div className="relative max-w-full min-h-[6.25rem] rounded-sm">
 					{loading && (
 						<div className="bg-background/50 absolute inset-0 z-10 flex items-center justify-center">
 							<Spinner />
@@ -118,7 +119,10 @@ export function Leaderboard() {
 						<div className="text-muted-foreground py-1 text-center text-xs">No models found</div>
 					) : (
 						ranked.length > 0 && (
-							<table className={cn('text-muted-foreground w-full text-left text-sm', loading && 'opacity-20')}>
+							<Table
+								aria-label="Leaderboard"
+								className={cn('text-muted-foreground text-left whitespace-nowrap', loading && 'opacity-20')}
+							>
 								<thead className="text-foreground bg-transparent text-xs uppercase">
 									<tr className="border-b">
 										{COLUMNS.map((col, i) => (
@@ -200,7 +204,7 @@ export function Leaderboard() {
 										</tr>
 									))}
 								</tbody>
-							</table>
+							</Table>
 						)
 					)}
 				</div>

@@ -3,10 +3,10 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
-import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { Button } from '@/components/ui/button';
+import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { convertMessagesToHistory, createMessagesList } from '@/lib/utils/auth-helpers';
 import { routePaths } from '@/routes/routePaths';
 
@@ -24,7 +24,6 @@ export function SharedChatPage() {
 	const token = useAuthStore((state) => state.token) ?? '';
 	const user = useAuthStore((state) => state.user);
 	const authStatus = useAuthStore((state) => state.status);
-	const WEBUI_NAME = useWebUIName();
 
 	const chatQuery = useQuery({
 		queryKey: ['shared-chat', id, token],
@@ -52,11 +51,9 @@ export function SharedChatPage() {
 		return createMessagesList(history, history.currentId);
 	}, [chatContent]);
 
-	useEffect(() => {
-		document.title = chatContent?.title
-			? `${chatContent.title.length > 30 ? `${chatContent.title.slice(0, 30)}...` : chatContent.title} / ${WEBUI_NAME}`
-			: WEBUI_NAME;
-	}, [chatContent?.title, WEBUI_NAME]);
+	// The tab names the chat through the shared title mechanism (LAY-5).
+	const title = chatContent?.title;
+	useDocumentTitle(title ? (title.length > 30 ? `${title.slice(0, 30)}...` : title) : null);
 
 	const canClone = !!user && (user.role === 'admin' || (user.permissions as any)?.chat?.import !== false);
 
@@ -88,7 +85,7 @@ export function SharedChatPage() {
 	return (
 		<div className="flex h-screen w-full flex-col overflow-y-auto">
 			<div className="mx-auto w-full max-w-3xl px-3 pt-5 pb-24">
-				<h1 className="line-clamp-1 text-2xl font-normal">{chatContent.title}</h1>
+				<h1 className="line-clamp-1 text-heading font-normal">{chatContent.title}</h1>
 				<time className="text-muted-foreground text-sm">
 					{new Date(chatContent.timestamp ?? Date.now()).toLocaleString()}
 				</time>

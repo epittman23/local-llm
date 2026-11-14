@@ -69,6 +69,8 @@ const h = vi.hoisted(() => {
 		relaunches: [] as unknown[],
 		/** The application menu's template, so a test can click an item. */
 		menu: [] as unknown[],
+		/** The arguments of each dialog.showMessageBox. */
+		messageBoxes: [] as unknown[][],
 		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
 		devServer: null as ((url: string) => string | null) | null,
 		/** Builds the next spawned child; the default is one that started (#433). */
@@ -143,7 +145,12 @@ const h = vi.hoisted(() => {
 			relaunch: (options?: { args?: string[] }) => state.relaunches.push(options?.args)
 		},
 		BrowserWindow: FakeWindow,
-		dialog: {},
+		dialog: {
+			showMessageBox: (...args: unknown[]) => {
+				state.messageBoxes.push(args);
+				return Promise.resolve({ response: 0 });
+			}
+		},
 		ipcMain: { handle: (name: string, f: (...args: unknown[]) => unknown) => state.handlers.set(name, f) },
 		Menu: {
 			setApplicationMenu: () => {},
@@ -175,6 +182,7 @@ const h = vi.hoisted(() => {
 		state.servicesUp = 0;
 		state.relaunches = [];
 		state.menu = [];
+		state.messageBoxes = [];
 		state.devServer = null;
 		state.spawnChild = null;
 		state.ownedFails = { rename: false, rm: false };
@@ -936,6 +944,35 @@ test('Restart now while the app runs its own stack saves the window size and sto
 	expect(h.state.relaunches).toHaveLength(1);
 	expect(h.state.stops).toEqual([990201]);
 	expect(storedFile().bounds).toEqual({ x: 3, y: 4, width: 1000, height: 750 });
+});
+
+test('Help > About names the version, the build and the server in use, over the app window (#1115)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	const win = appWindows()[0];
+	win?.emit('ready-to-show');
+	await tick(10);
+	clickMenu('About local-llm');
+	const [parent, options] = h.state.messageBoxes[0] as [unknown, { title: string; message: string; detail: string }];
+	expect(parent).toBe(win);
+	expect(options.title).toBe('About local-llm');
+	expect(options.detail).toContain('Version 0.0.0');
+	expect(options.detail).toMatch(/^Build /m);
+	expect(options.detail).toContain(`Server ${HERE.serverUrl}`);
+});
+
+test('the reload and developer tools items sit in a Developer submenu, and zoom stays in View (#1115)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	type Item = { label?: string; role?: string; submenu?: Item[] };
+	const menu = h.state.menu as Item[];
+	const view = menu.find((item) => item.label === 'View');
+	expect(view?.submenu?.map((item) => item.role).filter(Boolean)).toEqual(
+		expect.arrayContaining(['resetZoom', 'zoomIn', 'zoomOut'])
+	);
+	const developer = view?.submenu?.find((item) => item.label === 'Developer');
+	expect(developer?.submenu?.map((item) => item.role)).toEqual(['reload', 'forceReload', 'toggleDevTools']);
+	expect(menu.some((item) => item.role === 'viewMenu')).toBe(false);
 });
 
 // --- What answers on the dev server's port (#432) ------------------------------

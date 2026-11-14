@@ -12,6 +12,7 @@ import {
 	eventsInHour,
 	formatHour,
 	isSameDay,
+	MONTH_NAMES,
 	monthGrid,
 	NS,
 	nsAt,
@@ -20,9 +21,16 @@ import {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+/** "14 November 2026": the visible day number first, so a cell's name contains what it shows (A11Y-2). */
+export const dayName = (day: Date) => `${day.getDate()} ${MONTH_NAMES[day.getMonth()]} ${day.getFullYear()}`;
+
+/** A month cell's name: its date and how many events it holds ("14 November 2026, 2 events"). */
+export const monthCellName = (day: Date, count: number) =>
+	`${dayName(day)}, ${count === 0 ? 'no events' : count === 1 ? '1 event' : `${count} events`}`;
+
 /**
  * One event in a grid cell: a colored dot, the start time (unless all-day, or in the band, where the
- * start may be on an earlier day), the title. Automation runs are dimmed.
+ * start may be on an earlier day), the title. Automation runs are in the muted foreground, never dimmed (COL-2).
  */
 function EventChip({
 	event,
@@ -46,7 +54,7 @@ function EventChip({
 			<RowButton
 				className={cn(
 					'flex w-auto items-start justify-start gap-1.5 truncate px-0.5',
-					event.meta?.automation_id && 'opacity-60'
+					event.meta?.automation_id && 'text-foreground-muted'
 				)}
 				onClick={(e) => {
 					e.stopPropagation();
@@ -144,10 +152,10 @@ export function CalendarViews({
 						return (
 							<div
 								key={day.toISOString()}
-								{...cell(`New event on ${day.toDateString()}`, () => onCreate(nsAt(day, 9)))}
+								{...cell(monthCellName(day, dayEvents.length), () => onCreate(nsAt(day, 9)))}
+								data-outside-month={day.getMonth() !== date.getMonth() || undefined}
 								className={cn(
 									'hover:bg-muted/50 flex min-h-0 cursor-pointer flex-col overflow-hidden p-1 text-left transition',
-									day.getMonth() !== date.getMonth() && 'opacity-40',
 									i % 7 > 0 && 'border-l',
 									i >= 7 && 'border-t'
 								)}
@@ -155,7 +163,12 @@ export function CalendarViews({
 								<span
 									className={cn(
 										'mb-0.5 flex size-6 items-center justify-center rounded-full text-xs',
-										isSameDay(day, today) ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'
+										// Another month's days are muted, never dimmed: dimming took them to 2.49:1 (COL-2).
+										isSameDay(day, today)
+											? 'bg-brand text-brand-foreground'
+											: day.getMonth() !== date.getMonth()
+												? 'text-foreground-muted'
+												: 'text-foreground'
 									)}
 								>
 									{day.getDate()}
@@ -210,7 +223,7 @@ export function CalendarViews({
 								return (
 									<ul
 										key={day.toISOString()}
-										aria-label={day.toDateString()}
+										aria-label={dayName(day)}
 										className="flex min-w-0 flex-col gap-0.5 border-l border-border/50 p-0.5"
 									>
 										{shown.map((e) => (
@@ -244,7 +257,7 @@ export function CalendarViews({
 								return (
 									<div
 										key={day.toISOString()}
-										{...cell(`New event ${day.toDateString()} ${formatHour(hour)}`, () => onCreate(nsAt(day, hour)))}
+										{...cell(`New event ${dayName(day)}, ${formatHour(hour)}`, () => onCreate(nsAt(day, hour)))}
 										className="hover:bg-muted/40 flex min-w-0 cursor-pointer flex-col gap-0.5 border-l border-border/50 p-0.5 transition"
 									>
 										{shown.map(chip)}

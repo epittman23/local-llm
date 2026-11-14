@@ -25,6 +25,24 @@ describe('ChartLine', () => {
 		expect(container.querySelectorAll('path')).toHaveLength(2);
 	});
 
+	it('strokes each line with the colour it was given as a style, so CSS variables follow the theme', () => {
+		const { container } = render(
+			<ChartLine data={DATA} models={['alpha', 'beta']} colors={['var(--series-1)', 'var(--series-2)']} height={200} />
+		);
+		const paths = [...container.querySelectorAll('path')];
+		expect(paths.map((p) => p.style.stroke)).toEqual(['var(--series-1)', 'var(--series-2)']);
+	});
+
+	it('draws the crosshair and tooltip in the standard’s divider, surface and muted text (COL-1)', () => {
+		const { container } = renderChart();
+		hoverAt(0);
+		expect(container.querySelector('line')?.getAttribute('class')).toBe('stroke-border-divider');
+		expect(container.querySelector('circle')?.style.fill).toBe('#111');
+		const tooltip = screen.getByText('Jan 1, 2026');
+		expect(tooltip.className).toContain('text-foreground-muted');
+		expect(tooltip.parentElement?.className).toContain('bg-surface-2');
+	});
+
 	it('labels the x-axis with the first and last dates', () => {
 		renderChart();
 		expect(screen.getByText('1/1')).toBeTruthy();
