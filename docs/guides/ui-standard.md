@@ -469,7 +469,8 @@ not altered.
 document, then a bar with "Unsaved changes", Discard changes and Save
 document. The editor is the Source view with a caret: the same face, size,
 line numbers and highlighting, updated as you type, so nothing moves or
-changes colour when editing starts. Entering the editor moves focus into it; saving or discarding
+changes colour when editing starts. It has no focus outline: the caret, and
+the bar that appears below it, show that it has focus. Entering the editor moves focus into it; saving or discarding
 moves focus back to the document's heading. Closing the canvas, switching
 document or leaving the chat with unsaved changes asks first.
 
@@ -508,7 +509,8 @@ label.
 
 **A11Y-1. One focus indicator, on everything, never removed:** a 2 px solid
 `--focus` outline, offset 2 px (flush on fields, whose edge also turns
-`--focus`). No `outline-none` without it; no translucent ring.
+`--focus`). No `outline-none` without it; no translucent ring. One
+exception: the canvas's editor (CNV-6) shows its caret and no outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
 label tied to it, or an `aria-label` (ACT-4).

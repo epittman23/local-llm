@@ -394,8 +394,9 @@ html[data-ui="standard"] .hljs-emphasis {
 /*
  * CNV-6: the editor is the source view with a caret. The textarea lies over
  * the highlighted text with the same face, size and line height, shows only
- * its caret and selection, and the surface, not the textarea, carries the
- * focus indicator.
+ * its caret and selection. It has no focus outline, by the owner's decision
+ * (A11Y-1's one exception): the editor fills the canvas, and its caret and
+ * the save bar already say that it has focus.
  */
 html[data-ui="standard"] textarea[data-code-editor] {
 	margin: 0;
@@ -412,10 +413,6 @@ html[data-ui="standard"] textarea[data-code-editor] {
 }
 html[data-ui="standard"] textarea[data-code-editor]::selection {
 	background-color: color-mix(in oklch, var(--brand), transparent 65%);
-}
-html[data-ui="standard"] .code-surface:has(textarea[data-code-editor]:focus-visible) {
-	outline: 2px solid var(--focus);
-	outline-offset: -2px;
 }
 @media (pointer: coarse) {
 	html[data-ui="standard"] .code-surface {
