@@ -246,7 +246,7 @@ export function AddConnectionModal({
 							<div className="flex items-center gap-2">
 								<select
 									id="select-bearer-or-session"
-									className="bg-transparent pr-5 text-sm [&>option]:bg-popover"
+									className="bg-transparent pr-5 text-sm"
 									value={f.authType}
 									onChange={(e) => set({ authType: e.target.value })}
 								>
@@ -376,7 +376,7 @@ export function AddConnectionModal({
 										</label>
 										<select
 											id="provider-select"
-											className="block bg-transparent text-sm [&>option]:bg-popover"
+											className="block bg-transparent text-sm"
 											value={f.provider}
 											onChange={(e) => set({ provider: e.target.value })}
 										>

@@ -30,7 +30,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 type Group = { id: string; name: string; member_count?: number };
 type UserInfo = { id: string; name: string; email?: string };
 
-const nativeSelectClass = 'bg-transparent text-sm [&>option]:bg-popover [&>option]:text-popover-foreground';
+const nativeSelectClass = 'bg-transparent text-sm';
 
 /**
  * Ports workspace/common/AccessControl.svelte: the visibility picker

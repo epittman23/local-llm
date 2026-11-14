@@ -253,7 +253,7 @@ export function ArenaModelModal({
 						<hr className="my-2" />
 						<div className="flex items-center gap-2">
 							<select
-								className="w-full bg-transparent text-sm [&>option]:bg-popover"
+								className="w-full bg-transparent text-sm"
 								aria-label="Select a model"
 								value={selectedModelId}
 								onChange={(e) => setSelectedModelId(e.target.value)}

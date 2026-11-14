@@ -27,7 +27,7 @@ import {
 
 const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const label = 'text-muted-foreground mb-1 text-xs';
-const select = 'w-full cursor-pointer bg-transparent text-sm [&>option]:bg-popover';
+const select = 'w-full cursor-pointer bg-transparent text-sm';
 
 const REPEATS: [string, string][] = [
 	['', 'No Repeat'],
