@@ -1,31 +1,20 @@
-/* The progress and settings dialog. System fonts and colours that follow
-   the desktop's light or dark preference, like the app's own theme. */
+/* The progress and settings dialog. Dark, always: it is the app's default
+   theme (apps/web/src/lib/theme.ts), and this window cannot read the theme
+   chosen in the app, which lives in the server's origin. The colours are the
+   interface standard's dark tokens (apps/web/src/styles/standard.css), as
+   hex because nothing is shared between the two builds. */
 :root {
-	color-scheme: light dark;
-	--bg: #ffffff;
-	--fg: #18181b;
-	--muted: #71717a;
-	--line: #e4e4e7;
-	--panel: #f4f4f5;
-	--accent: #18181b;
-	--accent-fg: #fafafa;
-	--ok: #16a34a;
-	--bad: #dc2626;
-	--warn: #b45309;
-}
-@media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #18181b;
-		--fg: #fafafa;
-		--muted: #a1a1aa;
-		--line: #3f3f46;
-		--panel: #27272a;
-		--accent: #fafafa;
-		--accent-fg: #18181b;
-		--ok: #4ade80;
-		--bad: #f87171;
-		--warn: #fbbf24;
-	}
+	color-scheme: dark;
+	--bg: #121916;
+	--fg: #f1efe6;
+	--muted: #b1bab3;
+	--line: #414a46;
+	--panel: #19211e;
+	--accent: #82c7f0;
+	--accent-fg: #05161f;
+	--ok: #7cd591;
+	--bad: #f68482;
+	--warn: #ebc669;
 }
 * {
 	box-sizing: border-box;

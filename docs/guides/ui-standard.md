@@ -12,9 +12,10 @@ eight, and so that two pages doing the same job look and behave the same.
   shown there and are checked on the page being changed. Its Canvas section
   shows a design that is planned, not built (see "Canvas").
 - **Tokens:** `apps/web/src/styles/standard.css`.
-- **Automated check:** `apps/web/src/styles/standard.contrast.test.ts`
-  (part of `make test-web`) fails when a token breaks a colour promise, in
-  dark, black or light.
+- **Automated checks:** `apps/web/src/styles/standard.contrast.test.ts`
+  fails when a token breaks a colour promise, in dark, black or light, and
+  `standard.ratchet.test.ts` fails when a file gains a pattern the standard
+  forbids (see "The ratchet"). Both are part of `make test-web`.
 - **Where it came from:** the UX/UI review of 2026-11-14, issues #901 to
   #1115, indexed in #1116. Most rules exist because that review found the
   opposite on several pages.
@@ -23,31 +24,28 @@ Rules have identifiers (`COL-2`, `FRM-3`). Cite them in issues, pull
 requests and review comments. "Must" and "never" are requirements; "prefer"
 is a default that a pull request may depart from by saying why.
 
-## Status: defined, shown on `/ui`, not yet the app's default
+## Status: the app's theme; the pages are being brought to it
 
-As of 2026-11-14 the standard's values apply only to `/ui`. That page sets
-`data-ui="standard"` on `<html>`, which switches on a scoped layer in
-`standard.css`; every other page still renders with the previous tokens and
-does not meet many of these rules (see #1116).
+Since 2026-11-14 the standard's tokens are the app's theme on every page, in
+dark, black and light, and **dark is the default**: a browser that has never
+chosen a theme gets dark (`DEFAULT_THEME` in `apps/web/src/lib/theme.ts`),
+and the desktop app's own windows are always dark.
 
-What is true today:
+What that did and did not change:
 
-- The new token names (`--surface-1`, `--success`, `--border-control`, the
-  `text-*` steps, and so on) are declared globally. Any page may use them now.
-- The rules below apply to **every new or changed piece of interface from now
-  on**. A change is not asked to fix the page around it, but what it touches
-  must conform.
+- Everything built from the shared components and the token names
+  (`bg-background`, `text-muted-foreground`, `Button`, `Input`, ...) took the
+  standard's colours, type, focus indicator, edges and sizes at once.
+- Code that bypasses them did not: a colour class from Tailwind's palette, a
+  one-off size, a hand-styled `<button>`. The ratchet (below, "The ratchet")
+  counts every one, per file, and only lets the counts fall. Bringing them to
+  zero, area by area, is under way and not finished; the review's issues are
+  indexed in #1116.
+- A bypass stays only as an **exception the owner has accepted**, recorded
+  with its reason in `apps/web/ui-standard-baseline.json`. Nobody else adds
+  one: propose it to the owner with the justification.
 
-What is planned, and what makes it the default:
-
-1. Move the scoped layer's values into `global.css`'s `:root` and `.dark`,
-   and its component rules into `components/ui`. Delete the scope and the
-   `data-ui` attribute. This is the step that changes the look of every page.
-2. Work through #1116 against the rules.
-3. Add a ratchet for the mechanical rules (see "Planned checks").
-
-Until step 1, do not copy values out of `standard.css` into a page: use the
-tokens.
+The rules below apply to every new or changed piece of interface.
 
 ## The product this is for
 
@@ -94,10 +92,7 @@ Tokens, by role. Values are in `standard.css`; hex values are shown on `/ui`.
 The shared components read the older shadcn names (`--background`,
 `--primary`, `--muted-foreground`, ...). Under the standard those names point
 at the tokens above, so `bg-background` and `bg-page` mean the same thing
-on a page that is on the standard. Until the whole app is (see Status), a
-component that must look right on both uses the older names, which resolve
-everywhere; the names in this table are for code that only runs under the
-standard, and become the preferred ones once the scope is removed.
+everywhere. New code prefers the names in this table.
 
 **COL-1. Only tokens.** No colour literal (`#fff`, `rgb()`, `oklch()`) and no
 Tailwind palette colour (`bg-white`, `text-gray-500`, `bg-neutral-950`,
@@ -125,7 +120,10 @@ above). Two neighbouring surfaces differ in fill and are separated by a
 divider. A shadow is never the only thing that separates two surfaces: in
 dark it cannot be seen.
 
-**COL-6. The page declares its colour scheme.** `color-scheme` is `dark`
+**COL-6. Dark is the default, and the page declares its colour scheme.**
+Nothing chooses light for someone who has not asked for it: the theme
+default is dark, and a surface that cannot read the theme (the desktop app's
+own windows) is dark. `color-scheme` is `dark`
 under `.dark` and `light` otherwise, so native controls, scrollbars, date
 pickers and validation bubbles match. Anything the app does not draw itself
 is given a dark treatment explicitly: an embedded frame gets a themed
@@ -542,10 +540,11 @@ animations.**
 
 The Electron shell loads the server's pages, so the rules above reach it
 through `apps/web`. Its own windows (the progress and error dialogs in
-`apps/desktop`) are separate HTML. They must use the same colours, type and
-words (WRD-3), follow the app's theme rather than only the operating
-system's, and never let content overflow a fixed window. They do not yet:
-nothing under `apps/desktop` uses these tokens (#926, #1115).
+`apps/desktop`) are separate HTML. They are always dark, in the standard's
+dark colours (`apps/desktop/static/status.css`, as hex, since the two builds
+share nothing), because such a window cannot read the theme chosen in the
+app. They must also use the standard's type and words (WRD-3) and never let
+content overflow a fixed window; they do not yet (#926, #1115).
 
 ## Verifying a change
 
@@ -558,7 +557,8 @@ For any pull request that changes what a page looks like or how it behaves:
 3. **See all four states** of anything that shows data (STA-1), and the error
    state of anything that can fail.
 4. **Read every word** against the Words rules.
-5. **Run `make test-web`**, which includes the contrast test.
+5. **Run `make test-web`**, which includes the contrast test and the ratchet.
+   If the ratchet says a count fell, lower the baseline (see "The ratchet").
 6. **Say which rules the change was checked against** in the pull request,
    with dark screenshots. If a rule was departed from, say which and why.
 
@@ -570,15 +570,40 @@ component, a pattern) adds it **here, in `standard.css` and on `/ui` in the
 same pull request**. The three stay in step; `/ui` is how the owner sees what
 was decided.
 
+## The ratchet
+
+`apps/web/src/styles/standard.ratchet.test.ts` (part of `make test-web`)
+counts, in every source file outside `components/ui`, six patterns the
+standard forbids:
+
+| Pattern | Rule | What it catches |
+|---|---|---|
+| `palette-colour` | COL-1 | `bg-white`, `text-gray-500`, `border-red-400`, ... |
+| `text-colour-opacity` | COL-2 | `text-muted-foreground/60`, `text-foreground/50` |
+| `arbitrary-text-size` | TYP-2 | `text-[11px]`, `text-[0.8rem]` |
+| `outline-removed` | A11Y-1 | `outline-none`, `outline-hidden` |
+| `raw-button` | ACT-6 | `<button` instead of the shared `Button` |
+| `dark-one-off` | COL-1 | `dark:` variants, which tokens make unnecessary |
+
+It compares the counts with `apps/web/ui-standard-baseline.json`:
+
+- a file with **more** than its baseline fails, so new code meets the rule;
+- a file with **fewer** also fails until the baseline is lowered, so progress
+  is recorded. Lower it with
+  `cd apps/web && UPDATE_UI_BASELINE=1 bunx vitest run src/styles/standard.ratchet.test.ts`,
+  which refuses to raise any count, and commit the smaller file.
+
+The aim is zero. A count that stays above zero for good is an exception: an
+entry under `exceptions` in the baseline naming the file, the pattern, the
+count and the reason, which the test checks still matches the code. **Only
+the owner accepts an exception.** When replacing a bypass seems wrong, stop
+and put the case to the owner with the justification; do not add the entry
+yourself.
+
 ## Planned checks
 
-Not built yet. Each would make a rule mechanical instead of a matter of
-review:
+Not built yet:
 
-- A ratchet (like the Biome and basedpyright baselines) counting, per file,
-  the patterns COL-1, COL-2, TYP-2, ACT-6 and A11Y-1 forbid (palette colours,
-  opacity on text colours, arbitrary sizes, raw `<button>`, `outline-none`),
-  that only lets the counts fall.
 - An accessibility scan (axe) of `/ui` and the main pages in the Playwright
   suite, in dark and light.
 - Screenshot comparison of `/ui` in the Playwright suite, so a change to a

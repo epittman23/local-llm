@@ -29,7 +29,7 @@ function tokens(selector: string): Record<string, string> {
 const light = tokens(':root');
 const dark = { ...light, ...tokens('.dark') };
 // Black (OLED) changes the page and the three surfaces under the dark theme.
-const black = { ...dark, ...tokens('html[data-ui="standard"].oled') };
+const black = { ...dark, ...tokens('.oled') };
 const themes: Record<string, Record<string, string>> = { light, dark, black };
 
 function color(theme: string, name: string): Oklch {

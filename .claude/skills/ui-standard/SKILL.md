@@ -38,8 +38,12 @@ the rules it shows.
    every stop, Escape closes one layer, focus returns to the trigger.
 4. For anything that shows data, see loading, empty, failed and full.
 5. Read every string you added against the Words rules.
-6. `cd apps/web && bunx vitest run src/styles src/routes/ui` when the
-   tokens or `/ui` changed; `make test-web` before the pull request.
+6. `cd apps/web && bunx vitest run src/styles src/routes/ui`. When the
+   ratchet reports a count that fell, lower the baseline:
+   `UPDATE_UI_BASELINE=1 bunx vitest run src/styles/standard.ratchet.test.ts`.
+   When replacing a bypass seems wrong, do not add an exception: stop and
+   put the case, with its justification, to the owner. `make test-web`
+   before the pull request.
 
 ## In the pull request
 

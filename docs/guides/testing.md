@@ -71,6 +71,16 @@ basedpyright's version is pinned in `ci.yml` and the Makefile
 (`BASEDPYRIGHT_VERSION`), outside Dependabot. A new version can change what
 it reports, so bump it by hand and run `make baselines`.
 
+### The interface standard's ratchet
+
+A third baseline, of a different kind: `apps/web/ui-standard-baseline.json`
+counts, per file, the patterns the interface standard forbids (palette
+colours, hand-styled buttons, removed focus outlines and three more).
+`src/styles/standard.ratchet.test.ts`, a Vitest test in `make test-web`,
+fails when a count rises and when one falls without the baseline being
+lowered. How to lower it, and who may add an exception, is in
+[ui-standard.md](ui-standard.md#the-ratchet).
+
 ## Coverage of the changed lines
 
 The backend and web jobs measure coverage: pytest-cov for `local_llm`, and

@@ -1,19 +1,19 @@
 /*
  * The interface standard's tokens and conformance layer
  * (docs/guides/ui-standard.md). Rule ids in comments (COL-1, TYP-2, ...) are
- * that document's.
+ * that document's. Since 2026-11-14 this is the app's theme, on every page.
  *
- * Two parts:
+ * Three parts:
  *
- * 1. Additive tokens, on :root and .dark. They are new names, so declaring
- *    them changes nothing that exists; any page may start using them.
- * 2. The scoped layer, `html[data-ui='standard']`. It re-points the tokens the
- *    shared components already read (--background, --primary, --border, ...)
- *    at the standard's values and brings those components to the standard's
- *    focus, border and sizing rules. Only /ui (routes/ui) sets the attribute
- *    today. Rolling the standard out means moving this layer's values into
- *    global.css's :root/.dark and its component rules into components/ui,
- *    then deleting the scope.
+ * 1. The standard's own tokens, on :root and .dark (--page, --surface-1,
+ *    --brand, --success, ...).
+ * 2. The names the shared components read (--background, --primary,
+ *    --border, ...), pointed at those tokens.
+ * 3. The conformance layer: the standard's focus, edge and sizing rules for
+ *    the shared components, matched by their data-slot. It is unlayered, so
+ *    it beats the utilities those components still carry; folding each rule
+ *    into its component in components/ui, and deleting it here, is cleanup
+ *    that can happen one component at a time.
  *
  * Every colour pair the standard makes a promise about is checked by
  * standard.contrast.test.ts, which parses this file. Change a value here and
@@ -75,7 +75,7 @@
 	--text-display--line-height: 2.125rem;
 }
 
-/* ---- 1. Additive tokens ------------------------------------------------ */
+/* ---- 1. The standard's tokens ------------------------------------------- */
 
 :root {
 	/* "Whiteboard": warm paper, marker ink. */
@@ -141,12 +141,10 @@
 	--scrim: oklch(0.1 0.01 170 / 65%);
 }
 
-/* ---- 2. The scoped layer ------------------------------------------------ */
+/* ---- 2. The shared components' token names ------------------------------ */
 
-/* COL-1: the shared components' own token names, re-pointed. */
-html[data-ui="standard"] {
+:root {
 	color-scheme: light; /* COL-6 */
-	--app-font-family: var(--font-ui);
 	--background: var(--page);
 	--foreground: var(--foreground-strong);
 	--card: var(--surface-1);
@@ -178,30 +176,28 @@ html[data-ui="standard"] {
 	--sidebar-accent-foreground: var(--foreground-strong);
 	--sidebar-border: var(--border-divider);
 	--sidebar-ring: var(--focus);
-	--radius: 0.5rem; /* SHP-1: controls 8px; panels and dialogs use rounded-panel (12px) */
 }
-html[data-ui="standard"].dark {
+.dark {
 	color-scheme: dark;
 }
 /* OLED keeps true black under the page only; raised surfaces stay on the ladder. */
-html[data-ui="standard"].oled {
+.oled {
 	--page: oklch(0 0 0);
 	--surface-1: oklch(0.17 0.01 170);
 	--surface-2: oklch(0.22 0.012 170);
 	--surface-3: oklch(0.27 0.014 170);
 }
 
-html[data-ui="standard"] body {
-	font-family: var(--font-ui);
-	font-size: var(--text-body);
-	line-height: var(--text-body--line-height);
+/* ---- 3. The conformance layer ------------------------------------------- */
+
+:root body {
 	-webkit-font-smoothing: antialiased;
 }
-html[data-ui="standard"] :is(code, kbd, pre, samp, .font-mono) {
+:root :is(code, kbd, pre, samp, .font-mono) {
 	font-family: var(--font-code);
 }
 /* CNT-2: inline code sits on a fill. */
-html[data-ui="standard"] :not(pre) > code {
+:root :not(pre) > code {
 	background-color: var(--surface-3);
 	border-radius: 0.25rem;
 	padding: 0.0625rem 0.25rem;
@@ -212,52 +208,54 @@ html[data-ui="standard"] :not(pre) > code {
  * beats the `outline-none` and translucent `ring-*` utilities the shared
  * components carry today.
  */
-html[data-ui="standard"] :focus-visible {
+:root :focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 	--tw-ring-shadow: 0 0 #0000;
 }
 /* A dialog takes focus as a container when it opens; it is not a control. */
-html[data-ui="standard"] :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
 	outline: none;
 }
-html[data-ui="standard"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):focus-visible {
+:root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):focus-visible {
 	outline-offset: 0;
 	border-color: var(--focus);
 }
 
-/* FRM-1, LAY-2: fields have a 3:1 edge, a filled surface and the standard height. */
-html[data-ui="standard"]
-	:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], input, textarea, select) {
+/*
+ * FRM-1, LAY-2: fields have a 3:1 edge, a filled surface and the standard
+ * height. Only the shared components: a raw <input> may be the inside of a
+ * composite field that draws its own edge (FRM-4 says to use the shared ones).
+ */
+:root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
 	border-color: var(--border-control);
 	background-color: var(--surface-1);
 	font-size: var(--text-body);
 }
-html[data-ui="standard"] :is([data-slot="input"], [data-slot="select-trigger"]) {
+:root :is([data-slot="input"], [data-slot="select-trigger"]) {
 	height: var(--control);
 	padding-inline: 0.75rem;
 }
-html[data-ui="standard"] [data-slot="textarea"] {
+:root [data-slot="textarea"] {
 	padding: 0.5rem 0.75rem;
 }
-html[data-ui="standard"] :is([data-slot="input"], [data-slot="textarea"])::placeholder {
+:root :is([data-slot="input"], [data-slot="textarea"])::placeholder {
 	color: var(--foreground-muted); /* COL-2: placeholders are text; 4.5:1 */
 	opacity: 1;
 }
-html[data-ui="standard"]
-	:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"])[aria-invalid="true"] {
+:root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"])[aria-invalid="true"] {
 	border-color: var(--danger);
 }
-html[data-ui="standard"] :is([data-slot="checkbox"], [data-slot="switch"]) {
+:root :is([data-slot="checkbox"], [data-slot="switch"]) {
 	border-color: var(--border-control);
 }
-html[data-ui="standard"] [data-slot="switch"][data-state="unchecked"] {
+:root [data-slot="switch"][data-state="unchecked"] {
 	background-color: var(--surface-3);
 }
-html[data-ui="standard"] [data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
+:root [data-slot="switch"][data-state="unchecked"] [data-slot="switch-thumb"] {
 	background-color: var(--foreground-muted);
 }
-html[data-ui="standard"] [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
+:root [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
 	background-color: var(--brand-foreground);
 }
 
@@ -266,39 +264,39 @@ html[data-ui="standard"] [data-slot="switch"][data-state="checked"] [data-slot="
  * data-slot="button": a Button used as a dialog or menu trigger (asChild)
  * takes the trigger's data-slot.
  */
-html[data-ui="standard"] :is(button, a)[data-variant] {
+:root :is(button, a)[data-variant] {
 	font-size: var(--text-body);
 	font-weight: 550;
 	transition-duration: var(--motion-fast); /* MOT-1 */
 }
-html[data-ui="standard"] :is(button, a)[data-variant]:is([data-size="default"], [data-size="lg"]) {
+:root :is(button, a)[data-variant]:is([data-size="default"], [data-size="lg"]) {
 	height: var(--control);
 	padding-inline: 0.75rem;
 }
-html[data-ui="standard"] :is(button, a)[data-variant][data-size="icon"] {
+:root :is(button, a)[data-variant][data-size="icon"] {
 	width: var(--control);
 	height: var(--control);
 }
-html[data-ui="standard"] :is(button, a)[data-variant]:is([data-size="sm"], [data-size="xs"]) {
+:root :is(button, a)[data-variant]:is([data-size="sm"], [data-size="xs"]) {
 	height: var(--control-compact);
 	font-size: var(--text-dense);
 }
-html[data-ui="standard"] :is(button, a)[data-variant="outline"] {
+:root :is(button, a)[data-variant="outline"] {
 	border-color: var(--border-control);
 	background-color: transparent;
 }
-html[data-ui="standard"] :is(button, a)[data-variant="outline"]:hover {
+:root :is(button, a)[data-variant="outline"]:hover {
 	background-color: var(--surface-3);
 }
 /* ACT-3: the destructive action is filled in the danger colour, not tinted. */
-html[data-ui="standard"] :is(button, a)[data-variant="destructive"] {
+:root :is(button, a)[data-variant="destructive"] {
 	background-color: var(--danger-fill);
 	color: var(--danger-fill-foreground);
 }
-html[data-ui="standard"] :is(button, a)[data-variant="destructive"]:hover {
+:root :is(button, a)[data-variant="destructive"]:hover {
 	background-color: color-mix(in oklch, var(--danger-fill), var(--foreground-strong) 12%);
 }
-html[data-ui="standard"] :is(button, a)[data-variant]:disabled {
+:root :is(button, a)[data-variant]:disabled {
 	opacity: 1;
 	background-color: var(--surface-3);
 	border-color: transparent;
@@ -306,12 +304,11 @@ html[data-ui="standard"] :is(button, a)[data-variant]:disabled {
 }
 /* LAY-3: on touch, every control grows to the 44px target. */
 @media (pointer: coarse) {
-	html[data-ui="standard"]
-		:is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+	:root :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
 		min-height: var(--control-touch);
 		font-size: var(--text-reading); /* TYP-4: 16px, so iOS does not zoom */
 	}
-	html[data-ui="standard"]
+	:root
 		:is(button, a)[data-variant]:is(
 			[data-size="icon"],
 			[data-size="icon-sm"],
@@ -323,33 +320,32 @@ html[data-ui="standard"] :is(button, a)[data-variant]:disabled {
 }
 
 /* SUR-2: floating layers carry both an edge and a shadow; the scrim dims the page. */
-html[data-ui="standard"] :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
 	background-color: var(--surface-2);
 	border: 1px solid var(--border-divider);
 	border-radius: 0.75rem;
 	box-shadow: 0 24px 64px -16px oklch(0 0 0 / 55%);
 	animation-duration: var(--motion-base); /* MOT-1 */
 }
-html[data-ui="standard"] :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"]) {
+:root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"]) {
 	background-color: var(--scrim);
 	backdrop-filter: none;
 }
-html[data-ui="standard"]
-	:is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"]) {
+:root :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"]) {
 	border: 1px solid var(--border-divider);
 	box-shadow: 0 12px 32px -12px oklch(0 0 0 / 50%);
 }
 
 /* DAT-2: figures line up. */
-html[data-ui="standard"] :is(table, [data-numeric]) {
+:root :is(table, [data-numeric]) {
 	font-variant-numeric: tabular-nums;
 }
 
 /* MOT-2. Unlayered, so these beat the layered animation and transition utilities. */
 @media (prefers-reduced-motion: reduce) {
-	html[data-ui="standard"] *,
-	html[data-ui="standard"] *::before,
-	html[data-ui="standard"] *::after {
+	:root *,
+	:root *::before,
+	:root *::after {
 		animation-duration: 0.01ms;
 		animation-iteration-count: 1;
 		transition-duration: 0.01ms;
@@ -359,35 +355,38 @@ html[data-ui="standard"] :is(table, [data-numeric]) {
 
 /*
  * CNT-2: one code theme, from the tokens, in every app theme. These are
- * highlight.js's token classes; the scope's specificity beats whichever
- * highlight.js stylesheet a page has loaded.
+ * highlight.js's token classes; :root's specificity beats the highlight.js
+ * stylesheet the chat's code blocks import.
  */
-html[data-ui="standard"] :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-doctag) {
+:root .hljs {
+	background-color: var(--surface-1);
+	color: var(--foreground-strong);
+}
+:root :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-built_in, .hljs-doctag) {
 	color: var(--series-3);
 }
-html[data-ui="standard"] :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-bullet) {
+:root :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-bullet) {
 	color: var(--series-4);
 }
-html[data-ui="standard"] :is(.hljs-number, .hljs-symbol, .hljs-deletion) {
+:root :is(.hljs-number, .hljs-symbol, .hljs-deletion) {
 	color: var(--series-5);
 }
-html[data-ui="standard"] :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
+:root :is(.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class) {
 	color: var(--series-1);
 }
-html[data-ui="standard"]
-	:is(.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-params) {
+:root :is(.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable, .hljs-type, .hljs-params) {
 	color: var(--series-2);
 }
-html[data-ui="standard"] :is(.hljs-meta, .hljs-link, .hljs-code) {
+:root :is(.hljs-meta, .hljs-link, .hljs-code) {
 	color: var(--series-6);
 }
-html[data-ui="standard"] :is(.hljs-comment, .hljs-quote) {
+:root :is(.hljs-comment, .hljs-quote) {
 	color: var(--foreground-muted);
 }
-html[data-ui="standard"] .hljs-strong {
+:root .hljs-strong {
 	font-weight: 650;
 }
-html[data-ui="standard"] .hljs-emphasis {
+:root .hljs-emphasis {
 	font-style: italic;
 }
 
@@ -398,7 +397,7 @@ html[data-ui="standard"] .hljs-emphasis {
  * (A11Y-1's one exception): the editor fills the canvas, and its caret and
  * the save bar already say that it has focus.
  */
-html[data-ui="standard"] textarea[data-code-editor] {
+:root textarea[data-code-editor] {
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -411,11 +410,11 @@ html[data-ui="standard"] textarea[data-code-editor] {
 	tab-size: inherit;
 	outline: none;
 }
-html[data-ui="standard"] textarea[data-code-editor]::selection {
+:root textarea[data-code-editor]::selection {
 	background-color: color-mix(in oklch, var(--brand), transparent 65%);
 }
 @media (pointer: coarse) {
-	html[data-ui="standard"] .code-surface {
+	:root .code-surface {
 		font-size: var(--text-reading); /* TYP-4 */
 	}
 }

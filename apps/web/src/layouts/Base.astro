@@ -13,6 +13,8 @@ const { title = 'local-llm' } = Astro.props;
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="robots" content="noindex,nofollow" />
+		<!-- lib/theme.ts keeps this at the page colour of the current theme. -->
+		<meta name="theme-color" content="#121916" />
 		<title>{title}</title>
 		<script is:inline>
 			// Anti-FOUC: set before first paint, mirroring d863707:apps/openwebui/src/app.html's
@@ -21,10 +23,15 @@ const { title = 'local-llm' } = Astro.props;
 			// yet -- ports the mechanism now, not the theme picker UI (that's Phase 4).
 			(() => {
 				const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-				const theme = localStorage.theme || 'system';
+				// 'dark' is lib/theme.ts's DEFAULT_THEME: a browser that never chose is dark.
+				const theme = localStorage.theme || 'dark';
 				// Same mapping as lib/theme.ts's themeClasses (OLED dark is `dark oled`).
 				const classes = theme === 'oled-dark' ? ['dark', 'oled'] : theme === 'dark' ? ['dark'] : theme === 'light' ? ['light'] : [prefersDark ? 'dark' : 'light'];
 				document.documentElement.classList.add(...classes);
+				// --page in each theme (styles/standard.css), as lib/theme.ts's applyTheme sets it.
+				document
+					.querySelector('meta[name="theme-color"]')
+					?.setAttribute('content', classes.includes('oled') ? '#000000' : classes.includes('dark') ? '#121916' : '#f8f7f2');
 			})();
 		</script>
 	</head>

@@ -180,6 +180,9 @@ function openStatus(view: 'progress' | 'settings'): void {
 	statusView = view;
 	if (!statusWindow) {
 		statusWindow = new BrowserWindow({
+			// The page colour of the dark theme (static/status.css), so the window
+			// is never white before its page paints.
+			backgroundColor: '#121916',
 			// A fixed size (minimum = maximum) is what tiling compositors such
 			// as Hyprland and sway take as "float this", so the dialog opens
 			// floating and centred instead of being tiled like the app window.
@@ -272,6 +275,9 @@ function openApp(url: string): Promise<void> {
 	dispatch({ type: 'begin', step: 'open', at: Date.now() });
 	const win = new BrowserWindow({
 		...savedBounds(),
+		// The app's default theme is dark (apps/web/src/lib/theme.ts): no white
+		// window while the server's page loads.
+		backgroundColor: '#121916',
 		minWidth: 480,
 		minHeight: 400,
 		title: 'Local LLM',
