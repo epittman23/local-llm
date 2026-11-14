@@ -166,7 +166,7 @@ const router = createBrowserRouter(
 						{ path: routePaths.homePage, element: <HomePage />, handle: page('Home') },
 						{ path: routePaths.notes, element: <NotesPage />, handle: page('Notes') },
 						{ path: `${routePaths.notes}/new`, element: <NewNotePage />, handle: page('New note') },
-						{ path: `${routePaths.notes}/:id`, element: <NoteEditorPage />, handle: page('Note') },
+						{ path: `${routePaths.notes}/:id`, element: <NoteEditorPage />, handle: { title: 'Note', heading: 'sr' } },
 						{
 							path: routePaths.calendar,
 							element: <CalendarPage />,

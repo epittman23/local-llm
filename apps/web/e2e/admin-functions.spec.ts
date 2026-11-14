@@ -87,7 +87,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('filter', { exact: true })).toBeVisible();
 		await expect(page.getByText('3', { exact: true }).first()).toBeVisible();
 
-		await page.getByRole('button', { name: 'Tag', exact: true }).click();
+		await page.getByRole('button', { name: 'Tag: Type', exact: true }).click();
 		await page.getByRole('menuitemradio', { name: 'Filter' }).click();
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 1', { exact: true })).toHaveCount(0);
