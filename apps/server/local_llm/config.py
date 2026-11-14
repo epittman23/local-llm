@@ -125,10 +125,19 @@ for file_path in FRONTEND_STATIC_DIR.glob('**/*'):
         except Exception as e:
             logging.error(f'An error occurred: {e}')
 
-# There is no default avatar or model picture to copy: since decision D1
-# (2026-11-14) the picture endpoints answer 404 for a model or user without
-# one, and the frontend draws initials, so Open WebUI's user.png and
-# favicon.png are gone.
+# Since decision D1 (2026-11-14) the model and user picture endpoints answer
+# 404 for one without a picture, and the frontend draws initials, so Open
+# WebUI's user.png and favicon.png are gone. A webhook without a picture still
+# gets an image, the mark (lucide's Sigma): it lives at the frontend's root,
+# not under static/, so it is copied here by name. The build first, then the source.
+WEBHOOK_FALLBACK_IMAGE = STATIC_DIR / 'icon-512.png'
+for mark in (FRONTEND_BUILD_DIR / 'icon-512.png', FRONTEND_BUILD_DIR.parent / 'public' / 'icon-512.png'):
+    if mark.exists():
+        try:
+            shutil.copyfile(mark, WEBHOOK_FALLBACK_IMAGE)
+        except Exception as e:
+            logging.error(f'An error occurred: {e}')
+        break
 
 frontend_splash = FRONTEND_STATIC_DIR / 'splash.png'
 

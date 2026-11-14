@@ -1,23 +1,27 @@
-"""A model, user or webhook without a picture of its own gets a 404 (#924, decision D1).
+"""A model or user without a picture of its own gets a 404 (#924, decision D1).
 
 The picture endpoints used to answer with Open WebUI's 'OI' favicon or its grey
 silhouette, which the frontend could not tell from a real picture; now they
 answer 404, and the frontend's avatar draws the initials. "No picture" covers
 an empty value, the stored defaults (/user.png, /favicon.png,
 /static/favicon.png: left in the rows as they are) and an unusable one. A real
-picture is still served as before.
+picture is still served as before. A webhook without a picture keeps its
+status (the owner approved the 404 for models and users only) and gets the
+mark, lucide's Sigma, in place of Open WebUI's favicon.
 
 Run from apps/server:
 
     python -m pytest tests/test_profile_image_endpoints.py
 """
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from local_llm.config import WEBHOOK_FALLBACK_IMAGE
 from local_llm.internal.db import get_async_session
 from local_llm.routers import channels as channels_router
 from local_llm.routers import models as models_router
@@ -26,6 +30,7 @@ from local_llm.utils.auth import get_verified_user
 from local_llm.utils.validate import is_default_profile_image
 
 PNG = 'data:image/png;base64,iVBORw0KGgo='
+WEB_PUBLIC = Path(__file__).resolve().parents[2] / 'web' / 'public'
 DEFAULTS = ['', None, '/user.png', '/favicon.png', '/static/favicon.png']
 
 
@@ -116,15 +121,24 @@ def test_a_users_picture_is_still_served(client, monkeypatch):
     assert response.headers['content-type'] == 'image/png'
 
 
+def test_the_mark_is_in_the_static_directory_for_webhooks():
+    assert WEBHOOK_FALLBACK_IMAGE.name == 'icon-512.png'
+    assert WEBHOOK_FALLBACK_IMAGE.read_bytes() == (WEB_PUBLIC / 'icon-512.png').read_bytes()
+
+
 @pytest.mark.parametrize('url', ['', None])
-def test_a_webhook_without_a_picture_is_a_404(client, monkeypatch, url):
+def test_a_webhook_without_a_picture_gets_the_mark(client, monkeypatch, url):
     webhook_with(monkeypatch, url)
-    assert client.get('/channels/webhooks/w1/profile/image').status_code == 404
+    response = client.get('/channels/webhooks/w1/profile/image')
+    assert response.status_code == 200
+    assert response.content == (WEB_PUBLIC / 'icon-512.png').read_bytes()
 
 
-def test_a_missing_webhook_is_a_404(client, monkeypatch):
+def test_a_missing_webhook_gets_the_mark(client, monkeypatch):
     webhook_with(monkeypatch, None, exists=False)
-    assert client.get('/channels/webhooks/w1/profile/image').status_code == 404
+    response = client.get('/channels/webhooks/w1/profile/image')
+    assert response.status_code == 200
+    assert response.content == (WEB_PUBLIC / 'icon-512.png').read_bytes()
 
 
 def test_a_webhooks_picture_is_still_served(client, monkeypatch):
