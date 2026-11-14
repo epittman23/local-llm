@@ -12,13 +12,21 @@ export const WAITING_AFTER_MS = 8000;
 /** The id of the static splash in layouts/Base.astro, which paints before any script runs. */
 export const BOOT_SPLASH_ID = 'boot-splash';
 
-/** Removes Base.astro's static splash once React has drawn something in its place (RootLayout). */
+/** Removes Base.astro's static splash once React has drawn something in its place (AppRouter). */
 export function removeStaticBootSplash() {
 	document.getElementById(BOOT_SPLASH_ID)?.remove();
 }
 
+/** Whether a splash has already mounted in this page load; only the first continues Base.astro's static one. */
+let mountedBefore = false;
+
 /** Milliseconds since the page started loading, so the delays count from the first paint, not this mount. */
 const sinceNavigation = () => (typeof performance === 'undefined' ? 0 : performance.now());
+
+/** Test seam: makes the next splash count as the first of the page load again. */
+export function resetBootSplashForTests() {
+	mountedBefore = false;
+}
 
 /**
  * What the app shows while it waits for the server to say who is signed in
@@ -33,7 +41,10 @@ export function BootSplash() {
 	const [waiting, setWaiting] = useState(false);
 
 	useEffect(() => {
-		const elapsed = sinceNavigation();
+		// A splash that appears later in the session (signed out, session expired)
+		// has no static one before it, so its delays count from its own mount.
+		const elapsed = mountedBefore ? 0 : sinceNavigation();
+		mountedBefore = true;
 		const spinner = setTimeout(() => setShowSpinner(true), Math.max(0, SPINNER_AFTER_MS - elapsed));
 		const wait = setTimeout(() => setWaiting(true), Math.max(0, WAITING_AFTER_MS - elapsed));
 		return () => {

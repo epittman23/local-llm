@@ -1,7 +1,14 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BOOT_SPLASH_ID, BootSplash, removeStaticBootSplash, SPINNER_AFTER_MS, WAITING_AFTER_MS } from './BootSplash';
+import {
+	BOOT_SPLASH_ID,
+	BootSplash,
+	removeStaticBootSplash,
+	resetBootSplashForTests,
+	SPINNER_AFTER_MS,
+	WAITING_AFTER_MS
+} from './BootSplash';
 
 const renderAt = (path: string) =>
 	render(
@@ -14,6 +21,7 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	// The delays count from the start of the page load; pretend it has just begun.
 	vi.spyOn(performance, 'now').mockReturnValue(0);
+	resetBootSplashForTests();
 });
 afterEach(() => {
 	cleanup();
@@ -52,6 +60,18 @@ describe('BootSplash', () => {
 		vi.mocked(performance.now).mockReturnValue(7900);
 		renderAt('/');
 		act(() => vi.advanceTimersByTime(100));
+		expect(screen.getByText(/Still waiting for the server/)).toBeInTheDocument();
+	});
+
+	it('counts from its own mount when it appears later in the session', () => {
+		renderAt('/');
+		cleanup();
+		// Signed out ten minutes in: the page's clock says far more than 8 s.
+		vi.mocked(performance.now).mockReturnValue(600_000);
+		renderAt('/');
+		act(() => vi.advanceTimersByTime(WAITING_AFTER_MS - 1));
+		expect(screen.queryByText(/Still waiting for the server/)).toBeNull();
+		act(() => vi.advanceTimersByTime(1));
 		expect(screen.getByText(/Still waiting for the server/)).toBeInTheDocument();
 	});
 
