@@ -10,8 +10,11 @@ describe('ConnectionBanner', () => {
 	});
 
 	it('shows while the connection is lost and leaves when it is back, in a live region', () => {
-		render(<ConnectionBanner />);
-		const region = screen.getByRole('status');
+		const { container } = render(<ConnectionBanner />);
+		// A polite live region, always present, without role=status so it is not mistaken for a page's own status line.
+		const region = container.firstElementChild as HTMLElement;
+		expect(region).toHaveAttribute('aria-live', 'polite');
+		expect(screen.queryByRole('status')).toBeNull();
 		expect(region).toBeEmptyDOMElement();
 
 		act(() => useConnectionStore.getState().setLost(true));
@@ -25,6 +28,6 @@ describe('ConnectionBanner', () => {
 		vi.stubGlobal('navigator', { onLine: false });
 		useConnectionStore.setState({ lost: true });
 		render(<ConnectionBanner />);
-		expect(screen.getByRole('status')).toHaveTextContent('This computer is offline. Reconnecting…');
+		expect(screen.getByText('This computer is offline. Reconnecting…')).toBeInTheDocument();
 	});
 });
