@@ -278,7 +278,7 @@ function Calendar() {
 					</Button>
 					<select
 						aria-label="View"
-						className="bg-transparent px-2 py-1 text-xs [&>option]:bg-popover"
+						className="bg-transparent px-2 py-1 text-xs"
 						value={view}
 						onChange={(e) => setView(e.target.value as CalendarViewMode)}
 					>
