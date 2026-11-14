@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -231,10 +232,12 @@ export function Feedbacks() {
 												<Tip content={feedback.user?.name}>
 													<div className="shrink-0">
 														{feedback.user && (
-															<img
+															<ProfileAvatar
 																src={`${WEBUI_API_BASE_URL}/users/${feedback.user.id}/profile/image`}
-																alt={feedback.user.name}
-																className="size-5 shrink-0 rounded-full object-cover"
+																name={feedback.user.name}
+																label={feedback.user.name}
+																size="sm"
+																className="size-5"
 															/>
 														)}
 													</div>

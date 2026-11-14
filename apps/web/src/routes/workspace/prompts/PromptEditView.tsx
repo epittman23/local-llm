@@ -9,6 +9,7 @@ import { PromptHistoryMenu } from '@/components/common/PromptHistoryMenu';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -280,13 +281,11 @@ export function PromptEditView({
 								<div className="text-muted-foreground flex items-center gap-1 text-xs">
 									{entry.user && (
 										<>
-											<img
+											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${entry.user.id}/profile/image`}
-												alt={entry.user.name}
-												className="mr-0.5 size-3 rounded-full"
-												onError={(e) => {
-													e.currentTarget.style.visibility = 'hidden';
-												}}
+												name={entry.user.name}
+												size="sm"
+												className="mr-0.5 size-5"
 											/>
 											<span className="truncate">{entry.user.name}</span>
 											<span>•</span>

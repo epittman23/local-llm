@@ -2,6 +2,7 @@ import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -228,10 +229,11 @@ export default function Account() {
 					)}
 					<SettingsSection title="Profile" first>
 						<div className="flex items-center gap-3">
-							<img
-								src={profile.profile_image_url || '/user.png'}
-								alt="Profile"
-								className="size-14 rounded-full object-cover"
+							<ProfileAvatar
+								src={profile.profile_image_url}
+								name={profile.name}
+								label="Profile picture"
+								className="size-14 text-base"
 							/>
 							<div className="flex flex-col items-start gap-1 text-xs">
 								<input

@@ -46,7 +46,9 @@ describe('ModelSelector', () => {
 	it('narrows the options to the search text', () => {
 		show();
 		fireEvent.change(screen.getByRole('textbox', { name: 'Search a model' }), { target: { value: 'mat' } });
-		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Math']);
+		// Each option's picture is decorative (its initials are hidden), so its name is the model's.
+		expect(screen.getAllByRole('option')).toHaveLength(1);
+		expect(screen.getByRole('option', { name: 'Math' })).toBeInTheDocument();
 	});
 
 	it('names its button after the model it shows, so the name contains the visible text (A11Y-2)', () => {

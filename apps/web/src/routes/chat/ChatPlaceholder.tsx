@@ -1,6 +1,7 @@
 import { Zap } from 'lucide-react';
 import { useMemo } from 'react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { RowButton } from '@/components/ui/row-button';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -40,14 +41,7 @@ export function ChatPlaceholder({
 				</div>
 			)}
 			<div className="flex items-center gap-3">
-				{model && (
-					<img
-						src={modelImage(model.id)}
-						alt=""
-						className="size-10 rounded-full object-cover"
-						onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-					/>
-				)}
+				{model && <ProfileAvatar src={modelImage(model.id)} name={model.name} size="lg" />}
 				<h1 className="line-clamp-1 text-heading">{model?.name ?? `Hello, ${name ?? ''}`}</h1>
 			</div>
 			{description && (

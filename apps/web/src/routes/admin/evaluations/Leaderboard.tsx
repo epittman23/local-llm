@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
@@ -163,13 +164,11 @@ export function Leaderboard() {
 											<td className="text-foreground px-3 py-1.5 font-normal">{ranks.get(model.id) ?? '-'}</td>
 											<td className="px-3 py-1.5">
 												<div className="flex items-center gap-2">
-													<img
+													<ProfileAvatar
 														src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
-														alt={model.name}
-														className="size-5 shrink-0 rounded-full object-cover"
-														onError={(e) => {
-															e.currentTarget.src = '/favicon.png';
-														}}
+														name={model.name}
+														size="sm"
+														className="size-5"
 													/>
 													<Tip content={`${model.name} (${model.id})`} side="top">
 														<span className="text-foreground line-clamp-1 font-normal">{model.name}</span>

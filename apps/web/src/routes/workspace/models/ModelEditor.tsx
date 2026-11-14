@@ -7,6 +7,7 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
+import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ImageButton } from '@/components/ui/image-button';
 import { Input } from '@/components/ui/input';
@@ -262,17 +263,14 @@ function EditorForm({
 								<div className="group relative size-12 shrink-0 md:size-14">
 									<ImageButton
 										aria-label="Upload profile image"
+										shape="circle"
 										className="size-full"
 										overlay={<Camera />}
 										onClick={() => imageInput.current?.click()}
 									>
-										<img
-											src={meta.profile_image_url || DEFAULT_PROFILE_IMAGE}
-											alt="model profile"
-											className="size-full object-cover"
-										/>
+										<ProfileAvatar src={meta.profile_image_url} name={state.name} className="size-full text-base" />
 									</ImageButton>
-									{meta.profile_image_url && meta.profile_image_url !== DEFAULT_PROFILE_IMAGE && (
+									{hasPicture(meta.profile_image_url) && (
 										<Button
 											variant="ghost"
 											size="xs"

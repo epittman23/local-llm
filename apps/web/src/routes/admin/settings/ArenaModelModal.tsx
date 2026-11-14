@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ImageButton } from '@/components/ui/image-button';
@@ -153,7 +154,7 @@ export function ArenaModelModal({
 									overlay={<Pencil />}
 									onClick={() => imageInput.current?.click()}
 								>
-									<img src={profileImageUrl} alt="Profile" className="size-12 object-cover" />
+									<ProfileAvatar src={profileImageUrl} name={name} className="size-12 text-base" />
 								</ImageButton>
 							</div>
 							<div className="flex min-w-0 flex-1 flex-col gap-1">

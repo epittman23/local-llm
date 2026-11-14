@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -62,11 +63,12 @@ export function MessageList({
 										.filter((u) => u.id !== me?.id)
 										.slice(0, 2)
 										.map((u, i) => (
-											<img
+											<ProfileAvatar
 												key={u.id}
 												src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
-												alt={u.name}
-												className={`border-background size-7 rounded-full border-2 ${i === 1 ? '-ml-2.5' : ''}`}
+												name={u.name}
+												label={u.name}
+												className={`ring-background size-7 ring-2 ${i === 1 ? '-ml-2.5' : ''}`}
 											/>
 										))}
 								</div>

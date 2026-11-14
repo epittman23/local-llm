@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { CheckboxMark } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -224,10 +225,10 @@ export function MemberSelector({
 										onClick={() => toggleUser(user)}
 									>
 										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
-											<img
-												className="size-6 shrink-0 rounded-2xl object-cover"
+											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-												alt=""
+												name={user.name}
+												size="sm"
 											/>
 											<Tip content={user.email} side="top">
 												<span className="truncate">{user.name}</span>
