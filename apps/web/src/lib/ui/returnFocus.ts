@@ -18,7 +18,11 @@ export function useReturnFocus(onOpenAutoFocus: AutoFocusHandler, onCloseAutoFoc
 		onOpenAutoFocus(event: Event) {
 			// Before the caller's handler, which may move focus itself.
 			const active = document.activeElement;
-			opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+			// A menu item goes when its menu closes; the menu's trigger stays.
+			const menu = active?.closest('[role="menu"][id]');
+			const trigger = menu && document.querySelector(`[aria-controls="${CSS.escape(menu.id)}"]`);
+			const target = trigger ?? active;
+			opener.current = target instanceof HTMLElement && target !== document.body ? target : null;
 			onOpenAutoFocus?.(event);
 		},
 		onCloseAutoFocus(event: Event) {

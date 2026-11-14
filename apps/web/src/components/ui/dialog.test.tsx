@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 
 // NAV-4: a dialog opened from state, not through its Trigger, still returns
@@ -123,5 +124,41 @@ describe('focus return when the opener has gone', () => {
 		expect(opener.isConnected).toBe(false);
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(focus).not.toHaveBeenCalled();
+	});
+});
+
+describe('focus return when a menu item opened the dialog', () => {
+	it('returns focus to the menu’s trigger, since the item has gone', async () => {
+		function FromMenu() {
+			const [open, setOpen] = useState(false);
+			return (
+				<>
+					<DropdownMenu>
+						<DropdownMenuTrigger>Row menu</DropdownMenuTrigger>
+						<DropdownMenuContent>
+							<DropdownMenuItem onSelect={() => setOpen(true)}>Delete</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+					<AlertDialog open={open} onOpenChange={setOpen}>
+						<AlertDialogContent aria-describedby={undefined}>
+							<AlertDialogTitle>Delete it?</AlertDialogTitle>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+						</AlertDialogContent>
+					</AlertDialog>
+				</>
+			);
+		}
+		render(<FromMenu />);
+		const trigger = screen.getByRole('button', { name: 'Row menu' });
+		trigger.focus();
+		fireEvent.keyDown(trigger, { key: 'Enter' });
+		const item = await screen.findByRole('menuitem', { name: 'Delete' });
+		item.focus();
+		fireEvent.click(item);
+		await screen.findByRole('alertdialog');
+		await act(async () => {
+			fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+		});
+		await waitFor(() => expect(document.activeElement).toBe(trigger));
 	});
 });
