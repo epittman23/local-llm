@@ -228,7 +228,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 							'* (all domains)'
 						)}
 
-						{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to Local LLM roles.')}
+						{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to local-llm roles.')}
 						{oauth.ENABLE_OAUTH_ROLE_MANAGEMENT && (
 							<>
 								<div className={grid}>
@@ -239,7 +239,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 							</>
 						)}
 
-						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to Local LLM groups.')}
+						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to local-llm groups.')}
 						{oauth.ENABLE_OAUTH_GROUP_MANAGEMENT && (
 							<>
 								{toggle(

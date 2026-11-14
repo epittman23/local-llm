@@ -52,7 +52,7 @@ export function ExternalKnowledgePanel({ external }: { external: External }) {
 				</div>
 			</div>
 			<div className="text-muted-foreground text-xs">
-				This knowledge base retrieves from a connected source. Local LLM can query it, but cannot upload, sync, edit,
+				This knowledge base retrieves from a connected source. local-llm can query it, but cannot upload, sync, edit,
 				delete, reset, or reindex its source data.
 			</div>
 			<div className="flex flex-col gap-2">
