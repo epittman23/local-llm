@@ -251,7 +251,7 @@ export function AuthPage() {
 					{expired && !error && (
 						<div
 							role="alert"
-							className="border-destructive/20 bg-destructive/10 text-destructive mb-3 rounded-lg border px-3 py-2 text-sm"
+							className="border-destructive/20 bg-destructive/10 text-destructive mb-3 rounded-lg border px-3 py-2 text-dense"
 						>
 							Your session expired. Sign in to continue where you left off.
 						</div>

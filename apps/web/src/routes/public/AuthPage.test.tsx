@@ -51,9 +51,11 @@ describe('AuthPage', () => {
 		useAuthStore.setState({ status: 'anonymous' });
 		renderAt('/auth?redirect=%2Fc%2Fabc&reason=expired');
 
-		expect(await screen.findByRole('alert')).toHaveTextContent(
-			'Your session expired. Sign in to continue where you left off.'
-		);
+		const alert = await screen.findByRole('alert');
+		expect(alert).toHaveTextContent('Your session expired. Sign in to continue where you left off.');
+		// The standard's dense text size (TYP-2), not a raw Tailwind one.
+		expect(alert).toHaveClass('text-dense');
+		expect(alert).not.toHaveClass('text-sm');
 	});
 
 	it('sends an unreachable server to /error, keeping where the person was going', async () => {
