@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -56,13 +57,9 @@ export function ChatMenu({ chatId, title, onControls }: { chatId: string; title:
 			<DropdownMenu>
 				<Tip content="More">
 					<DropdownMenuTrigger asChild>
-						<button
-							type="button"
-							aria-label="Chat menu"
-							className="text-muted-foreground hover:bg-muted rounded-lg p-1.5"
-						>
+						<Button type="button" aria-label="Chat menu" variant="ghost" size="icon-sm">
 							<MoreHorizontal className="size-4" />
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="end" className="w-48">

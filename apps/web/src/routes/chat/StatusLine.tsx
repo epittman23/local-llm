@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import type { Message } from '@/lib/chat/history';
 import { cn } from '@/lib/utils';
 import { statusText } from './statusText';
@@ -28,14 +29,15 @@ export function StatusLine({ message }: { message: Message }) {
 	const working = message.statusHistory?.at(-1)?.done === false;
 	return (
 		<div className="mb-1 text-sm">
-			<button
+			<Button
 				type="button"
-				className={cn('text-muted-foreground line-clamp-1 text-left', working && 'animate-pulse')}
+				variant="ghost"
+				className={cn('line-clamp-1 h-auto justify-start text-left', working && 'animate-pulse')}
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 			>
 				{last.text}
-			</button>
+			</Button>
 			{open && shown.length > 1 && (
 				<ul className="text-muted-foreground mt-1 border-l-2 pl-3 text-xs">
 					{shown.map((s) => (

@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { Citation } from '@/lib/chat/sources';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -12,9 +13,9 @@ function Excerpt({ text }: { text: string }) {
 		<div className="text-sm whitespace-pre-wrap">
 			{all ? text : text.slice(0, PREVIEW)}
 			{!all && text.length > PREVIEW && (
-				<button type="button" className="text-muted-foreground ml-1 text-xs underline" onClick={() => setAll(true)}>
+				<Button type="button" variant="link" size="xs" className="ml-1" onClick={() => setAll(true)}>
 					Show all ({text.length} characters)
-				</button>
+				</Button>
 			)}
 		</div>
 	);

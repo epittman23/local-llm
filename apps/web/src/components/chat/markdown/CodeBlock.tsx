@@ -4,6 +4,7 @@ import { Check, ChevronDown, ChevronUp, Copy, Eye, Loader2, Play, X } from 'luci
 import 'highlight.js/styles/github-dark.min.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
+import { Button } from '@/components/ui/button';
 import type { CodeRunResult } from '@/lib/apis/utils';
 import { cn, copyToClipboard } from '@/lib/utils';
 
@@ -55,7 +56,7 @@ function Stream({ label, text, tone }: { label: string; text?: string; tone?: 'e
 	if (!text) return null;
 	return (
 		<div>
-			<div className="text-muted-foreground mb-0.5 text-[0.6875rem] uppercase">{label}</div>
+			<div className="text-muted-foreground mb-0.5 text-caption uppercase">{label}</div>
 			<pre
 				className={cn(
 					'bg-muted/50 max-h-64 overflow-auto rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
@@ -92,9 +93,9 @@ function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
 			<div className="text-muted-foreground flex items-center justify-between text-xs">
 				<span aria-hidden="true">{runStatus(run)}</span>
 				{run.state !== 'running' && (
-					<button type="button" className="hover:bg-muted rounded-md p-0.5" onClick={onClose} aria-label="Close output">
+					<Button type="button" variant="ghost" size="icon-xs" onClick={onClose} aria-label="Close output">
 						<X className="size-3" />
-					</button>
+					</Button>
 				)}
 			</div>
 			{run.state === 'running' && <Loader2 className="text-muted-foreground size-4 animate-spin" />}
@@ -187,43 +188,46 @@ export function CodeBlock({
 
 	const lines = code.split('\n');
 	const hidden = collapsed ? Math.max(0, lines.length - COLLAPSED_LINES) : 0;
-	const bar =
-		'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs transition';
 
 	return (
 		<div className="my-2 overflow-hidden rounded-2xl border" data-testid="code-block">
 			<div className="bg-muted/50 flex items-center justify-between px-3 py-1">
 				<span className="text-muted-foreground text-xs">{language || 'text'}</span>
 				<div className="flex items-center gap-0.5">
-					<button
+					<Button
 						type="button"
-						className={bar}
+						variant="ghost"
+						size="xs"
 						onClick={() => setCollapsed((c) => !c)}
 						aria-label={collapsed ? 'Expand' : 'Collapse'}
 					>
 						{collapsed ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
 						{collapsed ? 'Expand' : 'Collapse'}
-					</button>
+					</Button>
 					{onRun && ['python', 'py'].includes(language) && (
-						<button
+						<Button
 							ref={runButton}
 							type="button"
 							// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
-							className={cn(bar, blocked && 'cursor-not-allowed opacity-50')}
+							variant="ghost"
+							size="xs"
+							className={cn(blocked && 'cursor-not-allowed opacity-50')}
 							onClick={() => void start()}
 							aria-disabled={blocked}
 						>
 							<Play className="size-3" /> Run
-						</button>
+						</Button>
 					)}
 					{onPreview && ['html', 'svg'].includes(language) && (
-						<button type="button" className={bar} onClick={() => onPreview(code)}>
+						<Button type="button" variant="ghost" size="xs" onClick={() => onPreview(code)}>
 							<Eye className="size-3" /> Preview
-						</button>
+						</Button>
 					)}
-					<button
+					<Button
 						type="button"
-						className={cn(bar, 'copy-code-button')}
+						variant="ghost"
+						size="xs"
+						className="copy-code-button"
 						onClick={async () => {
 							if (await copyToClipboard(code)) {
 								setCopied(true);
@@ -233,12 +237,12 @@ export function CodeBlock({
 					>
 						{copied ? <Check className="size-3" /> : <Copy className="size-3" />}
 						{copied ? 'Copied' : 'Copy'}
-					</button>
+					</Button>
 				</div>
 			</div>
 			<pre
 				className={cn(
-					'hljs overflow-x-auto px-4 py-3 text-[0.8125rem] leading-relaxed',
+					'hljs overflow-x-auto px-4 py-3 text-dense leading-relaxed',
 					collapsed && 'max-h-40 overflow-hidden'
 				)}
 			>

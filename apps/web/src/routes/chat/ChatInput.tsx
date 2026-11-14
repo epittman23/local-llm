@@ -4,6 +4,7 @@ import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useMemo, us
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge';
 import { getPrompts } from '@/lib/apis/prompts';
 import {
@@ -57,9 +58,15 @@ function FileChip({ file, onRemove }: { file: ChatFile; onRemove: () => void }) 
 		>
 			{icon}
 			<span className="truncate">{String(file.name ?? 'File')}</span>
-			<button type="button" aria-label={`Remove ${String(file.name ?? 'file')}`} onClick={onRemove}>
+			<Button
+				type="button"
+				variant="ghost"
+				size="icon-xs"
+				aria-label={`Remove ${String(file.name ?? 'file')}`}
+				onClick={onRemove}
+			>
 				<X className="size-3" />
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -330,14 +337,16 @@ export const ChatInput = forwardRef<
 						<li key={qd.id} className="bg-muted/50 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
 							<span className="text-muted-foreground">Queued</span>
 							<span className="truncate">{qd.prompt}</span>
-							<button
+							<Button
 								type="button"
 								aria-label="Remove queued message"
+								variant="ghost"
+								size="icon-xs"
 								className="ml-auto"
 								onClick={() => onRemoveQueued(qd.id)}
 							>
 								<X className="size-3" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>
@@ -345,9 +354,16 @@ export const ChatInput = forwardRef<
 			{status && (
 				<div role="status" className="bg-muted/50 mb-1.5 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
 					<span className="text-muted-foreground">Sends {status.text}</span>
-					<button type="button" aria-label={`Don't send ${status.text}`} className="ml-auto" onClick={status.cancel}>
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-xs"
+						aria-label={`Don't send ${status.text}`}
+						className="ml-auto"
+						onClick={status.cancel}
+					>
 						<X className="size-3" />
-					</button>
+					</Button>
 				</div>
 			)}
 			<div className="relative">
@@ -358,17 +374,15 @@ export const ChatInput = forwardRef<
 						className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-72 w-full max-w-md overflow-y-auto rounded-xl border p-1 shadow-lg"
 					>
 						{suggestions.map((s, i) => (
-							<button
+							<Button
 								key={s.key}
 								type="button"
 								role="option"
 								aria-selected={i === highlighted}
 								onMouseDown={(e) => e.preventDefault()}
 								onClick={() => void pick(s)}
-								className={cn(
-									'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-									i === highlighted && 'bg-muted'
-								)}
+								variant="ghost"
+								className={cn('w-full justify-start', i === highlighted && 'bg-muted')}
 							>
 								{s.kind === 'model' && (
 									<img
@@ -380,7 +394,7 @@ export const ChatInput = forwardRef<
 								)}
 								<span className="truncate">{s.label}</span>
 								<span className="text-muted-foreground ml-auto shrink-0 truncate text-xs">{s.detail}</span>
-							</button>
+							</Button>
 						))}
 					</div>
 				)}
@@ -396,14 +410,16 @@ export const ChatInput = forwardRef<
 							<span>
 								Talking to <span className="text-foreground font-medium">{atModel.name}</span>
 							</span>
-							<button
+							<Button
 								type="button"
 								aria-label="Stop talking to this model"
-								className="hover:text-foreground ml-auto"
+								variant="ghost"
+								size="icon-xs"
+								className="ml-auto"
 								onClick={() => onAtModel?.(null)}
 							>
 								<X className="size-3.5" />
-							</button>
+							</Button>
 						</div>
 					)}
 					{files.length > 0 && (
@@ -467,33 +483,28 @@ export const ChatInput = forwardRef<
 								submit();
 							}
 						}}
-						className="max-h-72 min-h-10 w-full resize-none bg-transparent px-1 py-1.5 text-[0.9375rem] outline-none [field-sizing:content]"
+						className="text-body max-h-72 min-h-10 w-full resize-none bg-transparent px-1 py-1.5 [field-sizing:content]"
 					/>
 					<div className="flex items-center gap-1">
 						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">{toolbar}</div>
 						{generating && (
 							<Tip content="Stop">
-								<button
-									type="button"
-									aria-label="Stop"
-									onClick={onStop}
-									className="bg-foreground text-background rounded-full p-1.5"
-								>
+								<Button type="button" aria-label="Stop" onClick={onStop} size="icon-sm">
 									<Square className="size-4 fill-current" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 						{(!generating || text.trim()) && (
 							<Tip content="Send message">
-								<button
+								<Button
 									type="button"
 									aria-label="Send message"
 									disabled={disabled || uploading || (!text.trim() && !files.length)}
 									onClick={submit}
-									className="bg-foreground text-background rounded-full p-1.5 transition disabled:opacity-30"
+									size="icon-sm"
 								>
 									<ArrowUp className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 					</div>

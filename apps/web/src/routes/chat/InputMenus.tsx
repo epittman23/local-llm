@@ -17,6 +17,7 @@ import { type ReactNode, useRef, useState } from 'react';
 import { AttachWebpageDialog } from '@/components/common/AttachWebpageDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
 	DropdownMenu,
@@ -34,11 +35,7 @@ import { searchNotes } from '@/lib/apis/notes';
 import type { FeatureButtons } from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-
-const chip =
-	'text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-full p-1.5 text-sm transition';
 
 type PickKind = 'knowledge' | 'notes' | 'chats';
 
@@ -125,12 +122,13 @@ function AttachPicker({
 						<p className="text-muted-foreground py-6 text-center text-sm">No results found</p>
 					) : (
 						results.data.map((item) => (
-							<button
+							<Button
 								key={`${item.type}-${item.id}`}
 								type="button"
 								role="option"
 								aria-selected={false}
-								className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm"
+								variant="ghost"
+								className="w-full justify-between"
 								onClick={() => {
 									onPick(item);
 									onClose();
@@ -138,7 +136,7 @@ function AttachPicker({
 							>
 								<span className="truncate">{String(item.name ?? '')}</span>
 								<span className="text-muted-foreground shrink-0 text-xs">{String(item.description ?? '')}</span>
-							</button>
+							</Button>
 						))
 					)}
 				</div>
@@ -182,9 +180,9 @@ export function AttachMenu({
 			<DropdownMenu>
 				<Tip content="More">
 					<DropdownMenuTrigger asChild>
-						<button type="button" aria-label="More" className={chip}>
+						<Button type="button" aria-label="More" variant="ghost" size="icon-sm">
 							<Plus className="size-4" />
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="start" side="top" className="w-56">
@@ -259,14 +257,15 @@ export function IntegrationsMenu({
 			<DropdownMenu>
 				<Tip content="Integrations">
 					<DropdownMenuTrigger asChild>
-						<button
+						<Button
 							type="button"
 							aria-label="Integrations"
-							className={cn(chip, toolIds.length > 0 && 'text-foreground')}
+							variant="ghost"
+							size={toolIds.length > 0 ? 'sm' : 'icon-sm'}
 						>
 							<Settings2 className="size-4" />
 							{toolIds.length > 0 && <span className="text-xs">{toolIds.length}</span>}
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="start" side="top" className="w-64" onKeyDown={(e) => e.stopPropagation()}>
@@ -313,16 +312,18 @@ export function IntegrationsMenu({
 			{active
 				.filter(([k]) => toggles[k] && buttons[k])
 				.map(([k, label, icon]) => (
-					<button
+					<Button
 						key={k}
 						type="button"
 						aria-label={`${label} (on)`}
-						className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-600 dark:text-blue-400"
+						variant="ghost"
+						size="sm"
+						className="bg-brand/10 text-brand"
 						onClick={() => onToggles({ ...toggles, [k]: false })}
 					>
 						{icon}
 						{label}
-					</button>
+					</Button>
 				))}
 		</>
 	);

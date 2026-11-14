@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronsDown, ChevronsUp, Download, FileText, Maximize2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { CodeBlock } from '@/components/chat/markdown/CodeBlock';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { errorMessage } from '@/lib/apis/errors';
 import { getSandboxOutputHtml, getSandboxOutputText } from '@/lib/apis/sandbox';
@@ -197,38 +198,41 @@ function HtmlOutput({ file }: { file: OutputFile }) {
 	return (
 		<>
 			<div className="flex justify-end gap-3 px-2 pt-1">
-				<button
+				<Button
 					type="button"
-					className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs disabled:opacity-50"
+					variant="ghost"
+					size="xs"
 					onClick={() => step(-FRAME_STEP)}
 					aria-label={`Shorter: ${displayName(file)}`}
 					disabled={height <= FRAME_MIN}
 				>
 					<ChevronsUp className="size-3" />
 					Shorter
-				</button>
-				<button
+				</Button>
+				<Button
 					type="button"
-					className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs disabled:opacity-50"
+					variant="ghost"
+					size="xs"
 					onClick={() => step(FRAME_STEP)}
 					aria-label={`Taller: ${displayName(file)}`}
 					disabled={height >= FRAME_MAX}
 				>
 					<ChevronsDown className="size-3" />
 					Taller
-				</button>
+				</Button>
 				<span className="sr-only" aria-live="polite">
 					{`Frame height ${height} pixels`}
 				</span>
-				<button
+				<Button
 					type="button"
-					className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+					variant="ghost"
+					size="xs"
 					onClick={() => setEnlarged(true)}
 					aria-label={`Enlarge: ${displayName(file)}`}
 				>
 					<Maximize2 className="size-3" />
 					Enlarge
-				</button>
+				</Button>
 			</div>
 			{/* A height the user sets (drag the corner, or Taller/Shorter): the frame's own cannot be read across its opaque origin. */}
 			<div

@@ -49,10 +49,7 @@ export function Markdown({
 	};
 	return (
 		<MarkdownEnvContext.Provider value={env}>
-			<div
-				className={cn('markdown-prose w-full min-w-0 text-[0.9375rem] break-words', className)}
-				data-testid="markdown"
-			>
+			<div className={cn('markdown-prose w-full min-w-0 text-reading break-words', className)} data-testid="markdown">
 				<Blocks tokens={tokens} paragraphSpan={paragraphSpan} />
 			</div>
 		</MarkdownEnvContext.Provider>

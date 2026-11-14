@@ -1,5 +1,7 @@
 import { FileText, X } from 'lucide-react';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 type Params = Record<string, any>;
 type ChatFile = { id?: string | null; name?: string; type?: string; file?: { filename?: string } };
@@ -29,14 +31,16 @@ export function ChatControls({
 		<aside className="flex min-h-0 w-full flex-col border-l md:w-80" aria-label="Controls">
 			<div className="flex items-center px-3 py-2">
 				<span className="text-sm font-medium">Controls</span>
-				<button
+				<Button
 					type="button"
 					aria-label="Close controls"
-					className="text-muted-foreground hover:bg-muted ml-auto rounded-lg p-1.5"
+					variant="ghost"
+					size="icon-sm"
+					className="ml-auto"
 					onClick={onClose}
 				>
 					<X className="size-4" />
-				</button>
+				</Button>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 text-sm">
 				{files.length > 0 && (
@@ -56,10 +60,10 @@ export function ChatControls({
 					<label htmlFor="chat-system-prompt" className="mb-1 block text-xs font-medium">
 						System Prompt
 					</label>
-					<textarea
+					<Textarea
 						id="chat-system-prompt"
 						rows={4}
-						className="bg-muted/40 focus:border-ring w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-hidden"
+						className="min-h-0 field-sizing-fixed resize-y"
 						placeholder="Enter system prompt"
 						value={params.system ?? ''}
 						onChange={(e) => onParams({ ...params, system: e.target.value || undefined })}

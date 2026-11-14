@@ -148,9 +148,9 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 						{shared ? (
 							<>
 								You have shared this chat before.{' '}
-								<button type="button" className="underline" onClick={unshare}>
+								<Button type="button" variant="link" className="h-auto p-0" onClick={unshare}>
 									Delete this link
-								</button>{' '}
+								</Button>{' '}
 								to stop sharing, or update it with the chat as it is now. Choose below who can open it.
 							</>
 						) : (
@@ -220,13 +220,9 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 				</div>
 				<div className="max-h-96 overflow-y-auto" role="listbox" aria-label="Search results">
 					{!q ? (
-						<button
-							type="button"
-							className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm"
-							onClick={() => go('/')}
-						>
+						<Button type="button" variant="ghost" className="w-full justify-start" onClick={() => go('/')}>
 							<MessageSquare className="size-4" /> Start a new conversation
-						</button>
+						</Button>
 					) : results.isLoading ? (
 						<div className="flex justify-center py-6">
 							<Spinner className="size-4" />
@@ -235,17 +231,18 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 						<p className="text-muted-foreground px-2 py-6 text-center text-sm">No results found</p>
 					) : (
 						results.data.map((c) => (
-							<button
+							<Button
 								key={c.id}
 								type="button"
 								role="option"
 								aria-selected={false}
-								className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm"
+								variant="ghost"
+								className="w-full justify-between"
 								onClick={() => go(`/c/${c.id}`)}
 							>
 								<span className="truncate">{c.title}</span>
 								<span className="text-muted-foreground shrink-0 text-xs">{c.time_range}</span>
-							</button>
+							</Button>
 						))
 					)}
 				</div>
