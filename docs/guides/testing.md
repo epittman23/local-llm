@@ -75,7 +75,7 @@ it reports, so bump it by hand and run `make baselines`.
 
 A third baseline, of a different kind: `apps/web/ui-standard-baseline.json`
 counts, per file, the patterns the interface standard forbids (palette
-colours, hand-styled buttons, removed focus outlines and three more).
+colours, hand-styled buttons, removed focus outlines and six more).
 `src/styles/standard.ratchet.test.ts`, a Vitest test in `make test-web`,
 fails when a count rises and when one falls without the baseline being
 lowered. How to lower it, and who may add an exception, is in

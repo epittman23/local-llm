@@ -601,7 +601,7 @@ was decided.
 ## The ratchet
 
 `apps/web/src/styles/standard.ratchet.test.ts` (part of `make test-web`)
-counts, in every source file outside `components/ui`, six patterns the
+counts, in every source file outside `components/ui`, nine patterns the
 standard forbids:
 
 | Pattern | Rule | What it catches |
@@ -612,6 +612,9 @@ standard forbids:
 | `outline-removed` | A11Y-1 | `outline-none`, `outline-hidden` |
 | `raw-button` | ACT-6 | `<button` instead of the shared `Button` |
 | `dark-one-off` | COL-1 | `dark:` variants, which tokens make unnecessary |
+| `text-opacity` | COL-2 | `opacity-50`, `disabled:opacity-60`, `opacity-[0.6]`: any partial opacity (not `opacity-0` or `opacity-100`). The source cannot show whether the element holds text, so a dimmed picture or decoration is counted too |
+| `native-select` | FRM-4 | `<select` instead of the shared `Select` |
+| `raw-input` | FRM-4 | `<input` instead of the shared `Input`, `Checkbox` or `Switch`, a color or range input included. A file input and a hidden input are not counted: no shared component replaces them |
 
 It compares the counts with `apps/web/ui-standard-baseline.json`:
 
@@ -620,6 +623,15 @@ It compares the counts with `apps/web/ui-standard-baseline.json`:
   is recorded. Lower it with
   `cd apps/web && UPDATE_UI_BASELINE=1 bunx vitest run src/styles/standard.ratchet.test.ts`,
   which refuses to raise any count, and commit the smaller file.
+
+The baseline also lists the patterns it has counted (`patterns`). A pattern
+added to the test is new until the baseline lists it: the update records its
+counts as they stand, the one time a count may start above zero, and lists
+it, so a listed pattern is never recorded from scratch again. Adding a
+pattern therefore needs the owner's acceptance of its starting counts. The
+owner accepted `text-opacity`, `native-select` and `raw-input` on 2026-11-14,
+starting from the counts at the end of the UX review's cross-cutting section
+(#1116): 43 in 33 files, 51 in 30 files and 126 in 50 files.
 
 The aim is zero. A count that stays above zero for good is an exception: an
 entry under `exceptions` in the baseline naming the file, the pattern, the
