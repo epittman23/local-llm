@@ -19,6 +19,7 @@ import {
 	SettingsForm,
 	SettingsSection
 } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { deleteAllFiles } from '@/lib/apis/files';
 import { reindexKnowledgeFiles, reindexKnowledgeMetadata } from '@/lib/apis/knowledge';
 import { reindexMemoryVectors } from '@/lib/apis/memories';
@@ -33,12 +34,11 @@ import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { Bm25Weight } from './Bm25Weight';
-import { ExtractionFields } from './ExtractionFields';
 import {
-	type EmbeddingForm,
 	buildEmbeddingPayload,
 	buildRagPayload,
 	contextPlaceholders,
+	type EmbeddingForm,
 	embeddingError,
 	embeddingModelFor,
 	ragFormError,
@@ -48,13 +48,13 @@ import {
 	toEmbeddingForm,
 	toRagForm
 } from './documents';
+import { ExtractionFields } from './ExtractionFields';
 
 type Rec = Record<string, any>;
 type Draft = { rag: Rec; embedding: EmbeddingForm };
 
 const twoUp = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
-const actionButton = 'text-muted-foreground hover:text-foreground shrink-0 text-xs transition-colors';
-const hintClass = 'text-muted-foreground/70 mt-1 text-[0.6875rem]';
+const hintClass = 'text-foreground-muted mt-1 text-caption';
 
 const EXTRACTION_ENGINES = [
 	['', 'Default'],
@@ -94,9 +94,9 @@ function DangerAction({
 	return (
 		<>
 			<SettingRow label={label} description={description}>
-				<button type="button" className={actionButton} onClick={() => setOpen(true)}>
+				<Button variant="outline" size="sm" type="button" onClick={() => setOpen(true)}>
 					{action}
-				</button>
+				</Button>
 			</SettingRow>
 			<ConfirmDialog open={open} onOpenChange={setOpen} title={title ?? 'Confirm your action'} onConfirm={onConfirm}>
 				{children ?? 'This action cannot be undone. Do you wish to continue?'}
@@ -409,7 +409,7 @@ export default function Documents() {
 								<div className="flex w-full items-center gap-2">
 									<input
 										id="emb-model"
-										className="bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring h-7 w-full rounded-lg border px-2 text-xs outline-hidden transition-colors"
+										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring h-7 w-full rounded-lg border px-2 text-xs transition-colors"
 										placeholder={
 											emb.engine === 'ollama'
 												? 'Set embedding model'
@@ -420,15 +420,17 @@ export default function Documents() {
 										onChange={(e) => setEmbedding({ model: e.target.value })}
 									/>
 									{emb.engine === '' && (
-										<button
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											className="shrink-0 justify-center"
 											type="button"
 											aria-label="Update embedding model"
 											disabled={embeddingLoading}
-											className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-50"
 											onClick={updateEmbeddingModel}
 										>
 											{embeddingLoading ? <Spinner /> : <Download className="size-4" />}
-										</button>
+										</Button>
 									)}
 								</div>
 								<div className={hintClass}>

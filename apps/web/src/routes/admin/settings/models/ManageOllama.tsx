@@ -7,6 +7,7 @@ import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { SettingSelect } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { createModel, deleteModel, downloadModel, getOllamaModels, pullModel, uploadModel } from '@/lib/apis/ollama';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
@@ -25,11 +26,9 @@ import {
 } from './ollamaStreams';
 
 const inputClass =
-	'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs outline-hidden transition-colors disabled:opacity-50';
+	'bg-muted/40 placeholder:text-foreground-muted focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs transition-colors disabled:opacity-50';
 const textareaClass =
-	'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring w-full resize-none rounded-lg border px-2.5 py-2 text-xs outline-hidden transition-colors disabled:opacity-50';
-const iconButtonClass =
-	'bg-muted/40 hover:bg-muted inline-flex h-7 items-center justify-center rounded-lg border px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+	'bg-muted/40 placeholder:text-foreground-muted focus:border-ring w-full resize-none rounded-lg border px-2.5 py-2 text-xs transition-colors disabled:opacity-50';
 const headingClass = 'mb-2 text-sm font-normal';
 
 type OllamaModel = { id: string; name?: string; size?: number };
@@ -43,7 +42,7 @@ function Progress({ percent, digest }: { percent: number; digest?: string }) {
 			>
 				{percent}%
 			</div>
-			{digest && <div className="text-muted-foreground mt-1 text-[0.5rem]">{digest}</div>}
+			{digest && <div className="text-muted-foreground mt-1 text-caption">{digest}</div>}
 		</div>
 	);
 }
@@ -62,9 +61,9 @@ const IconButton = ({
 	type?: 'button' | 'submit';
 }) => (
 	<Tip content={label} side="top">
-		<button type={type} aria-label={label} className={iconButtonClass} onClick={onClick} disabled={disabled}>
+		<Button variant="ghost" size="icon-sm" type={type} aria-label={label} onClick={onClick} disabled={disabled}>
 			{children}
-		</button>
+		</Button>
 	</Tip>
 );
 
@@ -282,14 +281,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				<div className={`${headingClass} flex items-center gap-1.5`}>
 					<div>Pull a model from Ollama.com</div>
 					<Tip content="Update All Models" side="top">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Update All Models"
-							className="rounded-lg transition"
 							onClick={() => void updateAll()}
 						>
 							<RefreshCw className="size-4" />
-						</button>
+						</Button>
 					</Tip>
 				</div>
 				<div className="flex w-full items-center">
@@ -309,7 +309,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				<div className="text-muted-foreground mt-2 mb-1 text-xs">
 					To access the available model names for downloading,{' '}
 					<a
-						className="text-foreground/80 font-normal underline"
+						className="text-foreground font-normal underline"
 						href="https://ollama.com/library"
 						target="_blank"
 						rel="noopener noreferrer"
@@ -324,9 +324,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 							Updating &quot;{updateModelId}&quot; {updateProgress ? `(${updateProgress}%)` : ''}
 						</div>
 						<Tip content="Cancel">
-							<button type="button" aria-label="Cancel update" onClick={() => cancelUpdate(updateModelId)}>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								type="button"
+								aria-label="Cancel update"
+								onClick={() => cancelUpdate(updateModelId)}
+							>
 								<X className="size-4" />
-							</button>
+							</Button>
 						</Tip>
 					</div>
 				)}
@@ -339,9 +345,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 								<Progress percent={d.pullProgress ?? 0} digest={d.digest} />
 							</div>
 							<Tip content="Cancel">
-								<button type="button" aria-label={`Cancel ${name} download`} onClick={() => void cancelPull(name)}>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									type="button"
+									aria-label={`Cancel ${name} download`}
+									onClick={() => void cancelPull(name)}
+								>
 									<X className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						</div>
 					</div>
@@ -414,14 +426,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 					<div className="text-sm font-normal">
 						<ExperimentalBadge />
 					</div>
-					<button
+					<Button
+						variant="ghost"
+						size="sm"
 						type="button"
 						aria-expanded={showExperimental}
-						className="text-muted-foreground text-xs font-normal"
 						onClick={() => setShowExperimental((s) => !s)}
 					>
 						{showExperimental ? 'Hide' : 'Show'}
-					</button>
+					</Button>
 				</div>
 			</div>
 
@@ -435,13 +448,14 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				>
 					<div className="mb-2 flex w-full justify-between">
 						<div className="text-sm font-normal">Upload a GGUF model</div>
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
 							type="button"
-							className="flex rounded-sm p-1 px-3 text-xs transition"
 							onClick={() => setUploadMode((m) => (m === 'file' ? 'url' : 'file'))}
 						>
 							{uploadMode === 'file' ? 'File Mode' : 'URL Mode'}
-						</button>
+						</Button>
 					</div>
 
 					<div className="mb-1.5 flex w-full items-center">
@@ -456,9 +470,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 										hidden
 										onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
 									/>
-									<button type="button" className={inputClass} onClick={() => fileInput.current?.click()}>
+									<Button
+										variant="outline"
+										size="sm"
+										className="w-full justify-start"
+										type="button"
+										onClick={() => fileInput.current?.click()}
+									>
 										{uploadFile ? uploadFile.name : 'Click here to select'}
-									</button>
+									</Button>
 								</div>
 							) : (
 								<div className={`flex-1 ${uploadUrl !== '' ? 'mr-2' : ''}`}>
@@ -484,7 +504,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 					<div className="text-muted-foreground mt-1 text-xs">
 						To access the GGUF models available for downloading,{' '}
 						<a
-							className="text-foreground/80 font-normal underline"
+							className="text-foreground font-normal underline"
 							href="https://huggingface.co/models?search=gguf"
 							target="_blank"
 							rel="noopener noreferrer"

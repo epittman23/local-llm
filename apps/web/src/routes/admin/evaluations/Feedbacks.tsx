@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,9 +27,9 @@ import { feedbacksToCsv, ratingOutcome } from './feedbackCsv';
 const PER_PAGE = 30;
 
 const OUTCOME_STYLE = {
-	won: { label: 'Won', className: 'bg-blue-500/20 text-blue-700 dark:text-blue-200' },
+	won: { label: 'Won', className: 'bg-success/15 text-success' },
 	draw: { label: 'Draw', className: 'bg-muted text-muted-foreground' },
-	lost: { label: 'Lost', className: 'bg-red-500/20 text-red-700 dark:text-red-200' }
+	lost: { label: 'Lost', className: 'bg-danger/15 text-danger' }
 } as const;
 
 const COLUMNS: { key: string; label: string; className: string; inner?: string }[] = [
@@ -133,14 +134,10 @@ export function Feedbacks() {
 						{ids.length > 0 && (
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
-									<button
-										type="button"
-										aria-label="Model"
-										className="text-foreground/80 hover:text-foreground flex items-center gap-0.5 rounded-xl bg-transparent px-2.5 py-1.5 text-[0.8125rem] font-normal transition"
-									>
+									<Button variant="ghost" size="icon-sm" type="button" aria-label="Model">
 										<span className="truncate px-0.5">{modelId || 'All'}</span>
 										<ChevronDown className="size-3.5" strokeWidth={2.5} />
-									</button>
+									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
 									<DropdownMenuRadioGroup
@@ -164,13 +161,10 @@ export function Feedbacks() {
 					{total > 0 && (
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									className="hover:bg-muted flex h-8 shrink-0 items-center gap-1 rounded-xl px-2 py-1.5 text-xs transition"
-								>
+								<Button variant="ghost" size="sm" className="shrink-0" type="button">
 									Export
 									<ChevronDown className="size-3" strokeWidth={2.5} />
-								</button>
+								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end" className="w-[10.625rem]">
 								<DropdownMenuItem onSelect={() => exportFeedbacks('json')}>Export as JSON</DropdownMenuItem>
@@ -257,7 +251,7 @@ export function Feedbacks() {
 															</div>
 														</Tip>
 														<Tip content={siblings.join(', ')}>
-															<div className="text-muted-foreground line-clamp-1 text-[0.65rem]">
+															<div className="text-muted-foreground line-clamp-1 text-caption">
 																{siblings.length > 2
 																	? `${siblings.slice(0, 2).join(', ')}, and ${siblings.length - 2} more`
 																	: siblings.join(', ')}
@@ -292,13 +286,15 @@ export function Feedbacks() {
 											<DropdownMenu>
 												<Tip content="More">
 													<DropdownMenuTrigger asChild>
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															className="w-fit self-center"
 															type="button"
 															aria-label="Feedback Menu"
-															className="hover:bg-muted w-fit self-center rounded-xl p-1.5 text-sm"
 														>
 															<MoreHorizontal className="size-4" />
-														</button>
+														</Button>
 													</DropdownMenuTrigger>
 												</Tip>
 												<DropdownMenuContent align="end" className="min-w-[9.375rem]">

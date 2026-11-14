@@ -94,7 +94,7 @@ export function ChartLine({
 			</svg>
 
 			{data.length > 1 && (
-				<div className="text-muted-foreground absolute inset-x-0 bottom-0 flex justify-between px-0.5 text-[0.625rem]">
+				<div className="text-muted-foreground absolute inset-x-0 bottom-0 flex justify-between px-0.5 text-caption">
 					{Array.from({ length: labelCount }, (_, i) => {
 						const idx = i === labelCount - 1 ? data.length - 1 : Math.min(i * step, data.length - 1);
 						return data[idx] ? (
@@ -108,11 +108,11 @@ export function ChartLine({
 
 			{hovered && (
 				<div
-					className="pointer-events-none absolute top-1 text-[0.6875rem]"
+					className="pointer-events-none absolute top-1 text-caption"
 					style={{ left: `${Math.min(Math.max((mouseX / W) * 100, 8), 92)}%` }}
 				>
 					<div className="bg-popover min-w-[8.75rem] -translate-x-1/2 rounded border px-2.5 py-1.5 shadow-sm">
-						<div className="text-muted-foreground mb-1.5 text-[0.625rem]">
+						<div className="text-muted-foreground mb-1.5 text-caption">
 							{hovered.date?.includes(':')
 								? dayjs(hovered.date).format('MMM D, h A')
 								: dayjs(hovered.date).format('MMM D, YYYY')}

@@ -13,22 +13,22 @@ import { formatNumber } from '@/lib/utils';
 import { AnalyticsModelModal } from './AnalyticsModelModal';
 import {
 	CHART_COLORS,
+	chartModels,
+	chartPeriod,
 	type DailyPoint,
+	dateRange,
+	isCustomIncomplete,
 	type ModelSort,
 	type ModelStat,
 	PERIODS,
 	type Period,
-	type TokenStats,
-	type UserSort,
-	type UserStat,
-	chartModels,
-	chartPeriod,
-	dateRange,
-	isCustomIncomplete,
 	parsePeriod,
 	sharePercent,
 	sortModels,
-	sortUsers
+	sortUsers,
+	type TokenStats,
+	type UserSort,
+	type UserStat
 } from './analytics';
 import { ChartLine } from './ChartLine';
 
@@ -50,7 +50,7 @@ const store = {
 };
 
 const th = 'cursor-pointer px-2.5 py-1.5 font-normal select-none';
-const dateInput = 'bg-muted/40 h-7 rounded-lg border px-2 text-xs outline-hidden';
+const dateInput = 'bg-muted/40 h-7 rounded-lg border px-2 text-xs';
 
 function Head({
 	label,

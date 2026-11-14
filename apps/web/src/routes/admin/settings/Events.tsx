@@ -4,15 +4,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Tip } from '@/components/common/Tip';
-import { SettingSelect, SettingsSection, SettingSwitch, settingInputClass } from '@/components/settings/controls';
+import { SettingSelect, SettingSwitch, SettingsSection, settingInputClass } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
 	createEventWebhook,
 	deleteEventWebhook,
 	type EventWebhook,
-	getEventWebhooks,
 	getEvents,
+	getEventWebhooks,
 	updateEventWebhook
 } from '@/lib/apis';
 import { getGroupInfoById, getGroups } from '@/lib/apis/groups';
@@ -30,9 +30,9 @@ import {
 	setAllEvents,
 	sortWebhooks,
 	type TargetMode,
+	targetSummary,
 	targetsFor,
 	targetsToState,
-	targetSummary,
 	toggleEvent,
 	urlHost,
 	type WebhookForm,
@@ -55,9 +55,9 @@ const Chip = ({
 	<div className="bg-muted flex items-center gap-1 rounded-full px-2 py-1 text-xs">
 		<span className={cn('max-w-36 truncate', mono && 'max-w-none font-mono break-all')}>{label}</span>
 		{kind && <span className="text-muted-foreground">{kind}</span>}
-		<button type="button" aria-label={`Remove ${label}`} onClick={onRemove}>
+		<Button variant="ghost" size="icon-xs" type="button" aria-label={`Remove ${label}`} onClick={onRemove}>
 			<X className="size-3" strokeWidth={2} />
-		</button>
+		</Button>
 	</div>
 );
 
@@ -329,21 +329,25 @@ function WebhookDialog({
 									{query.trim() && (groupResults.length > 0 || userHits.length > 0) && (
 										<div className="bg-popover absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border py-1 shadow-lg">
 											{groupResults.map((g) => (
-												<button
+												<Button
+													variant="ghost"
+													size="sm"
+													className="h-auto w-full justify-between rounded-none text-left"
 													key={`g-${g.id}`}
 													type="button"
-													className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs"
 													onClick={() => addGroup(g)}
 												>
 													<span className="truncate">{g.name}</span>
 													<span className="text-muted-foreground">Group</span>
-												</button>
+												</Button>
 											))}
 											{userHits.map((u) => (
-												<button
+												<Button
+													variant="ghost"
+													size="sm"
+													className="h-auto w-full justify-between rounded-none text-left"
 													key={`u-${u.id}`}
 													type="button"
-													className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs"
 													onClick={() => addUser(u)}
 												>
 													<span className="truncate">
@@ -351,7 +355,7 @@ function WebhookDialog({
 														{u.email && <span className="text-muted-foreground"> ({u.email})</span>}
 													</span>
 													<span className="text-muted-foreground">User</span>
-												</button>
+												</Button>
 											))}
 										</div>
 									)}
@@ -401,9 +405,9 @@ function WebhookDialog({
 											}
 										}}
 									/>
-									<button type="button" className="text-xs hover:underline" onClick={addPattern}>
+									<Button variant="ghost" size="sm" type="button" onClick={addPattern}>
 										Add
-									</button>
+									</Button>
 								</div>
 								<div className="max-h-36 overflow-y-auto pb-0.5">
 									{filterEvents(events, pattern).map((event) => (
@@ -431,13 +435,9 @@ function WebhookDialog({
 						<div className="flex items-center justify-between pt-4">
 							<div>
 								{editing && (
-									<button
-										type="button"
-										className="text-muted-foreground hover:text-foreground px-1 py-1.5 text-sm hover:underline"
-										onClick={() => setConfirmDelete(true)}
-									>
+									<Button variant="destructive" size="sm" type="button" onClick={() => setConfirmDelete(true)}>
 										Delete
-									</button>
+									</Button>
 								)}
 							</div>
 							<Button type="submit" disabled={saving}>
@@ -513,19 +513,21 @@ export function Events() {
 			<div className="flex items-start justify-between gap-4">
 				<div className="min-w-0">
 					<div className="text-muted-foreground text-xs">Webhooks</div>
-					<p className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">
+					<p className="text-foreground-muted mt-1.5 text-caption">
 						Send product events as JSON to external services. Chat destinations receive readable messages.
 					</p>
 				</div>
 				<Tip content="Add webhook">
-					<button
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						className="justify-center"
 						type="button"
 						aria-label="Add webhook"
-						className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 items-center justify-center rounded-lg transition-colors"
 						onClick={() => setDialog({ open: true, editing: null })}
 					>
 						<Plus className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 			</div>
 
@@ -541,14 +543,15 @@ export function Events() {
 						</div>
 						<div className="flex items-center gap-1">
 							<Tip content="Configure">
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
 									type="button"
 									aria-label={`Configure ${webhook.name}`}
-									className="hover:bg-muted/70 rounded-lg p-1 transition"
 									onClick={() => setDialog({ open: true, editing: webhook })}
 								>
 									<Settings className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 							<Tip content={webhook.enabled ? 'Enabled' : 'Disabled'}>
 								<span>

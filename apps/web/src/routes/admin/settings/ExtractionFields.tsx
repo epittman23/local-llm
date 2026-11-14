@@ -8,6 +8,7 @@ import {
 	SettingSelect,
 	SettingTextarea
 } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { mineruUrlForMode } from './documents';
 
 type Rec = Record<string, any>;
@@ -23,16 +24,18 @@ function HeaderVariablesHint() {
 	const [open, setOpen] = useState(false);
 	return (
 		<>
-			<button
+			<Button
+				variant="ghost"
+				size="sm"
+				className="mt-1"
 				type="button"
 				aria-expanded={open}
-				className="text-muted-foreground/70 hover:text-foreground mt-1 text-[0.6875rem] transition-colors"
 				onClick={() => setOpen((o) => !o)}
 			>
 				Header variables
-			</button>
+			</Button>
 			{open && (
-				<div className="text-muted-foreground mt-1 text-[0.6875rem] leading-5">
+				<div className="text-muted-foreground mt-1 text-caption leading-5">
 					<div>No additional headers are sent unless configured.</div>
 					<div>
 						Example: <code className={codeClass}>{'{"X-LLLM-File-Id": "{{FILE_ID}}"}'}</code>

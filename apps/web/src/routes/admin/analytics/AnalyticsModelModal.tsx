@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getModelChats, getModelOverview } from '@/lib/apis/analytics';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { cn } from '@/lib/utils';
 import type { ActivityDay } from '../evaluations/activityChart';
 import { ModelActivityChart } from '../evaluations/ModelActivityChart';
 
@@ -117,13 +116,6 @@ export function AnalyticsModelModal({
 	};
 
 	if (!model) return null;
-	const tabClass = (active: boolean) =>
-		cn(
-			'px-1 pb-1.5 text-sm transition',
-			active
-				? 'border-foreground border-b-2 font-medium'
-				: 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
-		);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
@@ -135,13 +127,23 @@ export function AnalyticsModelModal({
 				</DialogHeader>
 
 				<div className="flex gap-3 border-b">
-					<button type="button" className={tabClass(tab === 'overview')} onClick={() => selectTab('overview')}>
+					<Button
+						variant={tab === 'overview' ? 'secondary' : 'ghost'}
+						size="sm"
+						type="button"
+						onClick={() => selectTab('overview')}
+					>
 						Overview
-					</button>
+					</Button>
 					{chatAccess && (
-						<button type="button" className={tabClass(tab === 'chats')} onClick={() => selectTab('chats')}>
+						<Button
+							variant={tab === 'chats' ? 'secondary' : 'ghost'}
+							size="sm"
+							type="button"
+							onClick={() => selectTab('chats')}
+						>
 							Chats
-						</button>
+						</Button>
 					)}
 				</div>
 
@@ -156,20 +158,16 @@ export function AnalyticsModelModal({
 								</Tip>
 								<div className="bg-muted inline-flex rounded-full p-0.5">
 									{RANGES.map((r) => (
-										<button
+										<Button
+											variant={range === r.key ? 'secondary' : 'ghost'}
+											size="sm"
 											key={r.key}
 											type="button"
 											aria-pressed={range === r.key}
-											className={cn(
-												'rounded-full px-2.5 py-0.5 text-xs font-normal transition-all',
-												range === r.key
-													? 'bg-background text-foreground shadow-sm'
-													: 'text-muted-foreground hover:text-foreground'
-											)}
 											onClick={() => setRange(r.key)}
 										>
 											{r.label}
-										</button>
+										</Button>
 									))}
 								</div>
 							</div>

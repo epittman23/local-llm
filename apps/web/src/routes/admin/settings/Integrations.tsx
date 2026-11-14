@@ -3,11 +3,12 @@ import { Cloud, Plus, Settings, Wrench } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
-import { SettingsForm, SettingsSection } from '@/components/settings/controls';
 import { AddTerminalServerModal } from '@/components/settings/AddTerminalServerModal';
 import { AddToolServerModal } from '@/components/settings/AddToolServerModal';
+import { SettingsForm, SettingsSection } from '@/components/settings/controls';
 import type { TerminalConnection } from '@/components/settings/terminalServerModel';
 import type { ToolServerConnection } from '@/components/settings/toolServerModel';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
 	getTerminalServerConnections,
@@ -16,11 +17,10 @@ import {
 	setToolServerConnections
 } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { ExternalKnowledge } from './ExternalKnowledge';
 import { uuid } from '@/lib/utils/uuid';
+import { ExternalKnowledge } from './ExternalKnowledge';
 
-const iconButton = 'text-muted-foreground hover:text-foreground rounded p-1 transition';
-const hint = 'text-muted-foreground/70 text-[0.6875rem]';
+const hint = 'text-foreground-muted text-caption';
 
 /** A connection row: icon and label (dimmed when off), a configure cog, an enable switch. */
 function ConnectionRow({
@@ -48,9 +48,9 @@ function ConnectionRow({
 			</div>
 			<div className="flex shrink-0 items-center gap-1">
 				<Tip content="Configure">
-					<button type="button" aria-label={`Configure ${label}`} className={iconButton} onClick={onConfigure}>
+					<Button variant="ghost" size="icon-sm" type="button" aria-label={`Configure ${label}`} onClick={onConfigure}>
 						<Settings className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 				<Tip content={enabled ? 'Enabled' : 'Disabled'}>
 					<span>
@@ -70,9 +70,9 @@ function ConnectionRow({
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
 	return (
 		<Tip content="Add Connection">
-			<button type="button" aria-label={label} className={iconButton} onClick={onClick}>
+			<Button variant="ghost" size="icon-sm" type="button" aria-label={label} onClick={onClick}>
 				<Plus className="size-4" />
-			</button>
+			</Button>
 		</Tip>
 	);
 }
@@ -228,7 +228,7 @@ export default function Integrations() {
 						through these servers.
 					</div>
 					<a
-						className="text-muted-foreground hover:text-foreground mt-0.5 block text-[0.6875rem] underline"
+						className="text-muted-foreground hover:text-foreground mt-0.5 block text-caption underline"
 						href="https://github.com/open-webui/open-terminal"
 						target="_blank"
 						rel="noreferrer"

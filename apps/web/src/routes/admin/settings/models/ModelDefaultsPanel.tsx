@@ -1,37 +1,32 @@
 import { type ReactNode, useState } from 'react';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
+import { Button } from '@/components/ui/button';
 import { CheckboxGrid } from '@/routes/workspace/models/EditorPickers';
-import { PromptSuggestionsEditor } from '@/routes/workspace/models/PromptSuggestionsEditor';
 import {
 	availableFeatures,
 	builtinToolItems,
 	capabilityItems,
 	featureItems
 } from '@/routes/workspace/models/modelEditorLabels';
+import { PromptSuggestionsEditor } from '@/routes/workspace/models/PromptSuggestionsEditor';
 import type { DefaultsState } from './adminModels';
 
 /** A heading row that opens and closes its body. */
-function Collapsible({
-	title,
-	children,
-	className = 'py-0.5'
-}: {
-	title: string;
-	children: ReactNode;
-	className?: string;
-}) {
+function Collapsible({ title, children }: { title: string; children: ReactNode }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<div>
-			<button
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-auto w-full justify-between gap-4 text-left"
 				type="button"
 				aria-expanded={open}
-				className={`flex w-full items-center justify-between gap-4 text-left ${className}`}
 				onClick={() => setOpen((o) => !o)}
 			>
 				<span className="text-muted-foreground text-xs">{title}</span>
-				<span className="text-muted-foreground/70 text-[0.6875rem]">{open ? 'Close' : 'Configure'}</span>
-			</button>
+				<span className="text-foreground-muted text-caption">{open ? 'Close' : 'Configure'}</span>
+			</Button>
 			{open && <div className="max-h-[24rem] overflow-y-auto pr-1 pb-2">{children}</div>}
 		</div>
 	);
@@ -58,22 +53,26 @@ export function ModelDefaultsPanel({
 	return (
 		<div className="shrink-0">
 			<div className="flex items-center justify-between gap-4 py-0.5">
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="min-w-0 flex-1 justify-start text-left"
 					type="button"
-					className="text-muted-foreground hover:text-foreground min-w-0 flex-1 text-left text-xs transition-colors"
 					onClick={() => setExpanded((e) => !e)}
 				>
 					Model Defaults
-				</button>
-				<button
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="shrink-0"
 					type="button"
 					aria-expanded={expanded}
 					aria-label="Configure model defaults"
-					className="text-muted-foreground/70 hover:text-foreground shrink-0 text-[0.6875rem] transition-colors"
 					onClick={() => setExpanded((e) => !e)}
 				>
 					{expanded ? 'Close' : 'Configure'}
-				</button>
+				</Button>
 			</div>
 
 			{expanded && (

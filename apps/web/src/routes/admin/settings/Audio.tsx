@@ -9,31 +9,32 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { getAudioConfig, getModels, getVoices, updateAudioConfig } from '@/lib/apis/audio';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { TTS_RESPONSE_SPLIT } from '@/lib/types';
 import {
-	type Voice,
 	buildAudioPayload,
 	engineDefaults,
 	formatOpenAiParams,
 	parseOpenAiParams,
 	sortVoices,
 	splitMimeTypes,
-	splitOptions
+	splitOptions,
+	type Voice
 } from './audio';
 
 type Rec = Record<string, any>;
 type Draft = { tts: Rec; stt: Rec; paramsText: string; mimeText: string };
 type Section = 'tts' | 'stt';
 
-const helpClass = 'text-muted-foreground/70 [&_a]:text-foreground mt-1 text-[0.6875rem] [&_a]:hover:underline';
+const helpClass = 'text-foreground-muted [&_a]:text-foreground mt-1 text-caption [&_a]:hover:underline';
 const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
@@ -364,15 +365,17 @@ export default function Audio() {
 										value={stt.WHISPER_MODEL ?? ''}
 										onChange={(e) => setStt({ WHISPER_MODEL: e.target.value })}
 									/>
-									<button
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										className="shrink-0 justify-center"
 										type="button"
 										aria-label="Update model"
 										disabled={whisperLoading}
-										className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-50"
 										onClick={updateWhisperModel}
 									>
 										{whisperLoading ? <Spinner /> : <Download className="size-4" />}
-									</button>
+									</Button>
 								</div>
 								<Help href="https://github.com/SYSTRAN/faster-whisper">
 									Click here to learn more about faster-whisper and see the available models.

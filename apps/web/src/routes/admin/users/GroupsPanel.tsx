@@ -18,7 +18,7 @@ import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { EditGroupModal, type Group, type GroupFormValue } from './EditGroupModal';
 import { GroupItem } from './GroupItem';
-import { type GroupSort, filterAndSortGroups } from './groupList';
+import { filterAndSortGroups, type GroupSort } from './groupList';
 
 const sortItems: { value: GroupSort; label: string }[] = [
 	{ value: 'members', label: 'Members' },
@@ -114,33 +114,30 @@ export function GroupsPanel() {
 						<div className="flex min-w-0 flex-1 items-center">
 							<Search className="mr-3 ml-1 size-3.5" />
 							<input
-								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
 								aria-label="Search Groups"
 								placeholder="Search Groups"
 							/>
 							{query && (
-								<button
+								<Button
+									variant="ghost"
+									size="icon-xs"
 									type="button"
-									className="hover:bg-muted rounded-full p-0.5 transition"
 									aria-label="Clear search"
 									onClick={() => setQuery('')}
 								>
 									<X className="size-3" strokeWidth={2} />
-								</button>
+								</Button>
 							)}
 						</div>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									aria-label="Sort"
-									className="text-foreground/80 hover:text-foreground flex h-8 shrink-0 items-center gap-1 rounded-xl bg-transparent px-1.5 py-1.5 text-[0.8125rem] font-normal transition"
-								>
+								<Button variant="ghost" size="icon-sm" className="shrink-0" type="button" aria-label="Sort">
 									<span className="truncate">{sortLabel}</span>
 									<ChevronDown className="size-3.5" strokeWidth={2.5} />
-								</button>
+								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
 								<DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as GroupSort)}>

@@ -65,7 +65,7 @@ export function EditUserModal({
 		}
 	};
 
-	const field = 'w-full bg-transparent text-sm outline-hidden';
+	const field = 'w-full bg-transparent text-sm';
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">

@@ -26,10 +26,8 @@ export function statusOf(m: ProviderModel, provider: string): string {
 }
 
 export function statusClass(status: string): string {
-	if (status === 'loaded' || status === 'sleeping')
-		return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-	if (status === 'loading' || status === 'downloading')
-		return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+	if (status === 'loaded' || status === 'sleeping') return 'bg-success/15 text-success';
+	if (status === 'loading' || status === 'downloading') return 'bg-warning/15 text-warning';
 	return 'bg-muted text-muted-foreground';
 }
 

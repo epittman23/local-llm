@@ -44,8 +44,8 @@ describe('statusOf', () => {
 		expect(statusOf({ id: 'a' }, 'llama.cpp')).toBe('available');
 	});
 	it('colours loaded and busy states', () => {
-		expect(statusClass('loaded')).toMatch(/green/);
-		expect(statusClass('downloading')).toMatch(/yellow/);
+		expect(statusClass('loaded')).toMatch(/success/);
+		expect(statusClass('downloading')).toMatch(/warning/);
 		expect(statusClass('unloaded')).toMatch(/muted/);
 	});
 });

@@ -1,4 +1,5 @@
 import { SettingNumber, SettingRow } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 
 /**
  * config.py's fallback when `RAG_HYBRID_BM25_WEIGHT` is unset. A deployment
@@ -6,9 +7,6 @@ import { SettingNumber, SettingRow } from '@/components/settings/controls';
  * tab is first saved, which stores a weight of its own.
  */
 export const DEFAULT_BM25_WEIGHT = 0.5;
-
-const resetButton =
-	'text-muted-foreground hover:text-foreground shrink-0 text-xs transition-colors disabled:opacity-50';
 
 /**
  * Hybrid search's BM25 weight. The Svelte page had a Default/Custom toggle
@@ -22,14 +20,15 @@ export function Bm25Weight({ value, onChange }: { value: number | null; onChange
 	return (
 		<>
 			<SettingRow label="BM25 Weight" description="Balance semantic and lexical weighting for hybrid search.">
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
 					type="button"
-					className={resetButton}
 					disabled={weight === DEFAULT_BM25_WEIGHT}
 					onClick={() => onChange(DEFAULT_BM25_WEIGHT)}
 				>
 					Reset to {DEFAULT_BM25_WEIGHT}
-				</button>
+				</Button>
 			</SettingRow>
 			<div className="flex items-center gap-2">
 				<div className="flex-1">
@@ -43,7 +42,7 @@ export function Bm25Weight({ value, onChange }: { value: number | null; onChange
 						onChange={(e) => onChange(Number(e.target.value))}
 						className="h-2 w-full cursor-pointer"
 					/>
-					<div className="text-muted-foreground/70 flex justify-between py-0.5 text-[0.6875rem]">
+					<div className="text-foreground-muted flex justify-between py-0.5 text-caption">
 						<div>semantic</div>
 						<div>lexical</div>
 					</div>

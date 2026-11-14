@@ -2,6 +2,7 @@ import saveAs from 'file-saver';
 import { useRef } from 'react';
 import { toast } from 'sonner';
 import { SettingRow, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { getAllUserChats } from '@/lib/apis/chats';
 import { exportConfig, importConfig } from '@/lib/apis/configs';
 import { getAllUsers } from '@/lib/apis/users';
@@ -9,8 +10,6 @@ import { downloadDatabase } from '@/lib/apis/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { csvCell } from '@/lib/utils/csv';
-
-const actionButton = 'text-muted-foreground hover:text-foreground text-xs transition-colors';
 
 /** id, name, email, role -- one CSV row per user; free-text cells are formula-neutralized. */
 export function usersToCsv(users: Record<string, unknown>[]): string {
@@ -77,14 +76,15 @@ export default function Database() {
 			/>
 			<SettingsSection title="Config" first>
 				<SettingRow label="Import Config" description="Import admin configuration from a JSON export file.">
-					<button type="button" className={actionButton} onClick={() => importInput.current?.click()}>
+					<Button variant="outline" size="sm" type="button" onClick={() => importInput.current?.click()}>
 						Import
-					</button>
+					</Button>
 				</SettingRow>
 				<SettingRow label="Export Config" description="Download the current admin configuration as JSON.">
-					<button
+					<Button
+						variant="outline"
+						size="sm"
 						type="button"
-						className={actionButton}
 						onClick={async () => {
 							const exported = await exportConfig(token).catch((error) => {
 								toast.error(`${error}`);
@@ -95,30 +95,31 @@ export default function Database() {
 						}}
 					>
 						Export
-					</button>
+					</Button>
 				</SettingRow>
 			</SettingsSection>
 
 			{(config?.features?.enable_admin_export ?? true) && (
 				<SettingsSection title="Export">
 					<SettingRow label="Database" description="Download the application database when supported.">
-						<button
+						<Button
+							variant="outline"
+							size="sm"
 							type="button"
-							className={actionButton}
 							onClick={() => downloadDatabase(token).catch((error) => toast.error(`${error}`))}
 						>
 							Database
-						</button>
+						</Button>
 					</SettingRow>
 					<SettingRow label="All Chats" description="Download every user's chat history as JSON.">
-						<button type="button" className={actionButton} onClick={exportChats}>
+						<Button variant="outline" size="sm" type="button" onClick={exportChats}>
 							Export
-						</button>
+						</Button>
 					</SettingRow>
 					<SettingRow label="Users" description="Download all users as CSV.">
-						<button type="button" className={actionButton} onClick={exportUsers}>
+						<Button variant="outline" size="sm" type="button" onClick={exportUsers}>
 							Export
-						</button>
+						</Button>
 					</SettingRow>
 				</SettingsSection>
 			)}

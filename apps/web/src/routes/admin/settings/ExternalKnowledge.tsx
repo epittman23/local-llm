@@ -21,25 +21,24 @@ import {
 } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import {
-	type ExternalConnection,
-	type ExternalKnowledgeItem,
-	type Provider,
-	type SourceForm,
 	blankSourceForm,
 	canSave,
 	canTest,
 	connectionForItem,
 	connectionPayload,
+	type ExternalConnection,
+	type ExternalKnowledgeItem,
 	endpointPlaceholder,
 	formFromItem,
+	type Provider,
+	type SourceForm,
 	schemaDefaults,
 	sourcePayload,
 	togglePayload
 } from './externalKnowledge';
 
-const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
+const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const label = 'text-muted-foreground text-xs';
-const iconButton = 'text-muted-foreground hover:text-foreground rounded p-1 transition disabled:opacity-50';
 const QUERY_KEY = ['admin-settings', 'external-knowledge'];
 
 type TestResult = { documents?: string[]; metadatas?: Record<string, unknown>[]; distances?: number[] };
@@ -110,17 +109,18 @@ export function ExternalKnowledge() {
 					<ExperimentalBadge />
 				</div>
 				<Tip content="Add Connection">
-					<button
+					<Button
+						variant="ghost"
+						size="icon-sm"
 						type="button"
 						aria-label="Add Knowledge Connection"
-						className={iconButton}
 						onClick={() => {
 							setEditing(null);
 							setDialogOpen(true);
 						}}
 					>
 						<Plus className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 			</div>
 
@@ -143,10 +143,11 @@ export function ExternalKnowledge() {
 							</div>
 							<div className="flex items-center gap-1">
 								<Tip content="Configure">
-									<button
+									<Button
+										variant="ghost"
+										size="icon-sm"
 										type="button"
 										aria-label={`Configure ${item.name}`}
-										className={iconButton}
 										disabled={!connection}
 										onClick={() => {
 											if (!connection) return void toast.error('External connection not found.');
@@ -155,7 +156,7 @@ export function ExternalKnowledge() {
 										}}
 									>
 										<Settings className="size-4" />
-									</button>
+									</Button>
 								</Tip>
 								<Tip content={enabled ? 'Enabled' : 'Disabled'}>
 									<span>
@@ -181,8 +182,8 @@ export function ExternalKnowledge() {
 			) : (
 				items.length === 0 && (
 					<>
-						<div className="text-muted-foreground/70 text-[0.6875rem]">No external knowledge sources configured.</div>
-						<div className="text-muted-foreground/70 text-[0.6875rem]">Test must pass before a source is created.</div>
+						<div className="text-foreground-muted text-caption">No external knowledge sources configured.</div>
+						<div className="text-foreground-muted text-caption">Test must pass before a source is created.</div>
 					</>
 				)
 			)}
@@ -319,7 +320,7 @@ function SourceDialog({
 							</label>
 							<select
 								id="external-source-provider"
-								className="block w-full bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+								className="block w-full bg-transparent text-sm [&>option]:bg-popover"
 								value={f.provider}
 								onChange={(e) => change({ provider: e.target.value as Provider, ...schemaDefaults(e.target.value) })}
 							>
@@ -416,21 +417,20 @@ function SourceDialog({
 								required
 							/>
 							<Tip content="Test">
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
 									type="button"
 									aria-label="Run test query"
-									className={iconButton}
 									disabled={testing}
 									onClick={test}
 								>
 									{testing ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-								</button>
+								</Button>
 							</Tip>
 						</div>
 						{tested && (
-							<div className="mt-1 text-xs text-green-700 dark:text-green-300">
-								Test passed: {testResult?.documents?.length} result(s).
-							</div>
+							<div className="mt-1 text-xs text-success">Test passed: {testResult?.documents?.length} result(s).</div>
 						)}
 						<div className="text-muted-foreground mt-1 text-xs">
 							External vectors must be generated with the same embedding model configured in Local LLM.

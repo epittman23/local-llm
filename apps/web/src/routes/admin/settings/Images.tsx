@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react';
-import { type ReactNode, Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
@@ -11,10 +11,11 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getBackendConfig } from '@/lib/apis';
 import { getConfig, getImageGenerationModels, updateConfig, verifyConfigUrl } from '@/lib/apis/images';
@@ -30,7 +31,6 @@ type Rec = Record<string, any>;
 type Draft = ReturnType<typeof toFormState>;
 
 const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
-const textButton = 'text-muted-foreground hover:text-foreground text-xs transition-colors hover:underline';
 
 /** A URL box with a button that saves, then asks the backend to reach the server. */
 function VerifiedUrl({
@@ -59,14 +59,16 @@ function VerifiedUrl({
 					value={value ?? ''}
 					onChange={(e) => onChange(e.target.value)}
 				/>
-				<button
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="shrink-0"
 					type="button"
 					aria-label="Verify connection"
-					className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
 					onClick={onVerify}
 				>
 					<RefreshCw className="size-4" />
-				</button>
+				</Button>
 			</div>
 		</SettingField>
 	);
@@ -114,24 +116,26 @@ function ComfyWorkflow({
 			>
 				<div className="flex items-center justify-end gap-2">
 					{workflow && (
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
 							type="button"
 							aria-label="Edit workflow.json content"
-							className={textButton}
 							onClick={() => setEditing(true)}
 						>
 							Edit
-						</button>
+						</Button>
 					)}
 					<Tip content="Click here to upload a workflow.json file.">
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
 							type="button"
 							aria-label="Click here to upload a workflow.json file."
-							className={textButton}
 							onClick={() => file.current?.click()}
 						>
 							Upload
-						</button>
+						</Button>
 					</Tip>
 				</div>
 			</SettingRow>
@@ -167,7 +171,7 @@ function ComfyWorkflow({
 					<div className="flex flex-col gap-1.5 text-xs">
 						{rows.map((row, i) => (
 							<div key={row.type} className="flex w-full flex-col">
-								<div className="text-muted-foreground/70 line-clamp-1 w-20 capitalize">
+								<div className="text-foreground-muted line-clamp-1 w-20 capitalize">
 									{row.type}
 									{requiredTypes.includes(row.type) ? '*' : ''}
 								</div>
@@ -182,7 +186,7 @@ function ComfyWorkflow({
 											onChange={(e) => onRows(rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))}
 										/>
 									</Tip>
-									<div className="text-muted-foreground/70 px-2">:</div>
+									<div className="text-foreground-muted px-2">:</div>
 									<div className="w-full">
 										<Tip content="Comma separated Node Ids (e.g. 1 or 1,2)">
 											<SettingInput
@@ -197,9 +201,7 @@ function ComfyWorkflow({
 							</div>
 						))}
 					</div>
-					<div className="text-muted-foreground/70 mt-1 text-xs">
-						*Prompt node ID(s) are required for image generation
-					</div>
+					<div className="text-foreground-muted mt-1 text-xs">*Prompt node ID(s) are required for image generation</div>
 				</SettingField>
 			)}
 		</>

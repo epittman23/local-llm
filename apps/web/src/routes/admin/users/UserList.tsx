@@ -23,11 +23,7 @@ import { UserPreviewModal } from './UserPreviewModal';
 const PER_PAGE = 30;
 
 const roleClass = (role: string) =>
-	role === 'admin'
-		? 'text-[#4f6f93] dark:text-[#8ba6c6]'
-		: role === 'user'
-			? 'text-[#4f7a5a] dark:text-[#8db395]'
-			: 'text-muted-foreground';
+	role === 'admin' ? 'text-brand' : role === 'user' ? 'text-foreground' : 'text-muted-foreground';
 
 type UserRow = AdminUser & { id: string };
 
@@ -96,7 +92,6 @@ export function UserList() {
 	};
 	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
 
-	const iconButton = 'hover:bg-muted w-fit self-center rounded-lg p-1.5';
 	const th = 'font-normal select-none';
 	const thButton = 'flex w-full items-center gap-1.5 px-2.5 py-1.5';
 
@@ -137,7 +132,7 @@ export function UserList() {
 							<div className="flex min-w-0 flex-1 items-center">
 								<Search className="mr-3 ml-1 size-3.5" />
 								<input
-									className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+									className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 									value={query}
 									onChange={(e) => {
 										setQuery(e.target.value);
@@ -147,9 +142,10 @@ export function UserList() {
 									placeholder="Search"
 								/>
 								{query && (
-									<button
+									<Button
+										variant="ghost"
+										size="icon-xs"
 										type="button"
-										className="hover:bg-muted rounded-full p-0.5 transition"
 										aria-label="Clear search"
 										onClick={() => {
 											setQuery('');
@@ -157,7 +153,7 @@ export function UserList() {
 										}}
 									>
 										<X className="size-3" strokeWidth={2} />
-									</button>
+									</Button>
 								)}
 							</div>
 							<Button variant="outline" size="sm" className="ml-1 shrink-0 text-xs" onClick={() => setShowAdd(true)}>
@@ -208,16 +204,18 @@ export function UserList() {
 												<div className="truncate font-normal">{user.name}</div>
 												{user.last_active_at && Date.now() / 1000 - user.last_active_at < 180 && (
 													<span className="relative flex size-1.5" title="Active now">
-														<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-														<span className="relative inline-flex size-1.5 rounded-full bg-green-500" />
+														<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+														<span className="relative inline-flex size-1.5 rounded-full bg-success" />
 													</span>
 												)}
 											</div>
 										</td>
 										<td className="w-20 min-w-[5rem] px-3 py-1">
-											<button
+											<Button
+												variant="ghost"
+												size="xs"
+												className={`capitalize ${roleClass(user.role)}`}
 												type="button"
-												className={`text-xs leading-4 font-normal capitalize transition ${roleClass(user.role)}`}
 												aria-label="Change User Role"
 												onClick={() => {
 													setSelected(user);
@@ -225,7 +223,7 @@ export function UserList() {
 												}}
 											>
 												{user.role}
-											</button>
+											</Button>
 										</td>
 										<td className="max-w-48 truncate px-3 py-1">{user.email}</td>
 										<td className="px-3 py-1">{dayjs(user.last_active_at * 1000).fromNow()}</td>
@@ -234,9 +232,10 @@ export function UserList() {
 											<div className="flex w-full justify-end">
 												{config?.features?.enable_admin_chat_access && user.role !== 'admin' && (
 													<Tip content="Chats">
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
 															type="button"
-															className={iconButton}
 															aria-label="Chats"
 															onClick={() => {
 																setSelected(user);
@@ -244,14 +243,15 @@ export function UserList() {
 															}}
 														>
 															<MessageSquare className="size-3.5" />
-														</button>
+														</Button>
 													</Tip>
 												)}
 												{user.role !== 'admin' && (
 													<Tip content="Preview Access">
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
 															type="button"
-															className={iconButton}
 															aria-label="Preview Access"
 															onClick={() => {
 																setSelected(user);
@@ -259,13 +259,14 @@ export function UserList() {
 															}}
 														>
 															<Eye className="size-3.5" />
-														</button>
+														</Button>
 													</Tip>
 												)}
 												<Tip content="Edit User">
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={iconButton}
 														aria-label="Edit User"
 														onClick={() => {
 															setSelected(user);
@@ -273,13 +274,14 @@ export function UserList() {
 														}}
 													>
 														<Pencil className="size-3.5" />
-													</button>
+													</Button>
 												</Tip>
 												{user.role !== 'admin' && (
 													<Tip content="Delete User">
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
 															type="button"
-															className={iconButton}
 															aria-label="Delete User"
 															onClick={() => {
 																setSelected(user);
@@ -287,7 +289,7 @@ export function UserList() {
 															}}
 														>
 															<Trash2 className="size-3.5" />
-														</button>
+														</Button>
 													</Tip>
 												)}
 											</div>
