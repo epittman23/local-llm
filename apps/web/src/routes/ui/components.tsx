@@ -25,6 +25,7 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -64,23 +65,24 @@ import { Example, Field, PageHeader, Panel, Section } from './parts';
 
 type Status = 'success' | 'warning' | 'danger' | 'neutral';
 
-const STATUS_STYLE: Record<Status, { icon: typeof CircleCheckIcon | null; className: string }> = {
-	success: { icon: CircleCheckIcon, className: 'text-success border-success/40' },
-	warning: { icon: TriangleAlertIcon, className: 'text-warning border-warning/40' },
-	danger: { icon: CircleAlertIcon, className: 'text-danger border-danger/40' },
-	neutral: { icon: null, className: 'text-foreground-muted border-border-control' }
+const STATUS_BADGE: Record<
+	Status,
+	{ icon: typeof CircleCheckIcon | null; variant: 'success' | 'warning' | 'danger' | 'secondary' }
+> = {
+	success: { icon: CircleCheckIcon, variant: 'success' },
+	warning: { icon: TriangleAlertIcon, variant: 'warning' },
+	danger: { icon: CircleAlertIcon, variant: 'danger' },
+	neutral: { icon: null, variant: 'secondary' }
 };
 
-/** COL-3, DAT-3: a status is a word with an icon, in its status colour. Never the colour alone. */
+/** COL-3, DAT-3: a status is the shared Badge's status variant, a word with an icon. Never the colour alone. */
 export function StatusBadge({ status, children }: { status: Status; children: string }) {
-	const { icon: Icon, className } = STATUS_STYLE[status];
+	const { icon: Icon, variant } = STATUS_BADGE[status];
 	return (
-		<span
-			className={`text-caption inline-flex h-5 items-center gap-1 rounded-full border px-2 font-strong ${className}`}
-		>
-			{Icon && <Icon aria-hidden className="size-3" />}
+		<Badge variant={variant}>
+			{Icon && <Icon aria-hidden data-icon="inline-start" />}
 			{children}
-		</span>
+		</Badge>
 	);
 }
 
@@ -229,7 +231,7 @@ export function FormsSection() {
 		>
 			<Example
 				title="A form that saves on request"
-				note="Change a value: the bar at the bottom reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it."
+				note="Change a value: the bar at the bottom reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it. The checkbox's box is 16 px, but it answers a click across 40 by 32 px, and 44 by 44 on touch."
 			>
 				<Panel className="max-w-[40rem]">
 					<form
@@ -317,6 +319,34 @@ export function FormsSection() {
 				</Panel>
 			</Example>
 			<Example
+				title="A native select"
+				note="New code uses the shared Select. The native selects pages still have get the same edge, fill, corner and compact height from the standard, and 16 px type on touch, without classes of their own."
+			>
+				<Panel className="flex max-w-[40rem] flex-wrap items-end gap-6">
+					<Field label="Shared Select, compact">
+						{(props) => (
+							<Select defaultValue="updated">
+								<SelectTrigger {...props} size="sm" className="w-44">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="updated">Recently updated</SelectItem>
+									<SelectItem value="name">Name</SelectItem>
+								</SelectContent>
+							</Select>
+						)}
+					</Field>
+					<Field label="Native select">
+						{(props) => (
+							<select {...props} defaultValue="updated" className="w-44">
+								<option value="updated">Recently updated</option>
+								<option value="name">Name</option>
+							</select>
+						)}
+					</Field>
+				</Panel>
+			</Example>
+			<Example
 				title="A setting that applies at once"
 				note="A switch is for a setting that takes effect immediately. Its label names the setting, not its current state, and the line below confirms what happened."
 			>
@@ -376,10 +406,10 @@ export function DataSection() {
 		>
 			<Example
 				title="A results table"
-				note="On a narrow screen the table scrolls inside its own frame; the page never scrolls sideways."
+				note="On a narrow screen the table scrolls inside its own frame, a shadow marks the edge that hides columns, and Tab reaches the frame so the arrow keys scroll it. The page never scrolls sideways."
 			>
-				<div className="border-border overflow-x-auto rounded-panel border">
-					<Table className="text-dense min-w-[38rem]">
+				<div className="border-border overflow-hidden rounded-panel border">
+					<Table aria-label="Runs" className="text-dense min-w-[38rem]">
 						<TableHeader className="bg-surface-1">
 							<TableRow>
 								<TableHead scope="col">Configuration</TableHead>
@@ -427,7 +457,7 @@ export function DataSection() {
 			</Example>
 			<Example
 				title="Status"
-				note="Four meanings, each a word with an icon. The neutral one is for states that are neither good nor bad."
+				note="Four meanings, each a word with an icon: the shared Badge's success, warning and danger variants, and secondary for a state that is neither good nor bad."
 			>
 				<div className="flex flex-wrap items-center gap-2">
 					<StatusBadge status="success">Passed</StatusBadge>
