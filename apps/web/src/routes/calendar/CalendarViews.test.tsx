@@ -123,6 +123,18 @@ describe('month cells (#923, #987)', () => {
 		expect(inside.querySelector('span')?.className).toMatch(/(^|\s)text-foreground(\s|$)/);
 	});
 
+	it('shows an automation run in the muted foreground rather than dimming it', () => {
+		const run = {
+			...event('r', 'Nightly report', new Date(2026, 10, 14, 2), new Date(2026, 10, 14, 3)),
+			meta: { automation_id: 'a1' }
+		} as never;
+		showMonth([run, event('m', 'Seminar', new Date(2026, 10, 14, 10), new Date(2026, 10, 14, 11))]);
+		const chip = screen.getByRole('button', { name: /Nightly report/ });
+		expect(chip.className).toContain('text-foreground-muted');
+		expect(chip.className).not.toMatch(/opacity/);
+		expect(screen.getByRole('button', { name: /Seminar/ }).className).not.toContain('text-foreground-muted');
+	});
+
 	it('names the hour cells with the same date', () => {
 		show('day', new Date(2026, 10, 14), []);
 		expect(screen.getByRole('button', { name: 'New event 14 November 2026, 9 AM' })).toBeInTheDocument();

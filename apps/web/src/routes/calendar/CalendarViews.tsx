@@ -30,7 +30,7 @@ export const monthCellName = (day: Date, count: number) =>
 
 /**
  * One event in a grid cell: a colored dot, the start time (unless all-day, or in the band, where the
- * start may be on an earlier day), the title. Automation runs are dimmed.
+ * start may be on an earlier day), the title. Automation runs are in the muted foreground, never dimmed (COL-2).
  */
 function EventChip({
 	event,
@@ -54,7 +54,7 @@ function EventChip({
 			<RowButton
 				className={cn(
 					'flex w-auto items-start justify-start gap-1.5 truncate px-0.5',
-					event.meta?.automation_id && 'opacity-60'
+					event.meta?.automation_id && 'text-foreground-muted'
 				)}
 				onClick={(e) => {
 					e.stopPropagation();
