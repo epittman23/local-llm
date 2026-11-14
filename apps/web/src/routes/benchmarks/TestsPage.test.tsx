@@ -57,6 +57,14 @@ describe('TestsPage release-date window', () => {
 		useAuthStore.setState({ token: null });
 	});
 
+	it('names every select by its visible label (#987)', async () => {
+		renderPage();
+		expect(await screen.findByRole('combobox', { name: 'Tier' })).toBeTruthy();
+		expect(screen.getByRole('combobox', { name: 'Benchmark' })).toBeTruthy();
+		expect(screen.getByRole('combobox', { name: 'System' })).toBeTruthy();
+		expect(screen.getByRole('combobox', { name: 'Item benchmark' })).toBeTruthy();
+	});
+
 	it('sends the window with a run, and shows it and the notes on the stream', async () => {
 		vi.mocked(api.streamTestRun).mockResolvedValue(
 			stream([

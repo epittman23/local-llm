@@ -47,6 +47,13 @@ describe('ServePage', () => {
 		useAuthStore.setState({ token: null });
 	});
 
+	it('names every select by its visible label (#987)', async () => {
+		renderPage();
+		expect(await screen.findByRole('combobox', { name: 'Profile' })).toBeTruthy();
+		expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeTruthy();
+		expect(screen.getByRole('combobox', { name: 'Speculative decoding' })).toBeTruthy();
+	});
+
 	it('says there is no log output while nothing is served, in the muted colour', async () => {
 		renderPage();
 		const empty = await screen.findByText('No log output yet');

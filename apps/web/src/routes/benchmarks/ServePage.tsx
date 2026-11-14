@@ -198,9 +198,9 @@ export function ServePage() {
 
 			<div className="grid gap-4 md:grid-cols-2">
 				<div className="flex flex-col gap-2">
-					<Label>Profile</Label>
+					<Label htmlFor="serve-profile">Profile</Label>
 					<Select value={selectedProfile} onValueChange={setSelectedProfile}>
-						<SelectTrigger className="w-full">
+						<SelectTrigger id="serve-profile" className="w-full">
 							<SelectValue placeholder="Select a profile" />
 						</SelectTrigger>
 						<SelectContent>
@@ -288,9 +288,11 @@ export function ServePage() {
 							<Input id="serve-ot" type="text" placeholder="--ot" value={ot} onChange={(e) => setOt(e.target.value)} />
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label className="text-muted-foreground text-xs font-normal">Reasoning effort</Label>
+							<Label htmlFor="serve-reasoning" className="text-muted-foreground text-xs font-normal">
+								Reasoning effort
+							</Label>
 							<Select value={reasoning} onValueChange={setReasoning}>
-								<SelectTrigger className="w-full">
+								<SelectTrigger id="serve-reasoning" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -303,9 +305,11 @@ export function ServePage() {
 							</Select>
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label className="text-muted-foreground text-xs font-normal">Speculative decoding</Label>
+							<Label htmlFor="serve-spec" className="text-muted-foreground text-xs font-normal">
+								Speculative decoding
+							</Label>
 							<Select value={spec} onValueChange={setSpec}>
-								<SelectTrigger className="w-full">
+								<SelectTrigger id="serve-spec" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>

@@ -86,7 +86,8 @@ export function AnswersPage() {
 	const answer = answerQuery.data;
 
 	return (
-		<div className="flex flex-col gap-2">
+		// min-w-0: a long answer or row scrolls in its own box instead of widening the page.
+		<div className="flex min-w-0 flex-col gap-2">
 			<div className="mb-2 flex flex-wrap items-center justify-between gap-2">
 				<h2 className="shrink-0 text-lg font-medium">Answers</h2>
 
@@ -147,7 +148,7 @@ export function AnswersPage() {
 					<p className="text-muted-foreground text-sm">Loading…</p>
 				</div>
 			) : (
-				<Table>
+				<Table aria-label="Answers">
 					<TableHeader>
 						<TableRow>
 							<TableHead>Benchmark</TableHead>
