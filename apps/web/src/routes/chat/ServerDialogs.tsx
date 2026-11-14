@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
 import type { ServerDialog } from './useChatSession';
 
 type Question = {
@@ -168,14 +167,12 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 								const picked =
 									answers[q.id]?.type === 'option' && (answers[q.id] as { option_index: number }).option_index === i;
 								return (
-									<button
+									<Button
 										key={i}
 										type="button"
 										aria-pressed={picked}
-										className={cn(
-											'hover:bg-muted rounded-xl border px-3 py-2 text-left text-sm',
-											picked && 'border-foreground/50 bg-muted'
-										)}
+										variant={picked ? 'secondary' : 'outline'}
+										className="h-auto justify-start text-left whitespace-normal"
 										onClick={() =>
 											setAnswers((a) => ({
 												...a,
@@ -185,7 +182,7 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 									>
 										<div>{o.label}</div>
 										{o.description && <div className="text-muted-foreground text-xs">{o.description}</div>}
-									</button>
+									</Button>
 								);
 							})}
 							{(q.allow_other ?? allowOther) && (

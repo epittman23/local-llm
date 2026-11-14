@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import { Button } from '@/components/ui/button';
 import { getBanners } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -14,10 +15,10 @@ import {
 } from './banners';
 
 const TYPE_CLASSES: Record<string, string> = {
-	info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200',
-	success: 'bg-green-500/20 text-green-700 dark:text-green-200',
-	warning: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200',
-	error: 'bg-red-500/20 text-red-700 dark:text-red-200'
+	info: 'bg-brand/15 text-brand',
+	success: 'bg-success/15 text-success',
+	warning: 'bg-warning/15 text-warning',
+	error: 'bg-danger/15 text-danger'
 };
 
 /**
@@ -69,15 +70,17 @@ export function ChatBanners() {
 						<div id={contentId} className="min-w-0 flex-1">
 							<SafeMarkdown text={banner.content} className="max-h-60 overflow-y-auto" />
 						</div>
-						<button
+						<Button
 							type="button"
 							aria-label={`Close ${type} banner`}
 							aria-describedby={contentId}
-							className="text-muted-foreground hover:text-foreground shrink-0"
+							variant="ghost"
+							size="icon-xs"
+							className="shrink-0"
 							onClick={() => close(banner.id, banner.dismissible)}
 						>
 							<X className="size-3.5" />
-						</button>
+						</Button>
 					</li>
 				);
 			})}

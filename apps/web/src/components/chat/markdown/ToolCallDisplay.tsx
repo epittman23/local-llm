@@ -69,16 +69,11 @@ export function ToolCallDisplay({
 
 	return (
 		<div className="my-1 w-full text-sm" data-testid="tool-call">
-			<button
-				type="button"
-				className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 py-0.5"
-				aria-expanded={open}
-				onClick={() => setOpen((o) => !o)}
-			>
+			<Button type="button" variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
 				{!done && !rejected && !needsApproval && <Loader2 className="size-3.5 animate-spin" />}
 				<span className={cn(failed && 'text-destructive')}>{label}</span>
 				{open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-			</button>
+			</Button>
 			{needsApproval && (
 				<div className="my-1 flex gap-2">
 					<Button size="sm" className="tool-call-allow-button" disabled={resolving} onClick={() => onResolve(true)}>
@@ -110,13 +105,9 @@ export function ToolCallDisplay({
 								{showAll ? pretty(result) : pretty(result).slice(0, RESULT_PREVIEW)}
 							</pre>
 							{!showAll && pretty(result).length > RESULT_PREVIEW && (
-								<button
-									type="button"
-									className="text-muted-foreground mt-1 text-xs underline"
-									onClick={() => setShowAll(true)}
-								>
+								<Button type="button" variant="link" size="xs" className="mt-1" onClick={() => setShowAll(true)}>
 									Show all ({pretty(result).length} characters)
-								</button>
+								</Button>
 							)}
 						</div>
 					)}

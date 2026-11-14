@@ -7,14 +7,12 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
-import { getFolderById } from '@/lib/apis/folders';
+import { Button } from '@/components/ui/button';
+import { canUseFeature } from '@/lib/access/features';
 import { updateChatById } from '@/lib/apis/chats';
+import { getFolderById } from '@/lib/apis/folders';
 import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
-import type { ChatFile, History } from '@/lib/chat/history';
-import { codeRunner } from '@/lib/chat/codeRun';
-import { cssUrl } from '@/lib/chat/prefs';
-import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
-import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
+import { getTools } from '@/lib/apis/tools';
 import {
 	canUploadFiles,
 	canUploadWeb,
@@ -22,33 +20,35 @@ import {
 	modelDefaults,
 	warnModelsWithoutVision
 } from '@/lib/chat/attachments';
-import { canUseFeature } from '@/lib/access/features';
-import { getTools } from '@/lib/apis/tools';
+import { codeRunner } from '@/lib/chat/codeRun';
+import type { ChatFile, History } from '@/lib/chat/history';
+import { cssUrl } from '@/lib/chat/prefs';
+import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
+import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useUIStore } from '@/lib/stores/uiStore';
-import { cn } from '@/lib/utils';
 import { ArtifactPanel } from './ArtifactPanel';
+import { ChatBanners } from './ChatBanners';
 import { ChatControls } from './ChatControls';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu } from './ChatMenu';
-import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
-import { useAttachments } from './useAttachments';
-import { useOnChatSwitch } from './useOnChatSwitch';
-import { useParamsAutosave } from './useParamsAutosave';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
-import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
+import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useMessageActions } from './MessageActions';
-import { useHeldSend } from './useHeldSend';
-import { useModelPick } from './useModelPick';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
+import { useAttachments } from './useAttachments';
 import { useChatPrefs } from './useChatPrefs';
 import { useChatSession } from './useChatSession';
+import { useHeldSend } from './useHeldSend';
+import { useModelPick } from './useModelPick';
 import { type ChatModel, useModels } from './useModels';
+import { useOnChatSwitch } from './useOnChatSwitch';
+import { useParamsAutosave } from './useParamsAutosave';
 
 type Folder = { id: string; name: string; data?: { model_ids?: string[] } | null };
 
@@ -381,23 +381,21 @@ export function ChatPage() {
 						)}
 						{!id && temporaryAllowed && (
 							<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
-								<button
+								<Button
 									type="button"
 									aria-label="Temporary Chat"
 									aria-pressed={temporary}
 									disabled={temporaryEnforced}
 									onClick={() => setTemporary((t) => !t)}
-									className={cn(
-										'hover:bg-muted rounded-lg p-1.5',
-										temporary ? 'text-foreground' : 'text-muted-foreground'
-									)}
+									variant={temporary ? 'secondary' : 'ghost'}
+									size="icon-sm"
 								>
 									<EyeOff className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 						<Tip content="Controls">
-							<button
+							<Button
 								type="button"
 								aria-label="Controls"
 								aria-pressed={controlsOpen}
@@ -405,13 +403,11 @@ export function ChatPage() {
 									setPreview(null);
 									setControlsOpen(!controlsOpen);
 								}}
-								className={cn(
-									'hover:bg-muted rounded-lg p-1.5',
-									controlsOpen ? 'text-foreground' : 'text-muted-foreground'
-								)}
+								variant={controlsOpen ? 'secondary' : 'ghost'}
+								size="icon-sm"
 							>
 								<SlidersHorizontal className="size-4" />
-							</button>
+							</Button>
 						</Tip>
 						{id && (
 							<ChatMenu

@@ -142,12 +142,13 @@ function DocumentCard({
 }) {
 	const Icon = doc.icon;
 	return (
-		<button
+		<Button
 			ref={buttonRef}
 			type="button"
 			aria-current={open ? 'true' : undefined}
 			onClick={onOpen}
-			className={`bg-surface-1 hover:bg-surface-3 flex w-full max-w-sm items-center gap-3 rounded-panel border p-3 text-left ${open ? 'border-brand' : 'border-border'}`}
+			variant="outline"
+			className={`h-auto w-full max-w-sm justify-start gap-3 rounded-panel p-3 text-left whitespace-normal ${open ? 'border-brand' : ''}`}
 		>
 			<span className="bg-surface-3 flex size-9 shrink-0 items-center justify-center rounded-lg">
 				<Icon aria-hidden className={`size-4 ${open ? 'text-brand' : 'text-foreground-muted'}`} />
@@ -160,7 +161,7 @@ function DocumentCard({
 					{doc.kind}, {doc.size}
 				</span>
 			</span>
-		</button>
+		</Button>
 	);
 }
 

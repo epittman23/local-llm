@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
+	CheckCheck,
 	ChevronDown,
 	ChevronRight,
 	Folder as FolderIcon,
@@ -7,8 +8,7 @@ import {
 	MoreHorizontal,
 	Pencil,
 	Plus,
-	Trash2,
-	CheckCheck
+	Trash2
 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink } from 'react-router';
@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -85,24 +86,28 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 			<section>
 				<div className="group flex items-center">
-					<button
+					<Button
 						type="button"
-						className={sectionHeader}
+						variant="ghost"
+						size="xs"
+						className="w-full justify-start"
 						aria-expanded={showFolders}
 						onClick={() => setShowFolders((s) => !s)}
 					>
 						{showFolders ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
 						Folders
-					</button>
+					</Button>
 					<Tip content="New Folder">
-						<button
+						<Button
 							type="button"
 							aria-label="New Folder"
-							className="text-muted-foreground hover:text-foreground mr-1 p-0.5"
+							variant="ghost"
+							size="icon-xs"
+							className="mr-1"
 							onClick={() => setCreating(true)}
 						>
 							<Plus className="size-3.5" />
-						</button>
+						</Button>
 					</Tip>
 				</div>
 				{showFolders && (
@@ -182,15 +187,16 @@ function FolderItem({
 	return (
 		<li>
 			<div className="group relative flex items-center" style={{ paddingLeft: depth * 12 }}>
-				<button
+				<Button
 					type="button"
 					aria-label={open ? `Collapse ${node.name}` : `Expand ${node.name}`}
 					aria-expanded={open}
-					className="text-muted-foreground p-1"
+					variant="ghost"
+					size="icon-xs"
 					onClick={toggle}
 				>
 					{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-				</button>
+				</Button>
 				<NavLink
 					to={`/folders/${node.id}`}
 					onClick={onNavigate}
@@ -206,13 +212,15 @@ function FolderItem({
 				</NavLink>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<button
+						<Button
 							type="button"
 							aria-label={`Folder menu: ${node.name}`}
-							className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1 hidden rounded p-0.5 group-focus-within:block group-hover:block data-[state=open]:block"
+							variant="ghost"
+							size="icon-xs"
+							className="absolute top-1 right-1 hidden group-focus-within:inline-flex group-hover:inline-flex data-[state=open]:inline-flex"
 						>
 							<MoreHorizontal className="size-4" />
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="start">
 						<DropdownMenuItem onSelect={() => setCreating(true)}>
@@ -263,13 +271,9 @@ function FolderItem({
 						<div className="text-muted-foreground px-2 py-1 text-xs">No chats</div>
 					)}
 					{chats.hasNextPage && (
-						<button
-							type="button"
-							className="text-muted-foreground px-2 py-1 text-xs"
-							onClick={() => void chats.fetchNextPage()}
-						>
+						<Button type="button" variant="ghost" size="xs" onClick={() => void chats.fetchNextPage()}>
 							Show more
-						</button>
+						</Button>
 					)}
 				</div>
 			)}
