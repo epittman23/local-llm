@@ -337,8 +337,7 @@ test('/ui shows the interface standard to a signed-out visitor, with its colour 
 	await page.goto('/ui');
 
 	await expect(page.getByRole('heading', { level: 1, name: 'Interface standard' })).toBeVisible();
-	await expect(page.locator('html')).toHaveAttribute('data-ui', 'standard');
-	// The scope declares the colour scheme, so native controls follow the theme (COL-6).
+	// The theme declares the colour scheme, so native controls follow the theme (COL-6).
 	expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark');
 	// Measured in this browser from the painted tokens, not parsed from the stylesheet.
 	await expect(page.getByText(/^All \d+ colour promises hold in this theme\.$/)).toBeVisible();

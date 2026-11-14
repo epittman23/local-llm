@@ -464,9 +464,11 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/styles/global.css`** — the Tailwind v4 entry and the shadcn Nova
   preset's design tokens.
 - **`src/styles/standard.css`** — the interface standard's tokens
-  (`docs/guides/ui-standard.md`) and the `data-ui="standard"` scope that
-  applies them, today to `/ui` only; `standard.contrast.test.ts` checks the
-  contrast ratios the standard promises. **`src/lib/ui/contrast.ts`** is
+  (`docs/guides/ui-standard.md`), which are the app's theme, and the rules
+  that bring the shared components to it; `standard.contrast.test.ts` checks
+  the contrast ratios the standard promises, and `standard.ratchet.test.ts`
+  holds the count of bypasses to **`ui-standard-baseline.json`** (in
+  `apps/web/`), which only shrinks. **`src/lib/ui/contrast.ts`** is
   the WCAG arithmetic both use. **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of the
   planned canvas (`docs/plans/canvas.md`), not the feature, and

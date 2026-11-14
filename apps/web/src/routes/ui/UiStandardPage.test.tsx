@@ -21,12 +21,12 @@ describe('UiStandardPage (/ui)', () => {
 		document.documentElement.className = '';
 	});
 
-	it('switches the scoped standard layer on while mounted, and off again', () => {
+	it('sets the tab title while mounted, and restores it', () => {
+		document.title = 'before';
 		const { unmount } = renderPage();
-		expect(document.documentElement.dataset.ui).toBe('standard');
 		expect(document.title).toBe('Interface standard · local-llm');
 		unmount();
-		expect(document.documentElement.dataset.ui).toBeUndefined();
+		expect(document.title).toBe('before');
 	});
 
 	it('has one h1 and a section for every entry in its navigation', () => {

@@ -265,9 +265,11 @@ applies it in the same change.
   mostly used), use the tokens in `src/styles/standard.css` and the shared
   components, and name the rules a change was checked against in its pull
   request. Something the standard lacks is added to the document, the
-  tokens and `/ui` in the same change. The standard's look applies only to
-  `/ui` until the global tokens are moved onto it; its rules apply to every
-  new or changed piece of interface now.
+  tokens and `/ui` in the same change. The standard is the app's theme
+  (dark by default), and a ratchet (`src/styles/standard.ratchet.test.ts`
+  against `ui-standard-baseline.json`) counts what still bypasses it and
+  only lets the counts fall; lower the baseline after removing some, and
+  never add an exception to it yourself: put the case to the owner.
 - More: [docs/guides/frontend.md](docs/guides/frontend.md). Astro's own
   documentation is at https://docs.astro.build; consult the relevant guide
   before working on:

@@ -21,11 +21,9 @@ import type { SectionMeta } from './parts';
  * shared components and to the patterns pages are built from. It is the
  * reference a UI change is compared with, in dark first.
  *
- * The standard's values are not the app's defaults yet. While this page is
- * mounted it sets `data-ui="standard"` on <html>, which switches on the scoped
- * layer in styles/standard.css; leaving the page removes it. The attribute is
- * on <html> rather than a wrapper because dialogs, menus and toasts render in
- * portals outside any wrapper.
+ * The standard is the app's theme, so this page renders with the same
+ * tokens and shared components as every other page; it adds nothing of its
+ * own beyond layout.
  */
 
 const SECTIONS: SectionMeta[] = [
@@ -105,18 +103,15 @@ function Specimen() {
 
 export function UiStandardPage() {
 	useEffect(() => {
-		const root = document.documentElement;
 		const previousTitle = document.title;
-		root.dataset.ui = 'standard';
 		document.title = 'Interface standard · local-llm';
 		return () => {
-			delete root.dataset.ui;
 			document.title = previousTitle;
 		};
 	}, []);
 
 	return (
-		<div className="bg-background text-foreground min-h-screen">
+		<div className="bg-background text-foreground text-body min-h-screen">
 			<a
 				href="#standard-main"
 				className="bg-brand text-brand-foreground sr-only rounded-lg px-3 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50"
@@ -158,9 +153,8 @@ export function UiStandardPage() {
 								like this page, in dark first.
 							</p>
 							<p className="text-foreground-muted mt-3 max-w-[60ch]">
-								The rules, with their identifiers, are in <code>docs/guides/ui-standard.md</code>. These values apply to
-								this page only until the rest of the app is moved onto them. The theme switch above sets the theme of
-								the whole app.
+								The rules, with their identifiers, are in <code>docs/guides/ui-standard.md</code>. The theme switch
+								above sets the theme of the whole app.
 							</p>
 						</div>
 						<Specimen />

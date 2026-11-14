@@ -7,6 +7,24 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest, 2): **The interface standard is the app's theme on
+  every page, dark is the default, and a ratchet counts what still bypasses
+  it.** The owner approved the direction shown on `/ui` and asked that every
+  bypass be replaced with the standard, or be put to them with a
+  justification.
+  - The scope that kept the standard's values to `/ui` is gone: its tokens
+    are the global theme (`apps/web/src/styles/standard.css`), and Geist and
+    the shadcn neutral values are removed. Whatever was built from the shared
+    components and token names changed at once; nothing else did.
+  - `standard.ratchet.test.ts` counts six forbidden patterns per file against
+    `apps/web/ui-standard-baseline.json`: 963 uses on the day it was recorded
+    (375 hand-styled buttons, 188 palette colours, 135 one-off text sizes,
+    110 removed focus outlines, 98 dimmed text colours, 57 `dark:` one-offs).
+    A count may only fall, and a use that stays is an exception only the
+    owner accepts, recorded with its reason.
+  - A browser that never chose a theme now gets dark instead of following
+    the operating system ("System" is still offered), and the desktop app's
+    own windows are always dark, in the standard's colours.
 - **2026-11-14** (latest): **A canvas beside the chat is planned: what a
   model provides (a file, a page of HTML) will be a card in the reply and a
   document in a right-hand panel, which is also a text editor.** The owner
