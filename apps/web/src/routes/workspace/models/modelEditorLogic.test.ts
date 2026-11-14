@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-	type EditorState,
 	buildModelInfo,
+	type EditorState,
 	getBaseModelItems,
 	getChatVariablesPreview,
 	initialEditorState,

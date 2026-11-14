@@ -1,10 +1,11 @@
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useState } from 'react';
+import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 
 const sectionLabel = 'mb-1.5 text-xs text-muted-foreground';
 
@@ -40,11 +41,17 @@ export function CheckboxGrid({
 							checked={isChecked(item.id)}
 							onCheckedChange={(c) => onToggle(item.id, c === true)}
 						/>
-						<button type="button" className="min-w-0 text-left" onClick={() => onToggle(item.id, !isChecked(item.id))}>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="min-w-0 justify-start"
+							type="button"
+							onClick={() => onToggle(item.id, !isChecked(item.id))}
+						>
 							<Tip content={<SafeMarkdown text={item.description} className="text-background" />} side="top">
 								<span className="block truncate">{item.label}</span>
 							</Tip>
-						</button>
+						</Button>
 					</div>
 				))}
 			</div>
@@ -118,16 +125,16 @@ export function ItemPicker({
 						}}
 					>
 						<PopoverTrigger asChild>
-							<button type="button" className="text-muted-foreground min-w-0 truncate text-xs hover:underline">
+							<Button variant="link" size="xs" className="min-w-0 truncate" type="button">
 								{labels.trigger}
-							</button>
+							</Button>
 						</PopoverTrigger>
 						<PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)] p-0.5">
 							<div className="flex w-full items-center space-x-1.5 px-1.5 pb-0.5">
 								<Search className="mr-1.5 size-3.5 shrink-0 self-center" />
 								<input
 									autoFocus
-									className="w-full bg-transparent py-0.5 text-[0.8125rem] outline-hidden"
+									className="w-full bg-transparent py-0.5 text-dense"
 									type="text"
 									aria-label={labels.search}
 									placeholder={labels.search}
@@ -138,26 +145,30 @@ export function ItemPicker({
 							</div>
 							<div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
 								{matches.length > 0 && (
-									<button
+									<Button
+										variant="ghost"
+										size="sm"
+										className="w-full justify-start"
 										type="button"
-										className="hover:bg-muted/50 h-7 w-full rounded-xl px-2 text-left text-[0.8125rem]"
 										onClick={() => {
 											onChange([...new Set([...selectedIds, ...matches.map((m) => m.id)])]);
 											setOpen(false);
 										}}
 									>
 										Enable all ({matches.length})
-									</button>
+									</Button>
 								)}
 								{matches.length === 0 ? (
 									<div className="text-muted-foreground pt-4 pb-6 text-center text-xs">{labels.empty}</div>
 								) : (
 									matches.map((item) => (
-										<button
+										<Button
+											variant="ghost"
+											size="sm"
+											className="w-full justify-between gap-2"
 											key={item.id}
 											type="button"
 											aria-pressed={selectedIds.includes(item.id)}
-											className="hover:bg-muted/50 flex h-7 w-full items-center justify-between gap-2 rounded-xl px-2 text-left text-[0.8125rem]"
 											onClick={() => {
 												toggle(item.id);
 												setOpen(false);
@@ -165,7 +176,7 @@ export function ItemPicker({
 										>
 											<span className="min-w-0 flex-1 truncate">{item.name || item.id}</span>
 											{selectedIds.includes(item.id) && <Check className="text-muted-foreground size-3.5 shrink-0" />}
-										</button>
+										</Button>
 									))
 								)}
 							</div>
@@ -189,17 +200,13 @@ export function ItemPicker({
 						</div>
 					))}
 					{shown.some((i) => !(lockGlobal && i.is_global)) && (
-						<button
-							type="button"
-							className="text-muted-foreground text-xs hover:underline"
-							onClick={() => onChange([])}
-						>
+						<Button variant="link" size="xs" type="button" onClick={() => onChange([])}>
 							Disable all
-						</button>
+						</Button>
 					)}
 				</div>
 			</div>
-			{footnote && <div className="text-muted-foreground/70 text-xs">{footnote}</div>}
+			{footnote && <div className="text-foreground-muted text-xs">{footnote}</div>}
 		</div>
 	);
 }
@@ -233,24 +240,22 @@ export function BaseModelSelect({
 			}}
 		>
 			<PopoverTrigger asChild>
-				<button
+				<Button
+					variant="outline"
+					className={cn('w-full justify-between', !current && 'text-foreground-muted')}
 					type="button"
 					aria-label="Base model"
-					className={cn(
-						'border-border flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs',
-						!current && 'text-muted-foreground'
-					)}
 				>
 					<span className="truncate">{current?.label ?? value ?? placeholder}</span>
 					<ChevronDown className="size-3.5 shrink-0" />
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0.5">
 				<div className="flex items-center px-1.5 pb-0.5">
 					<Search className="mr-1.5 size-3.5 shrink-0" />
 					<input
 						autoFocus
-						className="w-full bg-transparent py-0.5 text-[0.8125rem] outline-hidden"
+						className="w-full bg-transparent py-0.5 text-dense"
 						aria-label="Search a model"
 						placeholder="Search a model"
 						value={query}
@@ -262,10 +267,12 @@ export function BaseModelSelect({
 						<div className="text-muted-foreground py-4 text-center text-xs">No results found</div>
 					) : (
 						shown.map((item) => (
-							<button
+							<Button
+								variant="ghost"
+								size="sm"
+								className="w-full justify-between gap-2"
 								key={item.value}
 								type="button"
-								className="hover:bg-muted/50 flex h-7 w-full items-center justify-between gap-2 rounded-xl px-2 text-left text-[0.8125rem]"
 								onClick={() => {
 									onChange(item.value);
 									setOpen(false);
@@ -273,7 +280,7 @@ export function BaseModelSelect({
 							>
 								<span className="min-w-0 flex-1 truncate">{item.label}</span>
 								{item.value === value && <Check className="size-3.5 shrink-0" />}
-							</button>
+							</Button>
 						))
 					)}
 				</div>

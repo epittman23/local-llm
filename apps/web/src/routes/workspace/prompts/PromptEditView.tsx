@@ -10,8 +10,8 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import {
 	deletePromptHistoryVersion,
@@ -23,11 +23,11 @@ import {
 } from '@/lib/apis/prompts';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { copyToClipboard, cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { routePaths } from '@/routes/routePaths';
-import { type EditablePrompt, type PromptDraft, isValidCommand } from './promptTypes';
+import { type EditablePrompt, isValidCommand, type PromptDraft } from './promptTypes';
 
 type HistoryEntry = {
 	id: string;
@@ -338,7 +338,7 @@ export function PromptEditView({
 						<div className="my-2">
 							<div className="text-muted-foreground text-xs">Prompt Content</div>
 							<textarea
-								className="mt-1 w-full resize-none bg-transparent text-xs outline-hidden"
+								className="mt-1 w-full resize-none bg-transparent text-xs"
 								placeholder="Write a summary in 50 words that summarizes {{topic}}."
 								aria-label="Prompt Content"
 								rows={6}
@@ -350,7 +350,7 @@ export function PromptEditView({
 						<div className="my-2">
 							<div className="text-muted-foreground text-xs">Commit Message (optional)</div>
 							<input
-								className="mt-1 w-full bg-transparent text-xs outline-hidden"
+								className="mt-1 w-full bg-transparent text-xs"
 								placeholder="Describe what changed..."
 								aria-label="Commit Message"
 								value={commitMessage}
@@ -371,19 +371,21 @@ export function PromptEditView({
 				</DialogContent>
 			</Dialog>
 
-			<button
+			<Button
+				variant="ghost"
+				size="sm"
+				className="mb-1 w-fit"
 				type="button"
-				className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
 				onClick={() => navigate(routePaths.workspacePrompts)}
 			>
 				<ChevronLeft className="size-3" strokeWidth={2} />
 				<span>Back</span>
-			</button>
+			</Button>
 
 			<div className="flex shrink-0 items-start justify-between gap-3 pb-1">
 				<div className="min-w-0 flex-1">
 					<input
-						className="w-full bg-transparent text-sm outline-hidden"
+						className="w-full bg-transparent text-sm"
 						placeholder="Prompt Name"
 						aria-label="Prompt Name"
 						value={name}
@@ -397,7 +399,7 @@ export function PromptEditView({
 						<div className="flex min-w-0 flex-1 items-center gap-0.5">
 							<span>/</span>
 							<input
-								className="min-w-0 flex-1 bg-transparent outline-hidden"
+								className="min-w-0 flex-1 bg-transparent"
 								placeholder="command"
 								aria-label="Command"
 								value={command}
@@ -444,16 +446,18 @@ export function PromptEditView({
 					/>
 				</div>
 				<Tip content="Click to copy ID">
-					<button
+					<Button
+						variant="ghost"
+						size="xs"
+						className="max-w-56 min-w-0 shrink-0 truncate font-mono"
 						type="button"
-						className="text-muted-foreground hover:text-foreground max-w-56 min-w-0 shrink-0 truncate rounded-md px-1 py-0.5 font-mono text-xs transition"
 						onClick={() => {
 							copyToClipboard(prompt.id);
 							toast.success('ID copied to clipboard');
 						}}
 					>
 						{prompt.id}
-					</button>
+					</Button>
 				</Tip>
 			</div>
 
@@ -475,13 +479,9 @@ export function PromptEditView({
 								{selected.id === versionId ? (
 									<span className="text-muted-foreground inline-flex items-center text-xs">Live</span>
 								) : (
-									<button
-										type="button"
-										className="text-muted-foreground hover:text-foreground text-xs transition hover:underline"
-										onClick={() => setAsProduction(selected)}
-									>
+									<Button variant="link" size="xs" type="button" onClick={() => setAsProduction(selected)}>
 										Set as Production
-									</button>
+									</Button>
 								)}
 								<PromptHistoryMenu
 									isProduction={selected.id === versionId}
@@ -493,11 +493,11 @@ export function PromptEditView({
 					<div className="relative min-h-0 flex-1">
 						<div className="absolute top-2 right-2 z-10">
 							<Button variant="ghost" size="icon-sm" aria-label="Copy content" onClick={copyContent}>
-								{contentCopied ? <Check className="text-green-500" /> : <Clipboard />}
+								{contentCopied ? <Check className="text-success" /> : <Clipboard />}
 							</Button>
 						</div>
 						<div className="bg-muted/40 h-full overflow-y-auto rounded-lg px-3 py-2">
-							<pre className="pr-8 font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap">{shownContent}</pre>
+							<pre className="pr-8 font-mono text-caption leading-relaxed whitespace-pre-wrap">{shownContent}</pre>
 						</div>
 					</div>
 				</div>

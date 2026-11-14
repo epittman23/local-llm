@@ -1,23 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-	KB_DIR_MOVE,
-	KB_FILE_MOVE,
 	announceContentSaved,
 	clampPage,
 	createMissingDirectories,
+	type DirectoryFileEntry,
+	type DirectoryManifestEntry,
 	deletedFileIds,
 	filesToUpload,
+	gatherDroppedFiles,
 	getDirectoryUploadPath,
 	hasHiddenFolder,
+	KB_DIR_MOVE,
+	KB_FILE_MOVE,
 	knowledgeMetaPreview,
 	readMovePayload,
 	replacedFileIds,
+	type SyncDiff,
 	syncUploads,
-	takeDroppedItems,
-	gatherDroppedFiles,
-	type DirectoryFileEntry,
-	type DirectoryManifestEntry,
-	type SyncDiff
+	takeDroppedItems
 } from './knowledgeFiles';
 
 const entry = (path: string, filename: string): DirectoryManifestEntry => ({

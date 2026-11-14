@@ -59,7 +59,7 @@ export function PromptSuggestionsEditor({
 	const suggestions = value.map(shapeSuggestion);
 	const update = (i: number, patch: Partial<PromptSuggestion>) =>
 		onChange(suggestions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
-	const field = 'w-full bg-transparent text-[0.8125rem] leading-5 outline-hidden placeholder:text-muted-foreground/50';
+	const field = 'w-full bg-transparent text-dense leading-5 placeholder:text-foreground-muted';
 
 	return (
 		<div className="space-y-2">
@@ -156,14 +156,16 @@ export function PromptSuggestionsEditor({
 									onChange={(e) => update(i, { content: e.target.value })}
 								/>
 							</div>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								className="shrink-0"
 								type="button"
-								className="text-muted-foreground hover:text-foreground shrink-0 pt-1"
 								aria-label="Remove prompt suggestion"
 								onClick={() => onChange(suggestions.filter((_, idx) => idx !== i))}
 							>
 								<X className="size-3.5" />
-							</button>
+							</Button>
 						</div>
 					))}
 				</div>

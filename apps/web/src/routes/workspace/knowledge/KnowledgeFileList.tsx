@@ -2,6 +2,7 @@ import { ChevronRight, Download, File as FileIcon, Folder, MoreHorizontal, Penci
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -47,7 +48,7 @@ function RenameInput({
 			ref={ref}
 			value={value}
 			aria-label="Rename"
-			className="w-full border-none bg-transparent text-xs outline-hidden"
+			className="w-full border-none bg-transparent text-xs"
 			onChange={(e) => setValue(e.target.value)}
 			onKeyDown={(e) => {
 				if (e.key === 'Enter') onCommit(value);
@@ -94,41 +95,38 @@ export function KnowledgeBreadcrumbs({
 			if (payload) onMove(payload, target);
 		}
 	});
-	const crumbClass = (active: boolean, index: number) =>
-		cn(
-			'shrink-0 py-0.5 text-xs transition hover:underline',
-			active ? 'text-foreground' : 'text-muted-foreground',
-			over === index && 'bg-muted rounded-lg'
-		);
+	const crumbActive = (active: boolean) => (active ? 'text-foreground' : 'text-foreground-muted');
 
 	return (
 		<div ref={el} className="flex min-w-0 flex-1 items-center overflow-x-auto">
-			<button
+			<Button
+				variant="ghost"
+				size="xs"
+				className={cn('shrink-0', crumbActive(breadcrumbs.length === 0), over === -1 && 'bg-surface-3')}
 				type="button"
-				className={crumbClass(breadcrumbs.length === 0, -1)}
 				onClick={() => onNavigate(null)}
 				{...dropProps(-1, null)}
 			>
 				{rootLabel}
-			</button>
+			</Button>
 			{breadcrumbs.map((crumb, i) => (
 				<span key={crumb.id} className="flex items-center">
-					<ChevronRight className="text-muted-foreground/50 mx-0.5 size-3 shrink-0" />
-					<button
+					<ChevronRight className="text-foreground-muted mx-0.5 size-3 shrink-0" />
+					<Button
+						variant="ghost"
+						size="xs"
+						className={cn('shrink-0', crumbActive(i === breadcrumbs.length - 1), over === i && 'bg-surface-3')}
 						type="button"
-						className={crumbClass(i === breadcrumbs.length - 1, i)}
 						onClick={() => onNavigate(crumb.id)}
 						{...dropProps(i, crumb.id)}
 					>
 						{crumb.name}
-					</button>
+					</Button>
 				</span>
 			))}
 		</div>
 	);
 }
-
-const menuButton = 'hover:bg-muted rounded-full p-1 transition';
 
 /**
  * Ports KnowledgeBase/Files.svelte and DirectoryRow.svelte: directories first,
@@ -198,18 +196,20 @@ export function KnowledgeFileList({
 					}}
 				>
 					<div className="flex items-center">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-xs"
 							type="button"
-							className="rounded-full p-1"
 							aria-label={`Open ${dir.name}`}
 							onClick={() => onOpenDirectory(dir.id)}
 						>
 							<Folder className="size-3.5" />
-						</button>
+						</Button>
 					</div>
-					<button
+					<Button
+						variant="ghost"
+						className="relative h-auto flex-1 justify-between gap-1 p-2 text-left"
 						type="button"
-						className="relative flex flex-1 items-center justify-between gap-1 rounded-xl p-2 text-left"
 						onClick={() => renamingDir !== dir.id && onOpenDirectory(dir.id)}
 					>
 						<div className="line-clamp-1 text-xs">
@@ -228,19 +228,17 @@ export function KnowledgeFileList({
 						</div>
 						{dir.updated_at && (
 							<Tip content={dayjs(dir.updated_at * 1000).format('LLLL')}>
-								<div className="text-muted-foreground/70 shrink-0 text-xs">
-									{dayjs(dir.updated_at * 1000).fromNow()}
-								</div>
+								<div className="text-foreground-muted shrink-0 text-xs">{dayjs(dir.updated_at * 1000).fromNow()}</div>
 							</Tip>
 						)}
-					</button>
+					</Button>
 					{writeAccess && (
 						<div className="flex items-center">
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
-									<button type="button" className={menuButton} aria-label={`${dir.name} menu`}>
+									<Button variant="ghost" size="icon-xs" type="button" aria-label={`${dir.name} menu`}>
 										<MoreHorizontal className="size-3.5" />
-									</button>
+									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="end" className="min-w-36">
 									<DropdownMenuItem onSelect={() => setRenamingDir(dir.id)}>
@@ -264,7 +262,7 @@ export function KnowledgeFileList({
 					<span className="line-clamp-1">
 						{item.name}
 						{item.size ? (
-							<span className="text-muted-foreground ml-1 text-[0.6875rem]">{formatFileSize(item.size)}</span>
+							<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(item.size)}</span>
 						) : null}
 					</span>
 				</div>
@@ -289,19 +287,21 @@ export function KnowledgeFileList({
 							{isUploading ? (
 								<Spinner className="size-3.5" />
 							) : (
-								<button
+								<Button
+									variant="ghost"
+									size="icon-xs"
 									type="button"
-									className="rounded-full p-1"
 									aria-label={`Open ${name}`}
 									onClick={() => fileId && onSelect(fileId)}
 								>
 									<FileIcon className="size-3.5" />
-								</button>
+								</Button>
 							)}
 						</div>
-						<button
+						<Button
+							variant="ghost"
+							className="relative h-auto flex-1 justify-between gap-1 p-2 text-left"
 							type="button"
-							className="relative flex flex-1 items-center justify-between gap-1 rounded-xl p-2 text-left"
 							onClick={() => renamingFile === null && fileId && onSelect(fileId)}
 							onDoubleClick={() => writeAccess && setRenamingFile(fileId ?? null)}
 						>
@@ -319,9 +319,7 @@ export function KnowledgeFileList({
 									<>
 										{name}
 										{file.meta?.size ? (
-											<span className="text-muted-foreground ml-1 text-[0.6875rem]">
-												{formatFileSize(file.meta.size)}
-											</span>
+											<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(file.meta.size)}</span>
 										) : null}
 									</>
 								)}
@@ -329,7 +327,7 @@ export function KnowledgeFileList({
 							<div className="flex shrink-0 items-center gap-2">
 								{file.updated_at && (
 									<Tip content={dayjs(file.updated_at * 1000).format('LLLL')}>
-										<div className="text-muted-foreground/70 text-xs">{dayjs(file.updated_at * 1000).fromNow()}</div>
+										<div className="text-foreground-muted text-xs">{dayjs(file.updated_at * 1000).fromNow()}</div>
 									</Tip>
 								)}
 								{file.user && (
@@ -340,14 +338,14 @@ export function KnowledgeFileList({
 									</Tip>
 								)}
 							</div>
-						</button>
+						</Button>
 						{writeAccess && (
 							<div className="flex items-center">
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
-										<button type="button" className={menuButton} aria-label={`${name} menu`}>
+										<Button variant="ghost" size="icon-xs" type="button" aria-label={`${name} menu`}>
 											<MoreHorizontal className="size-3.5" />
-										</button>
+										</Button>
 									</DropdownMenuTrigger>
 									<DropdownMenuContent align="end" className="min-w-36">
 										<DropdownMenuItem onSelect={() => setRenamingFile(fileId ?? null)}>

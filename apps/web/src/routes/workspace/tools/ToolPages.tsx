@@ -7,7 +7,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { refusedForVersion } from '@/lib/utils/pluginVersion';
 import { routePaths } from '@/routes/routePaths';
 import { ToolkitEditor } from './ToolkitEditor';
-import { type ToolDraft, sanitizeIncomingTool } from './toolTypes';
+import { sanitizeIncomingTool, type ToolDraft } from './toolTypes';
 
 const payload = (t: ToolDraft) => ({
 	id: t.id,

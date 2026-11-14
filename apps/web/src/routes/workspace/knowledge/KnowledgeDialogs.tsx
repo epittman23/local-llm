@@ -112,7 +112,7 @@ export function NewDirectoryDialog({
 				>
 					<div className="text-muted-foreground mb-1 text-xs">Name</div>
 					<input
-						className="placeholder:text-muted-foreground/60 w-full bg-transparent text-sm outline-hidden"
+						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
 						aria-label="Name"
 						value={name}
 						onChange={(e) => setName(e.target.value)}
@@ -171,14 +171,14 @@ export function AddTextDialog({
 					}}
 				>
 					<input
-						className="w-full bg-transparent text-sm outline-hidden"
+						className="w-full bg-transparent text-sm"
 						aria-label="Title"
 						placeholder="Title"
 						value={name}
 						onChange={(e) => setName(e.target.value)}
 					/>
 					<textarea
-						className="placeholder:text-muted-foreground/60 mt-2 h-64 w-full resize-none bg-transparent text-sm outline-hidden"
+						className="placeholder:text-foreground-muted mt-2 h-64 w-full resize-none bg-transparent text-sm"
 						aria-label="Content"
 						placeholder="Write something..."
 						value={content}

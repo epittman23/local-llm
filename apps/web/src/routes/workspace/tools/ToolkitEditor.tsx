@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import { Suspense, lazy, useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
@@ -126,20 +126,22 @@ export function ToolkitEditor({
 					else setShowConfirm(true);
 				}}
 			>
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="mb-1 w-fit"
 					type="button"
-					className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
 					onClick={() => navigate(routePaths.workspaceTools)}
 				>
 					<ChevronLeft className="size-3" strokeWidth={2} />
 					<span>Back</span>
-				</button>
+				</Button>
 
 				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
 					<div className="min-w-0 flex-1">
 						<Tip content="e.g. My Tools" side="top">
 							<input
-								className="w-full bg-transparent text-sm outline-hidden"
+								className="w-full bg-transparent text-sm"
 								type="text"
 								placeholder="Tool Name"
 								aria-label="Tool Name"
@@ -156,7 +158,7 @@ export function ToolkitEditor({
 							) : (
 								<Tip content="e.g. my_tools" side="top">
 									<input
-										className="min-w-32 flex-1 bg-transparent font-mono outline-hidden"
+										className="min-w-32 flex-1 bg-transparent font-mono"
 										type="text"
 										placeholder="Tool ID"
 										aria-label="Tool ID"
@@ -168,7 +170,7 @@ export function ToolkitEditor({
 							)}
 							<Tip content="e.g. Tools for performing various operations" side="top">
 								<input
-									className="min-w-0 flex-1 bg-transparent outline-hidden"
+									className="min-w-0 flex-1 bg-transparent"
 									type="text"
 									placeholder="Tool Description"
 									aria-label="Tool Description"
@@ -197,7 +199,7 @@ export function ToolkitEditor({
 							value={tool?.content ?? ''}
 							boilerplate={toolBoilerplate}
 							lang="python"
-							className="text-[0.6875rem]"
+							className="text-caption"
 							onChange={onCodeChange}
 							onSave={() => form.current?.requestSubmit()}
 						/>
@@ -225,7 +227,7 @@ export function ToolkitEditor({
 export function CodeExecutionWarning() {
 	return (
 		<div className="text-sm">
-			<div className="rounded-lg bg-yellow-500/20 px-4 py-3 text-yellow-700 dark:text-yellow-200">
+			<div className="rounded-lg bg-warning/15 px-4 py-3 text-warning">
 				<div>Please carefully review the following warnings:</div>
 				<ul className="mt-1 list-disc pl-4 text-xs">
 					<li>Tools have a function calling system that allows arbitrary code execution.</li>

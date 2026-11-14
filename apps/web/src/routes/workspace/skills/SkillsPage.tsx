@@ -6,11 +6,12 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
+import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -36,7 +37,7 @@ import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
-import { type SkillListItem, parseSkillImport } from './skillTypes';
+import { parseSkillImport, type SkillListItem } from './skillTypes';
 
 const PER_PAGE = 30;
 
@@ -227,8 +228,6 @@ export function SkillsPage() {
 		document.title = `Skills / ${webuiName}`;
 	}, [webuiName]);
 
-	const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
-
 	return (
 		<div className="space-y-1">
 			<ConfirmDialog
@@ -316,15 +315,13 @@ export function SkillsPage() {
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={skill.id} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
-													{skill.name}
-												</div>
+												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{skill.name}</div>
 											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
+											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
 												/{skill.id}
 											</div>
 											<Tip content={dayjs(updatedAt).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
 													{dayjs(updatedAt).fromNow()}
 												</div>
 											</Tip>
@@ -333,14 +330,14 @@ export function SkillsPage() {
 										</div>
 										{skill.description && (
 											<Tip content={skill.description} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
 													{skill.description}
 												</div>
 											</Tip>
 										)}
 									</div>
 
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
+									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
 										<Tip content={skill.user?.email ?? 'Deleted User'} side="top">
 											<div className="truncate">
 												{capitalizeFirstLetter(skill.user?.name ?? skill.user?.email ?? 'Deleted User')}
@@ -352,9 +349,10 @@ export function SkillsPage() {
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
 											{shiftKey ? (
 												<Tip content="Delete">
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={rowIconButton}
 														aria-label="Delete"
 														onClick={(e) => {
 															e.stopPropagation();
@@ -362,21 +360,22 @@ export function SkillsPage() {
 														}}
 													>
 														<Trash2 className="size-4" />
-													</button>
+													</Button>
 												</Tip>
 											) : (
 												<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
 													<DropdownMenu>
 														<Tip content="More">
 															<DropdownMenuTrigger asChild>
-																<button
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
 																	type="button"
-																	className={rowIconButton}
 																	aria-label="Skill Menu"
 																	onClick={(e) => e.stopPropagation()}
 																>
 																	<MoreHorizontal className="size-4" />
-																</button>
+																</Button>
 															</DropdownMenuTrigger>
 														</Tip>
 														<DropdownMenuContent align="end" className="min-w-40">

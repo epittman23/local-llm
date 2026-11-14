@@ -112,20 +112,22 @@ export function SkillEditor({
 					submit();
 				}}
 			>
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="mb-1 w-fit"
 					type="button"
-					className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
 					onClick={() => navigate(routePaths.workspaceSkills)}
 				>
 					<ChevronLeft className="size-3" strokeWidth={2} />
 					<span>Back</span>
-				</button>
+				</Button>
 
 				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
 					<div className="min-w-0 flex-1">
 						<Tip content="e.g. Code Review Guidelines" side="top">
 							<input
-								className="w-full bg-transparent text-sm outline-hidden"
+								className="w-full bg-transparent text-sm"
 								type="text"
 								placeholder="Skill Name"
 								aria-label="Skill Name"
@@ -143,7 +145,7 @@ export function SkillEditor({
 							) : (
 								<Tip content="e.g. code-review-guidelines" side="top">
 									<input
-										className="min-w-32 flex-1 bg-transparent font-mono outline-hidden"
+										className="min-w-32 flex-1 bg-transparent font-mono"
 										type="text"
 										placeholder="Skill ID"
 										aria-label="Skill ID"
@@ -155,7 +157,7 @@ export function SkillEditor({
 							)}
 							<Tip content="e.g. Step-by-step instructions for code reviews" side="top">
 								<input
-									className="min-w-0 flex-1 bg-transparent outline-hidden"
+									className="min-w-0 flex-1 bg-transparent"
 									type="text"
 									placeholder="Skill Description"
 									aria-label="Skill Description"
@@ -178,11 +180,11 @@ export function SkillEditor({
 				<div className="bg-muted/40 min-h-0 flex-1 overflow-hidden rounded-lg">
 					{disabled ? (
 						<div className="h-full overflow-y-auto px-3 py-2">
-							<pre className="font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap">{content}</pre>
+							<pre className="font-mono text-caption leading-relaxed whitespace-pre-wrap">{content}</pre>
 						</div>
 					) : (
 						<textarea
-							className="placeholder:text-muted-foreground h-full w-full resize-none bg-transparent px-3 py-2 font-mono text-[0.6875rem] leading-relaxed outline-hidden"
+							className="placeholder:text-muted-foreground h-full w-full resize-none bg-transparent px-3 py-2 font-mono text-caption leading-relaxed"
 							value={content}
 							onChange={(e) => onContentChange(e.target.value)}
 							placeholder="Enter skill instructions in markdown..."

@@ -58,7 +58,7 @@ function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) 
 				<Search className="mr-1.5 size-3.5 shrink-0" />
 				<input
 					autoFocus
-					className="w-full bg-transparent py-0.5 text-[0.8125rem] outline-hidden"
+					className="w-full bg-transparent py-0.5 text-dense"
 					aria-label="Search Knowledge"
 					placeholder="Search Knowledge"
 					value={query}
@@ -70,15 +70,17 @@ function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) 
 					<div className="text-muted-foreground py-4 text-center text-xs">No knowledge found</div>
 				) : (
 					items.map((item) => (
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
+							className="w-full justify-start gap-2"
 							key={`${item.type}-${item.id}`}
 							type="button"
-							className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-xl px-2 py-1 text-left text-[0.8125rem]"
 							onClick={() => onPick(item)}
 						>
 							{iconFor(item)}
 							<span className="min-w-0 flex-1 truncate">{item.name}</span>
-						</button>
+						</Button>
 					))
 				)}
 			</div>
@@ -216,9 +218,9 @@ export function KnowledgePicker({
 					<div className="flex shrink-0 items-center gap-2">
 						<Popover open={open} onOpenChange={setOpen}>
 							<PopoverTrigger asChild>
-								<button type="button" className="text-muted-foreground min-w-0 truncate text-xs hover:underline">
+								<Button variant="link" size="xs" className="min-w-0 truncate" type="button">
 									Select Knowledge
-								</button>
+								</Button>
 							</PopoverTrigger>
 							<PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)] p-0.5">
 								<KnowledgeSearch
@@ -230,14 +232,15 @@ export function KnowledgePicker({
 							</PopoverContent>
 						</Popover>
 						{canUpload && (
-							<button
+							<Button
+								variant="link"
+								size="xs"
 								type="button"
-								className="text-muted-foreground text-xs hover:underline"
 								aria-label="Upload Files"
 								onClick={() => input.current?.click()}
 							>
 								Upload
-							</button>
+							</Button>
 						)}
 					</div>
 				</div>
@@ -249,23 +252,27 @@ export function KnowledgePicker({
 						{items.map((file, i) => (
 							<Tip key={file.itemId ?? `${file.id}-${i}`} content={file.description || file.name || file.id}>
 								<div className="bg-muted flex items-center gap-1 rounded-lg px-2 py-1 text-xs">
-									<button
+									<Button
+										variant="ghost"
+										size="sm"
+										className="min-w-0 gap-1.5"
 										type="button"
 										aria-label="Edit"
-										className="flex min-w-0 items-center gap-1.5"
 										onClick={() => setEditing(i)}
 									>
 										<span className="text-muted-foreground shrink-0">{iconFor(file)}</span>
 										<span className="min-w-0 truncate">{file.name || file.id}</span>
-									</button>
+									</Button>
 									{file.status === 'uploading' && <span className="text-muted-foreground shrink-0">Uploading</span>}
-									<button
+									<Button
+										variant="ghost"
+										size="icon-xs"
 										type="button"
 										aria-label="Remove File"
 										onClick={() => commit(items.filter((_, idx) => idx !== i))}
 									>
 										<X className="size-3" />
-									</button>
+									</Button>
 								</div>
 							</Tip>
 						))}
@@ -275,7 +282,7 @@ export function KnowledgePicker({
 					</div>
 				)}
 			</div>
-			<div className="text-muted-foreground/70 text-xs">
+			<div className="text-foreground-muted text-xs">
 				To attach knowledge base here, add them to the "Knowledge" workspace first.
 			</div>
 		</div>

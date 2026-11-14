@@ -8,36 +8,36 @@ import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Button } from '@/components/ui/button';
-import { getModelsDefaults } from '@/lib/apis/configs';
+import { getModels } from '@/lib/apis';
 import { getVoices } from '@/lib/apis/audio';
+import { getModelsDefaults } from '@/lib/apis/configs';
 import { getFunctions } from '@/lib/apis/functions';
 import { getBaseModelTags, getModelTags } from '@/lib/apis/models';
 import { getSkills } from '@/lib/apis/skills';
 import { getTerminalServers } from '@/lib/apis/terminal';
 import { getTools } from '@/lib/apis/tools';
-import { getModels } from '@/lib/apis';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { BaseModelSelect, CheckboxGrid, ItemPicker } from './EditorPickers';
 import { KnowledgePicker } from './KnowledgePicker';
-import { type PromptSuggestion, PromptSuggestionsEditor } from './PromptSuggestionsEditor';
+import { availableFeatures, builtinToolItems, capabilityItems, featureItems } from './modelEditorLabels';
 import {
+	buildModelInfo,
 	DEFAULT_PROFILE_IMAGE,
 	type EditorState,
-	type ModelInfo,
-	buildModelInfo,
 	getBaseModelItems,
 	getChatVariablesPreview,
 	initialEditorState,
+	type ModelInfo,
 	modelIdFromName
 } from './modelEditorLogic';
-import { availableFeatures, builtinToolItems, capabilityItems, featureItems } from './modelEditorLabels';
+import { type PromptSuggestion, PromptSuggestionsEditor } from './PromptSuggestionsEditor';
 
 const sectionLabel = 'text-xs text-muted-foreground';
 
 /** An endpoint that fails or answers with something unexpected counts as an empty list. */
 const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
-const fieldClass = 'bg-transparent outline-hidden placeholder:text-muted-foreground/50';
+const fieldClass = 'bg-transparent placeholder:text-foreground-muted';
 
 /** Resizes a picked image to a 250px square (cover-cropped) WebP data URL; animated formats are kept as they are. */
 function readProfileImage(file: File): Promise<string> {
@@ -220,14 +220,10 @@ function EditorForm({
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
 			/>
 
-			<button
-				type="button"
-				className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
-				onClick={onBack}
-			>
+			<Button variant="ghost" size="sm" className="mb-1 w-fit" type="button" onClick={onBack}>
 				<ChevronLeft className="size-3" strokeWidth={2} />
 				<span>Back</span>
-			</button>
+			</Button>
 
 			<div className="min-h-0 w-full flex-1 overflow-y-auto pr-1">
 				<input
@@ -277,13 +273,15 @@ function EditorForm({
 										</span>
 									</button>
 									{meta.profile_image_url && meta.profile_image_url !== DEFAULT_PROFILE_IMAGE && (
-										<button
+										<Button
+											variant="ghost"
+											size="xs"
+											className="absolute top-full left-1/2 mt-1 -translate-x-1/2 opacity-0 group-hover:opacity-60"
 											type="button"
-											className="text-muted-foreground hover:text-foreground absolute top-full left-1/2 mt-1 -translate-x-1/2 text-[0.5rem] leading-none opacity-0 transition group-hover:opacity-60"
 											onClick={() => setMeta({ profile_image_url: DEFAULT_PROFILE_IMAGE })}
 										>
 											Reset
-										</button>
+										</Button>
 									)}
 								</div>
 								<div className="min-w-0 flex-1">
@@ -329,14 +327,15 @@ function EditorForm({
 							<div>
 								<div className="mb-1 flex w-full items-center justify-between">
 									<div className={sectionLabel}>Description</div>
-									<button
+									<Button
+										variant="ghost"
+										size="xs"
 										type="button"
-										className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs"
 										aria-label={state.enableDescription ? 'Custom description enabled' : 'Default description enabled'}
 										onClick={() => patch({ enableDescription: !state.enableDescription })}
 									>
 										{state.enableDescription ? 'Custom' : 'Default'}
-									</button>
+									</Button>
 								</div>
 								{state.enableDescription && (
 									<textarea
@@ -400,7 +399,7 @@ function EditorForm({
 											</div>
 										)}
 										{variables.warnings.length > 0 && (
-											<ul className="mt-1 list-disc pl-4 text-amber-600 dark:text-amber-400">
+											<ul className="mt-1 list-disc pl-4 text-warning">
 												{variables.warnings.map((w) => (
 													<li key={w}>{w}</li>
 												))}
@@ -413,13 +412,9 @@ function EditorForm({
 							<div className="my-2">
 								<div className="flex w-full items-center justify-between">
 									<div className={sectionLabel}>Advanced Params</div>
-									<button
-										type="button"
-										className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs"
-										onClick={() => setShowAdvanced((v) => !v)}
-									>
+									<Button variant="ghost" size="xs" type="button" onClick={() => setShowAdvanced((v) => !v)}>
 										{showAdvanced ? 'Hide' : 'Show'}
-									</button>
+									</Button>
 								</div>
 								{showAdvanced && (
 									<div className="mt-2">
@@ -440,9 +435,10 @@ function EditorForm({
 						<div className="my-2">
 							<div className="mb-1 flex w-full items-center justify-between">
 								<div className={sectionLabel}>Prompts</div>
-								<button
+								<Button
+									variant="ghost"
+									size="xs"
 									type="button"
-									className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs"
 									aria-label={
 										(meta.suggestion_prompts ?? null) === null
 											? 'Default prompt suggestions'
@@ -456,7 +452,7 @@ function EditorForm({
 									}
 								>
 									{(meta.suggestion_prompts ?? null) === null ? 'Default' : 'Custom'}
-								</button>
+								</Button>
 							</div>
 							{meta.suggestion_prompts && (
 								<PromptSuggestionsEditor
@@ -632,13 +628,9 @@ function EditorForm({
 						<div className="pb-16">
 							<div className="flex items-center justify-between">
 								<div className="text-sm">JSON Preview</div>
-								<button
-									type="button"
-									className="text-muted-foreground hover:text-foreground text-xs"
-									onClick={() => setShowPreview((v) => !v)}
-								>
+								<Button variant="ghost" size="xs" type="button" onClick={() => setShowPreview((v) => !v)}>
 									{showPreview ? 'Hide' : 'Show'}
-								</button>
+								</Button>
 							</div>
 							{showPreview && (
 								<pre className="bg-muted/50 mt-2 max-h-96 overflow-auto rounded-lg p-3 text-xs">
