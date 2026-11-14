@@ -280,8 +280,11 @@
 :root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"])[aria-invalid="true"] {
 	border-color: var(--danger);
 }
-:root :is([data-slot="checkbox"], [data-slot="switch"]) {
+:root :is([data-slot="checkbox"], [data-slot="checkbox-mark"], [data-slot="switch"]) {
 	border-color: var(--border-control);
+}
+:root [data-slot="checkbox-mark"][data-state="checked"] {
+	border-color: var(--brand);
 }
 :root [data-slot="switch"][data-state="unchecked"] {
 	background-color: var(--surface-3);
@@ -291,6 +294,61 @@
 }
 :root [data-slot="switch"][data-state="checked"] [data-slot="switch-thumb"] {
 	background-color: var(--brand-foreground);
+}
+
+/*
+ * FRM-1, FRM-4, LAY-2, SHP-1: a native <select>. New code uses the shared
+ * Select (FRM-4); the native ones pages still have (toolbars, dialogs) get the
+ * field's edge, fill, radius and least height here, so none has to be
+ * restyled by hand. Skipped: the hidden <select> Radix renders for forms
+ * (aria-hidden), list boxes, and a select inside a composite field, whose box
+ * draws the edge. Width, padding and type stay the caller's; the padding
+ * below is a layered default that a caller's px-* replaces.
+ */
+:root select:not([aria-hidden="true"], [multiple], [size]:not([size="1"]), [data-composite-field] *) {
+	min-height: var(--control-compact);
+	border: 1px solid var(--border-control);
+	border-radius: var(--radius-lg);
+	background-color: var(--surface-1);
+}
+@layer base {
+	:root select:not([aria-hidden="true"], [multiple], [size]:not([size="1"]), [data-composite-field] *) {
+		padding-inline: 0.5rem;
+	}
+}
+:root[data-focus="keyboard"]
+	select:not([aria-hidden="true"], [multiple], [size]:not([size="1"]), [data-composite-field] *):focus-visible {
+	outline-offset: 0;
+	border-color: var(--focus);
+}
+
+/*
+ * TYP-4: on touch every field is at least 16px, so iOS does not zoom the page
+ * when one takes focus. 1em is the size the field inherits; a field set
+ * larger on purpose (a title being edited) keeps its own size.
+ */
+@media (pointer: coarse) {
+	:root
+		:is(
+			input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"]),
+			textarea,
+			select,
+			[contenteditable="true"]
+		):not(
+			[class*="text-title"],
+			[class*="text-heading"],
+			[class*="text-display"],
+			[class*="text-lg"],
+			[class*="text-xl"],
+			[class*="text-2xl"],
+			[class*="text-3xl"]
+		) {
+		font-size: max(16px, 1em);
+	}
+	/* LAY-3: and a native select grows to the touch target, as the shared fields do. */
+	:root select:not([aria-hidden="true"], [multiple], [size]:not([size="1"]), [data-composite-field] *) {
+		min-height: var(--control-touch);
+	}
 }
 
 /*
@@ -344,7 +402,12 @@
 	border: 1px solid var(--border-divider);
 	border-radius: 0.75rem;
 	box-shadow: 0 24px 64px -16px oklch(0 0 0 / 55%);
-	animation-duration: var(--motion-base); /* MOT-1 */
+}
+/* MOT-1. Only with motion allowed: at (0,2,0) it would beat MOT-2's reduce rule below (#1079). */
+@media (prefers-reduced-motion: no-preference) {
+	:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+		animation-duration: var(--motion-base);
+	}
 }
 :root :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"]) {
 	background-color: var(--scrim);
@@ -353,6 +416,11 @@
 :root :is([data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="popover-content"]) {
 	border: 1px solid var(--border-divider);
 	box-shadow: 0 12px 32px -12px oklch(0 0 0 / 50%);
+}
+
+/* DAT-6: a table's scrolling region draws its focus inside, where its frame cannot clip it. */
+:root[data-focus="keyboard"] [data-slot="table-container"]:focus-visible {
+	outline-offset: -2px;
 }
 
 /* DAT-2: figures line up. */

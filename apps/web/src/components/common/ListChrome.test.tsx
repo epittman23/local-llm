@@ -14,6 +14,19 @@ describe('ListSearchBar', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 		expect(onChange).toHaveBeenCalledWith('');
 	});
+
+	it('draws the field as a composite box around the bare input (FRM-1, A11Y-1)', () => {
+		const onChange = vi.fn();
+		render(<ListSearchBar value="" onChange={onChange} placeholder="Search prompts" />);
+		const input = screen.getByRole('textbox', { name: 'Search prompts' });
+		const box = input.closest('[data-composite-field]');
+		expect(box).not.toBeNull();
+		expect(box).toHaveClass('border', 'border-border-control', 'bg-surface-1', 'rounded-lg', 'h-(--control)');
+		expect(input).toHaveClass('bg-transparent');
+		expect(input.className).not.toMatch(/\bborder\b/);
+		fireEvent.change(input, { target: { value: 'variance' } });
+		expect(onChange).toHaveBeenCalledWith('variance');
+	});
 });
 
 describe('SortHeaderButton', () => {

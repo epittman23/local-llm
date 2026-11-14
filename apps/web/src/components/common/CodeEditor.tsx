@@ -1,16 +1,86 @@
 import { acceptCompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
-import { indentUnit } from '@codemirror/language';
+import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { Compartment, EditorState } from '@codemirror/state';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap, placeholder } from '@codemirror/view';
-import { EditorView, basicSetup } from 'codemirror';
-import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
+import { tags as t } from '@lezer/highlight';
+import { basicSetup, EditorView } from 'codemirror';
+import { type Ref, useEffect, useImperativeHandle, useRef } from 'react';
 import { toast } from 'sonner';
 import { formatPythonCode } from '@/lib/apis/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
+
+// CNT-2: the editor's colours are the standard's tokens, the same ones the
+// .hljs-* rules in standard.css give a code block, so one piece of code looks
+// the same in an answer and in the editor, in every app theme. The values are
+// CSS variables, so a theme change needs no reconfiguring; only CodeMirror's
+// own light/dark base styles are switched (EditorView.darkTheme below).
+const selection = 'color-mix(in oklch, var(--brand), transparent 65%)';
+const tokenTheme = EditorView.theme({
+	'&': { color: 'var(--foreground-strong)', backgroundColor: 'var(--surface-1)' },
+	'.cm-scroller': { fontFamily: 'var(--font-code)' },
+	'.cm-content': { caretColor: 'var(--foreground-strong)' },
+	'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--foreground-strong)' },
+	'&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+		{ backgroundColor: selection },
+	'.cm-gutters': {
+		backgroundColor: 'var(--surface-1)',
+		color: 'var(--foreground-muted)',
+		borderRight: '1px solid var(--border-divider)'
+	},
+	'.cm-activeLine': { backgroundColor: 'color-mix(in oklch, var(--surface-3), transparent 50%)' },
+	'.cm-activeLineGutter': { backgroundColor: 'var(--surface-3)', color: 'var(--foreground-strong)' },
+	'.cm-placeholder': { color: 'var(--foreground-muted)' },
+	'&.cm-focused .cm-matchingBracket': {
+		backgroundColor: 'var(--surface-3)',
+		outline: '1px solid var(--border-control)'
+	},
+	'.cm-searchMatch': { backgroundColor: 'color-mix(in oklch, var(--series-2), transparent 70%)' },
+	'.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: selection },
+	'.cm-panels': { backgroundColor: 'var(--surface-2)', color: 'var(--foreground-strong)' },
+	'.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--border-divider)' },
+	'.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--border-divider)' },
+	'.cm-tooltip': {
+		backgroundColor: 'var(--surface-2)',
+		color: 'var(--foreground-strong)',
+		border: '1px solid var(--border-divider)'
+	},
+	'.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+		backgroundColor: 'var(--surface-3)',
+		color: 'var(--foreground-strong)'
+	},
+	'.cm-foldPlaceholder': { backgroundColor: 'var(--surface-3)', color: 'var(--foreground-muted)', border: 'none' }
+});
+// The groups match standard.css's .hljs-* rules: keywords and literals, strings,
+// numbers, names being defined, attributes and types, meta, comments.
+const tokenHighlight = HighlightStyle.define([
+	{
+		tag: [t.keyword, t.operatorKeyword, t.modifier, t.bool, t.null, t.atom, t.self, t.special(t.variableName)],
+		color: 'var(--series-3)'
+	},
+	{ tag: [t.string, t.special(t.string), t.regexp, t.inserted, t.character], color: 'var(--series-4)' },
+	{ tag: [t.number, t.deleted, t.escape], color: 'var(--series-5)' },
+	{
+		tag: [
+			t.function(t.variableName),
+			t.function(t.definition(t.variableName)),
+			t.definition(t.className),
+			t.className,
+			t.heading,
+			t.tagName
+		],
+		color: 'var(--series-1)'
+	},
+	{ tag: [t.attributeName, t.propertyName, t.typeName, t.labelName, t.namespace], color: 'var(--series-2)' },
+	{ tag: [t.meta, t.annotation, t.processingInstruction, t.link, t.url], color: 'var(--series-6)' },
+	{ tag: t.comment, color: 'var(--foreground-muted)' },
+	{ tag: t.invalid, color: 'var(--danger)' },
+	{ tag: t.strong, fontWeight: '650' },
+	{ tag: t.emphasis, fontStyle: 'italic' },
+	{ tag: t.link, textDecoration: 'underline' }
+]);
 
 export type CodeEditorHandle = {
 	/** Formats the buffer with the backend's Black. Resolves false if it could not. */
@@ -20,7 +90,7 @@ export type CodeEditorHandle = {
 
 /**
  * Ports common/CodeEditor.svelte: a CodeMirror 6 editor with basicSetup, the
- * language picked from `lang`, One Dark when the page is dark, Tab to accept a
+ * language picked from `lang`, the standard's code colours (CNT-2), Tab to accept a
  * completion, Ctrl/Cmd+S to `onSave`, and Ctrl/Cmd+Shift+F to format.
  *
  * Uncontrolled after mount, on purpose: CodeMirror owns the document, `value`
@@ -96,7 +166,9 @@ export default function CodeEditor({
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) cb.current.onChange?.(update.state.doc.toString());
 					}),
-					theme.current.of(dark() ? oneDark : []),
+					tokenTheme,
+					syntaxHighlighting(tokenHighlight),
+					theme.current.of(EditorView.darkTheme.of(dark())),
 					language.current.of([])
 				]
 			}),
@@ -107,7 +179,7 @@ export default function CodeEditor({
 		if (value === '' && boilerplate !== '') cb.current.onChange?.(boilerplate);
 
 		const observer = new MutationObserver(() =>
-			editor.dispatch({ effects: theme.current.reconfigure(dark() ? oneDark : []) })
+			editor.dispatch({ effects: theme.current.reconfigure(EditorView.darkTheme.of(dark())) })
 		);
 		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
