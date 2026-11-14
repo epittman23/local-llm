@@ -1,0 +1,127 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+
+// NAV-4: a dialog opened from state, not through its Trigger, still returns
+// focus to what opened it when it closes.
+
+type Kind = 'dialog' | 'alert' | 'sheet';
+
+function Harness({
+	kind,
+	onCloseAutoFocus,
+	onOpenAutoFocus
+}: {
+	kind: Kind;
+	onCloseAutoFocus?: (event: Event) => void;
+	onOpenAutoFocus?: (event: Event) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const handlers = { onCloseAutoFocus, onOpenAutoFocus };
+	return (
+		<>
+			<button type="button" onClick={() => setOpen(true)}>
+				Open
+			</button>
+			<button type="button">Elsewhere</button>
+			{kind === 'dialog' && (
+				<Dialog open={open} onOpenChange={setOpen}>
+					<DialogContent aria-describedby={undefined} {...handlers}>
+						<DialogTitle>Add user</DialogTitle>
+					</DialogContent>
+				</Dialog>
+			)}
+			{kind === 'alert' && (
+				<AlertDialog open={open} onOpenChange={setOpen}>
+					<AlertDialogContent aria-describedby={undefined} {...handlers}>
+						<AlertDialogTitle>Delete it?</AlertDialogTitle>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+					</AlertDialogContent>
+				</AlertDialog>
+			)}
+			{kind === 'sheet' && (
+				<Sheet open={open} onOpenChange={setOpen}>
+					<SheetContent aria-describedby={undefined} {...handlers}>
+						<SheetTitle>Panel</SheetTitle>
+					</SheetContent>
+				</Sheet>
+			)}
+		</>
+	);
+}
+
+const roleOf = (kind: Kind) => (kind === 'alert' ? 'alertdialog' : 'dialog');
+
+async function openThenEscape(kind: Kind) {
+	const opener = screen.getByRole('button', { name: 'Open' });
+	opener.focus();
+	fireEvent.click(opener);
+	const dialog = await screen.findByRole(roleOf(kind));
+	expect(dialog.contains(document.activeElement)).toBe(true);
+	await act(async () => {
+		fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+	});
+	expect(screen.queryByRole(roleOf(kind))).toBeNull();
+	return opener;
+}
+
+describe.each<Kind>(['dialog', 'alert', 'sheet'])('%s focus return', (kind) => {
+	it('returns focus to the button that opened it by state', async () => {
+		render(<Harness kind={kind} />);
+		const opener = await openThenEscape(kind);
+		// Radix's FocusScope fires its unmount auto-focus on a later task.
+		await waitFor(() => expect(document.activeElement).toBe(opener));
+	});
+
+	it('calls the caller’s handlers, and a caller that prevents default keeps focus where it put it', async () => {
+		const onOpenAutoFocus = vi.fn();
+		let elsewhere: HTMLElement | null = null;
+		const onCloseAutoFocus = vi.fn((event: Event) => {
+			event.preventDefault();
+			elsewhere?.focus();
+		});
+		render(<Harness kind={kind} onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus} />);
+		elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+		await openThenEscape(kind);
+		await waitFor(() => expect(onCloseAutoFocus).toHaveBeenCalledOnce());
+		expect(onOpenAutoFocus).toHaveBeenCalledOnce();
+		expect(document.activeElement).toBe(elsewhere);
+	});
+});
+
+describe('focus return when the opener has gone', () => {
+	it('leaves focus to Radix instead of focusing a detached element', async () => {
+		function Gone() {
+			const [open, setOpen] = useState(false);
+			return (
+				<>
+					{!open && (
+						<button type="button" onClick={() => setOpen(true)}>
+							Open
+						</button>
+					)}
+					<Dialog open={open} onOpenChange={setOpen}>
+						<DialogContent aria-describedby={undefined}>
+							<DialogTitle>Gone</DialogTitle>
+						</DialogContent>
+					</Dialog>
+				</>
+			);
+		}
+		render(<Gone />);
+		const opener = screen.getByRole('button', { name: 'Open' });
+		opener.focus();
+		fireEvent.click(opener);
+		await screen.findByRole('dialog');
+		const focus = vi.spyOn(opener, 'focus');
+		await act(async () => {
+			fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+		});
+		expect(opener.isConnected).toBe(false);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(focus).not.toHaveBeenCalled();
+	});
+});
