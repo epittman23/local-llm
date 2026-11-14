@@ -320,7 +320,7 @@ function SourceDialog({
 							</label>
 							<select
 								id="external-source-provider"
-								className="block w-full bg-transparent text-sm [&>option]:bg-popover"
+								className="block w-full bg-transparent text-sm"
 								value={f.provider}
 								onChange={(e) => change({ provider: e.target.value as Provider, ...schemaDefaults(e.target.value) })}
 							>

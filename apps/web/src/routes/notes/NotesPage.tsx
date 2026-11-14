@@ -32,7 +32,7 @@ import {
 	safeFileName
 } from './notesModel';
 
-const filterSelect = 'bg-transparent px-1.5 text-dense [&>option]:bg-popover';
+const filterSelect = 'bg-transparent px-1.5 text-dense';
 
 /** Creates a note and returns its id (title defaults to today's date, as in the original). */
 export async function createNote(token: string, title = dayjs().format('YYYY-MM-DD'), md = '') {

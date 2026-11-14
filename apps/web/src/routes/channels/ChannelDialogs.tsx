@@ -52,7 +52,7 @@ import { usePinnedMessages } from './usePinnedMessages';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
-const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm [&>option]:bg-popover';
+const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm';
 
 /**
  * Ports channel/PinnedMessagesModal.svelte: the channel's pinned messages,
