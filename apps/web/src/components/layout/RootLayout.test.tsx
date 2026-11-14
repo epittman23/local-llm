@@ -79,12 +79,8 @@ describe('RootLayout', () => {
 		expect(document.title).toBe('Sign in · lab box');
 	});
 
-	it('takes down the static boot splash and installs the system theme listener once', async () => {
-		const splash = document.createElement('div');
-		splash.id = 'boot-splash';
-		document.body.append(splash);
+	it('installs the system theme listener once', async () => {
 		const router = renderAt('/auth');
-		expect(document.getElementById('boot-splash')).toBeNull();
 		await act(() => router.navigate('/bare'));
 		expect(installSystemThemeListener).toHaveBeenCalledTimes(1);
 	});

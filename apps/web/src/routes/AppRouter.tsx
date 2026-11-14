@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
+import { removeStaticBootSplash } from '@/components/layout/BootSplash';
 import { RootLayout } from '@/components/layout/RootLayout';
 import type { RouteHandle } from '@/lib/ui/pageTitle';
 import { AdminLayout } from '@/routes/admin/AdminLayout';
@@ -61,7 +63,7 @@ const router = createBrowserRouter(
 	[
 		{
 			// Every route, public ones included: the tab title from each route's
-			// `handle`, the system theme listener and the boot splash's removal.
+			// `handle` and the system theme listener.
 			element: <RootLayout />,
 			children: [
 				{
@@ -201,5 +203,9 @@ const router = createBrowserRouter(
 );
 
 export function AppRouter() {
+	// Base.astro's static boot splash comes down once React has drawn. Here,
+	// outside the routes, so a route that throws on its first render still
+	// shows react-router's error page instead of a splash over it.
+	useEffect(removeStaticBootSplash, []);
 	return <RouterProvider router={router} />;
 }
