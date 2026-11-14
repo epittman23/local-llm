@@ -6,7 +6,8 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -19,10 +20,11 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { createNewPrompt, deletePromptById, getPromptItems, getPromptTags, togglePromptById } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -58,7 +60,6 @@ const PER_PAGE = 30;
 export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?: boolean }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
@@ -101,9 +102,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const total = list.data?.total ?? 0;
 	const tags = tagsQuery.data ?? [];
 
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
 		if (list.data) setCount('prompts', list.data.total);
 	}, [list.data, setCount]);
@@ -250,9 +249,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		setPage(1);
 	};
 	const openPrompt = (prompt: PromptListItem) => navigate(`${routePaths.workspacePrompts}/${prompt.id}`);
-	useEffect(() => {
-		document.title = `Prompts / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Prompts');
 
 	return (
 		<div className="space-y-1">
@@ -308,7 +305,9 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				)}
 			</ListSearchBar>
 
-			{prompts === null ? (
+			{failed ? (
+				<LoadFailed what="prompts" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : prompts === null ? (
 				<div className="my-16 mb-24 flex h-full w-full items-center justify-center">
 					<Spinner />
 				</div>
@@ -337,51 +336,49 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 							const updatedAt = (prompt.updated_at ?? prompt.created_at) * 1000;
 							const isActive = activeOverride[prompt.id] ?? prompt.is_active !== false;
 							return (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={prompt.id}
-									role="button"
-									tabIndex={0}
-									className="group hover:bg-muted/50 flex min-h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left"
-									onClick={(e) => !isControlClick(e.target) && openPrompt(prompt)}
-									onKeyDown={(e) => {
-										if (e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openPrompt(prompt);
-										}
-									}}
+									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
 								>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<Tip content={prompt.name} side="top">
-												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{prompt.name}</div>
-											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
-												/{prompt.command}
-											</div>
-											<Tip content={dayjs(updatedAt).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(updatedAt).fromNow()}
+									<RowButton
+										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+										onClick={() => openPrompt(prompt)}
+									>
+										<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+											<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+												<Tip content={prompt.name} side="top">
+													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">
+														{prompt.name}
+													</div>
+												</Tip>
+												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+													/{prompt.command}
 												</div>
-											</Tip>
-											{!prompt.write_access && <Badge variant="secondary">Read Only</Badge>}
+												<Tip content={dayjs(updatedAt).format('LLLL')}>
+													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+														{dayjs(updatedAt).fromNow()}
+													</div>
+												</Tip>
+												{!prompt.write_access && <Badge variant="secondary">Read Only</Badge>}
+											</div>
+											{prompt.content && (
+												<Tip content={prompt.content} side="top">
+													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
+														{prompt.content}
+													</div>
+												</Tip>
+											)}
 										</div>
-										{prompt.content && (
-											<Tip content={prompt.content} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-													{prompt.content}
+
+										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
+											<Tip content={prompt.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(prompt.user?.name ?? prompt.user?.email ?? 'Deleted User')}
 												</div>
 											</Tip>
-										)}
-									</div>
-
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={prompt.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(prompt.user?.name ?? prompt.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+										</div>
+									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
 										{shiftKey ? (
@@ -466,7 +463,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 													</DropdownMenu>
 
 													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center" onClick={(e) => e.stopPropagation()}>
+														<span className="flex h-6 items-center">
 															<Switch
 																aria-label={isActive ? 'Enabled' : 'Disabled'}
 																checked={isActive}
