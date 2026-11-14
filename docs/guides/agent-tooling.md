@@ -23,6 +23,7 @@ that applies it.
 | `pr-gate` | before opening or updating a PR, and when `PR gate` fails | predicting the tripwire's findings from the diff, the no-attribution rule, `make pr-gate`, the `## Gate changes` section, asking the owner |
 | `new-migration` | any model or table change, or a recorded discontinuity | finding the head revision, an append-only revision, the `benchmark_schema_note` row, the schema-drift test |
 | `serving-change` | any edit to `benchmarks/serving/` or a profile | every place a launch-flag change touches, so `config_id` stays right |
+| `ui-standard` | any change to what a page looks like or how it behaves | checking it against `docs/guides/ui-standard.md`: dark first, two widths, keyboard, the four states, the words; keeping the document, the tokens and `/ui` in step |
 | `reindex` | after a pull, checkout or merge, or when graph answers look stale | rebuilding the codebase-memory-mcp index, `full` vs `fast`, checking it against `grep` |
 
 Claude Code offers them automatically when a task matches their

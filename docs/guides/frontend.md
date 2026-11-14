@@ -49,6 +49,12 @@ as `sonner.tsx` already is: it follows the app's theme class instead of
 See the 2026-09-18 entry in [decisions.md](../decisions.md) for why Nova and
 not the migration plan's original "new-york".
 
+## The interface standard
+
+What a page should look like and how it should behave is in
+[ui-standard.md](ui-standard.md), and `/ui` shows it. Check a UI change
+against it before opening a pull request.
+
 ## Known rough edges
 
 - **Real-backend coverage is a smoke pass, not a suite.** Every page was

@@ -7,6 +7,55 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest): **A canvas beside the chat is planned: what a
+  model provides (a file, a page of HTML) will be a card in the reply and a
+  document in a right-hand panel, which is also a text editor.** The owner
+  asked for it, pointing at the side panel other assistants have. Today
+  sandbox output files are rendered inline on the reply (`SandboxOutputs`)
+  and HTML is previewed only from a code block's Preview button, in a
+  white-framed panel (`ArtifactPanel`, #941).
+  - Nothing is built. [docs/plans/canvas.md](plans/canvas.md) is the plan:
+    a shared side-panel shell first (which also fixes Controls squeezing the
+    chat on a phone, #901), then the viewer, then the editor. The frame that
+    runs model-written HTML and the route that serves it are kept as they
+    are; no new way to render such HTML is added.
+  - The interface is decided and shown on `/ui`, and the standard gained
+    rules CNV-1 to CNV-8 for it.
+  - The owner settled four choices the same day, taking the plan's defaults:
+    a complete HTML document or a block over 15 lines goes to the canvas and
+    shorter snippets stay inline; saving an edit makes a new version in the
+    app and can be attached to the next message; the canvas opens by itself
+    for a single new document on a wide screen, with a setting; an image
+    keeps a thumbnail on its card; every previewed page runs in one frame
+    with scripts only, so form submission and `alert`/`confirm`/`prompt` stop
+    working in previews, and the system prompt will gain a line saying so
+    when that ships. The owner also required the text editor to look
+    identical to the source view, highlighted as the chat's code blocks are;
+    `/ui` shows it as one code surface with a transparent textarea over the
+    highlighted text.
+- **2026-11-14** (later still): **The interface has a written standard,
+  shown on `/ui`; it is not the app's default look yet.** A UX/UI review of
+  the whole app the same day filed 215 issues (#901 to #1115, indexed in
+  #1116). Most were the same few mistakes repeated across pages: text and
+  edges too faint to see in dark, which is how the app is mostly used; three
+  ways of doing one thing; controls reachable only by hover; failures shown
+  as empty lists. Fixing them page by page without a reference would repeat
+  them, so the owner asked for a standard to verify those fixes and every
+  later UI change against, and a page showing it.
+  - [docs/guides/ui-standard.md](guides/ui-standard.md) holds the rules, each
+    with an identifier (`COL-2`, `FRM-3`) to cite in issues and pull requests.
+  - `apps/web/src/styles/standard.css` holds the tokens: a dark-first
+    "blackboard" palette (green-grey slate, chalk text, one chalk blue) with a
+    "whiteboard" light counterpart, seven type sizes, and Atkinson
+    Hyperlegible Next and Mono, self-hosted, chosen because 0/O and 1/l/I
+    cannot be confused in a tool full of identifiers and figures. Geist, the
+    shadcn neutral theme and Open WebUI's marks are what it will replace.
+  - `standard.contrast.test.ts` asserts every contrast ratio the standard
+    promises, in dark, black and light, from the token file itself.
+  - `/ui` (public, static) shows the rules on the shared components. The
+    standard's values apply only there, through a `data-ui="standard"` scope,
+    so the owner can judge the direction before it changes every page. Moving
+    those values into the global tokens is the next step and is not done.
 - **2026-11-14** (later): **The backend pytest suite runs across four
   pytest-xdist workers.** CI's "Backend (pytest)" job took 6 to 9.5 minutes,
   almost all of it pytest on one process; the owner asked for 5 or less.

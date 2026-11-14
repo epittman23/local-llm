@@ -51,7 +51,10 @@ export const routePaths = {
 	auth: '/auth',
 	error: '/error',
 	watch: '/watch',
-	share: '/s/:id'
+	share: '/s/:id',
+	// The interface standard's demo page (docs/guides/ui-standard.md). Public like
+	// the four above: it is static and shows nothing from the backend.
+	uiStandard: '/ui'
 } as const;
 
 /** Builds a concrete `/s/<id>` path from `routePaths.share`'s `:id` pattern. */

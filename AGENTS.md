@@ -212,7 +212,8 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
 Project skills in `.claude/skills/` turn the rules below into procedures:
 `docs-sync` (the maintenance policy), `pr-gate` (the CI tripwire),
 `new-migration` (the append-only schema), `serving-change` (launch flags
-and the `config_id` fingerprint) and `reindex` (refreshing the code-graph
+and the `config_id` fingerprint), `ui-standard` (checking a UI change
+against the interface standard) and `reindex` (refreshing the code-graph
 index below). Use the one that matches the change. The
 `reviewer` subagent (`.claude/agents/`) reviews a branch before
 its PR. `.claude/settings.json` turns off Claude Code's attribution
@@ -258,6 +259,15 @@ applies it in the same change.
 - **Run `astro dev` on Node, not Bun** (no `bunx --bun`): Vite's websocket
   proxy calls `socket.destroySoon()`, which Bun lacks.
 - Add shadcn/ui components with `bunx --bun shadcn add <name>`.
+- **Interface changes follow [docs/guides/ui-standard.md](docs/guides/ui-standard.md)**:
+  numbered rules for colour, type, spacing, forms, feedback, states and
+  words, shown on `/ui`. Build and check in dark first (it is how the app is
+  mostly used), use the tokens in `src/styles/standard.css` and the shared
+  components, and name the rules a change was checked against in its pull
+  request. Something the standard lacks is added to the document, the
+  tokens and `/ui` in the same change. The standard's look applies only to
+  `/ui` until the global tokens are moved onto it; its rules apply to every
+  new or changed piece of interface now.
 - More: [docs/guides/frontend.md](docs/guides/frontend.md). Astro's own
   documentation is at https://docs.astro.build; consult the relevant guide
   before working on:
@@ -432,7 +442,7 @@ Code" footer, a Claude Code session link, or
 | [MAP.md](MAP.md) | where everything lives |
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
-| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling, assistant tools, features and the model harness |
+| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, the interface standard, desktop, model downloads, agent tooling, assistant tools, features and the model harness |
 | [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
 | [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings, the sandbox design that was built |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

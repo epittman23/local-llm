@@ -1,6 +1,6 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
 import { fakeSocketServer } from './fake-socket';
+import { expect, test } from './test';
 
 const sessionUser = {
 	id: 'u1',
@@ -327,4 +327,25 @@ test('an unknown share id sends an anonymous viewer to sign in, then back to it'
 	// The share may be limited to signed-in users, so an anonymous viewer is
 	// asked to sign in and brought back; a signed-in one goes home instead.
 	await expect(page).toHaveURL(/\/auth\?redirect=%2Fs%2Fnope$/);
+});
+
+test('/ui shows the interface standard to a signed-out visitor, with its colour promises measured', async ({
+	page
+}) => {
+	await mockConfig(page, baseConfig);
+	await page.addInitScript(() => localStorage.setItem('theme', 'dark'));
+	await page.goto('/ui');
+
+	await expect(page.getByRole('heading', { level: 1, name: 'Interface standard' })).toBeVisible();
+	await expect(page.locator('html')).toHaveAttribute('data-ui', 'standard');
+	// The scope declares the colour scheme, so native controls follow the theme (COL-6).
+	expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark');
+	// Measured in this browser from the painted tokens, not parsed from the stylesheet.
+	await expect(page.getByText(/^All \d+ colour promises hold in this theme\.$/)).toBeVisible();
+	// The page itself never scrolls sideways (LAY-4).
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+	await page.getByRole('button', { name: 'Light' }).click();
+	await expect(page.locator('html')).toHaveClass(/light/);
+	await expect(page.getByText(/^All \d+ colour promises hold in this theme\.$/)).toBeVisible();
 });

@@ -22,6 +22,7 @@ import { ChannelPage } from '@/routes/channels/ChannelPage';
 import { ChatPage } from '@/routes/chat/ChatPage';
 import { HomePage } from '@/routes/home/HomePage';
 import { NotFound } from '@/routes/NotFound';
+import { UiStandardPage } from '@/routes/ui/UiStandardPage';
 import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
 import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
 import {
@@ -160,6 +161,7 @@ const router = createBrowserRouter(
 		{ path: routePaths.error, element: <ErrorPage /> },
 		{ path: routePaths.watch, element: <WatchPage /> },
 		{ path: routePaths.share, element: <SharedChatPage /> },
+		{ path: routePaths.uiStandard, element: <UiStandardPage /> },
 		{ path: '*', element: <NotFound /> }
 	],
 	// Astro's own base path (`/`; main.py mounts the build at the root).

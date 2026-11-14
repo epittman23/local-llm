@@ -48,6 +48,18 @@ Check, in this order:
 6. **Project principles.** Nothing that assumes a cloud-only environment.
    Nothing that sends user data to a third party beyond what is strictly
    necessary. No model or system-prompt configuration in a repo file.
+7. **The interface standard.** For any change under `apps/web/src` or
+   `apps/desktop` that alters what is shown: read
+   `docs/guides/ui-standard.md` and check the diff against its numbered
+   rules. From the diff alone you can check colour literals and palette
+   classes (COL-1), opacity on text colours (COL-2), arbitrary sizes
+   (TYP-2), raw `<button>` (ACT-6), `outline-none` (A11Y-1), icon buttons
+   without a name (ACT-4), dialogs opened without their trigger (NAV-4),
+   the words (WRD rules), and whether a data view has its four states
+   (STA-1). Name the rule for each finding. Say plainly that you did not
+   see the page rendered, and whether the pull request shows dark
+   screenshots. A change to `standard.css`, a rule or `/ui` must change
+   all three together.
 
 Report in this shape, most severe first:
 
