@@ -2,9 +2,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from './ModelSelector';
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+const update = vi.hoisted(() => vi.fn(async (_: unknown) => undefined));
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/lib/settings/userSettings', () => ({
-	useUserSettings: () => ({ settings: {}, update: vi.fn(async () => undefined) })
+	useUserSettings: () => ({ settings: {}, update })
 }));
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'u1', role: 'admin' } })
@@ -18,11 +19,14 @@ const MODELS = [
 function show(value = 'coder') {
 	const onChange = vi.fn();
 	render(<ModelSelector models={MODELS} selected={[value]} onChange={onChange} />);
-	fireEvent.click(screen.getByRole('button', { name: 'Select a model' }));
+	fireEvent.click(screen.getByRole('button', { name: `Model: ${MODELS.find((m) => m.id === value)?.name}` }));
 	return onChange;
 }
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	update.mockClear();
+});
 
 describe('ModelSelector', () => {
 	it('lists every model as an option and marks the current one selected', () => {
@@ -43,6 +47,32 @@ describe('ModelSelector', () => {
 		show();
 		fireEvent.change(screen.getByRole('textbox', { name: 'Search a model' }), { target: { value: 'mat' } });
 		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Math']);
+	});
+
+	it('names its button after the model it shows, so the name contains the visible text (A11Y-2)', () => {
+		render(<ModelSelector models={MODELS} selected={['math', '']} onChange={vi.fn()} />);
+		const [first, second] = screen.getAllByRole('button', { name: /^Model: / });
+		expect(first.getAttribute('aria-label')).toBe('Model: Math');
+		expect(first.textContent).toContain('Math');
+		expect(second.getAttribute('aria-label')).toBe('Model: Select a model');
+	});
+
+	it('saves the selection as the default from the model menu, and closes it', async () => {
+		show('math');
+		// The menu's copy of "Set as default" is the one shown on short screens (A11Y-5).
+		const inMenu = screen.getAllByRole('button', { name: 'Set as default' });
+		expect(inMenu).toHaveLength(2);
+		fireEvent.click(inMenu[1]);
+		expect(update).toHaveBeenCalledExactlyOnceWith({ models: ['math'] });
+		expect(screen.queryByRole('listbox')).toBeNull();
+	});
+
+	it('saves the selection as the default from the row under the picker', () => {
+		render(<ModelSelector models={MODELS} selected={['coder']} onChange={vi.fn()} />);
+		const button = screen.getByRole('button', { name: 'Set as default' });
+		expect(button.className).toContain('[@media(max-height:520px)]:hidden');
+		fireEvent.click(button);
+		expect(update).toHaveBeenCalledExactlyOnceWith({ models: ['coder'] });
 	});
 
 	it('adds an empty model slot with Add Model', () => {
