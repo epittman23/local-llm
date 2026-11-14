@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CalendarPage } from './CalendarPage';
+import { dayName } from './CalendarViews';
 
 const { getCalendars, getCalendarEvents, deleteCalendar } = vi.hoisted(() => ({
 	getCalendars: vi.fn(),
@@ -49,18 +50,25 @@ afterEach(cleanup);
 describe('the calendar sidebar mini month', () => {
 	it('highlights today with the default variant', async () => {
 		show();
-		const today = await screen.findByRole('button', { name: new Date().toDateString() });
+		const today = await screen.findByRole('button', { name: dayName(new Date()) });
 		expect(today.getAttribute('data-variant')).toBe('default');
+	});
+
+	it('names each day by its visible number, so the name contains what it shows (A11Y-2)', async () => {
+		show();
+		const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+		const day = await screen.findByRole('button', { name: dayName(first) });
+		expect(day.textContent).toBe('1');
 	});
 
 	it('jumps the main date to the day that is pressed', async () => {
 		show();
 		const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 		const target = new Date(first.getFullYear(), first.getMonth(), 2);
-		const day = await screen.findByRole('button', { name: target.toDateString() });
+		const day = await screen.findByRole('button', { name: dayName(target) });
 		fireEvent.click(day);
 		await waitFor(() =>
-			expect(screen.getByRole('button', { name: target.toDateString() }).getAttribute('data-variant')).toBe('secondary')
+			expect(screen.getByRole('button', { name: dayName(target) }).getAttribute('data-variant')).toBe('secondary')
 		);
 	});
 
