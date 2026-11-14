@@ -163,7 +163,7 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 								variant={on ? 'secondary' : 'ghost'}
 								size="sm"
 								aria-pressed={on}
-								className="flex-1 rounded-xl"
+								className="flex-1 rounded-xl shrink"
 								onClick={() => set({ days: on ? value.days.filter((x) => x !== d) : [...value.days, d] })}
 							>
 								{d[0]}

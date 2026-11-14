@@ -44,7 +44,7 @@ export function CheckboxGrid({
 						<Button
 							variant="ghost"
 							size="sm"
-							className="min-w-0 justify-start"
+							className="min-w-0 justify-start shrink"
 							type="button"
 							onClick={() => onToggle(item.id, !isChecked(item.id))}
 						>
@@ -125,7 +125,7 @@ export function ItemPicker({
 						}}
 					>
 						<PopoverTrigger asChild>
-							<Button variant="link" size="xs" className="min-w-0 truncate" type="button">
+							<Button variant="link" size="xs" className="min-w-0 truncate shrink" type="button">
 								{labels.trigger}
 							</Button>
 						</PopoverTrigger>

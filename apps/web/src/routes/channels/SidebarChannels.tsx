@@ -58,7 +58,7 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 					type="button"
 					variant="ghost"
 					size="xs"
-					className="flex-1 justify-start"
+					className="flex-1 justify-start shrink"
 					aria-expanded={open}
 					onClick={() => setOpen((o) => !o)}
 				>

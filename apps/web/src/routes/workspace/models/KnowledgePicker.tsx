@@ -218,7 +218,7 @@ export function KnowledgePicker({
 					<div className="flex shrink-0 items-center gap-2">
 						<Popover open={open} onOpenChange={setOpen}>
 							<PopoverTrigger asChild>
-								<Button variant="link" size="xs" className="min-w-0 truncate" type="button">
+								<Button variant="link" size="xs" className="min-w-0 truncate shrink" type="button">
 									Select Knowledge
 								</Button>
 							</PopoverTrigger>
@@ -255,7 +255,7 @@ export function KnowledgePicker({
 									<Button
 										variant="ghost"
 										size="sm"
-										className="min-w-0 gap-1.5"
+										className="min-w-0 gap-1.5 shrink"
 										type="button"
 										aria-label="Edit"
 										onClick={() => setEditing(i)}

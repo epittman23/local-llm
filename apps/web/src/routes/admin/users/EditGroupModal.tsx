@@ -174,7 +174,7 @@ export function EditGroupModal({
 										<Button
 											variant={tab === id ? 'secondary' : 'ghost'}
 											size="sm"
-											className="flex-1 lg:flex-none"
+											className="flex-1 lg:flex-none shrink"
 											key={id}
 											type="button"
 											onClick={() => setTab(id)}

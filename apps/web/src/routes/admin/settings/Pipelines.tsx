@@ -203,7 +203,7 @@ export default function Pipelines() {
 								<Button
 									variant="outline"
 									size="sm"
-									className="min-w-0 flex-1 justify-start"
+									className="min-w-0 flex-1 justify-start shrink"
 									type="button"
 									onClick={() => uploadInput.current?.click()}
 								>

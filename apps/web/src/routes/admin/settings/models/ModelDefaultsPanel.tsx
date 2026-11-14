@@ -54,7 +54,7 @@ export function ModelDefaultsPanel({
 				<Button
 					variant="ghost"
 					size="sm"
-					className="min-w-0 flex-1 justify-start text-left"
+					className="min-w-0 flex-1 justify-start text-left shrink"
 					type="button"
 					onClick={() => setExpanded((e) => !e)}
 				>

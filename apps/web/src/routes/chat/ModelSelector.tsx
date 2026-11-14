@@ -130,7 +130,7 @@ function Picker({
 					id={id}
 					disabled={disabled}
 					variant="ghost"
-					className="text-title min-w-0"
+					className="text-title min-w-0 shrink"
 					aria-label="Select a model"
 				>
 					<span className="truncate">{current?.name ?? (value ? value : 'Select a model')}</span>

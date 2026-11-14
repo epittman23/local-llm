@@ -121,7 +121,7 @@ function CalendarSidebar({
 									variant="ghost"
 									size="sm"
 									aria-pressed={shown}
-									className="min-w-0 flex-1 justify-start gap-2 text-left"
+									className="min-w-0 flex-1 justify-start gap-2 text-left shrink"
 									onClick={() => onToggle(c.id)}
 								>
 									<span
