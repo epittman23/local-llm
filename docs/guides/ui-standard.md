@@ -38,9 +38,9 @@ What that did and did not change:
   standard's colours, type, focus indicator, edges and sizes at once.
 - Code that bypasses them did not: a colour class from Tailwind's palette, a
   one-off size, a hand-styled `<button>`. The ratchet (below, "The ratchet")
-  counts every one, per file, and only lets the counts fall. Bringing them to
-  zero, area by area, is under way and not finished; the review's issues are
-  indexed in #1116.
+  counts every one, per file, and only lets the counts fall. They were
+  replaced on 2026-11-14 and the count is at its floor: one accepted
+  exception. The review's wider issues are indexed in #1116.
 - A bypass stays only as an **exception the owner has accepted**, recorded
   with its reason in `apps/web/ui-standard-baseline.json`. Nobody else adds
   one: propose it to the owner with the justification.
@@ -86,6 +86,9 @@ Tokens, by role. Values are in `standard.css`; hex values are shown on `/ui`.
 | `--success`, `--warning`, `--danger` | Status, as text, icon or edge |
 | `--danger-fill` / `--danger-fill-foreground` | The filled destructive button |
 | `--focus` | The focus indicator |
+| `--important` | The Important callout in a rendered answer. Not a status |
+| `--canvas` | The inside of a frame showing a page the app did not write. White in every theme |
+| `--on-scrim` | An icon or word drawn over `--scrim` |
 | `--series-1` to `--series-6` | Chart series, in order |
 | `--scrim` | The layer behind a dialog |
 
@@ -107,7 +110,9 @@ text. Hierarchy comes from `--foreground-muted`, size and weight.
 
 **COL-3. Status has three colours and each means one thing.** Success: it
 worked, passed, is running normally. Warning: it works but needs attention.
-Danger: it failed, is invalid, or will destroy something. A status is never
+Danger: it failed, is invalid, or will destroy something. (The five callouts
+in a rendered answer use these three, brand for Note, and `--important` for
+Important, which is a callout colour and not a status.) A status is never
 shown by colour alone: it is a word, with an icon where space allows (`/ui`,
 "Status"). Brand blue is not a status.
 
@@ -264,6 +269,17 @@ tooltip. An action that cannot work is not offered as if it could.
 
 **ACT-6. Use the shared `Button`.** No `<button>` with its own classes. A new
 kind of button is a new variant of the shared component, added here first.
+
+**ACT-7. A whole row that opens something is a `RowButton`**
+(`components/ui/row-button.tsx`): a list entry with an image or icon, a name
+and a second line. It is full width, highlights on hover, and marks the open
+or selected row with `aria-current`. `Button` is for single-line controls
+and is not stretched into a row.
+
+**ACT-8. A picture you press is an `ImageButton`**
+(`components/ui/image-button.tsx`): a profile image that opens an upload. The
+picture fills it; an icon appears over a scrim on hover and on focus; it has
+an `aria-label`.
 
 ## Forms
 
@@ -422,7 +438,11 @@ Inline code is the monospaced face on `--surface-3`.
 the column scrolls inside its own box and shows that it does.
 
 **CNT-4. Output the app did not write** (an HTML preview, a sandbox's file, a
-generated figure) sits in a frame that belongs to the theme (COL-6).
+generated figure) sits in a frame that belongs to the theme (COL-6). The
+inside of a frame showing a page is `bg-canvas`, white in every theme: a page
+with no background of its own assumes white, and a dark one would put its
+black text on dark. The white is the page's, so it is framed (an edge, the
+themed surround) and never fills a panel edge to edge.
 
 ## Canvas
 

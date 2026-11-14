@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RowButton } from '@/components/ui/row-button';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	addMembersById,
@@ -446,10 +447,8 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 							const image = v.profile_image_url || '/static/favicon.png';
 							return (
 								<li key={w.id} className="rounded-xl border">
-									<Button
-										type="button"
-										variant="ghost"
-										className="h-auto w-full justify-start gap-3 px-3 py-2 text-left"
+									<RowButton
+										className="flex items-center justify-start gap-3 px-3 py-2"
 										aria-expanded={expanded === w.id}
 										onClick={() => setExpanded((x) => (x === w.id ? null : w.id))}
 									>
@@ -462,7 +461,7 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 											</div>
 										</div>
 										<ChevronDown className={`size-3.5 transition-transform ${expanded === w.id ? 'rotate-180' : ''}`} />
-									</Button>
+									</RowButton>
 									{expanded === w.id && (
 										<div className="flex items-center gap-2 border-t px-3 py-2">
 											<Button

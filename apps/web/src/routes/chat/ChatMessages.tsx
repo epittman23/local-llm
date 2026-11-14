@@ -4,6 +4,7 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import type { CodeRunner } from '@/lib/chat/codeRun';
 import { type History, type Message, messagesList, replyColumns, showBranch, siblingsOf } from '@/lib/chat/history';
 import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
@@ -353,16 +354,13 @@ export function ResponseMessage({
 					<div className="mt-2 flex flex-col items-start gap-1" aria-label="Follow-ups">
 						<span className="text-muted-foreground text-xs">Follow up</span>
 						{message.followUps.map((f, i) => (
-							<Button
+							<RowButton
 								key={i}
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="h-auto justify-start text-left whitespace-normal"
+								className="flex w-auto items-center justify-start px-3 py-2"
 								onClick={() => h.onFollowUp(f)}
 							>
 								{f}
-							</Button>
+							</RowButton>
 						))}
 					</div>
 				) : null}

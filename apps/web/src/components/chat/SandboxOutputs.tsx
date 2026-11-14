@@ -148,7 +148,7 @@ export function SandboxedHtmlFrame({ html, title }: { html: string; title: strin
 			sandbox="allow-scripts"
 			title={title}
 			referrerPolicy="no-referrer"
-			className="size-full border-0 bg-white"
+			className="bg-canvas border-border size-full rounded-lg border"
 		/>
 	);
 }

@@ -25,6 +25,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { canUseFeature } from '@/lib/access/features';
@@ -145,13 +146,13 @@ export function SidebarContent({
 			<div className="p-2">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-auto w-full justify-start gap-2 px-2 py-1.5">
+						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
 							<Avatar className="h-6 w-6">
 								<AvatarImage src={user?.profile_image_url} alt={user?.name ?? ''} />
 								<AvatarFallback>{user?.name?.at(0)?.toUpperCase() ?? '?'}</AvatarFallback>
 							</Avatar>
 							<span className="truncate text-sm">{user?.name ?? 'Signed out'}</span>
-						</Button>
+						</RowButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="start" className="w-56">
 						<DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>

@@ -7,6 +7,7 @@ import { Tip } from '@/components/common/Tip';
 import { SettingSelect, SettingSwitch, SettingsSection, settingInputClass } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RowButton } from '@/components/ui/row-button';
 import {
 	createEventWebhook,
 	deleteEventWebhook,
@@ -329,25 +330,19 @@ function WebhookDialog({
 									{query.trim() && (groupResults.length > 0 || userHits.length > 0) && (
 										<div className="bg-popover absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border py-1 shadow-lg">
 											{groupResults.map((g) => (
-												<Button
-													variant="ghost"
-													size="sm"
-													className="h-auto w-full justify-between rounded-none text-left"
+												<RowButton
+													className="flex items-center justify-between rounded-none px-3 py-2"
 													key={`g-${g.id}`}
-													type="button"
 													onClick={() => addGroup(g)}
 												>
 													<span className="truncate">{g.name}</span>
 													<span className="text-muted-foreground">Group</span>
-												</Button>
+												</RowButton>
 											))}
 											{userHits.map((u) => (
-												<Button
-													variant="ghost"
-													size="sm"
-													className="h-auto w-full justify-between rounded-none text-left"
+												<RowButton
+													className="flex items-center justify-between rounded-none px-3 py-2"
 													key={`u-${u.id}`}
-													type="button"
 													onClick={() => addUser(u)}
 												>
 													<span className="truncate">
@@ -355,7 +350,7 @@ function WebhookDialog({
 														{u.email && <span className="text-muted-foreground"> ({u.email})</span>}
 													</span>
 													<span className="text-muted-foreground">User</span>
-												</Button>
+												</RowButton>
 											))}
 										</div>
 									)}

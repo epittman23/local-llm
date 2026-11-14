@@ -261,3 +261,47 @@ describe('ChatInput: a suggestion list that shrinks under the selection (#623)',
 		expect(highlighted()).toEqual([expect.stringContaining('alpha')]);
 	});
 });
+
+describe('ChatInput: removing an attachment', () => {
+	afterEach(cleanup);
+
+	it('offers a Remove button on each attached file, which removes that file', () => {
+		const onRemoveFile = vi.fn();
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<ChatInput
+						onSubmit={vi.fn(() => true)}
+						onStop={vi.fn()}
+						generating={false}
+						queued={[]}
+						onRemoveQueued={vi.fn()}
+						files={[{ itemId: 'f1', type: 'text', name: 'notes.txt', status: 'uploaded' }]}
+						onRemoveFile={onRemoveFile}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Remove notes.txt' }));
+		expect(onRemoveFile).toHaveBeenCalledExactlyOnceWith('f1');
+	});
+
+	it('names the Remove button "Remove file" for an attachment without a name', () => {
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<ChatInput
+						onSubmit={vi.fn(() => true)}
+						onStop={vi.fn()}
+						generating={false}
+						queued={[]}
+						onRemoveQueued={vi.fn()}
+						files={[{ itemId: 'f2', type: 'text', status: 'uploaded' }]}
+						onRemoveFile={vi.fn()}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		expect(screen.getByRole('button', { name: 'Remove file' })).toBeTruthy();
+	});
+});

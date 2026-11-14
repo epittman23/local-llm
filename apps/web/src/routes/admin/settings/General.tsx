@@ -16,6 +16,7 @@ import {
 } from '@/components/settings/controls';
 import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { getAdminConfig, updateAdminConfig } from '@/lib/apis/auths';
 import { getBanners, setBanners } from '@/lib/apis/configs';
 import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '@/lib/constants';
@@ -97,11 +98,8 @@ export function DefaultInterfaceSettings({
 	return (
 		<div>
 			<div className="flex w-full items-start justify-between gap-4">
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-auto min-w-0 flex-1 justify-start whitespace-normal text-left"
-					type="button"
+				<RowButton
+					className="flex w-auto min-w-0 flex-1 flex-col items-start justify-start px-3 py-2"
 					aria-expanded={open}
 					onClick={() => setOpen((v) => !v)}
 				>
@@ -109,7 +107,7 @@ export function DefaultInterfaceSettings({
 					<div className="text-foreground-muted mt-1.5 text-caption">
 						Set system-wide interface defaults for every account. Personal settings override these defaults.
 					</div>
-				</Button>
+				</RowButton>
 				<Button
 					variant="ghost"
 					size="icon-sm"

@@ -39,7 +39,7 @@ import { ToolCallDisplay } from './ToolCallDisplay';
 const ALERTS: Record<AlertType, { border: string; text: string; icon: typeof Info }> = {
 	NOTE: { border: 'border-brand', text: 'text-brand', icon: Info },
 	TIP: { border: 'border-success', text: 'text-success', icon: Lightbulb },
-	IMPORTANT: { border: 'border-purple-500', text: 'text-purple-500', icon: Star },
+	IMPORTANT: { border: 'border-important', text: 'text-important', icon: Star },
 	WARNING: { border: 'border-warning', text: 'text-warning', icon: ArrowRightCircle },
 	CAUTION: { border: 'border-danger', text: 'text-danger', icon: Zap }
 };

@@ -6,6 +6,7 @@ import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { RowButton } from '@/components/ui/row-button';
 import { getGroups } from '@/lib/apis/groups';
 import { getUserInfoById, searchUsers } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -191,11 +192,9 @@ export function MemberSelector({
 							<div className="text-muted-foreground mx-1 mb-1 text-xs">Groups</div>
 							<div className="mb-3">
 								{filteredGroups.map((group) => (
-									<Button
-										variant="ghost"
-										className="h-auto w-full justify-between rounded-none p-0 text-xs font-normal"
+									<RowButton
+										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={group.id}
-										type="button"
 										onClick={() => toggleGroup(group)}
 									>
 										<span className="flex flex-1 items-center gap-1 px-3 py-1.5 font-normal">
@@ -205,7 +204,7 @@ export function MemberSelector({
 										<span className="px-3 py-1">
 											<Checkbox checked={groupIds.includes(group.id)} tabIndex={-1} aria-label={group.name} />
 										</span>
-									</Button>
+									</RowButton>
 								))}
 							</div>
 						</>
@@ -215,11 +214,9 @@ export function MemberSelector({
 							<div className="text-muted-foreground mx-1 mb-1 text-xs">Users</div>
 							<div>
 								{filteredUsers.map((user) => (
-									<Button
-										variant="ghost"
-										className="h-auto w-full justify-between rounded-none p-0 text-xs font-normal"
+									<RowButton
+										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={user.id}
-										type="button"
 										onClick={() => toggleUser(user)}
 									>
 										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
@@ -241,7 +238,7 @@ export function MemberSelector({
 										<span className="px-3 py-1">
 											<Checkbox checked={userIds.includes(user.id)} tabIndex={-1} aria-label={user.name} />
 										</span>
-									</Button>
+									</RowButton>
 								))}
 							</div>
 						</>

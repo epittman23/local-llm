@@ -1,22 +1,15 @@
 {
-	"exceptions": [],
+	"exceptions": [
+		{
+			"file": "src/routes/chat/MessageActions.tsx",
+			"pattern": "dark-one-off",
+			"count": 1,
+			"reason": "Accepted by the owner on 2026-11-14: a custom message action supplies its own icon as an image, and dark:invert keeps a black icon visible on the dark theme. The icon is someone else's image, not a theme colour, so no token can recolour it."
+		}
+	],
 	"counts": {
 		"dark-one-off": {
 			"src/routes/chat/MessageActions.tsx": 1
-		},
-		"palette-colour": {
-			"src/components/chat/markdown/Tokens.tsx": 2,
-			"src/components/chat/SandboxOutputs.tsx": 1,
-			"src/routes/admin/settings/ArenaModelModal.tsx": 2,
-			"src/routes/chat/ArtifactPanel.tsx": 1
-		},
-		"raw-button": {
-			"src/routes/admin/settings/ArenaModelModal.tsx": 1,
-			"src/routes/admin/settings/models/ModelRow.tsx": 1,
-			"src/routes/admin/users/GroupItem.tsx": 1,
-			"src/routes/admin/users/GroupsPanel.tsx": 1,
-			"src/routes/workspace/models/ModelEditor.tsx": 1,
-			"src/routes/workspace/prompts/PromptEditView.tsx": 1
 		}
 	}
 }

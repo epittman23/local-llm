@@ -12,6 +12,7 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { createNewGroup, getGroups } from '@/lib/apis/groups';
 import { getUserDefaultPermissions, updateUserDefaultPermissions } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -184,12 +185,7 @@ export function GroupsPanel() {
 
 				<hr className="border-border/40 my-1" />
 
-				<button
-					type="button"
-					className="group flex w-full cursor-pointer px-2.5 py-2 text-left"
-					aria-haspopup="dialog"
-					onClick={() => setShowDefaults(true)}
-				>
+				<RowButton className="group flex px-2.5 py-2" aria-haspopup="dialog" onClick={() => setShowDefaults(true)}>
 					<div className="flex w-full items-center gap-3">
 						<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 							<div className="text-sm font-normal group-hover:underline">Default permissions</div>
@@ -201,7 +197,7 @@ export function GroupsPanel() {
 							Edit
 						</div>
 					</div>
-				</button>
+				</RowButton>
 			</div>
 
 			{showDefaults && (

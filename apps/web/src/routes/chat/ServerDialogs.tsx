@@ -9,6 +9,7 @@ import {
 	DialogTitle
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ServerDialog } from './useChatSession';
 
@@ -167,12 +168,11 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 								const picked =
 									answers[q.id]?.type === 'option' && (answers[q.id] as { option_index: number }).option_index === i;
 								return (
-									<Button
+									<RowButton
 										key={i}
-										type="button"
 										aria-pressed={picked}
-										variant={picked ? 'secondary' : 'outline'}
-										className="h-auto justify-start text-left whitespace-normal"
+										aria-current={picked ? 'true' : undefined}
+										className="flex w-auto flex-col items-start justify-start border px-3 py-2"
 										onClick={() =>
 											setAnswers((a) => ({
 												...a,
@@ -182,7 +182,7 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 									>
 										<div>{o.label}</div>
 										{o.description && <div className="text-muted-foreground text-xs">{o.description}</div>}
-									</Button>
+									</RowButton>
 								);
 							})}
 							{(q.allow_other ?? allowOther) && (

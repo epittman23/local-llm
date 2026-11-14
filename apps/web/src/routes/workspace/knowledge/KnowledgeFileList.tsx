@@ -9,6 +9,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -206,10 +207,8 @@ export function KnowledgeFileList({
 							<Folder className="size-3.5" />
 						</Button>
 					</div>
-					<Button
-						variant="ghost"
-						className="relative h-auto flex-1 justify-between gap-1 p-2 text-left"
-						type="button"
+					<RowButton
+						className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
 						onClick={() => renamingDir !== dir.id && onOpenDirectory(dir.id)}
 					>
 						<div className="line-clamp-1 text-xs">
@@ -231,7 +230,7 @@ export function KnowledgeFileList({
 								<div className="text-foreground-muted shrink-0 text-xs">{dayjs(dir.updated_at * 1000).fromNow()}</div>
 							</Tip>
 						)}
-					</Button>
+					</RowButton>
 					{writeAccess && (
 						<div className="flex items-center">
 							<DropdownMenu>
@@ -298,10 +297,8 @@ export function KnowledgeFileList({
 								</Button>
 							)}
 						</div>
-						<Button
-							variant="ghost"
-							className="relative h-auto flex-1 justify-between gap-1 p-2 text-left"
-							type="button"
+						<RowButton
+							className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
 							onClick={() => renamingFile === null && fileId && onSelect(fileId)}
 							onDoubleClick={() => writeAccess && setRenamingFile(fileId ?? null)}
 						>
@@ -338,7 +335,7 @@ export function KnowledgeFileList({
 									</Tip>
 								)}
 							</div>
-						</Button>
+						</RowButton>
 						{writeAccess && (
 							<div className="flex items-center">
 								<DropdownMenu>

@@ -2,6 +2,7 @@ import { Pencil } from 'lucide-react';
 import { useRef } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ImageButton } from '@/components/ui/image-button';
 import { getGravatarUrl } from '@/lib/apis/utils';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -114,20 +115,14 @@ export function ProfileImageEditor({
 		<div className="group flex flex-col self-start">
 			{hidden}
 			<div className="flex self-center">
-				<Button
-					variant="ghost"
-					className="relative h-auto rounded-full p-0"
-					type="button"
+				<ImageButton
+					shape="circle"
 					aria-label="Change profile image"
+					overlay={<Pencil />}
 					onClick={() => input.current?.click()}
 				>
 					<img src={src} alt="profile" className={cn('rounded-full object-cover', imageClassName)} />
-					<div className="absolute right-0 bottom-0 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
-						<div className="rounded-full border bg-surface-1 p-1 text-foreground shadow">
-							<Pencil className="size-3" />
-						</div>
-					</div>
-				</Button>
+				</ImageButton>
 			</div>
 			<div className="mt-2 flex w-full flex-col justify-center">
 				<Button

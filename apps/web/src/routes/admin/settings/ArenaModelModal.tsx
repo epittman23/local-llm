@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ImageButton } from '@/components/ui/image-button';
 import { getModels } from '@/lib/apis';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -146,17 +147,14 @@ export function ArenaModelModal({
 									aria-label="Upload image"
 									onChange={(e) => pickImage(e.target.files)}
 								/>
-								<button
-									type="button"
-									className="group relative rounded-full"
+								<ImageButton
+									shape="circle"
 									aria-label="Change image"
+									overlay={<Pencil />}
 									onClick={() => imageInput.current?.click()}
 								>
-									<img src={profileImageUrl} alt="Profile" className="size-12 rounded-full object-cover" />
-									<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition group-hover:opacity-100">
-										<Pencil className="size-4" />
-									</span>
-								</button>
+									<img src={profileImageUrl} alt="Profile" className="size-12 object-cover" />
+								</ImageButton>
 							</div>
 							<div className="flex min-w-0 flex-1 flex-col gap-1">
 								<div>

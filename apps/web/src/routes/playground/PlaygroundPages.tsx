@@ -14,6 +14,8 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { ImageButton } from '@/components/ui/image-button';
+import { RowButton } from '@/components/ui/row-button';
 import { getModels } from '@/lib/apis';
 import { imageEdits, imageGenerations } from '@/lib/apis/images';
 import { useUserSettings } from '@/lib/settings/userSettings';
@@ -163,10 +165,8 @@ export function PlaygroundChat() {
 
 			<div className="flex items-center gap-1.5">
 				<div data-composite-field className="flex-1 rounded-lg border px-1.5 py-1 text-sm">
-					<Button
-						type="button"
-						variant="ghost"
-						className="h-auto w-full justify-between gap-2 px-0 py-0 font-normal"
+					<RowButton
+						className="flex items-center justify-between gap-2 px-0 py-0"
 						aria-expanded={showSystem}
 						onClick={() => setShowSystem((v) => !v)}
 					>
@@ -175,7 +175,7 @@ export function PlaygroundChat() {
 							<span className="text-muted-foreground line-clamp-1 flex-1 text-left">{system}</span>
 						)}
 						<Pencil className="size-3.5 shrink-0" />
-					</Button>
+					</RowButton>
 					{showSystem && (
 						<textarea
 							className="placeholder:text-foreground-muted mt-1 w-full resize-y bg-transparent px-1.5 text-sm"
@@ -389,19 +389,14 @@ export function PlaygroundImages() {
 				{results.length ? (
 					<div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
 						{results.map((img, idx) => (
-							<Button
+							<ImageButton
 								key={`${img.url}-${idx}`}
-								type="button"
-								variant="ghost"
 								aria-label={`Download image ${idx + 1}`}
-								className="group relative h-auto overflow-hidden rounded-xl p-0"
+								overlay={<Download className="size-5" />}
 								onClick={() => download(img.url, idx)}
 							>
 								<img src={img.url} alt="" className="aspect-square w-full object-cover" />
-								<span className="absolute inset-0 flex items-center justify-center bg-surface-2/70 text-foreground opacity-0 transition group-hover:opacity-100">
-									<Download className="size-5" />
-								</span>
-							</Button>
+							</ImageButton>
 						))}
 					</div>
 				) : (

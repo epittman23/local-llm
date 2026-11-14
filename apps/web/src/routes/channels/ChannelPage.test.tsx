@@ -15,6 +15,11 @@ const { getChannelById, joinChannelById, toast } = vi.hoisted(() => ({
 	toast: { error: vi.fn() }
 }));
 
+// A relative image URL would be fetched from the test server; a data: URL is not.
+vi.mock('@/lib/constants', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	WEBUI_API_BASE_URL: 'data:,api'
+}));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/apis/channels', () => ({ getChannelById, joinChannelById }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket: null }) }));
@@ -89,5 +94,29 @@ describe('opening a channel', () => {
 		joinChannelById.mockRejectedValue('403 Forbidden');
 		open(channel({ is_private: false, is_member: false }));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('403 Forbidden'));
+	});
+});
+
+describe('a direct message header', () => {
+	const dm = (active: boolean) =>
+		channel({
+			type: 'dm',
+			is_private: null,
+			users: [
+				{ id: 'me', name: 'Me' },
+				{ id: 'u2', name: 'Quinn', is_active: active }
+			] as Channel['users']
+		});
+
+	it('shows a green presence dot for an active partner', async () => {
+		open(dm(true));
+		const dot = await screen.findByLabelText('Active');
+		expect(dot.className).toContain('bg-success');
+	});
+
+	it('shows a muted presence dot for an away partner', async () => {
+		open(dm(false));
+		const dot = await screen.findByLabelText('Away');
+		expect(dot.className).toContain('bg-foreground-muted');
 	});
 });

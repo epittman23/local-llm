@@ -7,6 +7,27 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest, 3): **What bypassed the interface standard is
+  replaced: 962 of the 963 uses the ratchet counted, in about 150 files, and
+  the one that stays is an exception the owner accepted.** Hand-styled
+  buttons became the shared `Button`, palette colours and `dark:` one-offs
+  became tokens, one-off text sizes became the seven steps, and removed focus
+  outlines were restored.
+  - Eleven uses had a reason not to take the standard's replacement and were
+    put to the owner, who decided each. Four additions to the standard came
+    of it: `RowButton` for a whole row that opens something (ACT-7), which
+    also replaced the places a `Button` had been stretched into a row;
+    `ImageButton` for a picture you press (ACT-8), with `--on-scrim` for its
+    overlay; `--canvas`, white in every theme, for the inside of a frame
+    showing a page the app did not write, now framed with an edge (#941);
+    and `--important` for the Important callout in a rendered answer.
+  - The exception: a custom message action's icon is someone else's image,
+    so `dark:invert` stays to keep a black icon visible in dark. It is
+    recorded with its reason in `ui-standard-baseline.json`.
+  - Button and field sizes moved from the theme's stylesheet into the shared
+    components, so a caller's own height wins.
+  - About 60 unit-test files were added for components that had none, so the
+    changed lines are covered (91%).
 - **2026-11-14** (latest, 2): **The interface standard is the app's theme on
   every page, dark is the default, and a ratchet counts what still bypasses
   it.** The owner approved the direction shown on `/ui` and asked that every

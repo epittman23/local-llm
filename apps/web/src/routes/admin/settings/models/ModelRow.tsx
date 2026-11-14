@@ -25,6 +25,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -128,11 +129,7 @@ export function ModelRow({
 				</Tip>
 			</div>
 
-			<button
-				type="button"
-				className="group/item flex min-w-0 flex-1 cursor-pointer gap-2.5 text-left"
-				onClick={handlers.open}
-			>
+			<RowButton className="group/item flex flex-1 gap-2.5 px-1 py-1" onClick={handlers.open}>
 				<div className={cn('self-center rounded-xl', !active && 'opacity-50')}>
 					<img
 						src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
@@ -155,7 +152,7 @@ export function ModelRow({
 						</div>
 					</Tip>
 				</div>
-			</button>
+			</RowButton>
 
 			<div className="flex shrink-0 items-center gap-0.5 self-center">
 				{shiftKey && (

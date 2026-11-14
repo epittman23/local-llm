@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { CheckboxGrid } from '@/routes/workspace/models/EditorPickers';
 import {
 	availableFeatures,
@@ -16,17 +17,14 @@ function Collapsible({ title, children }: { title: string; children: ReactNode }
 	const [open, setOpen] = useState(false);
 	return (
 		<div>
-			<Button
-				variant="ghost"
-				size="sm"
-				className="h-auto w-full justify-between gap-4 text-left"
-				type="button"
+			<RowButton
+				className="flex items-center justify-between gap-4 px-3 py-2"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
 			>
 				<span className="text-muted-foreground text-xs">{title}</span>
 				<span className="text-foreground-muted text-caption">{open ? 'Close' : 'Configure'}</span>
-			</Button>
+			</RowButton>
 			{open && <div className="max-h-[24rem] overflow-y-auto pr-1 pb-2">{children}</div>}
 		</div>
 	);

@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useMemo } from 'react';
 import { Tip } from '@/components/common/Tip';
-import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import type { CalendarEventModel, CalendarModel } from '@/lib/apis/calendar';
 import { cn } from '@/lib/utils';
 import {
@@ -43,12 +43,9 @@ function EventChip({
 					.replace(' ', '');
 	return (
 		<Tip content={`${event.title}${event.location ? ` · ${event.location}` : ''}`}>
-			<Button
-				type="button"
-				variant="ghost"
-				size="xs"
+			<RowButton
 				className={cn(
-					'h-auto w-full items-start justify-start gap-1.5 truncate px-0.5 text-left font-normal',
+					'flex w-auto items-start justify-start gap-1.5 truncate px-0.5',
 					event.meta?.automation_id && 'opacity-60'
 				)}
 				onClick={(e) => {
@@ -64,25 +61,22 @@ function EventChip({
 					{time && <span className="text-muted-foreground">{time} </span>}
 					{event.title}
 				</span>
-			</Button>
+			</RowButton>
 		</Tip>
 	);
 }
 
 function More({ count, onClick }: { count: number; onClick: () => void }) {
 	return (
-		<Button
-			type="button"
-			variant="ghost"
-			size="xs"
-			className="text-muted-foreground mt-auto h-auto w-full justify-start truncate px-1 text-left font-normal"
+		<RowButton
+			className="text-muted-foreground mt-auto flex items-center justify-start truncate px-1"
 			onClick={(e) => {
 				e.stopPropagation();
 				onClick();
 			}}
 		>
 			+{count} more
-		</Button>
+		</RowButton>
 	);
 }
 

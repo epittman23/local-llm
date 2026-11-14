@@ -12,6 +12,7 @@ import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RowButton } from '@/components/ui/row-button';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import {
 	deletePromptHistoryVersion,
@@ -255,11 +256,11 @@ export function PromptEditView({
 					{history.map((entry) => {
 						const active = selected?.id === entry.id;
 						return (
-							<button
+							<RowButton
 								key={entry.id}
-								type="button"
+								aria-current={active ? 'true' : undefined}
 								className={cn(
-									'relative w-full px-1.5 py-1.5 pl-3 text-left transition',
+									'relative px-1.5 py-1.5 pl-3',
 									active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
 								)}
 								onClick={() => setSelected(entry)}
@@ -293,7 +294,7 @@ export function PromptEditView({
 									)}
 									<span className="shrink-0">{formatSecondsTimestamp(entry.created_at)}</span>
 								</div>
-							</button>
+							</RowButton>
 						);
 					})}
 					{historyLoading && (

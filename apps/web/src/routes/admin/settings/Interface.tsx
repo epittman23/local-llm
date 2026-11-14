@@ -13,7 +13,7 @@ import {
 	SettingsSection,
 	SettingTextarea
 } from '@/components/settings/controls';
-import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { getModels, getTaskConfig, updateTaskConfig } from '@/lib/apis';
 import { getChatConfig, updateChatConfig } from '@/lib/apis/chats';
 import { errorMessage } from '@/lib/apis/errors';
@@ -264,11 +264,8 @@ export default function Interface() {
 								/>
 							</div>
 							<div className="mt-2.5">
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-auto w-full justify-between gap-4 py-0.5 text-left"
-									type="button"
+								<RowButton
+									className="flex items-center justify-between gap-4 px-3 py-0.5"
 									aria-expanded={showTaskParameters}
 									onClick={() => setShowTaskParameters((v) => !v)}
 								>
@@ -276,7 +273,7 @@ export default function Interface() {
 									<span className="text-foreground-muted text-caption">
 										{showTaskParameters ? 'Close' : 'Configure'}
 									</span>
-								</Button>
+								</RowButton>
 								{showTaskParameters && (
 									<div className="max-h-[24rem] overflow-y-auto pr-1 pb-2">
 										<AdvancedParams

@@ -95,6 +95,7 @@ export const CONTRAST_RULES: ContrastRule[] = [
 	...onEvery('COL-2', '--success', 4.5),
 	...onEvery('COL-2', '--warning', 4.5),
 	...onEvery('COL-2', '--danger', 4.5),
+	...onEvery('COL-2', '--important', 4.5),
 	// Disabled text is exempt from WCAG; the standard still keeps it readable,
 	// including on the --surface-3 fill of a disabled button.
 	...onEvery('COL-2', '--foreground-disabled', 3),

@@ -127,3 +127,29 @@ describe('Documents: the embedding model is loaded again only when asked (#532)'
 		expect(bodies['/embedding/update']).toMatchObject({ force_reload: true });
 	});
 });
+
+describe('Documents: the danger zone asks before it acts', () => {
+	const openPage = async () => {
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<Documents />
+			</QueryClientProvider>
+		);
+		return screen.findByRole('button', { name: 'Reindex' });
+	};
+
+	it('the Reindex button opens a confirmation without sending anything', async () => {
+		fireEvent.click(await openPage());
+
+		expect(await screen.findByText('Reindex Embedding Data')).toBeTruthy();
+		expect(posted).toEqual([]);
+	});
+
+	it('a Reset button opens the generic confirmation', async () => {
+		await openPage();
+		fireEvent.click(screen.getAllByRole('button', { name: 'Reset' })[0]);
+
+		expect(await screen.findByText('Confirm your action')).toBeTruthy();
+		expect(posted).toEqual([]);
+	});
+});

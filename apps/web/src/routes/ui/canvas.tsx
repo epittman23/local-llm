@@ -37,6 +37,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CodeSurface } from './CodeSurface';
@@ -142,13 +143,11 @@ function DocumentCard({
 }) {
 	const Icon = doc.icon;
 	return (
-		<Button
+		<RowButton
 			ref={buttonRef}
-			type="button"
 			aria-current={open ? 'true' : undefined}
 			onClick={onOpen}
-			variant="outline"
-			className={`h-auto w-full max-w-sm justify-start gap-3 rounded-panel p-3 text-left whitespace-normal ${open ? 'border-brand' : ''}`}
+			className={`flex max-w-sm items-center justify-start gap-3 rounded-panel border p-3 ${open ? 'border-brand' : ''}`}
 		>
 			<span className="bg-surface-3 flex size-9 shrink-0 items-center justify-center rounded-lg">
 				<Icon aria-hidden className={`size-4 ${open ? 'text-brand' : 'text-foreground-muted'}`} />
@@ -161,7 +160,7 @@ function DocumentCard({
 					{doc.kind}, {doc.size}
 				</span>
 			</span>
-		</Button>
+		</RowButton>
 	);
 }
 

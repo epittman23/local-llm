@@ -13,6 +13,7 @@ vi.mock('@/lib/apis/benchmarks', async (importOriginal) => {
 		getDatasets: vi.fn(),
 		fetchDatasets: vi.fn(),
 		startTestRun: vi.fn(),
+		runOneItem: vi.fn(),
 		streamTestRun: vi.fn()
 	};
 });
@@ -107,5 +108,83 @@ describe('TestsPage release-date window', () => {
 
 		fireEvent.click(box);
 		expect(screen.getByLabelText(/test6\.jsonl: .* \(fetched\)/)).toBeInTheDocument();
+	});
+});
+
+describe('TestsPage datasets and item result', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'test-token' });
+		vi.mocked(api.getTestOptions).mockResolvedValue({
+			tiers: ['smoke'],
+			benchmarks: ['ds1000'],
+			systems: []
+		});
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+		useAuthStore.setState({ token: null });
+	});
+
+	it('shows why a dataset calibration no longer applies, in the warning colour', async () => {
+		vi.mocked(api.getDatasets).mockResolvedValue([
+			{
+				benchmark: 'ds1000',
+				name: 'DS-1000',
+				fetched: true,
+				vendored: true,
+				n_items: 1000,
+				revision: 'abc123',
+				fetched_at: null,
+				calibrated_at: null,
+				n_checked: null,
+				n_ungradeable: null,
+				calibration_stale: 'the file changed since it was calibrated'
+			},
+			{
+				benchmark: 'humaneval',
+				name: 'HumanEval+',
+				fetched: true,
+				vendored: true,
+				n_items: 164,
+				revision: 'def456',
+				fetched_at: null,
+				calibrated_at: null,
+				n_checked: 164,
+				n_ungradeable: 4,
+				calibration_stale: ''
+			}
+		]);
+		renderPage();
+		const stale = await screen.findByText('the file changed since it was calibrated');
+		expect(stale.className).toContain('text-warning');
+		expect(screen.getByText('160/164 gradeable').className).not.toContain('text-warning');
+	});
+
+	it('shows a single item result with the suites that leave it out', async () => {
+		vi.mocked(api.getDatasets).mockResolvedValue([]);
+		vi.mocked(api.runOneItem).mockResolvedValue({ started: true });
+		vi.mocked(api.streamTestRun).mockResolvedValue(
+			stream([
+				{
+					type: 'result',
+					benchmark: 'ds1000',
+					item_id: 'Pandas/1',
+					outcome: 'passed',
+					wall_ms: 1500,
+					excluded: 'smoke',
+					content: 'print(1)'
+				},
+				{ type: 'done', passed: 1, attempted: 1, cancelled: false }
+			])
+		);
+		renderPage();
+		fireEvent.change(await screen.findByLabelText('Item id'), { target: { value: 'Pandas/1' } });
+		fireEvent.click(await screen.findByRole('button', { name: 'Run item' }));
+		const result = await screen.findByTestId('item-result');
+		expect(result.textContent).toContain('ds1000/Pandas/1');
+		expect(result.textContent).toContain('1.5s');
+		expect(screen.getByText('A suite here leaves this item out: smoke').className).toContain('text-warning');
+		expect(screen.getByText('print(1)')).toBeInTheDocument();
 	});
 });

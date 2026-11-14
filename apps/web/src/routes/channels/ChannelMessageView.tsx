@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
 import { getMessageData } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -229,17 +230,14 @@ export function ChannelMessageView({
 			)}
 
 			{replyTo?.user && (
-				<Button
-					type="button"
-					variant="ghost"
-					size="xs"
-					className="mb-1 ml-12 h-auto min-w-0 justify-start gap-2 text-left font-normal"
+				<RowButton
+					className="mb-1 ml-12 flex w-auto min-w-0 items-center justify-start gap-2 px-3 py-2"
 					onClick={() => jumpTo(replyTo.id)}
 				>
 					<img src={authorImage(replyTo)} alt="" className="size-4 rounded-full object-cover" onError={fallbackImage} />
 					<span className="shrink-0">{authorName(replyTo)}</span>
 					<span className="text-muted-foreground line-clamp-1 flex-1 italic">{mentionsToText(replyTo.content)}</span>
-				</Button>
+				</RowButton>
 			)}
 
 			<div className="flex w-full">

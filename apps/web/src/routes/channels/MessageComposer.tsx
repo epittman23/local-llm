@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { getModels } from '@/lib/apis';
 import { getChannelMembersById } from '@/lib/apis/channels';
 import { uploadFile } from '@/lib/apis/files';
@@ -282,18 +283,14 @@ export const MessageComposer = forwardRef<
 					className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-60 w-72 overflow-y-auto rounded-xl border p-1 shadow-lg"
 				>
 					{suggestions.map((s, i) => (
-						<Button
+						<RowButton
 							key={`${s.kind}-${s.id}`}
-							type="button"
-							variant="ghost"
 							role="option"
 							aria-selected={i === highlighted}
+							aria-current={i === highlighted ? 'true' : undefined}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => pick(s)}
-							className={cn(
-								'h-auto w-full justify-start gap-2 px-2 py-1.5 text-left font-normal',
-								i === highlighted && 'bg-muted'
-							)}
+							className={cn('flex items-center justify-start gap-2 px-2 py-1.5', i === highlighted && 'bg-muted')}
 						>
 							{s.kind === 'channel' ? (
 								<Hash className="size-4" />
@@ -304,7 +301,7 @@ export const MessageComposer = forwardRef<
 							<span className="text-muted-foreground ml-auto text-xs">
 								{s.kind === 'model' ? 'Model' : s.kind === 'user' ? '' : 'Channel'}
 							</span>
-						</Button>
+						</RowButton>
 					))}
 				</div>
 			)}

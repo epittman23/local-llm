@@ -38,7 +38,7 @@ export function ArtifactPanel({ code, onClose }: { code: string; onClose: () => 
 			</div>
 			<iframe
 				title="Artifact preview"
-				className="min-h-0 w-full flex-1 bg-white"
+				className="bg-canvas border-border mx-2 mb-2 min-h-0 flex-1 rounded-lg border"
 				sandbox="allow-scripts allow-forms allow-modals"
 				srcDoc={artifactDocument(code)}
 			/>

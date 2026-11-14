@@ -8,6 +8,7 @@ import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Button } from '@/components/ui/button';
+import { ImageButton } from '@/components/ui/image-button';
 import { getModels } from '@/lib/apis';
 import { getVoices } from '@/lib/apis/audio';
 import { getModelsDefaults } from '@/lib/apis/configs';
@@ -257,10 +258,10 @@ function EditorForm({
 						<div className="flex w-full flex-col gap-3">
 							<div className="flex w-full min-w-0 items-center gap-3 py-0.5">
 								<div className="group relative size-12 shrink-0 md:size-14">
-									<button
-										type="button"
+									<ImageButton
 										aria-label="Upload profile image"
-										className="ring-border hover:ring-foreground/30 relative flex size-full items-center overflow-hidden rounded-xl ring-1 transition"
+										className="size-full"
+										overlay={<Camera />}
 										onClick={() => imageInput.current?.click()}
 									>
 										<img
@@ -268,10 +269,7 @@ function EditorForm({
 											alt="model profile"
 											className="size-full object-cover"
 										/>
-										<span className="bg-foreground text-background absolute right-0 bottom-0 m-1 rounded-full p-1 opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100">
-											<Camera className="size-3" />
-										</span>
-									</button>
+									</ImageButton>
 									{meta.profile_image_url && meta.profile_image_url !== DEFAULT_PROFILE_IMAGE && (
 										<Button
 											variant="ghost"

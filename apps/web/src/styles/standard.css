@@ -41,6 +41,10 @@
 	--color-danger-fill: var(--danger-fill);
 	--color-danger-fill-foreground: var(--danger-fill-foreground);
 	--color-focus: var(--focus);
+	--color-important: var(--important);
+	--color-canvas: var(--canvas);
+	--color-scrim: var(--scrim);
+	--color-on-scrim: var(--on-scrim);
 	--color-series-1: var(--series-1);
 	--color-series-2: var(--series-2);
 	--color-series-3: var(--series-3);
@@ -103,6 +107,12 @@
 	--series-5: oklch(0.56 0.14 45);
 	--series-6: oklch(0.5 0.14 295);
 	--scrim: oklch(0.24 0.02 170 / 45%);
+	/* The Important callout in a rendered answer; not a status (COL-3). */
+	--important: oklch(0.5 0.14 295);
+	/* The inside of a frame showing a page the app did not write: white in every theme (CNT-4). */
+	--canvas: oklch(1 0 0);
+	/* An icon or word over --scrim, which is dark in every theme. */
+	--on-scrim: oklch(0.98 0.005 95);
 
 	/* LAY-2: control heights. */
 	--control-compact: 1.75rem;
@@ -139,6 +149,9 @@
 	--series-5: oklch(0.76 0.11 45);
 	--series-6: oklch(0.76 0.1 295);
 	--scrim: oklch(0.1 0.01 170 / 65%);
+	--important: oklch(0.76 0.1 295);
+	--canvas: oklch(1 0 0);
+	--on-scrim: oklch(0.98 0.005 95);
 }
 
 /* ---- 2. The shared components' token names ------------------------------ */
