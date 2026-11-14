@@ -20,4 +20,9 @@ describe('NotFound', () => {
 		expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
 		expect(screen.getByText('/typo')).toBeTruthy();
 	});
+	it('is the page’s main region, headed at the standard’s page-title size (A11Y-3, TYP-2)', () => {
+		renderAt('/typo');
+		expect(screen.getByRole('main')).toBeTruthy();
+		expect(screen.getByRole('heading', { level: 1 }).className).toContain('text-heading');
+	});
 });
