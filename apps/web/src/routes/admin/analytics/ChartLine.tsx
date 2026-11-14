@@ -70,7 +70,7 @@ export function ChartLine({
 						key={m}
 						d={pathFor(m)}
 						fill="none"
-						stroke={colorMap.get(m)}
+						style={{ stroke: colorMap.get(m) }}
 						strokeWidth="1.5"
 						className={hovered && !hovered.models?.[m] ? 'opacity-20' : ''}
 					/>
@@ -82,19 +82,21 @@ export function ChartLine({
 							y1={PAD.t}
 							x2={getX(hoveredIdx)}
 							y2={ch + PAD.t}
-							stroke="#ddd"
+							className="stroke-border-divider"
 							strokeWidth="1"
 						/>
 						{models.map((m) => {
 							const v = hovered?.models?.[m] || 0;
-							return v > 0 ? <circle key={m} cx={getX(hoveredIdx)} cy={getY(v)} r="3" fill={colorMap.get(m)} /> : null;
+							return v > 0 ? (
+								<circle key={m} cx={getX(hoveredIdx)} cy={getY(v)} r="3" style={{ fill: colorMap.get(m) }} />
+							) : null;
 						})}
 					</>
 				)}
 			</svg>
 
 			{data.length > 1 && (
-				<div className="text-muted-foreground absolute inset-x-0 bottom-0 flex justify-between px-0.5 text-caption">
+				<div className="text-foreground-muted absolute inset-x-0 bottom-0 flex justify-between px-0.5 text-caption">
 					{Array.from({ length: labelCount }, (_, i) => {
 						const idx = i === labelCount - 1 ? data.length - 1 : Math.min(i * step, data.length - 1);
 						return data[idx] ? (
@@ -111,8 +113,8 @@ export function ChartLine({
 					className="pointer-events-none absolute top-1 text-caption"
 					style={{ left: `${Math.min(Math.max((mouseX / W) * 100, 8), 92)}%` }}
 				>
-					<div className="bg-popover min-w-[8.75rem] -translate-x-1/2 rounded border px-2.5 py-1.5 shadow-sm">
-						<div className="text-muted-foreground mb-1.5 text-caption">
+					<div className="bg-surface-2 border-border-divider min-w-[8.75rem] -translate-x-1/2 rounded border px-2.5 py-1.5 shadow-sm">
+						<div className="text-foreground-muted mb-1.5 text-caption">
 							{hovered.date?.includes(':')
 								? dayjs(hovered.date).format('MMM D, h A')
 								: dayjs(hovered.date).format('MMM D, YYYY')}

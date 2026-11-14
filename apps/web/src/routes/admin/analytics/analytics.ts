@@ -93,9 +93,13 @@ export const sharePercent = (count: number, total: number) => (total > 0 ? ((cou
 
 export type DailyPoint = { date: string; models: Record<string, number> };
 
-export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+/**
+ * The standard's series colours, in order (COL-8), as CSS variables: the SVG
+ * chart sets them as styles, so each line follows the theme without a redraw.
+ */
+export const CHART_COLORS = Array.from({ length: 6 }, (_, i) => `var(--series-${i + 1})`);
 
-/** The first eight models to appear in the series, in order of first appearance -- the ones the chart draws. */
+/** The first six models to appear in the series, in order of first appearance -- the ones the chart draws. */
 export const chartModels = (daily: DailyPoint[]) =>
 	[...new Set(daily.flatMap((d) => Object.keys(d.models || {})))].slice(0, CHART_COLORS.length);
 
