@@ -2,8 +2,7 @@
 
 Pins, without Docker or Kata:
 
-- sandbox/uploads.py's selection, ported from test_jupyter_chat_files.py
-  with the code (which T40 deletes): only uploaded files the user owns or
+- sandbox/uploads.py's selection: only uploaded files the user owns or
   may read, each id once, at most MAX_FILES, safe and unique names, the caps
   with a note for each file left out, decided from the size and hash
   recorded at upload; for the sync, an admin in another user's chat copies
@@ -90,14 +89,14 @@ def _items(*ids, kind='file'):
     return [{'type': kind, 'id': i, 'name': f'name-{i}'} for i in ids]
 
 
-# The selection, ported from test_jupyter_chat_files.py.
+# The selection.
 
 
 def test_copies_the_users_own_files_by_their_filename(stored_files):
     stored_files('f1', 'sales.csv')
-    files, notes = asyncio.run(uploads.chat_files(_items('f1'), OWNER))
+    files, notes = asyncio.run(uploads.chat_uploads(_items('f1'), OWNER))
 
-    assert [name for name, _ in files] == ['sales.csv']
+    assert [upload.name for upload in files] == ['sales.csv']
     assert notes == []
 
 
@@ -105,9 +104,9 @@ def test_another_users_file_needs_read_access(stored_files):
     stored_files('mine', 'a.csv')
     stored_files('theirs', 'b.csv', user_id='someone-else')
     stored_files('shared', 'c.csv', user_id='someone-else', granted=True)
-    files, _ = asyncio.run(uploads.chat_files(_items('mine', 'theirs', 'shared'), OWNER))
+    files, _ = asyncio.run(uploads.chat_uploads(_items('mine', 'theirs', 'shared'), OWNER))
 
-    assert [name for name, _ in files] == ['a.csv', 'c.csv']
+    assert [upload.name for upload in files] == ['a.csv', 'c.csv']
 
 
 def test_only_uploaded_files_count(stored_files):
@@ -119,18 +118,18 @@ def test_only_uploaded_files_count(stored_files):
         {'type': 'file'},
         'not a dict',
     ]
-    files, notes = asyncio.run(uploads.chat_files(items, OWNER))
+    files, notes = asyncio.run(uploads.chat_uploads(items, OWNER))
 
     assert files == [] and notes == []
 
 
 def test_no_user_copies_nothing(stored_files):
     stored_files('f1', 'a.csv')
-    assert asyncio.run(uploads.chat_files(_items('f1'), None)) == ([], [])
+    assert asyncio.run(uploads.chat_uploads(_items('f1'), None)) == ([], [])
 
 
 def test_a_missing_file_record_is_skipped(stored_files):
-    assert asyncio.run(uploads.chat_files(_items('gone'), OWNER)) == ([], [])
+    assert asyncio.run(uploads.chat_uploads(_items('gone'), OWNER)) == ([], [])
 
 
 def test_names_are_reduced_to_a_base_name_and_made_unique(stored_files):
@@ -139,10 +138,10 @@ def test_names_are_reduced_to_a_base_name_and_made_unique(stored_files):
     stored_files('f3', 'data.csv')
     stored_files('f4', 'C:\\Users\\me\\data.csv')
     stored_files('f5', '')
-    files, _ = asyncio.run(uploads.chat_files(_items('f1', 'f2', 'f3', 'f4', 'f5'), OWNER))
+    files, _ = asyncio.run(uploads.chat_uploads(_items('f1', 'f2', 'f3', 'f4', 'f5'), OWNER))
 
     # A file without a filename takes the name the chat gave it.
-    assert [name for name, _ in files] == ['passwd', 'data.csv', 'data (2).csv', 'data (3).csv', 'name-f5']
+    assert [upload.name for upload in files] == ['passwd', 'data.csv', 'data (2).csv', 'data (3).csv', 'name-f5']
 
 
 def test_files_over_the_limits_are_left_out_with_a_note(stored_files, monkeypatch):
@@ -151,9 +150,9 @@ def test_files_over_the_limits_are_left_out_with_a_note(stored_files, monkeypatc
     stored_files('small', 'small.csv', size=8)
     stored_files('big', 'big.csv', size=11)
     stored_files('second', 'second.csv', size=8)
-    files, notes = asyncio.run(uploads.chat_files(_items('small', 'big', 'second'), OWNER))
+    files, notes = asyncio.run(uploads.chat_uploads(_items('small', 'big', 'second'), OWNER))
 
-    assert [name for name, _ in files] == ['small.csv']
+    assert [upload.name for upload in files] == ['small.csv']
     assert [note.split(':')[0] for note in notes] == ['big.csv', 'second.csv']
     assert notes[0] == 'big.csv: not copied, over the 0 MB per file or 0 MB total limit'
 
@@ -162,10 +161,10 @@ def test_the_caps_can_be_given_per_call(stored_files):
     stored_files('small', 'small.csv', size=8)
     stored_files('big', 'big.csv', size=11)
     files, notes = asyncio.run(
-        uploads.chat_files(_items('small', 'big'), OWNER, max_file_bytes=10, max_total_bytes=100)
+        uploads.chat_uploads(_items('small', 'big'), OWNER, max_file_bytes=10, max_total_bytes=100)
     )
 
-    assert [name for name, _ in files] == ['small.csv']
+    assert [upload.name for upload in files] == ['small.csv']
     assert notes == ['big.csv: not copied, over the 0 MB per file or 0 MB total limit']
 
 
@@ -182,7 +181,7 @@ def test_a_file_storage_cannot_hand_over_gets_a_note(stored_files, monkeypatch):
         raise OSError('the object store is down')
 
     monkeypatch.setattr(Storage, 'get_file', broken)
-    assert asyncio.run(uploads.chat_files(_items('f1'), OWNER)) == ([], ['a.csv: could not be read'])
+    assert asyncio.run(uploads.chat_uploads(_items('f1'), OWNER)) == ([], ['a.csv: could not be read'])
 
 
 def test_chat_uploads_carries_the_id_and_size(stored_files):
@@ -195,16 +194,6 @@ def test_chat_uploads_carries_the_id_and_size(stored_files):
         uploads.Upload('b.csv', 'f2', 5, 'h2', str(path.parent / 'f2')),
     ]
     assert stored_files.fetched == [str(path)]
-
-
-def test_the_jupyter_module_still_offers_chat_files_with_its_own_caps(stored_files, monkeypatch):
-    from local_llm.utils import code_interpreter as ci
-
-    assert (ci.MAX_FILE_BYTES, ci.MAX_TOTAL_BYTES) == (uploads.MAX_FILE_BYTES, uploads.MAX_TOTAL_BYTES)
-    monkeypatch.setattr(ci, 'MAX_FILE_BYTES', 10)
-    stored_files('big', 'big.csv', size=11)
-    files, notes = asyncio.run(ci.chat_files(_items('big'), OWNER))
-    assert files == [] and [note.split(':')[0] for note in notes] == ['big.csv']
 
 
 # The sync, through the bash tool.
@@ -621,9 +610,9 @@ def test_unique_names_stay_within_255_bytes(stored_files):
     stored_files('f2', long)
     stored_files('f3', '')
     files, _ = asyncio.run(
-        uploads.chat_files([*_items('f1', 'f2'), {'type': 'file', 'id': 'f3', 'name': '..\0\n'}], OWNER)
+        uploads.chat_uploads([*_items('f1', 'f2'), {'type': 'file', 'id': 'f3', 'name': '..\0\n'}], OWNER)
     )
-    names = [name for name, _ in files]
+    names = [upload.name for upload in files]
     assert names == [long, 'y' * 247 + ' (2).csv', 'f3']
     validate_put_files('uploads', [(name, b'', 0o444) for name in names])
 
@@ -645,8 +634,8 @@ def test_bad_names_cannot_lock_bash_out(stored_files, monkeypatch):
 def test_each_file_id_counts_once_and_odd_ids_are_ignored(stored_files):
     stored_files('f1', 'a.csv')
     items = [*_items('f1', 'f1', 'f1'), {'type': 'file', 'id': ['f1']}, {'type': 'file', 'id': 7}]
-    files, notes = asyncio.run(uploads.chat_files(items, OWNER))
-    assert [name for name, _ in files] == ['a.csv'] and notes == []
+    files, notes = asyncio.run(uploads.chat_uploads(items, OWNER))
+    assert [upload.name for upload in files] == ['a.csv'] and notes == []
 
 
 def test_files_past_the_count_limit_are_not_looked_up(stored_files, monkeypatch):
@@ -663,9 +652,9 @@ def test_files_past_the_count_limit_are_not_looked_up(stored_files, monkeypatch)
         return await real(file_id)
 
     monkeypatch.setattr(Files, 'get_file_by_id', counting)
-    files, notes = asyncio.run(uploads.chat_files(_items('f0', 'f1', 'f2', 'f3', 'f4'), OWNER))
+    files, notes = asyncio.run(uploads.chat_uploads(_items('f0', 'f1', 'f2', 'f3', 'f4'), OWNER))
 
-    assert [name for name, _ in files] == ['0.csv', '1.csv']
+    assert [upload.name for upload in files] == ['0.csv', '1.csv']
     assert notes == ['3 more attached file(s) not copied: at most 2 files are copied, from the first 200 listed']
     assert looked_up == ['f0', 'f1']
 
@@ -722,7 +711,7 @@ def test_malformed_recorded_facts_are_ignored(stored_files):
     assert [(f.size, f.file_hash, f.path is not None) for f in files] == [(4, None, True)] * 3
 
 
-def test_chat_files_notes_a_file_storage_cannot_hand_over(stored_files, monkeypatch):
+def test_a_file_with_a_recorded_size_is_listed_without_touching_storage(stored_files, monkeypatch):
     from local_llm.storage.provider import Storage
 
     stored_files('f1', 'a.csv', meta={'size': 8})
@@ -731,7 +720,10 @@ def test_chat_files_notes_a_file_storage_cannot_hand_over(stored_files, monkeypa
         raise OSError('the object store is down')
 
     monkeypatch.setattr(Storage, 'get_file', broken)
-    assert asyncio.run(uploads.chat_files(_items('f1'), OWNER)) == ([], ['a.csv: could not be read'])
+    files, notes = asyncio.run(uploads.chat_uploads(_items('f1'), OWNER))
+
+    assert [(upload.name, upload.size, upload.path) for upload in files] == [('a.csv', 8, None)]
+    assert notes == []
 
 
 def test_an_admin_in_another_users_chat_copies_only_what_the_owner_may_read_too(stored_files, monkeypatch):

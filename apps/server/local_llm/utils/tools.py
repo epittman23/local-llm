@@ -61,7 +61,6 @@ from local_llm.tools.builtin import (
     delete_calendar_event,
     delete_memory,
     edit_image,
-    execute_code,
     fetch_url,
     generate_image,
     get_current_timestamp,
@@ -740,10 +739,10 @@ async def _skill_tools(ctx: _BuiltinToolContext) -> list[Callable]:
     return [view_skill] if ctx.extra_params.get('__skill_ids__') else []
 
 
-# The code interpreter's four gates; the engine then picks which tools pass them (_code_interpreter_tools).
+# The code interpreter's four gates, in front of the sandbox's four tools.
 _code_interpreter_gates = _gated_tools(
     'code_interpreter',
-    [execute_code],
+    [bash, view, write_file, str_replace],
     config_key='code_interpreter.enable',
     capability='code_interpreter',
     feature='code_interpreter',
@@ -752,13 +751,11 @@ _code_interpreter_gates = _gated_tools(
 
 
 async def _code_interpreter_tools(ctx: _BuiltinToolContext) -> list[Callable]:
-    # The sandbox engine offers its four tools instead of execute_code; any other engine (jupyter, pyodide, or
-    # one execute_code reports as unknown when called) keeps execute_code.
-    if not await _code_interpreter_gates(ctx):
+    # Only the sandbox engine has tools. Any other stored engine value (pyodide, or a removed engine's until T43's
+    # migration rewrites it) offers none.
+    if ctx.config.get('code_interpreter.engine') != 'sandbox':
         return []
-    if ctx.config.get('code_interpreter.engine') == 'sandbox':
-        return [bash, view, write_file, str_replace]
-    return [execute_code]
+    return await _code_interpreter_gates(ctx)
 
 
 async def _task_tools(ctx: _BuiltinToolContext) -> list[Callable]:

@@ -107,8 +107,6 @@ ENV_SETTINGS = {
     'PROFILE_IMAGE_MAX_DATA_URI_SIZE': (None, 7),
 }
 CONFIG_SETTINGS = {
-    'CODE_EXECUTION_JUPYTER_TIMEOUT': (60, 7),
-    'CODE_INTERPRETER_JUPYTER_TIMEOUT': (60, 7),
     'MEMORIES_REVIEW_INTERVAL_TURNS': (10, 7),
     'MEMORIES_USER_CHAR_LIMIT': (2000, 7),
     'MEMORIES_CONTEXT_CHAR_LIMIT': (2000, 7),
@@ -222,16 +220,6 @@ def _load_one(tmp_path, settings: dict, names: list[str]) -> tuple[dict, str]:
     ('settings', 'name', 'expected'),
     [
         # A setting that falls back to another reads the other when it is empty or bad.
-        (
-            {'CODE_INTERPRETER_JUPYTER_TIMEOUT': '', 'CODE_EXECUTION_JUPYTER_TIMEOUT': '7'},
-            'CODE_INTERPRETER_JUPYTER_TIMEOUT',
-            7,
-        ),
-        (
-            {'CODE_INTERPRETER_JUPYTER_TIMEOUT': 'x', 'CODE_EXECUTION_JUPYTER_TIMEOUT': '7'},
-            'CODE_INTERPRETER_JUPYTER_TIMEOUT',
-            7,
-        ),
         ({'RAG_EMBEDDING_BATCH_SIZE': '', 'RAG_EMBEDDING_OPENAI_BATCH_SIZE': '9'}, 'RAG_EMBEDDING_BATCH_SIZE', 9),
         ({'RAG_EMBEDDING_BATCH_SIZE': '8', 'RAG_EMBEDDING_OPENAI_BATCH_SIZE': '9'}, 'RAG_EMBEDDING_BATCH_SIZE', 8),
         # "none", in any case and with spaces, is no limit, as before.
@@ -252,3 +240,24 @@ def test_a_legacy_value_beside_a_current_one_is_not_read(tmp_path):
 
     assert values['RAG_EMBEDDING_BATCH_SIZE'] == 8
     assert 'RAG_EMBEDDING_OPENAI_BATCH_SIZE' not in stderr
+
+
+@pytest.mark.parametrize('name', ['CODE_INTERPRETER_ENGINE', 'CODE_EXECUTION_ENGINE'])
+@pytest.mark.parametrize(
+    ('value', 'expected', 'warned'),
+    [
+        (None, 'pyodide', False),
+        ('sandbox', 'sandbox', False),
+        ('pyodide', 'pyodide', False),
+        ('jupyter', 'pyodide', True),
+    ],
+)
+def test_a_code_engine_setting_names_a_live_engine_or_falls_back_to_pyodide(
+    monkeypatch, tmp_path, name, value, expected, warned
+):
+    monkeypatch.delenv('CODE_INTERPRETER_ENGINE', raising=False)
+    monkeypatch.delenv('CODE_EXECUTION_ENGINE', raising=False)
+    values, stderr = _load_one(tmp_path, {} if value is None else {name: value}, [name])
+
+    assert values[name] == expected
+    assert (f'{name}={value!r} is not a code engine' in stderr) is warned

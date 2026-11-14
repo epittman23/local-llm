@@ -4,9 +4,8 @@ The benchmark harness (benchmarks/evaluation/harness.py) answers an item
 through the app's chat pipeline, and nothing in the pipeline's result says
 which connection answered it, what was actually sent, or how long the code
 blocks ran. Inside `tracing()`, routers/openai.py notes each upstream request
-(its URL and the exact body sent), utils/code_interpreter.py and
-tools/builtin.py note each code run's duration, and tools/builtin.py notes
-the key of each sandbox a call ran in; outside it, every note is a no-op, so
+(its URL and the exact body sent), and tools/builtin.py notes each code
+run's duration and the key of each sandbox a call ran in; outside it, every note is a no-op, so
 ordinary chats are untouched.
 
 The ContextVar holds one Trace, appended to and never reassigned: asyncio
@@ -35,8 +34,8 @@ class Trace:
     requests: list[tuple[str, str]] = field(default_factory=list)
     #: Milliseconds per code run.
     code_runs_ms: list[float] = field(default_factory=list)
-    #: Code runs that failed in the code interpreter itself (Jupyter down, a
-    #: refused token), as opposed to code that raised.
+    #: Code runs that failed in the code interpreter itself (the sandbox's own
+    #: errors), as opposed to code that raised.
     code_run_failures: list[str] = field(default_factory=list)
     #: The keys of the sandboxes the calls ran in, distinct, in first-use
     #: order: more than one means the chat's sandbox was replaced between

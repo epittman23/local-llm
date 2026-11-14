@@ -71,23 +71,13 @@ def client(app):
 
 
 def _form(**overrides) -> dict:
-    """A complete form as the admin page posts it: Jupyter fields plus the six sandbox ones."""
+    """A complete form as the admin page posts it: switches, engines, prompt and the six sandbox settings."""
     form = {
         'ENABLE_CODE_EXECUTION': True,
         'CODE_EXECUTION_ENGINE': 'sandbox',
-        'CODE_EXECUTION_JUPYTER_URL': None,
-        'CODE_EXECUTION_JUPYTER_AUTH': None,
-        'CODE_EXECUTION_JUPYTER_AUTH_TOKEN': None,
-        'CODE_EXECUTION_JUPYTER_AUTH_PASSWORD': None,
-        'CODE_EXECUTION_JUPYTER_TIMEOUT': None,
         'ENABLE_CODE_INTERPRETER': True,
         'CODE_INTERPRETER_ENGINE': 'sandbox',
         'CODE_INTERPRETER_PROMPT_TEMPLATE': None,
-        'CODE_INTERPRETER_JUPYTER_URL': None,
-        'CODE_INTERPRETER_JUPYTER_AUTH': None,
-        'CODE_INTERPRETER_JUPYTER_AUTH_TOKEN': None,
-        'CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD': None,
-        'CODE_INTERPRETER_JUPYTER_TIMEOUT': None,
         'CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE': 'web',
         'CODE_INTERPRETER_SANDBOX_TIMEOUT': 120,
         'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 8,
@@ -253,6 +243,53 @@ class TestConfigForm:
     def test_the_bounds_themselves_are_accepted(self, client, people, field, value):
         r = client.post('/configs/code_execution', json=_form(**{field: value}), headers=people.admin.headers)
         assert r.status_code == 200, r.text
+
+    @pytest.mark.parametrize('field', ['CODE_EXECUTION_ENGINE', 'CODE_INTERPRETER_ENGINE'])
+    @pytest.mark.parametrize('engine', ['jupyter', '', 'SANDBOX', 'other'])
+    def test_an_engine_other_than_the_known_ones_is_refused_and_nothing_is_stored(self, client, people, field, engine):
+        key = configs_router.CODE_EXECUTION_CONFIG_KEYS[field]
+        _run(Config.upsert({key: 'sandbox'}))
+        r = client.post('/configs/code_execution', json=_form(**{field: engine}), headers=people.admin.headers)
+        assert r.status_code == 422, r.text
+        assert _run(Config.get(key)) == 'sandbox'
+
+    @pytest.mark.parametrize('field', ['CODE_EXECUTION_ENGINE', 'CODE_INTERPRETER_ENGINE'])
+    @pytest.mark.parametrize('engine', ['sandbox', 'pyodide'])
+    def test_the_sandbox_and_pyodide_engines_are_accepted_and_stored(self, client, people, field, engine):
+        r = client.post('/configs/code_execution', json=_form(**{field: engine}), headers=people.admin.headers)
+        assert r.status_code == 200, r.text
+        assert r.json()[field] == engine
+        assert _run(Config.get(configs_router.CODE_EXECUTION_CONFIG_KEYS[field])) == engine
+
+    def test_the_form_ignores_the_jupyter_fields_an_older_page_posts(self, client, people):
+        old = _form(CODE_INTERPRETER_JUPYTER_URL='http://jupyter.invalid', CODE_EXECUTION_JUPYTER_TIMEOUT=60)
+        r = client.post('/configs/code_execution', json=old, headers=people.admin.headers)
+        assert r.status_code == 200, r.text
+        assert 'CODE_INTERPRETER_JUPYTER_URL' not in r.json()
+        assert _run(Config.get('code_interpreter.jupyter.url')) is None
+
+    @pytest.mark.parametrize('key', ['code_execution.engine', 'code_interpreter.engine'])
+    def test_the_get_still_serves_a_stored_jupyter_engine(self, client, people, key):
+        _run(Config.upsert({key: 'jupyter'}))
+        r = client.get('/configs/code_execution', headers=people.admin.headers)
+        assert r.status_code == 200, r.text
+        field = {v: k for k, v in configs_router.CODE_EXECUTION_CONFIG_KEYS.items()}[key]
+        assert r.json()[field] == 'jupyter'
+
+    @pytest.mark.parametrize('key', ['code_execution.engine', 'code_interpreter.engine'])
+    def test_the_config_import_refuses_a_jupyter_engine(self, client, people, key):
+        _run(Config.upsert({key: 'sandbox'}))
+        r = client.post('/configs/import', json={'config': {key: 'jupyter'}}, headers=people.admin.headers)
+        assert r.status_code == 422, r.text
+        assert key in r.json()['detail']
+        assert _run(Config.get(key)) == 'sandbox'
+
+    @pytest.mark.parametrize('key', ['code_execution.engine', 'code_interpreter.engine'])
+    @pytest.mark.parametrize('engine', ['sandbox', 'pyodide'])
+    def test_the_config_import_accepts_the_known_engines(self, client, people, key, engine):
+        r = client.post('/configs/import', json={'config': {key: engine}}, headers=people.admin.headers)
+        assert r.status_code == 200, r.text
+        assert _run(Config.get(key)) == engine
 
     def test_a_non_admin_cannot_read_or_write_it(self, client, people):
         assert client.get('/configs/code_execution', headers=people.member.headers).status_code == 401

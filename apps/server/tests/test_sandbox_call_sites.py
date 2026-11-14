@@ -13,8 +13,8 @@ Pins, without Docker or Kata (SandboxManager on a FakeBackend):
   does: linked to the message when there is one (the tag path), stored but
   linked to nothing without one (the Run endpoint), owner decision Q25;
 - the FakeBackend lists /workspace/.runs as the real script does;
-- the tag path runs a `<code_interpreter>` block there without the blocked
-  modules preamble, and tells the model which files were attached;
+- the tag path runs a `<code_interpreter>` block there with its code
+  unchanged, answers "not configured" under a stored `jupyter` engine, and tells the model which files were attached;
 - each engine gets its own prompt on each function-calling path;
 - a request with both a terminal and the sandbox engine is refused (Q24),
   and terminal events go out for terminal tools only;
@@ -472,7 +472,6 @@ def _reply(monkeypatch, engine: str, run: dict | None = None):
 
     monkeypatch.setattr(middleware.Config, 'get', get)
     monkeypatch.setattr(builtin, 'run_code_in_sandbox', run_code_in_sandbox)
-    monkeypatch.setattr(middleware, 'CODE_INTERPRETER_BLOCKED_MODULES', ['os'])
     reply = object.__new__(middleware._StreamingReply)
     reply.request = SimpleNamespace()
     reply.user = _user()
@@ -486,7 +485,7 @@ def _reply(monkeypatch, engine: str, run: dict | None = None):
     return reply, calls
 
 
-def test_the_tag_path_runs_a_block_in_the_sandbox_without_the_blocked_modules_preamble(monkeypatch):
+def test_the_tag_path_runs_a_block_in_the_sandbox_with_its_code_unchanged(monkeypatch):
     run = {
         'stdout': 'hi\n',
         'stderr': 'warning\n',
@@ -515,6 +514,35 @@ def test_the_tag_path_shows_the_model_a_sandbox_failure(monkeypatch):
     assert out == {'stdout': 'The sandbox is not available on this server', 'stderr': '', 'result': ''}
 
 
+def test_execute_code_itself_answers_not_configured_for_a_stored_jupyter_engine_and_runs_nothing(monkeypatch):
+    # Detection no longer lets a block reach this function under such an engine; it stays the inert last resort.
+    reply, calls = _reply(monkeypatch, 'jupyter')
+    out = asyncio.run(middleware._StreamingReply._execute_code(reply, {'code': 'print(1)'}))
+    assert out['stdout'] == 'Code interpreter engine not configured.'
+    assert calls == []
+
+
+def _detects(monkeypatch, engine) -> bool:
+    """Whether the tag path detects code blocks, with every authorization gate open and the engine as given."""
+
+    async def get(key, default=None):
+        return {'code_interpreter.enable': True, 'code_interpreter.engine': engine}.get(key, default)
+
+    monkeypatch.setattr(middleware.Config, 'get', get)
+    reply = object.__new__(middleware._StreamingReply)
+    reply.user = SimpleNamespace(id='u1', role='admin')
+    reply.model = {'id': 'm', 'info': {'meta': {}}}
+    reply.metadata = {'params': {'function_calling': 'legacy'}, 'features': {'code_interpreter': True}}
+    return asyncio.run(middleware._StreamingReply._detect_code_interpreter(reply))
+
+
+@pytest.mark.parametrize(
+    ('engine', 'detected'), [('sandbox', True), ('pyodide', True), ('jupyter', False), ('cloud', False)]
+)
+def test_the_tag_path_detects_code_blocks_only_under_a_live_engine(monkeypatch, engine, detected):
+    assert _detects(monkeypatch, engine) is detected
+
+
 def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
     run = {'stdout': 'ok\n', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
     reply, _ = _reply(monkeypatch, 'sandbox', run)
@@ -527,8 +555,6 @@ def test_the_tag_path_adds_no_stderr_section_when_there_is_none(monkeypatch):
     [
         ('sandbox', True, 'CODE_INTERPRETER_SANDBOX_TAG_PROMPT'),
         ('sandbox', False, 'CODE_INTERPRETER_SANDBOX_PROMPT'),
-        ('jupyter', True, 'CODE_INTERPRETER_JUPYTER_PROMPT'),
-        ('jupyter', False, 'CODE_INTERPRETER_JUPYTER_PROMPT'),
         ('pyodide', True, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
         ('pyodide', False, 'CODE_INTERPRETER_PYODIDE_PROMPT'),
     ],
@@ -547,7 +573,7 @@ def test_each_engine_gets_its_own_prompt_on_each_path(monkeypatch, engine, legac
     others = {
         'CODE_INTERPRETER_SANDBOX_TAG_PROMPT',
         'CODE_INTERPRETER_SANDBOX_PROMPT',
-        'CODE_INTERPRETER_JUPYTER_PROMPT',
+        'CODE_INTERPRETER_PYODIDE_PROMPT',
     }
     for other in others - {expected}:
         assert getattr(middleware, other) not in added
@@ -581,7 +607,7 @@ def _config(monkeypatch, **values):
         ('t1', {'code_interpreter': True}, {'capabilities': {'code_interpreter': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {'builtinTools': {'code_interpreter': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {}, {'code_interpreter.enable': False}, False),
-        ('t1', {'code_interpreter': True}, {}, {'code_interpreter.engine': 'jupyter'}, False),
+        ('t1', {'code_interpreter': True}, {}, {'code_interpreter.engine': 'pyodide'}, False),
         ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {}, False),
         ('t1', {'code_interpreter': True}, {}, {'no session': True}, False),
         ('t1', {'code_interpreter': True}, {'capabilities': {'builtin_tools': False}}, {'legacy': True}, True),
@@ -595,7 +621,7 @@ def _config(monkeypatch, **values):
         'model without code',
         'tool off',
         'code interpreter off',
-        'jupyter',
+        'another engine',
         'native without builtin tools',
         'native without a session',
         'tag path without builtin tools',
@@ -685,6 +711,16 @@ def test_the_run_endpoint_needs_a_chat_under_the_sandbox_engine(endpoint):
     response = endpoint['client'].post('/code/execute', json={'code': 'print(1)'})
     assert response.status_code == 400
     assert 'chat_id' in response.json()['detail']
+    assert endpoint['runs'] == []
+
+
+@pytest.mark.parametrize('engine', ['jupyter', 'pyodide', None, '', 'other'])
+def test_the_run_endpoint_answers_400_under_any_engine_but_the_sandbox(endpoint, engine):
+    endpoint['engine'] = engine
+    endpoint['chats'][CHAT] = SimpleNamespace(id=CHAT, user_id='u1')
+    response = endpoint['client'].post('/code/execute', json={'code': 'print(1)', 'chat_id': CHAT})
+    assert response.status_code == 400
+    assert 'engine not supported' in response.json()['detail']
     assert endpoint['runs'] == []
 
 
@@ -932,8 +968,8 @@ def test_a_sub_agents_completion_runs_on_a_request_sharing_the_parents_sandbox(m
     assert state.sandbox_chat_id == CHAT
 
 
-@pytest.mark.parametrize(('engine', 'kept'), [('sandbox', True), ('jupyter', True), ('pyodide', False)])
-def test_a_background_sub_agent_keeps_the_code_interpreter_on_a_server_engine(monkeypatch, engine, kept):
+@pytest.mark.parametrize(('engine', 'kept'), [('sandbox', True), ('jupyter', False), ('pyodide', False)])
+def test_a_background_sub_agent_keeps_the_code_interpreter_only_on_the_sandbox_engine(monkeypatch, engine, kept):
     async def get(key, default=None):
         return engine if key == 'code_interpreter.engine' else default
 

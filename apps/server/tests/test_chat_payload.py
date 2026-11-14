@@ -307,10 +307,10 @@ CASES_SPEC = [
         {'params': LEGACY},
     ),
     _case(
-        'code_interpreter_legacy_jupyter_custom',
+        'code_interpreter_legacy_sandbox_custom',
         {'messages': CHAT, 'features': {'code_interpreter': True}},
         {'params': LEGACY},
-        {'config': {'code_interpreter.engine': 'jupyter', 'code_interpreter.prompt_template': 'Use the kernel.'}},
+        {'config': {'code_interpreter.engine': 'sandbox', 'code_interpreter.prompt_template': 'Use the workspace.'}},
     ),
     _case(
         'code_interpreter_native_pyodide',
@@ -318,7 +318,19 @@ CASES_SPEC = [
         {'params': NATIVE},
     ),
     _case(
-        'code_interpreter_native_jupyter',
+        'code_interpreter_native_sandbox',
+        {'messages': CHAT, 'features': {'code_interpreter': True}},
+        {'params': NATIVE},
+        {'config': {'code_interpreter.engine': 'sandbox'}},
+    ),
+    _case(
+        'code_interpreter_legacy_stored_jupyter',
+        {'messages': CHAT, 'features': {'code_interpreter': True}},
+        {'params': LEGACY},
+        {'config': {'code_interpreter.engine': 'jupyter'}},
+    ),
+    _case(
+        'code_interpreter_native_stored_jupyter',
         {'messages': CHAT, 'features': {'code_interpreter': True}},
         {'params': NATIVE},
         {'config': {'code_interpreter.engine': 'jupyter'}},

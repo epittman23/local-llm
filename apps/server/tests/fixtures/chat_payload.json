@@ -18440,7 +18440,7 @@
    ]
   ]
  },
- "payload:code_interpreter_legacy_jupyter_custom": {
+ "payload:code_interpreter_legacy_sandbox_custom": {
   "form_data": {
    "model": "m1",
    "messages": [
@@ -18454,7 +18454,7 @@
     },
     {
      "role": "user",
-     "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
+     "content": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`."
     }
    ],
    "inlet_filtered": true,
@@ -18473,7 +18473,7 @@
      "code_interpreter": true
     },
     "system_prompt": "Be brief.",
-    "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+    "user_prompt": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`.",
     "sources": []
    },
    "request_filtered": true
@@ -18493,7 +18493,7 @@
     "code_interpreter": true
    },
    "system_prompt": "Be brief.",
-   "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+   "user_prompt": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`.",
    "sources": []
   },
   "events": [],
@@ -18512,7 +18512,7 @@
     "code_interpreter": true
    },
    "system_prompt": "Be brief.",
-   "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+   "user_prompt": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`.",
    "sources": []
   },
   "calls": [
@@ -18721,7 +18721,7 @@
        },
        {
         "role": "user",
-        "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
+        "content": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`."
        }
       ],
       "inlet_filtered": true,
@@ -18853,7 +18853,7 @@
        },
        {
         "role": "user",
-        "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
+        "content": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`."
        }
       ],
       "inlet_filtered": true,
@@ -18872,7 +18872,7 @@
         "code_interpreter": true
        },
        "system_prompt": "Be brief.",
-       "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+       "user_prompt": "Use the workspace.\n\n##### Sandbox Environment\n\n- Each code block runs as a Python file, `/workspace/.runs/<n>.py`, in a private Linux sandbox, from `/workspace`. A\n  block ends every process it started, so variables do not carry over to the next block: save what you need to files.\n- `/workspace` persists for the whole chat, so files, installed packages and data you saved survive from one block to\n  the next.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Those files are attached to your reply, and the\n  output names them; do not repeat them as links.\n- Print what you want returned: the block's output comes back to you, shortened when long.\n- The sandbox has no internet. Installing a package works only from the reviewed package mirror, with\n  `subprocess.run(['pip', 'install', 'name'])`; if it answers \"no matching distribution\", tell the user the package is\n  not available instead of working around it.\n- The environment has Python with the scientific stack (numpy, pandas, scipy, scikit-learn, matplotlib), R, TeX Live\n  and the DuckDB CLI, which a block can run with `subprocess`.",
        "sources": []
       }
      }
@@ -19304,13 +19304,13 @@
    ]
   ]
  },
- "payload:code_interpreter_native_jupyter": {
+ "payload:code_interpreter_native_sandbox": {
   "form_data": {
    "model": "m1",
    "messages": [
     {
      "role": "system",
-     "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.\n[templated Be brief.]"
+     "content": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch.\n[templated Be brief.]"
     },
     {
      "role": "user",
@@ -19332,7 +19332,7 @@
     "features": {
      "code_interpreter": true
     },
-    "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+    "system_prompt": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch.",
     "user_prompt": "What is 2+2?",
     "sources": []
    },
@@ -19352,7 +19352,7 @@
    "features": {
     "code_interpreter": true
    },
-   "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+   "system_prompt": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch.",
    "user_prompt": "What is 2+2?",
    "sources": []
   },
@@ -19371,7 +19371,7 @@
    "features": {
     "code_interpreter": true
    },
-   "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+   "system_prompt": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch.",
    "user_prompt": "What is 2+2?",
    "sources": []
   },
@@ -19565,7 +19565,7 @@
       "messages": [
        {
         "role": "system",
-        "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
+        "content": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch."
        },
        {
         "role": "user",
@@ -19693,7 +19693,7 @@
       "messages": [
        {
         "role": "system",
-        "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
+        "content": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch."
        },
        {
         "role": "user",
@@ -19719,7 +19719,855 @@
        "features": {
         "code_interpreter": true
        },
-       "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
+       "system_prompt": "Be brief.\n\n\n##### Sandbox Environment\n\n- You work in a private Linux sandbox through four tools: `bash` (run a command), `view` (read a file), `write_file`\n  (create a file, or replace one when told to overwrite) and `str_replace` (edit part of a file).\n- `/workspace` persists for the whole chat, so files, installed packages and data you load survive from one call to\n  the next. Only running processes do not: each command ends every process it started.\n- Files the user attached are in `/workspace/uploads`, which is read-only. Copy a file elsewhere to change it.\n- Put every file the user should receive in `/workspace/outputs`. Nothing is captured inline, so save a figure with\n  `plt.savefig('/workspace/outputs/name.png')` instead of `plt.show()`. Your next `bash` call attaches the files new or\n  changed there to your reply and lists them under `outputs`; after `write_file` or `str_replace` into it, run one\n  (`ls outputs` will do) if no other command follows.\n- Print what you want returned: a command's stdout and stderr come back to you, shortened when long.\n- The sandbox has no internet. `pip install` works only from the reviewed package mirror; if it answers \"no matching\n  distribution\", tell the user the package is not available instead of working around it.\n- For a LaTeX document, build it in `/workspace/build/<name>/` with\n  `latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error`, read the log for `Overfull \\hbox`, undefined\n  references and missing citations, then copy the `.tex` source and the `.pdf` to `/workspace/outputs`.\n- There are two images, picked with the `bash` tool's `image` argument; a call that names none keeps the running\n  image, and a new sandbox starts with the one the admin configured. `data` has Python with the scientific stack, R,\n  TeX Live and the DuckDB CLI. Choose `web` only for TypeScript or JavaScript, Node tooling, or checking a page in\n  headless Chromium with Playwright; `/workspace` carries over when you switch.",
+       "user_prompt": "What is 2+2?",
+       "sources": []
+      }
+     }
+    }
+   ]
+  ]
+ },
+ "payload:code_interpreter_legacy_stored_jupyter": {
+  "form_data": {
+   "model": "m1",
+   "messages": [
+    {
+     "role": "system",
+     "content": "Be brief.\n[templated Be brief.]"
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "inlet_filtered": true,
+   "metadata": {
+    "message_id": "a1",
+    "params": {
+     "function_calling": "legacy"
+    },
+    "chat_id": "",
+    "model_id": "m1",
+    "tool_ids": null,
+    "skill_ids": [],
+    "terminal_id": null,
+    "files": null,
+    "features": {
+     "code_interpreter": true
+    },
+    "system_prompt": "Be brief.",
+    "user_prompt": "What is 2+2?",
+    "sources": []
+   },
+   "request_filtered": true
+  },
+  "metadata": {
+   "message_id": "a1",
+   "params": {
+    "function_calling": "legacy"
+   },
+   "chat_id": "",
+   "model_id": "m1",
+   "tool_ids": null,
+   "skill_ids": [],
+   "terminal_id": null,
+   "files": null,
+   "features": {
+    "code_interpreter": true
+   },
+   "system_prompt": "Be brief.",
+   "user_prompt": "What is 2+2?",
+   "sources": []
+  },
+  "events": [],
+  "metadata_given_after": {
+   "message_id": "a1",
+   "params": {
+    "function_calling": "legacy"
+   },
+   "chat_id": "",
+   "model_id": "m1",
+   "tool_ids": null,
+   "skill_ids": [],
+   "terminal_id": null,
+   "files": null,
+   "features": {
+    "code_interpreter": true
+   },
+   "system_prompt": "Be brief.",
+   "user_prompt": "What is 2+2?",
+   "sources": []
+  },
+  "calls": [
+   [
+    "apply_system_prompt_to_body",
+    [
+     "Be brief.",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     {
+      "message_id": "a1",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "chat_id": ""
+     },
+     "<user u1>"
+    ],
+    {
+     "replace": true
+    }
+   ],
+   [
+    "convert_url_images_to_base64",
+    [
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     }
+    ],
+    {
+     "user": "<user u1>"
+    }
+   ],
+   [
+    "get_event_emitter",
+    "a1"
+   ],
+   [
+    "get_system_oauth_token",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "config_get",
+    "task.model.default"
+   ],
+   [
+    "config_get",
+    "task.model.external"
+   ],
+   [
+    "process_pipeline_inlet_filter",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>",
+     {
+      "m1": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "m2": {
+       "id": "m2",
+       "info": {
+        "meta": {}
+       }
+      },
+      "arena": {
+       "id": "arena",
+       "owned_by": "arena"
+      },
+      "task-model": {
+       "id": "task-model"
+      }
+     }
+    ],
+    {}
+   ],
+   [
+    "get_filter_functions",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "id": "m1",
+      "info": {
+       "meta": {}
+      }
+     },
+     []
+    ],
+    {}
+   ],
+   [
+    "process_filter_functions",
+    [],
+    {
+     "request": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "filter_context": "<filter_context>",
+     "filter_functions": [
+      "<filter>"
+     ],
+     "filter_type": "inlet",
+     "form_data": {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     }
+    }
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
+    "chat_completion_files_handler",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "inlet_filtered": true,
+      "metadata": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       }
+      }
+     },
+     {
+      "__event_emitter__": "<callable emitter>",
+      "__event_call__": "<event_call>",
+      "__user__": {
+       "id": "u1",
+       "email": "ada@example.com",
+       "username": null,
+       "role": "user",
+       "name": "Ada",
+       "profile_image_url": "/api/v1/users/u1/profile/image",
+       "profile_banner_image_url": null,
+       "bio": null,
+       "gender": null,
+       "date_of_birth": null,
+       "timezone": null,
+       "presence_state": null,
+       "status_emoji": null,
+       "status_message": null,
+       "status_expires_at": null,
+       "info": null,
+       "settings": null,
+       "oauth": null,
+       "scim": null,
+       "last_active_at": 1,
+       "updated_at": 1,
+       "created_at": 1
+      },
+      "__metadata__": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       }
+      },
+      "__oauth_token__": {
+       "access_token": "sys"
+      },
+      "__request__": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+      "__model__": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "__chat_id__": "",
+      "__message_id__": "a1",
+      "__features__": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "resolve_system_prompt",
+    [
+     null,
+     {
+      "message_id": "a1",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "chat_id": "",
+      "model_id": "m1",
+      "tool_ids": null,
+      "skill_ids": [],
+      "terminal_id": null,
+      "files": null,
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "process_filter_functions",
+    [],
+    {
+     "request": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "filter_context": "<filter_context>",
+     "filter_functions": [
+      "<filter>"
+     ],
+     "filter_type": "request",
+     "form_data": {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "inlet_filtered": true,
+      "metadata": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       },
+       "system_prompt": "Be brief.",
+       "user_prompt": "What is 2+2?",
+       "sources": []
+      }
+     }
+    }
+   ]
+  ]
+ },
+ "payload:code_interpreter_native_stored_jupyter": {
+  "form_data": {
+   "model": "m1",
+   "messages": [
+    {
+     "role": "system",
+     "content": "Be brief.\n[templated Be brief.]"
+    },
+    {
+     "role": "user",
+     "content": "What is 2+2?"
+    }
+   ],
+   "inlet_filtered": true,
+   "metadata": {
+    "message_id": "a1",
+    "params": {
+     "function_calling": "native"
+    },
+    "chat_id": "",
+    "model_id": "m1",
+    "tool_ids": null,
+    "skill_ids": [],
+    "terminal_id": null,
+    "files": null,
+    "features": {
+     "code_interpreter": true
+    },
+    "system_prompt": "Be brief.",
+    "user_prompt": "What is 2+2?",
+    "sources": []
+   },
+   "request_filtered": true
+  },
+  "metadata": {
+   "message_id": "a1",
+   "params": {
+    "function_calling": "native"
+   },
+   "chat_id": "",
+   "model_id": "m1",
+   "tool_ids": null,
+   "skill_ids": [],
+   "terminal_id": null,
+   "files": null,
+   "features": {
+    "code_interpreter": true
+   },
+   "system_prompt": "Be brief.",
+   "user_prompt": "What is 2+2?",
+   "sources": []
+  },
+  "events": [],
+  "metadata_given_after": {
+   "message_id": "a1",
+   "params": {
+    "function_calling": "native"
+   },
+   "chat_id": "",
+   "model_id": "m1",
+   "tool_ids": null,
+   "skill_ids": [],
+   "terminal_id": null,
+   "files": null,
+   "features": {
+    "code_interpreter": true
+   },
+   "system_prompt": "Be brief.",
+   "user_prompt": "What is 2+2?",
+   "sources": []
+  },
+  "calls": [
+   [
+    "apply_system_prompt_to_body",
+    [
+     "Be brief.",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     {
+      "message_id": "a1",
+      "params": {
+       "function_calling": "native"
+      },
+      "chat_id": ""
+     },
+     "<user u1>"
+    ],
+    {
+     "replace": true
+    }
+   ],
+   [
+    "convert_url_images_to_base64",
+    [
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     }
+    ],
+    {
+     "user": "<user u1>"
+    }
+   ],
+   [
+    "get_event_emitter",
+    "a1"
+   ],
+   [
+    "get_system_oauth_token",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "config_get",
+    "task.model.default"
+   ],
+   [
+    "config_get",
+    "task.model.external"
+   ],
+   [
+    "process_pipeline_inlet_filter",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>",
+     {
+      "m1": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "m2": {
+       "id": "m2",
+       "info": {
+        "meta": {}
+       }
+      },
+      "arena": {
+       "id": "arena",
+       "owned_by": "arena"
+      },
+      "task-model": {
+       "id": "task-model"
+      }
+     }
+    ],
+    {}
+   ],
+   [
+    "get_filter_functions",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "id": "m1",
+      "info": {
+       "meta": {}
+      }
+     },
+     []
+    ],
+    {}
+   ],
+   [
+    "process_filter_functions",
+    [],
+    {
+     "request": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "filter_context": "<filter_context>",
+     "filter_functions": [
+      "<filter>"
+     ],
+     "filter_type": "inlet",
+     "form_data": {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "features": {
+       "code_interpreter": true
+      }
+     }
+    }
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
+    "chat_completion_files_handler",
+    [
+     "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "inlet_filtered": true,
+      "metadata": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "native"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       }
+      }
+     },
+     {
+      "__event_emitter__": "<callable emitter>",
+      "__event_call__": "<event_call>",
+      "__user__": {
+       "id": "u1",
+       "email": "ada@example.com",
+       "username": null,
+       "role": "user",
+       "name": "Ada",
+       "profile_image_url": "/api/v1/users/u1/profile/image",
+       "profile_banner_image_url": null,
+       "bio": null,
+       "gender": null,
+       "date_of_birth": null,
+       "timezone": null,
+       "presence_state": null,
+       "status_emoji": null,
+       "status_message": null,
+       "status_expires_at": null,
+       "info": null,
+       "settings": null,
+       "oauth": null,
+       "scim": null,
+       "last_active_at": 1,
+       "updated_at": 1,
+       "created_at": 1
+      },
+      "__metadata__": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "native"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       }
+      },
+      "__oauth_token__": {
+       "access_token": "sys"
+      },
+      "__request__": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+      "__model__": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "__chat_id__": "",
+      "__message_id__": "a1",
+      "__features__": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "resolve_system_prompt",
+    [
+     null,
+     {
+      "message_id": "a1",
+      "params": {
+       "function_calling": "native"
+      },
+      "chat_id": "",
+      "model_id": "m1",
+      "tool_ids": null,
+      "skill_ids": [],
+      "terminal_id": null,
+      "files": null,
+      "features": {
+       "code_interpreter": true
+      }
+     },
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "process_filter_functions",
+    [],
+    {
+     "request": "namespace(app=namespace(state=namespace(MODELS={'m1': {'id': 'm1', 'info': {'meta': {}}}, 'm2': {'id': 'm2', 'info': {'meta': {}}}, 'arena': {'id': 'arena', 'owned_by': 'arena'}, 'task-model': {'id': 'task-model'}})), state=namespace())",
+     "filter_context": "<filter_context>",
+     "filter_functions": [
+      "<filter>"
+     ],
+     "filter_type": "request",
+     "form_data": {
+      "model": "m1",
+      "messages": [
+       {
+        "role": "system",
+        "content": "Be brief."
+       },
+       {
+        "role": "user",
+        "content": "What is 2+2?"
+       },
+       {
+        "role": "system",
+        "content": "[templated Be brief.]"
+       }
+      ],
+      "inlet_filtered": true,
+      "metadata": {
+       "message_id": "a1",
+       "params": {
+        "function_calling": "native"
+       },
+       "chat_id": "",
+       "model_id": "m1",
+       "tool_ids": null,
+       "skill_ids": [],
+       "terminal_id": null,
+       "files": null,
+       "features": {
+        "code_interpreter": true
+       },
+       "system_prompt": "Be brief.",
        "user_prompt": "What is 2+2?",
        "sources": []
       }

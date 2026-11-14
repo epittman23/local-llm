@@ -30337,6 +30337,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "response:completion",
@@ -30857,7 +30861,7 @@
    ]
   ]
  },
- "stream:code_interpreter_jupyter_token": {
+ "stream:code_interpreter_sandbox": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -30875,7 +30879,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "jupyter ran",
+      "stdout": "sandbox ran",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -30937,6 +30942,10 @@
     {}
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -30968,51 +30977,11 @@
     "code_interpreter.engine"
    ],
    [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_token"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     "http://jup.test",
-     "\nimport builtins\n\nBLOCKED_MODULES = ['os']\n\n_real_import = builtins.__import__\ndef restricted_import(name, globals=None, locals=None, fromlist=(), level=0):\n    if name.split('.')[0] in BLOCKED_MODULES:\n        importer_name = globals.get('__name__') if globals else None\n        if importer_name == '__main__':\n            raise ImportError(\n                f\"Direct import of module {name} is restricted.\"\n            )\n    return _real_import(name, globals, locals, fromlist, level)\n\nbuiltins.__import__ = restricted_import\n\nprint(1)",
-     "tok",
-     null,
-     30
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31033,7 +31002,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31067,7 +31037,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31104,7 +31074,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31120,51 +31091,11 @@
     "code_interpreter.engine"
    ],
    [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_token"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     "http://jup.test",
-     "\nimport builtins\n\nBLOCKED_MODULES = ['os']\n\n_real_import = builtins.__import__\ndef restricted_import(name, globals=None, locals=None, fromlist=(), level=0):\n    if name.split('.')[0] in BLOCKED_MODULES:\n        importer_name = globals.get('__name__') if globals else None\n        if importer_name == '__main__':\n            raise ImportError(\n                f\"Direct import of module {name} is restricted.\"\n            )\n    return _real_import(name, globals, locals, fromlist, level)\n\nbuiltins.__import__ = restricted_import\n\nprint(1)",
-     "tok",
-     null,
-     30
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31185,7 +31116,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31219,7 +31151,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nsandbox ran\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31277,7 +31209,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "jupyter ran",
+        "stdout": "sandbox ran",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -31320,7 +31253,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "sandbox ran",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31396,7 +31330,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31473,7 +31408,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "sandbox ran",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31500,7 +31436,7 @@
    ]
   ]
  },
- "stream:code_interpreter_jupyter_password": {
+ "stream:code_interpreter_sandbox_failure": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
@@ -31518,7 +31454,8 @@
      "lang": "python",
      "code": "print(1)",
      "output": {
-      "stdout": "jupyter ran",
+      "stdout": "The sandbox is not available on this server",
+      "stderr": "",
       "result": ""
      },
      "started_at": 1000.0,
@@ -31567,6 +31504,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "chat:completion",
@@ -31598,51 +31539,11 @@
     "code_interpreter.engine"
    ],
    [
-    "chat_files",
-    [
-     null,
-     "<user u1>"
-    ],
-    {}
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.url"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.auth_password"
-   ],
-   [
-    "config_get",
-    "code_interpreter.jupyter.timeout"
-   ],
-   [
-    "execute_code_jupyter",
-    [
-     null,
-     "print(1)",
-     null,
-     "pw",
-     null
-    ],
-    {
-     "files": [
-      [
-       "sales.csv",
-       "/data/uploads/f1_sales.csv"
-      ]
-     ],
-     "notes": []
-    }
+    "run_code_in_sandbox",
+    "print(1)",
+    "",
+    "a1",
+    "the code block"
    ],
    [
     "emit",
@@ -31663,7 +31564,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "The sandbox is not available on this server",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31697,7 +31599,7 @@
       },
       {
        "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\njupyter ran\n</code_interpreter_output>"
+       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nThe sandbox is not available on this server\n</code_interpreter_output>"
       }
      ],
      "stream": true,
@@ -31766,7 +31668,8 @@
        "lang": "python",
        "code": "print(1)",
        "output": {
-        "stdout": "jupyter ran",
+        "stdout": "The sandbox is not available on this server",
+        "stderr": "",
         "result": ""
        },
        "started_at": 1000.0,
@@ -31809,7 +31712,8 @@
         "lang": "python",
         "code": "print(1)",
         "output": {
-         "stdout": "jupyter ran",
+         "stdout": "The sandbox is not available on this server",
+         "stderr": "",
          "result": ""
         },
         "started_at": 1000.0,
@@ -31885,7 +31789,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "The sandbox is not available on this server",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31962,7 +31867,8 @@
          "lang": "python",
          "code": "print(1)",
          "output": {
-          "stdout": "jupyter ran",
+          "stdout": "The sandbox is not available on this server",
+          "stderr": "",
           "result": ""
          },
          "started_at": 1000.0,
@@ -31989,40 +31895,20 @@
    ]
   ]
  },
- "stream:code_interpreter_unconfigured_engine": {
+ "stream:code_interpreter_stored_jupyter_engine": {
   "returned": null,
   "assistant_message": {
    "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
    "output": [
     {
-     "type": "open_webui:code_interpreter",
-     "id": "ci_000000000000000000000002",
-     "status": "completed",
-     "start_tag": "<code_interpreter>",
-     "end_tag": "</code_interpreter>",
-     "attributes": {
-      "type": "code",
-      "lang": "python"
-     },
-     "lang": "python",
-     "code": "print(1)",
-     "output": {
-      "stdout": "Code interpreter engine not configured.",
-      "result": ""
-     },
-     "started_at": 1000.0,
-     "ended_at": 1003.0,
-     "duration": 3
-    },
-    {
      "type": "message",
-     "id": "msg_000000000000000000000004",
+     "id": "msg_000000000000000000000001",
      "status": "completed",
      "role": "assistant",
      "content": [
       {
        "type": "output_text",
-       "text": ""
+       "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
       }
      ]
     }
@@ -32056,106 +31942,21 @@
     "code_interpreter.enable"
    ],
    [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "in_progress",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": null,
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       }
-      ]
-     }
-    }
-   ],
-   [
     "config_get",
     "code_interpreter.engine"
    ],
    [
     "emit",
     {
-     "type": "chat:completion",
+     "type": "response:completion",
      "data": {
-      "output": [
-       {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": "Code interpreter engine not configured.",
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
-        "type": "message",
-        "id": "msg_000000000000000000000004",
-        "status": "in_progress",
-        "role": "assistant",
-        "content": [
-         {
-          "type": "output_text",
-          "text": ""
-         }
-        ]
-       }
-      ]
+      "type": "response.output_text.delta",
+      "item_id": "msg_000000000000000000000001",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
      }
     }
-   ],
-   [
-    "generate_chat_completion",
-    {
-     "model": "m1",
-     "messages": [
-      {
-       "role": "user",
-       "content": "q?"
-      },
-      {
-       "role": "assistant",
-       "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\nCode interpreter engine not configured.\n</code_interpreter_output>"
-      }
-     ],
-     "stream": true,
-     "metadata": {
-      "message_id": "a1",
-      "chat_id": "",
-      "params": {
-       "function_calling": "legacy"
-      },
-      "features": {
-       "code_interpreter": true
-      },
-      "tools": {}
-     }
-    },
-    true
    ],
    [
     "clear_response_stream",
@@ -32185,34 +31986,14 @@
      "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
      [
       {
-       "type": "open_webui:code_interpreter",
-       "id": "ci_000000000000000000000002",
-       "status": "completed",
-       "start_tag": "<code_interpreter>",
-       "end_tag": "</code_interpreter>",
-       "attributes": {
-        "type": "code",
-        "lang": "python"
-       },
-       "lang": "python",
-       "code": "print(1)",
-       "output": {
-        "stdout": "Code interpreter engine not configured.",
-        "result": ""
-       },
-       "started_at": 1000.0,
-       "ended_at": 1003.0,
-       "duration": 3
-      },
-      {
        "type": "message",
-       "id": "msg_000000000000000000000004",
+       "id": "msg_000000000000000000000001",
        "status": "completed",
        "role": "assistant",
        "content": [
         {
          "type": "output_text",
-         "text": ""
+         "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
         }
        ]
       }
@@ -32228,34 +32009,14 @@
       "done": true,
       "output": [
        {
-        "type": "open_webui:code_interpreter",
-        "id": "ci_000000000000000000000002",
-        "status": "completed",
-        "start_tag": "<code_interpreter>",
-        "end_tag": "</code_interpreter>",
-        "attributes": {
-         "type": "code",
-         "lang": "python"
-        },
-        "lang": "python",
-        "code": "print(1)",
-        "output": {
-         "stdout": "Code interpreter engine not configured.",
-         "result": ""
-        },
-        "started_at": 1000.0,
-        "ended_at": 1003.0,
-        "duration": 3
-       },
-       {
         "type": "message",
-        "id": "msg_000000000000000000000004",
+        "id": "msg_000000000000000000000001",
         "status": "completed",
         "role": "assistant",
         "content": [
          {
           "type": "output_text",
-          "text": ""
+          "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
          }
         ]
        }
@@ -32304,34 +32065,14 @@
        "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
        "output": [
         {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000002",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": "Code interpreter engine not configured.",
-          "result": ""
-         },
-         "started_at": 1000.0,
-         "ended_at": 1003.0,
-         "duration": 3
-        },
-        {
          "type": "message",
-         "id": "msg_000000000000000000000004",
+         "id": "msg_000000000000000000000001",
          "status": "completed",
          "role": "assistant",
          "content": [
           {
            "type": "output_text",
-           "text": ""
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
           }
          ]
         }
@@ -32381,34 +32122,260 @@
        "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
        "output": [
         {
-         "type": "open_webui:code_interpreter",
-         "id": "ci_000000000000000000000002",
-         "status": "completed",
-         "start_tag": "<code_interpreter>",
-         "end_tag": "</code_interpreter>",
-         "attributes": {
-          "type": "code",
-          "lang": "python"
-         },
-         "lang": "python",
-         "code": "print(1)",
-         "output": {
-          "stdout": "Code interpreter engine not configured.",
-          "result": ""
-         },
-         "started_at": 1000.0,
-         "ended_at": 1003.0,
-         "duration": 3
-        },
-        {
          "type": "message",
-         "id": "msg_000000000000000000000004",
+         "id": "msg_000000000000000000000001",
          "status": "completed",
          "role": "assistant",
          "content": [
           {
            "type": "output_text",
-           "text": ""
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ]
+  ]
+ },
+ "stream:code_interpreter_unconfigured_engine": {
+  "returned": null,
+  "assistant_message": {
+   "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+   "output": [
+    {
+     "type": "message",
+     "id": "msg_000000000000000000000001",
+     "status": "completed",
+     "role": "assistant",
+     "content": [
+      {
+       "type": "output_text",
+       "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+      }
+     ]
+    }
+   ]
+  },
+  "calls": [
+   [
+    "get_system_oauth_token",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
+    "get_filter_functions",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     {
+      "id": "m1",
+      "info": {
+       "meta": {}
+      }
+     },
+     []
+    ],
+    {}
+   ],
+   [
+    "config_get",
+    "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
+    "emit",
+    {
+     "type": "response:completion",
+     "data": {
+      "type": "response.output_text.delta",
+      "item_id": "msg_000000000000000000000001",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+     }
+    }
+   ],
+   [
+    "clear_response_stream",
+    [
+     "<redis>",
+     "a1"
+    ],
+    {}
+   ],
+   [
+    "publish_chat_finished_event",
+    [
+     "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+     "<user u1>",
+     {
+      "message_id": "a1",
+      "chat_id": "",
+      "params": {
+       "function_calling": "legacy"
+      },
+      "features": {
+       "code_interpreter": true
+      },
+      "tools": {}
+     },
+     "",
+     "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+     [
+      {
+       "type": "message",
+       "id": "msg_000000000000000000000001",
+       "status": "completed",
+       "role": "assistant",
+       "content": [
+        {
+         "type": "output_text",
+         "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+        }
+       ]
+      }
+     ]
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:completion",
+     "data": {
+      "done": true,
+      "output": [
+       {
+        "type": "message",
+        "id": "msg_000000000000000000000001",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+         {
+          "type": "output_text",
+          "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+         }
+        ]
+       }
+      ],
+      "title": ""
+     }
+    }
+   ],
+   [
+    "outlet_filter_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ],
+    {}
+   ],
+   [
+    "background_tasks_handler",
+    [
+     {
+      "request": "namespace(app=namespace(state=namespace(redis='<redis>', MODELS={'m1': {'id': 'm1'}})), state=namespace())",
+      "form_data": {
+       "model": "m1",
+       "messages": [
+        {
+         "role": "user",
+         "content": "q?"
+        }
+       ]
+      },
+      "user": "<user u1>",
+      "model": {
+       "id": "m1",
+       "info": {
+        "meta": {}
+       }
+      },
+      "metadata": {
+       "message_id": "a1",
+       "chat_id": "",
+       "params": {
+        "function_calling": "legacy"
+       },
+       "features": {
+        "code_interpreter": true
+       },
+       "tools": {}
+      },
+      "events": [],
+      "event_emitter": "<callable event_emitter>",
+      "event_caller": "<callable event_caller>",
+      "tasks": {},
+      "assistant_message": {
+       "content": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>",
+       "output": [
+        {
+         "type": "message",
+         "id": "msg_000000000000000000000001",
+         "status": "completed",
+         "role": "assistant",
+         "content": [
+          {
+           "type": "output_text",
+           "text": "<code_interpreter type=\"code\" lang=\"python\">print(1)</code_interpreter>"
           }
          ]
         }
@@ -32486,6 +32453,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -32945,6 +32916,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -33495,6 +33470,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",
@@ -34588,6 +34567,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "filter",
@@ -38458,6 +38441,10 @@
     "code_interpreter.enable"
    ],
    [
+    "config_get",
+    "code_interpreter.engine"
+   ],
+   [
     "emit",
     {
      "type": "response:completion",
@@ -39028,6 +39015,10 @@
    [
     "config_get",
     "code_interpreter.enable"
+   ],
+   [
+    "config_get",
+    "code_interpreter.engine"
    ],
    [
     "emit",

@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
 from local_llm.models.users import UserModel
+from local_llm.tools import builtin
 from local_llm.utils import middleware
 
 GOLDEN = Path(__file__).parent / 'fixtures' / 'streaming_response.json'
@@ -691,35 +692,28 @@ CASES_SPEC = [
         },
     ),
     _case(
-        'code_interpreter_jupyter_token',
+        'code_interpreter_sandbox',
         [[chunk(CI_CODE), DONE], [DONE]],
         {'params': LEGACY_CI, 'features': CI_FEATURES},
-        {
-            'permitted': True,
-            'config': {
-                'code_interpreter.enable': True,
-                'code_interpreter.engine': 'jupyter',
-                'code_interpreter.jupyter.url': 'http://jup.test',
-                'code_interpreter.jupyter.auth': 'token',
-                'code_interpreter.jupyter.auth_token': 'tok',
-                'code_interpreter.jupyter.timeout': 30,
-            },
-            'env': {'CODE_INTERPRETER_BLOCKED_MODULES': ['os']},
-        },
+        {'permitted': True, 'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'}},
     ),
     _case(
-        'code_interpreter_jupyter_password',
+        'code_interpreter_sandbox_failure',
         [[chunk(CI_CODE), DONE], 'error_json'],
         {'params': LEGACY_CI, 'features': CI_FEATURES},
         {
             'admin': True,
-            'config': {
-                'code_interpreter.enable': True,
-                'code_interpreter.engine': 'jupyter',
-                'code_interpreter.jupyter.auth': 'password',
-                'code_interpreter.jupyter.auth_password': 'pw',
-            },
+            'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'sandbox'},
+            'sandbox_run': {'error': 'The sandbox is not available on this server'},
         },
+    ),
+    # A removed engine's stored value (a stored 'jupyter', or one that names no engine at all) is not a live engine:
+    # the tag is not detected, so it stays plain text in the reply and nothing runs.
+    _case(
+        'code_interpreter_stored_jupyter_engine',
+        [[chunk(CI_CODE), DONE], [DONE]],
+        {'params': LEGACY_CI, 'features': CI_FEATURES},
+        {'admin': True, 'config': {'code_interpreter.enable': True, 'code_interpreter.engine': 'jupyter'}},
     ),
     _case(
         'code_interpreter_unconfigured_engine',
@@ -1061,7 +1055,6 @@ ENV = {
     'ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION': False,
     'CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE': 1,
     'CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS': 10,
-    'CODE_INTERPRETER_BLOCKED_MODULES': [],
     'RAG_SYSTEM_CONTEXT': False,
     'ENABLE_API_OUTLET_FILTERS': False,
 }
@@ -1207,6 +1200,13 @@ def _install(m, world, log, continuations):
             return {'choices': []}
         return _stream_response(nxt, log, f'continuation-{len(continuations)}')
 
+    async def run_code_in_sandbox(code, *, chat_id, message_id, what, **kwargs):
+        log.append(['run_code_in_sandbox', code, chat_id, message_id, what])
+        return copy.deepcopy(
+            world.get('sandbox_run')
+            or {'stdout': 'sandbox ran', 'stderr': '', 'result': '', 'timed_out': False, 'outputs': []}
+        )
+
     def get_sorted_filters(model_id, models):
         if world.get('sorted_filters') == 'raise':
             raise RuntimeError('filter lookup failed')
@@ -1233,8 +1233,6 @@ def _install(m, world, log, continuations):
             'rag_template', lambda template, context, query: f'[RAG {len(context)} chars for {query}]'
         ),
         'generate_chat_completion': generate_chat_completion,
-        'chat_files': fake('chat_files', ([('sales.csv', '/data/uploads/f1_sales.csv')], [])),
-        'execute_code_jupyter': fake('execute_code_jupyter', {'stdout': 'jupyter ran', 'result': ''}),
         'publish_chat_finished_event': fake('publish_chat_finished_event'),
         'outlet_filter_handler': fake('outlet_filter_handler', lambda ctx: None),
         'background_tasks_handler': fake('background_tasks_handler', lambda ctx: None),
@@ -1251,6 +1249,7 @@ def _install(m, world, log, continuations):
     for name, value in {**patches, **ENV, **world.get('env', {})}.items():
         m.setattr(middleware, name, value)
     m.setattr(middleware.Config, 'get', config_get)
+    m.setattr(builtin, 'run_code_in_sandbox', run_code_in_sandbox)
     m.setattr(middleware.Chats, 'upsert_message_to_chat_by_id_and_message_id', upsert)
     m.setattr(
         middleware.Chats, 'get_message_by_id_and_message_id', fake('chats.get_message', world.get('stored_message'))

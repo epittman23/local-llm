@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from mcp.shared.auth import OAuthMetadata
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from local_llm.config import BannerModel
+from local_llm.config import CODE_ENGINES, BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.config import API_CONFIG_KEYS, Config
@@ -50,19 +50,9 @@ CONNECTIONS_CONFIG_KEYS = {
 CODE_EXECUTION_CONFIG_KEYS = {
     'ENABLE_CODE_EXECUTION': 'code_execution.enable',
     'CODE_EXECUTION_ENGINE': 'code_execution.engine',
-    'CODE_EXECUTION_JUPYTER_URL': 'code_execution.jupyter.url',
-    'CODE_EXECUTION_JUPYTER_AUTH': 'code_execution.jupyter.auth',
-    'CODE_EXECUTION_JUPYTER_AUTH_TOKEN': 'code_execution.jupyter.auth_token',
-    'CODE_EXECUTION_JUPYTER_AUTH_PASSWORD': 'code_execution.jupyter.auth_password',
-    'CODE_EXECUTION_JUPYTER_TIMEOUT': 'code_execution.jupyter.timeout',
     'ENABLE_CODE_INTERPRETER': 'code_interpreter.enable',
     'CODE_INTERPRETER_ENGINE': 'code_interpreter.engine',
     'CODE_INTERPRETER_PROMPT_TEMPLATE': 'code_interpreter.prompt_template',
-    'CODE_INTERPRETER_JUPYTER_URL': 'code_interpreter.jupyter.url',
-    'CODE_INTERPRETER_JUPYTER_AUTH': 'code_interpreter.jupyter.auth',
-    'CODE_INTERPRETER_JUPYTER_AUTH_TOKEN': 'code_interpreter.jupyter.auth_token',
-    'CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD': 'code_interpreter.jupyter.auth_password',
-    'CODE_INTERPRETER_JUPYTER_TIMEOUT': 'code_interpreter.jupyter.timeout',
     'CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE': 'code_interpreter.sandbox.default_image',
     'CODE_INTERPRETER_SANDBOX_TIMEOUT': 'code_interpreter.sandbox.timeout',
     'CODE_INTERPRETER_SANDBOX_MAX_RUNNING': 'code_interpreter.sandbox.max_running',
@@ -160,6 +150,10 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
     ):
         if key in form_data.config and (error := check(form_data.config[key])):
             raise HTTPException(status_code=400, detail=error)
+    # And its engines: a removed engine's value would leave the code interpreter off.
+    for key in CODE_ENGINE_KEYS:
+        if key in form_data.config and (error := code_engine_error(form_data.config[key])):
+            raise HTTPException(status_code=422, detail=f'{key}: {error}')
     # And the sandbox settings': one outside the bounds would fail the Code Execution page's form.
     for key in (*SETTING_KEYS, TIMEOUT_KEY):
         if key in form_data.config and (error := sandbox_setting_error(key, form_data.config[key])):
@@ -725,24 +719,25 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
 ############################
 # CodeInterpreterConfig
 ############################
+#: The engine settings, keyed as stored (the config import's keys).
+CODE_ENGINE_KEYS = ('code_execution.engine', 'code_interpreter.engine')
+
+
+def code_engine_error(value) -> str | None:
+    """Why a value cannot be a code engine setting, or None when it can."""
+    if value in CODE_ENGINES:
+        return None
+    return f'{value!r} is not a code engine; the engines are {", ".join(CODE_ENGINES)}'
+
+
 class CodeInterpreterConfig(BaseModel):
     """What GET serves: the stored values as they are, with no checks, so a bad stored value cannot break the page."""
 
     ENABLE_CODE_EXECUTION: bool
     CODE_EXECUTION_ENGINE: str
-    CODE_EXECUTION_JUPYTER_URL: str | None
-    CODE_EXECUTION_JUPYTER_AUTH: str | None
-    CODE_EXECUTION_JUPYTER_AUTH_TOKEN: str | None
-    CODE_EXECUTION_JUPYTER_AUTH_PASSWORD: str | None
-    CODE_EXECUTION_JUPYTER_TIMEOUT: int | None
     ENABLE_CODE_INTERPRETER: bool
     CODE_INTERPRETER_ENGINE: str
     CODE_INTERPRETER_PROMPT_TEMPLATE: str | None
-    CODE_INTERPRETER_JUPYTER_URL: str | None
-    CODE_INTERPRETER_JUPYTER_AUTH: str | None
-    CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: str | None
-    CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD: str | None
-    CODE_INTERPRETER_JUPYTER_TIMEOUT: int | None
     # Optional so a client that predates these fields still saves: an omitted field keeps its stored value, and
     # a null one means the manager's default.
     CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: str | None = None
@@ -754,7 +749,15 @@ class CodeInterpreterConfig(BaseModel):
 
 
 class CodeInterpreterConfigForm(CodeInterpreterConfig):
-    """What POST accepts: the same fields, with the sandbox settings held to the manager's bounds."""
+    """What POST accepts: the same fields, with the engines held to CODE_ENGINES and the sandbox settings to the
+    manager's bounds. A field it does not know, such as a removed engine's from an older page, is ignored."""
+
+    @field_validator('CODE_EXECUTION_ENGINE', 'CODE_INTERPRETER_ENGINE')
+    @classmethod
+    def _known_engine(cls, value):
+        if error := code_engine_error(value):
+            raise ValueError(error)
+        return value
 
     @field_validator(
         'CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE',

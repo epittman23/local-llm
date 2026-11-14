@@ -8,7 +8,6 @@ import os
 import random
 import re
 import sys
-import textwrap
 import time
 from typing import Any
 from uuid import uuid4
@@ -18,8 +17,7 @@ from fastapi.responses import HTMLResponse
 from starlette.responses import JSONResponse, StreamingResponse
 
 from local_llm.config import (
-    CODE_INTERPRETER_BLOCKED_MODULES,
-    CODE_INTERPRETER_JUPYTER_PROMPT,
+    CODE_ENGINES,
     CODE_INTERPRETER_PYODIDE_PROMPT,
     CODE_INTERPRETER_SANDBOX_PROMPT,
     CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
@@ -80,7 +78,6 @@ from local_llm.utils.access_control.folders import has_folder_access
 from local_llm.utils.ask_user import stage_ask_user_tool_calls
 from local_llm.utils.chat import generate_chat_completion
 from local_llm.utils.chat_id import is_saved_chat_id
-from local_llm.utils.code_interpreter import chat_files, execute_code_jupyter
 from local_llm.utils.context_compaction import compact_messages_for_request
 from local_llm.utils.files import (
     convert_markdown_base64_images,
@@ -2545,14 +2542,12 @@ async def _may_use_feature(user, feature_key: str) -> bool:
     )
 
 
-# Each engine's environment notes: for the tag path (legacy function calling), which runs `<code_interpreter>`
-# blocks, and for native function calling, whose tools differ by engine (the sandbox's four tools, or execute_code).
+# The sandbox's environment notes: for the tag path (legacy function calling), which runs `<code_interpreter>`
+# blocks, and for native function calling, which offers the sandbox's four tools.
 _CODE_INTERPRETER_TAG_PROMPTS = {
-    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
     'sandbox': CODE_INTERPRETER_SANDBOX_TAG_PROMPT,
 }
 _CODE_INTERPRETER_TOOL_PROMPTS = {
-    'jupyter': CODE_INTERPRETER_JUPYTER_PROMPT,
     'sandbox': CODE_INTERPRETER_SANDBOX_PROMPT,
 }
 
@@ -2576,9 +2571,12 @@ def sandbox_outputs_note(outputs: list[dict], *, timed_out: bool = False) -> str
 
 async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
     engine = await Config.get('code_interpreter.engine', 'pyodide')
+    # A removed engine's value (until T43's migration rewrites it) leaves the code interpreter off: no prompt.
+    if engine not in CODE_ENGINES:
+        return
 
     # Skip XML-tag prompt injection when native FC is enabled —
-    # execute_code will be injected as a builtin tool instead
+    # the sandbox's tools are injected as builtin tools instead
     if metadata.get('params', {}).get('function_calling') == 'legacy':
         ci_prompt_template = await Config.get('code_interpreter.prompt_template')
         prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
@@ -5056,8 +5054,9 @@ class _StreamingReply:
                 output.pop()
 
     async def _detect_code_interpreter(self) -> bool:
-        # Legacy tool-calling only: native FC gets execute_code as a builtin tool.
-        # Same five authz gates as utils/tools.py get_builtin_tools.
+        # Legacy tool-calling only: native FC gets the sandbox's tools as builtin tools.
+        # Same five authz gates as utils/tools.py get_builtin_tools, and a live engine: a removed engine's value
+        # (until T43's migration rewrites it) leaves the code interpreter off.
         features = self.metadata.get('features', {}) or {}
         model_capabilities = self.model.get('info', {}).get('meta', {}).get('capabilities') or {}
         builtin_tools_meta = self.model.get('info', {}).get('meta', {}).get('builtinTools', {})
@@ -5075,6 +5074,7 @@ class _StreamingReply:
                     await Config.get('user.permissions'),
                 )
             )
+            and await Config.get('code_interpreter.engine', 'pyodide') in CODE_ENGINES
         )
 
     def _reasoning_tags(self) -> list:
@@ -6172,28 +6172,8 @@ class _StreamingReply:
         code = sanitize_code(ci_item.get('code', ''))
         ci_engine = await Config.get('code_interpreter.engine')
         if ci_engine == 'sandbox':
-            # The block runs in the chat's own sandbox, where nothing needs blocking: no preamble.
+            # The block runs in the chat's own sandbox.
             return await self._execute_code_in_sandbox(code)
-
-        if CODE_INTERPRETER_BLOCKED_MODULES:
-            blocking_code = textwrap.dedent(f"""
-                import builtins
-
-                BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
-
-                _real_import = builtins.__import__
-                def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
-                    if name.split('.')[0] in BLOCKED_MODULES:
-                        importer_name = globals.get('__name__') if globals else None
-                        if importer_name == '__main__':
-                            raise ImportError(
-                                f"Direct import of module {{name}} is restricted."
-                            )
-                    return _real_import(name, globals, locals, fromlist, level)
-
-                builtins.__import__ = restricted_import
-            """)
-            code = blocking_code + '\n' + code
 
         if ci_engine == 'pyodide':
             ci_output = await self.event_caller(
@@ -6206,25 +6186,6 @@ class _StreamingReply:
                         'files': self.metadata.get('files', []),
                     },
                 }
-            )
-        elif ci_engine == 'jupyter':
-            files, notes = await chat_files(self.metadata.get('files'), self.user)
-            ci_output = await execute_code_jupyter(
-                await Config.get('code_interpreter.jupyter.url'),
-                code,
-                (
-                    await Config.get('code_interpreter.jupyter.auth_token')
-                    if await Config.get('code_interpreter.jupyter.auth') == 'token'
-                    else None
-                ),
-                (
-                    await Config.get('code_interpreter.jupyter.auth_password')
-                    if await Config.get('code_interpreter.jupyter.auth') == 'password'
-                    else None
-                ),
-                await Config.get('code_interpreter.jupyter.timeout'),
-                files=files,
-                notes=notes,
             )
         else:
             ci_output = {'stdout': 'Code interpreter engine not configured.'}

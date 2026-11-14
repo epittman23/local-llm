@@ -280,6 +280,7 @@ ALL_ON = {
     'image_generation.enable': True,
     'images.edit.enable': True,
     'code_interpreter.enable': True,
+    'code_interpreter.engine': 'sandbox',
     'notes.enable': True,
     'channels.enable': True,
     'automations.enable': True,

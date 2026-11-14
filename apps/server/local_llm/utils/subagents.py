@@ -305,14 +305,14 @@ def _subagent_limits(config: dict) -> tuple[int, int, int | None, int | None]:
 async def _run_settings(metadata: dict, background: bool) -> dict:
     """What the sub-agent inherits from the parent's request.
 
-    In the background it gets no tool servers, and no code interpreter unless that runs on the server (Jupyter, or
-    the sandbox): Pyodide runs in the user's browser.
+    In the background it gets no tool servers, and no code interpreter unless that runs on the server (the sandbox):
+    Pyodide runs in the user's browser, and any other stored engine value leaves the code interpreter off.
     """
     features = copy.deepcopy(metadata.get('features') or {})
     if (
         background
         and features.get('code_interpreter')
-        and await Config.get('code_interpreter.engine', 'pyodide') not in ('jupyter', 'sandbox')
+        and await Config.get('code_interpreter.engine', 'pyodide') != 'sandbox'
     ):
         features.pop('code_interpreter')
     return {

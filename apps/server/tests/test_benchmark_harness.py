@@ -118,7 +118,7 @@ class FakeSandbox:
 
 @pytest.fixture
 def app_with(monkeypatch):
-    """prepare() against a fake app: models, one connection URL, the code interpreter settings."""
+    """prepare() against a fake app: models, one connection URL, the code interpreter settings, a ready sandbox."""
     from local_llm import main
     from local_llm.models.config import Config
     from local_llm.routers import openai as openai_router
@@ -129,12 +129,11 @@ def app_with(monkeypatch):
         'missing_base': False,
         'url': f'http://127.0.0.1:{PORT}/v1',
         'api_config': {},
-        'engine': 'jupyter',
+        'engine': 'sandbox',
         'enabled': True,
         'defaults': {},
-        'jupyter': True,
         # The fake app's `state.sandbox`: a FakeSandbox, None, or _NO_SANDBOX for an app that never set one.
-        'sandbox': _NO_SANDBOX,
+        'sandbox': FakeSandbox(),
     }
 
     async def resolve(request, model_id, model_item, user):
@@ -149,15 +148,11 @@ def app_with(monkeypatch):
     async def get(key, default=None):
         return state['defaults'] if key == 'models.default_params' else default
 
-    async def jupyter_alive(ci):
-        return state['jupyter']
-
     monkeypatch.setattr(main, '_resolve_chat_model', resolve)
     monkeypatch.setattr(openai_router, 'get_openai_connection', connection)
     monkeypatch.setattr(Config, 'get_many', get_many)
     monkeypatch.setattr(Config, 'get', get)
     monkeypatch.setattr(harness, '_request_for', lambda source, user: source)
-    monkeypatch.setattr(harness, '_jupyter_alive', jupyter_alive)
 
     def prepare(model='coder'):
         app_state = SimpleNamespace(MODELS=state['models'])
@@ -186,9 +181,9 @@ def test_a_local_entry_is_accepted(app_with):
         ({'entry': _entry({'stream_response': False})}, 'streaming'),
         ({'entry': _entry({'function_calling': 'legacy'})}, 'legacy'),
         ({'entry': _entry({'max_completion_tokens': 100})}, 'max_completion_tokens'),
-        ({'engine': 'pyodide'}, 'Jupyter'),
-        ({'enabled': False}, 'Jupyter'),
-        ({'jupyter': False}, 'does not answer'),
+        ({'engine': 'pyodide'}, 'sandbox engine'),
+        ({'engine': 'jupyter'}, 'sandbox engine'),
+        ({'enabled': False}, 'sandbox engine'),
         # The global defaults count too: the pipeline merges them under the entry's.
         ({'defaults': {'stream_response': False}}, 'streaming'),
         ({'defaults': {'max_completion_tokens': 64}}, 'max_completion_tokens'),
@@ -326,33 +321,6 @@ def test_a_failed_code_interpreter_stops_the_run(monkeypatch):
         asyncio.run(harness.ask(HCTX, 'item'))
 
 
-def test_the_jupyter_client_reports_its_own_failure_to_the_trace(monkeypatch):
-    from local_llm.utils import code_interpreter as ci
-
-    class Executor:
-        def __init__(self, *args):
-            self.failure = 'HTTP 403'
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def run(self):
-            return ci.ResultModel(stderr='Error: HTTP 403')
-
-    monkeypatch.setattr(ci, 'JupyterCodeExecuter', Executor)
-
-    async def go():
-        with upstream_trace.tracing() as trace:
-            await ci.execute_code_jupyter('http://jupyter', 'x')
-        return trace
-
-    trace = asyncio.run(go())
-    assert len(trace.code_runs_ms) == 1 and trace.code_run_failures == ['HTTP 403']
-
-
 def test_a_pipeline_error_with_the_server_up_is_the_items_failure(monkeypatch):
     _pipeline(monkeypatch, errors=('context window exceeded',), assistant=None)
     ans = asyncio.run(harness.ask(HCTX, 'item'))
@@ -426,7 +394,7 @@ def pipeline_steps(monkeypatch):
     from local_llm.utils import chat, middleware
 
     calls = []
-    offered = {'execute_code': {'spec': {'name': 'execute_code'}}, 'search_notes': {'spec': {'name': 'search_notes'}}}
+    offered = {name: {'spec': {'name': name}} for name in (*SANDBOX_TOOLS, 'search_notes')}
 
     async def merge(form_data, model_info):
         calls.append('merge_params')
@@ -470,10 +438,17 @@ def pipeline_steps(monkeypatch):
 
 def _hctx():
     request = SimpleNamespace(state=SimpleNamespace())
-    return {**HCTX, 'request': request, 'user': SimpleNamespace(id='u1'), 'model': {'info': {}}, 'model_info': None}
+    return {
+        **HCTX,
+        'engine': 'sandbox',
+        'request': request,
+        'user': SimpleNamespace(id='u1'),
+        'model': {'info': {}},
+        'model_info': None,
+    }
 
 
-def test_the_steps_run_in_order_with_only_execute_code_and_a_capturing_emitter(pipeline_steps):
+def test_the_steps_run_in_order_with_only_the_sandbox_tools_and_a_capturing_emitter(pipeline_steps):
     calls, _ = pipeline_steps
     errors: list[str] = []
     assistant = asyncio.run(harness._run_pipeline(_hctx(), 'item', errors))
@@ -481,8 +456,8 @@ def test_the_steps_run_in_order_with_only_execute_code_and_a_capturing_emitter(p
     assert calls == [
         'merge_params',
         ('payload', 'temporary:', True, {'code_interpreter': True}),
-        ('generate', ['execute_code'], 0),
-        ('context', ['execute_code']),
+        ('generate', list(SANDBOX_TOOLS), 0),
+        ('context', sorted(SANDBOX_TOOLS)),
         ('respond', True, True),
         'cleanup',
         'cleanup',
@@ -491,13 +466,25 @@ def test_the_steps_run_in_order_with_only_execute_code_and_a_capturing_emitter(p
     assert assistant == {'output': [_message('done')]}
 
 
-def test_a_model_not_offered_execute_code_is_refused_and_cleaned_up(pipeline_steps):
+def test_a_model_not_offered_a_sandbox_tool_is_refused_and_cleaned_up(pipeline_steps):
     calls, offered = pipeline_steps
-    del offered['execute_code']
+    del offered['bash']
 
-    with pytest.raises(harness.HarnessRefused, match='execute_code'):
+    with pytest.raises(harness.HarnessRefused, match='bash'):
         asyncio.run(harness._run_pipeline(_hctx(), 'item', []))
     assert calls[-2:] == ['cleanup', 'cleanup']
+
+
+@pytest.mark.parametrize('engine', [None, '', 'jupyter', 'other'])
+def test_a_context_with_no_tools_and_no_live_engine_is_refused_not_a_key_error(pipeline_steps, engine):
+    calls, _ = pipeline_steps
+    hctx = _hctx()
+    hctx.pop('tools', None)
+    hctx['engine'] = engine
+
+    with pytest.raises(harness.HarnessRefused, match='offers no tools'):
+        asyncio.run(harness._run_pipeline(hctx, 'item', []))
+    assert calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -795,41 +782,6 @@ def test_the_tests_router_reports_a_refusal_as_not_recorded(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# code-run images stay out of the owner's Files during a benchmark
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize('benchmark', [True, False])
-def test_a_benchmark_keeps_code_run_images_inline(monkeypatch, benchmark):
-    from local_llm.models.users import Users
-    from local_llm.tools import builtin
-    from local_llm.utils import code_interpreter, files
-
-    uploaded = []
-
-    async def config_get(key, default=None):
-        return {'code_interpreter.engine': 'jupyter', 'code_interpreter.jupyter.auth': 'token'}.get(key, default)
-
-    async def run_code(*args, **kwargs):
-        return {'stdout': 'data:image/png;base64,AAAA', 'stderr': '', 'result': ''}
-
-    async def user_by_id(user_id):
-        return SimpleNamespace(id=user_id)
-
-    async def upload(request, line, metadata, user):
-        uploaded.append(line)
-        return '/files/plot'
-
-    monkeypatch.setattr(builtin.Config, 'get', config_get)
-    monkeypatch.setattr(code_interpreter, 'execute_code_jupyter', run_code)
-    monkeypatch.setattr(Users, 'get_user_by_id', user_by_id)
-    monkeypatch.setattr(files, 'get_image_url_from_base64', upload)
-    request = SimpleNamespace(state=SimpleNamespace(benchmark_harness=benchmark))
-    out = json.loads(asyncio.run(builtin.execute_code('plot()', __request__=request, __user__={'id': 'u1'})))
-
-    assert uploaded == ([] if benchmark else ['data:image/png;base64,AAAA'])
-    assert ('data:image/png;base64' in out['stdout']) is benchmark
-
-
-# ---------------------------------------------------------------------------
 # the sandbox engine (T30): preparing, the spec, the tools, the item's sandbox
 # ---------------------------------------------------------------------------
 SANDBOX_TOOLS = ('bash', 'view', 'write_file', 'str_replace')
@@ -873,38 +825,33 @@ def test_a_sandbox_that_cannot_run_the_harness_is_refused(app_with, sandbox, mes
         prepare()
 
 
-@pytest.mark.parametrize('change', [{'engine': 'pyodide'}, {'enabled': False}, {'engine': 'sandbox', 'enabled': False}])
-def test_the_code_interpreter_must_be_on_the_sandbox_or_jupyter_engine(app_with, change):
+@pytest.mark.parametrize(
+    'change',
+    [
+        {'engine': 'pyodide'},
+        {'engine': 'jupyter'},
+        {'engine': None},
+        {'enabled': False},
+        {'engine': 'sandbox', 'enabled': False},
+    ],
+)
+def test_the_code_interpreter_must_be_on_the_sandbox_engine(app_with, change):
     state, prepare = app_with
-    state.update(sandbox=FakeSandbox(), **change)
+    state.update(**change)
 
-    with pytest.raises(harness.HarnessRefused, match='sandbox or Jupyter engine'):
+    with pytest.raises(harness.HarnessRefused, match='on the sandbox engine'):
         prepare()
 
 
-def test_a_sandbox_engine_run_never_probes_jupyter(app_with):
-    state, prepare = app_with
-    state.update(engine='sandbox', sandbox=FakeSandbox(), jupyter=False)
-
-    assert prepare()['engine'] == 'sandbox'
-
-
-def test_a_jupyter_run_is_accepted_without_asking_the_sandbox(app_with):
+@pytest.mark.parametrize('engine', ['jupyter', 'pyodide'])
+def test_a_removed_engine_is_refused_without_asking_the_sandbox(app_with, engine):
     state, prepare = app_with
     manager = FakeSandbox()
-    state['sandbox'] = manager
-    hctx = prepare()
+    state.update(engine=engine, sandbox=manager)
 
-    assert (hctx['engine'], hctx['tools'], hctx['sandbox']) == ('jupyter', ('execute_code',), None)
-    assert manager.ready_calls == 0
-
-
-def test_a_jupyter_run_with_jupyter_down_is_still_refused_with_a_sandbox_present(app_with):
-    state, prepare = app_with
-    state.update(sandbox=FakeSandbox(), jupyter=False)
-
-    with pytest.raises(harness.HarnessRefused, match='does not answer'):
+    with pytest.raises(harness.HarnessRefused, match='on the sandbox engine'):
         prepare()
+    assert manager.ready_calls == 0
 
 
 # Computed from the harness before the sandbox engine (`git show HEAD:` of harness.py, T30's parent) for HCTX and BODY.
@@ -920,6 +867,22 @@ def test_a_jupyter_spec_has_no_sandbox_key_even_with_a_manager_in_the_context():
     spec = harness.spec_from_request({**HCTX, 'engine': 'jupyter', 'sandbox': FakeSandbox()}, BODY)
 
     assert 'sandbox_image' not in spec and spec['code_interpreter_engine'] == 'jupyter'
+
+
+# Computed from the harness at the commit before T40 removed Jupyter (a worktree of it, with this body, this context and
+# the image digest 'sha256:data-1'). It pins sandbox-era shas: a change that moves it renames every earlier sandbox
+# run's harness.
+SANDBOX_ERA_SHA = '3362f0c49d70'
+SANDBOX_ERA_BODY = {
+    **BODY,
+    'tools': [{'type': 'function', 'function': {'name': 'bash'}}, {'type': 'function', 'function': {'name': 'view'}}],
+}
+
+
+def test_a_sandbox_spec_keeps_the_sha_it_had_before_the_jupyter_engine_was_removed():
+    spec = harness.spec_from_request(_sandbox_hctx(), SANDBOX_ERA_BODY)
+
+    assert harness.spec_sha(spec) == SANDBOX_ERA_SHA
 
 
 def test_a_sandbox_spec_names_the_engine_and_the_image_digest():

@@ -381,20 +381,23 @@ except Exception:
 # Code Interpreter
 ####################################
 
+#: The live code engines: the values the Code Execution form and the config import accept, and the only ones that
+#: turn the code interpreter on. Pyodide is one until T42 removes it, after which only the sandbox is.
+CODE_ENGINES = ('sandbox', 'pyodide')
+
+
+def _code_engine_env(name: str, default: str) -> str:
+    """An engine setting's env value, or the default (with a warning) when it names no live engine."""
+    value = os.getenv(name, default)
+    if value in CODE_ENGINES:
+        return value
+    log.warning('%s=%r is not a code engine (%s); using %r', name, value, ', '.join(CODE_ENGINES), default)
+    return default
+
+
 ENABLE_CODE_EXECUTION = os.getenv('ENABLE_CODE_EXECUTION', 'True').lower() == 'true'
 
-CODE_EXECUTION_ENGINE = os.getenv('CODE_EXECUTION_ENGINE', 'pyodide')
-
-CODE_EXECUTION_JUPYTER_URL = os.getenv('CODE_EXECUTION_JUPYTER_URL', '')
-
-CODE_EXECUTION_JUPYTER_AUTH = os.getenv('CODE_EXECUTION_JUPYTER_AUTH', '')
-
-CODE_EXECUTION_JUPYTER_AUTH_TOKEN = os.getenv('CODE_EXECUTION_JUPYTER_AUTH_TOKEN', '')
-
-
-CODE_EXECUTION_JUPYTER_AUTH_PASSWORD = os.getenv('CODE_EXECUTION_JUPYTER_AUTH_PASSWORD', '')
-
-CODE_EXECUTION_JUPYTER_TIMEOUT = int_env('CODE_EXECUTION_JUPYTER_TIMEOUT', 60)
+CODE_EXECUTION_ENGINE = _code_engine_env('CODE_EXECUTION_ENGINE', 'pyodide')
 
 ENABLE_CODE_INTERPRETER = os.getenv('ENABLE_CODE_INTERPRETER', 'True').lower() == 'true'
 
@@ -405,33 +408,9 @@ MEMORIES_REVIEW_INTERVAL_TURNS = int_env('MEMORIES_REVIEW_INTERVAL_TURNS', 10)
 MEMORIES_USER_CHAR_LIMIT = int_env('MEMORIES_USER_CHAR_LIMIT', 2000)
 MEMORIES_CONTEXT_CHAR_LIMIT = int_env('MEMORIES_CONTEXT_CHAR_LIMIT', 2000)
 
-CODE_INTERPRETER_ENGINE = os.getenv('CODE_INTERPRETER_ENGINE', 'pyodide')
+CODE_INTERPRETER_ENGINE = _code_engine_env('CODE_INTERPRETER_ENGINE', 'pyodide')
 
 CODE_INTERPRETER_PROMPT_TEMPLATE = os.getenv('CODE_INTERPRETER_PROMPT_TEMPLATE', '')
-
-CODE_INTERPRETER_JUPYTER_URL = os.getenv('CODE_INTERPRETER_JUPYTER_URL', os.getenv('CODE_EXECUTION_JUPYTER_URL', ''))
-
-CODE_INTERPRETER_JUPYTER_AUTH = os.getenv(
-    'CODE_INTERPRETER_JUPYTER_AUTH',
-    os.getenv('CODE_EXECUTION_JUPYTER_AUTH', ''),
-)
-
-CODE_INTERPRETER_JUPYTER_AUTH_TOKEN = os.getenv(
-    'CODE_INTERPRETER_JUPYTER_AUTH_TOKEN',
-    os.getenv('CODE_EXECUTION_JUPYTER_AUTH_TOKEN', ''),
-)
-
-
-CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD = os.getenv(
-    'CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD',
-    os.getenv('CODE_EXECUTION_JUPYTER_AUTH_PASSWORD', ''),
-)
-
-CODE_INTERPRETER_JUPYTER_TIMEOUT = int_env('CODE_INTERPRETER_JUPYTER_TIMEOUT', CODE_EXECUTION_JUPYTER_TIMEOUT)
-
-CODE_INTERPRETER_BLOCKED_MODULES = [
-    library.strip() for library in os.getenv('CODE_INTERPRETER_BLOCKED_MODULES', '').split(',') if library.strip()
-]
 
 DEFAULT_CODE_INTERPRETER_PROMPT = """
 #### Code Interpreter
@@ -450,7 +429,7 @@ You have access to a Python code interpreter via: `<code_interpreter type="code"
 
 Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""  # noqa: E501 - prompt text, kept byte for byte
 
-# Appended to the code interpreter prompt only when engine is pyodide (not jupyter)
+# Appended to the code interpreter prompt only when engine is pyodide
 CODE_INTERPRETER_PYODIDE_PROMPT = """
 
 ##### Pyodide Environment
@@ -464,24 +443,6 @@ CODE_INTERPRETER_PYODIDE_PROMPT = """
 - You can also write output files to `/mnt/uploads/` so the user can access and download them from the file browser.
 - The file system persists across code executions within the same session.
 - Use `import os; os.listdir('/mnt/uploads')` to discover available files."""  # noqa: E501 - prompt text, kept byte for byte
-
-# The Jupyter engine's counterpart: utils/code_interpreter.py copies the
-# chat's uploaded files into each run's working directory, and every code
-# block starts a fresh kernel.
-CODE_INTERPRETER_JUPYTER_PROMPT = """
-
-##### Jupyter Environment
-
-- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,
-  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.
-- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next
-  block, so each block must repeat the setup it needs.
-
-##### Chat Files
-
-- Files the user attached to this chat are in the current working directory. Open them by name, for example
-  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.
-- Files written by the code are deleted when the block ends, so print the results the user needs."""
 
 # The sandbox engine's counterpart: the model works in a per-chat microVM
 # through four tools, and nothing is captured inline, so what it wants shown
@@ -2660,11 +2621,6 @@ DEFAULT_CONFIG = {
     'terminal_server.connections': TERMINAL_SERVER_CONNECTIONS,
     'code_execution.enable': ENABLE_CODE_EXECUTION,
     'code_execution.engine': CODE_EXECUTION_ENGINE,
-    'code_execution.jupyter.url': CODE_EXECUTION_JUPYTER_URL,
-    'code_execution.jupyter.auth': CODE_EXECUTION_JUPYTER_AUTH,
-    'code_execution.jupyter.auth_token': CODE_EXECUTION_JUPYTER_AUTH_TOKEN,
-    'code_execution.jupyter.auth_password': CODE_EXECUTION_JUPYTER_AUTH_PASSWORD,
-    'code_execution.jupyter.timeout': CODE_EXECUTION_JUPYTER_TIMEOUT,
     'code_interpreter.enable': ENABLE_CODE_INTERPRETER,
     'memories.enable': ENABLE_MEMORIES,
     'memories.system_context.enable': ENABLE_MEMORY_SYSTEM_CONTEXT,
@@ -2674,11 +2630,6 @@ DEFAULT_CONFIG = {
     'memories.context_char_limit': MEMORIES_CONTEXT_CHAR_LIMIT,
     'code_interpreter.engine': CODE_INTERPRETER_ENGINE,
     'code_interpreter.prompt_template': CODE_INTERPRETER_PROMPT_TEMPLATE,
-    'code_interpreter.jupyter.url': CODE_INTERPRETER_JUPYTER_URL,
-    'code_interpreter.jupyter.auth': CODE_INTERPRETER_JUPYTER_AUTH,
-    'code_interpreter.jupyter.auth_token': CODE_INTERPRETER_JUPYTER_AUTH_TOKEN,
-    'code_interpreter.jupyter.auth_password': CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD,
-    'code_interpreter.jupyter.timeout': CODE_INTERPRETER_JUPYTER_TIMEOUT,
     'code_interpreter.sandbox.default_image': 'data',
     'code_interpreter.sandbox.timeout': TIMEOUT_DEFAULT_S,
     'code_interpreter.sandbox.max_running': 4,

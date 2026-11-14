@@ -11,7 +11,7 @@ def strip_ansi_codes(text: str) -> str:
 
     ANSI escape codes can be introduced by LLMs that include terminal
     color codes in their output. These codes cause syntax errors when
-    the code is sent to Jupyter for execution.
+    the code is run.
 
     Common ANSI codes include:
     - Color codes: \x1b[31m (red), \x1b[32m (green), etc.
@@ -45,8 +45,8 @@ def sanitize_code(code: str) -> str:
     """
     Sanitize code for execution by applying all necessary cleanup steps.
 
-    This is the recommended function to use before sending code to
-    interpreters like Jupyter or Pyodide.
+    This is the recommended function to use before running code from a
+    `<code_interpreter>` block (the tag path).
 
     Steps applied:
     1. Strip ANSI escape codes (from LLM output)
