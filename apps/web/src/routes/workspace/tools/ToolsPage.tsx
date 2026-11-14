@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
 import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -23,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createNewTool, deleteToolById, exportTools, getToolById, getToolList, loadToolByUrl } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
+import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -46,7 +47,6 @@ export function ToolsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
@@ -87,9 +87,7 @@ export function ToolsPage() {
 		[list.data, query, viewOption, user?.id, sortKey, sortDirection]
 	);
 
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
 		if (list.data) setCount('tools', items.length);
 	}, [list.data, items.length, setCount]);
@@ -117,9 +115,7 @@ export function ToolsPage() {
 		return () => setActions([]);
 	}, [setActions, token, isAdmin, canImport, canExport]);
 
-	useEffect(() => {
-		document.title = `Tools / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Tools');
 
 	const openTool = (tool: ToolListItem) =>
 		navigate(`${routePaths.workspaceToolsEdit}?id=${encodeURIComponent(tool.id)}`);
@@ -260,7 +256,9 @@ export function ToolsPage() {
 				/>
 			</ListSearchBar>
 
-			{list.isPending ? (
+			{failed ? (
+				<LoadFailed what="tools" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : list.isPending ? (
 				<div className="my-16 mb-24 flex h-full w-full items-center justify-center">
 					<Spinner />
 				</div>

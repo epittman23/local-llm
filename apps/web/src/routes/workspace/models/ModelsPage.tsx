@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -38,7 +39,7 @@ import { deleteModelById, getModelById, getModelItems, getModelTags, toggleModel
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -83,7 +84,6 @@ type ModelRow = {
 export function ModelsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
@@ -123,15 +123,11 @@ export function ModelsPage() {
 	const models = list.data?.items ?? null;
 	const total = list.data?.total ?? 0;
 
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
 		if (list.data) setCount('models', list.data.total);
 	}, [list.data, setCount]);
-	useEffect(() => {
-		document.title = `Models / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Models');
 
 	const refetch = async () => {
 		await Promise.all([
@@ -347,7 +343,9 @@ export function ModelsPage() {
 				</DropdownMenu>
 			</ListSearchBar>
 
-			{models === null ? (
+			{failed ? (
+				<LoadFailed what="models" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : models === null ? (
 				<div className="flex h-full w-full items-center justify-center py-10">
 					<Spinner className="size-4" />
 				</div>

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
 import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -29,7 +30,7 @@ import {
 	toggleSkillById
 } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -55,7 +56,6 @@ const PER_PAGE = 30;
 export function SkillsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
@@ -90,9 +90,7 @@ export function SkillsPage() {
 	const skills = list.data?.items ?? null;
 	const total = list.data?.total ?? 0;
 
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
 		if (list.data) setCount('skills', list.data.total);
 	}, [list.data, setCount]);
@@ -224,9 +222,7 @@ export function SkillsPage() {
 		setPage(1);
 	};
 
-	useEffect(() => {
-		document.title = `Skills / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Skills');
 
 	return (
 		<div className="space-y-1">
@@ -269,7 +265,9 @@ export function SkillsPage() {
 				/>
 			</ListSearchBar>
 
-			{skills === null ? (
+			{failed ? (
+				<LoadFailed what="skills" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : skills === null ? (
 				<div className="my-16 mb-24 flex h-full w-full items-center justify-center">
 					<Spinner />
 				</div>

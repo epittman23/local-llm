@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
 import { Copy, Download, Globe, Heart, MoreHorizontal, Pencil, Settings, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
 import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
 import { SplitCreateButton } from '@/components/common/SplitCreateButton';
@@ -33,7 +34,7 @@ import {
 	toggleGlobalById
 } from '@/lib/apis/functions';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
@@ -69,7 +70,6 @@ const LIST_KEY = ['functions', 'list'];
 export function FunctionsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const shiftKey = useShiftKey();
@@ -92,9 +92,7 @@ export function FunctionsPage() {
 		queryKey: LIST_KEY,
 		queryFn: async () => ((await getFunctionList(token)) ?? []) as FunctionListItem[]
 	});
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 
 	const items = useMemo(
 		() =>
@@ -109,9 +107,7 @@ export function FunctionsPage() {
 		[list.data, debouncedQuery, selectedType, viewOption, user?.id, sortKey, sortDirection]
 	);
 
-	useEffect(() => {
-		document.title = `Functions / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Functions');
 
 	const refresh = () =>
 		Promise.all([
@@ -231,7 +227,7 @@ export function FunctionsPage() {
 		if (importInput.current) importInput.current.value = '';
 	};
 
-	if (list.isPending) {
+	if (list.isPending && !failed) {
 		return (
 			<div className="flex h-full w-full items-center justify-center">
 				<Spinner />
@@ -303,7 +299,7 @@ export function FunctionsPage() {
 				<div className="mb-1 flex w-full items-center justify-between">
 					<div className="flex shrink-0 items-center gap-1.5 px-0.5 text-sm font-normal md:self-center">
 						<div>Functions</div>
-						<div className="text-muted-foreground text-sm font-normal opacity-60">{items.length}</div>
+						{!failed && <div className="text-muted-foreground text-sm font-normal opacity-60">{items.length}</div>}
 					</div>
 					<div className="flex w-full justify-end">
 						<SplitCreateButton
@@ -346,7 +342,9 @@ export function FunctionsPage() {
 					/>
 				</ListSearchBar>
 
-				{items.length !== 0 ? (
+				{failed ? (
+					<LoadFailed what="functions" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+				) : items.length !== 0 ? (
 					<div className="my-1">
 						<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 							<SortHeaderButton
