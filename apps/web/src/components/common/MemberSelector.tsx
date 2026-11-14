@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxMark } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { RowButton } from '@/components/ui/row-button';
 import { getGroups } from '@/lib/apis/groups';
@@ -195,6 +195,8 @@ export function MemberSelector({
 									<RowButton
 										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={group.id}
+										role="checkbox"
+										aria-checked={groupIds.includes(group.id)}
 										onClick={() => toggleGroup(group)}
 									>
 										<span className="flex flex-1 items-center gap-1 px-3 py-1.5 font-normal">
@@ -202,7 +204,7 @@ export function MemberSelector({
 											<span className="text-muted-foreground">{group.member_count}</span>
 										</span>
 										<span className="px-3 py-1">
-											<Checkbox checked={groupIds.includes(group.id)} tabIndex={-1} aria-label={group.name} />
+											<CheckboxMark checked={groupIds.includes(group.id)} />
 										</span>
 									</RowButton>
 								))}
@@ -217,6 +219,8 @@ export function MemberSelector({
 									<RowButton
 										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={user.id}
+										role="checkbox"
+										aria-checked={userIds.includes(user.id)}
 										onClick={() => toggleUser(user)}
 									>
 										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
@@ -236,7 +240,7 @@ export function MemberSelector({
 											)}
 										</span>
 										<span className="px-3 py-1">
-											<Checkbox checked={userIds.includes(user.id)} tabIndex={-1} aria-label={user.name} />
+											<CheckboxMark checked={userIds.includes(user.id)} />
 										</span>
 									</RowButton>
 								))}

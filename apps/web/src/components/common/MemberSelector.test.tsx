@@ -42,21 +42,45 @@ describe('MemberSelector', () => {
 	it('picks a group, shows it as a chip, and unpicks it from the chip', async () => {
 		const onGroups = vi.fn();
 		render(<Harness onUsers={vi.fn()} onGroups={onGroups} />);
-		fireEvent.click(await screen.findByRole('button', { name: /Staff/ }));
+		const row = await screen.findByRole('checkbox', { name: /Staff/ });
+		expect(row).toHaveAttribute('aria-checked', 'false');
+		fireEvent.click(row);
 		expect(onGroups).toHaveBeenLastCalledWith(['g1']);
+		expect(row).toHaveAttribute('aria-checked', 'true');
 		expect(screen.getByText('1 groups')).toBeInTheDocument();
-		const chip = screen.getAllByRole('button', { name: /Staff/ })[0];
+		const chip = screen.getByRole('button', { name: /Staff/ });
 		fireEvent.click(chip);
 		expect(onGroups).toHaveBeenLastCalledWith([]);
+		expect(row).toHaveAttribute('aria-checked', 'false');
 	});
 
 	it('picks a user, shows it as a chip, and unpicks it from the chip', async () => {
 		const onUsers = vi.fn();
 		render(<Harness onUsers={onUsers} onGroups={vi.fn()} />);
-		fireEvent.click(await screen.findByRole('button', { name: /Ada/ }));
+		const row = await screen.findByRole('checkbox', { name: /Ada/ });
+		fireEvent.click(row);
 		expect(onUsers).toHaveBeenLastCalledWith(['u1']);
+		expect(row).toHaveAttribute('aria-checked', 'true');
 		await waitFor(() => expect(screen.getByText('1 users')).toBeInTheDocument());
-		fireEvent.click(screen.getAllByRole('button', { name: /Ada/ })[0]);
+		fireEvent.click(screen.getByRole('button', { name: /Ada/ }));
 		expect(onUsers).toHaveBeenLastCalledWith([]);
+	});
+
+	it('puts no control inside a row: the row is the checkbox (#1120)', async () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		render(<Harness onUsers={vi.fn()} onGroups={vi.fn()} />);
+		const rows = [
+			await screen.findByRole('checkbox', { name: /Staff/ }),
+			await screen.findByRole('checkbox', { name: /Ada/ })
+		];
+		for (const row of rows) {
+			expect(row.tagName).toBe('BUTTON');
+			expect(row.querySelector('button, [role="checkbox"], input')).toBeNull();
+			expect(row.querySelector('[data-slot="checkbox-mark"]')).toHaveAttribute('aria-hidden', 'true');
+		}
+		expect(error.mock.calls.flat().join(' ')).not.toMatch(
+			/cannot be a descendant|validateDOMNesting|cannot contain a nested/
+		);
+		error.mockRestore();
 	});
 });
