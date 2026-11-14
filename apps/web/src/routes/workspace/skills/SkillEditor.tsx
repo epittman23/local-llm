@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -123,52 +124,57 @@ export function SkillEditor({
 					<span>Back</span>
 				</Button>
 
-				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
-					<div className="min-w-0 flex-1">
-						<Tip content="e.g. Code Review Guidelines" side="top">
-							<input
-								className="w-full bg-transparent text-sm"
+				<div className="flex shrink-0 items-start gap-2 px-1 pb-3">
+					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+						<div className="flex min-w-0 flex-col gap-1.5">
+							<Label htmlFor="skill-name">Skill name</Label>
+							<Input
+								id="skill-name"
 								type="text"
-								placeholder="Skill Name"
-								aria-label="Skill Name"
+								placeholder="e.g. Code Review Guidelines"
 								value={name}
 								required
 								disabled={disabled}
 								onChange={(e) => onNameChange(e.target.value)}
 							/>
-						</Tip>
-						<div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-2 text-xs">
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
-								<div className="shrink-0 truncate font-mono" title={id}>
-									{id}
-								</div>
+								<>
+									{/* Fixed once created: shown as text, not a field. */}
+									<span className="text-sm leading-none font-medium">Skill ID</span>
+									<span className="flex h-9 min-w-0 items-center truncate font-mono text-dense" title={id}>
+										{id}
+									</span>
+								</>
 							) : (
-								<Tip content="e.g. code-review-guidelines" side="top">
-									<input
-										className="min-w-32 flex-1 bg-transparent font-mono"
+								<>
+									<Label htmlFor="skill-id">Skill ID</Label>
+									<Input
+										id="skill-id"
+										className="font-mono"
 										type="text"
-										placeholder="Skill ID"
-										aria-label="Skill ID"
+										placeholder="e.g. code-review-guidelines"
 										value={id}
 										required
 										onChange={(e) => setId(e.target.value)}
 									/>
-								</Tip>
+								</>
 							)}
-							<Tip content="e.g. Step-by-step instructions for code reviews" side="top">
-								<input
-									className="min-w-0 flex-1 bg-transparent"
-									type="text"
-									placeholder="Skill Description"
-									aria-label="Skill Description"
-									value={description}
-									disabled={disabled}
-									onChange={(e) => setDescription(e.target.value)}
-								/>
-							</Tip>
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+							<Label htmlFor="skill-description">Skill description</Label>
+							<Input
+								id="skill-description"
+								type="text"
+								placeholder="e.g. Step-by-step instructions for code reviews"
+								value={description}
+								disabled={disabled}
+								onChange={(e) => setDescription(e.target.value)}
+							/>
 						</div>
 					</div>
-					<div className="flex shrink-0 items-center gap-1 pr-0.5">
+					<div className="mt-6 flex shrink-0 items-center gap-1 pr-0.5">
 						{!disabled ? (
 							<AccessButton onClick={() => setShowAccess(true)} />
 						) : (
@@ -177,18 +183,25 @@ export function SkillEditor({
 					</div>
 				</div>
 
-				<div className="bg-muted/40 min-h-0 flex-1 overflow-hidden rounded-lg">
+				{disabled ? (
+					<span className="px-1 pb-1.5 text-sm leading-none font-medium">Skill instructions</span>
+				) : (
+					<Label htmlFor="skill-instructions" className="px-1 pb-1.5">
+						Skill instructions
+					</Label>
+				)}
+				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1">
 					{disabled ? (
 						<div className="h-full overflow-y-auto px-3 py-2">
 							<pre className="font-mono text-caption leading-relaxed whitespace-pre-wrap">{content}</pre>
 						</div>
 					) : (
 						<textarea
-							className="placeholder:text-muted-foreground h-full w-full resize-none bg-transparent px-3 py-2 font-mono text-caption leading-relaxed"
+							id="skill-instructions"
+							className="h-full w-full resize-none bg-transparent px-3 py-2 font-mono text-caption leading-relaxed placeholder:text-foreground-muted"
 							value={content}
 							onChange={(e) => onContentChange(e.target.value)}
-							placeholder="Enter skill instructions in markdown..."
-							aria-label="Skill Instructions"
+							placeholder="e.g. Read the diff first, then list risks before style notes. Markdown is fine."
 							required
 						/>
 					)}

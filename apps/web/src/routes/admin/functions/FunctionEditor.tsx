@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router';
 import type { CodeEditorHandle } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
@@ -129,52 +130,56 @@ export function FunctionEditor({
 					<span>Back</span>
 				</Button>
 
-				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
-					<div className="min-w-0 flex-1">
-						<Tip content="e.g. My Filter" side="top">
-							<input
-								className="w-full bg-transparent text-sm"
+				<div className="flex shrink-0 items-start gap-2 px-1 pb-3">
+					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+						<div className="flex min-w-0 flex-col gap-1.5">
+							<Label htmlFor="function-name">Function name</Label>
+							<Input
+								id="function-name"
 								type="text"
-								placeholder="Function Name"
-								aria-label="Function Name"
+								placeholder="e.g. My Filter"
 								value={name}
 								required
 								onChange={(e) => onNameChange(e.target.value)}
 							/>
-						</Tip>
-						<div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-2 text-xs">
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
-								<div className="shrink-0 truncate font-mono" title={id}>
-									{id}
-								</div>
+								<>
+									{/* Fixed once created: shown as text, not a field. */}
+									<span className="text-sm leading-none font-medium">Function ID</span>
+									<span className="flex h-9 min-w-0 items-center truncate font-mono text-dense" title={id}>
+										{id}
+									</span>
+								</>
 							) : (
-								<Tip content="e.g. my_filter" side="top">
-									<input
-										className="min-w-32 flex-1 bg-transparent font-mono"
+								<>
+									<Label htmlFor="function-id">Function ID</Label>
+									<Input
+										id="function-id"
+										className="font-mono"
 										type="text"
-										placeholder="Function ID"
-										aria-label="Function ID"
+										placeholder="e.g. my_filter"
 										value={id}
 										required
 										onChange={(e) => setId(e.target.value)}
 									/>
-								</Tip>
+								</>
 							)}
-							<Tip content="e.g. A filter to remove profanity from text" side="top">
-								<input
-									className="min-w-0 flex-1 bg-transparent"
-									type="text"
-									placeholder="Function Description"
-									aria-label="Function Description"
-									value={meta.description}
-									required
-									onChange={(e) => setMeta({ ...meta, description: e.target.value })}
-								/>
-							</Tip>
+						</div>
+						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+							<Label htmlFor="function-description">Function description</Label>
+							<Input
+								id="function-description"
+								type="text"
+								placeholder="e.g. A filter to remove profanity from text"
+								value={meta.description}
+								required
+								onChange={(e) => setMeta({ ...meta, description: e.target.value })}
+							/>
 						</div>
 					</div>
-
-					<div className="flex shrink-0 items-center gap-1">
+					<div className="mt-6 flex shrink-0 items-center gap-1">
 						{!edit && (
 							<select
 								className="h-7 rounded-lg border bg-transparent px-2 text-xs"
