@@ -14,6 +14,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Katex } from '@/components/chat/markdown/Katex';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -55,6 +56,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ServerUnreachableError } from '@/lib/apis/errors';
 import { highlight } from './CodeSurface';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 
@@ -542,6 +544,9 @@ export function FeedbackSection() {
 					>
 						Show a failure
 					</Button>
+					<Button variant="outline" onClick={() => toast.error('Prompt could not be saved')}>
+						Show a save failure
+					</Button>
 				</div>
 			</Example>
 			<Example title="Inline message" note="A condition that lasts is stated in place, not in a toast.">
@@ -699,19 +704,7 @@ export function StatesSection() {
 							</Button>
 						</div>
 					)}
-					{state === 'error' && (
-						<div className="mx-auto max-w-sm text-center" role="alert">
-							<CircleAlertIcon aria-hidden className="text-danger mx-auto size-5" />
-							<p className="text-title mt-2 font-title">Prompts could not be loaded</p>
-							<p className="text-foreground-muted mt-1">
-								The server did not answer. Your prompts are safe; this is a connection problem.
-							</p>
-							<Button variant="outline" className="mt-4">
-								<RotateCwIcon aria-hidden />
-								Try again
-							</Button>
-						</div>
-					)}
+					{state === 'error' && <LoadFailed what="prompts" error={new ServerUnreachableError()} onRetry={() => {}} />}
 				</Panel>
 			</Example>
 		</Section>
