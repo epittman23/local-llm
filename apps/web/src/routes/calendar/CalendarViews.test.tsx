@@ -124,10 +124,9 @@ describe('month cells (#923, #987)', () => {
 	});
 
 	it('shows an automation run in the muted foreground rather than dimming it', () => {
-		const run = {
-			...event('r', 'Nightly report', new Date(2026, 10, 14, 2), new Date(2026, 10, 14, 3)),
+		const run = Object.assign(event('r', 'Nightly report', new Date(2026, 10, 14, 2), new Date(2026, 10, 14, 3)), {
 			meta: { automation_id: 'a1' }
-		} as never;
+		});
 		showMonth([run, event('m', 'Seminar', new Date(2026, 10, 14, 10), new Date(2026, 10, 14, 11))]);
 		const chip = screen.getByRole('button', { name: /Nightly report/ });
 		expect(chip.className).toContain('text-foreground-muted');
