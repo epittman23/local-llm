@@ -70,6 +70,8 @@ describe('Toaster', () => {
 		expect(shown).toHaveLength(1);
 		const item = shown[0].closest('[data-sonner-toast]') as HTMLElement;
 		expect(item.querySelector('[data-close-button]')).not.toBeNull();
+		// Its hit area is widened past Sonner's 20 px (LAY-3).
+		expect(item.querySelector('[data-close-button]')).toHaveClass('after:absolute', 'after:-inset-1');
 
 		act(() => screen.getByRole('button', { name: 'Close toast' }).click());
 		await waitFor(() => expect(screen.queryByText('Prompt could not be saved')).toBeNull());

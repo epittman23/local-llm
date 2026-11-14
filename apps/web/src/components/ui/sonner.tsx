@@ -159,7 +159,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
 			}
 			toastOptions={{
 				classNames: {
-					toast: 'cn-toast'
+					toast: 'cn-toast',
+					// Sonner draws a 20 px close button; its hit area reaches 26 px,
+					// and 46 px on a touch screen (LAY-3).
+					closeButton: "after:absolute after:-inset-1 after:content-[''] pointer-coarse:after:-inset-3.5"
 				}
 			}}
 			{...props}
