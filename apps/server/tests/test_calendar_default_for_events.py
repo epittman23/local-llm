@@ -77,3 +77,16 @@ def test_a_user_who_owns_no_calendar_yet_gets_their_own_default():
 
     assert 'error' not in out, out
     assert calendar.user_id == me.id and calendar.is_default
+
+
+def test_a_new_default_calendar_stores_no_colour_so_the_frontend_draws_the_series_token():
+    """#989, decision D1b: new calendars take the token, not Open WebUI's light-theme blue."""
+
+    async def scenario():
+        tag = uuid.uuid4().hex[:8]
+        me = await Users.insert_new_user(f'c{tag}', 'Me', f'c{tag}@example.invalid', role='user')
+        return await Calendars.get_or_create_defaults(me.id)
+
+    calendars = asyncio.run(scenario())
+
+    assert [(c.name, c.is_default, c.color) for c in calendars] == [('Personal', True, None)]

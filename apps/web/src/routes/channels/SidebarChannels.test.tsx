@@ -204,7 +204,7 @@ describe('direct messages in the sidebar', () => {
 			{ id: 'u2', name: 'Quinn', is_active: active }
 		] as Channel['users']
 	});
-	const dot = () => screen.getByRole('link').querySelector('span.rounded-full');
+	const dot = () => screen.getByRole('link').querySelector('span.absolute.rounded-full');
 
 	it('marks an active partner with the success colour', () => {
 		list.current = [dm(true)];

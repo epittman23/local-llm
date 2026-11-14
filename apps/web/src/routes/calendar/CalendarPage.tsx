@@ -126,7 +126,7 @@ function CalendarSidebar({
 								>
 									<span
 										className="size-2.5 shrink-0 rounded-sm"
-										style={{ backgroundColor: c.color || '#3b82f6', opacity: shown ? 1 : 0.25 }}
+										style={{ backgroundColor: c.color || 'var(--series-1)', opacity: shown ? 1 : 0.25 }}
 									/>
 									<span className={cn('flex-1 truncate', !shown && 'text-muted-foreground')}>{c.name}</span>
 								</Button>

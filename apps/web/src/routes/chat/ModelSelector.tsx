@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -168,12 +169,7 @@ function Picker({
 								setOpen(false);
 							}}
 						>
-							<img
-								src={modelImage(m.id)}
-								alt=""
-								className="size-5 rounded-full object-cover"
-								onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-							/>
+							<ProfileAvatar src={modelImage(m.id)} name={m.name} size="sm" className="size-5" />
 							<span className="min-w-0 flex-1 truncate">{m.name}</span>
 							{m.id === value && <Check className="size-3.5" />}
 						</Button>

@@ -15,7 +15,7 @@ import {
 import { Link, NavLink } from 'react-router';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
 import { availableTabs } from '@/components/settings/settingsTabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -148,10 +148,7 @@ export function SidebarContent({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
-							<Avatar className="h-6 w-6">
-								<AvatarImage src={user?.profile_image_url} alt={user?.name ?? ''} />
-								<AvatarFallback>{user?.name?.at(0)?.toUpperCase() ?? '?'}</AvatarFallback>
-							</Avatar>
+							<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
 							<span className="truncate text-sm">{user?.name ?? 'Signed out'}</span>
 						</RowButton>
 					</DropdownMenuTrigger>

@@ -1,6 +1,7 @@
 import { Pencil } from 'lucide-react';
 import { useRef } from 'react';
 import { toast } from 'sonner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ImageButton } from '@/components/ui/image-button';
 import { getGravatarUrl } from '@/lib/apis/utils';
@@ -33,7 +34,6 @@ export function ProfileImageEditor({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const input = useRef<HTMLInputElement>(null);
-	const src = value !== '' ? value : generateInitialsImage(user?.name ?? '');
 
 	const pick = async (files: FileList | null) => {
 		const file = files?.[0];
@@ -85,7 +85,7 @@ export function ProfileImageEditor({
 					aria-label="Upload Photo"
 					onClick={() => input.current?.click()}
 				>
-					<img src={src} alt="profile" className="h-full w-full object-cover" />
+					<ProfileAvatar src={value} name={user?.name} className="size-full" />
 				</Button>
 				<div className="flex flex-col gap-1">
 					<span className="text-muted-foreground text-xs">{displayName || user?.name}</span>
@@ -121,7 +121,7 @@ export function ProfileImageEditor({
 					overlay={<Pencil />}
 					onClick={() => input.current?.click()}
 				>
-					<img src={src} alt="profile" className={cn('rounded-full object-cover', imageClassName)} />
+					<ProfileAvatar src={value} name={user?.name} className={cn('text-base', imageClassName)} />
 				</ImageButton>
 			</div>
 			<div className="mt-2 flex w-full flex-col justify-center">

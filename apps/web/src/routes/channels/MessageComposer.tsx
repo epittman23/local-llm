@@ -4,6 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
 import { getModels } from '@/lib/apis';
@@ -295,7 +296,7 @@ export const MessageComposer = forwardRef<
 							{s.kind === 'channel' ? (
 								<Hash className="size-4" />
 							) : (
-								<img src={s.image} alt="" className="size-5 rounded-full object-cover" />
+								<ProfileAvatar src={s.image} name={s.label} size="sm" className="size-5" />
 							)}
 							<span className="truncate">{s.label}</span>
 							<span className="text-muted-foreground ml-auto text-xs">

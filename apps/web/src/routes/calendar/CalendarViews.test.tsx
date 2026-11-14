@@ -123,6 +123,24 @@ describe('month cells (#923, #987)', () => {
 		expect(inside.querySelector('span')?.className).toMatch(/(^|\s)text-foreground(\s|$)/);
 	});
 
+	it('draws an event of a calendar with no colour in the --series-1 token (#989, D1b)', () => {
+		render(
+			<TooltipProvider>
+				<CalendarViews
+					view="day"
+					date={new Date(2026, 9, 20)}
+					events={[Object.assign({}, lunch, { calendar_id: 'plain' })] as never[]}
+					calendars={[{ id: 'plain', name: 'Plain', color: null }] as never[]}
+					onCreate={() => {}}
+					onEventClick={() => {}}
+					onOpenDay={() => {}}
+				/>
+			</TooltipProvider>
+		);
+		const dot = screen.getByRole('button', { name: /Lunch/ }).querySelector('span') as HTMLElement;
+		expect(dot.style.backgroundColor).toBe('var(--series-1)');
+	});
+
 	it('shows an automation run in the muted foreground rather than dimming it', () => {
 		const run = Object.assign(event('r', 'Nightly report', new Date(2026, 10, 14, 2), new Date(2026, 10, 14, 3)), {
 			meta: { automation_id: 'a1' }

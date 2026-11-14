@@ -2987,19 +2987,21 @@ async def get_manifest_json():
             'description': f'{app.state.LLLM_NAME}: a private assistant for mathematics, statistics, data and code.',
             'start_url': '/',
             'display': 'standalone',
-            'background_color': '#343541',
+            # The dark theme's page colour (--page), and the mark (decision D1, 2026-11-14),
+            # which apps/web/public holds and the frontend build serves at the root.
+            'background_color': '#121916',
             'icons': [
                 {
-                    'src': '/static/logo.png',
+                    'src': '/icon-512.png',
                     'type': 'image/png',
-                    'sizes': '500x500',
+                    'sizes': '512x512',
                     'purpose': 'any',
                 },
                 {
-                    'src': '/static/logo.png',
+                    'src': '/apple-touch-icon.png',
                     'type': 'image/png',
-                    'sizes': '500x500',
-                    'purpose': 'maskable',
+                    'sizes': '180x180',
+                    'purpose': 'any',
                 },
             ],
             'share_target': {
@@ -3018,7 +3020,7 @@ async def get_opensearch_xml():
     <ShortName>{app.state.LLLM_NAME}</ShortName>
     <Description>Search {app.state.LLLM_NAME}</Description>
     <InputEncoding>UTF-8</InputEncoding>
-    <Image width="16" height="16" type="image/x-icon">{webui_url}/static/favicon.png</Image>
+    <Image width="32" height="32" type="image/x-icon">{webui_url}/favicon.ico</Image>
     <Url type="text/html" method="get" template="{webui_url}/?q={'{searchTerms}'}"/>
     <moz:SearchForm>{webui_url}</moz:SearchForm>
     </OpenSearchDescription>

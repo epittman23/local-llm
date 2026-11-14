@@ -7,6 +7,7 @@ import { SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import { deleteUserById, getUsers } from '@/lib/apis/users';
@@ -205,13 +206,10 @@ export function UserList() {
 								<tr key={user.id} className="text-xs">
 									<td className="text-foreground max-w-48 px-3 py-1 font-normal">
 										<div className="flex items-center gap-2">
-											<img
-												className="size-5.5 shrink-0 rounded-full object-cover"
+											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-												alt="user"
-												onError={(e) => {
-													e.currentTarget.src = '/favicon.png';
-												}}
+												name={user.name}
+												size="sm"
 											/>
 											<div className="truncate font-normal">{user.name}</div>
 											{user.last_active_at && Date.now() / 1000 - user.last_active_at < 180 && (

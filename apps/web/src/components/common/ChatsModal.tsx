@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { deleteChatById } from '@/lib/apis/chats';
@@ -229,10 +230,11 @@ export function ChatsModal({
 											>
 												{showUserInfo && chat.user_id && (
 													<div className="flex w-32 shrink-0 items-center gap-2">
-														<img
+														<ProfileAvatar
 															src={`${WEBUI_API_BASE_URL}/users/${chat.user_id}/profile/image`}
-															alt={chat.user_name || 'User'}
-															className="size-5 shrink-0 rounded-full object-cover"
+															name={chat.user_name}
+															size="sm"
+															className="size-5"
 														/>
 														<span className="text-muted-foreground truncate text-xs">
 															{chat.user_name || 'Unknown'}

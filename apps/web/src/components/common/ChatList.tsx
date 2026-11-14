@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Link } from 'react-router';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
@@ -112,10 +113,11 @@ export function ChatList({
 								<div className="hover:bg-muted/50 flex w-full items-center rounded-lg px-3 py-2 text-sm">
 									{showUserInfo && chat.user_id && (
 										<div className="flex w-32 shrink-0 items-center gap-2">
-											<img
+											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${chat.user_id}/profile/image`}
-												alt={chat.user_name || 'User'}
-												className="size-5 shrink-0 rounded-full object-cover"
+												name={chat.user_name}
+												size="sm"
+												className="size-5"
 											/>
 											<span className="text-muted-foreground truncate text-xs">{chat.user_name || 'Unknown'}</span>
 										</div>

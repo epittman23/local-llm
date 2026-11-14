@@ -147,7 +147,8 @@ test('the sidebar lists channels by type with unread badges, and opening one cle
 	});
 	await page.goto('/');
 	const list = page.getByRole('list', { name: 'Channels' });
-	await expect(list.getByRole('link')).toHaveText(['general3', 'team', 'Ann']);
+	// A DM shows its partner's avatar first, whose initials (A) are part of the link's text.
+	await expect(list.getByRole('link')).toHaveText(['general3', 'team', /^A?Ann$/]);
 	await list.getByRole('link', { name: /general/ }).click();
 	await expect(page).toHaveURL(/\/channels\/c1$/);
 	await expect(list.getByRole('link', { name: /general/ })).toHaveText('general');
@@ -188,7 +189,8 @@ test('sends a message with a mention, shows it at once, and reacts, pins, edits 
 	await box.fill('hi ');
 	await box.pressSequentially('@Ann');
 	const suggestions = page.getByRole('listbox', { name: 'Mention suggestions' });
-	await expect(suggestions.getByRole('option')).toHaveText([/^Ann/, /^Annika/]);
+	// Each option starts with its avatar's initials (A), which are hidden from its accessible name.
+	await expect(suggestions.getByRole('option')).toHaveText([/^A?Ann(?!ika)/, /^A?Annika/]);
 	await page.keyboard.press('Enter');
 	await expect(box).toHaveValue('hi @Ann ');
 	await box.pressSequentially('welcome');

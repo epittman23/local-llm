@@ -63,7 +63,7 @@ function EventChip({
 			>
 				<span
 					className="mt-[0.3125rem] size-[0.4375rem] shrink-0 rounded-full"
-					style={{ backgroundColor: event.color || color || '#3b82f6' }}
+					style={{ backgroundColor: event.color || color || 'var(--series-1)' }}
 				/>
 				<span className="truncate">
 					{time && <span className="text-muted-foreground">{time} </span>}

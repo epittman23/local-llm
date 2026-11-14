@@ -8,12 +8,12 @@ import time
 from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.constants import ERROR_MESSAGES
-from local_llm.env import ENABLE_PROFILE_IMAGE_URL_FORWARDING, PROFILE_IMAGE_ALLOWED_MIME_TYPES, STATIC_DIR
+from local_llm.env import ENABLE_PROFILE_IMAGE_URL_FORWARDING, PROFILE_IMAGE_ALLOWED_MIME_TYPES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
 from local_llm.models.access_grants import AccessGrants
@@ -852,6 +852,10 @@ async def get_user_oauth_sessions_by_id(
 ############################
 
 
+def _no_profile_image() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No profile image')
+
+
 @router.get('/{user_id}/profile/image')
 async def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_user)):
     user = await Users.get_user_by_id(user_id)
@@ -874,7 +878,7 @@ async def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_u
                     media_type = header.split(';')[0].removeprefix('data:').lower()
 
                     if media_type not in PROFILE_IMAGE_ALLOWED_MIME_TYPES:
-                        return FileResponse(f'{STATIC_DIR}/user.png')
+                        raise _no_profile_image()
 
                     return StreamingResponse(
                         image_buffer,
@@ -886,7 +890,9 @@ async def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_u
                     )
                 except Exception:
                     pass
-        return FileResponse(f'{STATIC_DIR}/user.png')
+        # No picture of its own (none, a stored default such as /user.png, or an
+        # unusable one): the frontend draws the user's initials (decision D1, 2026-11-14).
+        raise _no_profile_image()
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

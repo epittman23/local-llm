@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { WEBUI_BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
+import { initials } from '@/lib/utils/initials';
 import { Avatar as AvatarPrimitive } from 'radix-ui';
 
 function Avatar({
@@ -37,7 +39,7 @@ function AvatarFallback({ className, ...props }: React.ComponentProps<typeof Ava
 		<AvatarPrimitive.Fallback
 			data-slot="avatar-fallback"
 			className={cn(
-				'flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs',
+				'flex size-full items-center justify-center rounded-full bg-surface-3 text-sm font-medium text-foreground-strong group-data-[size=sm]/avatar:text-xs',
 				className
 			)}
 			{...props}
@@ -87,4 +89,47 @@ function AvatarGroupCount({ className, ...props }: React.ComponentProps<'div'>) 
 	);
 }
 
-export { Avatar, AvatarImage, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarBadge };
+/**
+ * The paths the server stores to mean "no picture of its own" (the defaults
+ * utils/validate.py accepts): Open WebUI's stock images, which no longer
+ * exist. The picture endpoints answer 404 for them, so they are never fetched.
+ */
+const NO_PICTURE = ['/user.png', '/favicon.png', '/static/favicon.png'];
+
+/** Whether `src` is a picture of its own, not empty and not a stored default. */
+export const hasPicture = (src: string | null | undefined): src is string =>
+	!!src && !NO_PICTURE.some((path) => src === path || src === `${WEBUI_BASE_URL}${path}`);
+
+/**
+ * A model's, user's or webhook's picture, or, when it has none or the picture
+ * fails to load, its initials on `--surface-3` (#924, decision D1). Decorative
+ * by default, since the name is beside it; pass `label` when it stands alone.
+ */
+function ProfileAvatar({
+	src,
+	name,
+	label,
+	size,
+	className
+}: {
+	src?: string | null;
+	name: string | null | undefined;
+	label?: string;
+	size?: 'default' | 'sm' | 'lg';
+	className?: string;
+}) {
+	return (
+		<Avatar
+			size={size}
+			className={className}
+			role={label ? 'img' : undefined}
+			aria-label={label}
+			aria-hidden={label ? undefined : true}
+		>
+			{hasPicture(src) && <AvatarImage src={src} alt="" />}
+			<AvatarFallback>{initials(name)}</AvatarFallback>
+		</Avatar>
+	);
+}
+
+export { Avatar, AvatarImage, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarBadge, ProfileAvatar };

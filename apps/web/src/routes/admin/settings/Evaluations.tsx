@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { getConfig, updateConfig } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -38,10 +39,10 @@ function ArenaModelRow({
 			/>
 			<div className="flex items-center justify-between gap-2 rounded-lg px-1 py-1">
 				<div className="flex min-w-0 items-center gap-2">
-					<img
+					<ProfileAvatar
 						src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
-						alt={model.name}
-						className="size-7 shrink-0 rounded-full object-cover"
+						name={model.name}
+						className="size-7"
 					/>
 					<div className="min-w-0">
 						<div className="truncate text-xs font-normal">{model.name}</div>

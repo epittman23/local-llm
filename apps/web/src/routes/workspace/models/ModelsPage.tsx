@@ -25,6 +25,7 @@ import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,7 +48,6 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { type BulkAction, runBulkAction, setVisibility } from './modelBulk';
-import { DEFAULT_PROFILE_IMAGE } from './modelEditorLogic';
 import { parseModelImport, saveImportedModel } from './modelImport';
 
 const PER_PAGE = 30;
@@ -393,16 +393,10 @@ export function ModelsPage() {
 										}
 									}}
 								>
-									<div className="mr-1 shrink-0 self-center">
-										<img
-											className={`size-8 rounded-lg object-cover ${isActive ? '' : 'opacity-50'}`}
+									<div className={`mr-1 shrink-0 self-center ${isActive ? '' : 'opacity-50'}`}>
+										<ProfileAvatar
 											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
-											alt=""
-											loading="lazy"
-											decoding="async"
-											onError={(e) => {
-												e.currentTarget.src = DEFAULT_PROFILE_IMAGE;
-											}}
+											name={model.name ?? model.id}
 										/>
 									</div>
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">

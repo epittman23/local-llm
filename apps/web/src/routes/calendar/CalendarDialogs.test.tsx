@@ -251,12 +251,14 @@ describe('CreateCalendarDialog colour presets', () => {
 		vi.clearAllMocks();
 	});
 
-	it('marks the chosen preset as pressed and saves it', async () => {
+	it('offers the six series tokens, starts on --series-1, marks the chosen preset as pressed and saves it', async () => {
 		vi.mocked(api.createCalendar).mockResolvedValue({ id: 'n' } as never);
 		const onCreated = vi.fn();
 		render(<CreateCalendarDialog open onOpenChange={() => {}} onCreated={onCreated} />);
-		const first = screen.getByRole('button', { name: '#3b82f6' });
-		const green = screen.getByRole('button', { name: '#22c55e' });
+		// No stylesheet here, so the presets are the dark theme's series values (lib/ui/tokenColour.ts).
+		expect(document.querySelectorAll('button[aria-pressed]')).toHaveLength(6);
+		const first = screen.getByRole('button', { name: '#82c7f0' });
+		const green = screen.getByRole('button', { name: '#83d494' });
 		expect(first).toHaveAttribute('aria-pressed', 'true');
 		expect(green).toHaveAttribute('aria-pressed', 'false');
 		fireEvent.click(green);
@@ -265,9 +267,25 @@ describe('CreateCalendarDialog colour presets', () => {
 		fireEvent.change(screen.getByPlaceholderText('Calendar name'), { target: { value: 'Gym' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 		await waitFor(() =>
-			expect(api.createCalendar).toHaveBeenCalledWith(expect.anything(), { name: 'Gym', color: '#22c55e' })
+			expect(api.createCalendar).toHaveBeenCalledWith(expect.anything(), { name: 'Gym', color: '#83d494' })
 		);
 		expect(onCreated).toHaveBeenCalled();
+	});
+
+	it('takes the presets from the current theme each time it opens (#989, D1b)', async () => {
+		vi.mocked(api.createCalendar).mockResolvedValue({ id: 'n' } as never);
+		document.documentElement.style.setProperty('--series-1', 'oklch(0.48 0.115 245)');
+		try {
+			render(<CreateCalendarDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+			expect(screen.getByRole('button', { name: '#0e629a' })).toHaveAttribute('aria-pressed', 'true');
+			fireEvent.change(screen.getByPlaceholderText('Calendar name'), { target: { value: 'Work' } });
+			fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+			await waitFor(() =>
+				expect(api.createCalendar).toHaveBeenCalledWith(expect.anything(), { name: 'Work', color: '#0e629a' })
+			);
+		} finally {
+			document.documentElement.removeAttribute('style');
+		}
 	});
 
 	it('refuses an empty name', () => {

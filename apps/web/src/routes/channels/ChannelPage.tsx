@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { getChannelById, joinChannelById } from '@/lib/apis/channels';
@@ -165,11 +166,13 @@ function ChannelView({ id }: { id: string }) {
 								members.length ? (
 									<div className="relative flex">
 										{members.slice(0, 2).map((u, i) => (
-											<img
+											<ProfileAvatar
 												key={u.id}
 												src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
-												alt={u.name}
-												className={`border-background size-6 rounded-full border-2 ${i === 1 ? '-ml-3' : ''}`}
+												name={u.name}
+												label={u.name}
+												size="sm"
+												className={`ring-background ring-2 ${i === 1 ? '-ml-3' : ''}`}
 											/>
 										))}
 										{members.length === 1 && (

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ImageButton } from '@/components/ui/image-button';
@@ -14,6 +15,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
 import { type ArenaModel, arenaIdFromName, buildArenaModel } from './arenaModels';
 
+// The stored value that means "no picture of its own"; the avatar draws the initials for it.
 const FALLBACK_IMAGE = `${WEBUI_BASE_URL}/favicon.png`;
 
 type ModelInfo = { id: string; name: string; owned_by?: string };
@@ -153,7 +155,7 @@ export function ArenaModelModal({
 									overlay={<Pencil />}
 									onClick={() => imageInput.current?.click()}
 								>
-									<img src={profileImageUrl} alt="Profile" className="size-12 object-cover" />
+									<ProfileAvatar src={profileImageUrl} name={name} className="size-12 text-base" />
 								</ImageButton>
 							</div>
 							<div className="flex min-w-0 flex-1 flex-col gap-1">

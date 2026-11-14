@@ -10,6 +10,8 @@ import { extractInputVariables } from '@/lib/utils/variables';
 // knowledge references are migrated, when a base model id is kept -- can be
 // tested without rendering the form.
 
+// The stored value that means "no picture of its own" (no such file exists any more):
+// the server answers 404 for it and the avatar draws the initials (decision D1, 2026-11-14).
 export const DEFAULT_PROFILE_IMAGE = `${WEBUI_BASE_URL}/static/favicon.png`;
 
 type Json = Record<string, any>;
