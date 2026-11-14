@@ -507,8 +507,11 @@ label.
 
 **A11Y-1. One focus indicator, on everything, never removed:** a 2 px solid
 `--focus` outline, offset 2 px (flush on fields, whose edge also turns
-`--focus`). No `outline-none` without it; no translucent ring. One
-exception: the canvas's editor (CNV-6) shows its caret and no outline.
+`--focus`). No `outline-none` without it; no translucent ring. A box that
+draws the edge around a bare text field (the chat's message box) is a
+composite field: it carries `data-composite-field` and shows the focus on
+the box, as a field does. One exception: the canvas's editor (CNV-6) shows
+its caret and no outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
 label tied to it, or an `aria-label` (ACT-4).

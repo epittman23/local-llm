@@ -213,6 +213,20 @@
 	outline-offset: 2px;
 	--tw-ring-shadow: 0 0 #0000;
 }
+/*
+ * A11Y-1, composite fields: a box that draws the edge around a bare text
+ * field (the chat's message box) marks itself data-composite-field. The box
+ * shows the focus, as a field does, and the bare field inside shows none.
+ */
+:root [data-composite-field]:has(:is(input, textarea, [contenteditable="true"]):focus-visible) {
+	border-color: var(--focus);
+	outline: 1px solid var(--focus);
+	outline-offset: 0;
+}
+:root [data-composite-field] :is(input, textarea, [contenteditable="true"]):focus-visible {
+	outline: none;
+}
+
 /* A dialog takes focus as a container when it opens; it is not a control. */
 :root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
 	outline: none;

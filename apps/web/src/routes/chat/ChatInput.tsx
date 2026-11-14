@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUp, BookOpen, FileText, Globe, Image as ImageIcon, Loader2, Square, X } from 'lucide-react';
-import { type ReactNode, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
@@ -20,8 +20,8 @@ import { promptVariables } from '@/lib/chat/request';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
-import { extractInputVariables } from '@/lib/utils/variables';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { extractInputVariables } from '@/lib/utils/variables';
 import { InputVariablesDialog } from './InputVariablesDialog';
 import { modelImage } from './ModelSelector';
 import type { ChatModel } from './useModels';
@@ -384,7 +384,7 @@ export const ChatInput = forwardRef<
 						))}
 					</div>
 				)}
-				<div className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
+				<div data-composite-field className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
 					{atModel && (
 						<div className="text-muted-foreground mb-1 flex items-center gap-2 px-1 text-xs">
 							<img
