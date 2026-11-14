@@ -3,9 +3,9 @@
 > **Status: planned (2026-11-14). Nothing here is built** except the
 > interface design, which is shown on `/ui` ("Canvas") and specified by the
 > CNV rules in [docs/guides/ui-standard.md](../guides/ui-standard.md). This
-> file is the implementation plan. Five decisions are the owner's and are
-> listed under "Open decisions"; each has a recommended default so work can
-> start without them, and each task that depends on one says so.
+> file is the implementation plan. Of its five decisions, the owner settled
+> the first four on 2026-11-14 by accepting the defaults; the fifth (the
+> preview frame's permissions) is still open, and only C11 depends on it.
 
 ## What the owner asked for
 
@@ -98,28 +98,29 @@ and the canvas, if open on it, shows Source filling in; Preview becomes
 available when the block closes. This avoids re-running a half-written page
 on every token.
 
-## Open decisions (the owner's)
+## Decisions
 
-Each has a default the tasks below assume.
+Decisions 1 to 4 were settled by the owner on 2026-11-14, as written here.
+Decision 5 is open; the tasks assume its default.
 
-1. **Which HTML goes to the canvas?** *Default: every fenced `html` or `svg`
+1. **Which HTML goes to the canvas?** *Decided: every fenced `html` or `svg`
    block of a complete document or of more than 15 lines; shorter snippets
    stay inline as code.* The alternative is every block regardless of
    length, which hides three-line examples behind a click.
-2. **What does saving an edit do?** *Default: it saves a new version of the
+2. **What does saving an edit do?** *Decided: it saves a new version of the
    document in the app (a new `File` row linked to the same message, the
    earlier one kept), and offers "Attach to next message" so the model sees
    the edit.* It does not write into the sandbox's `/workspace`. Writing back
    into the workspace is the alternative; it needs the sandbox running and a
    new write path, so it is left to a later plan.
-3. **Does the canvas open by itself?** *Default: yes, when a reply finishes
+3. **Does the canvas open by itself?** *Decided: yes, when a reply finishes
    with exactly one new document and the window is at least `lg` wide;
    never on a phone; with a setting to turn it off.*
-4. **Do images stay inline?** *Default: an image keeps a thumbnail on its
+4. **Do images stay inline?** *Decided: an image keeps a thumbnail on its
    card and opens full size in the canvas.* A plot is often the whole answer,
    so hiding it entirely behind a card would cost a click on most
    data-analysis replies.
-5. **Do `ArtifactPanel`'s wider frame permissions survive?** *Default: no.
+5. **(Open.) Do `ArtifactPanel`'s wider frame permissions survive?** *Default: no.
    One frame, `allow-scripts` only, for every HTML document that is
    previewed, as sandbox outputs have today.* Forms and modal dialogs inside
    a preview stop working; the five unported "Artifacts" settings

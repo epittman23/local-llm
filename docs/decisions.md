@@ -21,10 +21,13 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     are; no new way to render such HTML is added.
   - The interface is decided and shown on `/ui`, and the standard gained
     rules CNV-1 to CNV-8 for it.
-  - Five choices are left to the owner, each with a default the plan assumes:
-    which HTML blocks go to the canvas, what saving an edit does, whether the
-    canvas opens by itself, whether images keep a thumbnail inline, and
-    whether the preview frame keeps forms and modal dialogs.
+  - The owner settled four choices the same day, taking the plan's defaults:
+    a complete HTML document or a block over 15 lines goes to the canvas and
+    shorter snippets stay inline; saving an edit makes a new version in the
+    app and can be attached to the next message; the canvas opens by itself
+    for a single new document on a wide screen, with a setting; an image
+    keeps a thumbnail on its card. One is open: whether the preview frame
+    keeps forms and modal dialogs.
 - **2026-11-14** (later still): **The interface has a written standard,
   shown on `/ui`; it is not the app's default look yet.** A UX/UI review of
   the whole app the same day filed 215 issues (#901 to #1115, indexed in
