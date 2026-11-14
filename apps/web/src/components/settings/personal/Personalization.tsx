@@ -180,22 +180,24 @@ export default function Personalization() {
 									{m.updated_at ? ` · ${dayjs(m.updated_at * 1000).format('LL')}` : ''}
 								</div>
 							</div>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label="Edit memory"
-								className="hover:bg-muted rounded p-1"
 								onClick={() => setDialog(m)}
 							>
 								<Pencil className="size-3.5" />
-							</button>
-							<button
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label="Delete memory"
-								className="hover:bg-muted rounded p-1"
 								onClick={() => setDeleting(m)}
 							>
 								<Trash2 className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>

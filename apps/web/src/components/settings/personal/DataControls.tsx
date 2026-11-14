@@ -56,17 +56,18 @@ function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 					{rows.map((c) => (
 						<li key={c.id} className="flex items-center gap-2 border-b py-1.5 last:border-0">
 							<span className="min-w-0 flex-1 truncate">{c.title}</span>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label={`Unshare ${c.title}`}
-								className="hover:bg-muted rounded p-1"
 								onClick={async () => {
 									await deleteSharedChatById(token, c.id).catch((e) => toast.error(`${e}`));
 									void list.refetch();
 								}}
 							>
 								<Link2Off className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 					{list.hasNextPage && (
@@ -104,17 +105,18 @@ function FilesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 							{f.created_at ? (
 								<span className="text-muted-foreground text-xs">{dayjs(f.created_at * 1000).format('LL')}</span>
 							) : null}
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
 								type="button"
 								aria-label={`Delete ${f.filename}`}
-								className="hover:bg-muted rounded p-1"
 								onClick={async () => {
 									await deleteFileById(token, f.id).catch((e) => toast.error(`${e}`));
 									void files.refetch();
 								}}
 							>
 								<Trash2 className="size-3.5" />
-							</button>
+							</Button>
 						</li>
 					))}
 				</ul>

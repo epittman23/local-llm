@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import type { Params } from '@/components/common/advancedParamDefs';
+import { Button } from '@/components/ui/button';
 import { useUserSettings } from '@/lib/settings/userSettings';
-import { THEMES, applyTheme, getTheme } from '@/lib/theme';
-import { SettingField, SettingRow, SettingSelect, SettingTextarea, SettingsForm, SettingsSection } from '../controls';
+import { applyTheme, getTheme, THEMES } from '@/lib/theme';
+import { SettingField, SettingRow, SettingSelect, SettingsForm, SettingsSection, SettingTextarea } from '../controls';
 import { generalPatch, paramsForForm } from './personalSettings';
 
 /**
@@ -73,9 +74,9 @@ export default function General() {
 			</SettingsSection>
 			<SettingsSection title="Advanced Parameters">
 				<SettingRow label="Model parameters" description="Show or hide custom generation parameters.">
-					<button type="button" className="text-xs underline" onClick={() => setShowAdvanced((s) => !s)}>
+					<Button variant="link" size="xs" type="button" onClick={() => setShowAdvanced((s) => !s)}>
 						{showAdvanced ? 'Hide' : 'Show'}
-					</button>
+					</Button>
 				</SettingRow>
 				{showAdvanced && <AdvancedParams params={params} onChange={setParams} />}
 			</SettingsSection>

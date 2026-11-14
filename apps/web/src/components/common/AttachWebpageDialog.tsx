@@ -55,7 +55,7 @@ export function AttachWebpageDialog({
 					</label>
 					<textarea
 						id="webpage-url"
-						className="placeholder:text-muted-foreground/60 w-full bg-transparent text-sm outline-hidden"
+						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
 						value={text}
 						onChange={(e) => setText(e.target.value)}
 						rows={3}

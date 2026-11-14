@@ -19,23 +19,23 @@ import {
 } from '@/lib/apis/configs';
 import { getTerminalConfig } from '@/lib/apis/terminal';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { specRequestUrl } from './toolServerModel';
 import {
-	type PolicyFields,
-	type TerminalConnection,
-	type TerminalFields,
 	blankPolicy,
 	buildPolicyData,
 	buildTerminalConnection,
+	type PolicyFields,
 	parseLifecycle,
 	policyFromServer,
 	suggestPolicyId,
+	type TerminalConnection,
+	type TerminalFields,
 	terminalFields
 } from './terminalServerModel';
+import { specRequestUrl } from './toolServerModel';
 
-const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
+const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const mono = `${bare} font-mono`;
-const select = 'bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover';
+const select = 'bg-transparent pr-5 text-sm [&>option]:bg-popover';
 const label = 'text-muted-foreground text-xs';
 
 /**
@@ -299,15 +299,17 @@ export function AddTerminalServerModal({
 								/>
 							</div>
 							<Tip content="Verify Connection">
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									className="mb-0.5"
 									type="button"
 									aria-label="Verify Connection"
-									className="hover:bg-muted mb-0.5 rounded p-1 transition"
 									disabled={verifying}
 									onClick={verify}
 								>
 									{verifying ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-								</button>
+								</Button>
 							</Tip>
 						</div>
 
@@ -328,14 +330,16 @@ export function AddTerminalServerModal({
 
 						{orchestrator && (
 							<>
-								<button
+								<Button
+									variant="ghost"
+									size="xs"
+									className="w-fit"
 									type="button"
-									className="text-muted-foreground hover:text-foreground w-fit text-xs"
 									aria-expanded={showOrchestrator}
 									onClick={() => setShowOrchestrator((v) => !v)}
 								>
 									{showOrchestrator ? '▾' : '▸'} Orchestrator
-								</button>
+								</Button>
 								{showOrchestrator && (
 									<OrchestratorFields
 										f={f}
@@ -357,14 +361,16 @@ export function AddTerminalServerModal({
 						)}
 
 						<div className="flex items-center justify-between">
-							<button
+							<Button
+								variant="ghost"
+								size="xs"
+								className="w-fit"
 								type="button"
-								className="text-muted-foreground hover:text-foreground w-fit text-xs"
 								aria-expanded={showAdvanced}
 								onClick={() => setShowAdvanced((v) => !v)}
 							>
 								{showAdvanced ? '▾' : '▸'} Advanced
-							</button>
+							</Button>
 							{!direct && <AccessButton onClick={() => setShowAccess(true)} />}
 						</div>
 
@@ -628,13 +634,14 @@ function OrchestratorFields({
 			<div>
 				<div className="mb-0.5 flex items-center justify-between">
 					<div className={label}>Environment Variables</div>
-					<button
+					<Button
+						variant="ghost"
+						size="xs"
 						type="button"
-						className="text-muted-foreground hover:text-foreground text-xs transition"
 						onClick={() => setPolicy({ envPairs: [...p.envPairs, { key: '', value: '' }] })}
 					>
 						+ Add
-					</button>
+					</Button>
 				</div>
 				{p.envPairs.map((pair, idx) => (
 					<div key={idx} className="mb-1 flex gap-1.5">
@@ -654,14 +661,15 @@ function OrchestratorFields({
 							onChange={(e) => setEnv(idx, { value: e.target.value })}
 							placeholder="value"
 						/>
-						<button
+						<Button
+							variant="ghost"
+							size="icon-xs"
 							type="button"
 							aria-label={`Remove variable ${idx + 1}`}
-							className="text-muted-foreground hover:text-foreground px-1 transition"
 							onClick={() => setPolicy({ envPairs: p.envPairs.filter((_, i) => i !== idx) })}
 						>
 							<X className="size-3" />
-						</button>
+						</Button>
 					</div>
 				))}
 			</div>
@@ -672,7 +680,7 @@ function OrchestratorFields({
 				</label>
 				<textarea
 					id="lifecycle-json"
-					className="placeholder:text-muted-foreground/50 min-h-24 w-full resize-y bg-transparent font-mono text-xs outline-hidden"
+					className="placeholder:text-foreground-muted min-h-24 w-full resize-y bg-transparent font-mono text-xs"
 					value={p.lifecycleJson}
 					onChange={(e) => setPolicy({ lifecycleJson: e.target.value })}
 					spellCheck={false}

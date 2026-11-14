@@ -11,6 +11,7 @@ import {
 	useState
 } from 'react';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -27,12 +28,6 @@ import {
 	resolveTab,
 	startsGroup
 } from './settingsTabs';
-
-const tabButtonClass = (active: boolean) =>
-	cn(
-		'flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-left text-xs transition-colors duration-75 md:w-full',
-		active ? 'bg-muted text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
-	);
 
 const lazyTabs = new Map<string, LazyExoticComponent<ComponentType>>();
 
@@ -60,13 +55,9 @@ class TabErrorBoundary extends Component<{ onRetry: () => void; children: ReactN
 		return (
 			<div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center text-sm">
 				<p className="text-muted-foreground">This tab could not be loaded. Check your connection to the server.</p>
-				<button
-					type="button"
-					className="bg-muted hover:bg-muted/70 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
-					onClick={this.props.onRetry}
-				>
+				<Button variant="secondary" size="sm" type="button" onClick={this.props.onRetry}>
 					Retry
-				</button>
+				</Button>
 			</div>
 		);
 	}
@@ -128,22 +119,27 @@ export function SettingsModal() {
 					id="settings-tabs-container"
 					className="flex min-w-0 shrink-0 border-b md:min-h-0 md:w-[15rem] md:flex-col md:border-r md:border-b-0"
 				>
-					<button
+					<Button
+						variant="ghost"
+						size="sm"
+						className="m-1 shrink-0 justify-start md:mb-0 md:w-[calc(100%-0.5rem)]"
 						type="button"
-						className="text-muted-foreground hover:text-foreground m-1 flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs transition-colors md:mb-0 md:w-[calc(100%-0.5rem)]"
 						onClick={closeSettings}
 					>
 						<ChevronLeft className="size-3" strokeWidth={2} />
 						<span>Back</span>
-					</button>
-					<div className="bg-muted/60 mx-1 mt-1 mb-0.5 hidden h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs md:flex">
+					</Button>
+					<div
+						data-composite-field
+						className="bg-muted/60 mx-1 mt-1 mb-0.5 hidden h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs md:flex"
+					>
 						<Search className="size-3.5" strokeWidth={1.5} />
 						<label className="sr-only" htmlFor="search-input-settings-modal">
 							Search
 						</label>
 						<input
 							id="search-input-settings-modal"
-							className="w-full bg-transparent py-1 text-xs outline-hidden"
+							className="w-full bg-transparent py-1 text-xs"
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 							placeholder="Search"
@@ -157,14 +153,14 @@ export function SettingsModal() {
 						{filtered.map((tab, index) => (
 							<div key={tab.id} className="contents">
 								{isAdminTab(tab.id) && (index === 0 || !isAdminTab(filtered[index - 1].id)) && (
-									<span className="text-foreground/80 mt-3 mb-0.5 hidden px-2 text-[0.625rem] font-medium md:block">
+									<span className="text-foreground-muted mt-3 mb-0.5 hidden px-2 text-caption font-medium md:block">
 										Admin
 									</span>
 								)}
 								{startsGroup(filtered, index) && (
 									<span
 										className={cn(
-											'text-muted-foreground hidden shrink-0 px-2 text-[0.625rem] md:block',
+											'text-muted-foreground hidden shrink-0 px-2 text-caption md:block',
 											index === 0 ? 'mt-0.5' : 'mt-2',
 											'mb-0.5'
 										)}
@@ -172,17 +168,19 @@ export function SettingsModal() {
 										{tab.group}
 									</span>
 								)}
-								<button
+								<Button
+									variant={selected === tab.id ? 'secondary' : 'ghost'}
+									size="sm"
+									className="shrink-0 justify-start md:w-full"
 									type="button"
 									role="tab"
 									aria-selected={selected === tab.id}
 									aria-controls={`tab-${tab.id.replace(':', '-')}`}
-									className={tabButtonClass(selected === tab.id)}
 									onClick={() => setSelected(tab.id)}
 								>
 									<AdminTabIcon id={adminTabSegment(tab.id)} />
 									<span>{tab.title}</span>
-								</button>
+								</Button>
 							</div>
 						))}
 						{filtered.length === 0 && <div className="text-muted-foreground px-2 py-1 text-xs">No matches</div>}

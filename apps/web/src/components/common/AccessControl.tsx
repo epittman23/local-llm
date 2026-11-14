@@ -3,34 +3,34 @@ import { useEffect, useMemo, useState } from 'react';
 import { AddAccessModal } from '@/components/common/AddAccessModal';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { getGroupInfoById, getGroups } from '@/lib/apis/groups';
-import { getUserInfoById } from '@/lib/apis/users';
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import {
 	type AccessGrant,
-	type Permission,
-	type Principal,
-	type Visibility,
 	addAccess,
 	getVisibility,
 	hasAnyoneReadGrant,
 	hasPublicReadGrant,
 	hasPublicWriteGrant,
 	normalizeInputToGrants,
+	type Permission,
+	type Principal,
 	principalIdsByPermission,
 	removePrincipal,
 	setVisibility,
 	togglePrincipalWrite,
-	togglePublicWrite
+	togglePublicWrite,
+	type Visibility
 } from '@/lib/access/accessGrants';
+import { getGroupInfoById, getGroups } from '@/lib/apis/groups';
+import { getUserInfoById } from '@/lib/apis/users';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 type Group = { id: string; name: string; member_count?: number };
 type UserInfo = { id: string; name: string; email?: string };
 
-const nativeSelectClass =
-	'bg-transparent text-sm outline-none [&>option]:bg-popover [&>option]:text-popover-foreground';
+const nativeSelectClass = 'bg-transparent text-sm [&>option]:bg-popover [&>option]:text-popover-foreground';
 
 /**
  * Ports workspace/common/AccessControl.svelte: the visibility picker
@@ -174,14 +174,15 @@ export function AccessControl({
 		);
 
 	const removeButton = (type: Principal, id: string, label: string) => (
-		<button
+		<Button
+			variant="ghost"
+			size="icon-sm"
 			type="button"
 			aria-label={`Remove ${label}`}
-			className="hover:bg-muted rounded-full p-1 transition"
 			onClick={() => onChange(removePrincipal(grants, type, id))}
 		>
 			<X className="size-4" />
-		</button>
+		</Button>
 	);
 
 	const visibilityBlocked = !(share && sharePublic) && visibility === 'private';
@@ -241,14 +242,10 @@ export function AccessControl({
 				<>
 					<div className="text-muted-foreground my-0.5 flex items-center justify-between text-xs">
 						<span>Access List</span>
-						<button
-							type="button"
-							className="hover:bg-muted flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition"
-							onClick={() => setShowAdd(true)}
-						>
+						<Button variant="ghost" size="sm" type="button" onClick={() => setShowAdd(true)}>
 							<Plus className="size-3" />
 							Add Access
-						</button>
+						</Button>
 					</div>
 
 					<div className="flex flex-col gap-1">

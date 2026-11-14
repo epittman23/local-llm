@@ -1,5 +1,5 @@
-import { RefreshCw } from 'lucide-react';
 import saveAs from 'file-saver';
+import { RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
@@ -16,8 +16,6 @@ import { initiateOAuthRedirect, registerOAuthClient, verifyToolServerConnection 
 import { useAuthStore } from '@/lib/stores/authStore';
 import { parseHeaders } from './connectionModel';
 import {
-	type ToolServerConnection,
-	type ToolServerFields,
 	blankToolServerFields,
 	buildToolServer,
 	directVerifyToken,
@@ -27,18 +25,17 @@ import {
 	registrationPayload,
 	registrationProblem,
 	specRequestUrl,
+	type ToolServerConnection,
+	type ToolServerFields,
 	toolServerFields,
 	validateToolServer,
 	verifyPayload,
 	verifyProblem
 } from './toolServerModel';
 
-const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
-const select = 'bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover';
+const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
+const select = 'bg-transparent pr-5 text-sm [&>option]:bg-popover';
 const label = 'text-muted-foreground text-xs';
-const linkButton =
-	'text-xs underline text-muted-foreground hover:text-foreground transition disabled:opacity-50 disabled:no-underline';
-
 /**
  * Ports components/AddToolServerModal.svelte: add or edit an external tool
  * server, OpenAPI or MCP (Streamable HTTP). It verifies on request, registers
@@ -200,12 +197,12 @@ export function AddToolServerModal({
 						<div className="flex items-center justify-between gap-3 pr-6">
 							<DialogTitle className="text-sm font-medium">{edit ? 'Edit Connection' : 'Add Connection'}</DialogTitle>
 							<div className="flex gap-1.5 text-xs">
-								<button type="button" className="hover:underline" onClick={() => fileInput.current?.click()}>
+								<Button variant="link" size="xs" type="button" onClick={() => fileInput.current?.click()}>
 									Import
-								</button>
-								<button type="button" className="hover:underline" onClick={exportFile}>
+								</Button>
+								<Button variant="link" size="xs" type="button" onClick={exportFile}>
 									Export
-								</button>
+								</Button>
 							</div>
 						</div>
 						<DialogDescription className="sr-only">An external OpenAPI or MCP tool server.</DialogDescription>
@@ -233,10 +230,11 @@ export function AddToolServerModal({
 							{direct ? (
 								<div className="text-xs">OpenAPI</div>
 							) : (
-								<button
+								<Button
+									variant="link"
+									size="xs"
 									type="button"
 									aria-label="Type"
-									className="text-xs underline-offset-2 hover:underline"
 									onClick={() => set({ type: f.type === 'mcp' ? 'openapi' : 'mcp' })}
 								>
 									{f.type === 'mcp' ? (
@@ -246,7 +244,7 @@ export function AddToolServerModal({
 									) : (
 										'OpenAPI'
 									)}
-								</button>
+								</Button>
 							)}
 						</div>
 
@@ -316,14 +314,16 @@ export function AddToolServerModal({
 								/>
 							</div>
 							<Tip content={verifyLabel}>
-								<button
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									className="mb-0.5"
 									type="button"
 									aria-label={verifyLabel}
-									className="hover:bg-muted mb-0.5 rounded p-1 transition"
 									onClick={verify}
 								>
 									<RefreshCw className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 							<Tip content={f.enable ? 'Enabled' : 'Disabled'}>
 								<span className="mb-0.5 flex items-center">
@@ -341,24 +341,20 @@ export function AddToolServerModal({
 									<div className="flex items-center gap-2">
 										{Boolean(f.oauthClientInfo) && (
 											<Tip content={edit ? 'Authorize OAuth' : 'Please save the connection before authorizing OAuth'}>
-												<button type="button" className={linkButton} disabled={!edit} onClick={authorize}>
+												<Button variant="link" size="xs" type="button" disabled={!edit} onClick={authorize}>
 													Authorize OAuth
-												</button>
+												</Button>
 											</Tip>
 										)}
 										<Tip content={f.oauthClientInfo ? 'Register Again' : 'Register Client'}>
-											<button type="button" className={linkButton} onClick={register}>
+											<Button variant="link" size="xs" type="button" onClick={register}>
 												Register Client
-											</button>
+											</Button>
 										</Tip>
 										{f.oauthClientInfo ? (
-											<span className="rounded-md bg-green-500/20 px-1.5 text-xs text-green-700 dark:text-green-200">
-												Registered
-											</span>
+											<span className="rounded-md bg-success/20 px-1.5 text-xs text-success">Registered</span>
 										) : (
-											<span className="rounded-md bg-yellow-500/20 px-1.5 text-xs text-yellow-700 dark:text-yellow-200">
-												Not Registered
-											</span>
+											<span className="rounded-md bg-warning/20 px-1.5 text-xs text-warning">Not Registered</span>
 										)}
 									</div>
 								)}
@@ -435,14 +431,16 @@ export function AddToolServerModal({
 						</div>
 
 						<div className="flex items-center justify-between">
-							<button
+							<Button
+								variant="ghost"
+								size="xs"
+								className="w-fit"
 								type="button"
-								className="text-muted-foreground hover:text-foreground w-fit text-xs"
 								aria-expanded={showAdvanced}
 								onClick={() => setShowAdvanced((v) => !v)}
 							>
 								{showAdvanced ? '▾' : '▸'} Advanced
-							</button>
+							</Button>
 							{!direct && <AccessButton label="Access Control" onClick={() => setShowAccess(true)} />}
 						</div>
 
@@ -563,7 +561,7 @@ export function AddToolServerModal({
 						)}
 
 						{f.type === 'mcp' && (
-							<div className="rounded-2xl bg-yellow-500/20 px-4 py-3 text-xs text-yellow-700 dark:text-yellow-200">
+							<div className="rounded-2xl bg-warning/20 px-4 py-3 text-xs text-warning">
 								Warning: MCP support is experimental and its specification changes often, which can lead to
 								incompatibilities. OpenAPI specification support is directly maintained by the Open WebUI team, making
 								it the more reliable option for compatibility.{' '}
