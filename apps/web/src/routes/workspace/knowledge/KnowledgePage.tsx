@@ -7,6 +7,7 @@ import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +27,7 @@ import {
 	searchKnowledgeBases
 } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useWebUIName } from '@/lib/stores/configStore';
+import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -58,7 +59,6 @@ type Page = { items: KnowledgeListItem[]; total: number };
 export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount?: boolean }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
@@ -102,6 +102,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 		return (list.data?.pages ?? []).flatMap((p) => p.items ?? []).filter((i) => !seen.has(i.id) && seen.add(i.id));
 	})();
 	const total = list.data?.pages[0]?.total ?? null;
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 
 	useEffect(() => {
 		if (total !== null) setCount('knowledge', total);
@@ -122,9 +123,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 		return () => setActions([]);
 	}, [setActions]);
 
-	useEffect(() => {
-		document.title = `Knowledge / ${webuiName}`;
-	}, [webuiName]);
+	useDocumentTitle('Knowledge');
 
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['knowledge'] });
 
@@ -218,7 +217,9 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 				/>
 			</ListSearchBar>
 
-			{list.isPending ? (
+			{failed ? (
+				<LoadFailed what="knowledge" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : list.isPending ? (
 				<div className="my-16 mb-24 flex justify-center">
 					<Spinner />
 				</div>

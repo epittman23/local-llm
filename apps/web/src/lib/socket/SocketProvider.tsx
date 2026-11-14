@@ -1,22 +1,25 @@
 // Ports the connection lifecycle from d863707:apps/openwebui/src/routes/+layout.svelte's
 // setupSocket() (roughly lines 118-250): same io() options, same auth token,
 // same connect/disconnect/reconnect_attempt/reconnect_failed handling and
-// heartbeat, and its "Connection lost. Reconnecting..." / "Reconnected" toasts
-// (docs/history/code-review.md L12; the Svelte app's extra grace period after a tab
-// resumes is left out). Still not ported: the version-mismatch auto-reload
+// heartbeat. Its "Connection lost. Reconnecting..." toast is now a banner that
+// stays while the connection is down (connectionStore, ConnectionBanner; FBK-1),
+// followed by one "Reconnected" toast (docs/history/code-review.md L12; the
+// Svelte app's extra grace period after a tab resumes is left out). Still not ported: the version-mismatch auto-reload
 // (needs the WEBUI_VERSION/WEBUI_DEPLOYMENT_ID stores) and the
 // websocket_heartbeat_interval config read; the heartbeat runs on the same 30s
 // literal the backend itself defaults to when that config value is absent.
 
+import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { WEBUI_BASE_URL } from '@/lib/constants';
+import { useConnectionStore } from '@/lib/socket/connectionStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
-/** A drop shorter than this (a quick reconnect) is not worth a toast. */
-const DISCONNECT_TOAST_DELAY_MS = 2000;
+/** A drop shorter than this (a quick reconnect) is not worth the banner. */
+const DISCONNECT_BANNER_DELAY_MS = 2000;
 
 type SocketContextValue = {
 	socket: Socket | null;
@@ -57,6 +60,7 @@ export function useSocketReady(on: boolean) {
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
 	const token = useAuthStore((state) => state.token);
+	const queryClient = useQueryClient();
 	const [connected, setConnected] = useState(false);
 	const [socket, setSocket] = useState<Socket | null>(null);
 	const [ready, setReady] = useState(false);
@@ -85,6 +89,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 		let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
 		let warned = false;
+		// Connected at least once: a later connect is a reconnect.
+		let wasConnected = false;
+		const setLost = useConnectionStore.getState().setLost;
 		const clearDisconnectTimer = () => {
 			if (disconnectTimer) clearTimeout(disconnectTimer);
 			disconnectTimer = null;
@@ -98,9 +105,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			console.log('connected', socket.id);
 			setConnected(true);
 			clearDisconnectTimer();
-			// Only after the reader saw the warning.
+			setLost(false);
+			// Only after the reader saw the banner.
 			if (warned) toast.success('Reconnected');
 			warned = false;
+			// Whatever changed while the connection was down was never pushed:
+			// refetch what is on screen, so a list that failed shows again (STA-4).
+			if (wasConnected) void queryClient.invalidateQueries();
+			wasConnected = true;
 
 			socket.emit('user-join', { auth: { token } });
 
@@ -134,8 +146,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				disconnectTimer = null;
 				if (socket.connected || document.visibilityState !== 'visible') return;
 				warned = true;
-				toast.warning('Connection lost. Reconnecting...');
-			}, DISCONNECT_TOAST_DELAY_MS);
+				setLost(true);
+			}, DISCONNECT_BANNER_DELAY_MS);
 		});
 
 		return () => {
@@ -143,12 +155,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			socket.io.off('reconnect_failed', onReconnectFailed);
 			if (heartbeatInterval) clearInterval(heartbeatInterval);
 			clearDisconnectTimer();
+			setLost(false);
 			closed.current.add(socket);
 			socket.disconnect();
 			setSocket(null);
 			setConnected(false);
 		};
-	}, [token]);
+	}, [token, queryClient]);
 
 	// `ready` is set from the shell's effect, after its children's effects, so
 	// by this render every listener under the shell has attached to `socket`.

@@ -4,16 +4,16 @@
 // infrastructure for this app rather than a port of any $lib/apis module: the
 // SvelteKit app has no shared fetch wrapper either, and Phase 4's own checklist
 // (docs/history/migration-plan.md) calls for one. Behavior kept identical, including
-// the "Session expired" toast (docs/history/code-review.md L12).
+// the "Session expired" message (docs/history/code-review.md L12), which is now an
+// inline alert on the sign-in page instead of a toast (useAuthGate, AuthPage; FBK-1).
 
-import { toast } from 'sonner';
 import { getBackendConfig } from '@/lib/apis';
 import { getSessionUser, updateUserTimezone, userSignOut } from '@/lib/apis/auths';
+import { isServerUnreachable } from '@/lib/apis/errors';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { getUserTimezone } from '@/lib/utils/auth-helpers';
-import { isServerUnreachable } from '@/lib/apis/errors';
 
 const TOKEN_EXPIRY_BUFFER = 60; // seconds
 const TOKEN_CHECK_INTERVAL_MS = 15000;
@@ -21,6 +21,17 @@ const TOKEN_CHECK_INTERVAL_MS = 15000;
 let tokenTimer: ReturnType<typeof setInterval> | null = null;
 let fetchGuardInstalled = false;
 let sessionWatchInstalled = false;
+
+/** Why the last session ended, when it ended on its own: read by the route gate and the toaster. */
+let endReason: 'expired' | null = null;
+
+/**
+ * 'expired' from the moment a session runs out until the next sign-in: the
+ * route gate then sends the person to the sign-in page with the reason, which
+ * explains it there, and the toaster holds back failures of requests the
+ * expired session still made, since that one message already explains them.
+ */
+export const sessionEndReason = () => endReason;
 
 const resolveFetchUrl = (input: RequestInfo | URL) => {
 	if (input instanceof Request) {
@@ -76,6 +87,8 @@ export const clearExpiredSession = () => {
 	if (useAuthStore.getState().status !== 'authenticated') return;
 
 	stopTokenTimer();
+	// Before the session is cleared: clearing it is what wakes the route gate.
+	endReason = 'expired';
 	useAuthStore.getState().clearSession();
 	localStorage.removeItem('token');
 	// Clears the OAuth token cookie so /auth doesn't auto-login and redirect-loop.
@@ -83,12 +96,12 @@ export const clearExpiredSession = () => {
 	userSignOut().catch((error) => {
 		console.error('Error signing out expired session:', error);
 	});
-	toast.error('Session expired. Please sign in again.');
 };
 
 /** A voluntary sign-out, as opposed to clearExpiredSession's involuntary one. */
 export const signOut = async () => {
 	stopTokenTimer();
+	endReason = null;
 	useAuthStore.getState().clearSession();
 	localStorage.removeItem('token');
 	document.cookie = 'token=; Max-Age=0; path=/';
@@ -118,7 +131,10 @@ const installSessionWatch = () => {
 	useAuthStore.subscribe((state, prev) => {
 		if (state.status === prev.status && state.token === prev.token) return;
 		stopTokenTimer();
-		if (state.status === 'authenticated') tokenTimer = setInterval(checkTokenExpiry, TOKEN_CHECK_INTERVAL_MS);
+		if (state.status === 'authenticated') {
+			endReason = null;
+			tokenTimer = setInterval(checkTokenExpiry, TOKEN_CHECK_INTERVAL_MS);
+		}
 	});
 };
 
