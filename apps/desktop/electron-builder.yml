@@ -24,7 +24,7 @@ linux:
   category: Development
   # The rpm needs a maintainer; no email on purpose.
   maintainer: epittman23
-  synopsis: Local LLM, the private assistant, in its own window
+  synopsis: local-llm, the private assistant, in its own window
   desktop:
     entry:
       StartupWMClass: local-llm

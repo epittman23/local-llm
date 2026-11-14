@@ -248,7 +248,7 @@ bar) stays reachable. A table's header stays visible while its body scrolls.
 
 **SHP-1. A corner says what kind of thing something is.** 4 px (`rounded`):
 checkboxes, inline code. 8 px (`rounded-lg`): buttons, fields, menu items.
-12 px (`rounded-panel`): panels, dialogs, menus. Full: badges, avatars,
+12 px (`rounded-panel`): panels, dialogs, menus. Full: badges, avatars (`ProfileAvatar`),
 switches. Not one radius on everything.
 
 **SHP-2. Two shadows, only on floating layers** (menus and popovers; dialogs),
@@ -294,6 +294,15 @@ and is not stretched into a row.
 (`components/ui/image-button.tsx`): a profile image that opens an upload. The
 picture fills it; an icon appears over a scrim on hover and on focus; it has
 an `aria-label`.
+
+**Profile pictures.** A model's or user's picture is the shared
+`ProfileAvatar` (`components/ui/avatar.tsx`), always round. Without a picture
+of its own (none, a stored default such as `/user.png`, or one that fails to
+load) it shows the name's initials, first and last word, on `--surface-3` in
+`--foreground-strong`: never a stock image. It is decorative (hidden from
+assistive technology) because the name is beside it; pass `label` when it
+stands alone. A stored default is never fetched, and the picture endpoints
+answer 404 for one.
 
 ## Forms
 

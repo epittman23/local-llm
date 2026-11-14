@@ -7,6 +7,42 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest, 5): **The product's mark, fallback pictures,
+  default colours, new-chat suggestions and three more ratchet patterns**,
+  settled by the owner for the UX review's cross-cutting section (#1116).
+  - **Mark (#924).** Until a real mark exists, local-llm's mark is lucide's
+    Sigma glyph in the dark theme's brand colour on its page colour:
+    `apps/web/public/favicon.svg`, rendered to `favicon.ico`, a 180 px
+    `apple-touch-icon.png` and `icon-512.png`, which is also the desktop
+    window's, the rpm's and the PWA manifest's icon. Astro's favicon and Open
+    WebUI's "OI" logo, favicon and grey silhouette are removed.
+  - **Fallback pictures (#924).** A model or user without a picture of its own
+    shows its initials on `--surface-3` in `--foreground-strong`, drawn by the
+    shared `ProfileAvatar`. For this the owner approved an API change:
+    `/api/v1/models/model/profile/image` and `/api/v1/users/{id}/profile/image`
+    answer 404 when there is no usable picture (a stored default such as
+    `/user.png`, `/favicon.png` or `/static/favicon.png` included), instead of
+    serving Open WebUI's images. Stored rows are left as they are. The webhook
+    picture endpoint keeps its 200 and serves the mark.
+  - **Default colours (#989).** New ones come from the tokens; stored ones are
+    untouched. A new user's generated picture is drawn in the current theme's
+    `--surface-3` and `--foreground-strong`, not white on orange; the
+    new-calendar presets are the six `--series` tokens, starting on
+    `--series-1`; a new Personal calendar is stored with no colour (the column
+    is nullable), so it is drawn in the current theme's `--series-1`.
+  - **New-chat suggestions (#1065).** None by default: Open WebUI's stock list
+    ("Help me study vocabulary...") misstated what the assistant is for.
+    Revision `52b5a00a0e74` removes it from existing installs only where it is
+    still the stock list unchanged. Suggestions set on a model, or in Admin
+    Settings, still show.
+  - **Desktop name (#979).** Only visible text says local-llm; the desktop
+    app's `productName` stays "Local LLM", because it names the config folder.
+  - **Ratchet.** `standard.ratchet.test.ts` also counts `text-opacity`
+    (COL-2), `native-select` and `raw-input` (FRM-4). The owner accepted their
+    starting counts at the end of the section (43, 51 and 126). The baseline
+    lists the patterns it has counted, so a new pattern's counts are recorded
+    once and then only fall.
+
 - **2026-11-14** (latest, 4): **The instance name defaults to `local-llm`.**
   `LLLM_NAME`'s default (and its fallbacks, the OpenAPI title and the
   manifest) changed from "Local LLM" to "local-llm", so the tab, the sign-in
