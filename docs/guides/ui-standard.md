@@ -525,13 +525,18 @@ label.
 
 ## Accessibility
 
-**A11Y-1. One focus indicator, on everything, never removed:** a 2 px solid
-`--focus` outline, offset 2 px (flush on fields, whose edge also turns
-`--focus`). No `outline-none` without it; no translucent ring. A box that
-draws the edge around a bare text field (the chat's message box) is a
-composite field: it carries `data-composite-field` and shows the focus on
-the box, as a field does. One exception: the canvas's editor (CNV-6) shows
-its caret and no outline.
+**A11Y-1. One focus indicator, on everything, for focus that came from the
+keyboard:** a 2 px solid `--focus` outline, offset 2 px (flush on fields,
+whose edge also turns `--focus`). It appears when focus was moved with Tab
+and not otherwise: a field that was clicked, tapped or focused by the app
+shows its caret and no outline, and a button that was clicked shows nothing.
+`apps/web/src/lib/ui/focusSource.ts` marks `<html>` with
+`data-focus="keyboard"` from a Tab press until the next pointer press, and
+the outline is drawn only under that mark. No `outline-none`, and no
+translucent ring. A box that draws the edge around a bare text field (the
+chat's message box) is a composite field: it carries `data-composite-field`
+and shows the focus on the box, as a field does. One exception: the canvas's
+editor (CNV-6) shows its caret and no outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
 label tied to it, or an `aria-label` (ACT-4).
