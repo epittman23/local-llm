@@ -13,6 +13,11 @@ vi.mock('@/lib/stores/authStore', () => ({
 const channel = { id: 'c1', name: 'general', type: 'group', created_at: 0, write_access: true } as unknown as Channel;
 
 describe('MessageList', () => {
+	it('titles the channel start on the standard’s heading step (TYP-2)', () => {
+		render(<MessageList channel={channel} messages={[]} top onLoadMore={() => {}} actions={{}} />);
+		expect(screen.getByRole('heading', { level: 2 }).className).toContain('text-heading');
+	});
+
 	it('offers a retry in place of the channel start when a page failed to load', () => {
 		const onLoadMore = vi.fn();
 		render(<MessageList channel={channel} messages={[]} top={false} failed onLoadMore={onLoadMore} actions={{}} />);

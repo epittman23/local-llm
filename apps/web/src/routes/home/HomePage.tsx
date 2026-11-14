@@ -24,7 +24,7 @@ export function HomePage() {
 
 	return (
 		<div className="flex flex-col gap-4 p-6">
-			<h1 className="text-xl font-semibold">Home</h1>
+			<h1 className="text-heading font-semibold">Home</h1>
 			{links.length ? (
 				<nav className="flex gap-2" aria-label="Home">
 					{links.map(({ to, label, icon: Icon }) => (

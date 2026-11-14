@@ -71,7 +71,7 @@ export function MessageList({
 										))}
 								</div>
 							)}
-							<h2 className="text-2xl">{channelTitle(channel, me?.id)}</h2>
+							<h2 className="text-heading">{channelTitle(channel, me?.id)}</h2>
 							<p className="text-muted-foreground text-sm">
 								This channel was created on {dayjs(channel.created_at / 1_000_000).format('MMMM D, YYYY')}. This is the
 								very beginning of the {channelTitle(channel, me?.id)} channel.

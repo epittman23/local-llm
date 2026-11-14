@@ -479,7 +479,8 @@ export function Blocks({
 								dir="auto"
 								className={cn(
 									'mt-4 mb-2 font-semibold',
-									['text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm', 'text-sm'][token.depth - 1]
+									// TYP-2's steps: h1 heading, h2 title, h3 reading, the rest body.
+									['text-heading', 'text-title', 'text-reading', 'text-body', 'text-body', 'text-body'][token.depth - 1]
 								)}
 							>
 								<Inline tokens={token.tokens} />

@@ -58,3 +58,12 @@ describe('SharedChatPage: cloning the share', () => {
 		expect(cloneSharedChatById).toHaveBeenCalledWith('t', 'share-1');
 	});
 });
+
+describe('SharedChatPage: its tab and heading', () => {
+	it('names the tab after the chat through the shared title hook, and sizes the heading on the scale', async () => {
+		renderPage();
+		const heading = await screen.findByRole('heading', { level: 1, name: 'shared chat' });
+		expect(heading.className).toContain('text-heading');
+		await waitFor(() => expect(document.title.startsWith('shared chat / ')).toBe(true));
+	});
+});
