@@ -10,6 +10,6 @@ import { compareVersion, extractFrontmatter } from '@/lib/utils/plugins';
 export function refusedForVersion(content: string): boolean {
 	const required = extractFrontmatter(content).required_open_webui_version ?? '0.0.0';
 	if (!compareVersion(required, WEBUI_VERSION)) return false;
-	toast.error(`Local LLM version (v${WEBUI_VERSION}) is lower than required version (v${required})`);
+	toast.error(`local-llm version (v${WEBUI_VERSION}) is lower than required version (v${required})`);
 	return true;
 }

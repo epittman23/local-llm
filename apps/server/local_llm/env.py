@@ -875,7 +875,7 @@ if ENABLE_SCIM and not SCIM_AUTH_PROVIDER:
 # WEBUI Identity
 ####################################
 
-LLLM_NAME = os.getenv('LLLM_NAME', 'Local LLM')
+LLLM_NAME = os.getenv('LLLM_NAME', 'local-llm')
 
 # Absolute URL of an icon for webhook cards (Teams `activityImage`); omitted when unset.
 LLLM_FAVICON_URL = os.getenv('LLLM_FAVICON_URL', '')

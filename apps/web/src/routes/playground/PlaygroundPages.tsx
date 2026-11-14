@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import saveAs from 'file-saver';
 import { Download, MinusCircle, MoreHorizontal, Pencil, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { Outlet } from 'react-router';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Spinner } from '@/components/common/Spinner';
+import { type SectionTab, SectionTabs } from '@/components/layout/SectionTabs';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -15,13 +16,13 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { ImageButton } from '@/components/ui/image-button';
+import { PageHeader } from '@/components/ui/page-header';
 import { RowButton } from '@/components/ui/row-button';
 import { getModels } from '@/lib/apis';
 import { imageEdits, imageGenerations } from '@/lib/apis/images';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
-import { cn } from '@/lib/utils';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import {
 	appendAssistant,
@@ -35,26 +36,23 @@ import { useStreamRunner } from './useStreamRunner';
 
 type ModelInfo = { id: string; name: string };
 
-const tab = ({ isActive }: { isActive: boolean }) =>
-	cn('min-w-fit px-1 text-sm transition select-none', isActive ? '' : 'text-foreground-muted hover:text-foreground');
+const playgroundTabs: SectionTab[] = [
+	{ to: '/playground', label: 'Chat', end: true },
+	{ to: '/playground/completions', label: 'Completions' },
+	{ to: '/playground/images', label: 'Images' }
+];
 
 /** Ports routes/(app)/playground/+layout.svelte: admin only, with Chat / Completions / Images tabs. */
 export function PlaygroundLayout() {
-	useDocumentTitle('Playground');
 	return (
 		<FeatureGate feature="playground">
 			<div className="flex h-full min-h-0 w-full flex-col">
-				<nav className="flex items-center gap-1 px-2.5 pt-2 pb-1" aria-label="Playground">
-					<NavLink to="/playground" end className={tab}>
-						Chat
-					</NavLink>
-					<NavLink to="/playground/completions" className={tab}>
-						Completions
-					</NavLink>
-					<NavLink to="/playground/images" className={tab}>
-						Images
-					</NavLink>
-				</nav>
+				<div className="mb-3 flex flex-col gap-3 border-b px-4 pt-4">
+					<div className="ps-[var(--shell-menu-inset,0px)]">
+						<PageHeader title="Playground" description="Try a model with hand-written requests, outside of chat." />
+					</div>
+					<SectionTabs label="Playground" tabs={playgroundTabs} />
+				</div>
 				<div className="min-h-0 flex-1 overflow-y-auto">
 					<Outlet />
 				</div>
@@ -92,7 +90,7 @@ function ModelSelect({
 	return (
 		<select
 			aria-label="Model"
-			className="w-full bg-transparent py-1 text-sm [&>option]:bg-popover"
+			className="w-full bg-transparent py-1 text-sm"
 			value={value}
 			onChange={(e) => onChange(e.target.value)}
 		>
@@ -166,7 +164,7 @@ export function PlaygroundChat() {
 			<div className="flex items-center gap-1.5">
 				<div data-composite-field className="flex-1 rounded-lg border px-1.5 py-1 text-sm">
 					<RowButton
-						className="flex items-center justify-between gap-2 px-0 py-0"
+						className="flex min-h-6 items-center justify-between gap-2 px-0 py-0 pointer-coarse:min-h-11"
 						aria-expanded={showSystem}
 						onClick={() => setShowSystem((v) => !v)}
 					>

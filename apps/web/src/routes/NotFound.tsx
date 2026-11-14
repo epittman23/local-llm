@@ -9,14 +9,14 @@ import { Link, useLocation } from 'react-router';
 export function NotFound() {
 	const location = useLocation();
 	return (
-		<div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-			<h1 className="text-xl font-semibold">Page not found</h1>
+		<main className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+			<h1 className="text-heading font-title">Page not found</h1>
 			<p className="text-muted-foreground max-w-sm text-sm">
 				Nothing lives at <code>{location.pathname}</code>.
 			</p>
 			<Link className="text-sm underline" to="/">
 				Go home
 			</Link>
-		</div>
+		</main>
 	);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Katex } from '@/components/chat/markdown/Katex';
 import { Button } from '@/components/ui/button';
 import { applyTheme, getTheme } from '@/lib/theme';
@@ -101,15 +101,9 @@ function Specimen() {
 	);
 }
 
+// The tab title, "Interface standard · local-llm", comes from this route's
+// handle in AppRouter.tsx, as every page's does (LAY-5).
 export function UiStandardPage() {
-	useEffect(() => {
-		const previousTitle = document.title;
-		document.title = 'Interface standard · local-llm';
-		return () => {
-			document.title = previousTitle;
-		};
-	}, []);
-
 	return (
 		<div className="bg-background text-foreground text-body min-h-screen">
 			<a

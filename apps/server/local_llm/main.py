@@ -536,7 +536,7 @@ async def _shutdown(app) -> None:
 apply_orjson_http_json()
 
 app = FastAPI(
-    title='Local LLM',
+    title='local-llm',
     docs_url='/docs' if ENV == 'dev' else None,
     openapi_url='/openapi.json' if ENV == 'dev' else None,
     redoc_url=None,
@@ -2984,10 +2984,7 @@ async def get_manifest_json():
         return {
             'name': app.state.LLLM_NAME,
             'short_name': app.state.LLLM_NAME,
-            'description': (
-                f'{app.state.LLLM_NAME} is an open, extensible, user-friendly interface for AI that adapts to your '
-                'workflow.'
-            ),
+            'description': f'{app.state.LLLM_NAME}: a private assistant for mathematics, statistics, data and code.',
             'start_url': '/',
             'display': 'standalone',
             'background_color': '#343541',

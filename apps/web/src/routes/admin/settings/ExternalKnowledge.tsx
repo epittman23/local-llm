@@ -433,7 +433,7 @@ function SourceDialog({
 							<div className="mt-1 text-xs text-success">Test passed: {testResult?.documents?.length} result(s).</div>
 						)}
 						<div className="text-muted-foreground mt-1 text-xs">
-							External vectors must be generated with the same embedding model configured in Local LLM.
+							External vectors must be generated with the same embedding model configured in local-llm.
 						</div>
 					</div>
 

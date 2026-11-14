@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PlaygroundImages, PlaygroundLayout } from './PlaygroundPages';
+import { PlaygroundChat, PlaygroundImages, PlaygroundLayout } from './PlaygroundPages';
 
 const { imageGenerations, imageEdits, saveAs, toast } = vi.hoisted(() => ({
 	imageGenerations: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock('@/lib/apis', () => ({ getModels: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'me', role: 'admin' } })
 }));
+vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
 vi.mock('@/routes/common/FeatureGate', () => ({ FeatureGate: ({ children }: { children: unknown }) => children }));
 
 const wrap = (node: React.ReactNode, path = '/playground') =>
@@ -44,18 +45,32 @@ describe('the playground tabs', () => {
 			path
 		);
 
-	it('shows the current tab in the normal colour and the others muted', () => {
+	it('marks the open tab as the current page and the others not, under the Playground heading', () => {
 		layout('/playground/images');
-		expect(screen.getByRole('link', { name: 'Images' }).className).not.toContain('text-foreground-muted');
-		expect(screen.getByRole('link', { name: 'Chat' }).className).toContain('text-foreground-muted');
+		expect(screen.getByRole('heading', { level: 1, name: 'Playground' })).toBeInTheDocument();
+		expect(screen.getByRole('navigation', { name: 'Playground' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Images' }).getAttribute('aria-current')).toBe('page');
+		expect(screen.getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBeNull();
 		expect(screen.getByRole('link', { name: 'Completions' }).className).toContain('hover:text-foreground');
 		expect(screen.getByText('images page')).toBeInTheDocument();
 	});
 
 	it('marks Chat as the current tab on the index route only', () => {
 		layout('/playground');
-		expect(screen.getByRole('link', { name: 'Chat' }).className).not.toContain('text-foreground-muted');
-		expect(screen.getByRole('link', { name: 'Images' }).className).toContain('text-foreground-muted');
+		expect(screen.getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page');
+		expect(screen.getByRole('link', { name: 'Images' }).getAttribute('aria-current')).toBeNull();
+	});
+});
+
+describe('the chat playground', () => {
+	it('makes System Instructions a target at least 24 px tall, 44 px on touch (LAY-3), that opens the field', () => {
+		wrap(<PlaygroundChat />);
+		const toggle = screen.getByRole('button', { name: /System Instructions/ });
+		expect(toggle.className).toContain('min-h-6');
+		expect(toggle.className).toContain('pointer-coarse:min-h-11');
+		fireEvent.click(toggle);
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(screen.getByRole('textbox', { name: 'System Instructions' })).toBeInTheDocument();
 	});
 });
 

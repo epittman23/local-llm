@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import { json, MODELS, mockChat, savedChat } from './chat-helpers';
+import { expect, test } from './test';
 
 test('a new chat: greeting and suggestions, send, stream, and the URL becomes the saved chat', async ({ page }) => {
 	const chat = await mockChat(page);
@@ -138,7 +138,7 @@ test('two models answer side by side', async ({ page }) => {
 	await page.goto('/');
 	await chat.socket.connected;
 	await page.getByRole('button', { name: 'Add Model' }).click();
-	await page.getByRole('button', { name: 'Select a model' }).nth(1).click();
+	await page.getByRole('button', { name: 'Model: Select a model' }).click();
 	await page.getByRole('option', { name: 'Llama' }).click();
 	await page.getByRole('textbox', { name: 'Message' }).fill('Compare');
 	await page.keyboard.press('Enter');

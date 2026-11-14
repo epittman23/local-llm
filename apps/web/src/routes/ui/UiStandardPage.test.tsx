@@ -21,10 +21,10 @@ describe('UiStandardPage (/ui)', () => {
 		document.documentElement.className = '';
 	});
 
-	it('sets the tab title while mounted, and restores it', () => {
+	it('leaves the tab title to its route, so it reads like every other page (LAY-5)', () => {
 		document.title = 'before';
 		const { unmount } = renderPage();
-		expect(document.title).toBe('Interface standard · local-llm');
+		expect(document.title).toBe('before');
 		unmount();
 		expect(document.title).toBe('before');
 	});

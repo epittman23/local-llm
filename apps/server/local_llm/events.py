@@ -1033,7 +1033,7 @@ def build_event(
 
 
 async def dispatch_webhook_event(app: Any, event: Event) -> None:
-    name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'Local LLM')
+    name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'local-llm')
     subject = event.subject or {}
     subject_id = subject.get('id')
     definition = EVENT_DEFINITIONS_BY_NAME.get(event.event)

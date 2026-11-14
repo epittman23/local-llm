@@ -3,9 +3,12 @@ import type { ReactNode } from 'react';
 import { useId } from 'react';
 import { Label } from '@/components/ui/label';
 
-// Building blocks of /ui (the interface standard's demo page). `Field` and
-// `PageHeader` are the standard's own patterns (FRM-1, FRM-2, LAY-5), written
-// once here so the page shows them the way a real page should use them.
+export { PageHeader } from '@/components/ui/page-header';
+
+// Building blocks of /ui (the interface standard's demo page). `Field` is the
+// standard's own pattern (FRM-1, FRM-2), written once here so the page shows it
+// the way a real page should use it. `PageHeader` (LAY-5) is the app's own
+// component now, re-exported so the page keeps one import for its parts.
 
 export interface SectionMeta {
 	id: string;
@@ -97,30 +100,6 @@ export function Field({
 					</p>
 				)
 			)}
-		</div>
-	);
-}
-
-/** LAY-5: every page opens with its name, one sentence on what it is for, and its primary action. */
-export function PageHeader({
-	title,
-	description,
-	action,
-	as: Heading = 'h1'
-}: {
-	title: string;
-	description: string;
-	action?: ReactNode;
-	/** `h1` on a real page. Lower only where the header is nested inside another page, as on /ui. */
-	as?: 'h1' | 'h2' | 'h3' | 'h4';
-}) {
-	return (
-		<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-			<div className="min-w-0">
-				<Heading className="text-heading font-title tracking-tight">{title}</Heading>
-				<p className="text-foreground-muted mt-1 max-w-[72ch]">{description}</p>
-			</div>
-			{action}
 		</div>
 	);
 }
