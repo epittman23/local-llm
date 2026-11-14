@@ -63,6 +63,13 @@ describe('TunePage errors show what the server said', () => {
 		useAuthStore.setState({ token: null });
 	});
 
+	it('names every select by its visible label (A11Y-2, #987)', async () => {
+		renderPage();
+		await screen.findByRole('button', { name: 'Start' });
+		for (const name of ['Profile', 'Tier', 'Benchmark', 'System', 'Grid', 'Budget', 'Recent sweeps'])
+			expect(screen.getByRole('combobox', { name })).toBeTruthy();
+	});
+
 	it('a refused start', async () => {
 		vi.mocked(api.startTune).mockRejectedValue('a sweep is already running');
 		renderPage();

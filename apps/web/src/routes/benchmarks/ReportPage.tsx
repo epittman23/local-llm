@@ -148,9 +148,9 @@ export function ReportPage() {
 				}}
 			>
 				<div className="flex flex-col gap-1">
-					<Label>Tier</Label>
+					<Label htmlFor="report-tier">Tier</Label>
 					<Select value={tier} onValueChange={setTier}>
-						<SelectTrigger className="w-40">
+						<SelectTrigger id="report-tier" className="w-40">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -176,9 +176,9 @@ export function ReportPage() {
 				</div>
 
 				<div className="flex flex-col gap-1">
-					<Label>Benchmark</Label>
+					<Label htmlFor="report-benchmark">Benchmark</Label>
 					<Select value={benchmark} onValueChange={setBenchmark}>
-						<SelectTrigger className="w-48">
+						<SelectTrigger id="report-benchmark" className="w-48">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
