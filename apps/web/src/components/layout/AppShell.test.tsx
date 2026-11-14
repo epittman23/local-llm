@@ -72,6 +72,8 @@ describe('AppShell', () => {
 		renderAt('/notes');
 		expect(screen.getAllByRole('navigation', { name: 'Main' }).length).toBeGreaterThan(0);
 		expect(screen.getByRole('main')).toBeInTheDocument();
+		// Named, so a page's own aside (Calendar's) does not make two unnamed ones.
+		expect(screen.getByRole('complementary', { name: 'Sidebar' })).toBeInTheDocument();
 	});
 
 	it('gives a page without a visible heading a hidden h1 with its name', () => {

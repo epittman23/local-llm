@@ -92,7 +92,10 @@ export function AppShell() {
 			>
 				Skip to content
 			</a>
-			<aside className={cn('hidden shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}>
+			<aside
+				aria-label="Sidebar"
+				className={cn('hidden shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}
+			>
 				{/* Not just visually collapsed (w-0 + overflow-hidden): unmounted
 				    entirely when closed. A flex child's default min-width is its
 				    content's own intrinsic size, so a nav link's text can force
