@@ -122,8 +122,7 @@ describe('UserList table (#987, #1062)', () => {
 
 	it('sits in the shared table container, labelled, with the dates left out on a phone', async () => {
 		await renderList();
-		const table = screen.getByRole('table', { name: 'Users' });
-		expect(table.parentElement).toHaveAttribute('data-slot', 'table-container');
+		expect(screen.getByRole('region', { name: 'Users' })).toHaveAttribute('data-slot', 'table-container');
 		expect(screen.getByRole('columnheader', { name: /Last Active/ }).className).toContain('hidden md:table-cell');
 		expect(screen.getByRole('columnheader', { name: /Created at/ }).className).toContain('hidden md:table-cell');
 		expect(screen.getByRole('columnheader', { name: /Name/ }).className).not.toContain('hidden');

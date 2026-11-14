@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getModels } from '@/lib/apis';
@@ -37,9 +37,9 @@ const show = () =>
 describe('Leaderboard table (#1062)', () => {
 	it('sits in the shared table container, labelled, so a narrow screen scrolls it in its own frame', async () => {
 		show();
-		const table = await screen.findByRole('table', { name: 'Leaderboard' });
-		expect(table.parentElement).toHaveAttribute('data-slot', 'table-container');
-		expect(table.className).toContain('whitespace-nowrap');
+		const region = await screen.findByRole('region', { name: 'Leaderboard' });
+		expect(region).toHaveAttribute('data-slot', 'table-container');
+		expect(within(region).getByRole('table').className).toContain('whitespace-nowrap');
 		expect(await screen.findByText('Statistics tutor')).toBeInTheDocument();
 	});
 });

@@ -138,7 +138,7 @@ describe('PrescreenPage', () => {
 		expect(screen.getByText('Points (3)')).toBeTruthy();
 		// Both tables scroll in the shared, labelled container on a narrow screen (#1062).
 		for (const name of ['Candidates', 'Points']) {
-			expect(screen.getByRole('table', { name }).parentElement?.getAttribute('data-slot')).toBe('table-container');
+			expect(screen.getByRole('region', { name }).getAttribute('data-slot')).toBe('table-container');
 		}
 		expect(api.streamPrescreen).not.toHaveBeenCalled();
 	});

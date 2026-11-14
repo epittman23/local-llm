@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cloneSharedChatById } from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { SharedChatPage } from './SharedChatPage';
 
 const toastError = vi.hoisted(() => vi.fn());
@@ -64,6 +65,6 @@ describe('SharedChatPage: its tab and heading', () => {
 		renderPage();
 		const heading = await screen.findByRole('heading', { level: 1, name: 'shared chat' });
 		expect(heading.className).toContain('text-heading');
-		await waitFor(() => expect(document.title.startsWith('shared chat / ')).toBe(true));
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('shared chat'));
 	});
 });

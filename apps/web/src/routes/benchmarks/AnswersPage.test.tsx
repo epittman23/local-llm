@@ -24,7 +24,7 @@ describe('AnswersPage', () => {
 			</QueryClientProvider>
 		);
 		expect((container.firstElementChild as HTMLElement).className).toContain('min-w-0');
-		const table = await screen.findByRole('table', { name: 'Answers' });
-		expect(table.parentElement?.getAttribute('data-slot')).toBe('table-container');
+		const region = await screen.findByRole('region', { name: 'Answers' });
+		expect(region.getAttribute('data-slot')).toBe('table-container');
 	});
 });

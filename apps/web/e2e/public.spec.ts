@@ -299,7 +299,7 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page.locator('strong', { hasText: 'monad' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Clone Chat' })).toHaveCount(0);
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
-	await expect(page).toHaveTitle('Explaining monads / local-llm');
+	await expect(page).toHaveTitle('Explaining monads · local-llm');
 });
 
 test('a shared chat shows HTML in a message as text: no page styles, forms or overlays from the sharer', async ({

@@ -24,6 +24,17 @@ const wrap = (ui: React.ReactNode) =>
 
 const openMenu = (name: string) => fireEvent.keyDown(screen.getByRole('button', { name }), { key: 'Enter' });
 
+// A closing dialog now returns focus to its opener (NAV-4), which opens the
+// opener's tooltip, and Radix positions that with a ResizeObserver jsdom lacks.
+vi.stubGlobal(
+	'ResizeObserver',
+	class {
+		observe() {}
+		unobserve() {}
+		disconnect() {}
+	}
+);
+
 afterEach(cleanup);
 
 describe('AttachMenu knowledge picker', () => {

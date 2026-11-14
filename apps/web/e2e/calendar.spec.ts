@@ -126,7 +126,7 @@ test('clicking a day creates a 9 AM event in the default calendar; the scheduled
 	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
 	const seen = await mockCalendar(page);
 	await page.goto('/calendar');
-	await page.getByRole('button', { name: `New event on ${new Date('2026-09-18T00:00:00').toDateString()}` }).click();
+	await page.getByRole('button', { name: /^18 September 2026, / }).click();
 	const d = page.getByRole('dialog', { name: 'New event' });
 	await expect(d.getByLabel('Start time')).toHaveValue('09:00');
 	await expect(d.getByLabel('End time')).toHaveValue('10:00');

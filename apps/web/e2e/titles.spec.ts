@@ -39,19 +39,7 @@ test.beforeEach(async ({ page, context }) => {
 	);
 });
 
-// Left out until their pages stop writing document.title themselves, which
-// I1 adds back: `/s/:id` (SharedChatPage) and the six list pages (the
-// workspace lists and Functions; `/workspace` lands on Models).
-const notYet = new Set<string>([
-	routePaths.workspace,
-	routePaths.workspaceModels,
-	routePaths.workspaceKnowledge,
-	routePaths.workspacePrompts,
-	routePaths.workspaceSkills,
-	routePaths.workspaceTools,
-	routePaths.adminFunctions
-]);
-const paths = Object.values(routePaths).filter((path) => !path.includes(':') && !notYet.has(path));
+const paths = Object.values(routePaths).filter((path) => !path.includes(':'));
 
 for (const path of paths) {
 	test(`${path} titles its tab "<Page> · local-llm"`, async ({ page }) => {
@@ -80,4 +68,25 @@ test('the first Tab press shows the skip link, and Enter moves focus to the page
 	await expect(skip).toBeInViewport();
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('main')).toBeFocused();
+});
+
+test('a shared chat titles its tab with the chat (`/s/:id`)', async ({ page }) => {
+	await page.route('**/api/v1/chats/share/abc123', (route) =>
+		route.fulfill(
+			json({
+				id: 'chat-1',
+				chat: {
+					title: 'Explaining monads',
+					timestamp: 1700000000000,
+					models: ['qwen38'],
+					history: {
+						currentId: 'm1',
+						messages: { m1: { id: 'm1', parentId: null, childrenIds: [], role: 'user', content: 'What is a monad?' } }
+					}
+				}
+			})
+		)
+	);
+	await page.goto(routePaths.share.replace(':id', 'abc123'));
+	await expect(page).toHaveTitle('Explaining monads · local-llm');
 });
