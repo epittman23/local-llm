@@ -4,23 +4,27 @@
 		<meta charset="utf-8" />
 		<meta
 			http-equiv="Content-Security-Policy"
-			content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'"
+			content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'"
 		/>
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Local LLM</title>
+		<title>local-llm</title>
 		<link rel="stylesheet" href="status.css" />
 		<script src="status.js" defer></script>
 	</head>
 	<body>
 		<main id="progress-view">
 			<header>
-				<h1 id="title">Starting Local LLM</h1>
+				<h1 id="title">Starting local-llm</h1>
 				<span id="elapsed" class="muted"></span>
 			</header>
 			<ol id="steps"></ol>
-			<p id="error" class="error" role="alert" hidden></p>
+			<div id="error" class="error" role="alert" hidden>
+				<p id="cause" class="cause" hidden></p>
+				<p id="error-message"></p>
+			</div>
+			<p id="notice" class="notice" hidden>A llama-server is still running and holding GPU memory. Stop it?</p>
 			<details id="details">
-				<summary>Show details</summary>
+				<summary id="details-toggle">Show log</summary>
 				<pre id="log"></pre>
 			</details>
 			<footer id="actions"></footer>
@@ -34,8 +38,8 @@
 				<p id="server-override" class="muted" hidden></p>
 				<p id="server-problem" hidden></p>
 				<p class="muted">
-					At http://127.0.0.1 or http://localhost, the app starts the local stack when nothing is running and stops it on
-					close. At any other address, such as a remote server, http://[::1] or https:// at loopback, it only connects.
+					Local address (127.0.0.1 or localhost): the app starts and stops the server for you. Any other address: the
+					app only connects.
 				</p>
 				<label for="repo-path">Repository folder</label>
 				<div class="row">

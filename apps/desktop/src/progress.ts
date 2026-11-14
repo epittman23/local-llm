@@ -26,6 +26,8 @@ export interface Step extends StepDef {
 	endedAt?: number;
 	/** The latest output line while it runs, or why it was skipped or failed. */
 	detail?: string;
+	/** The detail is a raw output line, which the step's hint replaces once it shows. */
+	detailIsOutput?: boolean;
 }
 
 export interface Progress {
@@ -36,6 +38,8 @@ export interface Progress {
 	steps: Step[];
 	log: string[];
 	error?: string;
+	/** The log's last error line in plain words, shown above `error` when the start failed. */
+	cause?: string;
 	finished: boolean;
 	/** A llama-server outlived a forced stop; the dialog offers to stop it. */
 	offerStopLlama: boolean;
@@ -148,6 +152,34 @@ export function cleanLine(text: string): string {
 	return (plain.split('\r').pop() ?? '').trimEnd();
 }
 
+/** Lines that say something failed without saying what: make's own wrapper, uvicorn's sign-off. */
+const WRAPPER = /^make(\[\d+\])?: \*\*\*|Application startup failed/;
+/** Routine output, even when it mentions an error (an access log's `404 Not Found`). */
+const ROUTINE = /^(INFO|DEBUG)\b/;
+const ERROR_WORDS = /\b(error|failed|not found|refused|denied|exception)\b/i;
+
+/**
+ * The log's last line that says what went wrong, in plain words: no logger
+ * or `make backend:` prefix, no Python exception class names. Lines that
+ * only say that something failed (make's `***` line, uvicorn's "Application
+ * startup failed") are passed over for the line before them that says why.
+ */
+export function errorLine(log: readonly string[]): string | undefined {
+	for (let i = log.length - 1; i >= 0; i--) {
+		const line = (log[i] ?? '').trim();
+		if (!line || line.startsWith(MARKER.trim()) || ROUTINE.test(line) || WRAPPER.test(line) || !ERROR_WORDS.test(line))
+			continue;
+		const plain = line
+			.replace(/^(ERROR|CRITICAL|FATAL)(\s*\[[^\]]*\])?:?\s+/, '')
+			.replace(/^make backend:\s*/, '')
+			.replace(/^([\w.]+\.)?\w*(Error|Exception):\s*/, '')
+			.replace(/^\([\w.]+(Error|Exception)\)\s*/, '')
+			.trim();
+		if (plain) return plain.charAt(0).toUpperCase() + plain.slice(1);
+	}
+	return undefined;
+}
+
 function update(progress: Progress, id: string, change: (step: Step) => Step): Progress {
 	return { ...progress, steps: progress.steps.map((s) => (s.id === id ? change(s) : s)) };
 }
@@ -173,7 +205,13 @@ function settleBefore(progress: Progress, id: string, at: number): Progress {
 function begin(progress: Progress, id: string, at: number, detail?: string): Progress {
 	const step = progress.steps.find((s) => s.id === id);
 	if (step?.state !== 'pending') return progress;
-	return update(settleBefore(progress, id, at), id, (s) => ({ ...s, state: 'running', startedAt: at, detail }));
+	return update(settleBefore(progress, id, at), id, (s) => ({
+		...s,
+		state: 'running',
+		startedAt: at,
+		detail,
+		detailIsOutput: false
+	}));
 }
 
 function finish(progress: Progress, id: string, at: number): Progress {
@@ -201,7 +239,7 @@ function onLine(progress: Progress, raw: string, at: number): Progress {
 		return next;
 	}
 	const running = next.steps.find((s) => s.state === 'running');
-	return running ? update(next, running.id, (s) => ({ ...s, detail: text.slice(0, 200) })) : next;
+	return running ? update(next, running.id, (s) => ({ ...s, detail: text.slice(0, 200), detailIsOutput: true })) : next;
 }
 
 export function reduce(progress: Progress, event: ProgressEvent): Progress {
@@ -241,7 +279,12 @@ export function reduce(progress: Progress, event: ProgressEvent): Progress {
 						endedAt: event.at
 					}))
 				: progress;
-			return { ...failed, error: event.message, endedAt: event.at };
+			return {
+				...failed,
+				error: event.message,
+				cause: progress.kind === 'startup' ? errorLine(progress.log) : undefined,
+				endedAt: event.at
+			};
 		}
 		case 'line':
 			return onLine(progress, event.text, event.at);

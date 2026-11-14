@@ -109,7 +109,7 @@ let appOrigin = '';
 let mainWindow: BrowserWindow | null = null;
 let statusWindow: BrowserWindow | null = null;
 let statusView: 'progress' | 'settings' = 'progress';
-let progress: Progress = createProgress('startup', 'Starting Local LLM', [], Date.now());
+let progress: Progress = createProgress('startup', 'Starting local-llm', [], Date.now());
 /** The stack this app started (or adopted) and so must stop. */
 let owned: { pgid: number; child?: ChildProcess; exitCode?: number | null } | null = null;
 let buildChild: ChildProcess | null = null;
@@ -192,7 +192,7 @@ function openStatus(view: 'progress' | 'settings'): void {
 			maximizable: false,
 			fullscreenable: false,
 			center: true,
-			title: 'Local LLM',
+			title: 'local-llm',
 			icon: ICON,
 			autoHideMenuBar: true,
 			show: false,
@@ -280,7 +280,7 @@ function openApp(url: string): Promise<void> {
 		backgroundColor: '#121916',
 		minWidth: 480,
 		minHeight: 400,
-		title: 'Local LLM',
+		title: 'local-llm',
 		icon: ICON,
 		autoHideMenuBar: true,
 		show: false,
@@ -507,7 +507,7 @@ async function startup(): Promise<void> {
 		}
 
 		if (!isLocalOrigin(origin)) {
-			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
+			setProgress(createProgress('startup', 'Connecting to local-llm', startupRemote(origin), now()));
 			openStatus('progress');
 			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			if ((await probe(`${origin}/health`, 5000)) === null) {
@@ -548,14 +548,14 @@ async function startup(): Promise<void> {
 		});
 
 		if (plan.mode === 'refuse' && plan.held) {
-			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
+			setProgress(createProgress('startup', 'Starting local-llm', STARTUP_OWN, now()));
 			openStatus('progress');
 			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			return fail(refuseMessage(plan.held, origin, port, repo));
 		}
 
 		if (plan.mode === 'attach' || plan.mode === 'adopt') {
-			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_ATTACH, now()));
+			setProgress(createProgress('startup', 'Starting local-llm', STARTUP_ATTACH, now()));
 			openStatus('progress');
 			const found =
 				plan.mode === 'adopt' ? 'found the backend this app started earlier' : `found a running backend at ${origin}`;
@@ -576,7 +576,7 @@ async function startup(): Promise<void> {
 			return await openApp(plan.loadUrl);
 		}
 
-		setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
+		setProgress(createProgress('startup', 'Starting local-llm', STARTUP_OWN, now()));
 		openStatus('progress');
 		dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 		if (!isRepoRoot(repo)) {
@@ -642,7 +642,7 @@ async function startup(): Promise<void> {
  * what is left running after a forced stop, or null.
  */
 async function stopEarlier(record: OwnedRecord): Promise<string | null> {
-	setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_STOP_EARLIER, Date.now()));
+	setProgress(createProgress('startup', 'Starting local-llm', STARTUP_STOP_EARLIER, Date.now()));
 	openStatus('progress');
 	dispatch({
 		type: 'begin',
@@ -741,7 +741,7 @@ async function shutdown(): Promise<void> {
 		return;
 	}
 
-	setProgress(createProgress('shutdown', 'Stopping Local LLM', SHUTDOWN, Date.now()));
+	setProgress(createProgress('shutdown', 'Stopping local-llm', SHUTDOWN, Date.now()));
 	openStatus('progress');
 	dispatch({ type: 'begin', step: 'window', at: Date.now() });
 	// destroy() fires no unload events, so each page first goes to a blank one:
