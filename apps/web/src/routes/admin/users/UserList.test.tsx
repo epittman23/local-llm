@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { deleteUserById, getUsers } from '@/lib/apis/users';
@@ -126,5 +127,28 @@ describe('UserList table (#987, #1062)', () => {
 		expect(screen.getByRole('columnheader', { name: /Last Active/ }).className).toContain('hidden md:table-cell');
 		expect(screen.getByRole('columnheader', { name: /Created at/ }).className).toContain('hidden md:table-cell');
 		expect(screen.getByRole('columnheader', { name: /Name/ }).className).not.toContain('hidden');
+	});
+});
+
+describe('UserList when the load fails (STA-4, #981)', () => {
+	it('shows the failure in place of a spinner that never ends, with no toast, and tries again', async () => {
+		vi.mocked(getUsers).mockRejectedValue('Database is locked');
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<MemoryRouter>
+					<TooltipProvider>
+						<UserList />
+					</TooltipProvider>
+				</MemoryRouter>
+			</QueryClientProvider>
+		);
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load users");
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		vi.mocked(getUsers).mockResolvedValue({ users: [row('b', 'Ben', 'user')], total: 1 } as never);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Ben')).toBeInTheDocument();
 	});
 });

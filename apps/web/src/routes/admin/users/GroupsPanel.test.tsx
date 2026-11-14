@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getGroups } from '@/lib/apis/groups';
@@ -99,5 +100,40 @@ describe('GroupsPanel', () => {
 		await renderPanel();
 		fireEvent.change(screen.getByLabelText('Search Groups'), { target: { value: 'zzz' } });
 		expect(screen.getByText('No groups found')).toBeTruthy();
+	});
+});
+
+describe('GroupsPanel when a load fails (STA-4, #981)', () => {
+	const renderFailing = () =>
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<MemoryRouter initialEntries={['/admin/users/groups']}>
+					<TooltipProvider>
+						<GroupsPanel />
+					</TooltipProvider>
+				</MemoryRouter>
+			</QueryClientProvider>
+		);
+
+	it('shows the failure in place of the list, with no toast, and tries both loads again', async () => {
+		vi.mocked(getGroups).mockRejectedValue('Database is locked');
+		renderFailing();
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load groups");
+		expect(screen.queryByText('No groups found')).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		vi.mocked(getGroups).mockResolvedValue(GROUPS as never);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Research')).toBeInTheDocument();
+		expect(getUserDefaultPermissions).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not offer New Group or the defaults when the default permissions did not load', async () => {
+		vi.mocked(getUserDefaultPermissions).mockRejectedValue('Database is locked');
+		renderFailing();
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load groups");
+		expect(screen.queryByRole('button', { name: 'New Group' })).toBeNull();
 	});
 });

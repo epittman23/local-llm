@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -179,7 +180,7 @@ function Calendar() {
 
 	const calendars = useQuery({
 		queryKey: ['calendars'],
-		queryFn: async () => (await getCalendars(token).catch(() => [])) ?? []
+		queryFn: async () => (await getCalendars(token)) ?? []
 	});
 	const range = visibleRange(view, date);
 	const events = useQuery({
@@ -187,9 +188,11 @@ function Calendar() {
 		queryFn: () => getCalendarEvents(token, range.start, range.end),
 		placeholderData: (prev) => prev
 	});
-	useEffect(() => {
-		if (events.isError) toast.error(`${events.error}`);
-	}, [events.isError, events.error]);
+	// A failed load is shown in place of what it would have filled (STA-4). The
+	// events kept on screen while a new range loads belong to the old range, so
+	// a range that cannot load is not shown as them.
+	const calendarsFailed = calendars.isError || (calendars.isPaused && calendars.data === undefined);
+	const eventsFailed = events.isError || (events.isPaused && (events.data === undefined || events.isPlaceholderData));
 
 	const list = calendars.data ?? [];
 	const visibleEvents = (events.data ?? []).filter((e) => !hidden.has(e.calendar_id));
@@ -215,6 +218,17 @@ function Calendar() {
 		}
 		setDeleting(null);
 	};
+
+	if (calendarsFailed) {
+		return (
+			<LoadFailed
+				what="calendars"
+				error={calendars.error}
+				onRetry={() => calendars.refetch()}
+				retrying={calendars.isFetching}
+			/>
+		);
+	}
 
 	if (calendars.isLoading) {
 		return (
@@ -316,18 +330,27 @@ function Calendar() {
 					/>
 				</aside>
 				<div className="flex min-h-0 flex-1 flex-col">
-					<CalendarViews
-						view={view}
-						date={date}
-						events={visibleEvents}
-						calendars={list}
-						onCreate={(startAt) => setEventDialog({ event: null, startAt })}
-						onEventClick={openEvent}
-						onOpenDay={(day) => {
-							setDate(day);
-							setView('day');
-						}}
-					/>
+					{eventsFailed ? (
+						<LoadFailed
+							what="events"
+							error={events.error}
+							onRetry={() => events.refetch()}
+							retrying={events.isFetching}
+						/>
+					) : (
+						<CalendarViews
+							view={view}
+							date={date}
+							events={visibleEvents}
+							calendars={list}
+							onCreate={(startAt) => setEventDialog({ event: null, startAt })}
+							onEventClick={openEvent}
+							onOpenDay={(day) => {
+								setDate(day);
+								setView('day');
+							}}
+						/>
+					)}
 				</div>
 			</div>
 		</div>

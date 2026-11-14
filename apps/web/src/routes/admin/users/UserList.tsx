@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -70,9 +71,7 @@ export function UserList() {
 	const users = list.data?.users ?? null;
 	const total = list.data?.total ?? null;
 
-	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
+	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
 		if (total !== null) setCount('users', total);
 	}, [total, setCount]);
@@ -127,7 +126,9 @@ export function UserList() {
 				/>
 			)}
 
-			{users === null || total === null ? (
+			{failed ? (
+				<LoadFailed what="users" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : users === null || total === null ? (
 				<div className="my-10 flex justify-center">
 					<Spinner />
 				</div>
