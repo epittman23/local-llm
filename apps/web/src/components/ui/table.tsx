@@ -1,10 +1,72 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+/**
+ * DAT-6: a table wider than its frame scrolls inside it, and a shadow on each
+ * edge that hides columns says so. Give it `aria-label` (it is moved to the
+ * scrolling container, which becomes a named region) so the region can be
+ * reached and scrolled from the keyboard once it overflows (A11Y-2).
+ * `stickyFirstColumn` keeps the first column in view while the rest scrolls.
+ */
+function Table({
+	className,
+	'aria-label': ariaLabel,
+	stickyFirstColumn = false,
+	...props
+}: React.ComponentProps<'table'> & { stickyFirstColumn?: boolean }) {
+	const scroller = React.useRef<HTMLDivElement>(null);
+	const [clipped, setClipped] = React.useState({ start: false, end: false });
+
+	React.useEffect(() => {
+		const el = scroller.current;
+		if (!el) return;
+		const measure = () => {
+			const start = el.scrollLeft > 0;
+			const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+			setClipped((was) => (was.start === start && was.end === end ? was : { start, end }));
+		};
+		measure();
+		el.addEventListener('scroll', measure, { passive: true });
+		window.addEventListener('resize', measure);
+		// The table grows when its rows arrive; happy-dom and old engines have no ResizeObserver.
+		const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+		observer?.observe(el);
+		if (el.firstElementChild) observer?.observe(el.firstElementChild);
+		return () => {
+			el.removeEventListener('scroll', measure);
+			window.removeEventListener('resize', measure);
+			observer?.disconnect();
+		};
+	}, []);
+
+	const overflows = clipped.start || clipped.end;
 	return (
-		<div data-slot="table-container" className="relative w-full overflow-x-auto">
-			<table data-slot="table" className={cn('w-full caption-bottom text-sm', className)} {...props} />
+		<div
+			data-slot="table-frame"
+			data-clipped-start={clipped.start || undefined}
+			data-clipped-end={clipped.end || undefined}
+			className="relative w-full before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-10 before:w-4 before:bg-linear-to-r before:from-scrim before:to-transparent before:opacity-0 before:transition-opacity after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:z-10 after:w-4 after:bg-linear-to-l after:from-scrim after:to-transparent after:opacity-0 after:transition-opacity data-clipped-start:before:opacity-100 data-clipped-end:after:opacity-100"
+		>
+			<div
+				ref={scroller}
+				data-slot="table-container"
+				role={ariaLabel ? 'region' : undefined}
+				aria-label={ariaLabel}
+				tabIndex={ariaLabel && overflows ? 0 : undefined}
+				className="relative w-full overflow-x-auto"
+			>
+				<table
+					data-slot="table"
+					data-sticky-first-column={stickyFirstColumn || undefined}
+					className={cn(
+						'w-full caption-bottom text-sm',
+						stickyFirstColumn &&
+							'[&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:z-[1] [&_tr>:first-child]:bg-[var(--table-surface,var(--page))]',
+						className
+					)}
+					{...props}
+				/>
+			</div>
 		</div>
 	);
 }
