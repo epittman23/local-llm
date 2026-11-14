@@ -1,6 +1,6 @@
 # The desktop app
 
-`apps/desktop` is a small Electron app. It shows Local LLM in a window of its
+`apps/desktop` is a small Electron app. It shows local-llm in a window of its
 own and, when the server is this machine, starts and stops the local stack
 itself, so the app needs no terminal. It does **not** carry its own copy of
 the frontend. Its window loads the backend's own address

@@ -7,6 +7,13 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest, 4): **The instance name defaults to `local-llm`.**
+  `LLLM_NAME`'s default (and its fallbacks, the OpenAPI title and the
+  manifest) changed from "Local LLM" to "local-llm", so the tab, the sign-in
+  page and the installable app name the product as WRD-3 writes it. The
+  manifest's description drops Open WebUI's tagline. An `LLLM_NAME` set in
+  `infra/.env` still overrides it.
+
 - **2026-11-14** (latest, 3): **What bypassed the interface standard is
   replaced: 962 of the 963 uses the ratchet counted, in about 150 files, and
   the one that stays is an exception the owner accepted.** Hand-styled

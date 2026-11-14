@@ -366,11 +366,16 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/components/App.tsx`** — the one persistent `client:only="react"`
   root: i18n, TanStack Query, auth, and Socket.IO providers around
   `routes/AppRouter.tsx`.
-- **`src/components/layout/`** — `AppShell` (collapsible sidebar, mobile
-  Sheet, and the auth gate for everything beneath it) and `Sidebar`.
+- **`src/components/layout/`** — `RootLayout` (every route's tab title from
+  its `handle`, the system-theme listener), `AppShell` (skip link, collapsible
+  sidebar, mobile Sheet, the boot splash, and the auth gate for everything
+  beneath it), `Sidebar` (the Main nav), `SectionTabs` (the tab strip of
+  Benchmarks, Workspace, Admin and Playground), `BootSplash` and
+  `ConnectionBanner` (the lost-connection pill, FBK-1).
 - **`src/components/common/`** — app-level components shared across
   surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`, `Tip`
-  (tooltip wrapper), `ConfirmDialog`, `FilterSelects` (the workspace
+  (tooltip wrapper), `ConfirmDialog`, `LoadFailed` (a list that could not load,
+  STA-4), `FilterSelects` (the workspace
   View/Tag selectors), `ListChrome` (search bar, sortable header, empty
   state shared by every workspace list), `PagePagination`, `Tags`, and the access-control
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
@@ -390,12 +395,13 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`),
-  plus two hand-written ones the interface standard defines: `row-button.tsx`
-  (ACT-7) and `image-button.tsx` (ACT-8).
+  plus hand-written ones the interface standard defines: `row-button.tsx`
+  (ACT-7), `image-button.tsx` (ACT-8) and `page-header.tsx` (LAY-5).
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
-  (`public/`: `/auth`, `/error`, `/watch`, `/s/:id`), which are top-level
+  (`public/`: `/auth`, `/error` (`ErrorPage`, which polls until the server
+  answers), `/watch`, `/s/:id`), which are top-level
   siblings because they must render without a session; and
   `NotFound`, the catch-all 404, which never navigates on its own. `benchmarks/`
   holds all eight Benchmarks pages plus their admin/feature-flag gate.
@@ -471,7 +477,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   the contrast ratios the standard promises, and `standard.ratchet.test.ts`
   holds the count of bypasses to **`ui-standard-baseline.json`** (in
   `apps/web/`), which only shrinks. **`src/lib/ui/contrast.ts`** is
-  the WCAG arithmetic both use. **`src/routes/ui/`** is `/ui`, the
+  the WCAG arithmetic both use; `src/lib/ui/pageTitle.ts` is the route
+  `handle` and title format (LAY-5), `focusSource.ts` marks keyboard focus
+  (A11Y-1) and `returnFocus.ts` returns focus to what opened a layer (NAV-4). **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of the
   planned canvas (`docs/plans/canvas.md`), not the feature, and
   `CodeSurface.tsx` is the one highlighted surface it reads and edits code on.

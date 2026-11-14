@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 747,
+	"total": 744,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -750,11 +750,6 @@
 		"apps/web/src/routes/workspace/prompts/PromptEditView.tsx": {
 			"lint/a11y/noLabelWithoutControl": 1,
 			"lint/correctness/useExhaustiveDependencies": 1
-		},
-		"apps/web/src/routes/workspace/prompts/PromptsPage.tsx": {
-			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/a11y/useKeyWithClickEvents": 1,
-			"lint/a11y/useSemanticElements": 1
 		},
 		"apps/web/src/routes/workspace/skills/SkillsPage.tsx": {
 			"lint/a11y/noStaticElementInteractions": 1,
