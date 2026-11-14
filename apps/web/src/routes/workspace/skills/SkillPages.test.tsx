@@ -39,7 +39,7 @@ describe('SkillEditPage', () => {
 			</TooltipProvider>
 		);
 
-		const instructions = await screen.findByLabelText('Skill Instructions');
+		const instructions = await screen.findByLabelText('Skill instructions');
 		expect(getSkillById).toHaveBeenCalledWith(expect.anything(), 'review');
 		fireEvent.change(instructions, { target: { value: 'new' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));

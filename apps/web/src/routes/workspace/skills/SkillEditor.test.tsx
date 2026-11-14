@@ -170,7 +170,7 @@ describe('SkillEditor fields (#1057, #983)', () => {
 		description: 'Reviews code',
 		content: 'Read the diff.',
 		is_active: true,
-		meta: {},
+		meta: { tags: [] },
 		access_grants: []
 	};
 
