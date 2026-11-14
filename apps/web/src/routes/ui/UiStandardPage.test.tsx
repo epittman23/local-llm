@@ -138,7 +138,7 @@ describe('UiStandardPage (/ui)', () => {
 		const frame = canvas().querySelector('iframe');
 		expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
 		expect(frame?.getAttribute('srcdoc')).toContain('Standard error explorer');
-		expect(screen.getByRole('button', { name: /Standard error explorer/, pressed: true })).toBeTruthy();
+		expect(screen.getByRole('button', { name: /Standard error explorer/, current: true })).toBeTruthy();
 
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
 		expect(canvas().querySelector('iframe')).toBeNull();
@@ -166,21 +166,33 @@ describe('UiStandardPage (/ui)', () => {
 		renderPage();
 		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
 		fireEvent.click(screen.getByRole('button', { name: /method-notes\.md/ }));
-		expect(within(canvas()).getByText('Saved')).toBeTruthy();
+		expect(within(canvas()).getByText('All changes saved')).toBeTruthy();
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
 		const editor = within(canvas()).getByLabelText('Edit method-notes.md');
 		expect(within(canvas()).getByText('Editing. No changes yet')).toBeTruthy();
 		fireEvent.change(editor, { target: { value: '## Changed heading' } });
 		expect(within(canvas()).getByText('Unsaved changes')).toBeTruthy();
 
-		// Closing, or opening another document, is refused while changes are unsaved (CNV-6).
+		expect(document.activeElement).toBe(editor);
+
+		// Closing, or opening another document, asks first while changes are unsaved (CNV-6).
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Close the canvas' }));
-		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
+		let ask = screen.getByRole('alertdialog');
+		expect(within(ask).getByText('Discard changes to method-notes.md?')).toBeTruthy();
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
 		expect(within(canvas()).getByLabelText('Edit method-notes.md')).toBeTruthy();
 
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Save document' }));
 		expect(canvas().textContent).toContain('Changed heading');
-		expect(within(canvas()).getByText('Saved')).toBeTruthy();
+		expect(within(canvas()).getByText('All changes saved')).toBeTruthy();
+
+		// Discarding through the question opens what was asked for.
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
+		fireEvent.change(within(canvas()).getByLabelText('Edit method-notes.md'), { target: { value: 'scrap' } });
+		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
+		ask = screen.getByRole('alertdialog');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+		expect(within(canvas()).getByText(/def standard_error/)).toBeTruthy();
 
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
 		fireEvent.click(within(canvas()).getByRole('button', { name: 'Discard changes' }));

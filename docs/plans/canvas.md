@@ -24,7 +24,7 @@ side panel other assistants have:
 | `ArtifactPanel` | `apps/web/src/routes/chat/ArtifactPanel.tsx` | Renders one HTML or SVG code block, after its Preview button is pressed, in a 28 rem column with a hard-coded white frame (#941). Frame: `allow-scripts allow-forms allow-modals`, no same-origin | Replaced by the canvas |
 | `SandboxOutputs` | `apps/web/src/components/chat/SandboxOutputs.tsx` | Renders every file a sandbox call left in `/workspace/outputs` **inline on the reply**: images, an HTML frame (`allow-scripts` only, 360 px, with Taller/Shorter/Enlarge), PDF page images, highlighted text, a CSV table, or a download link | Its renderers move into the canvas; the reply keeps a card per file |
 | `GET /api/v1/sandbox/outputs/{id}/html` | `apps/server/local_llm/routers/sandbox.py` | The only way an HTML output is ever shown: JSON for a sandboxed frame's `srcdoc`, behind a Content-Security-Policy | Kept exactly; the canvas calls it |
-| `Attachments` | `routes/chat/ChatMessages.tsx` | Chips for files the owner uploaded | A chip opens the file in the canvas |
+| `Attachments` | `routes/chat/ChatMessages.tsx` | Files the owner uploaded: an image inline, anything else as a chip | A chip, or the image, opens the file in the canvas |
 | `ChatControls` | `routes/chat/ChatControls.tsx` | The other occupant of the right-hand slot. On a phone it squeezes the chat to a sliver (#901) | Shares the canvas's new side-panel shell, which fixes #901 for both |
 | Chat files list | `useChatSession().chatFiles` | Every file on the current branch of the chat | Feeds the canvas's file list |
 
@@ -64,11 +64,12 @@ The interface is specified by CNV-1 to CNV-8 in the standard and shown on
 
   | Kind | Preview | Source | Editable |
   |---|---|---|---|
-  | HTML, SVG | Sandboxed frame inside a themed surround | Highlighted, line-numbered | Phase 4 |
+  | HTML (a sandbox output, or a fenced `html` or `svg` block) | Sandboxed frame inside a themed surround | Highlighted, line-numbered | Phase 4 |
+  | HTML the owner uploaded | none: Source and Download only | Highlighted, line-numbered | No |
   | Markdown | Rendered with the chat's renderer, at reading width | Plain text | Yes |
   | Text, code, LaTeX, JSON, logs | none: Source only | Highlighted, line-numbered | Yes |
   | CSV | Table (first 200 rows, the existing limits) | Plain text | Phase 4 |
-  | Image | The image, fitted, on a neutral surround | none | No |
+  | Image, including an SVG file | An `<img>`, fitted, on a neutral surround. An SVG file is never inlined or framed | none | No |
   | PDF | Page images (the existing previews) | none | No |
   | Anything else | Name, size and a Download button | none | No |
 
@@ -119,9 +120,10 @@ Each has a default the tasks below assume.
    so hiding it entirely behind a card would cost a click on most
    data-analysis replies.
 5. **Do `ArtifactPanel`'s wider frame permissions survive?** *Default: no.
-   One frame, `allow-scripts` only, for every HTML document, as sandbox
-   outputs have today.* Forms and modal dialogs inside a preview stop
-   working; the three unported "Artifacts" settings are removed.
+   One frame, `allow-scripts` only, for every HTML document that is
+   previewed, as sandbox outputs have today.* Forms and modal dialogs inside
+   a preview stop working; the five unported "Artifacts" settings
+   (`detectArtifacts` and the four `iframeSandboxAllow*`) are removed.
 
 ## Phases and tasks
 
@@ -154,7 +156,15 @@ Fixes #901 on its own, before any canvas exists.
   one renderer per kind, moved out of `SandboxOutputs.tsx` with their limits
   (256 KiB of text, 1 MiB and 200 rows of CSV, 5 MiB of HTML) and their
   fetches. `SandboxedHtmlFrame` is reused as it is; its Taller, Shorter and
-  Enlarge controls go, since the canvas gives it the height.
+  Enlarge controls go, since the canvas gives it the height. HTML reaches
+  that frame in exactly two ways, both as `srcdoc`, never as a frame `src`:
+  a sandbox output through the existing route, which puts its
+  Content-Security-Policy in front; and a fenced `html` or `svg` block,
+  whose text is already in the message, with the same policy prepended in
+  the browser as a `<meta http-equiv>` (the policy text moves to one shared
+  constant so the two cannot drift). HTML the owner uploaded is not
+  previewed: it has no route that serves it with the policy, so it gets
+  Source and Download only. An SVG file stays an `<img>`.
 - **C6.** The themed surround for a frame (COL-6, CNT-4, #941): the frame sits
   on `--surface-1` with an edge; before its document paints it shows the
   surface, not white. The document's own background is the document's
@@ -166,7 +176,7 @@ Fixes #901 on its own, before any canvas exists.
   (NAV-3).
 - **C9.** Streaming: the "Writing…" card and Source-while-streaming.
 - **C10.** Auto-open and its setting (decision 3), in Settings > Interface,
-  replacing the three unported "Artifacts" rows.
+  replacing the five unported "Artifacts" rows.
 - **C11.** Delete `ArtifactPanel.tsx` and the Preview button's plumbing
   (decision 5).
 - **C12.** Tests: Vitest for `documents.ts` (every kind, hostile shapes,
@@ -205,8 +215,10 @@ workspace; showing a cited knowledge file in the canvas.
 
 - **Security regressions when renderers move.** The frame, the HTML route and
   the "images only as `<img>`" rule move unchanged, and the Playwright cases
-  that assert them move with them (C12). No new way to render model-written
-  HTML is added.
+  that assert them move with them (C12). A fenced block's preview changes
+  frame (from `ArtifactPanel`'s wider flags to `allow-scripts` only, with the
+  policy added), which narrows what it can do; no HTML gains a way to render
+  that it lacks today, and uploaded HTML gains none (C5).
 - **A plot-heavy reply becomes click-heavy.** Decision 4's default keeps
   thumbnails; decision 3's default opens a single new document by itself.
 - **Imported and old chats.** `documents.ts` reads `message.files`

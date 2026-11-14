@@ -19,6 +19,16 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -132,7 +142,7 @@ function DocumentCard({
 		<button
 			ref={buttonRef}
 			type="button"
-			aria-pressed={open}
+			aria-current={open ? 'true' : undefined}
 			onClick={onOpen}
 			className={`bg-surface-1 hover:bg-surface-3 flex w-full max-w-sm items-center gap-3 rounded-panel border p-3 text-left ${open ? 'border-brand' : 'border-border'}`}
 		>
@@ -227,30 +237,32 @@ export function CanvasSection() {
 	const dirty = editing && draft !== text;
 	const showPreview = doc !== null && HAS_PREVIEW[doc.kind] && mode === 'preview' && !editing;
 
-	const open = (id: string) => {
-		if (dirty) {
-			toast.error('Save or discard your changes first', { description: 'The open document has unsaved changes.' });
-			return;
-		}
+	// CNV-6: with unsaved changes, opening another document or closing asks first.
+	// `pending` is what was asked for: a document id, or null for Close.
+	const [pending, setPending] = useState<{ id: string | null } | null>(null);
+	const editor = useRef<HTMLTextAreaElement>(null);
+
+	const show = (id: string | null) => {
+		const from = openId;
 		const next = DOCUMENTS.find((d) => d.id === id);
 		setOpenId(id);
 		setDraft(null);
-		setMode(next && HAS_PREVIEW[next.kind] ? 'preview' : 'source');
-		// CNV-8: opening a document moves focus to the canvas's heading.
+		if (next) setMode(HAS_PREVIEW[next.kind] ? 'preview' : 'source');
+		else setExpanded(false);
+		// CNV-8: opening moves focus to the canvas's heading; closing returns it to the card.
+		requestAnimationFrame(() => (next ? heading.current?.focus() : from && cards.current[from]?.focus()));
+	};
+	const open = (id: string) => (dirty ? setPending({ id }) : show(id));
+	const close = () => (dirty ? setPending({ id: null }) : show(null));
+	/** CNV-6: leaving the editor, by saving or discarding, puts focus back on the heading. */
+	const leaveEditor = () => {
+		setDraft(null);
 		requestAnimationFrame(() => heading.current?.focus());
 	};
-	const close = () => {
-		if (dirty) {
-			toast.error('Save or discard your changes first', { description: 'The open document has unsaved changes.' });
-			return;
-		}
-		const from = openId;
-		setOpenId(null);
-		setDraft(null);
-		setExpanded(false);
-		// CNV-8: focus returns to the card that opened the canvas.
-		if (from) requestAnimationFrame(() => cards.current[from]?.focus());
-	};
+	// CNV-6: entering the editor moves focus into it.
+	useEffect(() => {
+		if (editing) editor.current?.focus();
+	}, [editing]);
 
 	// CNV-8: Escape closes the canvas when nothing inside it (a menu) is open.
 	// Listened for on the frame around both columns, which outlives the canvas.
@@ -277,7 +289,7 @@ export function CanvasSection() {
 		>
 			<Example
 				title="A reply with four documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it."
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. Not shown in this box: the resize handle and remembered width of CNV-2, and the real breakpoints, which are wider than a demo inside a page can use."
 			>
 				<div
 					ref={frame}
@@ -432,6 +444,7 @@ export function CanvasSection() {
 							<div className="bg-background min-h-0 flex-1">
 								{editing ? (
 									<Textarea
+										ref={editor}
 										aria-label={`Edit ${doc.name}`}
 										value={draft}
 										onChange={(e) => setDraft(e.target.value)}
@@ -462,11 +475,11 @@ export function CanvasSection() {
 							{EDITABLE[doc.kind] && (
 								<div className="border-border flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
 									<p className="text-dense text-foreground-muted" role="status">
-										{!editing ? 'Saved' : dirty ? 'Unsaved changes' : 'Editing. No changes yet'}
+										{!editing ? 'All changes saved' : dirty ? 'Unsaved changes' : 'Editing. No changes yet'}
 									</p>
 									{editing ? (
 										<div className="flex gap-2">
-											<Button variant="ghost" size="sm" onClick={() => setDraft(null)}>
+											<Button variant="ghost" size="sm" onClick={leaveEditor}>
 												Discard changes
 											</Button>
 											<Button
@@ -474,7 +487,7 @@ export function CanvasSection() {
 												disabled={!dirty}
 												onClick={() => {
 													setTexts({ ...texts, [doc.id]: draft });
-													setDraft(null);
+													leaveEditor();
 													toast.success('Document saved');
 												}}
 											>
@@ -493,11 +506,34 @@ export function CanvasSection() {
 					) : (
 						<div className="text-foreground-muted flex items-center justify-center p-6 text-center max-lg:hidden">
 							<p className="max-w-xs">
-								The canvas is closed, so the chat has the full width. Choose a document on the left to open it here.
+								The canvas is closed. In a chat, the conversation would now have this space. Choose a document on the
+								left to open it here.
 							</p>
 						</div>
 					)}
 				</div>
+				<AlertDialog open={pending !== null} onOpenChange={(isOpen) => !isOpen && setPending(null)}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Discard changes to {doc?.name}?</AlertDialogTitle>
+							<AlertDialogDescription>
+								The document has edits that are not saved. Keep editing to save them first.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel autoFocus>Keep editing</AlertDialogCancel>
+							<AlertDialogAction
+								variant="destructive"
+								onClick={() => {
+									if (pending) show(pending.id);
+									setPending(null);
+								}}
+							>
+								Discard changes
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</Example>
 		</Section>
 	);

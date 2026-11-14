@@ -452,10 +452,10 @@ name (ACT-4). Below `md` everything but the switch and Close folds into one
 menu.
 
 **CNV-4. A kind has one renderer**, the same one wherever that kind is shown.
-HTML and SVG: a sandboxed frame. Markdown: the chat's rendering, at reading
-width (TYP-5). Text and code: the standard's code block with line numbers
-(CNT-2). CSV: the standard's table (DAT-1, DAT-2). Image and PDF: fitted to
-the canvas. Anything else: its name, its size and a Download button.
+A page of HTML, and an `svg` code block: a sandboxed frame. Markdown: the
+chat's rendering, at reading width (TYP-5). Text and code: the standard's code block with line numbers
+(CNT-2). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
+included, always as an image) and PDF: fitted to the canvas. Anything else: its name, its size and a Download button.
 
 **CNV-5. A page the model wrote runs in a sandboxed frame and sits in a
 themed surround.** The frame has `allow-scripts` and nothing else, is filled
@@ -464,17 +464,19 @@ through `srcdoc`, and is never a `blob:` URL or a new window. The surround is
 never white in dark. The page's own colours are the page's business and are
 not altered.
 
-**CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit,
-then a bar with "Unsaved changes", Discard changes and Save. Closing the
-canvas, switching document or leaving the chat with unsaved changes asks
-first.
+**CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
+document, then a bar with "Unsaved changes", Discard changes and Save
+document. Entering the editor moves focus into it; saving or discarding
+moves focus back to the document's heading. Closing the canvas, switching
+document or leaving the chat with unsaved changes asks first.
 
 **CNV-7. The open document is in the address** (NAV-1). A document that is no
 longer in the chat says so in the canvas (NAV-3).
 
 **CNV-8. Escape closes the canvas when nothing inside it is open, and focus
 returns to the card that opened it** (NAV-4). Opening a document moves focus
-to the canvas's heading.
+to the canvas's heading. While focus is inside a page's frame the keys
+belong to the page, so Close is always one Tab away from the frame.
 
 ## Words
 
