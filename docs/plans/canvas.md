@@ -1,0 +1,233 @@
+# Canvas: a document viewer and text editor beside the chat
+
+> **Status: planned (2026-11-14). Nothing here is built** except the
+> interface design, which is shown on `/ui` ("Canvas") and specified by the
+> CNV rules in [docs/guides/ui-standard.md](../guides/ui-standard.md). This
+> file is the implementation plan. Five decisions are the owner's and are
+> listed under "Open decisions"; each has a recommended default so work can
+> start without them, and each task that depends on one says so.
+
+## What the owner asked for
+
+A panel on the right of a chat that shows a document, in the manner of the
+side panel other assistants have:
+
+1. When the model provides a file, show it in the panel, not inline in the
+   reply.
+2. When the model's output is HTML, show it in the panel, not inline.
+3. The panel is a viewer and a text editor.
+
+## What exists today
+
+| Piece | Where | What it does | What happens to it |
+|---|---|---|---|
+| `ArtifactPanel` | `apps/web/src/routes/chat/ArtifactPanel.tsx` | Renders one HTML or SVG code block, after its Preview button is pressed, in a 28 rem column with a hard-coded white frame (#941). Frame: `allow-scripts allow-forms allow-modals`, no same-origin | Replaced by the canvas |
+| `SandboxOutputs` | `apps/web/src/components/chat/SandboxOutputs.tsx` | Renders every file a sandbox call left in `/workspace/outputs` **inline on the reply**: images, an HTML frame (`allow-scripts` only, 360 px, with Taller/Shorter/Enlarge), PDF page images, highlighted text, a CSV table, or a download link | Its renderers move into the canvas; the reply keeps a card per file |
+| `GET /api/v1/sandbox/outputs/{id}/html` | `apps/server/local_llm/routers/sandbox.py` | The only way an HTML output is ever shown: JSON for a sandboxed frame's `srcdoc`, behind a Content-Security-Policy | Kept exactly; the canvas calls it |
+| `Attachments` | `routes/chat/ChatMessages.tsx` | Chips for files the owner uploaded | A chip opens the file in the canvas |
+| `ChatControls` | `routes/chat/ChatControls.tsx` | The other occupant of the right-hand slot. On a phone it squeezes the chat to a sliver (#901) | Shares the canvas's new side-panel shell, which fixes #901 for both |
+| Chat files list | `useChatSession().chatFiles` | Every file on the current branch of the chat | Feeds the canvas's file list |
+
+The security properties of the two frames are deliberate and are kept:
+model-written HTML never runs on the app's origin, never in a `blob:` URL or
+a new window, and a sandbox output's frame has `allow-scripts` and nothing
+else (`docs/guides/sandbox.md`, "Outputs").
+
+## The design
+
+The interface is specified by CNV-1 to CNV-8 in the standard and shown on
+`/ui`. In short:
+
+```
+┌─────────┬───────────────────────────────┬──────────────────────────────────┐
+│ sidebar │ chat                          │ canvas                           │
+│         │                               │ [Preview|Source] name · kind     │
+│         │  …reply text…                 │        [files ▾] [Copy ▾] ⟳ ⤢ ✕ │
+│         │  ┌───────────────────────┐    ├──────────────────────────────────┤
+│         │  │ ▣ Variance explorer   │◀───│                                  │
+│         │  │   HTML · 14 kB        │    │   the document                   │
+│         │  └───────────────────────┘    │                                  │
+│         │  [ message box ]              │                                  │
+└─────────┴───────────────────────────────┴──────────────────────────────────┘
+        below md: the canvas is a full-screen sheet over the chat
+```
+
+- **A card in the reply stands for each document** (CNV-1): name, kind and
+  size, and it is a button that opens the canvas. The card of the open
+  document is marked. Nothing a model provided is rendered inline, with one
+  exception: an image keeps a thumbnail on its card.
+- **The canvas header** (CNV-3): a Preview / Source switch where both exist,
+  the document's name and kind, a file list when the chat has more than one
+  document, Copy with a menu (Copy, Download), Reload for a live page,
+  Expand to the full window, Close.
+- **Kinds and their renderers** (CNV-4):
+
+  | Kind | Preview | Source | Editable |
+  |---|---|---|---|
+  | HTML, SVG | Sandboxed frame inside a themed surround | Highlighted, line-numbered | Phase 4 |
+  | Markdown | Rendered with the chat's renderer, at reading width | Plain text | Yes |
+  | Text, code, LaTeX, JSON, logs | none: Source only | Highlighted, line-numbered | Yes |
+  | CSV | Table (first 200 rows, the existing limits) | Plain text | Phase 4 |
+  | Image | The image, fitted, on a neutral surround | none | No |
+  | PDF | Page images (the existing previews) | none | No |
+  | Anything else | Name, size and a Download button | none | No |
+
+- **Editing** (CNV-6): Edit turns the Source view into an editor. It saves on
+  request, with the standard's "Unsaved changes" bar (FRM-3). What saving
+  does is open decision 2.
+- **Width** (CNV-2): the canvas takes half of the space beside the sidebar by
+  default, is resized with a separator that works from the keyboard, and
+  remembers its width. Below `md` it is a sheet.
+- **Address** (CNV-7): the open document is in the URL
+  (`/c/<chat>?canvas=<file-id>`, or `?canvas=block:<message>:<n>` for a code
+  block), so reload and Back restore it.
+
+## What goes to the canvas
+
+| Source | Today | With the canvas |
+|---|---|---|
+| A file a sandbox call left in `/workspace/outputs` | Rendered inline by `SandboxOutputs` | A card; opens in the canvas |
+| A fenced `html` or `svg` code block in a reply | Shown as code, with a Preview button | A card in place of the block; Source is in the canvas. See open decision 1 for the threshold |
+| Any other fenced code block | Shown inline | Unchanged: stays inline. A long one gets "Open in canvas" in its header |
+| A file the owner uploaded | A chip | The chip opens it in the canvas |
+| A knowledge file cited by a reply | The citation dialog | Unchanged in this plan |
+
+While a reply is still streaming, an `html` block's card reads "Writing…"
+and the canvas, if open on it, shows Source filling in; Preview becomes
+available when the block closes. This avoids re-running a half-written page
+on every token.
+
+## Open decisions (the owner's)
+
+Each has a default the tasks below assume.
+
+1. **Which HTML goes to the canvas?** *Default: every fenced `html` or `svg`
+   block of a complete document or of more than 15 lines; shorter snippets
+   stay inline as code.* The alternative is every block regardless of
+   length, which hides three-line examples behind a click.
+2. **What does saving an edit do?** *Default: it saves a new version of the
+   document in the app (a new `File` row linked to the same message, the
+   earlier one kept), and offers "Attach to next message" so the model sees
+   the edit.* It does not write into the sandbox's `/workspace`. Writing back
+   into the workspace is the alternative; it needs the sandbox running and a
+   new write path, so it is left to a later plan.
+3. **Does the canvas open by itself?** *Default: yes, when a reply finishes
+   with exactly one new document and the window is at least `lg` wide;
+   never on a phone; with a setting to turn it off.*
+4. **Do images stay inline?** *Default: an image keeps a thumbnail on its
+   card and opens full size in the canvas.* A plot is often the whole answer,
+   so hiding it entirely behind a card would cost a click on most
+   data-analysis replies.
+5. **Do `ArtifactPanel`'s wider frame permissions survive?** *Default: no.
+   One frame, `allow-scripts` only, for every HTML document, as sandbox
+   outputs have today.* Forms and modal dialogs inside a preview stop
+   working; the three unported "Artifacts" settings are removed.
+
+## Phases and tasks
+
+Each phase is one pull request, verified against the interface standard
+(`ui-standard` skill) in dark first, and each leaves the app working.
+
+### Phase 1: the side-panel shell
+
+Fixes #901 on its own, before any canvas exists.
+
+- **C1.** `components/layout/SidePanel.tsx`: the right-hand region. From `md`
+  up, a column with a `role="separator"` resize handle (pointer and arrow
+  keys, `aria-valuenow`, width stored in `localStorage`); below `md`, the
+  shared `Sheet`, full screen. Escape closes it; focus returns to what opened
+  it (NAV-4).
+- **C2.** `ChatPage` renders `ChatControls` inside it. `ArtifactPanel` moves
+  inside it unchanged for now.
+- **C3.** Tests: Vitest for the resize arithmetic and the keyboard; Playwright
+  at 390 px (the chat is not squeezed; the sheet closes back to the chat) and
+  at 1440 px.
+
+### Phase 2: the canvas as a viewer
+
+- **C4.** `lib/chat/documents.ts`: one pure function from a chat's messages to
+  its documents (`{ id, name, kind, bytes, messageId, source }`), covering
+  sandbox outputs, uploads and qualifying code blocks (decision 1). `kind`
+  comes from the extension, then `meta.content_type`, as `SandboxOutputs`
+  does today. Defensive about the shape of `message.files`, as that file is.
+- **C5.** `routes/chat/canvas/`: `Canvas.tsx` (header, modes, file list) and
+  one renderer per kind, moved out of `SandboxOutputs.tsx` with their limits
+  (256 KiB of text, 1 MiB and 200 rows of CSV, 5 MiB of HTML) and their
+  fetches. `SandboxedHtmlFrame` is reused as it is; its Taller, Shorter and
+  Enlarge controls go, since the canvas gives it the height.
+- **C6.** The themed surround for a frame (COL-6, CNT-4, #941): the frame sits
+  on `--surface-1` with an edge; before its document paints it shows the
+  surface, not white. The document's own background is the document's
+  business.
+- **C7.** `DocumentCard` replaces the inline renderers on a reply and the
+  `html`/`svg` blocks that qualify. `Attachments` chips open the canvas.
+- **C8.** `?canvas=` in the URL (`useSearchParams`); a document id that no
+  longer exists shows "This document is no longer in the chat" in the canvas
+  (NAV-3).
+- **C9.** Streaming: the "Writing…" card and Source-while-streaming.
+- **C10.** Auto-open and its setting (decision 3), in Settings > Interface,
+  replacing the three unported "Artifacts" rows.
+- **C11.** Delete `ArtifactPanel.tsx` and the Preview button's plumbing
+  (decision 5).
+- **C12.** Tests: Vitest for `documents.ts` (every kind, hostile shapes,
+  branch switches) and each renderer; the existing
+  `e2e/sandbox-outputs.spec.ts` cases re-pointed at the canvas, since they
+  are the security checks (an HTML output never renders on the app's origin;
+  an SVG only as an image); a real-backend run with a sandbox producing an
+  HTML file, a CSV and a PDF, because Playwright mocks the backend.
+
+### Phase 3: the canvas as a text editor
+
+- **C13.** Edit mode for Markdown, text and code: CodeMirror (already a
+  dependency) with the standard's code theme (CNT-2), line numbers, and
+  wrapping on for prose kinds.
+- **C14.** Backend, for decision 2's default: `POST
+  /api/v1/files/{id}/versions` creating a new `File` row with
+  `meta.version_of` and the same message link, under the same ownership check
+  as the file routes; a migration only if `meta` cannot carry it (it can
+  today, so none is expected). The frontend's file list groups versions under
+  one document and shows "Version 2 of 2" with a way back.
+- **C15.** The save bar (FRM-3): Unsaved changes, Discard changes, Save; a
+  guard on closing the canvas, switching document or leaving the chat.
+- **C16.** "Attach to next message": puts the saved version in the message
+  box's attachments.
+- **C17.** Tests: pytest for the route (ownership, a version of a version, a
+  file from another chat is refused); Vitest for the dirty state and the
+  guard; a real-backend run.
+
+### Phase 4: later, not scheduled
+
+Editing HTML with a live preview beside the source; editing a CSV as a
+table; a comparison of two versions; writing an edit back into the sandbox
+workspace; showing a cited knowledge file in the canvas.
+
+## Risks and how the plan handles them
+
+- **Security regressions when renderers move.** The frame, the HTML route and
+  the "images only as `<img>`" rule move unchanged, and the Playwright cases
+  that assert them move with them (C12). No new way to render model-written
+  HTML is added.
+- **A plot-heavy reply becomes click-heavy.** Decision 4's default keeps
+  thumbnails; decision 3's default opens a single new document by itself.
+- **Imported and old chats.** `documents.ts` reads `message.files`
+  defensively and treats an unknown shape as "no document", as today.
+- **The page a model wrote is light while the app is dark.** The surround is
+  themed (C6); the document itself is not altered. The standard says so
+  (CNT-4), and the demo on `/ui` shows it.
+- **Phone width.** The canvas is a sheet, the header's secondary actions fold
+  into one menu, and nothing depends on hover.
+
+## Documentation that moves with it
+
+Per the maintenance policy, in the pull request that makes each true:
+`docs/guides/sandbox.md` "On the reply"; `docs/guides/features.md` and its
+chat diagram; README "Pages and URLs" (the `?canvas=` parameter);
+`MAP.md` (`routes/chat/canvas/`, `components/layout/SidePanel.tsx`);
+`docs/decisions.md` and the roadmap timeline when Phase 2 replaces
+`ArtifactPanel`; and this file's status line.
+
+## Related issues
+
+#901 (Controls on a phone), #941 (white preview panel in dark), #989
+(light-only colours in frames), #1064 (four code themes; the canvas's Source
+view uses the standard's one).

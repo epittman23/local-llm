@@ -9,7 +9,8 @@ eight, and so that two pages doing the same job look and behave the same.
   rules on the real shared components, in dark, black and light. Each of its
   sections lists the rules it shows; rules about whole pages, words and
   behaviour over time (for example NAV-1, NAV-3, the WRD rules) are not
-  shown there and are checked on the page being changed.
+  shown there and are checked on the page being changed. Its Canvas section
+  shows a design that is planned, not built (see "Canvas").
 - **Tokens:** `apps/web/src/styles/standard.css`.
 - **Automated check:** `apps/web/src/styles/standard.contrast.test.ts`
   (part of `make test-web`) fails when a token breaks a colour promise, in
@@ -423,6 +424,57 @@ the column scrolls inside its own box and shows that it does.
 
 **CNT-4. Output the app did not write** (an HTML preview, a sandbox's file, a
 generated figure) sits in a frame that belongs to the theme (COL-6).
+
+## Canvas
+
+The panel beside a chat that shows a document: a file the model produced, a
+page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
+decided; the feature is not built.** Its plan is
+[docs/plans/canvas.md](../plans/canvas.md).
+
+**CNV-1. What a model provides is a card in the reply and a document in the
+canvas, not inline content.** A file, or a page of HTML or SVG, appears in
+the reply as a card (an icon for its kind, its name, its kind and size) that
+is a button opening the canvas. The card of the open document is marked. An
+image keeps a thumbnail on its card.
+
+**CNV-2. The canvas is a column from `md` up and a full-screen sheet below
+it.** It never squeezes the chat (LAY-4). As a column it starts at half the
+space beside the sidebar, is resized with a separator that also works from
+the keyboard, never leaves the chat narrower than 24 rem, and remembers its
+width.
+
+**CNV-3. One header, the same for every kind**, left to right: the Preview /
+Source switch when the kind has both; the document's name and kind; then the
+file list (when the chat has more than one document), Copy with its menu
+(Copy, Download), Reload for a live page, Expand, Close. Every icon has a
+name (ACT-4). Below `md` everything but the switch and Close folds into one
+menu.
+
+**CNV-4. A kind has one renderer**, the same one wherever that kind is shown.
+HTML and SVG: a sandboxed frame. Markdown: the chat's rendering, at reading
+width (TYP-5). Text and code: the standard's code block with line numbers
+(CNT-2). CSV: the standard's table (DAT-1, DAT-2). Image and PDF: fitted to
+the canvas. Anything else: its name, its size and a Download button.
+
+**CNV-5. A page the model wrote runs in a sandboxed frame and sits in a
+themed surround.** The frame has `allow-scripts` and nothing else, is filled
+through `srcdoc`, and is never a `blob:` URL or a new window. The surround is
+`--surface-1` with an edge and is what shows before the page paints; it is
+never white in dark. The page's own colours are the page's business and are
+not altered.
+
+**CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit,
+then a bar with "Unsaved changes", Discard changes and Save. Closing the
+canvas, switching document or leaving the chat with unsaved changes asks
+first.
+
+**CNV-7. The open document is in the address** (NAV-1). A document that is no
+longer in the chat says so in the canvas (NAV-3).
+
+**CNV-8. Escape closes the canvas when nothing inside it is open, and focus
+returns to the card that opened it** (NAV-4). Opening a document moves focus
+to the canvas's heading.
 
 ## Words
 

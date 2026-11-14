@@ -124,6 +124,8 @@ Start here for "how do I run/use this."
   microVM sandbox, the code interpreter: its Kata host setup, images,
   backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
+  `canvas.md` (the document viewer and text editor beside a chat: planned,
+  not built; its interface is on `/ui` and in the standard's CNV rules),
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
   `benchmarks-through-the-app.md` (scoring the assistant as deployed: items
@@ -466,7 +468,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   applies them, today to `/ui` only; `standard.contrast.test.ts` checks the
   contrast ratios the standard promises. **`src/lib/ui/contrast.ts`** is
   the WCAG arithmetic both use. **`src/routes/ui/`** is `/ui`, the
-  standard's demo page (public, static).
+  standard's demo page (public, static); its `canvas.tsx` is a mock of the
+  planned canvas (`docs/plans/canvas.md`), not the feature.
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
   `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a

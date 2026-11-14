@@ -131,6 +131,64 @@ describe('UiStandardPage (/ui)', () => {
 		expect(screen.getByText('Off. Applied.')).toBeTruthy();
 	});
 
+	it('opens a document from its card in the canvas, in the view its kind has', () => {
+		renderPage();
+		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
+		// Opens on the page: a sandboxed frame with scripts and nothing else (CNV-5).
+		const frame = canvas().querySelector('iframe');
+		expect(frame?.getAttribute('sandbox')).toBe('allow-scripts');
+		expect(frame?.getAttribute('srcdoc')).toContain('Standard error explorer');
+		expect(screen.getByRole('button', { name: /Standard error explorer/, pressed: true })).toBeTruthy();
+
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
+		expect(canvas().querySelector('iframe')).toBeNull();
+		expect(within(canvas()).getByText('<!doctype html>')).toBeTruthy();
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Preview' }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Reload the page' }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Expand to the full width' }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Show the chat beside it' }));
+
+		// A script has no preview: source only, and no view switch.
+		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
+		expect(within(canvas()).queryByRole('button', { name: 'Preview' })).toBeNull();
+		expect(within(canvas()).getByText(/def standard_error/)).toBeTruthy();
+
+		fireEvent.click(screen.getByRole('button', { name: /summary\.csv/ }));
+		expect(within(canvas()).getByRole('columnheader', { name: 'Standard error' })).toBeTruthy();
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
+		expect(within(canvas()).getByText('n,standard_error')).toBeTruthy();
+
+		fireEvent.click(screen.getByRole('button', { name: /method-notes\.md/ }));
+		expect(canvas().textContent).toContain('Quadrupling the sample halves the standard error.');
+	});
+
+	it('edits a text document on request and will not close over unsaved changes', () => {
+		renderPage();
+		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
+		fireEvent.click(screen.getByRole('button', { name: /method-notes\.md/ }));
+		expect(within(canvas()).getByText('Saved')).toBeTruthy();
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
+		const editor = within(canvas()).getByLabelText('Edit method-notes.md');
+		expect(within(canvas()).getByText('Editing. No changes yet')).toBeTruthy();
+		fireEvent.change(editor, { target: { value: '## Changed heading' } });
+		expect(within(canvas()).getByText('Unsaved changes')).toBeTruthy();
+
+		// Closing, or opening another document, is refused while changes are unsaved (CNV-6).
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Close the canvas' }));
+		fireEvent.click(screen.getByRole('button', { name: /fit\.py/ }));
+		expect(within(canvas()).getByLabelText('Edit method-notes.md')).toBeTruthy();
+
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Save document' }));
+		expect(canvas().textContent).toContain('Changed heading');
+		expect(within(canvas()).getByText('Saved')).toBeTruthy();
+
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Discard changes' }));
+		fireEvent.keyDown(canvas(), { key: 'Escape' });
+		expect(screen.queryByRole('complementary', { name: 'Canvas' })).toBeNull();
+		expect(screen.getByText(/The canvas is closed/)).toBeTruthy();
+	});
+
 	it('opens the destructive confirmation with Cancel and a named action', () => {
 		renderPage();
 		fireEvent.click(screen.getByRole('button', { name: 'Delete collection' }));

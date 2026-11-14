@@ -7,6 +7,24 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-14** (latest): **A canvas beside the chat is planned: what a
+  model provides (a file, a page of HTML) will be a card in the reply and a
+  document in a right-hand panel, which is also a text editor.** The owner
+  asked for it, pointing at the side panel other assistants have. Today
+  sandbox output files are rendered inline on the reply (`SandboxOutputs`)
+  and HTML is previewed only from a code block's Preview button, in a
+  white-framed panel (`ArtifactPanel`, #941).
+  - Nothing is built. [docs/plans/canvas.md](plans/canvas.md) is the plan:
+    a shared side-panel shell first (which also fixes Controls squeezing the
+    chat on a phone, #901), then the viewer, then the editor. The frame that
+    runs model-written HTML and the route that serves it are kept as they
+    are; no new way to render such HTML is added.
+  - The interface is decided and shown on `/ui`, and the standard gained
+    rules CNV-1 to CNV-8 for it.
+  - Five choices are left to the owner, each with a default the plan assumes:
+    which HTML blocks go to the canvas, what saving an edit does, whether the
+    canvas opens by itself, whether images keep a thumbnail inline, and
+    whether the preview frame keeps forms and modal dialogs.
 - **2026-11-14** (later still): **The interface has a written standard,
   shown on `/ui`; it is not the app's default look yet.** A UX/UI review of
   the whole app the same day filed 215 issues (#901 to #1115, indexed in

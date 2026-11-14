@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Katex } from '@/components/chat/markdown/Katex';
 import { Button } from '@/components/ui/button';
 import { applyTheme, getTheme } from '@/lib/theme';
+import { CanvasSection } from './canvas';
 import {
 	ActionsSection,
 	ContentSection,
@@ -37,7 +38,8 @@ const SECTIONS: SectionMeta[] = [
 	{ id: 'navigation', title: 'Pages and navigation' },
 	{ id: 'feedback', title: 'Feedback and overlays' },
 	{ id: 'states', title: 'Loading, empty and failed' },
-	{ id: 'content', title: 'Answers' }
+	{ id: 'content', title: 'Answers' },
+	{ id: 'canvas', title: 'Canvas' }
 ];
 
 const THEME_CHOICES = [
@@ -174,6 +176,7 @@ export function UiStandardPage() {
 					<FeedbackSection />
 					<StatesSection />
 					<ContentSection />
+					<CanvasSection />
 				</main>
 			</div>
 		</div>

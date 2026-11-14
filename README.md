@@ -191,7 +191,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
-| `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch. Static; shows nothing from the backend |
+| `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch, and a mock of the planned canvas ([docs/plans/canvas.md](docs/plans/canvas.md)). Static; shows nothing from the backend |
 
 ### Signed-in
 
