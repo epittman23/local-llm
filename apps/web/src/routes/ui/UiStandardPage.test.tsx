@@ -62,24 +62,45 @@ describe('UiStandardPage (/ui)', () => {
 		expect(document.documentElement.classList.contains('dark')).toBe(false);
 	});
 
-	it('shows a field error in place, tied to its field, and reports unsaved changes', () => {
+	it('judges a field when it is left, shows the error in place, and reports unsaved changes', () => {
 		renderPage();
 		const context = screen.getByLabelText('Context size, tokens');
+		expect(context.getAttribute('aria-invalid')).toBeNull();
+		expect(screen.getByText('All changes saved')).toBeTruthy();
+
+		// Typing does not raise the error; leaving the field does (FRM-2).
+		fireEvent.change(context, { target: { value: '40000' } });
+		expect(context.getAttribute('aria-invalid')).toBeNull();
+		expect(screen.getByText('Unsaved changes')).toBeTruthy();
+		fireEvent.blur(context);
 		expect(context.getAttribute('aria-invalid')).toBe('true');
 		const note = document.getElementById(context.getAttribute('aria-describedby') ?? '');
 		expect(note?.textContent).toContain('between 512 and 32768');
 
-		expect(screen.getByText('All changes saved')).toBeTruthy();
-		fireEvent.change(context, { target: { value: '8192' } });
-		expect(context.getAttribute('aria-invalid')).toBeNull();
+		// Saving with the error keeps the changes pending.
+		fireEvent.submit(context.closest('form') as HTMLFormElement);
 		expect(screen.getByText('Unsaved changes')).toBeTruthy();
+
 		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 		expect(screen.getByText('All changes saved')).toBeTruthy();
+		expect(context.getAttribute('aria-invalid')).toBeNull();
 
-		fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'qwen36-b' } });
-		fireEvent.change(context, { target: { value: '8192' } });
+		fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'demo-b' } });
+		fireEvent.change(context, { target: { value: '4096' } });
 		fireEvent.submit(context.closest('form') as HTMLFormElement);
 		expect(screen.getByText('All changes saved')).toBeTruthy();
+	});
+
+	it('asks before unloading only while changes are unsaved', () => {
+		renderPage();
+		const unload = () => {
+			const event = new Event('beforeunload', { cancelable: true });
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		expect(unload()).toBe(false);
+		fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'demo-b' } });
+		expect(unload()).toBe(true);
 	});
 
 	it('shows each of the four list states', () => {
@@ -99,6 +120,7 @@ describe('UiStandardPage (/ui)', () => {
 			expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0);
 		}
 		fireEvent.click(screen.getByRole('button', { name: 'Copy answer' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Copy configuration example00a1' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a confirmation' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a failure' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));

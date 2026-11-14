@@ -87,7 +87,7 @@ function Ratio({ value, minimum }: { value: number | null; minimum: number }) {
 	if (value === null) return <span className="text-foreground-muted">not measured</span>;
 	const passes = value >= minimum;
 	return (
-		<span data-numeric className={passes ? 'text-foreground-muted' : 'text-danger font-[650]'}>
+		<span data-numeric className={passes ? 'text-foreground-muted' : 'text-danger font-title'}>
 			{value.toFixed(1)}:1{passes ? '' : ` (needs ${minimum}:1)`}
 		</span>
 	);
@@ -116,7 +116,7 @@ export function ColourSection() {
 					{SURFACES.map((name) => (
 						<div
 							key={name}
-							className="border-border flex min-h-28 flex-col justify-between rounded-xl border p-3"
+							className="border-border flex min-h-28 flex-col justify-between rounded-panel border p-3"
 							style={{ backgroundColor: `var(${name})` }}
 						>
 							<div>
@@ -135,15 +135,15 @@ export function ColourSection() {
 				title="Text and status on every surface"
 				note="Each cell is the measured contrast of that colour on that surface, computed from the tokens on this page. Text needs 4.5:1; body text is held to 7:1."
 			>
-				<div className="border-border overflow-x-auto rounded-xl border">
+				<div className="border-border overflow-x-auto rounded-panel border">
 					<table className="text-dense w-full min-w-[40rem] border-collapse">
 						<thead>
 							<tr className="bg-surface-1 text-left">
-								<th scope="col" className="px-3 py-2 font-[550]">
+								<th scope="col" className="px-3 py-2 font-strong">
 									Colour
 								</th>
 								{SURFACES.map((surface) => (
-									<th key={surface} scope="col" className="px-3 py-2 font-[550]">
+									<th key={surface} scope="col" className="px-3 py-2 font-strong">
 										<code>{surface.replace('--', '')}</code>
 									</th>
 								))}
@@ -158,7 +158,7 @@ export function ColourSection() {
 									</th>
 									{SURFACES.map((surface) => (
 										<td key={surface} className="px-3 py-2" style={{ backgroundColor: `var(${surface})` }}>
-											<span className="text-body block font-[550]" style={{ color: `var(${token.name})` }}>
+											<span className="text-body block font-strong" style={{ color: `var(${token.name})` }}>
 												Sample 0.26
 											</span>
 											<Ratio
@@ -187,7 +187,7 @@ export function ColourSection() {
 			>
 				<div className="grid gap-3 sm:grid-cols-2">
 					<Panel>
-						<p className="font-[550]">Divider</p>
+						<p className="font-strong">Divider</p>
 						<div className="border-border my-3 border-t" />
 						<p className="text-foreground-muted text-dense">
 							<code>--border-divider</code>,{' '}
@@ -195,7 +195,7 @@ export function ColourSection() {
 						</p>
 					</Panel>
 					<Panel>
-						<p className="font-[550]">Control edge</p>
+						<p className="font-strong">Control edge</p>
 						<div className="border-border-control my-2 h-7 rounded-md border" />
 						<p className="text-foreground-muted text-dense">
 							<code>--border-control</code>,{' '}
@@ -207,11 +207,11 @@ export function ColourSection() {
 
 			<Example
 				title="Chart series"
-				note="Six colours, used in this order, each at least 3:1 on the surfaces a chart sits on. Axes, gridlines and labels use the text and divider tokens, never fixed greys."
+				note="Six colours, used in this order, each at least 3:1 on the surfaces a chart sits on. With more than three series each line is also labelled at its end, so colour is never the only cue. Axes, gridlines and labels use the text and divider tokens, never fixed greys."
 			>
 				<Panel>
 					<svg
-						viewBox="0 0 600 150"
+						viewBox="0 0 640 150"
 						role="img"
 						aria-label="Six sample series drawn in the chart colours"
 						className="w-full"
@@ -219,20 +219,26 @@ export function ColourSection() {
 						{[30, 70, 110].map((y) => (
 							<line key={y} x1="0" x2="600" y1={y} y2={y} stroke="var(--border-divider)" strokeWidth="1" />
 						))}
-						{SERIES.map((name, i) => (
-							<polyline
-								key={name}
-								fill="none"
-								stroke={`var(${name})`}
-								strokeWidth="2.5"
-								strokeLinejoin="round"
-								points={[0, 100, 200, 300, 400, 500, 600]
-									.map((x, j) => `${x},${125 - i * 17 - Math.round(18 * Math.sin((j + i) * 0.9))}`)
-									.join(' ')}
-							/>
-						))}
+						{SERIES.map((name, i) => {
+							// 20 px apart with a 7 px swing, so the lines never meet and the end labels never collide.
+							const y = (j: number) => 132 - i * 20 - Math.round(7 * Math.sin((j + i) * 0.9));
+							return (
+								<g key={name}>
+									<polyline
+										fill="none"
+										stroke={`var(${name})`}
+										strokeWidth="2.5"
+										strokeLinejoin="round"
+										points={[0, 100, 200, 300, 400, 500, 600].map((x, j) => `${x},${y(j)}`).join(' ')}
+									/>
+									<text x="608" y={y(6) + 4} fontSize="12" fill="var(--foreground-muted)">
+										S{i + 1}
+									</text>
+								</g>
+							);
+						})}
 					</svg>
-					<ul className="text-dense mt-3 flex flex-wrap gap-x-5 gap-y-1">
+					<ul className="text-dense mt-3 flex flex-wrap gap-x-6 gap-y-1">
 						{SERIES.map((name, i) => (
 							<li key={name} className="flex items-center gap-2">
 								<span aria-hidden className="size-2.5 rounded-full" style={{ backgroundColor: `var(${name})` }} />
@@ -273,14 +279,14 @@ export function TypeSection() {
 				title="The seven steps"
 				note="A page uses these and no others. Three weights: 400 for text, 550 for labels and controls, 650 for headings."
 			>
-				<div className="border-border divide-border divide-y rounded-xl border">
+				<div className="border-border divide-border divide-y rounded-panel border">
 					{TYPE_STEPS.map((step) => (
 						<div
 							key={step.name}
 							className="grid items-baseline gap-x-6 gap-y-1 px-4 py-3 md:grid-cols-[1fr_7rem_18rem]"
 						>
 							<p
-								className={`${step.className} ${step.name === 'display' || step.name === 'heading' || step.name === 'title' ? 'font-[650] tracking-tight' : ''} min-w-0 truncate`}
+								className={`${step.className} ${step.name === 'display' || step.name === 'heading' || step.name === 'title' ? 'font-title tracking-tight' : ''} min-w-0 break-words`}
 							>
 								Residuals against fitted values
 							</p>
@@ -338,7 +344,7 @@ const SPACES = [
 const RADII = [
 	{ className: 'rounded', px: 4, use: 'Checkboxes, inline code, tags inside text' },
 	{ className: 'rounded-lg', px: 8, use: 'Buttons, fields, menu items' },
-	{ className: 'rounded-xl', px: 12, use: 'Panels, dialogs, menus' },
+	{ className: 'rounded-panel', px: 12, use: 'Panels, dialogs, menus' },
 	{ className: 'rounded-full', px: null, use: 'Badges, avatars, switches' }
 ];
 
@@ -372,7 +378,7 @@ export function SpaceSection() {
 								className={`border-border-control bg-surface-1 size-14 shrink-0 border ${radius.className}`}
 							/>
 							<p className="text-dense">
-								<span className="font-[550]" data-numeric>
+								<span className="font-strong" data-numeric>
 									{radius.px === null ? 'Full' : `${radius.px} px`}
 								</span>
 								<span className="text-foreground-muted block">{radius.use}</span>

@@ -23,9 +23,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     "whiteboard" light counterpart, seven type sizes, and Atkinson
     Hyperlegible Next and Mono, self-hosted, chosen because 0/O and 1/l/I
     cannot be confused in a tool full of identifiers and figures. Geist, the
-    shadcn neutral theme and Open WebUI's marks are what it replaces.
+    shadcn neutral theme and Open WebUI's marks are what it will replace.
   - `standard.contrast.test.ts` asserts every contrast ratio the standard
-    promises, in both themes, from the token file itself.
+    promises, in dark, black and light, from the token file itself.
   - `/ui` (public, static) shows the rules on the shared components. The
     standard's values apply only there, through a `data-ui="standard"` scope,
     so the owner can judge the direction before it changes every page. Moving

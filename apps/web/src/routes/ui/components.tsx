@@ -11,7 +11,7 @@ import {
 	Trash2Icon,
 	TriangleAlertIcon
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Katex } from '@/components/chat/markdown/Katex';
 import {
@@ -55,8 +55,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 
 // The second half of /ui: the shared components (components/ui) under the
-// standard, and the patterns built from them. Content is invented but is the
-// kind this app holds: serving profiles, benchmark runs, knowledge files.
+// standard, and the patterns built from them. Every name and figure is
+// invented (demo-a, example00a1, round numbers) so nothing here reads as a
+// measurement; the kinds of thing are the ones this app holds.
 
 type Status = 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -72,7 +73,7 @@ export function StatusBadge({ status, children }: { status: Status; children: st
 	const { icon: Icon, className } = STATUS_STYLE[status];
 	return (
 		<span
-			className={`text-caption inline-flex h-5 items-center gap-1 rounded-full border px-2 font-[550] ${className}`}
+			className={`text-caption inline-flex h-5 items-center gap-1 rounded-full border px-2 font-strong ${className}`}
 		>
 			{Icon && <Icon aria-hidden className="size-3" />}
 			{children}
@@ -82,9 +83,11 @@ export function StatusBadge({ status, children }: { status: Status; children: st
 
 export function ActionsSection() {
 	const [saving, setSaving] = useState(false);
+	const timer = useRef<number | undefined>(undefined);
+	useEffect(() => () => window.clearTimeout(timer.current), []);
 	const save = () => {
 		setSaving(true);
-		window.setTimeout(() => {
+		timer.current = window.setTimeout(() => {
 			setSaving(false);
 			toast.success('Profile saved');
 		}, 900);
@@ -110,7 +113,7 @@ export function ActionsSection() {
 			</Example>
 			<Example
 				title="States"
-				note="A busy button keeps its width and label and says it is working. A disabled one is visibly unavailable but still readable, and the reason sits next to it."
+				note="A busy button says what it is doing, shows a spinner and cannot be pressed twice. A disabled one is visibly unavailable but still readable, and the reason sits next to it."
 			>
 				<div className="flex flex-wrap items-center gap-3">
 					<Button onClick={save} disabled={saving} aria-busy={saving}>
@@ -153,15 +156,24 @@ export function ActionsSection() {
 }
 
 export function FormsSection() {
-	const [name, setName] = useState('qwen36');
-	const [context, setContext] = useState('40000');
-	const [saved, setSaved] = useState({ name: 'qwen36', context: '40000' });
+	const [name, setName] = useState('demo-a');
+	const [context, setContext] = useState('8192');
+	const [saved, setSaved] = useState({ name: 'demo-a', context: '8192' });
+	// FRM-2: a field is judged once the person has left it or tried to save.
+	const [contextChecked, setContextChecked] = useState(false);
 	const [autoTitle, setAutoTitle] = useState(true);
+	const contextField = useRef<HTMLInputElement>(null);
 	const dirty = name !== saved.name || context !== saved.context;
+	const contextValid = /^\d+$/.test(context) && Number(context) >= 512 && Number(context) <= 32768;
 	const contextError =
-		/^\d+$/.test(context) && Number(context) >= 512 && Number(context) <= 32768
-			? undefined
-			: 'Enter a whole number of tokens between 512 and 32768.';
+		contextChecked && !contextValid ? 'Enter a whole number of tokens between 512 and 32768.' : undefined;
+	// FRM-3: leaving the page with unsaved changes asks first.
+	useEffect(() => {
+		if (!dirty) return;
+		const ask = (event: BeforeUnloadEvent) => event.preventDefault();
+		window.addEventListener('beforeunload', ask);
+		return () => window.removeEventListener('beforeunload', ask);
+	}, [dirty]);
 	return (
 		<Section
 			id="forms"
@@ -171,14 +183,18 @@ export function FormsSection() {
 		>
 			<Example
 				title="A form that saves on request"
-				note="Change a value: the bar at the bottom reports unsaved changes and offers to discard them. The context field shows an error in place, in words that say how to fix it."
+				note="Change a value: the bar at the bottom reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it."
 			>
 				<Panel className="max-w-[40rem]">
 					<form
 						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
-							if (contextError) return;
+							setContextChecked(true);
+							if (!contextValid) {
+								contextField.current?.focus();
+								return;
+							}
 							setSaved({ name, context });
 							toast.success('Profile saved');
 						}}
@@ -189,7 +205,14 @@ export function FormsSection() {
 						</Field>
 						<Field label="Context size, tokens" error={contextError} help="512 to 32768.">
 							{(props) => (
-								<Input {...props} inputMode="numeric" value={context} onChange={(e) => setContext(e.target.value)} />
+								<Input
+									{...props}
+									ref={contextField}
+									inputMode="numeric"
+									value={context}
+									onChange={(e) => setContext(e.target.value)}
+									onBlur={() => setContextChecked(true)}
+								/>
 							)}
 						</Field>
 						<Field label="Offload" help="How much of the model runs on the GPU.">
@@ -234,6 +257,7 @@ export function FormsSection() {
 									onClick={() => {
 										setName(saved.name);
 										setContext(saved.context);
+										setContextChecked(false);
 									}}
 								>
 									Discard changes
@@ -252,7 +276,7 @@ export function FormsSection() {
 			>
 				<Panel className="flex max-w-[40rem] items-start justify-between gap-6">
 					<div>
-						<Label htmlFor="ui-demo-titles" className="text-body font-[550]">
+						<Label htmlFor="ui-demo-titles" className="text-body font-strong">
 							Name new chats automatically
 						</Label>
 						<p className="text-foreground-muted text-dense mt-1" role="status">
@@ -268,31 +292,31 @@ export function FormsSection() {
 
 const RUNS = [
 	{
-		config: 'a81d02c4e9f7',
-		profile: 'qwen36',
+		config: 'example00a1',
+		profile: 'demo-a',
 		status: 'success' as const,
 		word: 'Passed',
-		pass: 0.817,
-		tps: 7.6,
-		vram: 5571
+		pass: 0.75,
+		tps: 12.5,
+		vram: 4000
 	},
 	{
-		config: 'bd04a8517c22',
-		profile: 'qwen38',
+		config: 'example00b2',
+		profile: 'demo-b',
 		status: 'warning' as const,
 		word: 'Throttled',
-		pass: 0.783,
-		tps: 4.1,
-		vram: 5890
+		pass: 0.5,
+		tps: 2.5,
+		vram: 6000
 	},
 	{
-		config: 'c98ef02c11ab',
-		profile: 'qwen25c',
+		config: 'example00c3',
+		profile: 'demo-c',
 		status: 'danger' as const,
 		word: 'Failed',
 		pass: null,
 		tps: null,
-		vram: 4987
+		vram: 2000
 	}
 ];
 
@@ -308,7 +332,7 @@ export function DataSection() {
 				title="A results table"
 				note="On a narrow screen the table scrolls inside its own frame; the page never scrolls sideways."
 			>
-				<div className="border-border overflow-x-auto rounded-xl border">
+				<div className="border-border overflow-x-auto rounded-panel border">
 					<Table className="text-dense min-w-[38rem]">
 						<TableHeader className="bg-surface-1">
 							<TableRow>
@@ -330,7 +354,17 @@ export function DataSection() {
 							{RUNS.map((run) => (
 								<TableRow key={run.config}>
 									<TableCell>
-										<code>{run.config}</code>
+										<span className="flex items-center gap-1">
+											<code>{run.config}</code>
+											<Button
+												variant="ghost"
+												size="icon-sm"
+												aria-label={`Copy configuration ${run.config}`}
+												onClick={() => toast.success('Configuration id copied')}
+											>
+												<CopyIcon aria-hidden />
+											</Button>
+										</span>
 									</TableCell>
 									<TableCell>{run.profile}</TableCell>
 									<TableCell>
@@ -365,12 +399,13 @@ export function NavigationSection() {
 		<Section
 			id="navigation"
 			title="Pages and navigation"
-			lead="Every page opens the same way: its name, one sentence about what it is for, and its main action on the right. Sibling views are tabs, the open tab is unmistakable, and which tab is open is part of the address."
-			rules={['LAY-5', 'NAV-1', 'NAV-2', 'LAY-4']}
+			lead="Every page opens the same way: its name, one sentence about what it is for, and its main action on the right. Sibling views are tabs, and the open tab is unmistakable."
+			rules={['LAY-5', 'NAV-2']}
 		>
 			<Example title="Page header and tabs">
 				<Panel>
 					<PageHeader
+						as="h4"
 						title="Knowledge"
 						description="Collections of files a model can search while it answers."
 						action={
@@ -380,7 +415,7 @@ export function NavigationSection() {
 							</Button>
 						}
 					/>
-					<Tabs defaultValue="files" className="mt-5">
+					<Tabs defaultValue="files" className="mt-6">
 						<TabsList variant="line">
 							<TabsTrigger value="files">Files</TabsTrigger>
 							<TabsTrigger value="settings">Settings</TabsTrigger>
@@ -434,10 +469,10 @@ export function FeedbackSection() {
 				</div>
 			</Example>
 			<Example title="Inline message" note="A condition that lasts is stated in place, not in a toast.">
-				<div className="border-warning/50 flex max-w-[40rem] items-start gap-3 rounded-xl border p-3" role="status">
+				<div className="border-warning/50 flex max-w-[40rem] items-start gap-3 rounded-panel border p-3" role="status">
 					<TriangleAlertIcon aria-hidden className="text-warning mt-0.5 size-4 shrink-0" />
 					<div>
-						<p className="font-[550]">The code sandbox is not running</p>
+						<p className="font-strong">The code sandbox is not running</p>
 						<p className="text-foreground-muted text-dense mt-0.5">
 							Run buttons are hidden until it starts. Start it with <code>make backend</code>.
 						</p>
@@ -453,12 +488,12 @@ export function FeedbackSection() {
 						<DialogTrigger asChild>
 							<Button variant="outline">Rename chat</Button>
 						</DialogTrigger>
-						<DialogContent>
+						<DialogContent className="sm:max-w-lg">
 							<DialogHeader>
 								<DialogTitle>Rename chat</DialogTitle>
 								<DialogDescription>The name appears in the sidebar and in search.</DialogDescription>
 							</DialogHeader>
-							<Field label="Name">{(props) => <Input {...props} defaultValue="Sample variance walkthrough" />}</Field>
+							<Field label="Name">{(props) => <Input {...props} defaultValue="Variance walkthrough" />}</Field>
 							<DialogFooter>
 								<DialogClose asChild>
 									<Button variant="ghost">Cancel</Button>
@@ -568,7 +603,7 @@ export function StatesSection() {
 					)}
 					{state === 'empty' && (
 						<div className="mx-auto max-w-sm text-center">
-							<p className="text-title font-[650]">No prompts yet</p>
+							<p className="text-title font-title">No prompts yet</p>
 							<p className="text-foreground-muted mt-1">
 								A prompt is text you reuse. Save one and type <code>/</code> in a chat to insert it.
 							</p>
@@ -581,7 +616,7 @@ export function StatesSection() {
 					{state === 'filtered' && (
 						<div className="mx-auto max-w-sm text-center">
 							<SearchXIcon aria-hidden className="text-foreground-muted mx-auto size-5" />
-							<p className="text-title mt-2 font-[650]">No prompts match “regresion”</p>
+							<p className="text-title mt-2 font-title">No prompts match “regresion”</p>
 							<p className="text-foreground-muted mt-1">Check the spelling, or clear the search to see all 12.</p>
 							<Button variant="outline" className="mt-4">
 								Clear search
@@ -591,7 +626,7 @@ export function StatesSection() {
 					{state === 'error' && (
 						<div className="mx-auto max-w-sm text-center" role="alert">
 							<CircleAlertIcon aria-hidden className="text-danger mx-auto size-5" />
-							<p className="text-title mt-2 font-[650]">Prompts could not be loaded</p>
+							<p className="text-title mt-2 font-title">Prompts could not be loaded</p>
 							<p className="text-foreground-muted mt-1">
 								The server did not answer. Your prompts are safe; this is a connection problem.
 							</p>
@@ -641,10 +676,10 @@ export function ContentSection() {
 						For observations <Katex content="x_1, \dots, x_n" displayMode={false} /> the unbiased estimator of the
 						variance divides by <Katex content="n-1" displayMode={false} />:
 					</p>
-					<div className="border-border overflow-x-auto rounded-xl border px-4 py-2">
+					<div className="border-border overflow-x-auto rounded-panel border px-4 py-2">
 						<Katex content="s^2 = \frac{1}{n-1}\sum_{i=1}^{n}(x_i - \bar{x})^2" displayMode />
 					</div>
-					<figure className="border-border bg-surface-1 overflow-hidden rounded-xl border">
+					<figure className="border-border bg-surface-1 overflow-hidden rounded-panel border">
 						<figcaption className="border-border text-dense text-foreground-muted flex items-center justify-between border-b px-3 py-1.5">
 							<span>Python</span>
 							<span className="flex gap-1">

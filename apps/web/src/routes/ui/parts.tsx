@@ -23,7 +23,7 @@ export function Section({
 	return (
 		<section id={id} aria-labelledby={`${id}-title`} className="border-border scroll-mt-6 border-t pt-8 pb-12">
 			<div className="mb-6 max-w-[72ch]">
-				<h2 id={`${id}-title`} className="text-heading font-[650] tracking-tight">
+				<h2 id={`${id}-title`} className="text-heading font-title tracking-tight">
 					{title}
 				</h2>
 				<p className="text-foreground-muted text-reading mt-2">{lead}</p>
@@ -46,7 +46,7 @@ export function Section({
 export function Example({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
 	return (
 		<div>
-			<h3 className="text-title font-[650]">{title}</h3>
+			<h3 className="text-title font-title">{title}</h3>
 			{note && <p className="text-foreground-muted mt-1 mb-4 max-w-[72ch]">{note}</p>}
 			<div className={note ? undefined : 'mt-4'}>{children}</div>
 		</div>
@@ -55,7 +55,7 @@ export function Example({ title, note, children }: { title: string; note?: React
 
 /** A raised panel on surface-1 with a divider edge (COL-5). */
 export function Panel({ className = '', children }: { className?: string; children: ReactNode }) {
-	return <div className={`border-border bg-surface-1 rounded-xl border p-4 ${className}`}>{children}</div>;
+	return <div className={`border-border bg-surface-1 rounded-panel border p-4 ${className}`}>{children}</div>;
 }
 
 /**
@@ -80,7 +80,7 @@ export function Field({
 	const describedBy = error || help ? `${id}-note` : undefined;
 	return (
 		<div className="flex flex-col gap-1.5">
-			<Label htmlFor={id} className="text-body font-[550]">
+			<Label htmlFor={id} className="text-body font-strong">
 				{label}
 				{optional && <span className="text-foreground-muted font-normal"> (optional)</span>}
 			</Label>
@@ -102,11 +102,22 @@ export function Field({
 }
 
 /** LAY-5: every page opens with its name, one sentence on what it is for, and its primary action. */
-export function PageHeader({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+export function PageHeader({
+	title,
+	description,
+	action,
+	as: Heading = 'h1'
+}: {
+	title: string;
+	description: string;
+	action?: ReactNode;
+	/** `h1` on a real page. Lower only where the header is nested inside another page, as on /ui. */
+	as?: 'h1' | 'h2' | 'h3' | 'h4';
+}) {
 	return (
 		<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
 			<div className="min-w-0">
-				<p className="text-heading font-[650] tracking-tight">{title}</p>
+				<Heading className="text-heading font-title tracking-tight">{title}</Heading>
 				<p className="text-foreground-muted mt-1 max-w-[72ch]">{description}</p>
 			</div>
 			{action}

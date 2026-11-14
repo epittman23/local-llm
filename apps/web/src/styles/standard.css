@@ -24,6 +24,9 @@
 
 @theme inline {
 	/* COL-3: status and surface colours as utilities (text-success, bg-surface-2, ...). */
+	--color-page: var(--page);
+	--color-foreground-strong: var(--foreground-strong);
+	--color-border-divider: var(--border-divider);
 	--color-surface-1: var(--surface-1);
 	--color-surface-2: var(--surface-2);
 	--color-surface-3: var(--surface-3);
@@ -48,6 +51,12 @@
 	/* TYP-1: the only families. */
 	--font-ui: "Atkinson Hyperlegible Next Variable", ui-sans-serif, system-ui, sans-serif;
 	--font-code: "Atkinson Hyperlegible Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+
+	/* TYP-3: font-strong (labels, controls) and font-title (headings); text is the default 400. */
+	--font-weight-strong: 550;
+	--font-weight-title: 650;
+	/* SHP-1: rounded-panel, 12px, for panels, dialogs and menus. */
+	--radius-panel: 0.75rem;
 
 	/* TYP-2: the seven steps (text-caption ... text-display). */
 	--text-caption: 0.75rem;
@@ -169,7 +178,7 @@ html[data-ui="standard"] {
 	--sidebar-accent-foreground: var(--foreground-strong);
 	--sidebar-border: var(--border-divider);
 	--sidebar-ring: var(--focus);
-	--radius: 0.5rem; /* SHP-1: controls 8px; cards and dialogs use radius-xl (12px) */
+	--radius: 0.5rem; /* SHP-1: controls 8px; panels and dialogs use rounded-panel (12px) */
 }
 html[data-ui="standard"].dark {
 	color-scheme: dark;
@@ -191,6 +200,12 @@ html[data-ui="standard"] body {
 html[data-ui="standard"] :is(code, kbd, pre, samp, .font-mono) {
 	font-family: var(--font-code);
 }
+/* CNT-2: inline code sits on a fill. */
+html[data-ui="standard"] :not(pre) > code {
+	background-color: var(--surface-3);
+	border-radius: 0.25rem;
+	padding: 0.0625rem 0.25rem;
+}
 
 /*
  * A11Y-1: one focus indicator, everywhere, never removed. Unlayered, so it
@@ -201,6 +216,10 @@ html[data-ui="standard"] :focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
 	--tw-ring-shadow: 0 0 #0000;
+}
+/* A dialog takes focus as a container when it opens; it is not a control. */
+html[data-ui="standard"] :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
+	outline: none;
 }
 html[data-ui="standard"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):focus-visible {
 	outline-offset: 0;
@@ -250,10 +269,11 @@ html[data-ui="standard"] [data-slot="switch"][data-state="checked"] [data-slot="
 html[data-ui="standard"] :is(button, a)[data-variant] {
 	font-size: var(--text-body);
 	font-weight: 550;
+	transition-duration: var(--motion-fast); /* MOT-1 */
 }
 html[data-ui="standard"] :is(button, a)[data-variant]:is([data-size="default"], [data-size="lg"]) {
 	height: var(--control);
-	padding-inline: 0.875rem;
+	padding-inline: 0.75rem;
 }
 html[data-ui="standard"] :is(button, a)[data-variant][data-size="icon"] {
 	width: var(--control);
@@ -286,12 +306,18 @@ html[data-ui="standard"] :is(button, a)[data-variant]:disabled {
 }
 /* LAY-3: on touch, every control grows to the 44px target. */
 @media (pointer: coarse) {
-	html[data-ui="standard"] :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="select-trigger"]) {
+	html[data-ui="standard"]
+		:is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
 		min-height: var(--control-touch);
 		font-size: var(--text-reading); /* TYP-4: 16px, so iOS does not zoom */
 	}
 	html[data-ui="standard"]
-		:is(button, a)[data-variant]:is([data-size="icon"], [data-size="icon-sm"], [data-size="icon-xs"]) {
+		:is(button, a)[data-variant]:is(
+			[data-size="icon"],
+			[data-size="icon-sm"],
+			[data-size="icon-xs"],
+			[data-size="icon-lg"]
+		) {
 		min-width: var(--control-touch);
 	}
 }
@@ -302,6 +328,7 @@ html[data-ui="standard"] :is([data-slot="dialog-content"], [data-slot="alert-dia
 	border: 1px solid var(--border-divider);
 	border-radius: 0.75rem;
 	box-shadow: 0 24px 64px -16px oklch(0 0 0 / 55%);
+	animation-duration: var(--motion-base); /* MOT-1 */
 }
 html[data-ui="standard"] :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"]) {
 	background-color: var(--scrim);

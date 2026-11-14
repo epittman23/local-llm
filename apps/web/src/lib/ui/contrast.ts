@@ -95,15 +95,20 @@ export const CONTRAST_RULES: ContrastRule[] = [
 	...onEvery('COL-2', '--success', 4.5),
 	...onEvery('COL-2', '--warning', 4.5),
 	...onEvery('COL-2', '--danger', 4.5),
-	// Disabled text is exempt from WCAG; the standard still keeps it readable
-	// on the three surfaces a disabled control can sit on.
-	...onEvery('COL-2', '--foreground-disabled', 3, ['--page', '--surface-1', '--surface-2']),
+	// Disabled text is exempt from WCAG; the standard still keeps it readable,
+	// including on the --surface-3 fill of a disabled button.
+	...onEvery('COL-2', '--foreground-disabled', 3),
 	{ rule: 'COL-2', foreground: '--brand-foreground', background: '--brand', minimum: 4.5 },
 	{ rule: 'COL-2', foreground: '--danger-fill-foreground', background: '--danger-fill', minimum: 4.5 },
 	...onEvery('COL-4', '--border-control', 3),
 	...onEvery('COL-4', '--focus', 3),
 	...['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6'].flatMap((series) =>
 		onEvery('COL-4', series, 3, ['--page', '--surface-1', '--surface-2'])
+	),
+	// CNT-2: the series colours double as syntax colours, which is text, in a
+	// code block on --surface-1.
+	...['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6'].flatMap((series) =>
+		onEvery('CNT-2', series, 4.5, ['--surface-1'])
 	),
 	...onEvery('COL-5', '--border-divider', 1.3, ['--page', '--surface-1', '--surface-2'])
 ];

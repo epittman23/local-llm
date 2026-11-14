@@ -5,11 +5,15 @@ built and checked against. They exist so that a change can be verified, so
 that the same mistake is not made on a ninth page after being fixed on
 eight, and so that two pages doing the same job look and behave the same.
 
-- **See it:** `/ui` in the running app (`apps/web/src/routes/ui/`) shows
-  every rule below on the real shared components, in dark, black and light.
+- **See it:** `/ui` in the running app (`apps/web/src/routes/ui/`) shows the
+  rules on the real shared components, in dark, black and light. Each of its
+  sections lists the rules it shows; rules about whole pages, words and
+  behaviour over time (for example NAV-1, NAV-3, the WRD rules) are not
+  shown there and are checked on the page being changed.
 - **Tokens:** `apps/web/src/styles/standard.css`.
 - **Automated check:** `apps/web/src/styles/standard.contrast.test.ts`
-  (part of `make test-web`) fails when a token breaks a colour promise.
+  (part of `make test-web`) fails when a token breaks a colour promise, in
+  dark, black or light.
 - **Where it came from:** the UX/UI review of 2026-11-14, issues #901 to
   #1115, indexed in #1116. Most rules exist because that review found the
   opposite on several pages.
@@ -88,8 +92,11 @@ Tokens, by role. Values are in `standard.css`; hex values are shown on `/ui`.
 
 The shared components read the older shadcn names (`--background`,
 `--primary`, `--muted-foreground`, ...). Under the standard those names point
-at the tokens above, so `bg-background` and `bg-page` mean the same thing.
-New code prefers the names in this table.
+at the tokens above, so `bg-background` and `bg-page` mean the same thing
+on a page that is on the standard. Until the whole app is (see Status), a
+component that must look right on both uses the older names, which resolve
+everywhere; the names in this table are for code that only runs under the
+standard, and become the preferred ones once the scope is removed.
 
 **COL-1. Only tokens.** No colour literal (`#fff`, `rgb()`, `oklch()`) and no
 Tailwind palette colour (`bg-white`, `text-gray-500`, `bg-neutral-950`,
@@ -165,8 +172,8 @@ third family.
 No arbitrary size (`text-[11px]`, `text-[0.8rem]`). Nothing is smaller than
 12 px.
 
-**TYP-3. Three weights.** 400 for text, 550 for labels and controls, 650 for
-headings. Headings at `text-title` and above are set with `tracking-tight`.
+**TYP-3. Three weights.** 400 for text, 550 for labels and controls
+(`font-strong`), 650 for headings (`font-title`). Headings at `text-title` and above are set with `tracking-tight`.
 No italics for emphasis in the interface; bold is for the one thing in a
 sentence that must not be missed.
 
@@ -188,9 +195,11 @@ with the middle removed from a group of characters someone has to compare.
 
 ## Space, shape and size
 
-**LAY-1. Seven distances:** 4, 8, 12, 16, 24, 32 and 48 px (Tailwind `1`, `2`,
-`3`, `4`, `6`, `8`, `12`). What each is for is on `/ui`. No arbitrary spacing
-value.
+**LAY-1. Seven distances between things:** 4, 8, 12, 16, 24, 32 and 48 px
+(Tailwind `1`, `2`, `3`, `4`, `6`, `8`, `12`). What each is for is on `/ui`.
+Inside a single control or a single line of text (a button's padding, the
+gap between an icon and its label, a caption under its heading) 2, 6 and
+10 px are also allowed. No arbitrary spacing value.
 
 **LAY-2. Three control heights.** 36 px (`--control`) for every button, field
 and select. 28 px (`--control-compact`) in dense toolbars and table rows, and
@@ -219,9 +228,10 @@ width of its container.
 panel scrolls inside the panel, so what sits below it (the user menu, a save
 bar) stays reachable. A table's header stays visible while its body scrolls.
 
-**SHP-1. A corner says what kind of thing something is.** 4 px: checkboxes,
-inline code. 8 px: buttons, fields, menu items. 12 px: panels, dialogs,
-menus. Full: badges, avatars, switches. Not one radius on everything.
+**SHP-1. A corner says what kind of thing something is.** 4 px (`rounded`):
+checkboxes, inline code. 8 px (`rounded-lg`): buttons, fields, menu items.
+12 px (`rounded-panel`): panels, dialogs, menus. Full: badges, avatars,
+switches. Not one radius on everything.
 
 **SHP-2. Two shadows, only on floating layers** (menus and popovers; dialogs),
 and always together with an edge (COL-5). Panels and cards have no shadow.
@@ -248,8 +258,8 @@ starts on Cancel. In a menu the destructive item is last, below a separator.
 on hover and on focus. The icon is `aria-hidden`.
 
 **ACT-5. Every control shows five states:** resting, hover, focus (A11Y-1),
-busy and disabled. A busy button keeps its label's place, shows a spinner,
-sets `aria-busy` and cannot be pressed twice. A disabled control stays
+busy and disabled. A busy button says what it is doing ("Saving…"), shows a
+spinner, sets `aria-busy` and cannot be pressed twice. A disabled control stays
 readable and the reason it is disabled is stated next to it or in its
 tooltip. An action that cannot work is not offered as if it could.
 
@@ -473,9 +483,10 @@ animations.**
 
 The Electron shell loads the server's pages, so the rules above reach it
 through `apps/web`. Its own windows (the progress and error dialogs in
-`apps/desktop`) are separate HTML. They follow the same tokens, type and
+`apps/desktop`) are separate HTML. They must use the same colours, type and
 words (WRD-3), follow the app's theme rather than only the operating
-system's, and a window's content never overflows its fixed size.
+system's, and never let content overflow a fixed window. They do not yet:
+nothing under `apps/desktop` uses these tokens (#926, #1115).
 
 ## Verifying a change
 

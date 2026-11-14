@@ -27,7 +27,10 @@ function tokens(selector: string): Record<string, string> {
 }
 
 const light = tokens(':root');
-const themes: Record<string, Record<string, string>> = { light, dark: { ...light, ...tokens('.dark') } };
+const dark = { ...light, ...tokens('.dark') };
+// Black (OLED) changes the page and the three surfaces under the dark theme.
+const black = { ...dark, ...tokens('html[data-ui="standard"].oled') };
+const themes: Record<string, Record<string, string>> = { light, dark, black };
 
 function color(theme: string, name: string): Oklch {
 	const parsed = parseOklch(themes[theme][name] ?? '');
@@ -41,7 +44,7 @@ describe('the interface standard’s colour tokens', () => {
 		expect(colours.filter((name) => !(name in tokens('.dark')))).toEqual([]);
 	});
 
-	for (const theme of ['dark', 'light']) {
+	for (const theme of ['dark', 'black', 'light']) {
 		it.each(CONTRAST_RULES)(`${theme}: $foreground on $background is at least $minimum:1 ($rule)`, (rule) => {
 			const ratio = contrastRatio(color(theme, rule.foreground), color(theme, rule.background));
 			expect(ratio, `measured ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(rule.minimum);
@@ -50,7 +53,7 @@ describe('the interface standard’s colour tokens', () => {
 		it(`${theme}: each surface is lighter or darker than the one below it`, () => {
 			const steps = ['--page', '--surface-1', '--surface-2', '--surface-3'].map((name) => color(theme, name).l);
 			// Dark raises surfaces; light's raised surfaces are white and --surface-3 is the tinted fill.
-			if (theme === 'dark') expect(steps).toEqual([...steps].sort((a, b) => a - b));
+			if (theme !== 'light') expect(steps).toEqual([...steps].sort((a, b) => a - b));
 			expect(new Set(steps).size).toBe(steps.length);
 		});
 	}

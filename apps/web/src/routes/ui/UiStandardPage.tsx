@@ -69,12 +69,12 @@ function ThemeSwitch() {
 	);
 }
 
-/** The opening specimen: the three things this app shows (an answer, an equation, a measurement) set in the standard. */
+/** The opening specimen: the three things this app shows (an answer, an equation, a measurement) set in the standard. Invented values. */
 function Specimen() {
 	return (
-		<div className="border-border bg-surface-1 rounded-xl border">
+		<div className="border-border bg-surface-1 rounded-panel border">
 			<div className="border-border flex items-center justify-between gap-3 border-b px-4 py-2.5">
-				<p className="font-[550]">qwen36</p>
+				<p className="font-strong">demo-a</p>
 				<StatusBadge status="success">Serving</StatusBadge>
 			</div>
 			<div className="text-reading flex flex-col gap-3 px-4 py-4">
@@ -85,13 +85,13 @@ function Specimen() {
 			</div>
 			<dl className="border-border text-dense grid grid-cols-3 border-t">
 				{[
-					['Generation', '7.6', 'tokens/s'],
-					['Pass rate', '81.7', '%'],
-					['Peak VRAM', '5,571', 'MiB']
+					['Generation', '12.5', 'tokens/s'],
+					['Pass rate', '75.0', '%'],
+					['Peak VRAM', '4,000', 'MiB']
 				].map(([label, value, unit]) => (
 					<div key={label} className="border-border px-4 py-3 not-first:border-l">
 						<dt className="text-foreground-muted">{label}</dt>
-						<dd className="text-title mt-0.5 font-[650]" data-numeric>
+						<dd className="text-title mt-0.5 font-title" data-numeric>
 							{value} <span className="text-dense text-foreground-muted font-normal">{unit}</span>
 						</dd>
 					</div>
@@ -123,7 +123,7 @@ export function UiStandardPage() {
 			</a>
 			<header className="border-border border-b">
 				<div className="mx-auto flex max-w-[76rem] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-					<a href="/" className="font-[650]">
+					<a href="/" className="font-title">
 						local-llm
 					</a>
 					<ThemeSwitch />
@@ -149,14 +149,16 @@ export function UiStandardPage() {
 				<main id="standard-main" className="min-w-0">
 					<div className="grid items-center gap-8 py-12 xl:grid-cols-[minmax(0,1fr)_24rem]">
 						<div>
-							<h1 className="text-display font-[650] tracking-tight">Interface standard</h1>
+							<h1 className="text-display font-title tracking-tight">Interface standard</h1>
 							<p className="text-reading text-foreground-muted mt-3 max-w-[60ch]">
-								One set of rules for every page of local-llm, shown here on the real shared components. A change to the
-								interface is correct when it looks and behaves like this page, in dark first.
+								One set of rules for every page of local-llm. Each section below shows the rules it lists on the real
+								shared components, with invented content. A change to the interface is correct when it looks and behaves
+								like this page, in dark first.
 							</p>
 							<p className="text-foreground-muted mt-3 max-w-[60ch]">
 								The rules, with their identifiers, are in <code>docs/guides/ui-standard.md</code>. These values apply to
-								this page only until the rest of the app is moved onto them.
+								this page only until the rest of the app is moved onto them. The theme switch above sets the theme of
+								the whole app.
 							</p>
 						</div>
 						<Specimen />

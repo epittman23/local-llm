@@ -7,7 +7,8 @@ description: Check a change to the interface against this repo's interface stand
 
 The rules are in `docs/guides/ui-standard.md`. Read it; this skill is only
 the procedure for applying it to the change in hand. `/ui` in the running
-app shows every rule on the shared components.
+app shows the rules on the shared components; each of its sections lists
+the rules it shows.
 
 ## Before writing
 
