@@ -3,17 +3,17 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { updateUserSettings } from '@/lib/apis/users';
+import { useUserSettings } from '@/lib/settings/userSettings';
 import {
 	DEFAULT_KEYBINDINGS,
-	type KeybindingsMap,
-	Shortcut,
-	type ShortcutDefinition,
 	eventToChord,
 	formatChord,
 	isConfigurableShortcut,
+	type KeybindingsMap,
+	type Shortcut,
+	type ShortcutDefinition,
 	shortcuts
 } from '@/lib/shortcuts';
-import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KEYBINDINGS_KEY, SUPPORTED_SHORTCUTS, useKeybindings } from '@/lib/useShortcuts';
 import { cn } from '@/lib/utils';
@@ -96,14 +96,16 @@ export default function Shortcuts() {
 									{def.name}
 								</span>
 								{configurable ? (
-									<button
-										type="button"
-										aria-label={`Change shortcut for ${def.name}`}
+									<Button
+										variant="outline"
+										size="sm"
 										className={cn(
-											'bg-muted/50 min-w-16 rounded-md border px-2 py-0.5 font-mono',
-											recording === id && 'border-blue-500',
+											'min-w-16 font-mono',
+											recording === id && 'border-brand',
 											conflict && 'border-destructive text-destructive'
 										)}
+										type="button"
+										aria-label={`Change shortcut for ${def.name}`}
 										title={conflict ? `Also bound to ${shortcuts[conflict]?.name}` : undefined}
 										onClick={() => setRecording(id)}
 										onBlur={() => setRecording((r) => (r === id ? null : r))}
@@ -123,7 +125,7 @@ export default function Shortcuts() {
 										}}
 									>
 										{recording === id ? 'Press keys...' : chord ? formatChord(chord) : 'Not set'}
-									</button>
+									</Button>
 								) : (
 									<span className="bg-muted/30 rounded-md px-2 py-0.5 font-mono">{fixedChord(def.keys)}</span>
 								)}

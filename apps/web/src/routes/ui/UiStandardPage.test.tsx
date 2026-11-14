@@ -208,6 +208,17 @@ describe('UiStandardPage (/ui)', () => {
 		expect(screen.getByText(/The canvas is closed/)).toBeTruthy();
 	});
 
+	it('marks the open row, and names the picture button', () => {
+		renderPage();
+		const first = screen.getByRole('button', { name: /demo-a All layers/ });
+		const second = screen.getByRole('button', { name: /demo-b 20 layers/ });
+		expect(first.getAttribute('aria-current')).toBe('true');
+		fireEvent.click(second);
+		expect(second.getAttribute('aria-current')).toBe('true');
+		expect(first.getAttribute('aria-current')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Change the profile picture' }));
+	});
+
 	it('opens the destructive confirmation with Cancel and a named action', () => {
 		renderPage();
 		fireEvent.click(screen.getByRole('button', { name: 'Delete collection' }));

@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -11,8 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { getPromptTags } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { slugify } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import { type PromptDraft, isValidCommand } from './promptTypes';
+import { isValidCommand, type PromptDraft } from './promptTypes';
 
 /**
  * Ports the create half of workspace/Prompts/PromptEditor.svelte, in its
@@ -115,9 +115,16 @@ function CreateForm({
 				<DialogDescription className="sr-only">
 					Name a prompt, give it a slash command, and write its content.
 				</DialogDescription>
-				<button type="button" aria-label="Close" className="ml-2 shrink-0" onClick={onClose}>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="ml-2 shrink-0"
+					type="button"
+					aria-label="Close"
+					onClick={onClose}
+				>
 					<X className="size-5" />
-				</button>
+				</Button>
 			</div>
 
 			<form
@@ -135,7 +142,7 @@ function CreateForm({
 						<div className="flex w-full flex-col">
 							<div className="flex items-center">
 								<input
-									className="w-full bg-transparent text-sm outline-hidden"
+									className="w-full bg-transparent text-sm"
 									placeholder="Name"
 									aria-label="Name"
 									value={name}
@@ -152,7 +159,7 @@ function CreateForm({
 							<div className="text-muted-foreground flex items-center gap-0.5 text-xs">
 								<div>/</div>
 								<input
-									className="w-full bg-transparent outline-hidden"
+									className="w-full bg-transparent"
 									placeholder="Command"
 									aria-label="Command"
 									value={command}
@@ -179,7 +186,7 @@ function CreateForm({
 					<div className="text-muted-foreground text-xs">Prompt Content</div>
 					<div className="mt-1 flex min-h-0 flex-1 flex-col">
 						<textarea
-							className="min-h-0 w-full flex-1 resize-none bg-transparent text-xs outline-hidden"
+							className="min-h-0 w-full flex-1 resize-none bg-transparent text-xs"
 							placeholder="Write a summary in 50 words that summarizes {{topic}}."
 							aria-label="Prompt Content"
 							value={content}

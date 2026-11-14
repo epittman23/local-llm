@@ -7,12 +7,13 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
-import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
+import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
 import { SplitCreateButton } from '@/components/common/SplitCreateButton';
 import { Tip } from '@/components/common/Tip';
 import { ValvesModal } from '@/components/common/ValvesModal';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -48,7 +49,6 @@ import {
 } from './functionTypes';
 
 const LIST_KEY = ['functions', 'list'];
-const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
 
 /**
  * Ports admin/Functions.svelte. Like Tools, the endpoint returns every function
@@ -387,35 +387,33 @@ export function FunctionsPage() {
 								>
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-[0.625rem] leading-4 uppercase">
+											<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
 												{fn.type}
 											</div>
 											<Tip content={fn.id} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
-													{fn.name}
-												</div>
+												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
 											</Tip>
 											{fn.meta?.manifest?.version && (
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
 													v{fn.meta.manifest.version}
 												</div>
 											)}
 											<Tip content={dayjs(fn.updated_at * 1000).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
 													{dayjs(fn.updated_at * 1000).fromNow()}
 												</div>
 											</Tip>
 										</div>
 										{fn.meta?.description && (
 											<Tip content={fn.meta.description} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
 													{fn.meta.description}
 												</div>
 											</Tip>
 										)}
 									</div>
 
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
+									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
 										<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
 											<div className="truncate">
 												{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
@@ -426,9 +424,10 @@ export function FunctionsPage() {
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
 										{shiftKey ? (
 											<Tip content="Delete">
-												<button
+												<Button
+													variant="ghost"
+													size="icon-sm"
 													type="button"
-													className={rowIconButton}
 													aria-label="Delete"
 													onClick={(e) => {
 														e.stopPropagation();
@@ -436,15 +435,16 @@ export function FunctionsPage() {
 													}}
 												>
 													<Trash2 className="size-4" />
-												</button>
+												</Button>
 											</Tip>
 										) : (
 											<>
 												{fn.meta?.manifest?.funding_url && (
 													<Tip content="Support">
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
 															type="button"
-															className={rowIconButton}
 															aria-label="Support"
 															onClick={(e) => {
 																e.stopPropagation();
@@ -453,13 +453,14 @@ export function FunctionsPage() {
 															}}
 														>
 															<Heart className="size-4" />
-														</button>
+														</Button>
 													</Tip>
 												)}
 												<Tip content="Valves">
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={rowIconButton}
 														aria-label="Valves"
 														onClick={(e) => {
 															e.stopPropagation();
@@ -468,19 +469,20 @@ export function FunctionsPage() {
 														}}
 													>
 														<Settings className="size-4" />
-													</button>
+													</Button>
 												</Tip>
 												<DropdownMenu>
 													<Tip content="More">
 														<DropdownMenuTrigger asChild>
-															<button
+															<Button
+																variant="ghost"
+																size="icon-sm"
 																type="button"
-																className={rowIconButton}
 																aria-label="Function Menu"
 																onClick={(e) => e.stopPropagation()}
 															>
 																<MoreHorizontal className="size-4" />
-															</button>
+															</Button>
 														</DropdownMenuTrigger>
 													</Tip>
 													<DropdownMenuContent align="end" className="min-w-[11.25rem]">

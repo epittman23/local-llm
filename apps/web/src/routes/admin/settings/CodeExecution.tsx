@@ -6,9 +6,9 @@ import {
 	SettingField,
 	SettingRow,
 	SettingSwitch,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
 import { getCodeExecutionConfig, setCodeExecutionConfig } from '@/lib/apis/configs';
 import { getSandboxStatus } from '@/lib/apis/sandbox';
@@ -38,7 +38,7 @@ function SandboxFields({ config, set }: { config: Config; set: (patch: Config) =
 	const name = (suffix: string) => `CODE_INTERPRETER_SANDBOX_${suffix}`;
 	return (
 		<>
-			<p role="status" className="text-muted-foreground/70 text-[0.6875rem]">
+			<p role="status" className="text-foreground-muted text-caption">
 				{text}
 			</p>
 			<BoundSelect

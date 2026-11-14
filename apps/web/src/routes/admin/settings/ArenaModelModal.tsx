@@ -7,6 +7,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ImageButton } from '@/components/ui/image-button';
 import { getModels } from '@/lib/apis';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -107,7 +108,7 @@ export function ArenaModelModal({
 		onOpenChange(false);
 	};
 
-	const field = 'w-full bg-transparent text-sm outline-hidden';
+	const field = 'w-full bg-transparent text-sm';
 	return (
 		<>
 			<ConfirmDialog
@@ -146,17 +147,14 @@ export function ArenaModelModal({
 									aria-label="Upload image"
 									onChange={(e) => pickImage(e.target.files)}
 								/>
-								<button
-									type="button"
-									className="group relative rounded-full"
+								<ImageButton
+									shape="circle"
 									aria-label="Change image"
+									overlay={<Pencil />}
 									onClick={() => imageInput.current?.click()}
 								>
-									<img src={profileImageUrl} alt="Profile" className="size-12 rounded-full object-cover" />
-									<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition group-hover:opacity-100">
-										<Pencil className="size-4" />
-									</span>
-								</button>
+									<img src={profileImageUrl} alt="Profile" className="size-12 object-cover" />
+								</ImageButton>
 							</div>
 							<div className="flex min-w-0 flex-1 flex-col gap-1">
 								<div>
@@ -219,27 +217,29 @@ export function ArenaModelModal({
 						<div>
 							<div className="flex items-center justify-between">
 								<div className="text-muted-foreground text-xs">Models</div>
-								<button
+								<Button
+									variant="link"
+									size="sm"
 									type="button"
-									className="text-xs underline-offset-2 hover:underline"
 									onClick={() => setFilterMode((m) => (m === 'include' ? 'exclude' : 'include'))}
 								>
 									{filterMode === 'include' ? 'Include' : 'Exclude'}
-								</button>
+								</Button>
 							</div>
 							{modelIds.length > 0 ? (
 								<div className="mt-1 flex flex-col gap-1">
 									{modelIds.map((modelId) => (
 										<div key={modelId} className="flex items-center justify-between text-xs">
 											<div>{known.find((m) => m.id === modelId)?.name ?? modelId}</div>
-											<button
+											<Button
+												variant="ghost"
+												size="icon-sm"
 												type="button"
 												aria-label={`Remove ${modelId}`}
-												className="hover:bg-muted rounded p-0.5"
 												onClick={() => setModelIds((ids) => ids.filter((x) => x !== modelId))}
 											>
 												<Minus className="size-3.5" strokeWidth={2} />
-											</button>
+											</Button>
 										</div>
 									))}
 								</div>
@@ -253,7 +253,7 @@ export function ArenaModelModal({
 						<hr className="my-2" />
 						<div className="flex items-center gap-2">
 							<select
-								className="w-full bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+								className="w-full bg-transparent text-sm [&>option]:bg-popover"
 								aria-label="Select a model"
 								value={selectedModelId}
 								onChange={(e) => setSelectedModelId(e.target.value)}
@@ -267,10 +267,11 @@ export function ArenaModelModal({
 										</option>
 									))}
 							</select>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-sm"
 								type="button"
 								aria-label="Add model"
-								className="hover:bg-muted rounded p-1"
 								onClick={() => {
 									if (selectedModelId && !modelIds.includes(selectedModelId))
 										setModelIds((ids) => [...ids, selectedModelId]);
@@ -278,7 +279,7 @@ export function ArenaModelModal({
 								}}
 							>
 								<Plus className="size-3.5" strokeWidth={2} />
-							</button>
+							</Button>
 						</div>
 
 						<div className="flex justify-end gap-1.5 pt-3">

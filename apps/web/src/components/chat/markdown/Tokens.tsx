@@ -4,15 +4,16 @@ import { Fragment, type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { unescapeHtml } from '@/lib/markdown/content';
-import { type MdToken, lexChat } from '@/lib/markdown/lexer';
+import { lexChat, type MdToken } from '@/lib/markdown/lexer';
 import {
 	type AlertType,
-	type DetailGroup,
 	alertOf,
+	type DetailGroup,
 	detailText,
 	detailTitle,
 	groupDetails,
@@ -36,11 +37,11 @@ import { ToolCallDisplay } from './ToolCallDisplay';
 // mermaid's own output.
 
 const ALERTS: Record<AlertType, { border: string; text: string; icon: typeof Info }> = {
-	NOTE: { border: 'border-sky-500', text: 'text-sky-500', icon: Info },
-	TIP: { border: 'border-emerald-500', text: 'text-emerald-500', icon: Lightbulb },
-	IMPORTANT: { border: 'border-purple-500', text: 'text-purple-500', icon: Star },
-	WARNING: { border: 'border-yellow-500', text: 'text-yellow-500', icon: ArrowRightCircle },
-	CAUTION: { border: 'border-rose-500', text: 'text-rose-500', icon: Zap }
+	NOTE: { border: 'border-brand', text: 'text-brand', icon: Info },
+	TIP: { border: 'border-success', text: 'text-success', icon: Lightbulb },
+	IMPORTANT: { border: 'border-important', text: 'text-important', icon: Star },
+	WARNING: { border: 'border-warning', text: 'text-warning', icon: ArrowRightCircle },
+	CAUTION: { border: 'border-danger', text: 'text-danger', icon: Zap }
 };
 
 const iframeHeight = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
@@ -107,14 +108,16 @@ function SourceChip({ identifier, title }: { identifier: string | number; title:
 	const env = useMarkdownEnv();
 	if (!title) return null;
 	return (
-		<button
+		<Button
 			type="button"
 			aria-label={`View source: ${sourceLabel(title)}`}
-			className="bg-muted text-foreground/80 hover:text-foreground mx-0.5 inline-flex translate-y-[2px] rounded-xl px-2 py-0.5 text-[0.625rem] transition"
+			variant="secondary"
+			size="xs"
+			className="mx-0.5 translate-y-[2px]"
 			onClick={() => env.onSourceClick?.(identifier)}
 		>
 			<span className="line-clamp-1">{sourceLabel(title)}</span>
-		</button>
+		</Button>
 	);
 }
 
@@ -127,12 +130,9 @@ function Citation({ token }: { token: MdToken }) {
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
-				<button
-					type="button"
-					className="bg-muted mx-0.5 inline-flex translate-y-[2px] rounded-xl px-2 py-0.5 text-[0.625rem]"
-				>
+				<Button type="button" variant="secondary" size="xs" className="mx-0.5 translate-y-[2px]">
 					{sourceLabel(env.sourceIds[ids[0] - 1])} +{ids.length - 1}
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="flex w-auto max-w-sm flex-wrap gap-1 p-2">
 				{identifiers.map((ident, i) => (
@@ -219,7 +219,7 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 						);
 					case 'codespan':
 						return (
-							<code key={i} className="bg-muted mx-0.5 rounded-md px-1 py-0.5 font-mono text-[0.85em]">
+							<code key={i} className="bg-muted mx-0.5 rounded-md px-1 py-0.5 font-mono">
 								{unescapeHtml(t.text)}
 							</code>
 						);
@@ -229,11 +229,7 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 						return t.text ? <Katex key={i} content={t.text} displayMode={t.displayMode ?? false} /> : null;
 					case 'mention':
 						return (
-							<span
-								key={i}
-								className="rounded bg-blue-500/10 px-0.5 text-blue-600 dark:text-blue-400"
-								data-type="mention"
-							>
+							<span key={i} className="text-brand bg-brand/10 rounded px-0.5" data-type="mention">
 								{t.triggerChar}
 								{t.label}
 							</span>
@@ -275,19 +271,18 @@ function Collapsible({
 		!(attributes?.done === 'true' || env.done) && ['reasoning', 'code_interpreter'].includes(attributes?.type ?? '');
 	return (
 		<div className="my-1 w-full" data-testid="details">
-			<button
+			<Button
 				type="button"
 				disabled={disabled}
-				className={cn(
-					'text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]',
-					pending && 'animate-pulse'
-				)}
+				variant="ghost"
+				size="sm"
+				className={cn(pending && 'animate-pulse')}
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
 			>
 				{detailTitle(attributes, title, env.done)}
 				{!disabled && (open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)}
-			</button>
+			</Button>
 			{open && !disabled && <div className="border-muted text-muted-foreground mt-1 border-l-2 pl-3">{children}</div>}
 		</div>
 	);
@@ -344,18 +339,17 @@ function DetailGroupView({ group }: { group: DetailGroup }) {
 	const running = !env.done;
 	return (
 		<div className="my-1" data-testid="details-group">
-			<button
+			<Button
 				type="button"
-				className={cn(
-					'text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]',
-					running && 'animate-pulse'
-				)}
+				variant="ghost"
+				size="sm"
+				className={cn(running && 'animate-pulse')}
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
 			>
 				{running ? 'Working...' : `${group.items.length} steps`}
 				{open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-			</button>
+			</Button>
 			{open && (
 				<div className="border-muted mt-1 border-l-2 pl-3">
 					{group.items.map((t, i) => (
@@ -405,20 +399,22 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 			</div>
 			<div className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
 				<Tip content="Copy">
-					<button
+					<Button
 						type="button"
 						aria-label="Copy table"
-						className="bg-background hover:bg-muted rounded p-1"
+						variant="ghost"
+						size="icon-xs"
 						onClick={() => void copyToClipboard(token.raw.trim())}
 					>
 						<Copy className="size-3.5" />
-					</button>
+					</Button>
 				</Tip>
 				<Tip content="Export to CSV">
-					<button
+					<Button
 						type="button"
 						aria-label="Export to CSV"
-						className="bg-background hover:bg-muted rounded p-1"
+						variant="ghost"
+						size="icon-xs"
 						onClick={() =>
 							saveAs(
 								new Blob([`﻿${tableToCsv(token)}`], { type: 'text/csv;charset=UTF-8' }),
@@ -427,7 +423,7 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 						}
 					>
 						<Download className="size-3.5" />
-					</button>
+					</Button>
 				</Tip>
 			</div>
 		</div>

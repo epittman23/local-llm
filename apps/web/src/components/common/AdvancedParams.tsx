@@ -1,11 +1,11 @@
 import { Plus } from 'lucide-react';
+import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { Tip } from '@/components/common/Tip';
-import { type ParamDef, type Params, isUnset, nextTri, paramDefs, triLabel } from './advancedParamDefs';
+import { isUnset, nextTri, type ParamDef, type Params, paramDefs, triLabel } from './advancedParamDefs';
 
-const inputClass = 'w-full bg-transparent text-sm outline-hidden';
-const toggleButton = 'flex shrink-0 rounded-sm p-1 px-3 text-xs outline-hidden transition';
+const inputClass = 'w-full bg-transparent text-sm';
 
 /**
  * Ports chat/Settings/Advanced/AdvancedParams.svelte: the request parameters
@@ -123,14 +123,15 @@ export function AdvancedParams({
 
 		if (def.kind === 'tri') {
 			header = (
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
 					type="button"
-					className={toggleButton}
 					aria-label={`${def.label}: ${triLabel(def.tri, params[def.key])}`}
 					onClick={() => set(def.key, nextTri(def.tri, params[def.key]))}
 				>
 					<span className="ml-2 self-center">{triLabel(def.tri, params[def.key])}</span>
-				</button>
+				</Button>
 			);
 			const v = params[def.key];
 			if (def.tri === 'reasoning_tags' && Array.isArray(v) && v.length === 2) {
@@ -171,14 +172,15 @@ export function AdvancedParams({
 		} else {
 			const custom = !isUnset(params[def.key]);
 			header = (
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
 					type="button"
-					className={toggleButton}
 					aria-label={`${def.label}: ${custom ? 'Custom' : 'Default'}`}
 					onClick={() => set(def.key, custom ? null : def.seed)}
 				>
 					<span className="ml-2 self-center">{custom ? 'Custom' : 'Default'}</span>
-				</button>
+				</Button>
 			);
 			body = custom ? renderControl(def) : null;
 		}
@@ -216,7 +218,7 @@ export function AdvancedParams({
 								<div className="self-center text-xs">
 									<input
 										type="text"
-										className="w-full bg-transparent text-xs outline-none"
+										className="w-full bg-transparent text-xs"
 										aria-label="Custom Parameter Name"
 										placeholder="Custom Parameter Name"
 										defaultValue={key}
@@ -229,22 +231,23 @@ export function AdvancedParams({
 										}}
 									/>
 								</div>
-								<button
+								<Button
+									variant="ghost"
+									size="sm"
 									type="button"
-									className={toggleButton}
 									onClick={() => {
 										const { [key]: _removed, ...rest } = customParams;
 										setCustom(rest);
 									}}
 								>
 									Remove
-								</button>
+								</Button>
 							</div>
 							<div className="mt-0.5 flex space-x-2">
 								<div className="flex-1">
 									<input
 										type="text"
-										className="w-full bg-transparent text-sm outline-hidden"
+										className="w-full bg-transparent text-sm"
 										aria-label="Custom Parameter Value"
 										placeholder="Custom Parameter Value"
 										value={customParams[key]}
@@ -254,14 +257,15 @@ export function AdvancedParams({
 							</div>
 						</div>
 					))}
-					<button
+					<Button
+						variant="ghost"
+						className="mt-1 mb-5 w-full"
 						type="button"
-						className="mt-1 mb-5 flex w-full items-center justify-center gap-2 text-center"
 						onClick={() => setCustom({ ...customParams, custom_param_name: 'custom_param_value' })}
 					>
 						<Plus className="size-4" />
 						<div>Add Custom Parameter</div>
-					</button>
+					</Button>
 				</div>
 			)}
 		</div>

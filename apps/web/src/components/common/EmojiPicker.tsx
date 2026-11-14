@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { searchEmojis, useEmojiIndex } from '@/lib/emoji/emoji';
@@ -55,21 +56,23 @@ export function EmojiPicker({
 				) : (
 					<div className="grid max-h-60 grid-cols-8 gap-0.5 overflow-y-auto" role="listbox" aria-label="Emojis">
 						{matches.map((e) => (
-							<button
+							<Button
+								variant="ghost"
+								size="icon"
+								className="text-xl"
 								key={`${e.group}-${e.name}`}
 								type="button"
 								role="option"
 								aria-selected={false}
 								title={`:${e.name}:`}
 								aria-label={e.name}
-								className="hover:bg-muted flex size-8 items-center justify-center rounded text-xl"
 								onClick={() => {
 									onSubmit(e.name);
 									change(false);
 								}}
 							>
 								{e.char}
-							</button>
+							</Button>
 						))}
 					</div>
 				)}

@@ -6,6 +6,7 @@ import { SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
 	DropdownMenu,
@@ -35,11 +36,7 @@ const BATCH_SIZE = 10;
 const PER_PAGE = 30;
 
 const roleClass = (role: string) =>
-	role === 'admin'
-		? 'text-[#4f6f93] dark:text-[#8ba6c6]'
-		: role === 'user'
-			? 'text-[#4f7a5a] dark:text-[#8db395]'
-			: 'text-muted-foreground';
+	role === 'admin' ? 'text-brand' : role === 'user' ? 'text-foreground' : 'text-muted-foreground';
 
 /**
  * Ports admin/Users/Groups/Users.svelte: tick users in or out of a group, with
@@ -184,7 +181,7 @@ export function GroupUsers({
 					<div className="flex min-w-0 flex-1 items-center">
 						<Search className="mr-3 size-4 self-center" />
 						<input
-							className="w-full rounded-r-xl bg-transparent pr-4 text-sm outline-hidden"
+							className="w-full rounded-r-xl bg-transparent pr-4 text-sm"
 							value={query}
 							onChange={(e) => {
 								setQuery(e.target.value);
@@ -196,9 +193,11 @@ export function GroupUsers({
 					</div>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-xs"
+								className="ml-1 shrink-0"
 								type="button"
-								className="text-muted-foreground hover:text-foreground ml-1 flex shrink-0 items-center gap-0.5 rounded-lg px-1 py-0.5 text-xs font-normal transition disabled:cursor-not-allowed disabled:opacity-60"
 								disabled={importing || !groupId}
 								aria-label="Import CSV"
 							>
@@ -213,7 +212,7 @@ export function GroupUsers({
 										<ChevronDown className="size-2.5" strokeWidth={2.5} />
 									</>
 								)}
-							</button>
+							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end" className="min-w-[12rem]">
 							<DropdownMenuItem onSelect={() => fileInput.current?.click()}>
@@ -224,7 +223,7 @@ export function GroupUsers({
 								<Download />
 								Download CSV Template
 							</DropdownMenuItem>
-							<div className="text-muted-foreground px-2 py-0.5 text-[0.625rem] leading-3">CSV: Name,Email</div>
+							<div className="text-muted-foreground px-2 py-0.5 text-caption leading-3">CSV: Name,Email</div>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>

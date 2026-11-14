@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { type Permissions as PermissionsShape, withDefaults } from '@/lib/access/permissions';
 import { getUserDefaultPermissions, getUserDefaultPermissionsDefaults } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn } from '@/lib/utils';
 import { GroupGeneral } from './GroupGeneral';
 import { GroupPreviewPanel } from './GroupPreviewPanel';
 import { GroupUsers } from './GroupUsers';
@@ -172,18 +171,17 @@ export function EditGroupModal({
 								{tabs.map((id) => {
 									const { label, icon: Icon } = tabMeta[id];
 									return (
-										<button
+										<Button
+											variant={tab === id ? 'secondary' : 'ghost'}
+											size="sm"
+											className="flex-1 lg:flex-none shrink"
 											key={id}
 											type="button"
-											className={cn(
-												'flex w-fit max-w-fit flex-1 items-center gap-2 rounded-lg px-0.5 py-1 text-right transition lg:flex-none',
-												tab === id ? '' : 'text-muted-foreground/60 hover:text-foreground'
-											)}
 											onClick={() => setTab(id)}
 										>
 											<Icon className="size-4" />
 											<span>{label}</span>
-										</button>
+										</Button>
 									);
 								})}
 							</div>
@@ -231,13 +229,9 @@ export function EditGroupModal({
 															: 'Reset all permissions to their initial configuration values'
 													}
 												>
-													<button
-														type="button"
-														className="text-muted-foreground hover:text-foreground text-sm font-normal transition hover:underline"
-														onClick={() => setConfirmReset(true)}
-													>
+													<Button variant="ghost" size="sm" type="button" onClick={() => setConfirmReset(true)}>
 														Reset to Defaults
-													</button>
+													</Button>
 												</Tip>
 											)}
 										</div>

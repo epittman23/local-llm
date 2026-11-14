@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import { Suspense, lazy, useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { CodeEditorHandle } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -118,20 +118,22 @@ export function FunctionEditor({
 					else setShowConfirm(true);
 				}}
 			>
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
+					className="mb-1 w-fit"
 					type="button"
-					className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
 					onClick={() => navigate(routePaths.adminFunctions)}
 				>
 					<ChevronLeft className="size-3" strokeWidth={2} />
 					<span>Back</span>
-				</button>
+				</Button>
 
 				<div className="flex shrink-0 items-start gap-2 px-1 pb-2">
 					<div className="min-w-0 flex-1">
 						<Tip content="e.g. My Filter" side="top">
 							<input
-								className="w-full bg-transparent text-sm outline-hidden"
+								className="w-full bg-transparent text-sm"
 								type="text"
 								placeholder="Function Name"
 								aria-label="Function Name"
@@ -148,7 +150,7 @@ export function FunctionEditor({
 							) : (
 								<Tip content="e.g. my_filter" side="top">
 									<input
-										className="min-w-32 flex-1 bg-transparent font-mono outline-hidden"
+										className="min-w-32 flex-1 bg-transparent font-mono"
 										type="text"
 										placeholder="Function ID"
 										aria-label="Function ID"
@@ -160,7 +162,7 @@ export function FunctionEditor({
 							)}
 							<Tip content="e.g. A filter to remove profanity from text" side="top">
 								<input
-									className="min-w-0 flex-1 bg-transparent outline-hidden"
+									className="min-w-0 flex-1 bg-transparent"
 									type="text"
 									placeholder="Function Description"
 									aria-label="Function Description"
@@ -175,7 +177,7 @@ export function FunctionEditor({
 					<div className="flex shrink-0 items-center gap-1">
 						{!edit && (
 							<select
-								className="h-7 rounded-lg border bg-transparent px-2 text-xs outline-hidden"
+								className="h-7 rounded-lg border bg-transparent px-2 text-xs"
 								value={starter}
 								onChange={(e) => chooseStarter(e.target.value)}
 								aria-label="Function starter"
@@ -200,7 +202,7 @@ export function FunctionEditor({
 							value={seed}
 							boilerplate={filterBoilerplate}
 							lang="python"
-							className="text-[0.6875rem]"
+							className="text-caption"
 							onChange={onCodeChange}
 							onSave={() => form.current?.requestSubmit()}
 						/>
@@ -228,7 +230,7 @@ export function FunctionEditor({
 export function FunctionCodeWarning() {
 	return (
 		<div className="text-sm">
-			<div className="rounded-lg bg-yellow-500/20 px-4 py-3 text-yellow-700 dark:text-yellow-200">
+			<div className="rounded-lg bg-warning/15 px-4 py-3 text-warning">
 				<div>Please carefully review the following warnings:</div>
 				<ul className="mt-1 list-disc pl-4 text-xs">
 					<li>Functions allow arbitrary code execution.</li>

@@ -19,6 +19,7 @@ import {
 	Strikethrough
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 import { htmlToMarkdown } from '@/lib/editor/markdown';
 import { cn } from '@/lib/utils';
 
@@ -77,7 +78,7 @@ export function RichTextEditor({
 		content: (content as string | object | null) ?? '',
 		editorProps: {
 			attributes: {
-				class: cn('rich-text outline-hidden', className),
+				class: cn('rich-text', className),
 				'aria-label': ariaLabel,
 				role: 'textbox',
 				'aria-multiline': 'true'
@@ -130,20 +131,18 @@ function ToolButton({
 	children: ReactNode;
 }) {
 	return (
-		<button
+		<Button
+			variant={active ? 'secondary' : 'ghost'}
+			size="icon-xs"
 			type="button"
 			aria-label={label}
 			aria-pressed={active}
 			title={label}
-			className={cn(
-				'rounded-md p-1 transition',
-				active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
-			)}
 			onMouseDown={(e) => e.preventDefault()}
 			onClick={onClick}
 		>
 			{children}
-		</button>
+		</Button>
 	);
 }
 

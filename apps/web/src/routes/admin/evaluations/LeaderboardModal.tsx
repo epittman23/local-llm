@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getModelHistory } from '@/lib/apis/evaluations';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn } from '@/lib/utils';
 import type { ActivityDay } from './activityChart';
 import type { RankedModel } from './leaderboard';
 import { ModelActivityChart } from './ModelActivityChart';
@@ -58,20 +57,16 @@ export function LeaderboardModal({
 						<div className="text-muted-foreground text-xs font-normal tracking-wide uppercase">Activity</div>
 						<div className="bg-muted inline-flex rounded-full p-0.5">
 							{RANGES.map((r) => (
-								<button
+								<Button
+									variant={range === r.key ? 'secondary' : 'ghost'}
+									size="sm"
 									key={r.key}
 									type="button"
 									aria-pressed={range === r.key}
-									className={cn(
-										'rounded-full px-2.5 py-0.5 text-xs font-normal transition-all',
-										range === r.key
-											? 'bg-background text-foreground shadow-sm'
-											: 'text-muted-foreground hover:text-foreground'
-									)}
 									onClick={() => setRange(r.key)}
 								>
 									{r.label}
-								</button>
+								</Button>
 							))}
 						</div>
 					</div>

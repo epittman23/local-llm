@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DEFAULT_FLOATING_ACTIONS, type FloatingAction, newFloatingAction } from './interfaceSettingDefs';
 
-const bare = 'w-full bg-transparent text-xs outline-hidden placeholder:text-muted-foreground/50';
+const bare = 'w-full bg-transparent text-xs placeholder:text-foreground-muted';
 
 /**
  * Ports chat/Settings/Interface/ManageFloatingActionButtonsModal.svelte: the
@@ -52,22 +52,24 @@ export function FloatingActionsDialog({
 					<div className="flex items-center justify-between text-xs">
 						<div>Actions</div>
 						<div className="text-muted-foreground flex items-center gap-2">
-							<button
+							<Button
+								variant="ghost"
+								size="xs"
 								type="button"
-								className="hover:text-foreground"
 								onClick={() => setActions(actions === null ? DEFAULT_FLOATING_ACTIONS.map((a) => ({ ...a })) : null)}
 							>
 								{actions === null ? 'Default' : 'Custom'}
-							</button>
+							</Button>
 							{actions !== null && (
-								<button
+								<Button
+									variant="ghost"
+									size="icon-xs"
 									type="button"
 									aria-label="Add action"
-									className="hover:text-foreground"
 									onClick={() => setActions([...actions, newFloatingAction(actions)])}
 								>
 									<Plus className="size-4" />
-								</button>
+								</Button>
 							)}
 						</div>
 					</div>
@@ -103,14 +105,15 @@ export function FloatingActionsDialog({
 											onChange={(e) => edit(idx, { prompt: e.target.value })}
 										/>
 									</div>
-									<button
+									<Button
+										variant="ghost"
+										size="icon-xs"
 										type="button"
 										aria-label="Remove action"
-										className="text-muted-foreground hover:text-foreground"
 										onClick={() => setActions(actions.filter((_, i) => i !== idx))}
 									>
 										<Minus className="size-4" />
-									</button>
+									</Button>
 								</li>
 							))}
 						</ul>

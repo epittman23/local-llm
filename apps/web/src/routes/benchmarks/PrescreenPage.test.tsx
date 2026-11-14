@@ -271,4 +271,18 @@ describe('PrescreenPage', () => {
 		renderPage();
 		expect(await screen.findByText('Its last output: RuntimeError: password authentication failed')).toBeTruthy();
 	});
+
+	it('colours a point by its status, and an unknown status as an error', async () => {
+		vi.mocked(api.getPrescreenSweep).mockResolvedValue({
+			...detail('done'),
+			points: [point(1, 'ok'), point(2, 'oom'), point(3, 'pruned'), point(4, 'exploded')]
+		});
+		renderPage();
+		await screen.findByText('Points (4)');
+		const cell = (name: string) => screen.getAllByText(name).find((el) => el.tagName === 'SPAN') as HTMLElement;
+		expect(cell('ok').className).toBe('text-success');
+		expect(cell('oom').className).toBe('text-danger');
+		expect(cell('pruned').className).toBe('text-muted-foreground');
+		expect(cell('exploded').className).toBe('text-danger');
+	});
 });

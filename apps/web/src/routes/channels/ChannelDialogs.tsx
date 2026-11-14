@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RowButton } from '@/components/ui/row-button';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	addMembersById,
@@ -39,6 +40,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { resizeToDataUrl } from '@/lib/utils/image';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { ChannelMessageView } from './ChannelMessageView';
 import {
 	type Channel,
 	type ChannelFormValue,
@@ -46,13 +48,11 @@ import {
 	isPublicChannel,
 	normalizeChannelName
 } from './channelModel';
-import { ChannelMessageView } from './ChannelMessageView';
 import { usePinnedMessages } from './usePinnedMessages';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
-const nativeSelect =
-	'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm outline-none [&>option]:bg-popover';
+const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm [&>option]:bg-popover';
 
 /**
  * Ports channel/PinnedMessagesModal.svelte: the channel's pinned messages,
@@ -217,21 +217,22 @@ export function ChannelInfoDialog({
 								<Tip content={u.email}>
 									<span className="truncate">{u.name}</span>
 								</Tip>
-								{u.is_active && <span className="size-2 rounded-full bg-green-500" aria-label="Active" />}
+								{u.is_active && <span className="size-2 rounded-full bg-success" aria-label="Active" />}
 								{u.role && (
 									<Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="ml-auto">
 										{u.role}
 									</Badge>
 								)}
 								{manager && (
-									<button
+									<Button
 										type="button"
+										variant="ghost"
+										size="icon-xs"
 										aria-label={`Remove ${u.name}`}
-										className="text-muted-foreground hover:text-foreground"
 										onClick={() => void remove(u.id)}
 									>
 										<X className="size-3.5" />
-									</button>
+									</Button>
 								)}
 							</li>
 						))}
@@ -446,9 +447,8 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 							const image = v.profile_image_url || '/static/favicon.png';
 							return (
 								<li key={w.id} className="rounded-xl border">
-									<button
-										type="button"
-										className="flex w-full items-center gap-3 px-3 py-2 text-left"
+									<RowButton
+										className="flex items-center justify-start gap-3 px-3 py-2"
 										aria-expanded={expanded === w.id}
 										onClick={() => setExpanded((x) => (x === w.id ? null : w.id))}
 									>
@@ -461,12 +461,18 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 											</div>
 										</div>
 										<ChevronDown className={`size-3.5 transition-transform ${expanded === w.id ? 'rotate-180' : ''}`} />
-									</button>
+									</RowButton>
 									{expanded === w.id && (
 										<div className="flex items-center gap-2 border-t px-3 py-2">
-											<button type="button" aria-label="Change picture" onClick={() => fileInput.current?.click()}>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												aria-label="Change picture"
+												onClick={() => fileInput.current?.click()}
+											>
 												<img src={image} alt="" className="size-8 rounded-full object-cover" />
-											</button>
+											</Button>
 											<Input
 												value={v.name}
 												onChange={(e) => edit(w, { name: e.target.value })}
@@ -475,27 +481,29 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 												className="h-8"
 											/>
 											<Tip content="Copy URL">
-												<button
+												<Button
 													type="button"
+													variant="ghost"
+													size="icon-sm"
 													aria-label="Copy URL"
-													className="hover:bg-muted rounded-md p-1.5"
 													onClick={async () => {
 														if (await copyToClipboard(`${WEBUI_API_BASE_URL}/channels/webhooks/${w.id}/${w.token}`))
 															toast.success('Copied');
 													}}
 												>
 													<Copy className="size-4" />
-												</button>
+												</Button>
 											</Tip>
 											<Tip content="Delete">
-												<button
+												<Button
 													type="button"
+													variant="ghost"
+													size="icon-sm"
 													aria-label="Delete webhook"
-													className="hover:bg-muted rounded-md p-1.5"
 													onClick={() => setConfirmDelete(w.id)}
 												>
 													<Trash2 className="size-4" />
-												</button>
+												</Button>
 											</Tip>
 										</div>
 									)}

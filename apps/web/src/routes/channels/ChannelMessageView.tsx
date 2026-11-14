@@ -15,15 +15,14 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
 import { getMessageData } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { dayjs, formatSecondsTimestamp } from '@/lib/utils/dates';
-import { type ChannelMessage, attachmentUrl, mentionsToText, messageFiles, reactionTooltip } from './channelModel';
-
-const toolButton = 'hover:bg-muted rounded-md p-1 transition';
+import { attachmentUrl, type ChannelMessage, mentionsToText, messageFiles, reactionTooltip } from './channelModel';
 
 /** A message's author picture: the model's, a webhook's, or the user's. */
 function authorImage(m: Pick<ChannelMessage, 'meta' | 'user'>) {
@@ -117,8 +116,8 @@ export function ChannelMessageView({
 		const el = document.getElementById(`message-${domPrefix}${id}`);
 		if (!el) return;
 		el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-		el.classList.add('bg-blue-500/10');
-		setTimeout(() => el.classList.remove('bg-blue-500/10'), 2000);
+		el.classList.add('bg-brand/10');
+		setTimeout(() => el.classList.remove('bg-brand/10'), 2000);
 	};
 
 	const saveEdit = () => {
@@ -131,10 +130,10 @@ export function ChannelMessageView({
 			id={domId}
 			data-testid="channel-message"
 			className={cn(
-				'group relative flex w-full flex-col px-5 transition-colors hover:bg-gray-500/5',
-				highlighted && 'border-l-4 border-blue-500 bg-blue-500/5 pl-4',
-				repliesToMe && 'border-l-4 border-orange-500 bg-orange-500/5 pl-4',
-				message.is_pinned && 'bg-yellow-500/10',
+				'group relative flex w-full flex-col px-5 transition-colors hover:bg-surface-3',
+				highlighted && 'border-l-4 border-brand bg-brand/5 pl-4',
+				repliesToMe && 'border-l-4 border-warning bg-warning/5 pl-4',
+				message.is_pinned && 'bg-warning/10',
 				showAuthor && 'pt-1.5 pb-0.5',
 				className
 			)}
@@ -149,64 +148,74 @@ export function ChannelMessageView({
 					<div className="bg-popover flex gap-0.5 rounded-lg border p-0.5 shadow-md">
 						{actions.onReaction && (
 							<EmojiPicker onSubmit={(name) => actions.onReaction?.(message, name)} onOpenChange={setPickerOpen}>
-								<button type="button" className={toolButton} aria-label="Add Reaction">
+								<Button type="button" variant="ghost" size="icon-sm" aria-label="Add Reaction">
 									<SmilePlus className="size-4" />
-								</button>
+								</Button>
 							</EmojiPicker>
 						)}
 						{actions.onReply && (
 							<Tip content="Reply">
-								<button
+								<Button
 									type="button"
-									className={toolButton}
+									variant="ghost"
+									size="icon-sm"
 									aria-label="Reply"
 									onClick={() => actions.onReply?.(message)}
 								>
 									<ArrowUpLeft className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 						{actions.onPin && (
 							<Tip content={message.is_pinned ? 'Unpin' : 'Pin'}>
-								<button
+								<Button
 									type="button"
-									className={toolButton}
+									variant="ghost"
+									size="icon-sm"
 									aria-label={message.is_pinned ? 'Unpin' : 'Pin'}
 									onClick={() => actions.onPin?.(message)}
 								>
 									{message.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
-								</button>
+								</Button>
 							</Tip>
 						)}
 						{!thread && actions.onThread && (
 							<Tip content="Reply in Thread">
-								<button
+								<Button
 									type="button"
-									className={toolButton}
+									variant="ghost"
+									size="icon-sm"
 									aria-label="Reply in Thread"
 									onClick={() => actions.onThread?.(message.id)}
 								>
 									<MessageSquare className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 						{mine && actions.onEdit && (
 							<Tip content="Edit">
-								<button
+								<Button
 									type="button"
-									className={toolButton}
+									variant="ghost"
+									size="icon-sm"
 									aria-label="Edit"
 									onClick={() => setEditing(message.content)}
 								>
 									<Pencil className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 						{mine && actions.onDelete && (
 							<Tip content="Delete">
-								<button type="button" className={toolButton} aria-label="Delete" onClick={() => setConfirmDelete(true)}>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Delete"
+									onClick={() => setConfirmDelete(true)}
+								>
 									<Trash2 className="size-4" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 					</div>
@@ -215,21 +224,20 @@ export function ChannelMessageView({
 
 			{message.is_pinned && (
 				<div className="ml-11 flex items-center gap-1 text-xs">
-					<Pin className="size-3 text-yellow-500" />
+					<Pin className="size-3 text-warning" />
 					<span className="text-muted-foreground">Pinned</span>
 				</div>
 			)}
 
 			{replyTo?.user && (
-				<button
-					type="button"
-					className="mb-1 ml-12 flex min-w-0 items-center gap-2 text-left text-xs"
+				<RowButton
+					className="mb-1 ml-12 flex w-auto min-w-0 items-center justify-start gap-2 px-3 py-2"
 					onClick={() => jumpTo(replyTo.id)}
 				>
 					<img src={authorImage(replyTo)} alt="" className="size-4 rounded-full object-cover" onError={fallbackImage} />
 					<span className="shrink-0">{authorName(replyTo)}</span>
 					<span className="text-muted-foreground line-clamp-1 flex-1 italic">{mentionsToText(replyTo.content)}</span>
-				</button>
+				</RowButton>
 			)}
 
 			<div className="flex w-full">
@@ -244,7 +252,7 @@ export function ChannelMessageView({
 					) : (
 						message.created_at > 0 && (
 							<Tip content={dayjs(message.created_at / 1_000_000).format('LLLL')}>
-								<span className="text-muted-foreground mt-1.5 hidden text-[0.625rem] group-hover:inline">
+								<span className="text-muted-foreground mt-1.5 hidden text-caption group-hover:inline">
 									{dayjs(message.created_at / 1_000_000).format('HH:mm')}
 								</span>
 							</Tip>
@@ -339,7 +347,7 @@ export function ChannelMessageView({
 											modelName={message.meta?.model_name}
 											className="w-auto text-sm [&_p]:my-0.5"
 										/>
-										{edited && <span className="text-muted-foreground pl-1 text-[0.625rem]">(edited)</span>}
+										{edited && <span className="text-muted-foreground pl-1 text-caption">(edited)</span>}
 									</div>
 								)}
 							</div>
@@ -350,43 +358,47 @@ export function ChannelMessageView({
 										const minePick = r.users.some((u) => u.id === me?.id);
 										return (
 											<Tip key={r.name} content={reactionTooltip(r, me?.id)}>
-												<button
+												<Button
 													type="button"
+													variant="secondary"
+													size="sm"
 													aria-label={`${r.name} ${r.users.length}`}
 													aria-pressed={minePick}
 													disabled={!actions.onReaction || disabled}
 													onClick={() => actions.onReaction?.(message, r.name)}
 													className={cn(
-														'flex items-center gap-1.5 rounded-xl px-2 py-0.5 text-sm transition',
-														minePick
-															? 'bg-blue-500/10 outline outline-1 outline-blue-500/50'
-															: 'bg-gray-500/10 hover:outline hover:outline-1 hover:outline-gray-500/30'
+														'gap-1.5 rounded-xl',
+														minePick && 'bg-brand/10 outline outline-1 outline-brand/50 hover:bg-brand/10'
 													)}
 												>
 													<Emoji name={r.name} />
 													<span className="text-muted-foreground text-xs">{r.users.length}</span>
-												</button>
+												</Button>
 											</Tip>
 										);
 									})}
 									{actions.onReaction && !disabled && (
 										<EmojiPicker onSubmit={(name) => actions.onReaction?.(message, name)}>
-											<button
+											<Button
 												type="button"
-												className="text-muted-foreground rounded-xl bg-gray-500/10 px-1.5 py-1"
+												variant="secondary"
+												size="icon-sm"
+												className="rounded-xl"
 												aria-label="Add another reaction"
 											>
 												<SmilePlus className="size-3.5" />
-											</button>
+											</Button>
 										</EmojiPicker>
 									)}
 								</div>
 							)}
 
 							{!thread && (message.reply_count ?? 0) > 0 && (
-								<button
+								<Button
 									type="button"
-									className="text-muted-foreground hover:text-foreground mb-1.5 flex items-center gap-1 text-xs"
+									variant="ghost"
+									size="xs"
+									className="text-muted-foreground mb-1.5"
 									onClick={() => actions.onThread?.(message.id)}
 								>
 									<span>
@@ -396,7 +408,7 @@ export function ChannelMessageView({
 										<span>- Last reply {dayjs(message.latest_reply_at / 1_000_000).fromNow()}</span>
 									) : null}
 									<ChevronRight className="size-3" />
-								</button>
+								</Button>
 							)}
 						</>
 					)}

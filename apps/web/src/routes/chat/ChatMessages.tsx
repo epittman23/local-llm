@@ -3,15 +3,17 @@ import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
+import type { CodeRunner } from '@/lib/chat/codeRun';
 import { type History, type Message, messagesList, replyColumns, showBranch, siblingsOf } from '@/lib/chat/history';
+import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
+import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { removeAllDetails } from '@/lib/markdown/content';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
-import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
-import type { CodeRunner } from '@/lib/chat/codeRun';
-import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
 import { modelImage } from './ModelSelector';
 import { StatusLine } from './StatusLine';
 import { useChatPrefs } from './useChatPrefs';
@@ -39,8 +41,6 @@ export type MessageHandlers = {
 	onRun?: CodeRunner;
 };
 
-const actionButton = 'text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition';
-
 /** "‹ 2/3 ›" between regenerations or edits of a message. */
 function SiblingNav({
 	history,
@@ -57,27 +57,29 @@ function SiblingNav({
 	const go = (j: number) => onBranch(showBranch(history, siblings[Math.max(0, Math.min(siblings.length - 1, j))]));
 	return (
 		<div className="text-muted-foreground flex items-center text-xs" aria-label="Versions">
-			<button
+			<Button
 				type="button"
 				aria-label="Previous version"
-				className={actionButton}
+				variant="ghost"
+				size="icon-sm"
 				disabled={i <= 0}
 				onClick={() => go(i - 1)}
 			>
 				<ChevronLeft className="size-3.5" />
-			</button>
+			</Button>
 			<span>
 				{i + 1}/{siblings.length}
 			</span>
-			<button
+			<Button
 				type="button"
 				aria-label="Next version"
-				className={actionButton}
+				variant="ghost"
+				size="icon-sm"
 				disabled={i >= siblings.length - 1}
 				onClick={() => go(i + 1)}
 			>
 				<ChevronRight className="size-3.5" />
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -85,14 +87,16 @@ function SiblingNav({
 function CopyButton({ text, className }: { text: string; className?: string }) {
 	return (
 		<Tip content="Copy">
-			<button
+			<Button
 				type="button"
 				aria-label="Copy"
-				className={cn(actionButton, className)}
+				variant="ghost"
+				size="icon-sm"
+				className={className}
 				onClick={() => void copyToClipboard(text)}
 			>
 				<Copy className="size-3.5" />
-			</button>
+			</Button>
 		</Tip>
 	);
 }
@@ -169,7 +173,7 @@ function UserMessage({
 					<div className="text-sm font-medium">{prefs.showUsername ? (user?.name ?? 'You') : 'You'}</div>
 					{message.files?.length ? <Attachments files={message.files} /> : null}
 					{edit ?? (
-						<div className="text-[0.9375rem]" dir="auto">
+						<div className="text-reading" dir="auto">
 							{body}
 						</div>
 					)}
@@ -198,26 +202,23 @@ function Sources({ message, onOpen }: { message: Message; onOpen: (n: number) =>
 	if (!citations.length) return null;
 	return (
 		<div className="my-1">
-			<button
-				type="button"
-				className="text-muted-foreground hover:text-foreground text-xs"
-				aria-expanded={open}
-				onClick={() => setOpen((o) => !o)}
-			>
+			<Button type="button" variant="ghost" size="xs" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
 				{citations.length === 1 ? '1 Source' : `${citations.length} Sources`}
-			</button>
+			</Button>
 			{open && (
 				<div className="mt-1 flex flex-wrap gap-1" aria-label="Sources">
 					{citations.map((c, i) => (
-						<button
+						<Button
 							key={c.id}
 							type="button"
-							className="bg-muted hover:bg-muted/70 max-w-60 truncate rounded-xl px-2 py-0.5 text-xs"
+							variant="secondary"
+							size="xs"
+							className="max-w-60 truncate"
 							onClick={() => onOpen(i + 1)}
 						>
 							<span className="text-muted-foreground mr-1">{i + 1}</span>
 							{String(c.source?.name ?? c.id)}
-						</button>
+						</Button>
 					))}
 				</div>
 			)}
@@ -285,7 +286,7 @@ export function ResponseMessage({
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:300ms]" />
 						</div>
 					) : !prefs.markdownInAssistantMessages ? (
-						<div className="text-[0.9375rem] whitespace-pre-wrap" dir="auto">
+						<div className="text-reading whitespace-pre-wrap" dir="auto">
 							{removeAllDetails(citationsEnabled ? message.content : stripCitations(message.content))}
 						</div>
 					) : (
@@ -334,14 +335,16 @@ export function ResponseMessage({
 							h.regenerate(message)
 						) : (
 							<Tip content="Regenerate">
-								<button
+								<Button
 									type="button"
 									aria-label="Regenerate"
-									className={cn(actionButton, 'regenerate-response-button')}
+									variant="ghost"
+									size="icon-sm"
+									className="regenerate-response-button"
 									onClick={() => h.onRegenerate(message)}
 								>
 									<RotateCcw className="size-3.5" />
-								</button>
+								</Button>
 							</Tip>
 						)}
 					</div>
@@ -351,14 +354,13 @@ export function ResponseMessage({
 					<div className="mt-2 flex flex-col items-start gap-1" aria-label="Follow-ups">
 						<span className="text-muted-foreground text-xs">Follow up</span>
 						{message.followUps.map((f, i) => (
-							<button
+							<RowButton
 								key={i}
-								type="button"
-								className="text-muted-foreground hover:text-foreground text-left text-sm"
+								className="flex w-auto items-center justify-start px-3 py-2"
 								onClick={() => h.onFollowUp(f)}
 							>
 								{f}
-							</button>
+							</RowButton>
 						))}
 					</div>
 				) : null}

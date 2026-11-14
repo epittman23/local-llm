@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { type ComponentProps, useId, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -32,6 +33,7 @@ export function SensitiveInput({
 	const settings = variant === 'settings';
 	return (
 		<div
+			data-composite-field={settings ? '' : undefined}
 			className={cn(
 				settings
 					? 'bg-muted/40 focus-within:border-ring flex h-7 flex-1 items-center rounded-lg border px-2 transition-colors'
@@ -46,8 +48,8 @@ export function SensitiveInput({
 				id={id}
 				className={cn(
 					settings
-						? 'placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-xs outline-hidden disabled:opacity-50'
-						: 'w-full bg-transparent py-0.5 text-sm outline-hidden',
+						? 'placeholder:text-foreground-muted min-w-0 flex-1 bg-transparent text-xs disabled:opacity-50'
+						: 'w-full bg-transparent py-0.5 text-sm',
 					!settings && className
 				)}
 				placeholder={placeholder}
@@ -58,18 +60,17 @@ export function SensitiveInput({
 				disabled={readOnly}
 				{...rest}
 			/>
-			<button
+			<Button
+				variant="ghost"
+				size="icon-xs"
+				className={settings ? 'ml-1.5' : undefined}
 				type="button"
-				className={cn(
-					'bg-transparent transition',
-					settings ? 'text-muted-foreground hover:text-foreground ml-1.5' : 'pl-1.5'
-				)}
 				aria-pressed={show}
 				aria-label="Make password visible in the user interface"
 				onClick={() => setShow((s) => !s)}
 			>
 				{show ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-			</button>
+			</Button>
 		</div>
 	);
 }

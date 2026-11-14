@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { RowButton } from '@/components/ui/row-button';
 import type { Permissions } from '@/lib/access/permissions';
 import { deleteGroupById, updateGroupById } from '@/lib/apis/groups';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -62,22 +63,18 @@ export function GroupItem({
 				onDelete={remove}
 				onMemberChange={onGroupUpdate}
 			/>
-			<button
-				type="button"
-				className="group flex w-full cursor-pointer px-2.5 py-2 text-left"
-				onClick={() => setShowEdit(true)}
-			>
+			<RowButton className="group flex px-2.5 py-2" onClick={() => setShowEdit(true)}>
 				<div className="flex w-full items-center gap-3">
 					<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 						<div className="flex min-w-0 items-center gap-2">
 							<div className="line-clamp-1 text-sm font-normal group-hover:underline">{group.name}</div>
-							<div className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] leading-none font-normal">
+							<div className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-caption leading-none font-normal">
 								{group.member_count ?? 0} members
 							</div>
 						</div>
 						<div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
 							<div className="line-clamp-1 min-w-0">{group.description || 'No description'}</div>
-							<div className="text-muted-foreground/50 shrink-0">/</div>
+							<div className="text-foreground-muted shrink-0">/</div>
 							<div className="shrink-0">{hasCustomPermissions ? 'Custom permissions' : 'Uses defaults'}</div>
 						</div>
 					</div>
@@ -85,7 +82,7 @@ export function GroupItem({
 						Edit
 					</div>
 				</div>
-			</button>
+			</RowButton>
 		</>
 	);
 }

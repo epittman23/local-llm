@@ -1,5 +1,6 @@
-import { Download, X } from 'lucide-react';
 import saveAs from 'file-saver';
+import { Download, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /** An svg snippet is shown centred on an otherwise empty page; html is used as written. */
 export const artifactDocument = (code: string) =>
@@ -21,26 +22,23 @@ export function ArtifactPanel({ code, onClose }: { code: string; onClose: () => 
 		<aside className="flex min-h-0 w-full flex-col border-l md:w-[28rem]" aria-label="Artifacts">
 			<div className="flex items-center gap-1 px-3 py-2">
 				<span className="text-sm font-medium">Artifacts</span>
-				<button
+				<Button
 					type="button"
 					aria-label="Download artifact"
-					className="text-muted-foreground hover:bg-muted ml-auto rounded-lg p-1.5"
+					variant="ghost"
+					size="icon-sm"
+					className="ml-auto"
 					onClick={() => saveAs(new Blob([artifactDocument(code)], { type: 'text/html' }), 'artifact.html')}
 				>
 					<Download className="size-4" />
-				</button>
-				<button
-					type="button"
-					aria-label="Close artifacts"
-					className="text-muted-foreground hover:bg-muted rounded-lg p-1.5"
-					onClick={onClose}
-				>
+				</Button>
+				<Button type="button" aria-label="Close artifacts" variant="ghost" size="icon-sm" onClick={onClose}>
 					<X className="size-4" />
-				</button>
+				</Button>
 			</div>
 			<iframe
 				title="Artifact preview"
-				className="min-h-0 w-full flex-1 bg-white"
+				className="bg-canvas border-border mx-2 mb-2 min-h-0 flex-1 rounded-lg border"
 				sandbox="allow-scripts allow-forms allow-modals"
 				srcDoc={artifactDocument(code)}
 			/>

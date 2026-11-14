@@ -1,6 +1,7 @@
 import { Zap } from 'lucide-react';
 import { useMemo } from 'react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import { RowButton } from '@/components/ui/row-button';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { modelImage } from './ModelSelector';
@@ -59,15 +60,10 @@ export function ChatPlaceholder({
 					</div>
 					<div className="grid gap-1 sm:grid-cols-2">
 						{suggestions.map((s, i) => (
-							<button
-								key={i}
-								type="button"
-								className="hover:bg-muted rounded-xl px-3 py-2 text-left"
-								onClick={() => onSelect(s.content)}
-							>
+							<RowButton key={i} className="flex flex-col items-start px-3 py-2" onClick={() => onSelect(s.content)}>
 								<div className="line-clamp-1 text-sm font-medium">{s.title?.[0] ?? s.content}</div>
 								{s.title?.[1] && <div className="text-muted-foreground line-clamp-1 text-xs">{s.title[1]}</div>}
-							</button>
+							</RowButton>
 						))}
 					</div>
 				</div>

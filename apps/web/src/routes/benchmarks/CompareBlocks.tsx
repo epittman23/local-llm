@@ -14,8 +14,8 @@ import {
 } from './compareFormat';
 
 const verdictClass: Record<string, string> = {
-	different: 'bg-green-500/15 text-green-800 dark:text-green-200',
-	underpowered: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-200',
+	different: 'bg-success/15 text-success',
+	underpowered: 'bg-warning/20 text-warning',
 	'not different': 'text-muted-foreground',
 	'not tested': 'text-muted-foreground'
 };

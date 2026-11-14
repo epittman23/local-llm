@@ -106,7 +106,7 @@ export function SubTabs({
 					draggable={false}
 					className={cn(
 						'flex min-w-fit items-center gap-1.5 rounded-lg px-0.5 py-1 text-right transition select-none lg:flex-none',
-						active === tab.id ? '' : 'text-muted-foreground/60 hover:text-foreground'
+						active === tab.id ? '' : 'text-foreground-muted hover:text-foreground'
 					)}
 				>
 					<span>{tab.label}</span>

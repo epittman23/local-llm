@@ -213,3 +213,15 @@ describe('PromptEditView access dialog (#676)', () => {
 		expect(shown()).toBe('');
 	});
 });
+
+describe('PromptEditView copy button', () => {
+	it('copies the prompt content and shows it was copied', async () => {
+		const writeText = vi.fn(async () => undefined);
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+		renderView();
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Copy content' }));
+		});
+		expect(writeText).toHaveBeenCalledWith('Summarise this.');
+	});
+});

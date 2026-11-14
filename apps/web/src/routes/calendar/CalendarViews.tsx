@@ -1,18 +1,19 @@
 import { type KeyboardEvent, useMemo } from 'react';
-import type { CalendarEventModel, CalendarModel } from '@/lib/apis/calendar';
 import { Tip } from '@/components/common/Tip';
+import { RowButton } from '@/components/ui/row-button';
+import type { CalendarEventModel, CalendarModel } from '@/lib/apis/calendar';
 import { cn } from '@/lib/utils';
 import {
+	bandEvents,
 	type CalendarViewMode,
 	DAY_NAMES,
-	NS,
-	bandEvents,
 	dayKey,
 	eventsByDay,
 	eventsInHour,
 	formatHour,
 	isSameDay,
 	monthGrid,
+	NS,
 	nsAt,
 	weekDays
 } from './calendarModel';
@@ -42,10 +43,9 @@ function EventChip({
 					.replace(' ', '');
 	return (
 		<Tip content={`${event.title}${event.location ? ` · ${event.location}` : ''}`}>
-			<button
-				type="button"
+			<RowButton
 				className={cn(
-					'hover:bg-muted flex w-full items-start gap-1.5 truncate rounded-md px-0.5 text-left text-xs transition',
+					'flex w-auto items-start justify-start gap-1.5 truncate px-0.5',
 					event.meta?.automation_id && 'opacity-60'
 				)}
 				onClick={(e) => {
@@ -61,23 +61,22 @@ function EventChip({
 					{time && <span className="text-muted-foreground">{time} </span>}
 					{event.title}
 				</span>
-			</button>
+			</RowButton>
 		</Tip>
 	);
 }
 
 function More({ count, onClick }: { count: number; onClick: () => void }) {
 	return (
-		<button
-			type="button"
-			className="text-muted-foreground hover:text-foreground mt-auto w-full truncate px-1 text-left text-[0.625rem]"
+		<RowButton
+			className="text-muted-foreground mt-auto flex items-center justify-start truncate px-1"
 			onClick={(e) => {
 				e.stopPropagation();
 				onClick();
 			}}
 		>
 			+{count} more
-		</button>
+		</RowButton>
 	);
 }
 
@@ -86,7 +85,7 @@ function More({ count, onClick }: { count: number; onClick: () => void }) {
  * day hour grids. Clicking empty space asks for a new event there (9 AM for a
  * day in the month grid); "+N more" opens that day.
  *
- * A grid cell is a `div` with `role="button"` rather than a `<button>`, because
+ * A grid cell is a `div` with `role="button"` rather than a button element, because
  * it contains the event chips, which are buttons themselves (the Svelte markup
  * nests buttons, which is invalid HTML).
  */
@@ -156,7 +155,7 @@ export function CalendarViews({
 								<span
 									className={cn(
 										'mb-0.5 flex size-6 items-center justify-center rounded-full text-xs',
-										isSameDay(day, today) ? 'bg-blue-500 text-white' : 'text-muted-foreground'
+										isSameDay(day, today) ? 'bg-brand text-brand-foreground' : 'text-muted-foreground'
 									)}
 								>
 									{day.getDate()}
@@ -184,11 +183,11 @@ export function CalendarViews({
 							<div />
 							{days.map((day) => (
 								<div key={day.toISOString()} className={cn('py-2.5 text-center', day.getDay() > 0 && 'border-l')}>
-									<div className="text-muted-foreground text-[0.6875rem]">{DAY_NAMES[day.getDay()]}</div>
+									<div className="text-muted-foreground text-caption">{DAY_NAMES[day.getDay()]}</div>
 									<div
 										className={cn(
 											'mx-auto mt-0.5 flex size-7 items-center justify-center rounded-full text-sm',
-											isSameDay(day, today) && 'bg-blue-500 text-white'
+											isSameDay(day, today) && 'bg-brand text-brand-foreground'
 										)}
 									>
 										{day.getDate()}
@@ -205,7 +204,7 @@ export function CalendarViews({
 								view === 'week' ? 'grid-cols-[52px_repeat(7,1fr)]' : 'grid-cols-[56px_1fr]'
 							)}
 						>
-							<div className="text-muted-foreground pt-1 pr-2 text-right text-[0.625rem] select-none">all-day</div>
+							<div className="text-muted-foreground pt-1 pr-2 text-right text-caption select-none">all-day</div>
 							{days.map((day, i) => {
 								const shown = view === 'week' ? bands[i].slice(0, 3) : bands[i];
 								return (
@@ -236,7 +235,7 @@ export function CalendarViews({
 								hour > 0 && 'border-t border-border/50'
 							)}
 						>
-							<div className="text-muted-foreground pt-1 pr-2 text-right text-[0.625rem] select-none">
+							<div className="text-muted-foreground pt-1 pr-2 text-right text-caption select-none">
 								{view === 'day' || hour > 0 ? formatHour(hour) : ''}
 							</div>
 							{days.map((day) => {

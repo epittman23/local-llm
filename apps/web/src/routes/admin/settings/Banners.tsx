@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { SettingSelect, SettingSwitch, SettingTextarea } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import type { Banner } from '@/lib/types';
 import { BANNER_TYPES, moveBanner } from './banners';
 
@@ -16,24 +17,26 @@ export function Banners({ banners, onChange }: { banners: Banner[]; onChange: (n
 			{banners.map((banner, index) => (
 				<li key={banner.id} className="flex items-start justify-between gap-1" data-testid="banner-item">
 					<div className="flex flex-col">
-						<button
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Move banner up"
 							disabled={index === 0}
-							className="text-muted-foreground hover:text-foreground disabled:opacity-30"
 							onClick={() => onChange(moveBanner(banners, index, -1))}
 						>
 							<ChevronUp className="size-4" />
-						</button>
-						<button
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon-sm"
 							type="button"
 							aria-label="Move banner down"
 							disabled={index === banners.length - 1}
-							className="text-muted-foreground hover:text-foreground disabled:opacity-30"
 							onClick={() => onChange(moveBanner(banners, index, 1))}
 						>
 							<ChevronDown className="size-4" />
-						</button>
+						</Button>
 					</div>
 
 					<div className="flex flex-1 flex-row items-start gap-2">
@@ -72,14 +75,15 @@ export function Banners({ banners, onChange }: { banners: Banner[]; onChange: (n
 						</div>
 					</div>
 
-					<button
+					<Button
+						variant="ghost"
+						size="icon-sm"
 						type="button"
 						aria-label="Remove banner"
-						className="text-muted-foreground hover:text-foreground px-2"
 						onClick={() => onChange(banners.filter((_, i) => i !== index))}
 					>
 						<X className="size-4" />
-					</button>
+					</Button>
 				</li>
 			))}
 		</ul>

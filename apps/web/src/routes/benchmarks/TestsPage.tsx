@@ -315,9 +315,7 @@ export function TestsPage() {
 								<td>{d.name}</td>
 								<td>{d.fetched ? d.n_items : 'not fetched'}</td>
 								<td className="font-mono">{d.revision ?? '-'}</td>
-								<td className={d.calibration_stale ? 'text-amber-600 dark:text-amber-400' : ''}>
-									{calibrationText(d)}
-								</td>
+								<td className={d.calibration_stale ? 'text-warning' : ''}>{calibrationText(d)}</td>
 							</tr>
 						))}
 					</tbody>
@@ -447,7 +445,7 @@ export function TestsPage() {
 								</span>
 							</div>
 							{(windowProblem || windowMissing.length > 0) && (
-								<div className="text-xs text-amber-600 dark:text-amber-400">
+								<div className="text-xs text-warning">
 									{windowProblem || `This window needs ${windowMissing.join(', ')}: fetch it first.`}
 								</div>
 							)}
@@ -533,11 +531,7 @@ export function TestsPage() {
 							<span className="text-muted-foreground ml-auto">{(result.wall_ms / 1000).toFixed(1)}s</span>
 						)}
 					</div>
-					{result.excluded && (
-						<div className="text-amber-600 dark:text-amber-400">
-							A suite here leaves this item out: {result.excluded}
-						</div>
-					)}
+					{result.excluded && <div className="text-warning">A suite here leaves this item out: {result.excluded}</div>}
 					{result.content && (
 						<pre className="bg-muted max-h-72 overflow-auto rounded p-2 whitespace-pre-wrap">{result.content}</pre>
 					)}

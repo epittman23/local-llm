@@ -27,7 +27,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DISLIKE_REASONS, type FeedbackDetails, LIKE_REASONS, REASON_LABELS } from '@/lib/chat/feedback';
-import { type History, type Message, canContinue, siblingsOf } from '@/lib/chat/history';
+import { canContinue, type History, type Message, siblingsOf } from '@/lib/chat/history';
 import { canChat } from '@/lib/chat/permissions';
 import { isTemporaryChatId } from '@/lib/chat/request';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -37,8 +37,6 @@ import type { MessageHandlers } from './ChatMessages';
 import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
 import { useReadAloud } from './useReadAloud';
-
-const actionButton = 'text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition';
 
 type Session = {
 	chatId: string | null;
@@ -128,22 +126,23 @@ function RateComment({
 		<div className="my-2 rounded-2xl border p-3" data-testid="rate-comment">
 			<div className="flex items-center justify-between">
 				<span className="text-sm">How would you rate this response?</span>
-				<button type="button" aria-label="Close feedback" className="text-muted-foreground" onClick={onClose}>
+				<Button type="button" aria-label="Close feedback" variant="ghost" size="icon-xs" onClick={onClose}>
 					<X className="size-4" />
-				</button>
+				</Button>
 			</div>
 			<div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Score">
 				{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-					<button
+					<Button
 						key={n}
 						type="button"
 						aria-label={`Rate ${n} out of 10`}
 						aria-pressed={score === n}
-						className={cn('size-7 rounded-lg border text-xs', score === n && 'bg-foreground text-background')}
+						variant={score === n ? 'default' : 'outline'}
+						size="icon-sm"
 						onClick={() => setScore(n)}
 					>
 						{n}
-					</button>
+					</Button>
 				))}
 			</div>
 			{reasons.length > 0 && (
@@ -151,18 +150,16 @@ function RateComment({
 					<div className="mt-2 text-sm">Why?</div>
 					<div className="mt-1 flex flex-wrap gap-1">
 						{reasons.map((r) => (
-							<button
+							<Button
 								key={r}
 								type="button"
 								aria-pressed={reason === r}
-								className={cn(
-									'rounded-full border px-2.5 py-0.5 text-xs',
-									reason === r && 'bg-foreground text-background'
-								)}
+								variant={reason === r ? 'default' : 'outline'}
+								size="sm"
 								onClick={() => setReason(r)}
 							>
 								{REASON_LABELS[r]}
-							</button>
+							</Button>
 						))}
 					</div>
 				</>
@@ -196,14 +193,16 @@ function RateComment({
 function RegenerateButton({ message, session }: { message: Message; session: Session }) {
 	return (
 		<Tip content="Regenerate">
-			<button
+			<Button
 				type="button"
 				aria-label="Regenerate"
-				className={cn(actionButton, 'regenerate-response-button')}
+				variant="ghost"
+				size="icon-sm"
+				className="regenerate-response-button"
 				onClick={() => void session.regenerate(message)}
 			>
 				<RotateCcw className="size-3.5" />
-			</button>
+			</Button>
 		</Tip>
 	);
 }
@@ -216,9 +215,9 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
 			<RegenerateButton message={message} session={session} />
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<button type="button" aria-label="Regenerate options" className={cn(actionButton, 'px-0.5')}>
+					<Button type="button" aria-label="Regenerate options" variant="ghost" size="icon-xs">
 						<ChevronDown className="size-3" />
-					</button>
+					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" className="w-60">
 					<form
@@ -302,52 +301,57 @@ export function useMessageActions(
 			<>
 				{(!reply || canChat(user, 'edit')) && (
 					<Tip content="Edit">
-						<button type="button" aria-label="Edit" className={actionButton} onClick={() => setEditingId(m.id)}>
+						<Button type="button" aria-label="Edit" variant="ghost" size="icon-sm" onClick={() => setEditingId(m.id)}>
 							<Pencil className="size-3.5" />
-						</button>
+						</Button>
 					</Tip>
 				)}
 				{reply && canChat(user, 'tts') && (
 					<Tip content={speakingId === m.id ? 'Stop' : 'Read Aloud'}>
-						<button
+						<Button
 							type="button"
 							aria-label={speakingId === m.id ? 'Stop reading' : 'Read Aloud'}
-							className={actionButton}
+							variant="ghost"
+							size="icon-sm"
 							onClick={() => (speakingId === m.id ? stop() : void speak(m.id, m.content))}
 						>
 							{speakingId === m.id ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-						</button>
+						</Button>
 					</Tip>
 				)}
 				{reply && saved && ratingOn !== false && canChat(user, 'rate_response') && (
 					<>
 						<Tip content="Good Response">
-							<button
+							<Button
 								type="button"
 								aria-label="Good Response"
 								aria-pressed={rating === 1}
-								className={cn(actionButton, rating === 1 && 'text-foreground bg-muted')}
+								variant="ghost"
+								size="icon-sm"
+								className={cn(rating === 1 && 'text-foreground bg-muted')}
 								onClick={async () => {
 									await session.rate(m, 1);
 									setRatingId(m.id);
 								}}
 							>
 								<ThumbsUp className="size-3.5" />
-							</button>
+							</Button>
 						</Tip>
 						<Tip content="Bad Response">
-							<button
+							<Button
 								type="button"
 								aria-label="Bad Response"
 								aria-pressed={rating === -1}
-								className={cn(actionButton, rating === -1 && 'text-foreground bg-muted')}
+								variant="ghost"
+								size="icon-sm"
+								className={cn(rating === -1 && 'text-foreground bg-muted')}
 								onClick={async () => {
 									await session.rate(m, -1);
 									setRatingId(m.id);
 								}}
 							>
 								<ThumbsDown className="size-3.5" />
-							</button>
+							</Button>
 						</Tip>
 					</>
 				)}
@@ -362,31 +366,33 @@ export function useMessageActions(
 							</pre>
 						}
 					>
-						<button type="button" aria-label="Generation Info" className={actionButton}>
+						<Button type="button" aria-label="Generation Info" variant="ghost" size="icon-sm">
 							<Info className="size-3.5" />
-						</button>
+						</Button>
 					</Tip>
 				)}
 				{reply && isLast && canContinue(m) && canChat(user, 'continue_response') && (
 					<Tip content="Continue Response">
-						<button
+						<Button
 							type="button"
 							aria-label="Continue Response"
-							className={actionButton}
+							variant="ghost"
+							size="icon-sm"
 							onClick={() => void session.continueReply(m)}
 						>
 							<PlayCircle className="size-3.5" />
-						</button>
+						</Button>
 					</Tip>
 				)}
 				{/* The model's Action functions, a button each (ResponseMessage.svelte; docs/history/code-review.md M6). */}
 				{reply &&
 					(models.find((x) => x.id === m.model)?.actions ?? []).map((action) => (
 						<Tip key={action.id} content={action.name}>
-							<button
+							<Button
 								type="button"
 								aria-label={action.name}
-								className={actionButton}
+								variant="ghost"
+								size="icon-sm"
 								onClick={() => void session.runAction(action.id, m)}
 							>
 								{action.icon ? (
@@ -399,14 +405,14 @@ export function useMessageActions(
 								) : (
 									<Sparkles className="size-3.5" />
 								)}
-							</button>
+							</Button>
 						</Tip>
 					))}
 				{canDelete && (
 					<Tip content="Delete">
-						<button type="button" aria-label="Delete" className={actionButton} onClick={() => setDeleting(m)}>
+						<Button type="button" aria-label="Delete" variant="ghost" size="icon-sm" onClick={() => setDeleting(m)}>
 							<Trash2 className="size-3.5" />
-						</button>
+						</Button>
 					</Tip>
 				)}
 				{deleting?.id === m.id && (

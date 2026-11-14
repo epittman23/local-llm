@@ -389,7 +389,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `*Model.ts`/`*Defs.ts` and a unit test. The app's toast system
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
-- **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
+- **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`),
+  plus two hand-written ones the interface standard defines: `row-button.tsx`
+  (ACT-7) and `image-button.tsx` (ACT-8).
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/` and the Phase 9 surfaces); the public ones

@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -48,32 +49,35 @@ export function ModelSelector({
 						onPick={(pick) => onChange(selected.map((s, i) => (i === idx ? pick : s)))}
 					/>
 					{idx === 0 && multiple && (
-						<button
+						<Button
 							type="button"
 							aria-label="Add Model"
-							className="text-muted-foreground hover:text-foreground p-1"
+							variant="ghost"
+							size="icon-xs"
 							disabled={disabled}
 							onClick={() => onChange([...selected, ''])}
 						>
 							<Plus className="size-3.5" />
-						</button>
+						</Button>
 					)}
 					{idx > 0 && (
-						<button
+						<Button
 							type="button"
 							aria-label="Remove Model"
-							className="text-muted-foreground hover:text-foreground p-1"
+							variant="ghost"
+							size="icon-xs"
 							disabled={disabled}
 							onClick={() => onChange(selected.filter((_, i) => i !== idx))}
 						>
 							<Minus className="size-3.5" />
-						</button>
+						</Button>
 					)}
 				</div>
 			))}
-			<button
+			<Button
 				type="button"
-				className="text-muted-foreground hover:text-foreground px-1 text-xs"
+				variant="ghost"
+				size="xs"
 				onClick={() =>
 					update({ models: selected }).then(
 						() => toast.success('Default model updated'),
@@ -82,7 +86,7 @@ export function ModelSelector({
 				}
 			>
 				Set as default
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -121,16 +125,17 @@ function Picker({
 			}}
 		>
 			<PopoverTrigger asChild>
-				<button
+				<Button
 					type="button"
 					id={id}
 					disabled={disabled}
-					className="flex min-w-0 items-center gap-1 text-lg font-medium"
+					variant="ghost"
+					className="text-title min-w-0 shrink"
 					aria-label="Select a model"
 				>
 					<span className="truncate">{current?.name ?? (value ? value : 'Select a model')}</span>
 					<ChevronDown className="size-4 shrink-0" />
-				</button>
+				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-80 p-1.5">
 				<Input
@@ -144,15 +149,13 @@ function Picker({
 				<div role="listbox" aria-label="Models" className="max-h-80 overflow-y-auto">
 					{shown.length === 0 && <p className="text-muted-foreground px-2 py-3 text-sm">No results found</p>}
 					{shown.map((m) => (
-						<button
+						<Button
 							key={m.id}
 							type="button"
 							role="option"
 							aria-selected={m.id === value}
-							className={cn(
-								'hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-								m.id === value && 'bg-muted'
-							)}
+							variant="ghost"
+							className={cn('w-full justify-start', m.id === value && 'bg-muted')}
 							onClick={() => {
 								onPick(m.id);
 								setOpen(false);
@@ -166,7 +169,7 @@ function Picker({
 							/>
 							<span className="min-w-0 flex-1 truncate">{m.name}</span>
 							{m.id === value && <Check className="size-3.5" />}
-						</button>
+						</Button>
 					))}
 				</div>
 			</PopoverContent>

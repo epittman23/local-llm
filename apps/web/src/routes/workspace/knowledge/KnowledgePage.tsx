@@ -1,23 +1,23 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontal, Trash2, Download } from 'lucide-react';
+import { Download, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
+import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	createNewKnowledge,
@@ -266,9 +266,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={item.description ?? item.name} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
-													{item.name}
-												</div>
+												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{item.name}</div>
 											</Tip>
 											{external && (
 												<>
@@ -278,20 +276,18 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 											)}
 											{!item.write_access && !external && <Badge variant="secondary">Read Only</Badge>}
 											<Tip content={dayjs(item.updated_at * 1000).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
 													{dayjs(item.updated_at * 1000).fromNow()}
 												</div>
 											</Tip>
 										</div>
 										{preview && (
 											<Tip content={preview} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
-													{preview}
-												</div>
+												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{preview}</div>
 											</Tip>
 										)}
 									</div>
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
+									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
 										<Tip content={item.user?.email ?? 'Deleted User'} side="top">
 											<div className="truncate">
 												{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
@@ -303,14 +299,15 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 											<DropdownMenu>
 												<Tip content="More">
 													<DropdownMenuTrigger asChild>
-														<button
+														<Button
+															variant="ghost"
+															size="icon-sm"
 															type="button"
-															className="text-muted-foreground flex size-6 items-center justify-center rounded-lg transition"
 															aria-label="More Options"
 															onClick={(e) => e.stopPropagation()}
 														>
 															<MoreHorizontal className="size-4" />
-														</button>
+														</Button>
 													</DropdownMenuTrigger>
 												</Tip>
 												<DropdownMenuContent align="end" className="min-w-40">
@@ -407,7 +404,7 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 					<div>
 						<div className="text-muted-foreground mb-2 text-xs">What are you working on?</div>
 						<input
-							className="placeholder:text-muted-foreground/60 w-full bg-transparent text-sm outline-hidden"
+							className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
 							type="text"
 							aria-label="Name"
 							value={name}
@@ -419,7 +416,7 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 					<div>
 						<div className="text-muted-foreground mb-2 text-xs">What are you trying to achieve?</div>
 						<textarea
-							className="placeholder:text-muted-foreground/60 w-full resize-none bg-transparent text-sm outline-hidden"
+							className="placeholder:text-foreground-muted w-full resize-none bg-transparent text-sm"
 							rows={6}
 							aria-label="Description"
 							value={description}

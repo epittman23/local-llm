@@ -12,13 +12,14 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { createNewGroup, getGroups } from '@/lib/apis/groups';
 import { getUserDefaultPermissions, updateUserDefaultPermissions } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { EditGroupModal, type Group, type GroupFormValue } from './EditGroupModal';
 import { GroupItem } from './GroupItem';
-import { type GroupSort, filterAndSortGroups } from './groupList';
+import { filterAndSortGroups, type GroupSort } from './groupList';
 
 const sortItems: { value: GroupSort; label: string }[] = [
 	{ value: 'members', label: 'Members' },
@@ -114,33 +115,30 @@ export function GroupsPanel() {
 						<div className="flex min-w-0 flex-1 items-center">
 							<Search className="mr-3 ml-1 size-3.5" />
 							<input
-								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
+								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
 								value={query}
 								onChange={(e) => setQuery(e.target.value)}
 								aria-label="Search Groups"
 								placeholder="Search Groups"
 							/>
 							{query && (
-								<button
+								<Button
+									variant="ghost"
+									size="icon-xs"
 									type="button"
-									className="hover:bg-muted rounded-full p-0.5 transition"
 									aria-label="Clear search"
 									onClick={() => setQuery('')}
 								>
 									<X className="size-3" strokeWidth={2} />
-								</button>
+								</Button>
 							)}
 						</div>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									aria-label="Sort"
-									className="text-foreground/80 hover:text-foreground flex h-8 shrink-0 items-center gap-1 rounded-xl bg-transparent px-1.5 py-1.5 text-[0.8125rem] font-normal transition"
-								>
+								<Button variant="ghost" size="icon-sm" className="shrink-0" type="button" aria-label="Sort">
 									<span className="truncate">{sortLabel}</span>
 									<ChevronDown className="size-3.5" strokeWidth={2.5} />
-								</button>
+								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
 								<DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as GroupSort)}>
@@ -187,12 +185,7 @@ export function GroupsPanel() {
 
 				<hr className="border-border/40 my-1" />
 
-				<button
-					type="button"
-					className="group flex w-full cursor-pointer px-2.5 py-2 text-left"
-					aria-haspopup="dialog"
-					onClick={() => setShowDefaults(true)}
-				>
+				<RowButton className="group flex px-2.5 py-2" aria-haspopup="dialog" onClick={() => setShowDefaults(true)}>
 					<div className="flex w-full items-center gap-3">
 						<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 							<div className="text-sm font-normal group-hover:underline">Default permissions</div>
@@ -204,7 +197,7 @@ export function GroupsPanel() {
 							Edit
 						</div>
 					</div>
-				</button>
+				</RowButton>
 			</div>
 
 			{showDefaults && (

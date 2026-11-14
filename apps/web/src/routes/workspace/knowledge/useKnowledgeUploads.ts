@@ -1,29 +1,29 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { uploadFile } from '@/lib/apis/files';
 import {
 	addFileToKnowledgeById,
 	createKnowledgeDirectory,
 	syncKnowledgeCleanup,
 	syncKnowledgeDiff
 } from '@/lib/apis/knowledge';
-import { uploadFile } from '@/lib/apis/files';
 import { processUrl } from '@/lib/apis/retrieval';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { blobToFile } from '@/lib/utils/files';
 import {
 	type Breadcrumb,
-	type DirectoryFileEntry,
-	type DirectoryManifestEntry,
-	type SyncDiff,
-	type UploadOutcome,
 	buildDirectoryManifest,
 	createMissingDirectories,
+	type DirectoryFileEntry,
+	type DirectoryManifestEntry,
+	deletedFileIds,
 	filesToUpload,
 	getDirectoryUploadPath,
-	deletedFileIds,
 	hasHiddenFolder,
-	syncUploads
+	type SyncDiff,
+	syncUploads,
+	type UploadOutcome
 } from './knowledgeFiles';
 
 export type UploadingItem = { itemId: string; name: string; size: number | null };

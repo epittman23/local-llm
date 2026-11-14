@@ -1,12 +1,14 @@
 import { Pencil } from 'lucide-react';
 import { useRef } from 'react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { ImageButton } from '@/components/ui/image-button';
 import { getGravatarUrl } from '@/lib/apis/utils';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { cn } from '@/lib/utils';
 import { canvasPixelTest, generateInitialsImage } from '@/lib/utils/auth-helpers';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
-import { cn } from '@/lib/utils';
 
 /**
  * Ports chat/Settings/Account/UserProfileImage.svelte: click the avatar to
@@ -72,72 +74,84 @@ export function ProfileImageEditor({
 	);
 
 	if (variant === 'account') {
-		const link = 'text-muted-foreground hover:text-foreground text-[0.6875rem] transition-colors';
 		return (
 			<div className="mb-2 flex items-center gap-4">
 				{hidden}
-				<button
+				<Button
+					variant="outline"
+					size="icon"
+					className="size-10 overflow-hidden rounded-full p-0"
 					type="button"
-					className="ring-border relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1"
 					aria-label="Upload Photo"
 					onClick={() => input.current?.click()}
 				>
 					<img src={src} alt="profile" className="h-full w-full object-cover" />
-				</button>
+				</Button>
 				<div className="flex flex-col gap-1">
 					<span className="text-muted-foreground text-xs">{displayName || user?.name}</span>
 					<div className="flex flex-wrap items-center gap-2">
-						<button type="button" className={link} onClick={() => input.current?.click()}>
+						<Button variant="link" size="xs" type="button" onClick={() => input.current?.click()}>
 							Upload Photo
-						</button>
-						<span className="text-muted-foreground/50 text-[0.6875rem]">·</span>
-						<button type="button" className={link} onClick={remove}>
+						</Button>
+						<span className="text-foreground-muted text-caption">·</span>
+						<Button variant="link" size="xs" type="button" onClick={remove}>
 							Remove
-						</button>
-						<span className="text-muted-foreground/50 text-[0.6875rem]">·</span>
-						<button type="button" className={link} onClick={initials}>
+						</Button>
+						<span className="text-foreground-muted text-caption">·</span>
+						<Button variant="link" size="xs" type="button" onClick={initials}>
 							Initials
-						</button>
-						<span className="text-muted-foreground/50 text-[0.6875rem]">·</span>
-						<button type="button" className={link} onClick={gravatar}>
+						</Button>
+						<span className="text-foreground-muted text-caption">·</span>
+						<Button variant="link" size="xs" type="button" onClick={gravatar}>
 							Gravatar
-						</button>
+						</Button>
 					</div>
 				</div>
 			</div>
 		);
 	}
 
-	const action =
-		'text-muted-foreground rounded-lg py-0.5 text-center text-xs opacity-0 transition-all group-focus-within:opacity-100 group-hover:opacity-100';
 	return (
 		<div className="group flex flex-col self-start">
 			{hidden}
 			<div className="flex self-center">
-				<button
-					type="button"
-					className="relative rounded-full"
+				<ImageButton
+					shape="circle"
 					aria-label="Change profile image"
+					overlay={<Pencil />}
 					onClick={() => input.current?.click()}
 				>
 					<img src={src} alt="profile" className={cn('rounded-full object-cover', imageClassName)} />
-					<div className="absolute right-0 bottom-0 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
-						<div className="rounded-full border bg-white p-1 text-black shadow">
-							<Pencil className="size-3" />
-						</div>
-					</div>
-				</button>
+				</ImageButton>
 			</div>
 			<div className="mt-2 flex w-full flex-col justify-center">
-				<button type="button" className={action} onClick={remove}>
+				<Button
+					variant="ghost"
+					size="xs"
+					className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+					type="button"
+					onClick={remove}
+				>
 					Remove
-				</button>
-				<button type="button" className={action} onClick={initials}>
+				</Button>
+				<Button
+					variant="ghost"
+					size="xs"
+					className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+					type="button"
+					onClick={initials}
+				>
 					Initials
-				</button>
-				<button type="button" className={action} onClick={gravatar}>
+				</Button>
+				<Button
+					variant="ghost"
+					size="xs"
+					className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+					type="button"
+					onClick={gravatar}
+				>
 					Gravatar
-				</button>
+				</Button>
 			</div>
 		</div>
 	);

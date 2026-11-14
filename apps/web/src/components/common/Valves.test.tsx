@@ -78,3 +78,20 @@ describe('enumOption', () => {
 		expect(enumOption([null, 1], 'null')).toBe('null');
 	});
 });
+
+describe('a password valve', () => {
+	it('masks the value until the show button is pressed', () => {
+		render(
+			<Valves
+				spec={{ properties: { key: { title: 'Key', type: 'string', input: { type: 'password' } } } }}
+				valves={{ key: 'abc' }}
+				onChange={vi.fn()}
+			/>
+		);
+		const field = () => document.getElementById('valve-key') as HTMLInputElement;
+		expect(field().type).toBe('password');
+		fireEvent.click(screen.getByRole('button', { name: 'Show value' }));
+		expect(field().type).toBe('text');
+		expect(screen.getByRole('button', { name: 'Hide value' })).toBeInTheDocument();
+	});
+});

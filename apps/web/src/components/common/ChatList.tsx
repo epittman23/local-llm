@@ -1,7 +1,9 @@
+import { cn } from 'cn';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Link } from 'react-router';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { dayjs } from '@/lib/utils/dates';
 import { sharePath } from '@/routes/routePaths';
@@ -60,12 +62,18 @@ export function ChatList({
 }) {
 	const header = (key: ChatListSort, label: string, className: string) =>
 		onSort ? (
-			<button type="button" className={`${className} cursor-pointer select-none`} onClick={() => onSort(key)}>
+			<Button
+				variant="ghost"
+				size="sm"
+				className={cn('justify-start', className)}
+				type="button"
+				onClick={() => onSort(key)}
+			>
 				<div className="flex items-center gap-1.5">
 					{label}
 					<Mark active={orderBy === key} direction={direction} />
 				</div>
-			</button>
+			</Button>
 		) : (
 			<div className={className}>{label}</div>
 		);

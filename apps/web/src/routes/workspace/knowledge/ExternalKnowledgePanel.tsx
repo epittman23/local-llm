@@ -59,7 +59,7 @@ export function ExternalKnowledgePanel({ external }: { external: External }) {
 				<div className="text-xs">Test Query</div>
 				<div className="flex gap-2">
 					<input
-						className="bg-muted w-full rounded-xl px-3 py-2 text-xs outline-hidden"
+						className="bg-muted w-full rounded-xl px-3 py-2 text-xs"
 						aria-label="Test Query"
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}

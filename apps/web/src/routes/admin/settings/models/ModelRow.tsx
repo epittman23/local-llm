@@ -1,14 +1,14 @@
 import {
+	ArrowDown,
+	ArrowUp,
 	Check,
 	Copy,
 	Download,
 	Eye,
 	EyeOff,
+	Globe,
 	GripVertical,
 	Link2,
-	ArrowDown,
-	ArrowUp,
-	Globe,
 	Lock,
 	MoreHorizontal,
 	Pencil,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Tip } from '@/components/common/Tip';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -24,19 +25,18 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { DEFAULT_PROFILE_IMAGE } from '@/routes/workspace/models/modelEditorLogic';
-import { type ModelItem, accessLabel, isPublicModel } from './adminModels';
+import { accessLabel, isPublicModel, type ModelItem } from './adminModels';
 
 const accessClass = {
-	Public: 'text-emerald-700 dark:text-emerald-400',
-	Shared: 'text-sky-700 dark:text-sky-400',
+	Public: 'text-success',
+	Shared: 'text-brand',
 	Private: 'text-muted-foreground'
 } as const;
-const iconButton =
-	'text-muted-foreground hover:bg-muted hover:text-foreground flex size-7 items-center justify-center rounded-xl transition-colors';
 
 export type RowHandlers = {
 	open: () => void;
@@ -112,7 +112,7 @@ export function ModelRow({
 			onDragOver={onDragOver}
 			onDrop={onDrop}
 		>
-			<div className="text-muted-foreground/60 -ml-1 flex items-center self-center pr-1">
+			<div className="text-foreground-muted -ml-1 flex items-center self-center pr-1">
 				<Tip content={canReorder ? 'Drag to reorder' : 'Clear filters to reorder'}>
 					<span
 						role="img"
@@ -129,11 +129,7 @@ export function ModelRow({
 				</Tip>
 			</div>
 
-			<button
-				type="button"
-				className="group/item flex min-w-0 flex-1 cursor-pointer gap-2.5 text-left"
-				onClick={handlers.open}
-			>
+			<RowButton className="group/item flex flex-1 gap-2.5 px-1 py-1" onClick={handlers.open}>
 				<div className={cn('self-center rounded-xl', !active && 'opacity-50')}>
 					<img
 						src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
@@ -148,77 +144,88 @@ export function ModelRow({
 				</div>
 				<div className={cn('flex min-w-0 flex-1 self-center pr-1', !active && 'text-muted-foreground')}>
 					<Tip content={<SafeMarkdown text={modelDescription(model)} className="text-background" />} side="top">
-						<div className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] leading-4">
+						<div className="flex min-w-0 items-center gap-1.5 text-dense leading-4">
 							<span className="min-w-0 truncate">{model.name ?? model.id}</span>
-							<span className={cn('shrink-0 text-[0.6875rem]', accessClass[access])}>{access}</span>
-							{isSelected && <span className="text-muted-foreground shrink-0 text-[0.6875rem]">Selected</span>}
-							{isDefaultPinned && <span className="text-muted-foreground shrink-0 text-[0.6875rem]">Pinned</span>}
+							<span className={cn('shrink-0 text-caption', accessClass[access])}>{access}</span>
+							{isSelected && <span className="text-muted-foreground shrink-0 text-caption">Selected</span>}
+							{isDefaultPinned && <span className="text-muted-foreground shrink-0 text-caption">Pinned</span>}
 						</div>
 					</Tip>
 				</div>
-			</button>
+			</RowButton>
 
 			<div className="flex shrink-0 items-center gap-0.5 self-center">
 				{shiftKey && (
 					<>
 						<Tip content={hidden ? 'Show' : 'Hide'}>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-sm"
 								type="button"
-								className={iconButton}
 								aria-label={hidden ? 'Show' : 'Hide'}
 								onClick={handlers.toggleHidden}
 							>
 								{hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-							</button>
+							</Button>
 						</Tip>
 						<Tip content={isSelected ? 'Remove Selected Model' : 'Set as Selected Model'}>
-							<button
+							<Button
+								variant={isSelected ? 'secondary' : 'ghost'}
+								size="icon-sm"
 								type="button"
-								className={cn(iconButton, isSelected && 'text-foreground')}
 								aria-label={isSelected ? 'Remove Selected Model' : 'Set as Selected Model'}
 								onClick={handlers.toggleSelected}
 							>
 								<Check className="size-3.5" />
-							</button>
+							</Button>
 						</Tip>
 						<Tip content={isDefaultPinned ? 'Remove Pinned Model' : 'Set as Pinned Model'}>
-							<button
+							<Button
+								variant={isDefaultPinned ? 'secondary' : 'ghost'}
+								size="icon-sm"
 								type="button"
-								className={cn(iconButton, isDefaultPinned && 'text-foreground')}
 								aria-label={isDefaultPinned ? 'Remove Pinned Model' : 'Set as Pinned Model'}
 								onClick={handlers.toggleDefaultPinned}
 							>
 								{isDefaultPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-							</button>
+							</Button>
 						</Tip>
 						<Tip content={isPublic ? 'Make Private' : 'Make Public'}>
-							<button
+							<Button
+								variant="ghost"
+								size="icon-sm"
 								type="button"
-								className={iconButton}
 								aria-label={isPublic ? 'Make Private' : 'Make Public'}
 								onClick={handlers.togglePrivacy}
 							>
 								{isPublic ? <Lock className="size-3.5" /> : <Globe className="size-3.5" />}
-							</button>
+							</Button>
 						</Tip>
 					</>
 				)}
 
-				<button
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					className="hidden sm:inline-flex"
 					type="button"
-					className={cn(iconButton, 'hidden sm:flex')}
 					aria-label={`Edit ${model.name ?? model.id}`}
 					onClick={handlers.open}
 				>
 					<Pencil className="size-3.5" />
-				</button>
+				</Button>
 
 				<DropdownMenu>
 					<Tip content="More">
 						<DropdownMenuTrigger asChild>
-							<button type="button" className={iconButton} aria-label={`More actions for ${model.name ?? model.id}`}>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								type="button"
+								aria-label={`More actions for ${model.name ?? model.id}`}
+							>
 								<MoreHorizontal className="size-3.5" />
-							</button>
+							</Button>
 						</DropdownMenuTrigger>
 					</Tip>
 					<DropdownMenuContent align="end" className="w-auto min-w-44">

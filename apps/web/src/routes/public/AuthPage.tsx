@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getBackendConfig } from '@/lib/apis';
-import { getSessionUser, updateUserTimezone, userSignIn, userSignUp } from '@/lib/apis/auths';
-import { safeRedirect } from '@/lib/auth/redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getBackendConfig } from '@/lib/apis';
+import { getSessionUser, updateUserTimezone, userSignIn, userSignUp } from '@/lib/apis/auths';
+import { safeRedirect } from '@/lib/auth/redirect';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
@@ -325,13 +325,14 @@ export function AuthPage() {
 								{config?.features?.enable_signup && !config?.onboarding && (
 									<div className="mt-4 text-center text-sm">
 										{mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
-										<button
+										<Button
 											type="button"
-											className="underline"
+											variant="link"
+											className="h-auto p-0"
 											onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
 										>
 											{mode === 'signin' ? 'Sign up' : 'Sign in'}
-										</button>
+										</Button>
 									</div>
 								)}
 							</>

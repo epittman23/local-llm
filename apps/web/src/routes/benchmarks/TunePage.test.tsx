@@ -251,3 +251,38 @@ describe('TunePage live-status stream lifecycle', () => {
 		expect(vi.mocked(api.streamTuneLog).mock.calls.length).toBe(before);
 	});
 });
+
+describe('TunePage guard tiles', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'test-token' });
+		vi.mocked(api.getServeProfiles).mockResolvedValue({ profiles: [] });
+		vi.mocked(api.getTestOptions).mockResolvedValue({ tiers: ['smoke'], benchmarks: [], systems: [] });
+		vi.mocked(api.getTuneGrids).mockResolvedValue({ grids: [] });
+		vi.mocked(api.getRecentSweeps).mockResolvedValue({ sweeps: [] });
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+		useAuthStore.setState({ token: null });
+	});
+
+	const tile = (label: string) => screen.getByText(label).parentElement as HTMLElement;
+
+	it('warns on the Regressed tile when the guard found a regression', async () => {
+		vi.mocked(api.streamTuneLog).mockResolvedValue(stream([{ sweep_id: 's1', guard: { n: 40, regressed: true } }]));
+		renderPage();
+		expect(await screen.findByText('Regressed?')).toBeTruthy();
+		expect(tile('Regressed?').className).toContain('bg-danger/10');
+		expect(within(tile('Regressed?')).getByText('Yes')).toBeTruthy();
+		expect(tile('Wins').className).toContain('bg-muted/50');
+	});
+
+	it('leaves the Regressed tile plain when nothing regressed', async () => {
+		vi.mocked(api.streamTuneLog).mockResolvedValue(stream([{ sweep_id: 's1', guard: { n: 40, regressed: false } }]));
+		renderPage();
+		expect(await screen.findByText('Regressed?')).toBeTruthy();
+		expect(tile('Regressed?').className).toContain('bg-muted/50');
+		expect(within(tile('Regressed?')).getByText('No')).toBeTruthy();
+	});
+});

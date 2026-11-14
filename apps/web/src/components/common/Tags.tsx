@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
@@ -66,15 +67,10 @@ export function Tags({
 						<span className="line-clamp-1">{tag.name}</span>
 					</span>
 				) : (
-					<button
-						key={tag.name}
-						type="button"
-						className="bg-muted/50 text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-full border px-1.5 py-px text-xs transition-colors"
-						onClick={() => onDelete(tag.name)}
-					>
+					<Button variant="secondary" size="xs" key={tag.name} type="button" onClick={() => onDelete(tag.name)}>
 						<span className="line-clamp-1">{tag.name}</span>
 						<X className="size-3" strokeWidth={2.5} aria-label={`Remove tag ${tag.name}`} />
-					</button>
+					</Button>
 				)
 			)}
 
@@ -86,7 +82,7 @@ export function Tags({
 								ref={inputRef}
 								value={value}
 								className={cn(
-									'placeholder:text-muted-foreground w-full bg-transparent text-xs outline-hidden',
+									'placeholder:text-muted-foreground w-full bg-transparent text-xs',
 									tags.length > 0 && 'px-0.5'
 								)}
 								placeholder="Add a tag..."
@@ -122,18 +118,20 @@ export function Tags({
 					>
 						<div role="listbox" className="max-h-48 overflow-y-auto">
 							{suggestions.map((name) => (
-								<button
+								<Button
+									variant="ghost"
+									size="sm"
+									className="w-full justify-start"
 									key={name}
 									type="button"
 									role="option"
 									aria-selected={false}
-									className="hover:bg-muted flex w-full items-center rounded-xl px-2 py-1 text-left text-xs transition-colors"
 									// mousedown would blur the input before the click lands.
 									onMouseDown={(e) => e.preventDefault()}
 									onClick={() => add(name)}
 								>
 									<span className="truncate">{name}</span>
-								</button>
+								</Button>
 							))}
 						</div>
 					</PopoverContent>

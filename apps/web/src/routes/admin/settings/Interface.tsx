@@ -9,10 +9,11 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
-	SettingTextarea,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
+import { RowButton } from '@/components/ui/row-button';
 import { getModels, getTaskConfig, updateTaskConfig } from '@/lib/apis';
 import { getChatConfig, updateChatConfig } from '@/lib/apis/chats';
 import { errorMessage } from '@/lib/apis/errors';
@@ -244,7 +245,7 @@ export default function Interface() {
 						<div>
 							<div className="mb-2">
 								<div className="text-muted-foreground text-xs">Task Model</div>
-								<p className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">
+								<p className="text-foreground-muted mt-1.5 text-caption">
 									Choose fallback models for background tasks. Current Model follows the active chat model.
 								</p>
 							</div>
@@ -263,17 +264,16 @@ export default function Interface() {
 								/>
 							</div>
 							<div className="mt-2.5">
-								<button
-									type="button"
-									className="flex w-full items-center justify-between gap-4 py-0.5 text-left"
+								<RowButton
+									className="flex items-center justify-between gap-4 px-3 py-0.5"
 									aria-expanded={showTaskParameters}
 									onClick={() => setShowTaskParameters((v) => !v)}
 								>
 									<span className="text-muted-foreground text-xs">Task Model Parameters</span>
-									<span className="text-muted-foreground/70 text-[0.6875rem]">
+									<span className="text-foreground-muted text-caption">
 										{showTaskParameters ? 'Close' : 'Configure'}
 									</span>
-								</button>
+								</RowButton>
 								{showTaskParameters && (
 									<div className="max-h-[24rem] overflow-y-auto pr-1 pb-2">
 										<AdvancedParams
@@ -372,7 +372,7 @@ export default function Interface() {
 										value={chat.CONTEXT_COMPACTION_PROMPT_TEMPLATE ?? ''}
 										onChange={(e) => patchChat({ CONTEXT_COMPACTION_PROMPT_TEMPLATE: e.target.value })}
 									/>
-									<p className="text-muted-foreground/70 mt-1 text-[0.6875rem]">
+									<p className="text-foreground-muted mt-1 text-caption">
 										Available variables: <code>{'{{PREVIOUS_SUMMARY}}'}</code>, <code>{'{{COMPACTED_MESSAGES}}'}</code>,{' '}
 										<code>{'{{RECENT_MESSAGES}}'}</code>, <code>{'{{MESSAGES}}'}</code>,{' '}
 										<code>{'{{CURRENT_DATE}}'}</code>

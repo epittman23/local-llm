@@ -8,8 +8,8 @@ import {
 	Eye,
 	EyeOff,
 	Link2,
-	MoreHorizontal,
 	Minus,
+	MoreHorizontal,
 	Pencil,
 	Pin,
 	PinOff,
@@ -20,7 +20,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
+import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -34,8 +34,8 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { deleteModelById, getModelById, getModelItems, getModelTags, toggleModelById } from '@/lib/apis/models';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWebUIName } from '@/lib/stores/configStore';
@@ -268,8 +268,6 @@ export function ModelsPage() {
 		setPage(1);
 	};
 
-	const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
-
 	return (
 		<div className="space-y-1">
 			<ConfirmDialog
@@ -414,28 +412,26 @@ export function ModelsPage() {
 											<Tip content={model.name} side="top">
 												<Link
 													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
-													className="min-w-0 truncate text-[0.8125rem] leading-5 hover:underline"
+													className="min-w-0 truncate text-dense leading-5 hover:underline"
 												>
 													{model.name}
 												</Link>
 											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
+											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
 												{model.id}
 											</div>
 											<Tip content={dayjs(model.updated_at * 1000).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
 													{dayjs(model.updated_at * 1000).fromNow()}
 												</div>
 											</Tip>
 											{!model.write_access && <Badge variant="secondary">Read Only</Badge>}
 										</div>
 										<Tip content={description} side="top">
-											<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
-												{description}
-											</div>
+											<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{description}</div>
 										</Tip>
 									</div>
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
+									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
 										<Tip content={model.user?.email ?? 'Deleted User'} side="top">
 											<div className="truncate">
 												{capitalizeFirstLetter(model.user?.name ?? model.user?.email ?? 'Deleted User')}
@@ -447,9 +443,10 @@ export function ModelsPage() {
 										{shiftKey && model.write_access ? (
 											<>
 												<Tip content={hidden ? 'Show' : 'Hide'}>
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={rowIconButton}
 														aria-label={hidden ? 'Show' : 'Hide'}
 														onClick={(e) => {
 															e.stopPropagation();
@@ -457,12 +454,13 @@ export function ModelsPage() {
 														}}
 													>
 														{hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-													</button>
+													</Button>
 												</Tip>
 												<Tip content="Delete">
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={rowIconButton}
 														aria-label="Delete"
 														onClick={(e) => {
 															e.stopPropagation();
@@ -470,7 +468,7 @@ export function ModelsPage() {
 														}}
 													>
 														<Trash2 className="size-4" />
-													</button>
+													</Button>
 												</Tip>
 											</>
 										) : (
@@ -478,14 +476,15 @@ export function ModelsPage() {
 												<DropdownMenu>
 													<Tip content="More">
 														<DropdownMenuTrigger asChild>
-															<button
+															<Button
+																variant="ghost"
+																size="icon-sm"
 																type="button"
-																className={rowIconButton}
 																aria-label="Model Menu"
 																onClick={(e) => e.stopPropagation()}
 															>
 																<MoreHorizontal className="size-4" />
-															</button>
+															</Button>
 														</DropdownMenuTrigger>
 													</Tip>
 													<DropdownMenuContent align="end" className="min-w-44">

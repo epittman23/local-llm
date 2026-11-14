@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { RowButton } from '@/components/ui/row-button';
 import type { Message } from '@/lib/chat/history';
 import { cn } from '@/lib/utils';
 import { statusText } from './statusText';
@@ -28,14 +29,13 @@ export function StatusLine({ message }: { message: Message }) {
 	const working = message.statusHistory?.at(-1)?.done === false;
 	return (
 		<div className="mb-1 text-sm">
-			<button
-				type="button"
-				className={cn('text-muted-foreground line-clamp-1 text-left', working && 'animate-pulse')}
+			<RowButton
+				className={cn('line-clamp-1 flex w-auto items-center justify-start px-3 py-2', working && 'animate-pulse')}
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 			>
 				{last.text}
-			</button>
+			</RowButton>
 			{open && shown.length > 1 && (
 				<ul className="text-muted-foreground mt-1 border-l-2 pl-3 text-xs">
 					{shown.map((s) => (

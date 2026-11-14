@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, SlidersHorizontal, Search } from 'lucide-react';
+import { ChevronLeft, Search, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -36,24 +36,24 @@ import {
 } from '@/lib/apis/knowledge';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { blobToFile } from '@/lib/utils/files';
 import { copyToClipboard } from '@/lib/utils';
+import { blobToFile } from '@/lib/utils/files';
 import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
 import { ExternalKnowledgePanel } from './ExternalKnowledgePanel';
 import { AddContentMenu, AddTextDialog, NewDirectoryDialog } from './KnowledgeDialogs';
 import {
+	KnowledgeBreadcrumbs,
 	type KnowledgeDirectory,
 	type KnowledgeFile,
-	KnowledgeBreadcrumbs,
 	KnowledgeFileList
 } from './KnowledgeFileList';
 import {
-	type Breadcrumb,
-	type DirectoryFileEntry,
 	announceContentSaved,
+	type Breadcrumb,
 	clampPage,
+	type DirectoryFileEntry,
 	gatherDroppedFiles
 } from './knowledgeFiles';
 import {
@@ -82,7 +82,7 @@ type FilesPage = {
 	hasPending: boolean;
 };
 
-const selectClass = 'bg-transparent text-xs outline-none [&>option]:bg-popover [&>option]:text-popover-foreground';
+const selectClass = 'bg-transparent text-xs [&>option]:bg-popover [&>option]:text-popover-foreground';
 
 /**
  * Ports workspace/Knowledge/KnowledgeBase.svelte (the 1,745-line detail page):
@@ -584,12 +584,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				id={id}
 			/>
 
-			<div className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
+			<div data-composite-field className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
 				<div className="flex w-full flex-1 items-center space-x-1.5 px-3">
 					<div className="flex flex-1 items-center">
 						<Search className="text-muted-foreground mr-2 ml-1 size-3.5" />
 						<input
-							className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-xs outline-hidden"
+							className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-xs"
 							value={query}
 							onChange={(e) => {
 								setQuery(e.target.value);
@@ -772,7 +772,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 						</div>
 						<textarea
 							key={selectedFileId}
-							className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs outline-none"
+							className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs"
 							value={content}
 							onChange={(e) => setContent(e.target.value)}
 							disabled={!writeAccess || loadingContent}
@@ -806,21 +806,17 @@ function Header({
 }) {
 	return (
 		<div className="w-full px-2">
-			<button
-				type="button"
-				className="text-muted-foreground hover:text-foreground mb-1 flex h-6 w-fit items-center gap-1 rounded-md text-xs transition-colors"
-				onClick={onBack}
-			>
+			<Button variant="ghost" size="sm" className="mb-1 w-fit" type="button" onClick={onBack}>
 				<ChevronLeft className="size-3" strokeWidth={2} />
 				<span>Back</span>
-			</button>
+			</Button>
 			<div className="flex w-full">
 				<div className="flex-1 px-1">
 					<div className="flex w-full items-center justify-between">
 						<div className="flex w-full items-center justify-between">
 							<input
 								type="text"
-								className="w-full flex-1 bg-transparent text-left text-sm outline-hidden"
+								className="w-full flex-1 bg-transparent text-left text-sm"
 								value={knowledge.name}
 								aria-label="Knowledge Name"
 								placeholder="Knowledge Name"
@@ -842,7 +838,7 @@ function Header({
 					<div className="flex w-full items-center">
 						<input
 							type="text"
-							className="text-muted-foreground w-full flex-1 bg-transparent text-left text-xs outline-hidden"
+							className="text-muted-foreground w-full flex-1 bg-transparent text-left text-xs"
 							value={knowledge.description}
 							aria-label="Knowledge Description"
 							placeholder="Knowledge Description"
@@ -851,16 +847,18 @@ function Header({
 						/>
 						<div className="hidden md:block">
 							<Tip content="Click to copy ID">
-								<button
+								<Button
+									variant="ghost"
+									size="xs"
+									className="shrink-0 font-mono"
 									type="button"
-									className="text-muted-foreground shrink-0 cursor-pointer rounded-lg px-2 py-1 font-mono text-xs whitespace-nowrap transition hover:underline"
 									onClick={() => {
 										copyToClipboard(id);
 										toast.success('ID copied to clipboard');
 									}}
 								>
 									{id}
-								</button>
+								</Button>
 							</Tip>
 						</div>
 					</div>

@@ -4,6 +4,8 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { getModels } from '@/lib/apis';
 import { getChannelMembersById } from '@/lib/apis/channels';
 import { uploadFile } from '@/lib/apis/files';
@@ -13,17 +15,17 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { uuid } from '@/lib/utils/uuid';
 import {
 	type Channel,
 	type ChannelMessage,
 	type ChannelUser,
-	type Mention,
 	encodeMentions,
+	type Mention,
 	mentionQuery,
 	mentionText
 } from './channelModel';
 import { useChannelList } from './useChannels';
-import { uuid } from '@/lib/utils/uuid';
 
 export type ComposerFile = {
 	itemId: string;
@@ -281,17 +283,14 @@ export const MessageComposer = forwardRef<
 					className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-60 w-72 overflow-y-auto rounded-xl border p-1 shadow-lg"
 				>
 					{suggestions.map((s, i) => (
-						<button
+						<RowButton
 							key={`${s.kind}-${s.id}`}
-							type="button"
 							role="option"
 							aria-selected={i === highlighted}
+							aria-current={i === highlighted ? 'true' : undefined}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => pick(s)}
-							className={cn(
-								'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-								i === highlighted && 'bg-muted'
-							)}
+							className={cn('flex items-center justify-start gap-2 px-2 py-1.5', i === highlighted && 'bg-muted')}
 						>
 							{s.kind === 'channel' ? (
 								<Hash className="size-4" />
@@ -302,12 +301,12 @@ export const MessageComposer = forwardRef<
 							<span className="text-muted-foreground ml-auto text-xs">
 								{s.kind === 'model' ? 'Model' : s.kind === 'user' ? '' : 'Channel'}
 							</span>
-						</button>
+						</RowButton>
 					))}
 				</div>
 			)}
 
-			<div className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
+			<div data-composite-field className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
 				{replyTo && (
 					<div className="text-muted-foreground mb-1 flex items-center gap-2 px-1 text-xs">
 						<span className="truncate">
@@ -316,14 +315,16 @@ export const MessageComposer = forwardRef<
 								{replyTo.meta?.model_name ?? replyTo.user?.name ?? 'Unknown User'}
 							</span>
 						</span>
-						<button
+						<Button
 							type="button"
+							variant="ghost"
+							size="icon-xs"
 							aria-label="Cancel reply"
-							className="hover:text-foreground ml-auto"
+							className="ml-auto"
 							onClick={onCancelReply}
 						>
 							<X className="size-3.5" />
-						</button>
+						</Button>
 					</div>
 				)}
 
@@ -333,13 +334,15 @@ export const MessageComposer = forwardRef<
 							<div key={f.itemId} className="flex items-center gap-2 rounded-xl border px-2 py-1 text-xs">
 								{f.status === 'uploading' ? <Spinner className="size-3.5" /> : <FileText className="size-3.5" />}
 								<span className="max-w-40 truncate">{f.name}</span>
-								<button
+								<Button
 									type="button"
+									variant="ghost"
+									size="icon-xs"
 									aria-label={`Remove ${f.name}`}
 									onClick={() => setFiles((fs) => fs.filter((x) => x.itemId !== f.itemId))}
 								>
 									<X className="size-3" />
-								</button>
+								</Button>
 							</div>
 						))}
 					</div>
@@ -356,15 +359,17 @@ export const MessageComposer = forwardRef<
 							e.target.value = '';
 						}}
 					/>
-					<button
+					<Button
 						type="button"
+						variant="ghost"
+						size="icon-sm"
 						aria-label="Attach files"
 						disabled={disabled}
-						className="text-muted-foreground hover:bg-muted mb-0.5 rounded-full p-1.5 disabled:opacity-50"
+						className="mb-0.5 rounded-full"
 						onClick={() => fileInputRef.current?.click()}
 					>
 						<Paperclip className="size-4" />
-					</button>
+					</Button>
 					<textarea
 						ref={textareaRef}
 						aria-label="Message"
@@ -389,17 +394,18 @@ export const MessageComposer = forwardRef<
 								addFiles(pasted);
 							}
 						}}
-						className="max-h-60 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none [field-sizing:content] disabled:cursor-not-allowed"
+						className="max-h-60 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-sm [field-sizing:content] disabled:cursor-not-allowed"
 					/>
-					<button
+					<Button
 						type="button"
+						size="icon-sm"
 						aria-label="Send message"
 						disabled={disabled || uploading || (!text.trim() && files.length === 0)}
 						onClick={submit}
-						className="bg-foreground text-background mb-0.5 rounded-full p-1.5 transition disabled:opacity-30"
+						className="mb-0.5 rounded-full"
 					>
 						<ArrowUp className="size-4" />
-					</button>
+					</Button>
 				</div>
 			</div>
 		</div>

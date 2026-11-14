@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
-import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '@/components/settings/controls';
 import { AddConnectionModal } from '@/components/settings/AddConnectionModal';
 import type { Connection } from '@/components/settings/connectionModel';
+import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { getModels } from '@/lib/apis';
 import { getConnectionsConfig, setConnectionsConfig } from '@/lib/apis/configs';
@@ -14,13 +15,11 @@ import { getOllamaConfig, updateOllamaConfig } from '@/lib/apis/ollama';
 import { getOpenAIConfig, getOpenAIModels, updateOpenAIConfig } from '@/lib/apis/openai';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { type ConfigMap, alignKeys, normalizeConfigs, removeConnection, stripTrailingSlashes } from './connectionsList';
+import { alignKeys, type ConfigMap, normalizeConfigs, removeConnection, stripTrailingSlashes } from './connectionsList';
 
 type OpenAIState = { enabled: boolean; urls: string[]; keys: string[]; configs: ConfigMap };
 type OllamaState = { enabled: boolean; urls: string[]; configs: ConfigMap };
 type DirectState = { ENABLE_DIRECT_CONNECTIONS?: boolean; ENABLE_BASE_MODELS_CACHE?: boolean };
-
-const iconButton = 'text-muted-foreground hover:text-foreground rounded p-1 transition';
 
 /**
  * One connection: a read-only URL, a cog that opens the editor, an enable switch.
@@ -63,23 +62,29 @@ function ConnectionRow({
 				<Tip content={requestHint} side="top">
 					<div className={`relative flex min-w-0 flex-1 items-center ${enabled ? '' : 'opacity-50'}`}>
 						<input
-							className="bg-muted/40 h-7 w-full rounded-lg border px-2 text-xs outline-hidden"
+							className="bg-muted/40 h-7 w-full rounded-lg border px-2 text-xs"
 							placeholder={ollama ? 'Enter URL (e.g. http://localhost:11434)' : 'API Base URL'}
 							aria-label={ollama ? 'Ollama URL' : 'API Base URL'}
 							value={url}
 							readOnly
 						/>
 						{pipeline && (
-							<span className="text-muted-foreground absolute end-2 text-[0.625rem]" title="Pipelines">
+							<span className="text-muted-foreground absolute end-2 text-caption" title="Pipelines">
 								pipeline
 							</span>
 						)}
 					</div>
 				</Tip>
 				<Tip content="Configure">
-					<button type="button" aria-label={`Configure ${url}`} className={iconButton} onClick={() => setEditing(true)}>
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						type="button"
+						aria-label={`Configure ${url}`}
+						onClick={() => setEditing(true)}
+					>
 						<Settings className="size-4" />
-					</button>
+					</Button>
 				</Tip>
 				<Tip content={enabled ? 'Enabled' : 'Disabled'}>
 					<span>
@@ -315,14 +320,15 @@ export default function Connections() {
 								<div className="flex items-center justify-between">
 									<div className={heading}>Manage OpenAI API Connections</div>
 									<Tip content="Add Connection">
-										<button
+										<Button
+											variant="ghost"
+											size="icon-sm"
 											type="button"
 											aria-label="Add OpenAI Connection"
-											className={iconButton}
 											onClick={() => setShowAddOpenAI(true)}
 										>
 											<Plus className="size-4" />
-										</button>
+										</Button>
 									</Tip>
 								</div>
 								<div className="flex flex-col gap-1.5">
@@ -366,14 +372,15 @@ export default function Connections() {
 								<div className="flex items-center justify-between">
 									<div className={heading}>Manage Ollama API Connections</div>
 									<Tip content="Add Connection">
-										<button
+										<Button
+											variant="ghost"
+											size="icon-sm"
 											type="button"
 											aria-label="Add Ollama Connection"
-											className={iconButton}
 											onClick={() => setShowAddOllama(true)}
 										>
 											<Plus className="size-4" />
-										</button>
+										</Button>
 									</Tip>
 								</div>
 								<div className="flex flex-col gap-1.5">
@@ -435,15 +442,16 @@ export default function Connections() {
 								<div className="flex items-center gap-2">
 									{direct.ENABLE_BASE_MODELS_CACHE && (
 										<Tip content="Refresh">
-											<button
+											<Button
+												variant="ghost"
+												size="icon-sm"
 												type="button"
 												aria-label="Refresh"
-												className={iconButton}
 												disabled={refreshing}
 												onClick={refreshModelList}
 											>
 												{refreshing ? <Spinner className="size-3.5" /> : <RefreshCw className="size-4" />}
-											</button>
+											</Button>
 										</Tip>
 									)}
 									<SettingSwitch

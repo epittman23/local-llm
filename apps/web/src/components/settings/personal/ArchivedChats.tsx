@@ -105,25 +105,27 @@ export default function ArchivedChats() {
 									{c.updated_at ? dayjs(c.updated_at * 1000).format('LLL') : ''}
 								</td>
 								<td className="py-1.5 text-right whitespace-nowrap">
-									<button
+									<Button
+										variant="ghost"
+										size="icon-xs"
 										type="button"
 										aria-label={`Unarchive ${c.title}`}
-										className="hover:bg-muted rounded p-1"
 										onClick={async () => {
 											await archiveChatById(token, c.id).catch((e) => toast.error(`${e}`));
 											void refresh();
 										}}
 									>
 										<ArchiveRestore className="size-3.5" />
-									</button>
-									<button
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon-xs"
 										type="button"
 										aria-label={`Delete ${c.title}`}
-										className="hover:bg-muted rounded p-1"
 										onClick={() => setDeleting(c)}
 									>
 										<Trash2 className="size-3.5" />
-									</button>
+									</Button>
 								</td>
 							</tr>
 						))}

@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { SplitCreateButton } from '@/components/common/SplitCreateButton';
-import { getModelItems } from '@/lib/apis/models';
 import { searchKnowledgeBases } from '@/lib/apis/knowledge';
+import { getModelItems } from '@/lib/apis/models';
 import { getPromptItems } from '@/lib/apis/prompts';
 import { getSkillItems } from '@/lib/apis/skills';
 import { getToolList } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { type WorkspaceSection, useWorkspaceStore } from '@/lib/stores/workspaceStore';
+import { useWorkspaceStore, type WorkspaceSection } from '@/lib/stores/workspaceStore';
 import { cn, formatNumber } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { canEnterSection, canSeeTab, sectionOfPath, sectionPaths, tabOrder } from './workspaceAccess';

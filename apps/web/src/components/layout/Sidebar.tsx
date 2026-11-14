@@ -1,18 +1,20 @@
 import {
 	Calendar,
+	ChartBar,
 	Clock,
 	FlaskConical,
-	ChartBar,
 	LayoutGrid,
 	LogOut,
-	Settings,
 	NotebookText,
 	PanelLeft,
 	Search,
+	Settings,
 	ShieldCheck,
 	SquarePen
 } from 'lucide-react';
 import { Link, NavLink } from 'react-router';
+import { implementedTabIds } from '@/components/settings/adminTabComponents';
+import { availableTabs } from '@/components/settings/settingsTabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,17 +25,16 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { implementedTabIds } from '@/components/settings/adminTabComponents';
-import { availableTabs } from '@/components/settings/settingsTabs';
 import { canUseFeature } from '@/lib/access/features';
 import { signOut } from '@/lib/auth/session';
-import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { cn } from '@/lib/utils';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
@@ -85,14 +86,10 @@ export function SidebarContent({
 					<SquarePen className="h-4 w-4" />
 					New Chat
 				</Link>
-				<button
-					type="button"
-					onClick={() => setSearchOpen(true)}
-					className="hover:bg-accent/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
-				>
+				<Button type="button" onClick={() => setSearchOpen(true)} variant="ghost" className="w-full justify-start">
 					<Search className="h-4 w-4" />
 					Search
-				</button>
+				</Button>
 			</div>
 
 			<Separator className="my-2" />
@@ -149,13 +146,13 @@ export function SidebarContent({
 			<div className="p-2">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="h-auto w-full justify-start gap-2 px-2 py-1.5">
+						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
 							<Avatar className="h-6 w-6">
 								<AvatarImage src={user?.profile_image_url} alt={user?.name ?? ''} />
 								<AvatarFallback>{user?.name?.at(0)?.toUpperCase() ?? '?'}</AvatarFallback>
 							</Avatar>
 							<span className="truncate text-sm">{user?.name ?? 'Signed out'}</span>
-						</Button>
+						</RowButton>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="start" className="w-56">
 						<DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>

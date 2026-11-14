@@ -17,6 +17,7 @@ import { useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -27,6 +28,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import {
 	archiveChatById,
 	cloneChatById,
@@ -37,7 +39,7 @@ import {
 	updateChatById,
 	updateChatFolderIdById
 } from '@/lib/apis/chats';
-import { type ChatListItem, type Folder, chatAsText, fileSafe, isUnread } from '@/lib/chat/chatList';
+import { type ChatListItem, chatAsText, type Folder, fileSafe, isUnread } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { ShareChatDialog } from './ChatDialogs';
@@ -120,11 +122,10 @@ export function ChatItem({
 	return (
 		<div className="group relative" data-testid="chat-item">
 			{renaming ? (
-				<input
+				<Input
 					ref={inputRef}
 					autoFocus
 					aria-label="Chat title"
-					className="bg-accent w-full rounded-md px-2 py-1.5 text-sm outline-none"
 					value={title}
 					onChange={(e) => setTitle(e.target.value)}
 					onBlur={() => void rename()}
@@ -156,20 +157,22 @@ export function ChatItem({
 						)
 					}
 				>
-					{unread && <span className="size-1.5 shrink-0 rounded-full bg-blue-500" aria-label="Unread" />}
+					{unread && <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />}
 					<span className="truncate">{chat.title}</span>
 				</NavLink>
 			)}
 			{!renaming && (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<button
+						<Button
 							type="button"
 							aria-label={`Chat menu: ${chat.title}`}
-							className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1 hidden rounded p-0.5 group-focus-within:block group-hover:block data-[state=open]:block"
+							variant="ghost"
+							size="icon-xs"
+							className="absolute top-1 right-1 hidden group-focus-within:inline-flex group-hover:inline-flex data-[state=open]:inline-flex"
 						>
 							<MoreHorizontal className="size-4" />
-						</button>
+						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="start" className="w-52">
 						<DropdownMenuItem onSelect={() => setShare(true)}>

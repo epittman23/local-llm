@@ -83,3 +83,38 @@ describe('day and week grids', () => {
 		expect(onOpenDay).toHaveBeenCalledWith(new Date(2026, 9, 19));
 	});
 });
+
+describe('today in the grids', () => {
+	it('the month view marks only today with the brand circle', () => {
+		const now = new Date();
+		render(
+			<TooltipProvider>
+				<CalendarViews
+					view="month"
+					date={now}
+					events={[]}
+					calendars={calendars}
+					onCreate={() => {}}
+					onEventClick={() => {}}
+					onOpenDay={() => {}}
+				/>
+			</TooltipProvider>
+		);
+		const marked = (d: Date) =>
+			screen.getAllByRole('button', { name: `New event on ${d.toDateString()}` })[0].querySelector('span');
+		expect(marked(now)?.className).toContain('bg-brand');
+		const other = new Date(now.getFullYear(), now.getMonth(), now.getDate() === 15 ? 16 : 15);
+		expect(marked(other)?.className).not.toContain('bg-brand');
+	});
+
+	it('the week view marks only today in its header', () => {
+		const now = new Date();
+		show('week', now, []);
+		const circles = screen
+			.getAllByText(/^\d{1,2}$/)
+			.filter((el) => el.className.includes('rounded-full') && el.className.includes('size-7'));
+		expect(circles).toHaveLength(7);
+		expect(circles.filter((el) => el.className.includes('bg-brand'))).toHaveLength(1);
+		expect(circles.find((el) => el.className.includes('bg-brand'))?.textContent).toBe(String(now.getDate()));
+	});
+});

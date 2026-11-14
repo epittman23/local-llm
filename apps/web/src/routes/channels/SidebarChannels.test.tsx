@@ -24,6 +24,11 @@ const { createNewChannel, updateChannelById, toast, list, me } = vi.hoisted(() =
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: me.current })
 }));
+// A relative image URL would be fetched from the test server; a data: URL is not.
+vi.mock('@/lib/constants', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	WEBUI_API_BASE_URL: 'data:,api'
+}));
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket: null }) }));
 vi.mock('@/lib/apis/channels', async (importOriginal) => ({
@@ -185,5 +190,31 @@ describe('public group channels in the sidebar', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
 		await screen.findByLabelText('Visibility');
 		expect(screen.getByText('You may not keep this channel public: saving makes it private.')).toBeTruthy();
+	});
+});
+
+describe('direct messages in the sidebar', () => {
+	const dm = (active: boolean): Channel => ({
+		id: 'dm1',
+		name: 'dm1',
+		type: 'dm',
+		created_at: 1,
+		users: [
+			{ id: 'me', name: 'Me' },
+			{ id: 'u2', name: 'Quinn', is_active: active }
+		] as Channel['users']
+	});
+	const dot = () => screen.getByRole('link').querySelector('span.rounded-full');
+
+	it('marks an active partner with the success colour', () => {
+		list.current = [dm(true)];
+		show();
+		expect(dot()?.className).toContain('bg-success');
+	});
+
+	it('marks an away partner with the muted colour', () => {
+		list.current = [dm(false)];
+		show();
+		expect(dot()?.className).toContain('bg-foreground-muted');
 	});
 });

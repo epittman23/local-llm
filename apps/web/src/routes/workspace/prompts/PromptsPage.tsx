@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
-import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -253,8 +254,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		document.title = `Prompts / ${webuiName}`;
 	}, [webuiName]);
 
-	const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
-
 	return (
 		<div className="space-y-1">
 			<ConfirmDialog
@@ -355,15 +354,13 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={prompt.name} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
-													{prompt.name}
-												</div>
+												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{prompt.name}</div>
 											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
+											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
 												/{prompt.command}
 											</div>
 											<Tip content={dayjs(updatedAt).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
 													{dayjs(updatedAt).fromNow()}
 												</div>
 											</Tip>
@@ -371,14 +368,14 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 										</div>
 										{prompt.content && (
 											<Tip content={prompt.content} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
 													{prompt.content}
 												</div>
 											</Tip>
 										)}
 									</div>
 
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
+									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
 										<Tip content={prompt.user?.email ?? 'Deleted User'} side="top">
 											<div className="truncate">
 												{capitalizeFirstLetter(prompt.user?.name ?? prompt.user?.email ?? 'Deleted User')}
@@ -389,9 +386,10 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
 										{shiftKey ? (
 											<Tip content="Delete">
-												<button
+												<Button
+													variant="ghost"
+													size="icon-sm"
 													type="button"
-													className={rowIconButton}
 													aria-label="Delete"
 													onClick={(e) => {
 														e.stopPropagation();
@@ -399,14 +397,15 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 													}}
 												>
 													<Trash2 className="size-4" />
-												</button>
+												</Button>
 											</Tip>
 										) : (
 											<>
 												<Tip content="Copy Prompt">
-													<button
+													<Button
+														variant="ghost"
+														size="icon-sm"
 														type="button"
-														className={rowIconButton}
 														aria-label="Copy Prompt"
 														onClick={(e) => {
 															e.stopPropagation();
@@ -418,21 +417,22 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 														) : (
 															<Clipboard className="size-4" strokeWidth={1.5} />
 														)}
-													</button>
+													</Button>
 												</Tip>
 
 												<div className="ml-0.5 flex shrink-0 flex-row items-center gap-1.5 self-center">
 													<DropdownMenu>
 														<Tip content="More">
 															<DropdownMenuTrigger asChild>
-																<button
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
 																	type="button"
-																	className={rowIconButton}
 																	aria-label="Prompt Menu"
 																	onClick={(e) => e.stopPropagation()}
 																>
 																	<MoreHorizontal className="size-4" />
-																</button>
+																</Button>
 															</DropdownMenuTrigger>
 														</Tip>
 														<DropdownMenuContent align="end" className="min-w-40">

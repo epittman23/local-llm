@@ -44,8 +44,10 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { ImageButton } from '@/components/ui/image-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RowButton } from '@/components/ui/row-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -84,6 +86,7 @@ export function StatusBadge({ status, children }: { status: Status; children: st
 
 export function ActionsSection() {
 	const [saving, setSaving] = useState(false);
+	const [openRow, setOpenRow] = useState('a');
 	const timer = useRef<number | undefined>(undefined);
 	useEffect(() => () => window.clearTimeout(timer.current), []);
 	const save = () => {
@@ -98,7 +101,7 @@ export function ActionsSection() {
 			id="actions"
 			title="Actions"
 			lead="A view has one filled button: the thing you most likely came to do. Everything else is quieter. A button's label says what will happen, and the confirmation that follows uses the same word."
-			rules={['ACT-1', 'ACT-2', 'ACT-4', 'ACT-5', 'ACT-6', 'A11Y-1', 'FBK-3']}
+			rules={['ACT-1', 'ACT-2', 'ACT-4', 'ACT-5', 'ACT-6', 'ACT-7', 'ACT-8', 'A11Y-1', 'FBK-3']}
 		>
 			<Example
 				title="The five kinds"
@@ -150,6 +153,48 @@ export function ActionsSection() {
 						<PlusIcon aria-hidden />
 						Compact, for toolbars
 					</Button>
+				</div>
+			</Example>
+			<Example
+				title="Rows and pictures"
+				note="A whole row that opens something is a row button, not a stretched button: it takes the full width, highlights on hover and marks the open row. A picture you press to change it is an image button: the picture fills it, and an icon appears over it on hover and on focus."
+			>
+				<div className="grid max-w-[40rem] gap-6 sm:grid-cols-[1fr_auto]">
+					<div className="border-border flex flex-col gap-1 rounded-panel border p-1">
+						{[
+							{ id: 'a', name: 'demo-a', note: 'All layers on the GPU' },
+							{ id: 'b', name: 'demo-b', note: '20 layers on the GPU' }
+						].map((row) => (
+							<RowButton
+								key={row.id}
+								aria-current={row.id === openRow ? 'true' : undefined}
+								className="flex items-center gap-3 px-3 py-2"
+								onClick={() => setOpenRow(row.id)}
+							>
+								<span
+									aria-hidden
+									className="bg-surface-3 text-foreground-muted font-strong flex size-8 shrink-0 items-center justify-center rounded-lg"
+								>
+									{row.name.slice(-1).toUpperCase()}
+								</span>
+								<span className="min-w-0">
+									<span className="font-strong block truncate">{row.name}</span>
+									<span className="text-dense text-foreground-muted block truncate">{row.note}</span>
+								</span>
+							</RowButton>
+						))}
+					</div>
+					<ImageButton
+						shape="circle"
+						aria-label="Change the profile picture"
+						className="size-16 self-center"
+						overlay={<PencilIcon />}
+						onClick={() => toast.success('Choose a picture')}
+					>
+						<span aria-hidden className="bg-surface-3 text-title font-title flex size-full items-center justify-center">
+							A
+						</span>
+					</ImageButton>
 				</div>
 			</Example>
 		</Section>

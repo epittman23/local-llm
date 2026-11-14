@@ -14,11 +14,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
-	type NotificationTarget,
 	createNotificationTarget,
 	deleteNotificationTarget,
 	getNotificationEvents,
 	getNotificationTargets,
+	type NotificationTarget,
 	setDefaultNotificationTarget,
 	testNotificationTarget,
 	updateNotificationTarget
@@ -138,7 +138,7 @@ export default function Notifications() {
 									<div className="flex items-center gap-2">
 										<span className="font-medium">{t.id}</span>
 										<span className="text-muted-foreground">Webhook</span>
-										{t.is_default && <span className="rounded bg-blue-500/10 px-1 text-blue-600">Default</span>}
+										{t.is_default && <span className="rounded bg-brand/10 px-1 text-brand">Default</span>}
 										<Switch
 											className="ml-auto"
 											aria-label={`Enabled: ${t.id}`}
@@ -153,39 +153,44 @@ export default function Notifications() {
 										· {t.delivery === 'away' ? 'Only when away' : 'Always'}
 									</div>
 									<div className="mt-1.5 flex gap-2">
-										<button
+										<Button
+											variant="link"
+											size="xs"
 											type="button"
-											className="underline"
 											onClick={() => void act(() => testNotificationTarget(token, t.id), 'Test notification sent.')}
 										>
 											Send Test
-										</button>
+										</Button>
 										{!t.is_default && (
-											<button
+											<Button
+												variant="link"
+												size="xs"
 												type="button"
-												className="underline"
 												onClick={() => void act(() => setDefaultNotificationTarget(token, t.id))}
 											>
 												Make Default
-											</button>
+											</Button>
 										)}
-										<button
+										<Button
+											variant="link"
+											size="xs"
 											type="button"
-											className="underline"
 											onClick={() => {
 												setEditingId(t.id);
 												setForm({ id: t.id, url: '', enabled: t.enabled, events: [...t.events], delivery: t.delivery });
 											}}
 										>
 											Edit
-										</button>
-										<button
+										</Button>
+										<Button
+											variant="link"
+											size="xs"
+											className="text-danger"
 											type="button"
-											className="text-destructive underline"
 											onClick={() => void act(() => deleteNotificationTarget(token, t.id))}
 										>
 											Remove
-										</button>
+										</Button>
 									</div>
 								</li>
 							))}
@@ -276,7 +281,7 @@ export default function Notifications() {
 									<option value="always">Always</option>
 								</select>
 							</label>
-							<p className="text-muted-foreground text-[0.6875rem]">
+							<p className="text-muted-foreground text-caption">
 								The notify tool always sends to an enabled target, regardless of automatic event settings.
 							</p>
 							<DialogFooter>

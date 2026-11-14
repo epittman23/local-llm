@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
+import { enumChoices, enumOption } from '@/components/common/Valves';
 import {
 	SettingField,
 	SettingInput,
@@ -11,26 +12,24 @@ import {
 	SettingsForm,
 	SettingsSection
 } from '@/components/settings/controls';
-import { enumChoices, enumOption } from '@/components/common/Valves';
+import { Button } from '@/components/ui/button';
 import {
 	deletePipeline,
 	downloadPipeline,
-	getPipelineValves,
-	getPipelineValvesSpec,
 	getPipelines,
 	getPipelinesList,
+	getPipelineValves,
+	getPipelineValvesSpec,
 	updatePipelineValves,
 	uploadPipeline
 } from '@/lib/apis';
 import { toastSaved } from '@/lib/settings/useAdminSaved';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { type ValveSpec, type ValveValues, formToValves, valvesToForm } from './pipelineValves';
+import { formToValves, type ValveSpec, type ValveValues, valvesToForm } from './pipelineValves';
 
 type PipelineServer = { idx: number; url: string };
 type Pipeline = { id: string; name: string; type?: string; valves?: boolean };
 
-const actionButton =
-	'text-muted-foreground hover:text-foreground shrink-0 text-xs transition-colors disabled:opacity-50';
 const muted = 'text-muted-foreground text-xs';
 
 /**
@@ -201,16 +200,18 @@ export default function Pipelines() {
 							description="Upload a local Python pipeline file to the selected server."
 						>
 							<div className="flex items-center gap-2">
-								<button
+								<Button
+									variant="outline"
+									size="sm"
+									className="min-w-0 flex-1 justify-start shrink"
 									type="button"
-									className="bg-muted/40 hover:bg-muted h-7 min-w-0 flex-1 truncate rounded-lg border px-2 text-left text-xs"
 									onClick={() => uploadInput.current?.click()}
 								>
 									{file ? '1 pipeline(s) selected' : 'Select a .py file'}
-								</button>
-								<button type="button" className={actionButton} onClick={upload} disabled={uploading}>
+								</Button>
+								<Button variant="outline" size="sm" type="button" onClick={upload} disabled={uploading}>
 									{uploading ? 'Uploading' : 'Upload'}
-								</button>
+								</Button>
 							</div>
 						</SettingField>
 						<SettingField
@@ -223,9 +224,9 @@ export default function Pipelines() {
 									value={downloadUrl}
 									onChange={(e) => setDownloadUrl(e.target.value)}
 								/>
-								<button type="button" className={actionButton} onClick={install} disabled={downloading}>
+								<Button variant="outline" size="sm" type="button" onClick={install} disabled={downloading}>
 									{downloading ? 'Installing' : 'Install'}
-								</button>
+								</Button>
 							</div>
 						</SettingField>
 					</SettingsSection>
@@ -255,9 +256,9 @@ export default function Pipelines() {
 												</option>
 											))}
 										</SettingSelect>
-										<button type="button" className={actionButton} onClick={remove}>
+										<Button variant="destructive" size="sm" type="button" onClick={remove}>
 											Delete
-										</button>
+										</Button>
 									</div>
 								</SettingField>
 							</SettingsSection>
@@ -271,13 +272,14 @@ export default function Pipelines() {
 											return (
 												<div key={key} className="flex flex-col gap-1.5">
 													<SettingRow label={prop.title ?? key} description={prop.description ?? ''}>
-														<button
+														<Button
+															variant="outline"
+															size="sm"
 															type="button"
-															className={actionButton}
 															onClick={() => setValve(key, value === null ? '' : null)}
 														>
 															{value === null ? 'None' : 'Custom'}
-														</button>
+														</Button>
 													</SettingRow>
 													{value !== null && (
 														<div>
@@ -298,7 +300,7 @@ export default function Pipelines() {
 															) : prop.type === 'boolean' ? (
 																<SettingRow
 																	label={value ? 'Enabled' : 'Disabled'}
-																	labelClassName="text-muted-foreground/70"
+																	labelClassName="text-foreground-muted"
 																>
 																	{(id) => (
 																		<SettingSwitch

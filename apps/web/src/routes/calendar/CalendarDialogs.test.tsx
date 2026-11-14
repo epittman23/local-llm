@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/lib/apis/calendar';
-import { EventDialog } from './CalendarDialogs';
+import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
 import { NS } from './calendarModel';
 
 vi.mock('@/lib/apis/calendar', async (original) => ({
@@ -9,7 +9,8 @@ vi.mock('@/lib/apis/calendar', async (original) => ({
 	getCalendarEventById: vi.fn(),
 	updateCalendarEvent: vi.fn(),
 	createCalendarEvent: vi.fn(),
-	deleteCalendarEvent: vi.fn()
+	deleteCalendarEvent: vi.fn(),
+	createCalendar: vi.fn()
 }));
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }));
@@ -241,5 +242,38 @@ describe('EventDialog on an event whose menu rule is stored in another form (#70
 
 		await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalled());
 		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2].rrule).toBe(rule);
+	});
+});
+
+describe('CreateCalendarDialog colour presets', () => {
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it('marks the chosen preset as pressed and saves it', async () => {
+		vi.mocked(api.createCalendar).mockResolvedValue({ id: 'n' } as never);
+		const onCreated = vi.fn();
+		render(<CreateCalendarDialog open onOpenChange={() => {}} onCreated={onCreated} />);
+		const first = screen.getByRole('button', { name: '#3b82f6' });
+		const green = screen.getByRole('button', { name: '#22c55e' });
+		expect(first).toHaveAttribute('aria-pressed', 'true');
+		expect(green).toHaveAttribute('aria-pressed', 'false');
+		fireEvent.click(green);
+		expect(green).toHaveAttribute('aria-pressed', 'true');
+		expect(first).toHaveAttribute('aria-pressed', 'false');
+		fireEvent.change(screen.getByPlaceholderText('Calendar name'), { target: { value: 'Gym' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		await waitFor(() =>
+			expect(api.createCalendar).toHaveBeenCalledWith(expect.anything(), { name: 'Gym', color: '#22c55e' })
+		);
+		expect(onCreated).toHaveBeenCalled();
+	});
+
+	it('refuses an empty name', () => {
+		render(<CreateCalendarDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+		expect(toastError).toHaveBeenCalledWith('Name is required');
+		expect(api.createCalendar).not.toHaveBeenCalled();
 	});
 });
