@@ -99,24 +99,30 @@ describe('SectionTabs', () => {
 		expect(nav.style.maskImage).toMatch(/^linear-gradient\(to right, transparent/);
 	});
 
-	it('measures again when the strip is resized', () => {
+	it('measures again, and keeps the open tab in view, when the strip or a tab is resized', () => {
 		let resized: () => void = () => {};
 		const disconnect = vi.fn();
+		const observe = vi.fn();
+		const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
 		vi.stubGlobal(
 			'ResizeObserver',
 			class {
 				constructor(cb: () => void) {
 					resized = cb;
 				}
-				observe() {}
+				observe = observe;
 				disconnect = disconnect;
 			}
 		);
 		renderAt('/benchmarks/serve');
 		const nav = screen.getByRole('navigation', { name: 'Benchmarks' });
+		// The strip and each of its three tabs (a count arriving widens a tab).
+		expect(observe).toHaveBeenCalledTimes(4);
 		setGeometry(nav, { scrollWidth: 558, clientWidth: 358, scrollLeft: 0 });
+		scrolled.mockClear();
 		act(() => resized());
 		expect(nav.dataset.fadeEnd).toBe('true');
+		expect(scrolled).toHaveBeenCalledTimes(1);
 		cleanup();
 		expect(disconnect).toHaveBeenCalled();
 		vi.unstubAllGlobals();

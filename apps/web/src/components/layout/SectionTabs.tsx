@@ -47,24 +47,31 @@ export function SectionTabs({ label, tabs, className }: { label: string; tabs: S
 		setFade((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
 	}, []);
 
+	/** Scrolls the open tab into view, then updates the fades. */
+	const reveal = useCallback(() => {
+		strip.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView?.({
+			inline: 'nearest',
+			block: 'nearest'
+		});
+		measure();
+	}, [measure]);
+
 	// The open tab comes into view on arrival and whenever another tab opens.
 	useLayoutEffect(() => {
-		if (activeTo !== undefined) {
-			strip.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView?.({
-				inline: 'nearest',
-				block: 'nearest'
-			});
-		}
-		measure();
-	}, [activeTo, measure]);
+		if (activeTo !== undefined) reveal();
+		else measure();
+	}, [activeTo, reveal, measure]);
 
+	// ...and again when the strip or a tab changes size (a count arriving
+	// widens its tab), which would otherwise leave the open tab part hidden.
 	useEffect(() => {
 		const el = strip.current;
-		if (!el || typeof ResizeObserver === 'undefined') return;
-		const observer = new ResizeObserver(measure);
+		if (!el || tabs.length === 0 || typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver(reveal);
 		observer.observe(el);
+		for (const tab of Array.from(el.children)) observer.observe(tab);
 		return () => observer.disconnect();
-	}, [measure]);
+	}, [reveal, tabs.length]);
 
 	return (
 		<nav
