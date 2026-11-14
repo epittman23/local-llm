@@ -70,6 +70,45 @@ describe('ErrorPage', () => {
 		expect(navigation.leaveFor).toHaveBeenCalledWith('/');
 	});
 
+	it.each([
+		['this page, which would reload in a loop', '/error?x=1'],
+		['a path the server answers itself', '/api/v1/auths/'],
+		['a path the server answers itself', '/oauth/google/login'],
+		['a path the server answers itself', '/ws/socket.io/'],
+		['a path the server answers itself', '/static/favicon.png'],
+		['a path the server answers itself', '/cache/image.png']
+	])('goes home instead of to %s (%s)', async (_why, path) => {
+		fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+		renderAt(`/error?redirect=${encodeURIComponent(path)}`);
+		await settle();
+		expect(navigation.leaveFor).toHaveBeenCalledWith('/');
+	});
+
+	it('still goes to an app path that only starts like a server prefix', async () => {
+		fetchMock.mockResolvedValue(new Response('{}', { status: 200 }));
+		renderAt('/error?redirect=%2Fapi-keys');
+		await settle();
+		expect(navigation.leaveFor).toHaveBeenCalledWith('/api-keys');
+	});
+
+	it('gives up on a request that never answers, so the next check still runs', async () => {
+		fetchMock.mockImplementation(
+			(_url: string, init: RequestInit) =>
+				new Promise((_resolve, reject) => {
+					init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+				})
+		);
+		renderAt('/error');
+		await settle();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		await act(async () => vi.advanceTimersByTime(5000));
+		expect(screen.getByRole('status')).toHaveTextContent('Last try: no answer.');
+
+		await act(async () => vi.advanceTimersByTime(RETRY_INTERVAL_MS));
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
 	it('tries at once on Try now, and shows that it is trying', async () => {
 		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 		renderAt('/error');

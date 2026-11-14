@@ -12,8 +12,24 @@ export const RETRY_INTERVAL_MS = 3000;
 /** A press of "Try now" shows that it is trying for at least this long, even when the answer is instant (FBK-3). */
 const PRESSED_MIN_MS = 400;
 
+/** A request that has not answered by then counts as no answer, so it cannot block every later check. */
+const REQUEST_TIMEOUT_MS = 5000;
+/** Paths the server answers itself: a full page load of one would leave the app. */
+const SERVER_PREFIXES = ['/api/', '/oauth/', '/ws/', '/static/', '/cache/'];
+
 /** A full page load, so the session is restored from the saved token on the way back. */
 export const navigation = { leaveFor: (url: string) => window.location.assign(url) };
+
+/** The page to go back to: home when there is none, when it is this page (a reload loop) or when the server owns it. */
+function targetFor(redirect: string | null) {
+	const target = safeRedirect(redirect);
+	if (!target) return routePaths.home;
+	const { pathname } = new URL(target, window.location.origin);
+	if (pathname === routePaths.error || SERVER_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+		return routePaths.home;
+	}
+	return target;
+}
 
 /**
  * Where the app lands when it cannot reach its server: on load, the sign-in
@@ -29,7 +45,7 @@ export const navigation = { leaveFor: (url: string) => window.location.assign(ur
 export function ErrorPage() {
 	const name = useWebUIName();
 	const [searchParams] = useSearchParams();
-	const target = safeRedirect(searchParams.get('redirect')) ?? routePaths.home;
+	const target = targetFor(searchParams.get('redirect'));
 	// Only a press of "Try now" changes the page while it checks: the automatic
 	// checks leave it still, so a focused button is never disabled under the
 	// person and a screen reader is not told the same thing every 3 seconds.
@@ -42,9 +58,11 @@ export function ErrorPage() {
 			if (inFlight.current) return;
 			inFlight.current = true;
 			if (byPress) setPressed(true);
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 			try {
 				const [res] = await Promise.all([
-					fetch(`${WEBUI_BASE_URL}/api/config`, { credentials: 'include' }),
+					fetch(`${WEBUI_BASE_URL}/api/config`, { credentials: 'include', signal: controller.signal }),
 					byPress ? new Promise((resolve) => setTimeout(resolve, PRESSED_MIN_MS)) : null
 				]);
 				if (res.ok) {
@@ -55,6 +73,7 @@ export function ErrorPage() {
 			} catch {
 				setLastFailure('no answer.');
 			} finally {
+				clearTimeout(timeout);
 				inFlight.current = false;
 				setPressed(false);
 			}
