@@ -19,7 +19,7 @@ export function ConnectionBanner() {
 			className="pointer-events-none fixed inset-x-0 top-2 z-40 flex justify-center px-4"
 		>
 			{lost && (
-				<p className="border-border-divider bg-surface-2 text-dense text-foreground pointer-events-auto flex max-w-full items-center gap-2 rounded-full border px-3 py-1 shadow-lg">
+				<p className="border-border-divider bg-surface-2 text-dense text-foreground flex max-w-full items-center gap-2 rounded-full border px-3 py-1 shadow-lg">
 					<WifiOffIcon aria-hidden className="text-warning size-4 shrink-0" />
 					<span className="min-w-0">
 						{offline ? 'This computer is offline.' : "Can't reach the server."} Reconnecting…
