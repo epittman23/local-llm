@@ -1,18 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { SectionSkeleton, type SectionTab, SectionTabs } from '@/components/layout/SectionTabs';
+import { PageHeader } from '@/components/ui/page-header';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { adminGate, adminSectionOfPath } from './adminAccess';
-
-const tabClass = (active: boolean) =>
-	cn(
-		'min-w-fit border-b-2 px-1 pb-2 text-sm transition-colors select-none',
-		active
-			? 'border-foreground text-foreground font-medium'
-			: 'border-transparent text-muted-foreground hover:text-foreground'
-	);
 
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/admin/+layout.svelte: the admin-only
@@ -28,7 +22,6 @@ export function AdminLayout() {
 	const authStatus = useAuthStore((s) => s.status);
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
-	const webuiName = useWebUIName();
 	const { pathname } = useLocation();
 	const navigate = useNavigate();
 	const redirected = useRef(false);
@@ -50,37 +43,25 @@ export function AdminLayout() {
 		if (allowed) redirected.current = false;
 	}, [allowed, pathname]);
 
-	useEffect(() => {
-		document.title = `Admin Panel / ${webuiName}`;
-	}, [webuiName]);
-
-	if (!allowed) {
-		return (
-			<div className="flex flex-1 items-center justify-center p-8">
-				<p className="text-muted-foreground text-sm">{settled ? 'Redirecting…' : 'Loading…'}</p>
-			</div>
-		);
-	}
+	if (!allowed) return <SectionSkeleton label="admin" />;
 
 	const section = adminSectionOfPath(pathname);
+	const tabs: SectionTab[] = [
+		{ to: routePaths.admin, label: 'Users', active: section === 'users' },
+		{ to: routePaths.adminEvaluations, label: 'Evaluations', active: section === 'evaluations' },
+		...(config?.features?.enable_plugins
+			? [{ to: routePaths.adminFunctions, label: 'Functions', active: section === 'functions' }]
+			: []),
+		{ to: routePaths.adminSettings, label: 'Settings', active: section === 'settings' }
+	];
 	return (
 		<div className="flex h-full min-w-0 flex-col">
-			<nav className="flex gap-4 overflow-x-auto border-b px-4 pt-3">
-				<NavLink to={routePaths.admin} className={() => tabClass(section === 'users')}>
-					Users
-				</NavLink>
-				<NavLink to={routePaths.adminEvaluations} className={() => tabClass(section === 'evaluations')}>
-					Evaluations
-				</NavLink>
-				{config?.features?.enable_plugins && (
-					<NavLink to={routePaths.adminFunctions} className={() => tabClass(section === 'functions')}>
-						Functions
-					</NavLink>
-				)}
-				<NavLink to={routePaths.adminSettings} className={() => tabClass(section === 'settings')}>
-					Settings
-				</NavLink>
-			</nav>
+			<div className="flex flex-col gap-3 border-b px-4 pt-4">
+				<div className="ps-[var(--shell-menu-inset,0px)]">
+					<PageHeader title="Admin" description="Accounts, evaluations, functions and settings for this server." />
+				</div>
+				<SectionTabs label="Admin" tabs={tabs} />
+			</div>
 			<div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-1">
 				<Outlet />
 			</div>
@@ -110,7 +91,9 @@ export function SubTabs({
 					)}
 				>
 					<span>{tab.label}</span>
-					{tab.count != null && <span className={cn('text-sm', tab.countClassName ?? 'opacity-60')}>{tab.count}</span>}
+					{tab.count != null && (
+						<span className={cn('text-sm', tab.countClassName ?? 'text-muted-foreground')}>{tab.count}</span>
+					)}
 				</NavLink>
 			))}
 		</div>
