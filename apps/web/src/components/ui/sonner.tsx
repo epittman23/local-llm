@@ -1,6 +1,7 @@
 import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { type ExternalToast, Toaster as Sonner, type ToasterProps, toast } from 'sonner';
+import { sessionEndReason } from '@/lib/auth/session';
 import { useConnectionStore } from '@/lib/socket/connectionStore';
 
 // The shadcn template reads `next-themes`, which needs its own
@@ -107,15 +108,18 @@ type ToastFn = (message: Parameters<typeof toast.error>[0], data?: ExternalToast
  * an id derived from the text, so the same failure raised again (a poll,
  * every request while offline) updates the toast already showing instead of
  * stacking another. A caller's own `duration` or `id` still wins.
+ *
+ * Once the session has run out, the failures of requests it still made are
+ * not shown: they all fail for that one reason, which the sign-in page
+ * explains in place (FBK-1), so the person sees one message, not a pile.
  */
 const persistent =
 	(show: ToastFn): ToastFn =>
-	(message, data) =>
-		show(message, {
-			duration: Number.POSITIVE_INFINITY,
-			...(typeof message === 'string' ? { id: messageId(message) } : {}),
-			...data
-		});
+	(message, data) => {
+		const id = data?.id ?? (typeof message === 'string' ? messageId(message) : undefined);
+		if (sessionEndReason() === 'expired') return id ?? '';
+		return show(message, { duration: Number.POSITIVE_INFINITY, ...(id === undefined ? {} : { id }), ...data });
+	};
 const patched = toast as typeof toast & { persistentFailures?: true };
 if (!patched.persistentFailures) {
 	patched.persistentFailures = true;

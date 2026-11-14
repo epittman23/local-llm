@@ -1,8 +1,11 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sessionEndReason } from '@/lib/auth/session';
 import { useConnectionStore } from '@/lib/socket/connectionStore';
 import { keepClearOffset, messageId, Toaster, WIDE_QUERY } from './sonner';
+
+vi.mock('@/lib/auth/session', () => ({ sessionEndReason: vi.fn(() => null) }));
 
 /** A matchMedia whose WIDE_QUERY answer the test sets, and can change live. */
 function mockWidth(wide: boolean) {
@@ -86,6 +89,17 @@ describe('Toaster', () => {
 		const mine = toasts.find((t) => t.title === 'Quick one');
 		expect(mine?.id).toBe('mine');
 		expect(mine?.duration).toBe(1000);
+	});
+
+	it('holds back failures once the session has run out: the sign-in page explains them (#1061)', async () => {
+		mockWidth(true);
+		render(<Toaster />);
+		vi.mocked(sessionEndReason).mockReturnValue('expired');
+		act(() => void toast.error('Not authenticated'));
+		vi.mocked(sessionEndReason).mockReturnValue(null);
+		act(() => void toast.success('Saved'));
+		expect(await screen.findByText('Saved')).toBeInTheDocument();
+		expect(screen.queryByText('Not authenticated')).toBeNull();
 	});
 
 	it('lifts toasts above a message box in the lower half of the screen', async () => {

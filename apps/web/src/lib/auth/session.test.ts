@@ -1,5 +1,9 @@
+import { toast } from 'sonner';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initAuth } from './session';
+import { useAuthStore } from '@/lib/stores/authStore';
+import { clearExpiredSession, initAuth, sessionEndReason, signOut } from './session';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 
 // One stub for the whole file: initAuth's fetch guard captures window.fetch the
 // first time it runs, so each test changes what this stub does instead.
@@ -56,5 +60,43 @@ describe('the time zone (#324)', () => {
 		await initAuth();
 
 		expect(sent).toEqual([{ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }]);
+	});
+});
+
+describe('a session that runs out (#1061)', () => {
+	it('records why it ended instead of raising a toast, and forgets it at the next sign-in', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
+		await initAuth();
+		expect(useAuthStore.getState().status).toBe('authenticated');
+		expect(sessionEndReason()).toBeNull();
+
+		clearExpiredSession();
+
+		expect(sessionEndReason()).toBe('expired');
+		expect(useAuthStore.getState().status).toBe('anonymous');
+		expect(localStorage.getItem('token')).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		useAuthStore.getState().setSession('new-token', { id: 'u', role: 'user' } as never);
+		expect(sessionEndReason()).toBeNull();
+	});
+
+	it('records nothing for a sign-out the person chose', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
+		await initAuth();
+		clearExpiredSession();
+		await signOut();
+		expect(sessionEndReason()).toBeNull();
+	});
+
+	it('marks a request refused for an expired session, through the fetch guard', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
+		await initAuth();
+		fetch.mockImplementation(async () => json({ detail: 'Not authenticated' }, 401));
+
+		await window.fetch('/api/v1/chats/', { headers: { authorization: 'Bearer saved-token' } });
+
+		expect(sessionEndReason()).toBe('expired');
+		expect(useAuthStore.getState().status).toBe('anonymous');
 	});
 });
