@@ -191,6 +191,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
+| `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch. Static; shows nothing from the backend |
 
 ### Signed-in
 
@@ -329,6 +330,7 @@ OpenAI-compatible endpoint.
 | The app's own test suites | [docs/guides/testing.md](docs/guides/testing.md) |
 | Backend dependencies and the offline model cache | [docs/guides/dependencies.md](docs/guides/dependencies.md) |
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
+| The interface standard: the rules every UI change is checked against | [docs/guides/ui-standard.md](docs/guides/ui-standard.md) |
 | The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
 | The code interpreter, web search (SearXNG), retrieval models | [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md) |
 | Turning OAuth sign-in on (environment variables only) | [docs/guides/oauth.md](docs/guides/oauth.md) |

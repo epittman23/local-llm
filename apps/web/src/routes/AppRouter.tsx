@@ -1,11 +1,13 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AdminLayout } from '@/routes/admin/AdminLayout';
-import { AnalyticsRedirect, SettingsRedirect } from '@/routes/admin/SettingsRedirects';
 import { EvaluationsPage } from '@/routes/admin/evaluations/EvaluationsPage';
 import { FunctionCreatePage, FunctionEditPage } from '@/routes/admin/functions/FunctionPages';
 import { FunctionsPage } from '@/routes/admin/functions/FunctionsPage';
+import { AnalyticsRedirect, SettingsRedirect } from '@/routes/admin/SettingsRedirects';
 import { UsersPage } from '@/routes/admin/users/UsersPage';
+import { AutomationPage } from '@/routes/automations/AutomationPage';
+import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { AnswersPage } from '@/routes/benchmarks/AnswersPage';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
 import { ComparePage } from '@/routes/benchmarks/ComparePage';
@@ -15,8 +17,6 @@ import { ReportPage } from '@/routes/benchmarks/ReportPage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { TunePage } from '@/routes/benchmarks/TunePage';
-import { AutomationPage } from '@/routes/automations/AutomationPage';
-import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { ChannelPage } from '@/routes/channels/ChannelPage';
 import { ChatPage } from '@/routes/chat/ChatPage';
@@ -35,16 +35,17 @@ import { ErrorPage } from '@/routes/public/ErrorPage';
 import { SharedChatPage } from '@/routes/public/SharedChatPage';
 import { WatchPage } from '@/routes/public/WatchPage';
 import { routePaths } from '@/routes/routePaths';
+import { UiStandardPage } from '@/routes/ui/UiStandardPage';
+import { KnowledgeBasePage } from '@/routes/workspace/knowledge/KnowledgeBasePage';
+import { KnowledgePage } from '@/routes/workspace/knowledge/KnowledgePage';
+import { ModelCreatePage, ModelEditPage } from '@/routes/workspace/models/ModelPages';
+import { ModelsPage } from '@/routes/workspace/models/ModelsPage';
 import { PromptEditPage } from '@/routes/workspace/prompts/PromptEditPage';
 import { PromptsPage } from '@/routes/workspace/prompts/PromptsPage';
 import { SkillCreatePage, SkillEditPage } from '@/routes/workspace/skills/SkillPages';
 import { SkillsPage } from '@/routes/workspace/skills/SkillsPage';
 import { ToolCreatePage, ToolEditPage } from '@/routes/workspace/tools/ToolPages';
 import { ToolsPage } from '@/routes/workspace/tools/ToolsPage';
-import { KnowledgeBasePage } from '@/routes/workspace/knowledge/KnowledgeBasePage';
-import { KnowledgePage } from '@/routes/workspace/knowledge/KnowledgePage';
-import { ModelCreatePage, ModelEditPage } from '@/routes/workspace/models/ModelPages';
-import { ModelsPage } from '@/routes/workspace/models/ModelsPage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -160,6 +161,7 @@ const router = createBrowserRouter(
 		{ path: routePaths.error, element: <ErrorPage /> },
 		{ path: routePaths.watch, element: <WatchPage /> },
 		{ path: routePaths.share, element: <SharedChatPage /> },
+		{ path: routePaths.uiStandard, element: <UiStandardPage /> },
 		{ path: '*', element: <NotFound /> }
 	],
 	// Astro's own base path (`/`; main.py mounts the build at the root).

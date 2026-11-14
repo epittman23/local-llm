@@ -23,6 +23,7 @@ skill is only the procedure for applying it to the change in hand.
 | Models, providers, endpoints or serving flags | AGENTS.md "Models in use" / "Local inference", and `docs/guides/llama-cpp.md`. For flags, also use the `serving-change` skill. |
 | `serving/profiles.py`, `serving/launcher.py`, the Makefile or `infra/docker-compose.yml` defaults, flags or function names | Their description in README.md or the guides. |
 | How the app starts (Makefile targets, ports, `infra/.env` keys, tool versions) | README.md "Running it". |
+| The interface standard changed: a token in `apps/web/src/styles/standard.css`, a rule, a shared component's look | `docs/guides/ui-standard.md` and `/ui` (`apps/web/src/routes/ui/`), together. Use the `ui-standard` skill. |
 | A URL the frontend serves (`apps/web/src/routes/AppRouter.tsx`, `routePaths.ts`) added, removed, renamed or given new query parameters | README.md "Pages and URLs". |
 | A benchmark number recorded in `docs/guides/` | Hardware, model file, llama.cpp build and flags beside it. |
 | The deployed system prompt changed in the app | Copy it byte-for-byte to `apps/server/local_llm/benchmarks/data/prompts/assistant.txt`. That path is append-only for the gate, so the PR needs a `## Gate changes` note. |

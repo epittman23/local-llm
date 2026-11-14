@@ -66,7 +66,8 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   (the maintenance-policy checklist), `pr-gate` (the CI tripwire before and
   after a push), `new-migration` (append-only Alembic revisions and
   `benchmark_schema_note` rows), `serving-change` (launch flags and the
-  `config_id` fingerprint), `reindex` (refreshing the codebase-memory-mcp
+  `config_id` fingerprint), `ui-standard` (checking a UI change against the interface standard),
+  `reindex` (refreshing the codebase-memory-mcp
   index).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.claude/settings.json`** — tracked project settings: only Claude Code's
@@ -114,7 +115,8 @@ Start here for "how do I run/use this."
   `benchmarks.md` (the Benchmarks section: tests, grading, compare, report),
   `testing.md` (the app's own test suites), `dependencies.md` (the backend
   venv and offline model cache), `frontend.md` (`apps/web` dev server,
-  build, rough edges), `model-downloads.md` (`hf download` commands for the
+  build, rough edges), `ui-standard.md` (the interface standard: the
+  numbered rules every UI change is checked against, shown on `/ui`), `model-downloads.md` (`hf download` commands for the
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
   agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter in brief,
   SearXNG web search, and the retrieval models), `oauth.md` (turning OAuth
@@ -459,6 +461,12 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `components/common/EmojiPicker`.
 - **`src/styles/global.css`** — the Tailwind v4 entry and the shadcn Nova
   preset's design tokens.
+- **`src/styles/standard.css`** — the interface standard's tokens
+  (`docs/guides/ui-standard.md`) and the `data-ui="standard"` scope that
+  applies them, today to `/ui` only; `standard.contrast.test.ts` checks the
+  contrast ratios the standard promises. **`src/lib/ui/contrast.ts`** is
+  the WCAG arithmetic both use. **`src/routes/ui/`** is `/ui`, the
+  standard's demo page (public, static).
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
   `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a
