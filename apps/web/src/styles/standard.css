@@ -162,7 +162,8 @@
 	--destructive: var(--danger);
 	--border: var(--border-divider);
 	--input: var(--border-control);
-	--ring: var(--focus);
+	/* The focus colour only while focus came from the keyboard (see A11Y-1 below). */
+	--ring: var(--border-control);
 	--chart-1: var(--series-1);
 	--chart-2: var(--series-2);
 	--chart-3: var(--series-3);
@@ -175,7 +176,7 @@
 	--sidebar-accent: var(--surface-3);
 	--sidebar-accent-foreground: var(--foreground-strong);
 	--sidebar-border: var(--border-divider);
-	--sidebar-ring: var(--focus);
+	--sidebar-ring: var(--border-control);
 }
 .dark {
 	color-scheme: dark;
@@ -204,34 +205,48 @@
 }
 
 /*
- * A11Y-1: one focus indicator, everywhere, never removed. Unlayered, so it
- * beats the `outline-none` and translucent `ring-*` utilities the shared
- * components carry today.
+ * A11Y-1: one focus indicator, on everything, for focus that arrived from the
+ * keyboard. lib/ui/focusSource.ts sets data-focus="keyboard" on <html> when
+ * Tab is pressed and removes it on the next pointer press, so a field that
+ * was clicked, tapped or focused by the app (autofocus) shows its caret and
+ * no outline. `:focus-visible` alone cannot say this: a text field matches it
+ * however it was focused.
+ *
+ * Unlayered, so it beats the `outline-none` and translucent `ring-*`
+ * utilities the shared components carry today.
  */
 :root :focus-visible {
+	outline: none;
+	--tw-ring-shadow: 0 0 #0000;
+}
+:root[data-focus="keyboard"] {
+	--ring: var(--focus);
+	--sidebar-ring: var(--focus);
+}
+:root[data-focus="keyboard"] :focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
-	--tw-ring-shadow: 0 0 #0000;
 }
 /*
  * A11Y-1, composite fields: a box that draws the edge around a bare text
  * field (the chat's message box) marks itself data-composite-field. The box
  * shows the focus, as a field does, and the bare field inside shows none.
  */
-:root [data-composite-field]:has(:is(input, textarea, [contenteditable="true"]):focus-visible) {
+:root[data-focus="keyboard"] [data-composite-field]:has(:is(input, textarea, [contenteditable="true"]):focus-visible) {
 	border-color: var(--focus);
 	outline: 1px solid var(--focus);
 	outline-offset: 0;
 }
-:root [data-composite-field] :is(input, textarea, [contenteditable="true"]):focus-visible {
+:root[data-focus="keyboard"] [data-composite-field] :is(input, textarea, [contenteditable="true"]):focus-visible {
 	outline: none;
 }
 
 /* A dialog takes focus as a container when it opens; it is not a control. */
-:root :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
+:root[data-focus="keyboard"] :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]):focus-visible {
 	outline: none;
 }
-:root :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):focus-visible {
+:root[data-focus="keyboard"]
+	:is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]):focus-visible {
 	outline-offset: 0;
 	border-color: var(--focus);
 }

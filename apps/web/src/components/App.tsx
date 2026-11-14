@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { I18nProvider } from '@/lib/i18n/I18nProvider';
 import { QueryProvider } from '@/lib/query/QueryProvider';
 import { SocketProvider } from '@/lib/socket/SocketProvider';
+import { installFocusSource } from '@/lib/ui/focusSource';
 import { AppRouter } from '@/routes/AppRouter';
 
 /**
@@ -14,6 +16,8 @@ import { AppRouter } from '@/routes/AppRouter';
  * without needing prop drilling.
  */
 export default function App() {
+	// The focus outline is drawn only for focus that came from Tab (A11Y-1).
+	useEffect(installFocusSource, []);
 	return (
 		<I18nProvider>
 			<QueryProvider>
