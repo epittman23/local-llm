@@ -10,7 +10,7 @@ files:
   - package.json
 extraResources:
   # The window icon at runtime; the launcher icon is linux.icon below.
-  - from: ../web/public/favicon.png
+  - from: ../web/public/icon-512.png
     to: icon.png
 linux:
   target: rpm
@@ -20,7 +20,7 @@ linux:
   # class Hyprland reports): docks and launchers then match the running
   # window to its entry instead of showing a second, generic icon.
   syncDesktopName: true
-  icon: ../web/public/favicon.png
+  icon: ../web/public/icon-512.png
   category: Development
   # The rpm needs a maintainer; no email on purpose.
   maintainer: epittman23

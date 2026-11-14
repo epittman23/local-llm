@@ -89,7 +89,7 @@ import {
 const STATUS_HTML = join(__dirname, '..', 'static', 'status.html');
 const ICON = app.isPackaged
 	? join(process.resourcesPath, 'icon.png')
-	: join(__dirname, '..', '..', 'web', 'public', 'favicon.png');
+	: join(__dirname, '..', '..', 'web', 'public', 'icon-512.png');
 
 // userData is ~/.config/Local LLM: package.json's productName, the same in
 // development (`electron .`) and packaged, so both share one session.

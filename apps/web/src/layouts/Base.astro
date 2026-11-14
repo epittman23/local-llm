@@ -16,6 +16,10 @@ const { title = 'local-llm' } = Astro.props;
 		<!-- lib/theme.ts keeps this at the page colour of the current theme. -->
 		<meta name="theme-color" content="#121916" />
 		<title>{title}</title>
+		<!-- The mark (decision D1, 2026-11-14): lucide's Sigma until a real one exists. -->
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		<script is:inline>
 			// Anti-FOUC: set before first paint, mirroring d863707:apps/openwebui/src/app.html's
 			// own inline script (same localStorage.theme key, same class-on-<html>
