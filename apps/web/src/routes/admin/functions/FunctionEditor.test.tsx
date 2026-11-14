@@ -73,6 +73,12 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 		expect(screen.getByText('Function description').tagName).toBe('LABEL');
 	});
 
+	it('takes a hand-typed id', async () => {
+		show();
+		fireEvent.change(await screen.findByLabelText('Function ID'), { target: { value: 'profanity_filter' } });
+		expect(screen.getByLabelText('Function ID')).toHaveValue('profanity_filter');
+	});
+
 	it('shows an existing function’s id as text, not as a field', async () => {
 		render(
 			<MemoryRouter>

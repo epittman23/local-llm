@@ -108,6 +108,16 @@ describe('ToolkitEditor fields (#1057, #983)', () => {
 		expect(screen.getByText('Tool name').tagName).toBe('LABEL');
 	});
 
+	it('edits the name, id and description through the labelled fields', () => {
+		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave: vi.fn() });
+		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Unit Converter' } });
+		fireEvent.change(screen.getByLabelText('Tool ID'), { target: { value: 'units' } });
+		fireEvent.change(screen.getByLabelText('Tool description'), { target: { value: 'Converts units' } });
+		expect(screen.getByLabelText('Tool name')).toHaveValue('Unit Converter');
+		expect(screen.getByLabelText('Tool ID')).toHaveValue('units');
+		expect(screen.getByLabelText('Tool description')).toHaveValue('Converts units');
+	});
+
 	it('shows a created tool’s fixed id as text, not as a field', () => {
 		renderEditor({ tool, edit: true, onSave: vi.fn() });
 		expect(screen.queryByLabelText('Tool ID')).toBeNull();
