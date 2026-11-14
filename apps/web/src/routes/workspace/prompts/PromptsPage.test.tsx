@@ -1,3 +1,4 @@
+import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -71,7 +72,7 @@ describe('PromptsPage', () => {
 		vi.mocked(getPromptItems).mockResolvedValue({ items: [prompt], total: 1 });
 		renderPage();
 		await screen.findByText('Summarise a table');
-		expect(document.title).toMatch(/^Prompts \/ /);
+		expect(usePageTitleStore.getState().dynamic).toBe('Prompts');
 	});
 
 	it('opens a prompt from a row button that holds no other control (ACT-7)', async () => {

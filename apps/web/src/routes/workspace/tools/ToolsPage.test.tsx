@@ -1,3 +1,4 @@
+import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -27,7 +28,7 @@ describe('ToolsPage', () => {
 		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load tools");
 		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
 		expect(toast.error).not.toHaveBeenCalled();
-		expect(document.title).toMatch(/^Tools \/ /);
+		expect(usePageTitleStore.getState().dynamic).toBe('Tools');
 
 		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 		expect(vi.mocked(getToolList).mock.calls.length).toBeGreaterThan(1);
