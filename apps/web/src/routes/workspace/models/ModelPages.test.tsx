@@ -89,6 +89,13 @@ describe('ModelCreatePage', () => {
 		expect(sessionStorage.model).toBeUndefined();
 	});
 
+	it('hands the server’s words for a failed create to the editor', async () => {
+		vi.mocked(createNewModel).mockRejectedValue({ detail: 'Model id is invalid' });
+		renderAt('/workspace/models/create', <ModelCreatePage />);
+		fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(document.body.dataset.saveError).toBe('Model id is invalid'));
+	});
+
 	it('hands a refused create back to the editor, and stays', async () => {
 		vi.mocked(createNewModel).mockResolvedValue(null as never);
 		const router = renderAt('/workspace/models/create', <ModelCreatePage />);
@@ -111,7 +118,7 @@ describe('ModelEditPage', () => {
 	});
 
 	it('says in place that a missing model does not exist, with a way back (NAV-3)', async () => {
-		vi.mocked(getModelById).mockRejectedValue(NOT_FOUND_DETAIL);
+		vi.mocked(getModelById).mockRejectedValue({ detail: NOT_FOUND_DETAIL });
 		const router = renderAt('/workspace/models/edit?id=nope', <ModelEditPage />);
 		expect(await screen.findByRole('heading', { level: 2, name: "This model doesn't exist." })).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Go to Models' }));

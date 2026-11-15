@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { errorDetail } from '@/lib/apis/errors';
 import { uploadFile } from '@/lib/apis/files';
 import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge';
 import { searchNotes } from '@/lib/apis/notes';
@@ -215,7 +216,7 @@ export function KnowledgePicker({
 				)
 			);
 		} catch (e) {
-			const { cause, detail } = failureCause(e);
+			const { cause, detail } = failureCause(errorDetail(e));
 			toast.error(`Couldn't upload “${file.name}”. ${cause}`, detail ? { description: detail } : undefined);
 			commit(latest.current.filter((it) => it.itemId !== itemId));
 		}

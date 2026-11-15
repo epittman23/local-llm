@@ -6,6 +6,7 @@ import { Gone, isNotFound } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { errorDetail } from '@/lib/apis/errors';
 import { createNewModel, getModelById, updateModelById } from '@/lib/apis/models';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
@@ -18,7 +19,9 @@ import { type IncomingModel, sanitizeIncomingModel } from './modelImport';
 
 /** The API helpers answer a failure with null; the editor needs it thrown, to show it above the save bar. */
 const orThrow = async <T,>(request: Promise<T | null>): Promise<T> => {
-	const res = await request;
+	const res = await request.catch((error) => {
+		throw errorDetail(error);
+	});
 	if (!res) throw new Error('The server did not save it.');
 	return res;
 };
@@ -86,7 +89,10 @@ export function ModelEditPage() {
 		gcTime: 0,
 		retry: false,
 		queryFn: async () => {
-			const res = await getModelById(token, id as string);
+			// The helper throws the response body; its `detail` tells "not found" from a failure.
+			const res = await getModelById(token, id as string).catch((error) => {
+				throw errorDetail(error);
+			});
 			if (!res) throw new Error('The server returned no model.');
 			return res as EditorModel & { write_access?: boolean };
 		}
