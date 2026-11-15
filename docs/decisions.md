@@ -74,7 +74,13 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     Playground alike, so none of them stores an unnamed parameter. A tool's
     or function's setting is shown masked by the words in its name
     (`api_key`, `github_token`), no longer by letters inside a word
-    (`keywords`, `tokenizer`, `sort_key` now show).
+    (`keywords`, `tokenizer`, `sort_key` now show). A tool's and a
+    function's description are optional, as the API already allowed, so a
+    tool can be created without one. Importing a tool or function from a
+    link no longer toasts that it was imported before anything is created.
+    An untouched create page's save bar reads "Nothing to save yet". On a
+    phone the function editor hides the Admin header and tabs, as the
+    workspace editors hide theirs, and the editors' save bar stays in view.
     The Models row's second line is the base model and tags; the model's
     description is no longer shown on the row. Knowledge's description is
     optional. On Tools and Admin > Functions a tool's or function's "Valves"
