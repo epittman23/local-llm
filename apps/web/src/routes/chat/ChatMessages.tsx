@@ -32,7 +32,8 @@ import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { removeAllDetails } from '@/lib/markdown/content';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn, copyToClipboard } from '@/lib/utils';
+import { useCopy } from '@/lib/ui/useCopy';
+import { cn } from '@/lib/utils';
 import { shownTime } from '@/lib/utils/dates';
 import { ErrorReply } from './ErrorReply';
 import { modelImage } from './ModelSelector';
@@ -125,18 +126,21 @@ function SiblingNav({
 	);
 }
 
+/** Copy for a message: the icon turns to a check and the name says "Copied" for 1.5 s; a refused copy says so (#942, FBK-3). */
 function CopyButton({ text, className }: { text: string; className?: string }) {
+	const { copied, copy } = useCopy();
+	const name = copied ? 'Copied' : 'Copy';
 	return (
-		<Tip content="Copy">
+		<Tip content={name}>
 			<Button
 				type="button"
-				aria-label="Copy"
+				aria-label={name}
 				variant="ghost"
 				size="icon-sm"
 				className={className}
-				onClick={() => void copyToClipboard(text)}
+				onClick={() => void copy(text, 'message')}
 			>
-				<Copy className="size-3.5" />
+				{copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
 			</Button>
 		</Tip>
 	);

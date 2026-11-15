@@ -1,13 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { History, Message } from '@/lib/chat/history';
+import { copyToClipboard } from '@/lib/utils';
 import { ChatMessages, type MessageHandlers, ResponseMessage } from './ChatMessages';
 
 vi.mock('./useModels', () => ({ useModels: () => ({ models: [] }) }));
+vi.mock('@/lib/utils', async (orig) => ({
+	...(await orig<typeof import('@/lib/utils')>()),
+	copyToClipboard: vi.fn(async () => true)
+}));
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'u1', name: 'Test User' } })
@@ -246,5 +253,26 @@ describe('replies from two models side by side (#945, #991)', () => {
 		expect(turn.parentElement?.className).toContain('max-w-6xl');
 		expect(turn.innerHTML).not.toContain('opacity-80');
 		expect(screen.getByTestId('chat-column').className).not.toContain('max-w-3xl');
+	});
+});
+
+describe('copying a message (#942)', () => {
+	it('says Copied, with a check, once the text is on the clipboard', async () => {
+		show(reply);
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+		});
+		expect(copyToClipboard).toHaveBeenCalledWith('Cats are mammals.');
+		expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy();
+	});
+
+	it('says so when the browser refuses the copy', async () => {
+		vi.mocked(copyToClipboard).mockResolvedValueOnce(false);
+		show(reply);
+		fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+		await waitFor(() =>
+			expect(toastError).toHaveBeenCalledWith("Couldn't copy the message: the browser blocked clipboard access")
+		);
+		expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
 	});
 });
