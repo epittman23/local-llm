@@ -19,8 +19,11 @@ import { cn } from '@/lib/utils';
 // own light/dark base styles are switched (EditorView.darkTheme below).
 const selection = 'color-mix(in oklch, var(--brand), transparent 65%)';
 const tokenTheme = EditorView.theme({
-	'&': { color: 'var(--foreground-strong)', backgroundColor: 'var(--surface-1)' },
-	'.cm-scroller': { fontFamily: 'var(--font-code)' },
+	// The editor fills its host and scrolls inside it. Without a height CodeMirror
+	// grows to its content, and a host that clips (every caller's panel does) then
+	// hides the lines past its bottom from the wheel and from Ctrl+End.
+	'&': { height: '100%', color: 'var(--foreground-strong)', backgroundColor: 'var(--surface-1)' },
+	'.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-code)' },
 	'.cm-content': { caretColor: 'var(--foreground-strong)' },
 	'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--foreground-strong)' },
 	'&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':

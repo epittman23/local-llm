@@ -34,6 +34,16 @@ describe('CodeEditor (CNT-2)', () => {
 		expect(css).not.toContain('#282c34');
 	});
 
+	it('fills its host and scrolls inside it instead of growing to its content', async () => {
+		const { container } = render(<CodeEditor value={'x = 1\n'.repeat(200)} />);
+		await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
+		const rules = mountedCss()
+			.split('\n')
+			.filter((rule) => /\.cm-scroller|height/.test(rule));
+		expect(rules.some((rule) => /height: 100%/.test(rule))).toBe(true);
+		expect(rules.some((rule) => /\.cm-scroller[^{]*\{[^}]*overflow: auto/.test(rule))).toBe(true);
+	});
+
 	it('switches CodeMirror’s own light and dark base styles with the page', async () => {
 		const { container } = render(<CodeEditor value="x = 1" />);
 		const editor = await waitFor(() => {
