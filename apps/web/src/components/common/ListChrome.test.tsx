@@ -29,6 +29,23 @@ describe('ListSearchBar', () => {
 	});
 });
 
+describe('ListSearchBar filters', () => {
+	it('gives the search the whole row when every filter is hidden', () => {
+		const { container, rerender } = render(
+			<ListSearchBar value="" onChange={vi.fn()} placeholder="Search skills">
+				{false}
+			</ListSearchBar>
+		);
+		expect(container.firstElementChild?.children).toHaveLength(1);
+		rerender(
+			<ListSearchBar value="" onChange={vi.fn()} placeholder="Search skills">
+				<button type="button">Tag</button>
+			</ListSearchBar>
+		);
+		expect(container.firstElementChild?.children).toHaveLength(2);
+	});
+});
+
 describe('SortHeaderButton', () => {
 	it('calls onClick when the header is pressed', () => {
 		const onClick = vi.fn();

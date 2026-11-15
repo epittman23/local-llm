@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -40,9 +40,12 @@ export function ListSearchBar({
 					</Button>
 				)}
 			</div>
-			<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
-				<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
-			</div>
+			{/* A list whose filters are all hidden (one account, no tags) gives the search the whole row. */}
+			{Children.toArray(children).length > 0 && (
+				<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
+					<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
+				</div>
+			)}
 		</div>
 	);
 }
