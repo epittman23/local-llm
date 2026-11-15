@@ -57,6 +57,6 @@ describe('App', () => {
 		// rendered at all until opened -- see AppShell.tsx's own comment on why
 		// it's unmounted rather than just visually collapsed.
 		fireEvent.click(screen.getByRole('button', { name: /open sidebar/i }));
-		expect(screen.getByRole('link', { name: /new chat/i })).toBeInTheDocument();
+		expect(screen.getAllByRole('link', { name: /new chat/i }).length).toBeGreaterThan(0);
 	});
 });

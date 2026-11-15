@@ -175,8 +175,8 @@ describe('ChatSidebar folder actions', () => {
 		vi.mocked(createNewFolder).mockResolvedValue({ id: 'f9' } as never);
 		show();
 		fireEvent.click(await screen.findByRole('button', { name: 'New folder' }));
-		fireEvent.change(await screen.findByLabelText('Folder Name'), { target: { value: 'Travel' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Travel' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
 		await waitFor(() =>
 			expect(createNewFolder).toHaveBeenCalledWith('t', { name: 'Travel', data: undefined, parent_id: null })
 		);
@@ -189,7 +189,7 @@ describe('ChatSidebar folder actions', () => {
 		show();
 		await menuOf('Folder menu: Work');
 		fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit folder' }));
-		fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Save folder' }));
 		await waitFor(() => expect(updateFolderById).toHaveBeenCalled());
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Folder updated'));
 	});
