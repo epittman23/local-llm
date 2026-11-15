@@ -15,6 +15,14 @@ describe('failureToast (FBK-4)', () => {
 		expect(errorText(undefined)).toBeNull();
 	});
 
+	it('reads an object detail in words, never as "[object Object]"', () => {
+		expect(errorText({ detail: [{ loc: ['body', 'name'], msg: 'Field required' }] })).toBe('name: Field required');
+		expect(errorText({ detail: { message: 'Tool id is taken' } })).toBe('Tool id is taken');
+		expect(errorText({ error: { message: 'Rate limited' } })).toBe('Rate limited');
+		expect(errorText({ detail: { code: 7 } })).toBeNull();
+		expect(errorText({})).toBeNull();
+	});
+
 	it('puts the server words behind Details, never as the message', () => {
 		const error = vi.spyOn(toast, 'error').mockReturnValue('id');
 		toastFailure('Couldn\'t delete "A".', { detail: 'Database is locked' });

@@ -1,13 +1,13 @@
 import { toast } from 'sonner';
+import { errorMessage } from '@/lib/apis/errors';
 
 /** The server's own words for whatever a request rejected with, or null when there are none. */
 export function errorText(error: unknown): string | null {
 	if (error === null || error === undefined) return null;
-	if (typeof error === 'string') return error.trim() || null;
-	const e = error as { detail?: unknown; message?: unknown };
-	const text = e.detail ?? e.message;
-	if (text !== undefined && text !== null) return String(text).trim() || null;
-	return String(error).trim() || null;
+	if (typeof error !== 'object') return String(error).trim() || null;
+	// errorMessage reads every shape a failure comes in (a validation list, `{ error: { message } }`),
+	// where String() would print "[object Object]".
+	return errorMessage(error, '').trim() || null;
 }
 
 /** The raw text behind a "Details" disclosure, as LoadFailed shows it (FBK-4). */
