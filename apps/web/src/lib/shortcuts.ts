@@ -195,43 +195,43 @@ export function matchKeybinding(event: KeyboardEvent, bindings: KeybindingsMap):
 export const shortcuts: ShortcutRegistry = {
 	//Chat
 	[Shortcut.NEW_CHAT]: {
-		name: 'New Chat',
+		name: 'New chat',
 		keys: ['mod', 'shift', 'O'],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.NEW_TEMPORARY_CHAT]: {
-		name: 'New Temporary Chat',
+		name: 'New temporary chat',
 		keys: ['mod', 'shift', `'`],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.DELETE_CHAT]: {
-		name: 'Delete Chat',
+		name: 'Delete chat',
 		keys: ['mod', 'shift', 'Backspace'],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.OPEN_MODEL_SELECTOR]: {
-		name: 'Open Model Selector',
+		name: 'Open model selector',
 		keys: ['mod', 'shift', 'M'],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.TOGGLE_DICTATION]: {
-		name: 'Toggle Dictation',
+		name: 'Toggle dictation',
 		keys: ['mod', 'shift', 'L'],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.NAVIGATE_CHAT_UP]: {
-		name: 'Navigate to Previous Chat',
+		name: 'Navigate to previous chat',
 		keys: [],
 		category: 'Chat',
 		configurable: true
 	},
 	[Shortcut.NAVIGATE_CHAT_DOWN]: {
-		name: 'Navigate to Next Chat',
+		name: 'Navigate to next chat',
 		keys: [],
 		category: 'Chat',
 		configurable: true
@@ -245,25 +245,25 @@ export const shortcuts: ShortcutRegistry = {
 		configurable: true
 	},
 	[Shortcut.OPEN_SETTINGS]: {
-		name: 'Open Settings',
+		name: 'Open settings',
 		keys: ['mod', '.'],
 		category: 'Global',
 		configurable: true
 	},
 	[Shortcut.SHOW_SHORTCUTS]: {
-		name: 'Show Shortcuts',
+		name: 'Show shortcuts',
 		keys: ['mod', '/'],
 		category: 'Global',
 		configurable: true
 	},
 	[Shortcut.TOGGLE_SIDEBAR]: {
-		name: 'Toggle Sidebar',
+		name: 'Toggle sidebar',
 		keys: ['mod', 'shift', 'S'],
 		category: 'Global',
 		configurable: true
 	},
 	[Shortcut.TOGGLE_CONTROLS]: {
-		name: 'Toggle Controls',
+		name: 'Toggle controls',
 		keys: [],
 		category: 'Global',
 		configurable: true
@@ -277,86 +277,86 @@ export const shortcuts: ShortcutRegistry = {
 
 	//Input
 	[Shortcut.FOCUS_INPUT]: {
-		name: 'Focus Chat Input',
+		name: 'Focus chat input',
 		keys: ['shift', 'Escape'],
 		category: 'Input',
 		configurable: true
 	},
 	[Shortcut.ACCEPT_AUTOCOMPLETE]: {
-		name: 'Accept Autocomplete Generation\nJump to Prompt Variable',
+		name: 'Accept autocomplete generation\nJump to prompt variable',
 		keys: ['Tab'],
 		category: 'Input'
 	},
 	[Shortcut.PREVENT_FILE_CREATION]: {
-		name: 'Prevent File Creation',
+		name: 'Prevent file creation',
 		keys: ['mod', 'shift', 'V'],
 		category: 'Input',
 		tooltip: 'Only active when "Paste Large Text as File" setting is toggled on.'
 	},
 	[Shortcut.ATTACH_FILE]: {
-		name: 'Attach File From Knowledge',
+		name: 'Attach file from knowledge',
 		keys: ['#'],
 		category: 'Input'
 	},
 	[Shortcut.ADD_PROMPT]: {
-		name: 'Add Custom Prompt',
+		name: 'Add custom prompt',
 		keys: ['/'],
 		category: 'Input'
 	},
 	[Shortcut.TALK_TO_MODEL]: {
-		name: 'Talk to Model',
+		name: 'Talk to model',
 		keys: ['@'],
 		category: 'Input'
 	},
 
 	//Message
 	[Shortcut.GENERATE_MESSAGE_PAIR]: {
-		name: 'Generate Message Pair',
+		name: 'Generate message pair',
 		keys: ['mod', 'shift', 'Enter'],
 		category: 'Message',
 		configurable: true,
 		tooltip: 'Only active when the chat input is in focus.'
 	},
 	[Shortcut.REGENERATE_RESPONSE]: {
-		name: 'Regenerate Response',
+		name: 'Regenerate response',
 		keys: ['mod', 'R'],
 		category: 'Message',
 		configurable: true
 	},
 	[Shortcut.ALLOW_TOOL_CALL]: {
-		name: 'Allow Tool Call',
+		name: 'Allow tool call',
 		keys: ['mod', 'alt', 'Enter'],
 		category: 'Message',
 		configurable: true,
 		tooltip: 'Only active when a tool call is waiting for approval.'
 	},
 	[Shortcut.DENY_TOOL_CALL]: {
-		name: 'Deny Tool Call',
+		name: 'Deny tool call',
 		keys: ['mod', 'alt', 'Backspace'],
 		category: 'Message',
 		configurable: true,
 		tooltip: 'Only active when a tool call is waiting for approval.'
 	},
 	[Shortcut.STOP_GENERATING]: {
-		name: 'Stop Generating',
+		name: 'Stop generating',
 		keys: ['Escape'],
 		category: 'Message',
 		tooltip: 'Only active when the chat input is in focus and an LLM is generating a response.'
 	},
 	[Shortcut.NAVIGATE_PROMPT_HISTORY_UP]: {
-		name: 'Edit Last Message',
+		name: 'Edit last message',
 		keys: ['ArrowUp'],
 		category: 'Message',
 		tooltip: 'Only can be triggered when the chat input is in focus.'
 	},
 	[Shortcut.COPY_LAST_RESPONSE]: {
-		name: 'Copy Last Response',
+		name: 'Copy last response',
 		keys: ['mod', 'shift', 'C'],
 		category: 'Message',
 		configurable: true
 	},
 	[Shortcut.COPY_LAST_CODE_BLOCK]: {
-		name: 'Copy Last Code Block',
+		name: 'Copy last code block',
 		keys: ['mod', 'shift', ';'],
 		category: 'Message',
 		configurable: true
@@ -364,7 +364,7 @@ export const shortcuts: ShortcutRegistry = {
 
 	//Voice
 	[Shortcut.TOGGLE_MUTE]: {
-		name: 'Toggle Mute',
+		name: 'Toggle mute',
 		keys: ['M'],
 		category: 'Voice',
 		tooltip: 'Only active during Voice Mode.'

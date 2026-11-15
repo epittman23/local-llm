@@ -36396,7 +36396,8 @@
         }
        ]
       }
-     ]
+     ],
+     "stopped": true
     },
     true
    ],
@@ -36506,7 +36507,8 @@
         }
        ]
       }
-     ]
+     ],
+     "stopped": true
     },
     true
    ]
@@ -37490,7 +37492,8 @@
         ]
        }
       ],
-      "title": ""
+      "title": "",
+      "finish_reason": "stop"
      }
     }
    ],
@@ -46053,7 +46056,8 @@
         }
        ]
       }
-     ]
+     ],
+     "stopped": true
     },
     true
    ],
@@ -46167,7 +46171,8 @@
         }
        ]
       }
-     ]
+     ],
+     "stopped": true
     },
     true
    ],

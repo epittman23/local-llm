@@ -1,5 +1,6 @@
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { isDraftKey } from '@/lib/chat/drafts';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
 export const getAdminDetails = async (token: string) => {
 	let error = null;
@@ -231,7 +232,13 @@ export const userSignUp = async (name: string, email: string, password: string, 
 	return res;
 };
 
-export const userSignOut = async () => {
+/**
+ * Signs out on the server and forgets this tab's session storage. `keepDrafts`
+ * keeps the message box's unsent drafts (lib/chat/drafts): a session that ran
+ * out puts them back after the next sign-in (#1061); a deliberate sign-out
+ * forgets them too.
+ */
+export const userSignOut = async ({ keepDrafts = false } = {}) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/signout`, {
@@ -255,7 +262,9 @@ export const userSignOut = async () => {
 		throw error;
 	}
 
-	sessionStorage.clear();
+	if (keepDrafts) {
+		for (const key of Object.keys(sessionStorage)) if (!isDraftKey(key)) sessionStorage.removeItem(key);
+	} else sessionStorage.clear();
 	return res;
 };
 

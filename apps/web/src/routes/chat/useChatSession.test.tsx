@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as apis from '@/lib/apis';
 import * as chatsApi from '@/lib/apis/chats';
+import * as evaluationsApi from '@/lib/apis/evaluations';
 import * as usersApi from '@/lib/apis/users';
 import { updateMessage } from '@/lib/chat/history';
 import { getOutputText } from '@/lib/chat/structuredOutput';
@@ -79,7 +80,8 @@ vi.mock('@/lib/apis', async (orig) => ({
 vi.mock('@/lib/apis/evaluations', async (orig) => ({
 	...(await orig<object>()),
 	createNewFeedback: vi.fn(() => new Promise((resolve) => (pending.feedback = resolve))),
-	updateFeedbackById: vi.fn(async () => ({}))
+	updateFeedbackById: vi.fn(async () => ({})),
+	deleteFeedbackById: vi.fn(async () => true)
 }));
 
 vi.mock('@/lib/apis/openai', async (orig) => ({
@@ -600,6 +602,168 @@ describe('useChatSession loadChat', () => {
 		expect(session.history.messages['B-m'].annotation).toBeUndefined();
 	});
 
+	it('a second press while a rating is saved adds no second feedback row (ACT-5)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		vi.mocked(evaluationsApi.createNewFeedback).mockClear();
+		const message = session.history.messages['A-m'];
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(message, 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		expect(session.ratingIds.has('A-m')).toBe(true);
+		await act(() => session.rate(message, -1));
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(evaluationsApi.createNewFeedback).toHaveBeenCalledTimes(1);
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		expect(session.ratingIds.size).toBe(0);
+	});
+
+	it('an un-rate pressed before the first rating answers waits, and leaves no orphan row (ACT-5)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockClear();
+		const message = session.history.messages['A-m'];
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(message, 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		await act(() => session.unrate(message));
+		// Refused while the rating is saved: nothing removed, nothing saved.
+		expect(chatsApi.updateChatById).not.toHaveBeenCalled();
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(evaluationsApi.deleteFeedbackById).not.toHaveBeenCalled();
+		// The row and the rating agree, so the thumb removes it with its row once pressed again.
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		await act(() => session.unrate(session.history.messages['A-m']));
+		expect(evaluationsApi.deleteFeedbackById).toHaveBeenCalledWith(expect.anything(), 'fb1');
+		expect(session.history.messages['A-m'].feedbackId).toBeUndefined();
+	});
+
+	/** Chat A open with its message rated good (feedback fb1, tagged). */
+	async function rateA() {
+		const router = await openChatA();
+		delete pending.feedback;
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockClear();
+		return router;
+	}
+
+	it.each([
+		['deleted', async () => true],
+		['already gone', async () => Promise.reject("We could not find what you're looking for :/")]
+	])(
+		'removing a rating whose entry is %s clears it, its note and tags, and saves the chat (S3-D2b)',
+		async (_c, del) => {
+			await rateA();
+			vi.mocked(evaluationsApi.deleteFeedbackById).mockImplementationOnce(del as never);
+			await act(() => session.unrate(session.history.messages['A-m']));
+			expect(evaluationsApi.deleteFeedbackById).toHaveBeenCalledWith(expect.anything(), 'fb1');
+			const m = session.history.messages['A-m'];
+			expect(m.annotation).toBeUndefined();
+			expect(m.feedbackId).toBeUndefined();
+			expect(savedTo()).toEqual(['A']);
+			const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+				history: { messages: Record<string, Record<string, unknown>> };
+			};
+			expect(JSON.parse(JSON.stringify(body.history.messages['A-m']))).not.toHaveProperty('feedbackId');
+		}
+	);
+
+	it('a rating whose entry could not be deleted is kept (S3-D2b)', async () => {
+		await rateA();
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockRejectedValueOnce('Server error');
+		await act(() => session.unrate(session.history.messages['A-m']));
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		expect(savedTo()).toEqual([]);
+	});
+
+	it('a rating removed while another chat opened is removed from its own chat (S3-D2b, #215)', async () => {
+		const router = await rateA();
+		let release: (v: unknown) => void = () => undefined;
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockImplementationOnce(
+			() => new Promise((r) => (release = r)) as never
+		);
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.unrate({ ...session.history.messages['A-m'], feedbackId: 'fb1' });
+		});
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		vi.mocked(chatsApi.getChatById).mockResolvedValueOnce({
+			id: 'A',
+			chat: {
+				history: {
+					currentId: 'A-m',
+					messages: {
+						'A-m': {
+							id: 'A-m',
+							parentId: null,
+							childrenIds: [],
+							role: 'user',
+							content: 'hi',
+							feedbackId: 'fb1',
+							annotation: { rating: 1, comment: 'ok' }
+						}
+					}
+				}
+			}
+		} as never);
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		await act(async () => {
+			release(true);
+			await run;
+		});
+		expect(savedTo()).toEqual(['A']);
+		const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+			history: { messages: Record<string, Record<string, unknown>> };
+		};
+		expect(body.history.messages['A-m'].annotation).toBeUndefined();
+		expect(body.history.messages['A-m'].feedbackId).toBeUndefined();
+	});
+
+	it('tags that arrive after the rating was removed are not put back (S3-D2b)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		let releaseTags: (v: unknown) => void = () => undefined;
+		vi.mocked(apis.generateTags).mockImplementationOnce(() => new Promise((r) => (releaseTags = r)) as never);
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => pending.feedback({ id: 'fb1' }));
+		await waitFor(() => expect(session.history.messages['A-m'].feedbackId).toBe('fb1'));
+		await act(() => session.unrate(session.history.messages['A-m']));
+		vi.mocked(evaluationsApi.updateFeedbackById).mockClear();
+		await act(async () => {
+			releaseTags(['late']);
+			await run;
+		});
+		expect(session.history.messages['A-m'].annotation).toBeUndefined();
+		expect(evaluationsApi.updateFeedbackById).not.toHaveBeenCalled();
+	});
+
 	/** The next completion POST, held until the test answers it. */
 	async function holdNextPost() {
 		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
@@ -648,6 +812,24 @@ describe('useChatSession loadChat', () => {
 			// By chat id, which the chat's owner may use; stopping one task by id is admin-only.
 			expect(apis.stopTasksByChatId).toHaveBeenCalledWith('t', 'A');
 			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('Stop marks the reply being written as stopped (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			const { send, answer } = await holdNextPost();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => session.stop());
+			await act(async () => answer.resolve({ task_ids: ['t1'] }));
+
+			const reply = session.history.messages[session.history.currentId ?? ''];
+			expect(reply).toMatchObject({ role: 'assistant', done: true, stopped: true });
 		} finally {
 			probeModels = [];
 		}
@@ -745,6 +927,28 @@ describe('useChatSession loadChat', () => {
 
 			expect(session.history.messages.r.error).toBeTruthy();
 			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('continuing a stopped reply drops its stopped and token-limit marks (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() =>
+				session.setHistory((h) =>
+					updateMessage(h, 'r', { done: true, content: 'half', model: 'm', stopped: true, finish_reason: 'length' })
+				)
+			);
+			const { send } = await holdNextPost();
+			act(() => void session.continueReply(session.history.messages.r));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			expect(session.history.messages.r).toMatchObject({ done: false });
+			expect(session.history.messages.r.stopped).toBeUndefined();
+			expect(session.history.messages.r.finish_reason).toBeUndefined();
 		} finally {
 			probeModels = [];
 		}

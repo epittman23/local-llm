@@ -7,6 +7,77 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-15** (later): **The chat: the owner's decisions for the UX review's
+  section 3 (#1116), and canvas Phase 1, the side panel.**
+  - **The Arena model is off (#990, S3-D1 A).** `ENABLE_EVALUATION_ARENA_MODELS`
+    defaults to false, and revision `c17c2aeb2577` deletes a stored
+    `evaluation.arena.enable` that is true, so it reseeds from the environment
+    or the new false default. A deliberate "on" cannot be told apart and is
+    turned off too; Admin > Evaluations turns it back on. While on, the picker
+    reads "Answers with a random model".
+  - **Message rating is off by default (#995, S3-D2 B).** `ENABLE_MESSAGE_RATING`
+    defaults to false, and the same revision deletes a stored
+    `ui.enable_message_rating` that is true, so it reseeds off unless the
+    environment sets it. Admin Settings > Interface turns it back on. Stored
+    ratings are untouched.
+  - **A thumb is one click (#995, S3-D2).** A thumb under a reply saves the
+    rating at once and reads 'Rated good' / 'Rated bad'; 'Add a note' opens a
+    comment box only. The 1-10 score and the canned reasons are no longer
+    asked; stored ratings keep what they hold, and Admin > Evaluations still
+    shows stored reasons. The thumbs show only while message rating is on
+    (Admin Settings > Interface).
+  - **Pressing the given thumb again removes the rating (#995, S3-D2b).** It
+    deletes that reply's feedback entry through the existing
+    `DELETE /api/v1/evaluations/feedback/{id}`, and the reply loses the rating,
+    note and tags it carried; an entry already deleted from Admin >
+    Evaluations counts as removed. The other thumb switches the rating. A
+    change to stored data the owner approved; no API or schema change.
+  - **Ollama-only parameters follow the Ollama connection (#996, S3-D3 A).**
+    The ten Ollama-only parameters (the eight "(Ollama)" rows plus use_mmap and
+    use_mlock) sit in a closed "Ollama only" group. It shows only while the
+    Ollama connection is on, read from the admin-only `/ollama/config`; where
+    that cannot be read, the group shows closed. No API change.
+  - **A stopped or cut-off reply says so (#1081, S3-D4 A).** A reply that was
+    cancelled is saved with `stopped: true`, and a streamed reply keeps the
+    `finish_reason` its provider gave (or the Responses API's incomplete
+    reason). Cancelled means Stop, a send that interrupts the reply while the
+    queue is off, or a backend shutdown that cancels a running reply. Such a
+    reply ends with 'Stopped' or 'Reached the token limit' and labelled
+    Continue and Regenerate. Continuing it clears both marks. Both are extra
+    fields in the chat's JSON; nothing is migrated.
+  - **A follow-up fills the message box (#1087, S3-D5 A).** Clicking a
+    suggested follow-up puts it in the message box, focused, by default
+    (`insertFollowUpPrompt` now defaults to true, in Settings > Interface
+    too). Anyone who set it explicitly keeps their choice; stored settings are
+    not rewritten.
+  - **Run without the sandbox explains itself, frontend only (#993, S3-D6 A).**
+    Run on a host without the sandbox says "The code sandbox isn't set up on
+    this machine", what it needs, and links `docs/guides/sandbox.md`; Run is
+    then disabled for the session with that reason. No API change.
+  - **Generation info shows what the reply holds, frontend only (#994, S3-D7
+    A).** Tokens in words; speed and times when llama-server reported them,
+    and "Speed not reported by this provider" otherwise. Nothing new is
+    recorded.
+  - **Behaviour changes.**
+    - Controls and the code-block preview share one side panel
+      (`components/layout/SidePanel.tsx`, canvas Phase 1): a resizable column
+      with its width remembered per occupant, or a full-screen sheet where
+      there is no room, always on phones.
+    - On a phone the chat's header buttons sit in the app bar and the model
+      picker in the message box, so there is one header row.
+    - The header shows the chat's title, with Rename, Pin and Tags; Download
+      offers Markdown first, and the JSON file is named `chat-<title>.json`.
+    - A temporary chat keeps a "not saved" chip after its first message, and
+      reloading it asks first.
+    - Enter is a newline on touch; the unsent text of the message box is kept
+      per chat in `sessionStorage` (attachments are not), also through a
+      sign-in after the session ran out, whose sign-out now keeps the drafts.
+    - "Set as default" became "Make default" inside the model picker; the
+      model parameters are named in words and grouped.
+    - Code blocks offer Collapse only above 25 lines; Wrap lines is one
+      setting for every block, remembered (`codeWrap` in localStorage);
+      Copy table writes tab-separated values.
+
 - **2026-11-15**: **The app shell, sidebar, Settings and public pages:
   the owner's decisions for the UX review's section 2 (#1116), and organising
   a chat no longer changes its date.**

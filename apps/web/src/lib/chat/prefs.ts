@@ -55,7 +55,8 @@ export function chatPrefs(settings: Record<string, unknown> | null | undefined):
 		markdownInAssistantMessages: read('renderMarkdownInAssistantMessages', true),
 		keepFollowUps: read('keepFollowUpPrompts', false),
 		insertSuggestion: read('insertSuggestionPrompt', false),
-		insertFollowUp: read('insertFollowUpPrompt', false),
+		// S3-D5: a follow-up fills the message box unless the person chose to send it at once.
+		insertFollowUp: read('insertFollowUpPrompt', true),
 		regenerateMenu: read('regenerateMenu', true),
 		scrollOnResponse: read('scrollOnResponseGeneration', true),
 		scrollOnBranch: read('scrollOnBranchChange', true),

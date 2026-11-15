@@ -226,7 +226,7 @@ export const ROWS: Record<Section, RowDef[]> = {
 			'insertFollowUpPrompt',
 			'Insert Follow-Up Prompt to Input',
 			'Insert selected follow-up prompts directly into the composer.',
-			false
+			true
 		),
 		sw('regenerateMenu', 'Regenerate Menu', 'Show the regenerate action menu for assistant responses.', true),
 		sw('collapseCodeBlocks', 'Always Collapse Code Blocks', 'Collapse code blocks by default.', false),
@@ -377,8 +377,7 @@ export const ROWS: Record<Section, RowDef[]> = {
 	]
 };
 
-const own = (o: unknown, k: string) =>
-	typeof o === 'object' && o !== null && Object.prototype.hasOwnProperty.call(o, k);
+const own = (o: unknown, k: string) => typeof o === 'object' && o !== null && Object.hasOwn(o, k);
 
 /** Whether `path` (dotted) is set in `source` at all, even to a falsy value. */
 export function hasSettingPath(source: InterfaceValues | null | undefined, path: string): boolean {

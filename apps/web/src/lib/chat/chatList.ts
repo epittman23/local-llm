@@ -80,26 +80,53 @@ type SavedChat = {
 	chat?: { title?: string; history?: { messages: Record<string, any>; currentId: string | null }; messages?: any[] };
 };
 
+type ExportedMessage = {
+	role?: string;
+	content?: string;
+	output?: Parameters<typeof getOutputText>[0];
+	model?: string;
+	modelName?: string;
+};
+
+/** The messages along the chat's current branch, oldest first (or its flat list, for an old record). */
+function branchMessages(chat: SavedChat): ExportedMessage[] {
+	const history = chat.chat?.history;
+	if (!history?.messages) return chat.chat?.messages ?? [];
+	const list: ExportedMessage[] = [];
+	let id = history.currentId;
+	const seen = new Set<string>();
+	while (id && history.messages[id] && !seen.has(id)) {
+		seen.add(id);
+		list.unshift(history.messages[id]);
+		id = history.messages[id].parentId;
+	}
+	return list;
+}
+
+const messageText = (m: ExportedMessage): string => getOutputText(m.output) || m.content || '';
+
 /** A chat as plain text, "### USER / ### ASSISTANT" per message along the current branch (ChatMenu's getChatAsText). */
 export function chatAsText(chat: SavedChat): string {
-	const history = chat.chat?.history;
-	let list: any[] = chat.chat?.messages ?? [];
-	if (history?.messages) {
-		list = [];
-		let id = history.currentId;
-		const seen = new Set<string>();
-		while (id && history.messages[id] && !seen.has(id)) {
-			seen.add(id);
-			list.unshift(history.messages[id]);
-			id = history.messages[id].parentId;
-		}
-	}
-	return list
-		.reduce(
-			(text, m) => `${text}### ${String(m.role).toUpperCase()}\n${getOutputText(m.output) || m.content || ''}\n\n`,
-			''
-		)
+	return branchMessages(chat)
+		.reduce((text, m) => `${text}### ${String(m.role).toUpperCase()}\n${messageText(m)}\n\n`, '')
 		.trim();
+}
+
+/**
+ * A chat as Markdown (#1085): its title, then a "## You" or "## <model>"
+ * heading per message along the current branch, each followed by the
+ * message's own source, so mathematics, tables and code stay as written. A
+ * rule separates the messages, since a reply's own headings can be "##" too.
+ */
+export function chatAsMarkdown(chat: SavedChat): string {
+	const title = chat.chat?.title?.trim();
+	const parts = branchMessages(chat).map((m) => {
+		const who =
+			m.role === 'user' ? 'You' : m.role === 'assistant' ? m.modelName || m.model || 'Assistant' : String(m.role);
+		return `## ${who}\n\n${messageText(m).trim()}`;
+	});
+	const body = parts.join('\n\n---\n\n');
+	return `${[title ? `# ${title}` : null, body].filter(Boolean).join('\n\n')}\n`;
 }
 
 /** A title safe to use in a file name. */

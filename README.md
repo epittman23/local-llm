@@ -298,6 +298,9 @@ per task, each wrapping a specific OpenRouter model id:
 - **Coding** → `qwen/qwen-2.5-coder-32b-instruct`
 - **Reasoning** → `qwen/qwen3.6-27b`
 
+The new-chat greeting shows the Workspace entry's name, with its model id
+beneath; name the entry to change what it says.
+
 Both models are configured (per-model, in the System Prompt field) with the
 following instructions:
 

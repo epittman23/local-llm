@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { isNotFound } from '@/components/common/Gone';
 import { chatAction, generateTags, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
-import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
+import { createNewFeedback, deleteFeedbackById, updateFeedbackById } from '@/lib/apis/evaluations';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import { getAndUpdateUserLocation } from '@/lib/apis/users';
@@ -31,6 +31,7 @@ import {
 	normalizeHistory,
 	rewrittenMessage,
 	saveReplyAsCopy,
+	stopReplies,
 	updateMessage
 } from '@/lib/chat/history';
 import {
@@ -592,12 +593,10 @@ export function useChatSession({
 		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
 		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
 		setTaskIds(null);
+		// A reply still being written is marked stopped (S3-D4); the server saves the mark with what it streamed.
 		setHistory((h) => {
 			const m = h.currentId ? h.messages[h.currentId] : null;
-			if (!m?.parentId) return h;
-			let next = h;
-			for (const c of h.messages[m.parentId]?.childrenIds ?? []) next = updateMessage(next, c, { done: true });
-			return next;
+			return m?.parentId ? stopReplies(h, m.parentId) : h;
 		});
 	}, [token, taskIds, setHistory]);
 
@@ -701,7 +700,8 @@ export function useChatSession({
 				toast.error('Model not found');
 				return;
 			}
-			setHistory((h) => updateMessage(h, message.id, { done: false }));
+			// Continued, it no longer ends where it was stopped or cut off (S3-D4); the server clears its copy too.
+			setHistory((h) => updateMessage(h, message.id, { done: false, stopped: undefined, finish_reason: undefined }));
 			const req = await beginRequest();
 			if (!req) return;
 			const chatId = chatIdRef.current;
@@ -829,79 +829,166 @@ export function useChatSession({
 		[token, socket, save, setHistory]
 	);
 
+	// Replies whose rating is being saved or removed (ACT-5): a second call before the first
+	// answers would create a second feedback row, or lose an un-rate made before the row exists.
+	const ratingRef = useRef(new Set<string>());
+	const [ratingIds, setRatingIds] = useState<ReadonlySet<string>>(() => new Set());
+	const beginRating = useCallback((messageId: string) => {
+		if (ratingRef.current.has(messageId)) return false;
+		ratingRef.current.add(messageId);
+		setRatingIds(new Set(ratingRef.current));
+		return true;
+	}, []);
+	const endRating = useCallback((messageId: string) => {
+		if (!ratingRef.current.delete(messageId)) return;
+		setRatingIds(new Set(ratingRef.current));
+	}, []);
+
 	/**
 	 * Rates a reply, or adds details to its rating, and records it as feedback
 	 * (creating it the first time). After a first thumbs up or down with no
-	 * tags yet, asks the model for tags, as the Svelte app does.
+	 * tags yet, asks the model for tags, as the Svelte app does. Ignored while
+	 * the reply's rating is already being saved or removed.
 	 */
 	const rate = useCallback(
 		async (message: Message, rating: number | null, details: FeedbackDetails | null = null) => {
 			const id = chatIdRef.current;
 			if (!id || isTemporaryChatId(id)) return;
-			// This chat's history as it is now: the awaits below may end in another chat.
-			const history = historyRef.current;
-			const annotation = annotate(message, rating, details);
-			const chatRecord = await getChatById(token, id).catch((e) => {
-				toast.error(`${e}`);
-				return null;
-			});
-			if (!chatRecord) return;
-			const baseModelOf = (mid: string) => {
-				const m = latest.current.models.find((x) => x.id === mid);
-				return m ? (m.info?.base_model_id ?? null) : undefined;
-			};
-			const item = feedbackItem({
-				history,
-				message,
-				annotation,
-				chatId: id,
-				chat: chatRecord,
-				baseModelOf
-			});
-			const feedbackId = message.feedbackId as string | undefined;
-			const res = (await (feedbackId
-				? updateFeedbackById(token, feedbackId, item)
-				: createNewFeedback(token, item)
-			).catch((e) => {
-				toast.error(`${e}`);
-				return null;
-			})) as { id?: string } | null;
-			const patch = { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) };
-			// Another chat opened meanwhile: record the rating in this chat's
-			// stored copy, not in the chat now open (#215).
-			if (chatIdRef.current !== id) {
-				const stored = chatRecord.chat?.history as History | undefined;
-				if (stored?.messages?.[message.id]) {
-					const h = updateMessage(stored, message.id, patch);
-					await updateChatById(token, id, {
-						...chatRecord.chat,
-						history: h,
-						messages: messagesList(h, h.currentId)
-					}).catch((e) => toast.error(`${e}`));
-				}
-				return;
-			}
-			const next = updateMessage(historyRef.current, message.id, patch);
-			setHistory(next);
-			await save(next);
-			if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
-				const tags = (await generateTags(token, message.model ?? '', messagesList(next, message.id) as never, id).catch(
-					() => null
-				)) as string[] | null;
-				const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
-				if (tags?.length && fid) {
-					if (chatIdRef.current === id) {
-						const tagged = updateMessage(historyRef.current, message.id, (m) => ({
-							annotation: { ...(m.annotation ?? {}), tags }
-						}));
-						setHistory(tagged);
-						void save(tagged);
+			if (!beginRating(message.id)) return;
+			try {
+				// This chat's history as it is now: the awaits below may end in another chat.
+				const history = historyRef.current;
+				const annotation = annotate(message, rating, details);
+				const chatRecord = await getChatById(token, id).catch((e) => {
+					toast.error(`${e}`);
+					return null;
+				});
+				if (!chatRecord) return;
+				const baseModelOf = (mid: string) => {
+					const m = latest.current.models.find((x) => x.id === mid);
+					return m ? (m.info?.base_model_id ?? null) : undefined;
+				};
+				const item = feedbackItem({
+					history,
+					message,
+					annotation,
+					chatId: id,
+					chat: chatRecord,
+					baseModelOf
+				});
+				const feedbackId = message.feedbackId as string | undefined;
+				const res = (await (feedbackId
+					? updateFeedbackById(token, feedbackId, item)
+					: createNewFeedback(token, item)
+				).catch((e) => {
+					toast.error(`${e}`);
+					return null;
+				})) as { id?: string } | null;
+				const patch = { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) };
+				// Another chat opened meanwhile: record the rating in this chat's
+				// stored copy, not in the chat now open (#215).
+				if (chatIdRef.current !== id) {
+					const stored = chatRecord.chat?.history as History | undefined;
+					if (stored?.messages?.[message.id]) {
+						const h = updateMessage(stored, message.id, patch);
+						await updateChatById(token, id, {
+							...chatRecord.chat,
+							history: h,
+							messages: messagesList(h, h.currentId)
+						}).catch((e) => toast.error(`${e}`));
 					}
-					void updateFeedbackById(token, fid, { ...item, data: { ...item.data, tags } }).catch(() => {});
+					return;
 				}
+				const next = updateMessage(historyRef.current, message.id, patch);
+				setHistory(next);
+				await save(next);
+				// Saved: the thumbs answer again while the model is asked for tags.
+				endRating(message.id);
+				if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
+					const tags = (await generateTags(
+						token,
+						message.model ?? '',
+						messagesList(next, message.id) as never,
+						id
+					).catch(() => null)) as string[] | null;
+					const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
+					// The rating was removed while the model was asked (S3-D2b): its row is gone, so are its tags.
+					const removed = chatIdRef.current === id && historyRef.current.messages[message.id]?.feedbackId !== fid;
+					if (tags?.length && fid && !removed) {
+						if (chatIdRef.current === id) {
+							const tagged = updateMessage(historyRef.current, message.id, (m) => ({
+								annotation: { ...(m.annotation ?? {}), tags }
+							}));
+							setHistory(tagged);
+							void save(tagged);
+						}
+						void updateFeedbackById(token, fid, { ...item, data: { ...item.data, tags } }).catch(() => {});
+					}
+				}
+			} finally {
+				endRating(message.id);
 			}
 		},
-		[token, save, setHistory]
+		[token, save, setHistory, beginRating, endRating]
+	);
+
+	/**
+	 * Removes a reply's rating (S3-D2b): deletes its feedback entry, then the
+	 * rating, note and tags it carried. An entry already gone (deleted from
+	 * Admin > Evaluations) counts as removed; any other failure leaves the
+	 * rating as it is and says why.
+	 */
+	const unrate = useCallback(
+		async (message: Message) => {
+			const id = chatIdRef.current;
+			if (!id || isTemporaryChatId(id)) return;
+			if (!beginRating(message.id)) return;
+			try {
+				const feedbackId = message.feedbackId as string | undefined;
+				if (feedbackId) {
+					const deleted = await deleteFeedbackById(token, feedbackId).then(
+						() => true,
+						(e) => {
+							if (isNotFound(e)) return true;
+							toast.error(`${e}`);
+							return false;
+						}
+					);
+					if (!deleted) return;
+				}
+				const unrated = (m: Message): Partial<Message> => {
+					const rest = Object.fromEntries(
+						Object.entries(m.annotation ?? {}).filter(
+							([k]) => !['rating', 'comment', 'reason', 'details', 'tags'].includes(k)
+						)
+					);
+					return { annotation: Object.keys(rest).length ? rest : undefined, feedbackId: undefined };
+				};
+				// Another chat opened meanwhile: change this chat's stored copy, not the chat now open (#215).
+				if (chatIdRef.current !== id) {
+					const chatRecord = await getChatById(token, id).catch((e) => {
+						toast.error(`${e}`);
+						return null;
+					});
+					const stored = chatRecord?.chat?.history as History | undefined;
+					if (stored?.messages?.[message.id]) {
+						const h = updateMessage(stored, message.id, unrated);
+						await updateChatById(token, id, {
+							...chatRecord?.chat,
+							history: h,
+							messages: messagesList(h, h.currentId)
+						}).catch((e) => toast.error(`${e}`));
+					}
+					return;
+				}
+				const next = updateMessage(historyRef.current, message.id, unrated);
+				setHistory(next);
+				await save(next);
+			} finally {
+				endRating(message.id);
+			}
+		},
+		[token, save, setHistory, beginRating, endRating]
 	);
 
 	return {
@@ -909,6 +996,9 @@ export function useChatSession({
 		editMessage,
 		removeMessage,
 		rate,
+		unrate,
+		/** Replies whose rating is being saved or removed: their thumbs wait (ACT-5). */
+		ratingIds,
 		runAction,
 		chatId: chatIdRef.current,
 		/** The id the server gave a chat started on this page (its URL change is not a new chat). */

@@ -43,9 +43,40 @@ describe('ChatPlaceholder suggestions', () => {
 	});
 });
 
-describe('ChatPlaceholder heading', () => {
-	it('shows the model name on the standard’s heading step (TYP-2)', () => {
-		render(<ChatPlaceholder model={model} temporary={false} onSelect={vi.fn()} />);
+describe('ChatPlaceholder heading (#927, #1065)', () => {
+	it('shows the entry’s name on the heading step (TYP-2), with its id beneath in mono (DAT-4)', () => {
+		const { container } = render(<ChatPlaceholder model={model} temporary={false} onSelect={vi.fn()} />);
 		expect(screen.getByRole('heading', { level: 1, name: 'Coder' }).className).toContain('text-heading');
+		expect(container.querySelector('.font-mono.text-caption')?.textContent).toBe('coder');
+	});
+
+	it('shows an entry with no name of its own as its id, monospaced, wrapping after / and - (TYP-7)', () => {
+		const id = 'qwen/qwen-2.5-coder-32b-instruct';
+		render(<ChatPlaceholder model={{ id, name: id }} temporary={false} onSelect={vi.fn()} />);
+		const h1 = screen.getByRole('heading', { level: 1 });
+		expect(h1.textContent).toBe(id);
+		expect(h1.className).toContain('font-mono');
+		expect(h1.className).toContain('text-title');
+		expect(h1.className).not.toContain('line-clamp');
+		expect(h1.querySelectorAll('wbr')).toHaveLength(5);
+	});
+
+	it('greets the user when there is no model, and says when the chat is temporary', () => {
+		render(<ChatPlaceholder model={undefined} temporary onSelect={vi.fn()} />);
+		expect(screen.getByRole('heading', { level: 1, name: 'Hello, Ada' })).toBeInTheDocument();
+		expect(screen.getByText(/^Temporary chat: /)).toBeInTheDocument();
+	});
+});
+
+describe('ChatPlaceholder suggestion order (#927)', () => {
+	it('keeps the source order and shows the first six, the same on every render', () => {
+		const suggestion_prompts = Array.from({ length: 7 }, (_, i) => ({ content: `Prompt ${i + 1}` }));
+		const shown = () => screen.getAllByRole('button').map((b) => b.textContent);
+		const m = { id: 'm', name: 'M', info: { meta: { suggestion_prompts } } };
+		const { rerender } = render(<ChatPlaceholder model={m} temporary={false} onSelect={vi.fn()} />);
+		const first = shown();
+		expect(first).toEqual(['Prompt 1', 'Prompt 2', 'Prompt 3', 'Prompt 4', 'Prompt 5', 'Prompt 6']);
+		rerender(<ChatPlaceholder model={{ ...m }} temporary={false} onSelect={vi.fn()} />);
+		expect(shown()).toEqual(first);
 	});
 });

@@ -1,6 +1,7 @@
 import {
 	ChevronDown,
-	Info,
+	MoreHorizontal,
+	NotebookPen,
 	Pencil,
 	PlayCircle,
 	RotateCcw,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,14 +28,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { DISLIKE_REASONS, type FeedbackDetails, LIKE_REASONS, REASON_LABELS } from '@/lib/chat/feedback';
+import type { FeedbackDetails } from '@/lib/chat/feedback';
 import { canContinue, type History, type Message, siblingsOf } from '@/lib/chat/history';
 import { canChat } from '@/lib/chat/permissions';
 import { isTemporaryChatId } from '@/lib/chat/request';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
-import type { MessageHandlers } from './ChatMessages';
+import type { ExtraActionsContext, MessageHandlers } from './ChatMessages';
+import { GenerationInfo } from './GenerationInfo';
 import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
 import { useReadAloud } from './useReadAloud';
@@ -46,6 +49,9 @@ type Session = {
 	continueReply: (m: Message) => Promise<void>;
 	regenerate: (m: Message, suggestion?: string) => Promise<void>;
 	rate: (m: Message, rating: number | null, details?: FeedbackDetails | null) => Promise<void>;
+	unrate: (m: Message) => Promise<void>;
+	/** Replies whose rating is being saved or removed. */
+	ratingIds: ReadonlySet<string>;
 	runAction: (actionId: string, m: Message) => Promise<void>;
 };
 
@@ -73,7 +79,7 @@ function EditBox({ message, onDone, session }: { message: Message; onDone: () =>
 			<div className="mt-2 flex items-center justify-between gap-2">
 				{!user ? (
 					<Button size="sm" variant="ghost" onClick={() => void run('copy')}>
-						Save As Copy
+						Save as copy
 					</Button>
 				) : (
 					<span />
@@ -102,88 +108,58 @@ function EditBox({ message, onDone, session }: { message: Message; onDone: () =>
 	);
 }
 
-/** Ports RateComment.svelte: why, a 1-10 score and a comment, saved onto the rating. */
-function RateComment({
+/**
+ * The note on a rating (S3-D2): a comment box and nothing else. Ports what is
+ * left of RateComment.svelte; the 1-10 score and the canned reasons are no
+ * longer asked, and what a stored rating already holds is kept.
+ */
+function RateNote({
 	message,
+	busy,
 	onSave,
 	onClose
 }: {
 	message: Message;
-	onSave: (d: FeedbackDetails) => void;
+	/** The rating is being saved or removed: the note waits for it (ACT-5). */
+	busy: boolean;
+	onSave: (comment: string) => void;
 	onClose: () => void;
 }) {
-	const a = (message.annotation ?? {}) as {
-		rating?: number;
-		reason?: string;
-		comment?: string;
-		details?: { rating?: number | null };
-	};
-	const [reason, setReason] = useState(a.reason ?? '');
-	const [score, setScore] = useState<number | null>(a.details?.rating ?? null);
-	const [comment, setComment] = useState(a.comment ?? '');
-	const reasons = a.rating === 1 ? LIKE_REASONS : a.rating === -1 ? DISLIKE_REASONS : [];
+	const [comment, setComment] = useState(((message.annotation ?? {}) as { comment?: string }).comment ?? '');
 	return (
-		<div className="my-2 rounded-2xl border p-3" data-testid="rate-comment">
-			<div className="flex items-center justify-between">
-				<span className="text-sm">How would you rate this response?</span>
-				<Button type="button" aria-label="Close feedback" variant="ghost" size="icon-xs" onClick={onClose}>
-					<X className="size-4" />
-				</Button>
-			</div>
-			<div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Score">
-				{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-					<Button
-						key={n}
-						type="button"
-						aria-label={`Rate ${n} out of 10`}
-						aria-pressed={score === n}
-						variant={score === n ? 'default' : 'outline'}
-						size="icon-sm"
-						onClick={() => setScore(n)}
-					>
-						{n}
+		<div
+			className="border-border-divider bg-surface-1 my-2 flex flex-col gap-2 rounded-panel border p-3"
+			data-testid="rate-note"
+		>
+			<div className="flex items-center justify-between gap-2">
+				<label htmlFor={`note-${message.id}`} className="text-body font-strong">
+					Note on your rating
+				</label>
+				<Tip content="Close note">
+					<Button type="button" aria-label="Close note" variant="ghost" size="icon-xs" onClick={onClose}>
+						<X className="size-4" aria-hidden />
 					</Button>
-				))}
+				</Tip>
 			</div>
-			{reasons.length > 0 && (
-				<>
-					<div className="mt-2 text-sm">Why?</div>
-					<div className="mt-1 flex flex-wrap gap-1">
-						{reasons.map((r) => (
-							<Button
-								key={r}
-								type="button"
-								aria-pressed={reason === r}
-								variant={reason === r ? 'default' : 'outline'}
-								size="sm"
-								onClick={() => setReason(r)}
-							>
-								{REASON_LABELS[r]}
-							</Button>
-						))}
-					</div>
-				</>
-			)}
 			<Textarea
-				className="mt-2"
-				aria-label="Additional feedback comments"
-				placeholder="Feel free to add specific details"
+				id={`note-${message.id}`}
+				autoFocus
+				placeholder="What was good or bad about it"
 				value={comment}
 				onChange={(e) => setComment(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === 'Escape') onClose();
+				}}
 			/>
-			<div className="mt-2 flex justify-end">
+			<div className="flex justify-end">
 				<Button
 					size="sm"
-					onClick={() =>
-						onSave({
-							reason,
-							comment,
-							tags: (message.annotation as { tags?: string[] } | undefined)?.tags ?? [],
-							details: { rating: score }
-						})
-					}
+					variant="outline"
+					aria-disabled={busy || undefined}
+					className={cn(busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed')}
+					onClick={() => !busy && onSave(comment)}
 				>
-					Save
+					Save note
 				</Button>
 			</div>
 		</div>
@@ -239,12 +215,13 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
 						/>
 					</form>
 					<DropdownMenuSeparator />
-					<DropdownMenuItem onSelect={() => void session.regenerate(message)}>Try Again</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => void session.regenerate(message)}>Try again</DropdownMenuItem>
+					{/* The suggestion is sent to the model as written: only the label is sentence case. */}
 					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'Add Details')}>
-						Add Details
+						Add details
 					</DropdownMenuItem>
 					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'More Concise')}>
-						More Concise
+						More concise
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -253,25 +230,31 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
 }
 
 /**
- * Everything a message offers beyond Copy and versions, as the pieces
- * ChatMessages renders: Edit, Read Aloud, Good/Bad Response with the rating
- * form, Continue Response, the regenerate menu, and Delete, each behind the
- * chat permission the Svelte app checks.
+ * Everything a message offers beyond Copy, Regenerate and versions, as the
+ * pieces ChatMessages renders, each behind the chat permission the Svelte app
+ * checks. A reply shows its thumbs (when rating is on), their note and
+ * Generation info; Edit, Read aloud, Continue, the model's own actions and
+ * Delete are in its "More actions" menu (#995, OVL-3, ACT-3). A prompt shows
+ * Edit and Delete.
  */
 export function useMessageActions(
 	session: Session
-): Pick<MessageHandlers, 'extraActions' | 'editing' | 'below' | 'regenerate'> {
+): Pick<MessageHandlers, 'extraActions' | 'editing' | 'below' | 'regenerate' | 'onRetry' | 'onContinue'> {
 	const user = useAuthStore((s) => s.user);
 	const ratingOn = useConfigStore(
 		(s) => ((s.config?.features ?? {}) as Record<string, unknown>).enable_message_rating ?? true
 	);
 	const [editingId, setEditingId] = useState<string | null>(null);
-	const [ratingId, setRatingId] = useState<string | null>(null);
+	const [noteId, setNoteId] = useState<string | null>(null);
+	// The thumb last pressed: it shows the spinner while its reply's rating is saved (ACT-5).
+	const [pressedThumb, setPressedThumb] = useState<{ id: string; value: 1 | -1 } | null>(null);
 	const [deleting, setDeleting] = useState<Message | null>(null);
 	const { speakingId, speak, stop } = useReadAloud();
 	const saved = Boolean(session.chatId) && !isTemporaryChatId(session.chatId);
 	const prefs = useChatPrefs();
 	const { models } = useModels();
+	// Edit, chosen in the menu, puts focus in the editor: the menu must not take it back to its (removed) button.
+	const keepFocus = useRef(false);
 
 	// "Auto-Playback Response": a reply that finishes streaming in this session
 	// is read aloud (Chat.svelte clicked its speak button on `done`); one that
@@ -291,144 +274,200 @@ export function useMessageActions(
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [current?.id, current?.done]);
 
-	const extraActions = (m: Message, { isLast }: { isLast: boolean }) => {
+	const deleteDialog = (m: Message) =>
+		deleting?.id === m.id && (
+			<ConfirmDialog
+				open
+				onOpenChange={(o) => !o && setDeleting(null)}
+				title="Delete message?"
+				confirmLabel="Delete message"
+				destructive
+				onConfirm={async () => {
+					setDeleting(null);
+					await session.removeMessage(m);
+				}}
+			>
+				{m.role === 'assistant'
+					? 'This reply and everything after it are deleted.'
+					: 'This message and the replies under it are deleted.'}
+			</ConfirmDialog>
+		);
+
+	const extraActions = (m: Message, { isLast, errorOnly = false, cutOff = false }: ExtraActionsContext) => {
 		const reply = m.role === 'assistant';
 		const rating = (m.annotation as { rating?: number } | undefined)?.rating;
 		const canDelete = reply
 			? canChat(user, 'delete_message')
 			: canChat(user, 'delete_user_message') && (m.parentId !== null || siblingsOf(session.history, m).length > 1);
-		return (
-			<>
-				{(!reply || canChat(user, 'edit')) && (
-					<Tip content="Edit">
-						<Button type="button" aria-label="Edit" variant="ghost" size="icon-sm" onClick={() => setEditingId(m.id)}>
-							<Pencil className="size-3.5" />
-						</Button>
-					</Tip>
-				)}
-				{reply && canChat(user, 'tts') && (
-					<Tip content={speakingId === m.id ? 'Stop' : 'Read Aloud'}>
-						<Button
-							type="button"
-							aria-label={speakingId === m.id ? 'Stop reading' : 'Read Aloud'}
-							variant="ghost"
-							size="icon-sm"
-							onClick={() => (speakingId === m.id ? stop() : void speak(m.id, m.content))}
-						>
-							{speakingId === m.id ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-						</Button>
-					</Tip>
-				)}
-				{reply && saved && ratingOn !== false && canChat(user, 'rate_response') && (
-					<>
-						<Tip content="Good Response">
-							<Button
-								type="button"
-								aria-label="Good Response"
-								aria-pressed={rating === 1}
-								variant="ghost"
-								size="icon-sm"
-								className={cn(rating === 1 && 'text-foreground bg-muted')}
-								onClick={async () => {
-									await session.rate(m, 1);
-									setRatingId(m.id);
-								}}
-							>
-								<ThumbsUp className="size-3.5" />
+		const canEdit = (!reply || canChat(user, 'edit')) && !errorOnly;
+		if (!reply)
+			return (
+				<>
+					{canEdit && (
+						<Tip content="Edit">
+							<Button type="button" aria-label="Edit" variant="ghost" size="icon-sm" onClick={() => setEditingId(m.id)}>
+								<Pencil className="size-3.5" />
 							</Button>
 						</Tip>
-						<Tip content="Bad Response">
-							<Button
-								type="button"
-								aria-label="Bad Response"
-								aria-pressed={rating === -1}
-								variant="ghost"
-								size="icon-sm"
-								className={cn(rating === -1 && 'text-foreground bg-muted')}
-								onClick={async () => {
-									await session.rate(m, -1);
-									setRatingId(m.id);
-								}}
-							>
-								<ThumbsDown className="size-3.5" />
+					)}
+					{canDelete && (
+						<Tip content="Delete">
+							<Button type="button" aria-label="Delete" variant="ghost" size="icon-sm" onClick={() => setDeleting(m)}>
+								<Trash2 className="size-3.5" />
 							</Button>
 						</Tip>
-					</>
-				)}
-				{reply && m.usage && (
-					<Tip
-						content={
-							<pre className="text-xs">
-								{Object.entries(m.usage)
-									.filter(([, v]) => typeof v !== 'object')
-									.map(([k, v]) => `${k}: ${v}`)
-									.join('\n')}
-							</pre>
-						}
-					>
-						<Button type="button" aria-label="Generation Info" variant="ghost" size="icon-sm">
-							<Info className="size-3.5" />
-						</Button>
-					</Tip>
-				)}
-				{reply && isLast && canContinue(m) && canChat(user, 'continue_response') && (
-					<Tip content="Continue Response">
-						<Button
-							type="button"
-							aria-label="Continue Response"
-							variant="ghost"
-							size="icon-sm"
-							onClick={() => void session.continueReply(m)}
-						>
-							<PlayCircle className="size-3.5" />
-						</Button>
-					</Tip>
-				)}
-				{/* The model's Action functions, a button each (ResponseMessage.svelte; docs/history/code-review.md M6). */}
-				{reply &&
-					(models.find((x) => x.id === m.model)?.actions ?? []).map((action) => (
-						<Tip key={action.id} content={action.name}>
-							<Button
-								type="button"
-								aria-label={action.name}
-								variant="ghost"
-								size="icon-sm"
-								onClick={() => void session.runAction(action.id, m)}
-							>
-								{action.icon ? (
-									<img
-										src={action.icon}
-										alt=""
-										className={cn('size-3.5', action.icon.includes('data:image/svg') && 'dark:invert-[80%]')}
-										draggable={false}
-									/>
-								) : (
-									<Sparkles className="size-3.5" />
-								)}
-							</Button>
-						</Tip>
-					))}
-				{canDelete && (
-					<Tip content="Delete">
-						<Button type="button" aria-label="Delete" variant="ghost" size="icon-sm" onClick={() => setDeleting(m)}>
-							<Trash2 className="size-3.5" />
-						</Button>
-					</Tip>
-				)}
-				{deleting?.id === m.id && (
-					<ConfirmDialog
-						open
-						onOpenChange={(o) => !o && setDeleting(null)}
-						title="Delete message?"
-						confirmLabel="Delete"
-						onConfirm={async () => {
-							setDeleting(null);
-							await session.removeMessage(m);
+					)}
+					{deleteDialog(m)}
+				</>
+			);
+
+		const rates = !errorOnly && saved && ratingOn !== false && canChat(user, 'rate_response');
+		// S3-D2: a thumb saves at once and says so; the other thumb switches the rating, and
+		// pressing the given one again removes it, with its note (S3-D2b). While either call is
+		// pending both thumbs wait, so a second press cannot add a second rating (ACT-5).
+		const busy = session.ratingIds.has(m.id);
+		const thumb = (value: 1 | -1) => {
+			const given = rating === value;
+			const spinning = busy && pressedThumb?.id === m.id && pressedThumb.value === value;
+			const name = spinning
+				? given
+					? 'Removing rating…'
+					: 'Saving rating…'
+				: value === 1
+					? given
+						? 'Rated good'
+						: 'Good response'
+					: given
+						? 'Rated bad'
+						: 'Bad response';
+			return (
+				<Tip content={busy && !spinning ? `${name}: waits for the rating to save` : name}>
+					<Button
+						type="button"
+						aria-label={name}
+						aria-pressed={given}
+						aria-busy={spinning || undefined}
+						// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
+						aria-disabled={busy || undefined}
+						variant="ghost"
+						size="icon-sm"
+						className={cn(
+							given && 'text-foreground bg-muted',
+							busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed'
+						)}
+						onClick={() => {
+							if (busy) return;
+							setPressedThumb({ id: m.id, value });
+							if (!given) return void session.rate(m, value);
+							if (noteId === m.id) setNoteId(null);
+							void session.unrate(m);
 						}}
 					>
-						This will delete this message and its replies.
-					</ConfirmDialog>
+						{spinning ? (
+							<Spinner className="size-3.5" />
+						) : value === 1 ? (
+							<ThumbsUp className="size-3.5" />
+						) : (
+							<ThumbsDown className="size-3.5" />
+						)}
+					</Button>
+				</Tip>
+			);
+		};
+		const hasNote = Boolean((m.annotation as { comment?: string } | undefined)?.comment);
+		const tts = !errorOnly && canChat(user, 'tts');
+		const canContinueHere = isLast && !cutOff && canContinue(m) && canChat(user, 'continue_response');
+		const actions = models.find((x) => x.id === m.model)?.actions ?? [];
+		const menu = canEdit || tts || canContinueHere || actions.length > 0 || canDelete;
+		return (
+			<>
+				{rates && (
+					<>
+						{thumb(1)}
+						{thumb(-1)}
+						{(rating === 1 || rating === -1) && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="xs"
+								aria-expanded={noteId === m.id}
+								onClick={() => setNoteId(m.id)}
+							>
+								<NotebookPen data-icon="inline-start" aria-hidden />
+								{/* On a phone the icon alone, so the row stays one line; the words still name it. */}
+								<span className="max-sm:sr-only">{hasNote ? 'Edit note' : 'Add a note'}</span>
+							</Button>
+						)}
+					</>
 				)}
+				{m.usage && <GenerationInfo usage={m.usage} />}
+				{menu && (
+					<DropdownMenu>
+						<Tip content="More actions">
+							<DropdownMenuTrigger asChild>
+								<Button type="button" aria-label="More actions" variant="ghost" size="icon-sm">
+									<MoreHorizontal className="size-3.5" aria-hidden />
+								</Button>
+							</DropdownMenuTrigger>
+						</Tip>
+						<DropdownMenuContent
+							align="start"
+							className="w-auto min-w-44"
+							onCloseAutoFocus={(e) => {
+								if (keepFocus.current) e.preventDefault();
+								keepFocus.current = false;
+							}}
+						>
+							{canEdit && (
+								<DropdownMenuItem
+									onSelect={() => {
+										keepFocus.current = true;
+										setEditingId(m.id);
+									}}
+								>
+									<Pencil aria-hidden />
+									Edit
+								</DropdownMenuItem>
+							)}
+							{tts && (
+								<DropdownMenuItem onSelect={() => (speakingId === m.id ? stop() : void speak(m.id, m.content))}>
+									{speakingId === m.id ? <VolumeX aria-hidden /> : <Volume2 aria-hidden />}
+									{speakingId === m.id ? 'Stop reading' : 'Read aloud'}
+								</DropdownMenuItem>
+							)}
+							{canContinueHere && (
+								<DropdownMenuItem onSelect={() => void session.continueReply(m)}>
+									<PlayCircle aria-hidden />
+									Continue
+								</DropdownMenuItem>
+							)}
+							{/* The model's Action functions (ResponseMessage.svelte; docs/history/code-review.md M6). */}
+							{actions.map((action) => (
+								<DropdownMenuItem key={action.id} onSelect={() => void session.runAction(action.id, m)}>
+									{action.icon ? (
+										<img
+											src={action.icon}
+											alt=""
+											className={cn('size-4', action.icon.includes('data:image/svg') && 'dark:invert-[80%]')}
+											draggable={false}
+										/>
+									) : (
+										<Sparkles aria-hidden />
+									)}
+									{action.name}
+								</DropdownMenuItem>
+							))}
+							{canDelete && (canEdit || tts || canContinueHere || actions.length > 0) && <DropdownMenuSeparator />}
+							{canDelete && (
+								<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(m)}>
+									<Trash2 aria-hidden />
+									Delete
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
+				{deleteDialog(m)}
 			</>
 		);
 	};
@@ -438,13 +477,16 @@ export function useMessageActions(
 		editing: (m) =>
 			m.id === editingId ? <EditBox message={m} session={session} onDone={() => setEditingId(null)} /> : null,
 		below: (m) =>
-			m.id === ratingId ? (
-				<RateComment
+			m.id === noteId ? (
+				<RateNote
 					message={m}
-					onClose={() => setRatingId(null)}
-					onSave={async (d) => {
-						setRatingId(null);
-						await session.rate(m, null, d);
+					busy={session.ratingIds.has(m.id)}
+					onClose={() => setNoteId(null)}
+					onSave={async (comment) => {
+						setNoteId(null);
+						// A note is not a thumb press: no thumb shows the note's save as its own.
+						setPressedThumb(null);
+						await session.rate(m, null, { comment });
 					}}
 				/>
 			) : null,
@@ -455,6 +497,8 @@ export function useMessageActions(
 					) : (
 						<RegenerateButton message={m} session={session} />
 					)
-			: () => null
+			: () => null,
+		onRetry: canChat(user, 'regenerate_response') ? (m) => void session.regenerate(m) : undefined,
+		onContinue: canChat(user, 'continue_response') ? (m) => void session.continueReply(m) : undefined
 	};
 }

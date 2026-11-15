@@ -2029,3 +2029,139 @@ def test_a_cancelled_reply_saves_its_unrun_call_as_failed(monkeypatch):
 
     assert not [c for c in observed['calls'] if c[0] == 'tool']
     assert _call_statuses(observed) == ['failed']
+
+
+def test_a_reply_cut_off_by_the_token_limit_saves_its_finish_reason(monkeypatch):
+    """S3-D4 (#1081): the chat can say a reply reached the token limit, after a reload too."""
+    observed = _run(
+        [[chunk('The answer is'), sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'length'}]}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done')]
+    assert final and final[-1]['finish_reason'] == 'length'
+    assert [d for d in _emitted(observed) if d.get('done')][-1]['finish_reason'] == 'length'
+
+
+RESP_INCOMPLETE = sse(
+    {'type': 'response.incomplete', 'response': {'incomplete_details': {'reason': 'max_output_tokens'}}}
+)
+
+
+def test_a_responses_api_reply_cut_off_saves_why(monkeypatch):
+    observed = _run(
+        [
+            [
+                *RESP_TEXT[:3],
+                RESP_INCOMPLETE,
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert [s for s in _saved(observed) if s.get('done')][-1]['finish_reason'] == 'max_output_tokens'
+
+
+def test_a_stopped_reply_is_saved_as_stopped(monkeypatch):
+    """S3-D4 (#1081): a reply the person stopped is saved with `stopped`, so it still reads as stopped later."""
+    observed = _run([[chunk('partial'), 'CANCEL']], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
+
+    final = [s for s in _saved(observed) if s.get('done')]
+    assert final and final[-1]['stopped'] is True
+    assert 'finish_reason' not in final[-1]
+
+
+def test_a_reply_that_failed_mid_stream_is_not_saved_as_stopped(monkeypatch):
+    log = []
+    _install(monkeypatch, {}, log, [])
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('The answer is'), 'RESET'], log, 'first')
+
+    with pytest.raises(ConnectionResetError):
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+
+    saved = [c[2] for c in log if c[0] == 'chats.upsert_message']
+    assert any(s.get('done') for s in saved)
+    assert not [s for s in saved if s.get('stopped')]
+
+
+STOPPED_HEAD = {
+    'content': 'head',
+    'stopped': True,
+    'finish_reason': 'length',
+    'output': [
+        {'type': 'message', 'id': 'msg_s', 'status': 'completed', 'content': [{'type': 'output_text', 'text': 'head'}]}
+    ],
+}
+
+
+def test_continuing_a_stopped_reply_clears_its_marks(monkeypatch):
+    """S3-D4: a reply continued to its end no longer says it was stopped or cut off."""
+    observed = _run(
+        [[chunk(' tail'), DONE]],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {'stored_message': STOPPED_HEAD},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert final['stopped'] is False
+    assert final['finish_reason'] is None
+
+
+def test_a_continuation_stopped_again_is_saved_as_stopped(monkeypatch):
+    observed = _run(
+        [[chunk(' tail'), 'CANCEL']],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {'stored_message': STOPPED_HEAD},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert (final['stopped'], final['finish_reason']) == (True, None)
+
+
+def _cancel_during_background_tasks(monkeypatch, stream, world):
+    """Run a reply to its end, then cancel the task while the follow-up, title, tags and memory tasks run."""
+    log = []
+    _install(monkeypatch, world, log, [])
+
+    async def cancelled_background(ctx):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(middleware, 'background_tasks_handler', cancelled_background)
+    ctx = _ctx(world, {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'}, {}, None, log)
+    assert asyncio.run(_drive([stream], world, ctx, log)) == {'cancelled': True}
+    return [c[2] for c in log if c[0] == 'chats.upsert_message' and c[2].get('done') is True]
+
+
+def test_a_cancel_after_the_reply_finished_does_not_mark_it_stopped(monkeypatch):
+    """A stop pressed while the background tasks run must not rewrite a finished reply as stopped."""
+    length = sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'length'}]})
+    done_saves = _cancel_during_background_tasks(monkeypatch, [chunk('The answer is'), length, DONE], {})
+
+    assert not [s for s in done_saves if s.get('stopped')]
+    assert done_saves[-1]['finish_reason'] == 'length'
+
+
+def test_a_cancel_after_a_continued_reply_finished_keeps_its_finish_reason(monkeypatch):
+    """The continued reply's freshly saved finish_reason must not be overwritten with None by the cancel."""
+    stop = sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})
+    done_saves = _cancel_during_background_tasks(
+        monkeypatch, [chunk(' tail'), stop, DONE], {'stored_message': STOPPED_HEAD}
+    )
+
+    assert (done_saves[-1]['stopped'], done_saves[-1]['finish_reason']) == (False, 'stop')

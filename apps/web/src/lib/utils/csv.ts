@@ -5,8 +5,9 @@
 // to prefix such a cell with a single quote so it is read as text.
 
 const FORMULA_START = /^[=+\-@\t\r]/;
-// A plain number is safe as it is, and must stay one: ratings are -1 / 0 / 1.
-const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
+// A plain number is safe as it is, and must stay one: ratings are -1 / 0 / 1. Thousands
+// separators, an exponent and a trailing percent still make a number (-1,234.5, -1.2e-3, -5%).
+const PLAIN_NUMBER = /^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?([eE][+-]?\d+)?%?$/;
 
 /** A string made inert for a spreadsheet: `=1+1` -> `'=1+1`; numbers and ordinary text are unchanged. */
 export const neutralizeFormula = (text: string) =>

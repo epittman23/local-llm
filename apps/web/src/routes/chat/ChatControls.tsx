@@ -1,6 +1,5 @@
-import { FileText, X } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
 type Params = Record<string, any>;
@@ -12,68 +11,60 @@ type ChatFile = { id?: string | null; name?: string; type?: string; file?: { fil
  * removable here; #160), its system prompt and its advanced
  * parameters. What is edited here is the chat's own `params` -- sent with
  * every request and saved with the chat -- layered over the user's defaults
- * from Settings > General. Function valves are not ported.
+ * from Settings > General. Function valves are not ported. It is the body of
+ * the chat's side panel (`SidePanel`), which gives it its heading and Close.
  */
 export function ChatControls({
 	params,
 	onParams,
 	files,
-	onClose,
-	admin
+	admin,
+	defaults
 }: {
 	params: Params;
 	onParams: (p: Params) => void;
 	files: ChatFile[];
-	onClose: () => void;
 	admin: boolean;
+	/** The user's own defaults (Settings > General), which a row shows while it is not overridden. */
+	defaults?: Params;
 }) {
 	return (
-		<aside className="flex min-h-0 w-full flex-col border-l md:w-80" aria-label="Controls">
-			<div className="flex items-center px-3 py-2">
-				<span className="text-sm font-medium">Controls</span>
-				<Button
-					type="button"
-					aria-label="Close controls"
-					variant="ghost"
-					size="icon-sm"
-					className="ml-auto"
-					onClick={onClose}
-				>
-					<X className="size-4" />
-				</Button>
-			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pb-4 text-sm">
-				{files.length > 0 && (
-					<section>
-						<h3 className="mb-1 text-xs font-medium">Files</h3>
-						<ul className="flex flex-col gap-1" aria-label="Chat files">
-							{files.map((f, i) => (
-								<li key={f.id ?? i} className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs">
-									<FileText className="text-muted-foreground size-3.5 shrink-0" />
-									<span className="truncate">{f.name ?? f.file?.filename ?? f.id}</span>
-								</li>
-							))}
-						</ul>
-					</section>
-				)}
+		<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 text-sm">
+			{files.length > 0 && (
 				<section>
-					<label htmlFor="chat-system-prompt" className="mb-1 block text-xs font-medium">
-						System Prompt
-					</label>
-					<Textarea
-						id="chat-system-prompt"
-						rows={4}
-						className="min-h-0 field-sizing-fixed resize-y"
-						placeholder="Enter system prompt"
-						value={params.system ?? ''}
-						onChange={(e) => onParams({ ...params, system: e.target.value || undefined })}
-					/>
+					<h3 className="mb-1 text-xs font-medium">Files</h3>
+					<ul className="flex flex-col gap-1" aria-label="Chat files">
+						{files.map((f, i) => (
+							<li key={f.id ?? i} className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs">
+								<FileText className="text-muted-foreground size-3.5 shrink-0" />
+								<span className="truncate">{f.name ?? f.file?.filename ?? f.id}</span>
+							</li>
+						))}
+					</ul>
 				</section>
-				<section>
-					<h3 className="mb-1 text-xs font-medium">Advanced Params</h3>
-					<AdvancedParams params={params} onChange={(p) => onParams({ ...p, system: params.system })} admin={admin} />
-				</section>
-			</div>
-		</aside>
+			)}
+			<section>
+				<label htmlFor="chat-system-prompt" className="mb-1 block text-xs font-medium">
+					System prompt
+				</label>
+				<Textarea
+					id="chat-system-prompt"
+					rows={4}
+					className="min-h-0 field-sizing-fixed resize-y"
+					placeholder="Enter system prompt"
+					value={params.system ?? ''}
+					onChange={(e) => onParams({ ...params, system: e.target.value || undefined })}
+				/>
+			</section>
+			<section>
+				<h3 className="mb-1 text-xs font-medium">Model parameters</h3>
+				<AdvancedParams
+					params={params}
+					onChange={(p) => onParams({ ...p, system: params.system })}
+					admin={admin}
+					defaults={defaults}
+				/>
+			</section>
+		</div>
 	);
 }
