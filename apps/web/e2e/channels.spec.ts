@@ -572,7 +572,7 @@ test('home links to what the user may use; a folder opens a chat inside it', asy
 		json(route, { detail: "We could not find what you're looking for :/" }, 404)
 	);
 	await page.goto('/home');
-	await expect(page.getByRole('navigation', { name: 'Home' }).getByRole('link')).toHaveText(['Notes']);
+	await expect(page.getByRole('list', { name: 'Quick actions' }).getByRole('link')).toHaveText(['New note']);
 	await page.goto('/folders/f1');
 	await expect(page.getByRole('heading', { level: 1, name: 'Research' })).toBeVisible();
 	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'New chat in Research');
