@@ -389,6 +389,9 @@ describe('ModelEditor attachments and capabilities', () => {
 		fireEvent.click(await screen.findByRole('option', { name: 'Redact' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Choose actions' }));
 		fireEvent.click(await screen.findByRole('option', { name: 'Explain' }));
+		// Each pick lands (its checkbox shows, its popover closes) before the next popover opens.
+		expect(await screen.findByRole('checkbox', { name: 'Explain' })).toBeChecked();
+		await waitFor(() => expect(screen.queryByRole('option', { name: 'Explain' })).toBeNull());
 		fireEvent.click(screen.getByRole('button', { name: 'Choose filters' }));
 		fireEvent.click(await screen.findByRole('option', { name: /Redact/ }));
 		save('Save changes');
