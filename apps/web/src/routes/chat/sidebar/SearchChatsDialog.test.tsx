@@ -42,10 +42,37 @@ afterEach(cleanup);
 describe('SearchChatsDialog', () => {
 	it('offers a new chat before anything is typed, which opens the home page', async () => {
 		const onOpenChange = show();
-		expect(await screen.findByText('No chats yet')).toBeInTheDocument();
+		// The main list leaves out chats in folders, so an empty one is not "no chats" (STA-3, WRD-1).
+		expect(await screen.findByText(/Recent chats outside folders appear here/)).toBeInTheDocument();
+		expect(screen.queryByText(/No chats yet/)).toBeNull();
 		fireEvent.click(screen.getByRole('option', { name: 'New chat' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 		expect(screen.getByTestId('where').textContent).toBe('/');
+	});
+
+	it('shows the recent chats loading, not "no chats", before they arrive (STA-2)', async () => {
+		let resolve: (v: never) => void = () => {};
+		vi.mocked(getChatList).mockImplementation(() => new Promise((r) => (resolve = r)));
+		show();
+		expect(await screen.findByRole('progressbar', { name: 'Loading recent chats' })).toBeInTheDocument();
+		expect(screen.queryByText(/appear here|No chats yet/)).toBeNull();
+		expect(screen.getByRole('option', { name: 'New chat' })).toBeInTheDocument();
+		resolve([{ id: 'r1', title: 'Late arrival', updated_at: now }] as never);
+		expect(await screen.findByRole('option', { name: /Late arrival/ })).toBeInTheDocument();
+	});
+
+	it('says in place when the recent chats fail, and tries again (STA-4)', async () => {
+		let fail = true;
+		vi.mocked(getChatList).mockImplementation(async () => {
+			if (fail) throw 'Database is locked';
+			return [{ id: 'r1', title: 'Back again', updated_at: now }] as never;
+		});
+		show();
+		expect(await screen.findByText("Couldn't load recent chats")).toBeInTheDocument();
+		expect(screen.queryByText(/appear here|No chats yet/)).toBeNull();
+		fail = false;
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('option', { name: /Back again/ })).toBeInTheDocument();
 	});
 
 	it('offers the most recent chats before anything is typed', async () => {
@@ -124,6 +151,23 @@ describe('SearchChatsDialog', () => {
 		expect(getChatListBySearchText).toHaveBeenCalledWith('t', 'monte archived:true', 1);
 		fireEvent.click(within(group).getByRole('option'));
 		expect(screen.getByTestId('where').textContent).toBe('/c/old');
+	});
+
+	it('says so below the results when the archived search fails, and tries it again (STA-4)', async () => {
+		let fail = true;
+		vi.mocked(getChatListBySearchText).mockImplementation(async (_t, text) => {
+			if (!text.includes('archived:true')) return [] as never;
+			if (fail) throw 'Database is locked';
+			return [{ id: 'old', title: 'Monte Carlo integration', updated_at: now - 40 * 86400 }] as never;
+		});
+		show();
+		type('monte');
+		expect(await screen.findByText("Couldn't search archived chats.")).toBeInTheDocument();
+		// Half the search failed, so it does not say nothing matched.
+		expect(screen.queryByText(/No chats match/)).toBeNull();
+		fail = false;
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('group', { name: 'Archived' })).toBeInTheDocument();
 	});
 
 	it('does not add an archived search to one that names its own archived filter', async () => {

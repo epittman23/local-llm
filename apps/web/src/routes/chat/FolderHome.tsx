@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
-import { updateFolderById } from '@/lib/apis/folders';
+import { getSharedFolders, updateFolderById } from '@/lib/apis/folders';
 import type { Folder } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { shownTime } from '@/lib/utils/dates';
@@ -18,10 +18,14 @@ import { FOLDER_PAGE_SIZE, useFolderChats } from './sidebar/useChatList';
  * which one. The folder's name is the page's h1 (A11Y-3, LAY-5) with Edit
  * folder beside it, its instructions folded under it, and its chats below,
  * each with its date. ChatPage shows it in place of the new-chat greeting,
- * above the message box, which reads "New chat in <folder>".
+ * above the message box, which reads "New chat in <folder>". Edit folder is
+ * offered only to someone who may change it: its owner, an admin, or an
+ * account it is shared with for writing (the server's own `permission` in
+ * GET /folders/shared, which counts groups and parent folders).
  */
 export function FolderHome({ folder }: { folder: Folder }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const user = useAuthStore((s) => s.user);
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [editing, setEditing] = useState(false);
@@ -31,6 +35,13 @@ export function FolderHome({ folder }: { folder: Folder }) {
 	// pages by FOLDER_PAGE_SIZE), so a short folder offers no Show more (#1070).
 	const more = chats.hasNextPage && (chats.data?.pages.at(-1)?.length ?? 0) >= FOLDER_PAGE_SIZE;
 	const instructions = String(folder.data?.system_prompt ?? '').trim();
+	const mine = user?.role === 'admin' || (Boolean(user) && folder.user_id === user?.id);
+	const sharedFolders = useQuery({
+		queryKey: ['folders', 'shared'],
+		enabled: Boolean(token) && !mine,
+		queryFn: async () => ((await getSharedFolders(token)) ?? []) as { id: string; permission?: string }[]
+	});
+	const canEdit = mine || Boolean(sharedFolders.data?.some((f) => f.id === folder.id && f.permission === 'write'));
 
 	const save = async (v: { name: string; system_prompt: string }) => {
 		const res = await updateFolderById(token, folder.id, {
@@ -61,9 +72,11 @@ export function FolderHome({ folder }: { folder: Folder }) {
 								: 'A message sent below starts a chat in this folder.'}
 						</p>
 					</div>
-					<Button variant="outline" onClick={() => setEditing(true)}>
-						<Pencil aria-hidden /> Edit folder
-					</Button>
+					{canEdit && (
+						<Button variant="outline" onClick={() => setEditing(true)}>
+							<Pencil aria-hidden /> Edit folder
+						</Button>
+					)}
 				</div>
 
 				{instructions && (

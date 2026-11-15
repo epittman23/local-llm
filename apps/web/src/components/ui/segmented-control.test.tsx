@@ -58,4 +58,25 @@ describe('SegmentedControl (FRM-4)', () => {
 		fireEvent.click(screen.getByRole('radio', { name: 'Only me' }));
 		expect(onValueChange).toHaveBeenCalledWith('me');
 	});
+
+	it('draws a disabled segment in the disabled colour, not faded, and each segment with the 8 px corner (COL-2, SHP-1)', () => {
+		render(
+			<SegmentedControl<'a' | 'b'>
+				aria-label="Pick"
+				value="b"
+				onValueChange={() => {}}
+				options={[
+					{ value: 'a', label: 'A', disabled: true },
+					{ value: 'b', label: 'B' }
+				]}
+			/>
+		);
+		const disabled = screen.getByRole('radio', { name: 'A' });
+		expect(disabled).toHaveAttribute('data-disabled');
+		expect(disabled.className).toContain('data-disabled:text-foreground-disabled');
+		expect(disabled.className).toContain('data-disabled:cursor-not-allowed');
+		expect(disabled.className).not.toMatch(/opacity-\d/);
+		expect(disabled).toHaveClass('rounded-lg');
+		expect(disabled).not.toHaveClass('rounded-md');
+	});
 });

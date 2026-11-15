@@ -290,6 +290,45 @@ describe('ShareChatDialog: a chat that has a link (#334, #1006)', () => {
 		await waitFor(() => expect(updateChatAccessGrants).toHaveBeenCalledWith('t', 'c1', [GROUP_READ]));
 	});
 
+	it('says a link every signed-in account may open as it is, with neither answer chosen', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([PUBLIC_READ] as never);
+		open();
+
+		expect(await screen.findByText('All signed-in accounts can open this link.')).toBeInTheDocument();
+		expect(radio('Anyone with the link')).toHaveAttribute('aria-checked', 'false');
+		expect(radio('Only me (signed in)')).toHaveAttribute('aria-checked', 'false');
+		expect(screen.getByRole('radiogroup')).toHaveAccessibleDescription('All signed-in accounts can open this link.');
+		expect(screen.queryByText(/opens only while you are signed in/)).toBeNull();
+	});
+
+	it('"Make it only me" removes the every-account grant and keeps named ones', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants)
+			.mockResolvedValueOnce([PUBLIC_READ, GROUP_READ] as never)
+			.mockResolvedValue([GROUP_READ] as never);
+		vi.mocked(updateChatAccessGrants).mockResolvedValue({ id: 'c1' } as never);
+		open();
+
+		fireEvent.click(await screen.findByRole('button', { name: 'Make it only me' }));
+
+		await waitFor(() => expect(updateChatAccessGrants).toHaveBeenCalledWith('t', 'c1', [GROUP_READ]));
+		await waitFor(() => expect(radio('Only me (signed in)')).toHaveAttribute('aria-checked', 'true'));
+		expect(screen.queryByText('All signed-in accounts can open this link.')).toBeNull();
+	});
+
+	it('still gives the reason "Anyone" cannot be chosen beside the every-account note (ACT-5)', async () => {
+		signIn({ sharing: { public_chats: true, open_chats: false } });
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([PUBLIC_READ] as never);
+		open();
+
+		expect(
+			await screen.findByText(/All signed-in accounts can open this link\. Your sharing permissions/)
+		).toBeInTheDocument();
+		expect(radio('Anyone with the link')).toBeDisabled();
+	});
+
 	it('goes back to what was stored when a save fails', async () => {
 		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
 		vi.mocked(getChatAccessGrants).mockResolvedValue([]);

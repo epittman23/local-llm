@@ -25,6 +25,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { canUseFeature } from '@/lib/access/features';
 import {
 	createNewFolder,
 	deleteFolderById,
@@ -34,6 +35,7 @@ import {
 } from '@/lib/apis/folders';
 import { type Folder, type FolderNode, folderTree, groupByTimeRange } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { DeleteFolderDialog, FolderDialog } from './ChatDialogs';
 import { ChatItem, rowClass, rowMenuButtonClass } from './ChatItem';
@@ -43,18 +45,37 @@ import { useChatPages, useFolderChats, useFolders, usePinnedChats } from './useC
 export const DISCLOSURE = 'aria-expanded:bg-transparent aria-expanded:hover:bg-muted';
 const sectionHeader = 'text-foreground-muted text-caption font-strong flex w-full items-center gap-1 px-2 py-1';
 
+/** A part of the sidebar that failed to load, said where it would be, with Try again (STA-4). */
+function InlineFailed({ what, onRetry, retrying }: { what: string; onRetry: () => void; retrying: boolean }) {
+	return (
+		<div role="alert" className="text-dense text-foreground-muted flex items-center gap-2 px-2 py-1">
+			Couldn't load {what}.
+			<Button type="button" variant="ghost" size="xs" onClick={onRetry} disabled={retrying}>
+				{retrying ? 'Trying again…' : 'Try again'}
+			</Button>
+		</div>
+	);
+}
+
 /**
  * The chat half of layout/Sidebar.svelte: Pinned chats, the folder tree, and
  * every other chat grouped by when it was last updated, loading more as the
  * list scrolls. Empty, it says what will appear (STA-3); a failed load is
- * shown in place with Try again (STA-4), never as an empty list.
+ * shown in place with Try again (STA-4), never as an empty list: only the
+ * main list failing outright takes the whole list's place, while pinned
+ * chats, the folders or a further page fail where they would be. Folders are
+ * shown, and asked for, only when the server has them on and this account
+ * may use them (the server refuses otherwise).
  */
 export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const user = useAuthStore((s) => s.user);
+	const config = useConfigStore((s) => s.config);
 	const queryClient = useQueryClient();
 	const pages = useChatPages();
 	const pinned = usePinnedChats();
-	const folders = useFolders();
+	const foldersOn = canUseFeature('folders', user, config);
+	const folders = useFolders(foldersOn);
 	const [creating, setCreating] = useState(false);
 	const [showFolders, setShowFolders] = useState(true);
 	const list = (pages.data?.pages ?? []).flat();
@@ -77,81 +98,98 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 		return Boolean(res);
 	};
 
-	const failed = [pages, pinned, folders].filter((q) => q.isError);
-	if (failed.length > 0)
+	if (pages.isError && !pages.data)
 		return (
 			<section className="mt-2" aria-label="Chats">
-				<LoadFailed
-					what="chats"
-					error={failed[0].error}
-					retrying={failed.some((q) => q.isFetching)}
-					onRetry={() => {
-						for (const q of failed) void q.refetch();
-					}}
-				/>
+				<LoadFailed what="chats" error={pages.error} retrying={pages.isFetching} onRetry={() => void pages.refetch()} />
 			</section>
 		);
-	const empty = !pages.isLoading && list.length === 0 && (pinned.data?.length ?? 0) === 0;
+	// The main list leaves out pinned chats and chats in folders, so it is empty
+	// only when those are known to be empty too; with folders it says which it holds.
+	const empty =
+		!pages.isLoading &&
+		!pinned.isLoading &&
+		!pinned.isError &&
+		!(foldersOn && folders.isLoading) &&
+		list.length === 0 &&
+		(pinned.data?.length ?? 0) === 0;
+	const emptyText =
+		allFolders.length > 0 || folders.isError ? 'Chats outside folders appear here.' : 'Your chats will appear here.';
+	const nextFailed = pages.isFetchNextPageError;
 
 	return (
 		<section className="mt-2 flex flex-col gap-1" aria-label="Chats">
-			{(pinned.data?.length ?? 0) > 0 && (
+			{pinned.isError ? (
 				<section>
 					<div className={sectionHeader}>Pinned</div>
-					{pinned.data!.map((c) => (
-						<ChatItem key={c.id} chat={c} folders={allFolders} onNavigate={onNavigate} />
-					))}
+					<InlineFailed what="pinned chats" onRetry={() => void pinned.refetch()} retrying={pinned.isFetching} />
+				</section>
+			) : (
+				(pinned.data?.length ?? 0) > 0 && (
+					<section>
+						<div className={sectionHeader}>Pinned</div>
+						{(pinned.data ?? []).map((c) => (
+							<ChatItem key={c.id} chat={c} folders={allFolders} onNavigate={onNavigate} />
+						))}
+					</section>
+				)
+			)}
+
+			{foldersOn && (
+				<section>
+					<div className="group flex items-center">
+						<Button
+							type="button"
+							variant="ghost"
+							size="xs"
+							className={cn('w-full min-w-0 shrink justify-start', DISCLOSURE)}
+							aria-expanded={showFolders}
+							onClick={() => setShowFolders((s) => !s)}
+						>
+							{showFolders ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+							Folders
+						</Button>
+						<Tip content="New folder">
+							<Button
+								type="button"
+								aria-label="New folder"
+								variant="ghost"
+								size="icon-xs"
+								className="mr-1"
+								onClick={() => setCreating(true)}
+							>
+								<Plus className="size-3.5" />
+							</Button>
+						</Tip>
+					</div>
+					{showFolders && folders.isError && (
+						<InlineFailed what="folders" onRetry={() => void folders.refetch()} retrying={folders.isFetching} />
+					)}
+					{showFolders && !folders.isLoading && !folders.isError && allFolders.length === 0 && (
+						<p className="text-foreground-muted text-caption px-2 pb-1">
+							Group chats and give them shared instructions.
+						</p>
+					)}
+					{showFolders && (
+						<ul aria-label="Folders">
+							{folderTree(allFolders).map((f) => (
+								<FolderItem
+									key={f.id}
+									node={f}
+									folders={allFolders}
+									depth={0}
+									onNavigate={onNavigate}
+									onCreateChild={createFolder}
+								/>
+							))}
+						</ul>
+					)}
+					<FolderDialog open={creating} onOpenChange={setCreating} onSave={(v) => createFolder(v)} />
 				</section>
 			)}
 
-			<section>
-				<div className="group flex items-center">
-					<Button
-						type="button"
-						variant="ghost"
-						size="xs"
-						className={cn('w-full min-w-0 shrink justify-start', DISCLOSURE)}
-						aria-expanded={showFolders}
-						onClick={() => setShowFolders((s) => !s)}
-					>
-						{showFolders ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-						Folders
-					</Button>
-					<Tip content="New folder">
-						<Button
-							type="button"
-							aria-label="New folder"
-							variant="ghost"
-							size="icon-xs"
-							className="mr-1"
-							onClick={() => setCreating(true)}
-						>
-							<Plus className="size-3.5" />
-						</Button>
-					</Tip>
-				</div>
-				{showFolders && !folders.isLoading && allFolders.length === 0 && (
-					<p className="text-foreground-muted text-caption px-2 pb-1">Group chats and give them shared instructions.</p>
-				)}
-				{showFolders && (
-					<ul aria-label="Folders">
-						{folderTree(allFolders).map((f) => (
-							<FolderItem
-								key={f.id}
-								node={f}
-								folders={allFolders}
-								depth={0}
-								onNavigate={onNavigate}
-								onCreateChild={createFolder}
-							/>
-						))}
-					</ul>
-				)}
-				<FolderDialog open={creating} onOpenChange={setCreating} onSave={(v) => createFolder(v)} />
-			</section>
-
 			<section aria-label="Chat list">
-				{empty && <p className="text-foreground-muted text-dense px-2 py-1">Your chats will appear here.</p>}
+				{empty && <p className="text-foreground-muted text-dense px-2 py-1">{emptyText}</p>}
 				{pages.isLoading && (
 					<div className="flex justify-center py-3">
 						<Spinner className="size-4" />
@@ -165,7 +203,14 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 						))}
 					</div>
 				))}
-				{pages.hasNextPage && (
+				{nextFailed && (
+					<InlineFailed
+						what="more chats"
+						onRetry={() => void pages.fetchNextPage()}
+						retrying={pages.isFetchingNextPage}
+					/>
+				)}
+				{pages.hasNextPage && !nextFailed && (
 					<InfiniteLoader onVisible={() => !pages.isFetchingNextPage && void pages.fetchNextPage()}>
 						<div className="flex justify-center py-2">
 							<Spinner className="size-4" />
@@ -288,12 +333,7 @@ function FolderItem({
 						</ul>
 					)}
 					{chats.isError && (
-						<div role="alert" className="text-dense text-foreground-muted flex items-center gap-2 px-2 py-1">
-							Couldn't load this folder's chats.
-							<Button type="button" variant="ghost" size="xs" onClick={() => void chats.refetch()}>
-								Try again
-							</Button>
-						</div>
+						<InlineFailed what="this folder's chats" onRetry={() => void chats.refetch()} retrying={chats.isFetching} />
 					)}
 					{chats.isLoading ? (
 						<Spinner className="m-2 size-3.5" />

@@ -58,6 +58,11 @@ describe('ChatPage header', () => {
 		expect(toggle.getAttribute('aria-pressed')).toBe('true');
 	});
 
+	it('names a new chat "New chat" in the tab and the phone bar, in sentence case (WRD-1, #1091)', async () => {
+		show();
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('New chat'));
+	});
+
 	it('marks its model row as the top of the page, which toasts start below on a phone (FBK-2)', () => {
 		show();
 		const row = screen.getByRole('button', { name: 'Controls' }).closest('header');

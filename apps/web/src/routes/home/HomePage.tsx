@@ -84,7 +84,7 @@ function ChatsBlock() {
 			) : pinnedList.length + recent.length === 0 ? (
 				<div className="flex flex-col items-start gap-3 py-2">
 					<p className="text-foreground-muted">
-						No chats yet. Your pinned and most recent chats appear here once you start one.
+						Nothing here yet. Your pinned chats and your most recent chats outside folders appear here.
 					</p>
 					<Button variant="outline" asChild>
 						<Link to={routePaths.home}>

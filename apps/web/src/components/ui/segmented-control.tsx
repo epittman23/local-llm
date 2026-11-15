@@ -16,6 +16,8 @@ export type SegmentedOption<T extends string> = { value: T; label: string; icon?
  * (the Share dialog's "who can open the link", then Create): a `value`
  * matching no option leaves every segment unchosen. A disabled segment gives
  * its reason in the help line under the control (ACT-5).
+ * A disabled segment is drawn in the disabled colour (COL-2). Each segment
+ * is a button-like item, so it takes SHP-1's 8 px corner.
  */
 export function SegmentedControl<T extends string>({
 	value,
@@ -54,9 +56,10 @@ export function SegmentedControl<T extends string>({
 					disabled={disabled}
 					data-slot="segmented-control-item"
 					className={cn(
-						'text-foreground-muted font-strong inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-3 text-body transition-colors hover:text-foreground-strong pointer-coarse:h-11 max-sm:px-1',
+						'text-foreground-muted font-strong inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 text-body transition-colors hover:text-foreground-strong pointer-coarse:h-11 max-sm:px-1',
 						'data-[state=checked]:bg-surface-3 data-[state=checked]:text-foreground-strong',
-						'data-disabled:pointer-events-none data-disabled:opacity-50',
+						// COL-2: a disabled segment's words are the disabled colour, never faded.
+						'data-disabled:cursor-not-allowed data-disabled:text-foreground-disabled data-disabled:hover:text-foreground-disabled',
 						'[&_svg]:size-4 [&_svg]:shrink-0'
 					)}
 				>

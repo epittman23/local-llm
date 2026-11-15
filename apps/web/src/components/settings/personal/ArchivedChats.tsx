@@ -32,6 +32,10 @@ export const ARCHIVED_PAGE_SIZE = 60;
  * Ports Settings/ArchivedChats.svelte: archived chats, searchable, newest
  * first, loading more on scroll; open, unarchive or delete one; unarchive
  * all; export them all as JSON. The title takes the free width (#954).
+ * Below 640 px each row stacks (DAT-6): the title on a line of its own,
+ * wrapped in full, with the date and the actions under it, so nothing
+ * scrolls sideways (LAY-4). The explicit roles keep it a table to
+ * assistive technology once its rows are laid out as grids.
  */
 export default function ArchivedChats() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -109,32 +113,43 @@ export default function ArchivedChats() {
 					</p>
 				)
 			) : (
-				<Table aria-label="Archived chats">
-					<TableHeader>
-						<TableRow>
-							<TableHead scope="col" className="w-full">
+				<Table aria-label="Archived chats" role="table">
+					<TableHeader role="rowgroup">
+						<TableRow role="row" className="max-sm:sr-only">
+							<TableHead scope="col" role="columnheader" className="w-full">
 								Title
 							</TableHead>
-							<TableHead scope="col" className="text-right">
+							<TableHead scope="col" role="columnheader" className="text-right">
 								Updated
 							</TableHead>
-							<TableHead scope="col">
+							<TableHead scope="col" role="columnheader">
 								<span className="sr-only">Actions</span>
 							</TableHead>
 						</TableRow>
 					</TableHeader>
-					<TableBody>
+					<TableBody role="rowgroup">
 						{rows.map((c) => (
-							<TableRow key={c.id}>
-								<TableCell className="w-full max-w-0 truncate" title={c.title}>
+							<TableRow
+								key={c.id}
+								role="row"
+								className="max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:py-1"
+							>
+								<TableCell
+									role="cell"
+									className="w-full max-w-0 truncate max-sm:col-span-2 max-sm:w-auto max-sm:max-w-none max-sm:pb-0 max-sm:break-words max-sm:whitespace-normal"
+									title={c.title}
+								>
 									<Link to={`/c/${c.id}`} className="hover:underline" onClick={closeSettings}>
 										{c.title}
 									</Link>
 								</TableCell>
-								<TableCell className="text-foreground-muted text-right text-dense tabular-nums">
+								<TableCell
+									role="cell"
+									className="text-foreground-muted text-right text-dense tabular-nums max-sm:text-left"
+								>
 									<ChatTime seconds={c.updated_at} />
 								</TableCell>
-								<TableCell className="text-right">
+								<TableCell role="cell" className="text-right">
 									<div className="flex items-center justify-end gap-1">
 										<Button variant="ghost" size="sm" asChild>
 											<Link to={`/c/${c.id}`} onClick={closeSettings} aria-label={`Open ${c.title}`}>

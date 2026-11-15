@@ -100,7 +100,7 @@ describe('HomePage header and quick actions (LAY-5, ACT-1)', () => {
 		const actions = within(screen.getByRole('list', { name: 'Quick actions' }));
 		expect(actions.getAllByRole('link').map((l) => l.textContent?.trim())).toEqual(['New note']);
 		expect(screen.queryByRole('heading', { name: 'Today' })).toBeNull();
-		await screen.findByText(/No chats yet/);
+		await screen.findByText(/Nothing here yet/);
 		expect(getCalendarEvents).not.toHaveBeenCalled();
 	});
 
@@ -143,7 +143,13 @@ describe('HomePage chats (STA-1)', () => {
 		show();
 		expect(screen.getByTestId('home-chats-loading')).toBeInTheDocument();
 		resolve([]);
-		expect(await screen.findByText(/No chats yet/)).toBeInTheDocument();
+		// The lists leave out chats in folders, so it never says there are no chats (STA-3, WRD-1).
+		expect(
+			await screen.findByText(
+				'Nothing here yet. Your pinned chats and your most recent chats outside folders appear here.'
+			)
+		).toBeInTheDocument();
+		expect(screen.queryByText(/No chats yet/)).toBeNull();
 		expect(screen.queryByTestId('home-chats-loading')).toBeNull();
 		expect(screen.getByRole('link', { name: 'Start a chat' })).toHaveAttribute('href', '/');
 	});

@@ -191,6 +191,51 @@ describe('Escape meant for another layer (#950)', () => {
 	});
 });
 
+describe('Escape forwarded to another layer, press after press (#950)', () => {
+	it('forwards every press the layer above takes, not only the first three', async () => {
+		const outside = document.createElement('button');
+		document.body.appendChild(outside);
+		render(<SettingsModal />);
+		openOn('notifications');
+		const tab = await screen.findByRole('tab', { name: 'Notifications' });
+		const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(outside);
+		// The layer above takes each forwarded press, so it never comes back to Settings.
+		let forwarded = 0;
+		const takeForwarded = (event: KeyboardEvent) => {
+			if (event.target !== outside) return;
+			forwarded += 1;
+			event.stopImmediatePropagation();
+		};
+		window.addEventListener('keydown', takeForwarded, true);
+		for (let press = 1; press <= 4; press += 1) {
+			fireEvent.keyDown(tab, { key: 'Escape' });
+			await waitFor(() => expect(forwarded).toBe(press));
+		}
+		expect(store().open).toBe(true);
+		window.removeEventListener('keydown', takeForwarded, true);
+		active.mockRestore();
+		outside.remove();
+	});
+
+	it('stops after three forwards of one press that keeps coming back, so it cannot loop', async () => {
+		const outside = document.createElement('button');
+		document.body.appendChild(outside);
+		render(<SettingsModal />);
+		openOn('notifications');
+		const tab = await screen.findByRole('tab', { name: 'Notifications' });
+		const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(outside);
+		const forwards = vi.fn();
+		outside.addEventListener('keydown', forwards);
+		fireEvent.keyDown(tab, { key: 'Escape' });
+		await waitFor(() => expect(forwards).toHaveBeenCalledTimes(3));
+		await new Promise((r) => setTimeout(r, 30));
+		expect(forwards).toHaveBeenCalledTimes(3);
+		expect(store().open).toBe(true);
+		active.mockRestore();
+		outside.remove();
+	});
+});
+
 describe('unsaved changes (#951, FRM-3)', () => {
 	it('asks before another tab, keeps editing on Keep editing, and leaves on Discard changes', async () => {
 		render(<SettingsModal />);
@@ -224,6 +269,37 @@ describe('unsaved changes (#951, FRM-3)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
 		expect(store().open).toBe(false);
+	});
+
+	it('has the browser ask before a reload while a tab has unsaved changes, and not once it is clean', async () => {
+		const unload = () => {
+			const event = new Event('beforeunload', { cancelable: true });
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		render(<SettingsModal />);
+		openOn('general');
+		const draft = await screen.findByRole('textbox', { name: 'Draft' });
+		expect(unload()).toBe(false);
+		fireEvent.change(draft, { target: { value: 'x' } });
+		expect(unload()).toBe(true);
+		fireEvent.change(draft, { target: { value: '' } });
+		expect(unload()).toBe(false);
+		fireEvent.change(draft, { target: { value: 'y' } });
+		expect(unload()).toBe(true);
+		act(() => store().closeSettings());
+		expect(unload()).toBe(false);
+	});
+
+	it('leaves the desktop app’s unload alone, since Electron would refuse it without asking', async () => {
+		Object.assign(window, { lllmDesktop: {} });
+		render(<SettingsModal />);
+		openOn('general');
+		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
+		const event = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(event);
+		expect(event.defaultPrevented).toBe(false);
+		delete (window as { lllmDesktop?: unknown }).lllmDesktop;
 	});
 
 	it('closes at once when nothing changed', async () => {

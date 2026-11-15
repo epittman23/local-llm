@@ -36,6 +36,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from local_llm.config import DEFAULT_USER_PERMISSIONS
+from local_llm.constants import ERROR_MESSAGES
 from local_llm.models import chats as chats_model
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.chats import ChatForm, Chats
@@ -174,7 +175,8 @@ def test_another_user_cannot_read_it(client, people):
 def test_an_admin_reads_another_users_chat_only_with_admin_chat_access(client, people, admin_chat_access):
     chat_id = _chat(people.owner)
     assert client.get(f'/chats/{chat_id}', headers=people.admin.headers).status_code == 401
-    assert client.get(f'/chats/share/{chat_id}', headers=people.admin.headers).status_code == 401
+    # A chat id is no share id: with access off the admin is told no such share, as for any unknown id.
+    assert client.get(f'/chats/share/{chat_id}', headers=people.admin.headers).status_code == 404
     assert client.get(f'/chats/list/user/{people.owner.id}', headers=people.admin.headers).status_code == 401
     admin_chat_access(True)
     assert client.get(f'/chats/{chat_id}', headers=people.admin.headers).status_code == 200
@@ -413,9 +415,43 @@ def test_resharing_refreshes_the_snapshot_under_the_same_link(client, people):
     assert shared['chat']['history']['messages']['m2']['content'] == 'revised answer'
 
 
-def test_an_unknown_share_id_is_refused(client, people):
-    assert client.get('/chats/share/no-such-share', headers=people.owner.headers).status_code == 401
-    assert client.get('/chats/share/no-such-share').status_code == 401
+def test_an_unknown_share_id_is_not_found_signed_in_or_not(client, people):
+    for headers in (people.owner.headers, None):
+        r = client.get('/chats/share/no-such-share', headers=headers)
+        assert r.status_code == 404
+        assert r.json()['detail'] == ERROR_MESSAGES.NOT_FOUND
+
+
+def test_a_private_share_asks_an_anonymous_visitor_to_sign_in_and_serves_its_owner(client, people):
+    chat_id = _chat(people.owner)
+    share_id = _share(client, people.owner, chat_id)
+    assert client.get(f'/chats/share/{share_id}').status_code == 401
+    assert client.get(f'/chats/share/{share_id}', headers=people.other.headers).status_code == 401
+    assert client.get(f'/chats/share/{share_id}', headers=people.owner.headers).status_code == 200
+
+
+def test_an_unshared_link_is_not_found(client, people):
+    chat_id = _chat(people.owner)
+    share_id = _share(client, people.owner, chat_id)
+    assert client.delete(f'/chats/{chat_id}/share', headers=people.owner.headers).json() is True
+    assert client.get(f'/chats/share/{share_id}').status_code == 404
+
+
+def test_only_the_original_chats_owner_is_given_its_id(client, people, config):
+    chat_id = _chat(people.owner)
+    share_id = _share(client, people.owner, chat_id)
+    config['user.permissions']['sharing'].update({'public_chats': True, 'open_chats': True})
+    _set_grants(
+        client, people.owner, chat_id, [{'principal_type': 'anyone', 'principal_id': '*', 'permission': 'read'}]
+    )
+
+    mine = client.get(f'/chats/share/{share_id}', headers=people.owner.headers).json()
+    assert mine['original_chat_id'] == chat_id
+    for headers in (people.other.headers, None):
+        theirs = client.get(f'/chats/share/{share_id}', headers=headers)
+        assert theirs.status_code == 200
+        assert theirs.json().get('original_chat_id') is None
+        assert chat_id not in theirs.text
 
 
 def test_the_shared_list_holds_only_the_callers_shares(client, people):

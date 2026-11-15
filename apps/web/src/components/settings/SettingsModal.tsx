@@ -78,7 +78,8 @@ const FLASH_MS = 1600;
  * levels, the list (with search) and then the tab with a way back. #1001:
  * search finds settings by their label and description as well as tabs, and
  * a miss leaves the open tab where it is. #951: leaving a tab with unsaved
- * changes, by another tab, the close button or Escape, asks first.
+ * changes, by another tab, the close button or Escape, asks first, and so
+ * does the browser before a reload.
  */
 export function SettingsModal() {
 	const open = useSettingsModalStore((s) => s.open);
@@ -86,6 +87,7 @@ export function SettingsModal() {
 	const selected = useSettingsModalStore((s) => s.tab);
 	const setting = useSettingsModalStore((s) => s.setting);
 	const pending = useSettingsModalStore((s) => s.pending);
+	const dirty = useSettingsModalStore((s) => s.dirty);
 	const { requestTab, requestClose, confirmLeave, cancelLeave } = useSettingsModalStore.getState();
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
@@ -100,6 +102,16 @@ export function SettingsModal() {
 	const retries = useRef(0);
 
 	useDocumentTitle(open ? 'Settings' : null);
+
+	// FRM-3: reloading or closing the page would lose unsaved changes too, so the
+	// browser asks first. Not in the desktop app: Electron cancels a prevented
+	// unload without asking, so its window would silently refuse to close.
+	useEffect(() => {
+		if (!open || !dirty || 'lllmDesktop' in window) return;
+		const ask = (event: BeforeUnloadEvent) => event.preventDefault();
+		window.addEventListener('beforeunload', ask);
+		return () => window.removeEventListener('beforeunload', ask);
+	}, [open, dirty]);
 
 	const tabs = useMemo(() => availableTabs(user, config, implementedTabIds), [user, config]);
 	const tabsNow = useRef(tabs);
@@ -217,8 +229,12 @@ export function SettingsModal() {
 					retries.current += 1;
 					setTimeout(() => {
 						const still = document.activeElement;
+						const before = retries.current;
 						if (still && still === focused && still.isConnected)
 							still.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+						// The press reached its layer (or focus moved on) without coming back
+						// here: the count is per press, so the next one starts again.
+						if (retries.current === before) retries.current = 0;
 					}, 0);
 				}}
 				onOpenAutoFocus={(event) => {

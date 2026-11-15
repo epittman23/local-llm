@@ -27,6 +27,7 @@ import {
 	DROPPED_GRANTS_WARNING,
 	grantsDropped,
 	hasAnyoneReadGrant,
+	hasPublicReadGrant,
 	setVisibility
 } from '@/lib/access/accessGrants';
 import {
@@ -61,6 +62,9 @@ const AUDIENCE_HELP: Record<Audience | '', string> = {
 	me: 'The link opens only while you are signed in, such as on your other devices.'
 };
 
+/** Why "Anyone with the link" cannot be chosen (ACT-5). */
+const BLOCKED_HELP = 'Your sharing permissions do not allow links that anyone can open.';
+
 /**
  * Ports chat/ShareChatModal.svelte, asking first (#1006, S2-D2): before a link
  * exists the dialog asks who can open it, "Anyone with the link" or "Only me
@@ -71,7 +75,9 @@ const AUDIENCE_HELP: Record<Audience | '', string> = {
  * The answer is stored as the share's access grants (#334) through the
  * existing routes: "anyone" is the `anyone:*` read grant (`getVisibility`'s
  * "open"), "only me" is no grant, since the shared-chat route always serves a
- * share to its owner. The users-and-groups list is shown only when more than
+ * share to its owner. A share made with the old dialog may instead hold the
+ * `user:*` read grant (every signed-in account): that is said as it is, with
+ * neither answer chosen and a way to make it only the owner's. The users-and-groups list is shown only when more than
  * one account exists (WRD-4), counted by GET /users/search's `total`. Not
  * ported: sharing to the original project's community site.
  */
@@ -231,9 +237,11 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		void chat.refetch();
 	};
 
+	// A link every signed-in account may open (`user:*`), from the old dialog: neither answer.
+	const everyAccount = shared && grants !== null && !hasAnyoneReadGrant(grants) && hasPublicReadGrant(grants);
 	// Before a link exists the owner's pick; after, what is stored.
 	const audience: Audience | '' = shared
-		? grants === null
+		? grants === null || everyAccount
 			? ''
 			: hasAnyoneReadGrant(grants)
 				? 'anyone'
@@ -244,7 +252,7 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		else if (grants !== null) void saveAccess(setVisibility(grants, next === 'anyone' ? 'open' : 'private'));
 	};
 	const anyoneBlocked = !canShareOpen && audience !== 'anyone';
-	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ' Your sharing permissions do not allow links that anyone can open.' : ''}`;
+	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ` ${BLOCKED_HELP}` : ''}`;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -275,9 +283,24 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 								{ value: 'me', label: 'Only me (signed in)', icon: Lock }
 							]}
 						/>
-						<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
-							{help}
-						</p>
+						{everyAccount ? (
+							<div className="mt-1 flex flex-wrap items-center gap-x-2">
+								<p id={`${ids}-who-help`} className="text-foreground-muted text-dense">
+									All signed-in accounts can open this link.{anyoneBlocked && ` ${BLOCKED_HELP}`}
+								</p>
+								<Button
+									variant="link"
+									className="px-0"
+									onClick={() => grants && void saveAccess(setVisibility(grants, 'private'))}
+								>
+									Make it only me
+								</Button>
+							</div>
+						) : (
+							<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
+								{help}
+							</p>
+						)}
 					</div>
 					{shareId && (
 						<div className="min-w-0">
@@ -396,10 +419,13 @@ function ChatOption({ chat, archived, onOpen }: { chat: ChatListItem; archived?:
 /**
  * Ports layout/SearchModal.svelte's search (NAV-5): a command list the arrow
  * keys move through and Enter opens, with the first result highlighted.
- * Before anything is typed it offers the most recent chats. Results are
+ * Before anything is typed it offers the most recent chats outside folders
+ * (the server's main list, which leaves out pinned chats and chats in
+ * folders), saying so while they load or when they fail. Results are
  * grouped by time, each with the matching text and its date; archived chats
  * that match come last, marked, from a second search with the server's own
- * `archived:true` filter. The server also understands `tag:`, `folder:` and
+ * `archived:true` filter; when that half fails it says so below the rest.
+ * The server also understands `tag:`, `folder:` and
  * `pinned:`, which the footer says.
  */
 export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
@@ -433,6 +459,7 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	const typing = query.trim() !== q;
 	const found = results.data ?? [];
 	const foundArchived = archivedText ? (archived.data ?? []) : [];
+	const archivedFailed = Boolean(archivedText) && archived.isError;
 	const groups = groupByTime(found);
 
 	// cmdk highlights the first item only when its own filter runs; results that
@@ -446,14 +473,33 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	if (!q) {
 		body = (
 			<>
-				{recentChats.length > 0 && (
+				{recent.isLoading ? (
+					<CommandLoading label="Loading recent chats">
+						<div aria-hidden className="flex flex-col gap-2 px-2 py-2">
+							{[0, 1, 2].map((i) => (
+								<div key={i} className="bg-surface-3 h-8 animate-pulse rounded-lg" />
+							))}
+						</div>
+					</CommandLoading>
+				) : recent.isError && !recent.data ? (
+					<LoadFailed
+						what="recent chats"
+						error={recent.error}
+						onRetry={() => void recent.refetch()}
+						retrying={recent.isFetching}
+					/>
+				) : recentChats.length > 0 ? (
 					<CommandGroup heading="Recent chats">
 						{recentChats.map((c) => (
 							<ChatOption key={c.id} chat={c} onOpen={() => go(`/c/${c.id}`)} />
 						))}
 					</CommandGroup>
+				) : (
+					<p className="text-dense text-foreground-muted px-2 py-1.5">
+						Recent chats outside folders appear here. Type to search all your chats.
+					</p>
 				)}
-				<CommandGroup heading={recentChats.length ? undefined : 'No chats yet'}>
+				<CommandGroup>
 					<CommandItem value={NEW_CHAT} onSelect={() => go('/')}>
 						<SquarePen aria-hidden /> New chat
 					</CommandItem>
@@ -479,7 +525,7 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 				</div>
 			</CommandLoading>
 		);
-	} else if (!found.length && !foundArchived.length) {
+	} else if (!found.length && !foundArchived.length && !archivedFailed) {
 		body = (
 			<div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
 				<p className="text-foreground-muted">No chats match “{q}”.</p>
@@ -504,6 +550,14 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 							<ChatOption key={c.id} chat={c} archived onOpen={() => go(`/c/${c.id}`)} />
 						))}
 					</CommandGroup>
+				)}
+				{archivedFailed && (
+					<div role="alert" className="text-dense text-foreground-muted flex items-center gap-2 px-2 py-1.5">
+						Couldn't search archived chats.
+						<Button variant="ghost" size="xs" onClick={() => void archived.refetch()} disabled={archived.isFetching}>
+							{archived.isFetching ? 'Trying again…' : 'Try again'}
+						</Button>
+					</div>
 				)}
 			</>
 		);

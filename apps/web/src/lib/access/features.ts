@@ -1,5 +1,5 @@
-import type { BackendConfig } from '@/lib/stores/configStore';
 import type { SessionUser } from '@/lib/stores/authStore';
+import type { BackendConfig } from '@/lib/stores/configStore';
 
 // Who may open the Phase 9 surfaces. Ported from layout/Sidebar.svelte's
 // `isMenuItemVisible`, which is the only place the Svelte app spells these
@@ -10,9 +10,12 @@ import type { SessionUser } from '@/lib/stores/authStore';
 // permission". Notes and channels default the permission to allowed (the
 // Svelte sidebar's channel section reads `permissions.features.channels ?? true`,
 // and the backend's USER_PERMISSIONS_FEATURES_CHANNELS defaults to True);
-// calendar and automations do not (as in the original).
+// calendar and automations do not (as in the original). Folders copy the
+// server's own check (routers/folders.py, `check_folders_permission`): only
+// `enable_folders` set to false turns them off, and the permission defaults to
+// allowed (USER_PERMISSIONS_FEATURES_FOLDERS).
 
-export type Feature = 'notes' | 'calendar' | 'automations' | 'playground' | 'channels';
+export type Feature = 'notes' | 'calendar' | 'automations' | 'playground' | 'channels' | 'folders';
 
 type Perms = { features?: Record<string, boolean | undefined> } & Record<string, unknown>;
 
@@ -30,6 +33,8 @@ export function canUseFeature(feature: Feature, user: SessionUser | null, config
 			return Boolean(f.enable_automations) && (admin || Boolean(perm.automations));
 		case 'channels':
 			return Boolean(f.enable_channels) && (admin || (perm.channels ?? true));
+		case 'folders':
+			return f.enable_folders !== false && (admin || (perm.folders ?? true));
 		case 'playground':
 			return admin;
 	}

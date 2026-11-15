@@ -336,17 +336,37 @@ test('a shared chat shows HTML in a message as text: no page styles, forms or ov
 	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).not.toBe('rgb(1, 2, 3)');
 });
 
-test('an unknown share id sends an anonymous viewer to sign in, then back to it', async ({ page }) => {
+test('a private share sends an anonymous viewer to sign in, then back to it', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/chats/share/nope', (route) =>
-		route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"Not found"}' })
+		route.fulfill({
+			status: 401,
+			contentType: 'application/json',
+			body: '{"detail":"Your session has expired or the token is invalid. Please sign in again."}'
+		})
 	);
 
 	await page.goto('/s/nope');
 
-	// The share may be limited to signed-in users, so an anonymous viewer is
-	// asked to sign in and brought back; a signed-in one goes home instead.
+	// The share exists but is limited to signed-in users, so an anonymous viewer
+	// is asked to sign in and brought back.
 	await expect(page).toHaveURL(/\/auth\?redirect=%2Fs%2Fnope$/);
+});
+
+test('an unknown share id tells an anonymous viewer the link no longer works (#953)', async ({ page }) => {
+	await mockConfig(page, baseConfig);
+	await page.route('**/api/v1/chats/share/gone', (route) =>
+		route.fulfill({
+			status: 404,
+			contentType: 'application/json',
+			body: JSON.stringify({ detail: "We could not find what you're looking for :/" })
+		})
+	);
+
+	await page.goto('/s/gone');
+
+	await expect(page.getByRole('heading', { level: 1, name: 'This shared link is no longer available.' })).toBeVisible();
+	await expect(page).toHaveURL(/\/s\/gone$/);
 });
 
 test('/ui shows the interface standard to a signed-out visitor, with its colour promises measured', async ({

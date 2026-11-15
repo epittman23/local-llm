@@ -77,7 +77,9 @@ test('home lists pinned then recent chats and today’s events, and opens a chat
 test('home says what belongs in each list when it is empty, with the first step', async ({ page }) => {
 	await mockHome(page, { pinned: [], recent: [], events: [] });
 	await page.goto('/home');
-	await expect(page.getByText(/^No chats yet\./)).toBeVisible();
+	await expect(
+		page.getByText(/^Nothing here yet\. Your pinned chats and your most recent chats outside folders/)
+	).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Start a chat' })).toHaveAttribute('href', '/');
 	await expect(page.getByText('Nothing on your calendar today.')).toBeVisible();
 	await page.getByRole('link', { name: 'Open calendar' }).click();

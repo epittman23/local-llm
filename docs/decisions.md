@@ -47,7 +47,11 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     `updated_at` to now (and pinning also marked it read), so the sidebar,
     which groups chats by that date, moved an old chat to Today. The three
     model functions no longer write those columns. No migration, no rewritten
-    rows, no response change; dates already bumped stay as they are.
+    rows, no response change; dates already bumped stay as they are. It also
+    changes ordering: Archived chats (sorted by `updated_at`), a folder's list
+    (`unread_updated_at`: unread first, then by `updated_at`, 10 per page) and
+    the pinned chats (by `updated_at`) now keep a chat at its old date instead
+    of moving it to the top when it is archived, filed or pinned.
 
 - **2026-11-14** (latest, 5): **The product's mark, fallback pictures,
   default colours, new-chat suggestions and three more ratchet patterns**,
