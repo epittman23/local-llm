@@ -1,0 +1,48 @@
+created 200 d4190470-7a9b-4dac-a68b-f859824d9241
+start {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: false,
+  folder_id: null
+}
+after pin {
+  updated_at: 1794757649,
+  pinned: true,
+  archived: false,
+  folder_id: null
+} dateKept true
+after unpin {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: false,
+  folder_id: null
+} dateKept true
+after archive {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: true,
+  folder_id: null
+} dateKept true
+after unarchive {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: false,
+  folder_id: null
+} dateKept true
+folder 200 fd857eba-1b57-42fb-bf9e-6bdfc950b6d6
+after move {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: false,
+  folder_id: 'fd857eba-1b57-42fb-bf9e-6bdfc950b6d6'
+} dateKept true
+after move out {
+  updated_at: 1794757649,
+  pinned: false,
+  archived: false,
+  folder_id: null
+} dateKept true
+folder delete 200
+chat delete 200
+chat count before/after 4 4
+folders left 0
