@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatPythonCode } from '@/lib/apis/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
-import CodeEditor, { type CodeEditorHandle, parseBlackError } from './CodeEditor';
+import { CONTRAST_RULES } from '@/lib/ui/contrast';
+import CodeEditor, { type CodeEditorHandle, PARSE_ERROR_GUTTER, parseBlackError } from './CodeEditor';
 
 vi.mock('@/lib/apis/utils', () => ({ formatPythonCode: vi.fn() }));
 
@@ -157,5 +158,16 @@ describe('CodeEditor parse errors (#1015)', () => {
 		vi.mocked(formatPythonCode).mockRejectedValue('Server unreachable');
 		await act(async () => expect(await ref.current?.formatPython()).toBe('unformatted'));
 		useAuthStore.setState({ token: 't', user: { role: 'user' } } as never);
+	});
+});
+
+describe('the parse error mark (COL-2)', () => {
+	it('draws the line number in a token pair the contrast test holds at 4.5:1', () => {
+		const rule = CONTRAST_RULES.find(
+			(r) =>
+				`var(${r.foreground})` === PARSE_ERROR_GUTTER.color &&
+				`var(${r.background})` === PARSE_ERROR_GUTTER.backgroundColor
+		);
+		expect(rule?.minimum).toBeGreaterThanOrEqual(4.5);
 	});
 });

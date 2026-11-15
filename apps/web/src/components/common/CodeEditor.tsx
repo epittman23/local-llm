@@ -18,6 +18,17 @@ import { cn } from '@/lib/utils';
 // CSS variables, so a theme change needs no reconfiguring; only CodeMirror's
 // own light/dark base styles are switched (EditorView.darkTheme below).
 const selection = 'color-mix(in oklch, var(--brand), transparent 65%)';
+/**
+ * The marked line's number (COL-2): the danger fill and its foreground, a pair
+ * the contrast test holds at 4.5:1 in every theme. The danger colour on the
+ * tinted line measured 3.84:1.
+ */
+export const PARSE_ERROR_GUTTER = {
+	backgroundColor: 'var(--danger-fill)',
+	color: 'var(--danger-fill-foreground)',
+	fontWeight: '650'
+};
+
 const tokenTheme = EditorView.theme({
 	// The editor fills its host and scrolls inside it. Without a height CodeMirror
 	// grows to its content, and a host that clips (every caller's panel does) then
@@ -36,13 +47,9 @@ const tokenTheme = EditorView.theme({
 	'.cm-activeLine': { backgroundColor: 'color-mix(in oklch, var(--surface-3), transparent 50%)' },
 	'.cm-activeLineGutter': { backgroundColor: 'var(--surface-3)', color: 'var(--foreground-strong)' },
 	'.cm-placeholder': { color: 'var(--foreground-muted)' },
-	// A line Black could not parse (#1015): tinted, with its number in the danger colour.
+	// A line Black could not parse (#1015): tinted, with its number on the solid danger fill.
 	'.cm-parse-error': { backgroundColor: 'color-mix(in oklch, var(--danger), transparent 82%)' },
-	'.cm-gutterElement.cm-parse-error-gutter': {
-		backgroundColor: 'color-mix(in oklch, var(--danger), transparent 70%)',
-		color: 'var(--danger)',
-		fontWeight: '650'
-	},
+	'.cm-gutterElement.cm-parse-error-gutter': PARSE_ERROR_GUTTER,
 	'&.cm-focused .cm-matchingBracket': {
 		backgroundColor: 'var(--surface-3)',
 		outline: '1px solid var(--border-control)'
