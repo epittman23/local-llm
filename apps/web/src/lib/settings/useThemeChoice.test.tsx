@@ -40,7 +40,11 @@ describe('useThemeChoice (#1089)', () => {
 	it('applies a choice at once, caches it in this browser and saves it with the account', async () => {
 		const { result } = renderHook(() => useThemeChoice(), { wrapper });
 		await waitFor(() => expect(getUserSettings).toHaveBeenCalled());
-		// The account's settings have loaded, so a change can be merged into them.
+		// Wait until the account's settings have loaded (the hook merges a change
+		// into them), not merely been asked for: under load the answer can lag.
+		await act(async () => {
+			await vi.mocked(getUserSettings).mock.results[0].value;
+		});
 		await act(async () => {});
 		act(() => result.current[1]('oled-dark'));
 		expect(result.current[0]).toBe('oled-dark');
@@ -58,7 +62,9 @@ describe('useThemeChoice (#1089)', () => {
 		vi.mocked(updateUserSettings).mockRejectedValue('down');
 		const { result } = renderHook(() => useThemeChoice(), { wrapper });
 		await waitFor(() => expect(getUserSettings).toHaveBeenCalled());
-		// The account's settings have loaded, so a change can be merged into them.
+		await act(async () => {
+			await vi.mocked(getUserSettings).mock.results[0].value;
+		});
 		await act(async () => {});
 		act(() => result.current[1]('light'));
 		expect(localStorage.theme).toBe('light');
