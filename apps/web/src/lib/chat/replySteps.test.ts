@@ -100,6 +100,8 @@ describe('replySegments', () => {
 		const live = [text('m', 'Checking.'), call('c1', 'bash', { command: 'sleep 5' }, { status: 'in_progress' })];
 		expect(steps(live, false)[0].status).toBe('running');
 		expect(steps(live, true)[0].status).toBe('unanswered');
+		const streaming = [call('c3', 'bash', {}, { arguments: '', status: 'in_progress' })];
+		expect(steps(streaming, false)[0].title).toBe('Preparing a command');
 		expect(steps([reasoning('r', 'hm', { status: 'in_progress' })], false)[0]).toMatchObject({
 			status: 'running',
 			title: 'Thinking'

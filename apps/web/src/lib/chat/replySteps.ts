@@ -208,11 +208,13 @@ function toolStep(item: OutputItem, result: OutputItem | undefined, replyDone: b
 			: parsed.type === 'command' && parsed.timedOut
 				? 'timed out'
 				: undefined;
+	// While a call's arguments are still streaming in there is nothing to name yet.
+	const preparing = status === 'running' && !Object.keys(args).length;
 	return {
 		id: item.id ?? item.call_id ?? '',
 		kind,
 		name,
-		title,
+		title: preparing ? `Preparing ${name === 'bash' ? 'a command' : humanize(name).toLowerCase()}` : title,
 		meta,
 		status,
 		input,
