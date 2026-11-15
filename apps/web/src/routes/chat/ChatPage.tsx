@@ -511,9 +511,12 @@ export function ChatPage() {
 				)}
 				{isMd ? (
 					// On a phone, toasts and the connection banner start below this row (FBK-2).
-					<header data-page-top className="flex items-start gap-2 px-4 py-2">
-						{modelSelector}
-						<div className="flex min-w-0 flex-1 items-center gap-2 pt-1">
+					// Where the column is too narrow for the picker beside the title and the
+					// buttons (a side panel open at 768 or 1024 px), those wrap to a second
+					// row rather than squeezing the title to nothing or spilling over the panel.
+					<header data-page-top className="flex flex-wrap items-start gap-x-2 px-4 py-2">
+						<div className="max-w-full min-w-0">{modelSelector}</div>
+						<div className="flex min-w-48 flex-1 items-center gap-2 pt-1">
 							{id && (
 								<ChatTitle
 									chatId={id}
