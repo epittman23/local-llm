@@ -436,9 +436,10 @@ function EditorForm({
 											{...fieldProps(nameNote, { error: errors.name })}
 											onBlur={() => check('name')}
 											onChange={(e) => {
-												// A new model's id follows its name until edited by hand.
+												// A new model's id follows its name, cleared name included, until the id is edited by hand.
 												const name = e.target.value;
-												const next = { ...state, ...(!edit && name ? { name, id: modelIdFromName(name) } : { name }) };
+												const auto = !edit && state.id === modelIdFromName(state.name);
+												const next = { ...state, name, ...(auto ? { id: modelIdFromName(name) } : {}) };
 												setState(next);
 												check('name', next, false);
 												if (next.id !== state.id) check('id', next, false);

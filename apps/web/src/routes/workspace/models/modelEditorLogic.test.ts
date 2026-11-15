@@ -28,6 +28,9 @@ describe('modelIdFromName', () => {
 	it('lowercases, hyphenates whitespace and drops everything else', () => {
 		expect(modelIdFromName('My Model 2!')).toBe('my-model-2');
 		expect(modelIdFromName('Café  Bot')).toBe('caf-bot');
+		expect(modelIdFromName(' x ')).toBe('x');
+		expect(modelIdFromName('Tutor!')).toBe('tutor');
+		expect(modelIdFromName('')).toBe('');
 	});
 });
 

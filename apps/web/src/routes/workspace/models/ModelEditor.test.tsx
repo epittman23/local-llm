@@ -302,6 +302,8 @@ describe('ModelEditor validation (#1010, FRM-2)', () => {
 		const name = await screen.findByLabelText('Model name');
 		fireEvent.change(name, { target: { value: 'x' } });
 		fireEvent.change(name, { target: { value: '' } });
+		// Clearing the name clears the ID that followed it; an ID typed by hand stays.
+		fireEvent.change(screen.getByLabelText('Model ID'), { target: { value: 'x' } });
 		save('Create model');
 		expect(name).toHaveAttribute('aria-invalid', 'true');
 		expect(name).toHaveAccessibleDescription('Enter a name for this model.');
@@ -340,6 +342,21 @@ describe('ModelEditor validation (#1010, FRM-2)', () => {
 		expect(id).toHaveAccessibleDescription('Enter an ID: it names the model in the API.');
 		fireEvent.change(id, { target: { value: 'fresh' } });
 		expect(id).toHaveAccessibleDescription("Names the model in the API. It can't be changed later.");
+	});
+
+	it("keeps a new model's ID following its name, cleared name and spaces included, until the ID is typed", async () => {
+		renderEditor({ model: null, edit: false });
+		const name = await screen.findByLabelText('Model name');
+		const id = screen.getByLabelText('Model ID');
+		fireEvent.change(name, { target: { value: ' Stats tutor' } });
+		expect(id).toHaveValue('stats-tutor');
+		fireEvent.change(name, { target: { value: '' } });
+		expect(id).toHaveValue('');
+		fireEvent.change(name, { target: { value: 'Proofs' } });
+		expect(id).toHaveValue('proofs');
+		fireEvent.change(id, { target: { value: 'proof-checker' } });
+		fireEvent.change(name, { target: { value: 'Proof checker v2' } });
+		expect(id).toHaveValue('proof-checker');
 	});
 
 	it('says uploads still running stop a save, at the knowledge list', async () => {

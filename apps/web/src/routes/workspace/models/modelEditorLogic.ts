@@ -76,8 +76,10 @@ export type ModelDefaults = {
 /** "My Model 2" -> "my-model-2": what the id becomes as you type a name into a new model. */
 export const modelIdFromName = (name: string): string =>
 	name
+		.trim()
 		.replace(/\s+/g, '-')
 		.replace(/[^a-zA-Z0-9-]/g, '')
+		.replace(/^-+|-+$/g, '')
 		.toLowerCase();
 
 const blankInfo = (): ModelInfo => ({
