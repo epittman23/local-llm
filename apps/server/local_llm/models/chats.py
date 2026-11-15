@@ -1483,8 +1483,7 @@ class ChatTable:
             async with get_async_db_context(db) as session:
                 chat = await session.get(Chat, id)
                 chat.pinned = not chat.pinned
-                chat.updated_at = int(time.time())
-                chat.last_read_at = int(time.time())
+                # Organising a chat leaves its date and read state alone (#949).
                 await session.commit()
                 return ChatModel.model_validate(chat)
         except Exception:
@@ -1496,7 +1495,7 @@ class ChatTable:
                 chat = await session.get(Chat, id)
                 chat.archived = not chat.archived
                 chat.folder_id = None
-                chat.updated_at = int(time.time())
+                # Organising a chat leaves its date alone (#949).
                 chat.last_read_at = int(time.time())
                 await session.commit()
                 return ChatModel.model_validate(chat)
@@ -2439,7 +2438,7 @@ class ChatTable:
             async with get_async_db_context(db) as session:
                 chat = await session.get(Chat, id)
                 chat.folder_id = folder_id
-                chat.updated_at = int(time.time())
+                # Organising a chat leaves its date alone (#949).
                 chat.last_read_at = int(time.time())
                 chat.pinned = False
                 if folder_id is not None:
