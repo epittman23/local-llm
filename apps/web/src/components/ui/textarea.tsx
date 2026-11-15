@@ -25,8 +25,9 @@ function Textarea({ className, rows = 2, style, ...props }: React.ComponentProps
 
 /**
  * A one-line field for a name that may be long (#958): it wraps to show all
- * of it, up to three lines, then scrolls. Like an input, Enter submits its
- * form and a line break never gets in (a pasted one becomes a space).
+ * of it, up to three lines, then scrolls. Enter does what it does in an
+ * input: it submits the form through its default button, unless that button
+ * is disabled. A line break never gets in (a pasted one becomes a space).
  */
 function LineTextarea({ className, onChange, onKeyDown, ...props }: Omit<React.ComponentProps<'textarea'>, 'rows'>) {
 	return (
@@ -37,7 +38,14 @@ function LineTextarea({ className, onChange, onKeyDown, ...props }: Omit<React.C
 				onKeyDown?.(e);
 				if (e.key === 'Enter' && !e.defaultPrevented && !e.nativeEvent.isComposing) {
 					e.preventDefault();
-					e.currentTarget.form?.requestSubmit();
+					// As implicit submission does: through the form's default button, and not at all
+					// while that button is off (nothing changed yet, or a save is running).
+					const form = e.currentTarget.form;
+					const button = form?.querySelector<HTMLButtonElement | HTMLInputElement>(
+						'button[type="submit"], input[type="submit"]'
+					);
+					if (!form || button?.disabled) return;
+					form.requestSubmit(button ?? undefined);
 				}
 			}}
 			onChange={(e) => {

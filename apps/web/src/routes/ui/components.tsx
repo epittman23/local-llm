@@ -323,7 +323,7 @@ export function FormsSection() {
 			</Example>
 			<Example
 				title="A name that may be long"
-				note="A name field is one line that wraps to show the whole name, up to three lines, then scrolls (the shared LineTextarea). Enter submits, as in an input, and a pasted line break becomes a space."
+				note="A name field is one line that wraps to show the whole name, up to three lines, then scrolls (the shared LineTextarea). Enter does what it does in an input, and a pasted line break becomes a space."
 			>
 				<Panel className="max-w-[24rem]">
 					<Field label="Tool name">

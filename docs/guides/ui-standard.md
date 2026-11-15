@@ -400,7 +400,9 @@ swap out in place (the model editor) calls it from its own Back.
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A name that may be long (a tool's, a skill's) is
 `LineTextarea`: one line that wraps to show all of it, up to three lines,
-where Enter submits and no line break gets in; an `Input` would clip it.
+where Enter does what it does in an input (submits through the form's
+default button, unless that is disabled) and no line break gets in; an
+`Input` would clip it.
 A native control is allowed only where the shared one cannot do the job (a date), and then it relies on COL-6. A native `<select>` that
 remains gets the field's edge, fill, `rounded-lg` and least height
 (`--control-compact`, 44 px on touch) from `standard.css`, so it needs no

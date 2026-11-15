@@ -42,3 +42,19 @@ describe('LineTextarea (#958)', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe('LineTextarea Enter', () => {
+	it('submits nothing while the form\'s default button is disabled, as an input would not', () => {
+		const onSubmit = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+		render(
+			<form onSubmit={onSubmit}>
+				<LineTextarea aria-label="Skill name" />
+				<button type="submit" disabled>
+					Save changes
+				</button>
+			</form>
+		);
+		fireEvent.keyDown(screen.getByRole('textbox', { name: 'Skill name' }), { key: 'Enter' });
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+});

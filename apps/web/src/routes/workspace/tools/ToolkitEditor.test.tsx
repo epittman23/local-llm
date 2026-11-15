@@ -292,3 +292,12 @@ describe('the save bar on a phone (FRM-3, LAY-4)', () => {
 		expect(bar).toHaveClass('max-sm:sticky', 'max-sm:bottom-0', 'max-sm:bg-page');
 	});
 });
+
+describe('ToolkitEditor Enter in the name', () => {
+	it('saves nothing on an untouched page, where Save is off', () => {
+		const onSave = vi.fn();
+		renderEditor({ tool, edit: true, onSave });
+		fireEvent.keyDown(screen.getByLabelText('Tool name'), { key: 'Enter' });
+		expect(onSave).not.toHaveBeenCalled();
+	});
+});
