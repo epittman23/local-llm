@@ -1,10 +1,11 @@
 # Canvas: a document viewer and text editor beside the chat
 
-> **Status: planned (2026-11-14). Nothing here is built** except the
-> interface design, which is shown on `/ui` ("Canvas") and specified by the
-> CNV rules in [docs/guides/ui-standard.md](../guides/ui-standard.md). This
-> file is the implementation plan. The owner settled all five of its
-> decisions on 2026-11-14; none is open.
+> **Status: Phase 1 built (2026-11-15, #<PR>): `SidePanel` holds Controls
+> and the preview; Phases 2-3 planned.** The interface design is shown on
+> `/ui` ("Canvas") and specified by the CNV rules in
+> [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
+> implementation plan. The owner settled all five of its decisions on
+> 2026-11-14; none is open.
 
 ## What the owner asked for
 
@@ -136,14 +137,18 @@ Each phase is one pull request, verified against the interface standard
 
 Fixes #901 on its own, before any canvas exists.
 
-- **C1.** `components/layout/SidePanel.tsx`: the right-hand region. From `md`
-  up, a column with a `role="separator"` resize handle (pointer and arrow
-  keys, `aria-valuenow`, width stored in `localStorage`); below `md`, the
-  shared `Sheet`, full screen. Escape closes it; focus returns to what opened
-  it (NAV-4).
-- **C2.** `ChatPage` renders `ChatControls` inside it. `ArtifactPanel` moves
-  inside it unchanged for now.
-- **C3.** Tests: Vitest for the resize arithmetic and the keyboard; Playwright
+- **C1 (done).** `components/layout/SidePanel.tsx`: the right-hand region.
+  A column when the space beside the sidebar holds the panel's minimum plus
+  24 rem, otherwise (and always below `md`) the shared `Sheet`, full screen.
+  The column has a separator resize handle (pointer, arrow keys, Home/End,
+  `aria-valuenow`, width kept in `localStorage` per occupant). Escape from
+  inside closes it; focus returns to what opened it (NAV-4). Default widths
+  per occupant: Controls 20 rem (minimum 18), the preview 28 rem (minimum
+  20); half the space is the Phase 2 canvas's.
+- **C2 (done).** `ChatPage` renders `ChatControls` inside it. `ArtifactPanel` moves
+  inside it unchanged for now. Its Download is a header action and its title
+  is 'Preview'.
+- **C3 (done).** Tests: Vitest for the resize arithmetic and the keyboard; Playwright
   at 390 px (the chat is not squeezed; the sheet closes back to the chat) and
   at 1440 px.
 
