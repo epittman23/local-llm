@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Spinner } from '@/components/common/Spinner';
+import { AppMark } from '@/components/ui/app-mark';
 import { APP_NAME } from '@/lib/constants';
 import { routePaths } from '@/routes/routePaths';
 
@@ -30,7 +31,7 @@ export function resetBootSplashForTests() {
 
 /**
  * What the app shows while it waits for the server to say who is signed in
- * (STA-2, WRD-3): the product's name on the page colour, a spinner after
+ * (STA-2, WRD-3): the product's mark and name on the page colour, a spinner after
  * 400 ms, and after 8 s a sentence saying it is still waiting with a link to
  * the page that retries the server. It continues Base.astro's static splash,
  * which looks the same.
@@ -56,7 +57,10 @@ export function BootSplash() {
 	const here = `${location.pathname}${location.search}`;
 	return (
 		<div className="bg-page text-foreground flex h-svh w-full flex-col items-center justify-center gap-4 p-4 text-center">
-			<p className="text-title font-title">{APP_NAME}</p>
+			<div className="flex items-center gap-2">
+				<AppMark size={32} />
+				<p className="text-title font-title">{APP_NAME}</p>
+			</div>
 			<div className="flex size-5 items-center justify-center">{showSpinner && <Spinner />}</div>
 			<p role="status" className="text-foreground-muted min-h-5">
 				{waiting && (
