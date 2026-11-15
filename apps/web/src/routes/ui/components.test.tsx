@@ -90,6 +90,21 @@ describe('/ui components', () => {
 		expect(screen.getByText('local-llm')).toBeInTheDocument();
 	});
 
+	it("demonstrates the model picker's two-line rows, checking the one chosen (NAV-5)", () => {
+		inProvider(<NavigationSection />);
+		const list = screen.getByText('Writes, reviews and debugs code.').closest('[role="listbox"]') as HTMLElement;
+		const options = within(list).getAllByRole('option');
+		expect(options.map((o) => o.textContent)).toEqual([
+			expect.stringContaining('Writes, reviews and debugs code.'),
+			expect.stringContaining('qwen/qwen3.6-27b')
+		]);
+		expect(within(options[1]).getByText('qwen/qwen3.6-27b')).toHaveClass('font-mono');
+		expect(options[0].textContent).toContain('(current)');
+		fireEvent.click(options[1]);
+		expect(within(list).getAllByRole('option')[1].textContent).toContain('(current)');
+		expect(within(list).getAllByRole('option')[0].textContent).not.toContain('(current)');
+	});
+
 	it('demonstrates the vertical tab list, which opens a tab on Enter and names a repeated one by its half (NAV-2)', () => {
 		inProvider(<NavigationSection />);
 		const list = screen.getByRole('tablist', { name: 'Settings' });

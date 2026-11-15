@@ -1800,7 +1800,9 @@ ENABLE_BENCHMARKS = os.getenv('ENABLE_BENCHMARKS', 'True').lower() == 'true'
 
 ENABLE_USER_STATUS = os.getenv('ENABLE_USER_STATUS', 'True').lower() == 'true'
 
-ENABLE_EVALUATION_ARENA_MODELS = os.getenv('ENABLE_EVALUATION_ARENA_MODELS', 'True').lower() == 'true'
+# Off by default (2026-11-15, #990): the blind comparison answers with a random model, which
+# one owner choosing between a coder and a reasoner does not want. Admin > Evaluations turns it on.
+ENABLE_EVALUATION_ARENA_MODELS = os.getenv('ENABLE_EVALUATION_ARENA_MODELS', 'False').lower() == 'true'
 try:
     evaluation_arena_models = JSONCodec.loads(os.getenv('EVALUATION_ARENA_MODELS', '[]'))
     if not isinstance(evaluation_arena_models, list) or not all(
@@ -1839,7 +1841,8 @@ BYPASS_ADMIN_ACCESS_CONTROL = (
 
 ENABLE_ADMIN_ANALYTICS = os.getenv('ENABLE_ADMIN_ANALYTICS', 'True').lower() == 'true'
 
-ENABLE_MESSAGE_RATING = os.getenv('ENABLE_MESSAGE_RATING', 'True').lower() == 'true'
+# Off by default (2026-11-15, #995). Admin Settings > Interface turns the thumbs on.
+ENABLE_MESSAGE_RATING = os.getenv('ENABLE_MESSAGE_RATING', 'False').lower() == 'true'
 
 ENABLE_USER_WEBHOOKS = os.getenv('ENABLE_USER_WEBHOOKS', 'False').lower() == 'true'
 

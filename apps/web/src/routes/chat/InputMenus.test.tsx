@@ -41,8 +41,8 @@ describe('AttachMenu knowledge picker', () => {
 	it('lists the matching knowledge bases and attaches the one pressed', async () => {
 		const onItem = vi.fn();
 		wrap(<AttachMenu onFiles={vi.fn()} onWeb={vi.fn()} onItem={onItem} canUpload canWeb notesEnabled={false} />);
-		openMenu('More');
-		fireEvent.click(await screen.findByRole('menuitem', { name: /Attach Knowledge/ }));
+		openMenu('Attach');
+		fireEvent.click(await screen.findByRole('menuitem', { name: /Attach knowledge/ }));
 		const option = await screen.findByRole('option', { name: /Handbook/ });
 		fireEvent.click(option);
 		expect(onItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'kb1', type: 'collection' }));
@@ -51,14 +51,14 @@ describe('AttachMenu knowledge picker', () => {
 
 	it('says so when nothing matches', async () => {
 		wrap(<AttachMenu onFiles={vi.fn()} onWeb={vi.fn()} onItem={vi.fn()} canUpload canWeb notesEnabled />);
-		openMenu('More');
-		fireEvent.click(await screen.findByRole('menuitem', { name: /Reference Chats/ }));
+		openMenu('Attach');
+		fireEvent.click(await screen.findByRole('menuitem', { name: /Reference chats/ }));
 		expect(await screen.findByText('No results found')).toBeTruthy();
 		expect(screen.queryByRole('option')).toBeNull();
 	});
 });
 
-describe('IntegrationsMenu', () => {
+describe('IntegrationsMenu (the Tools menu, #1083)', () => {
 	const props = {
 		tools: [],
 		toolIds: [],
@@ -70,7 +70,7 @@ describe('IntegrationsMenu', () => {
 	it('shows a button for each feature that is on, which turns it off', () => {
 		const onToggles = vi.fn();
 		wrap(<IntegrationsMenu {...props} onToggles={onToggles} />);
-		fireEvent.click(screen.getByRole('button', { name: 'Web Search (on)' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Web search (on)' }));
 		expect(onToggles).toHaveBeenCalledExactlyOnceWith({
 			webSearch: false,
 			imageGeneration: false,
@@ -80,12 +80,12 @@ describe('IntegrationsMenu', () => {
 
 	it('shows no such button for a feature that is off', () => {
 		wrap(<IntegrationsMenu {...props} toggles={{ ...props.toggles, webSearch: false }} onToggles={vi.fn()} />);
-		expect(screen.queryByRole('button', { name: 'Web Search (on)' })).toBeNull();
-		expect(screen.getByRole('button', { name: 'Integrations' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Web search (on)' })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Tools' })).toBeTruthy();
 	});
 
-	it('counts the enabled tools on the Integrations button', () => {
+	it('counts what is on, tools and switched-on features, on the Tools button', () => {
 		wrap(<IntegrationsMenu {...props} tools={[{ id: 't1', name: 'Calc' }]} toolIds={['t1']} onToggles={vi.fn()} />);
-		expect(screen.getByRole('button', { name: 'Integrations' }).textContent).toBe('1');
+		expect(screen.getByRole('button', { name: 'Tools (2 on)' }).textContent).toBe('2');
 	});
 });

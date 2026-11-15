@@ -1,14 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, EyeOff, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
+import { Archive, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { overriddenCount } from '@/components/common/advancedParamDefs';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Gone, isNotFound } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ShellBarPortal } from '@/components/layout/ShellBarSlot';
+import { SidePanel, useMdUp } from '@/components/layout/SidePanel';
 import { Button } from '@/components/ui/button';
 import { canUseFeature } from '@/lib/access/features';
 import { updateChatById } from '@/lib/apis/chats';
@@ -23,6 +26,7 @@ import {
 	warnModelsWithoutVision
 } from '@/lib/chat/attachments';
 import { codeRunner } from '@/lib/chat/codeRun';
+import { draftKeyFor } from '@/lib/chat/drafts';
 import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
@@ -32,19 +36,24 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
-import { ArtifactPanel } from './ArtifactPanel';
+import { ArtifactDownload, ArtifactPanel } from './ArtifactPanel';
 import { ChatBanners } from './ChatBanners';
 import { ChatControls } from './ChatControls';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu } from './ChatMenu';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
+import { ChatTitle, RenameChatDialog } from './ChatTitle';
 import { CitationDialog } from './CitationDialog';
+import { DropOverlay, useFileDrag } from './DropOverlay';
 import { FolderHome } from './FolderHome';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
+import { JumpToLatest } from './JumpToLatest';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
+import { openModelPicker } from './modelPickerStore';
 import { ServerDialogs } from './ServerDialogs';
+import { TemporaryNotice, TemporaryToggle, useLeaveWarning } from './TemporaryNotice';
 import { useAttachments } from './useAttachments';
 import { useChatPrefs } from './useChatPrefs';
 import { useChatSession } from './useChatSession';
@@ -54,6 +63,9 @@ import { type ChatModel, useModels } from './useModels';
 import { useOnChatSwitch } from './useOnChatSwitch';
 import { useParamsAutosave } from './useParamsAutosave';
 import { useSavedAskUser } from './useSavedAskUser';
+
+/** Below md on a short screen the app bar's buttons float over the top of the page (AppShell, A11Y-5). */
+const SHORT_PHONE_TOP = 'max-md:[@media(max-height:520px)]:pt-12';
 
 type Folder = { id: string; name: string; data?: { model_ids?: string[]; system_prompt?: string } | null };
 
@@ -154,7 +166,9 @@ export function ChatPage() {
 	// opened (`?load-url=`, `?q=`), so it runs first.
 	useOnChatSwitch(id, session.adoptedChatId, () => {
 		attachments.clear();
-		input.current?.setText('');
+		input.current?.restoreDraft();
+		// A rename made here is in the title the next chat loads; one made since in the sidebar would be hidden.
+		setRenamed(null);
 	});
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
@@ -198,6 +212,23 @@ export function ChatPage() {
 	}, [id]);
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
+	// The same, for the render: Jump to latest shows while the reader is away from the end (#929).
+	const [awayFromEnd, setAwayFromEnd] = useState(false);
+	const jumpToLatest = () => {
+		const el = scroller.current;
+		if (el) el.scrollTop = el.scrollHeight;
+		atBottom.current = true;
+		setAwayFromEnd(false);
+	};
+
+	// A rename made on this page shows at once in the header, the tab and the
+	// phone bar; the session keeps the title it loaded until the chat reloads.
+	const [renamed, setRenamed] = useState<{ id: string; title: string } | null>(null);
+	const title = (id && renamed?.id === id ? renamed.title : null) ?? session.title;
+	// Which chat's title is being edited, so opening another chat ends it.
+	const [renamingId, setRenamingId] = useState<string | null>(null);
+	const renaming = Boolean(id) && renamingId === id;
+	const setRenaming = (on: boolean) => setRenamingId(on ? id : null);
 
 	// A chat or folder that is not there says so in the tab as on the page (NAV-3).
 	const chatGone = session.missing?.kind === 'not-found';
@@ -208,10 +239,10 @@ export function ChatPage() {
 			: folderGone
 				? 'Folder not found'
 				: // A folder's page is named after the folder (#998) until a chat started there has a title.
-					folderId && folder.data && !session.title
+					folderId && folder.data && !title
 					? folder.data.name
 					: prefs.titleInTab
-						? session.title || 'New chat'
+						? title || 'New chat'
 						: null
 	);
 	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
@@ -239,6 +270,12 @@ export function ChatPage() {
 
 	/** Sends a prompt now (true if it went, or was queued). */
 	const send = (text: string, files: ChatFile[] = []) => {
+		// An empty model slot (old saved data): open its picker, which says what to do (FRM-2).
+		const emptySlot = atModel ? -1 : selectedModels.indexOf('');
+		if (emptySlot >= 0) {
+			openModelPicker(emptySlot);
+			return false;
+		}
 		scrollOnce.current = true;
 		warnModelsWithoutVision(
 			atModel ? [atModel.id] : selectedModels,
@@ -327,6 +364,10 @@ export function ChatPage() {
 	const saveParams = useParamsAutosave(id, token);
 	const [preview, setPreview] = useState<string | null>(null);
 	useEffect(() => setPreview(null), [id]);
+	// Controls opened by its shortcut takes the side panel from a preview.
+	useEffect(() => {
+		if (controlsOpen) setPreview(null);
+	}, [controlsOpen]);
 
 	const actions = useMessageActions(session);
 	const [citation, setCitation] = useState<Citation | null>(null);
@@ -337,6 +378,7 @@ export function ChatPage() {
 		onBranch,
 		citationsFor: (modelId) => models.find((m) => m.id === modelId)?.info?.meta?.capabilities?.citations !== false,
 		onRegenerate: (m) => void session.regenerate(m),
+		onTryAnotherModel: () => openModelPicker(),
 		onFollowUp: (text) => applyPrompt(text, prefs.insertFollowUp),
 		onToolCallResolved: () => void session.reload(),
 		onPreview: (code) => {
@@ -417,21 +459,76 @@ export function ChatPage() {
 			retrying={folder.isFetching}
 		/>
 	) : null;
+	const isMd = useMdUp();
+	const fileDrag = useFileDrag();
+	// A temporary chat with messages says so for as long as it lasts, and a reload asks first (#1080).
+	const temporaryLive = temporary && !id && !empty;
+	useLeaveWarning(temporaryLive);
+	const iconSize = isMd ? 'icon-sm' : 'icon';
+	const modelSelector = (
+		<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
+	);
+	const changedParams = overriddenCount(session.params);
+	const headerActions = (
+		<>
+			{temporaryLive
+				? isMd && <TemporaryNotice />
+				: !id &&
+					temporaryAllowed && (
+						<TemporaryToggle
+							on={temporary}
+							disabled={temporaryEnforced}
+							onToggle={() => setTemporary((t) => !t)}
+							size={iconSize}
+						/>
+					)}
+			<Tip content={changedParams ? `Controls: ${changedParams} changed` : 'Controls'}>
+				<Button
+					type="button"
+					aria-label="Controls"
+					// The dot says this chat's parameters differ from the defaults (#996).
+					aria-description={changedParams ? `${changedParams} changed` : undefined}
+					className="relative"
+					aria-pressed={controlsOpen && preview === null}
+					onClick={() => {
+						setPreview(null);
+						setControlsOpen(!controlsOpen);
+					}}
+					variant={controlsOpen && preview === null ? 'secondary' : 'ghost'}
+					size={iconSize}
+				>
+					<SlidersHorizontal className="size-4" />
+					{changedParams > 0 && (
+						<span
+							aria-hidden
+							data-testid="controls-changed"
+							className="bg-brand absolute top-1 right-1 size-1.5 rounded-full"
+						/>
+					)}
+				</Button>
+			</Tip>
+			{id && <ChatMenu chatId={id} title={title} size={iconSize} onRename={() => setRenaming(true)} />}
+		</>
+	);
 	if (gone) return <div className="flex h-full min-h-0 w-full flex-col justify-center overflow-y-auto">{gone}</div>;
 
 	return (
 		<div className="flex h-full min-h-0 w-full">
 			<div
 				className="relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
+				onDragEnter={fileDrag.onDragEnter}
+				onDragLeave={fileDrag.onDragLeave}
 				onDragOver={(e) => {
 					if (e.dataTransfer.types.includes('Files')) e.preventDefault();
 				}}
 				onDrop={(e) => {
+					fileDrag.onDrop();
 					if (!e.dataTransfer.files.length) return;
 					e.preventDefault();
 					attachments.addFiles(Array.from(e.dataTransfer.files));
 				}}
 			>
+				<DropOverlay shown={fileDrag.dragging} />
 				{prefs.backgroundImageUrl && (
 					// The user's chat background, behind a wash that keeps the text readable.
 					<div
@@ -443,96 +540,109 @@ export function ChatPage() {
 						<div className="bg-background/85 absolute inset-0" />
 					</div>
 				)}
-				{/* On a phone, toasts and the connection banner start below this row (FBK-2). */}
-				<header data-page-top className="flex items-start gap-2 px-4 py-2">
-					<ModelSelector
-						models={models}
-						selected={selectedModels}
-						onChange={changeModels}
-						disabled={session.generating}
+				{isMd ? (
+					// On a phone, toasts and the connection banner start below this row (FBK-2).
+					// Where the column is too narrow for the picker beside the title and the
+					// buttons (a side panel open at 768 or 1024 px), those wrap to a second
+					// row rather than squeezing the title to nothing or spilling over the panel.
+					<header data-page-top className="flex flex-wrap items-start gap-x-2 px-4 py-2">
+						<div className="max-w-full min-w-0">{modelSelector}</div>
+						<div className="flex min-w-48 flex-1 items-center gap-2 pt-1">
+							{id && (
+								<ChatTitle
+									chatId={id}
+									title={title}
+									editing={renaming}
+									onEditingChange={setRenaming}
+									onRenamed={(t) => setRenamed({ id, title: t })}
+								/>
+							)}
+							<div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div>
+						</div>
+					</header>
+				) : (
+					// A phone has one header row, the app bar (#1091): these go in its slot,
+					// and the model picker goes in the composer's toolbar.
+					<ShellBarPortal>{headerActions}</ShellBarPortal>
+				)}
+				{id && !isMd && (
+					<RenameChatDialog
+						chatId={id}
+						title={title}
+						open={renaming}
+						onOpenChange={setRenaming}
+						onRenamed={(t) => setRenamed({ id, title: t })}
 					/>
-					<div className="ml-auto flex items-center gap-2 pt-1">
-						{!id && temporaryAllowed && (
-							<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
-								<Button
-									type="button"
-									aria-label="Temporary Chat"
-									aria-pressed={temporary}
-									disabled={temporaryEnforced}
-									onClick={() => setTemporary((t) => !t)}
-									variant={temporary ? 'secondary' : 'ghost'}
-									size="icon-sm"
-								>
-									<EyeOff className="size-4" />
-								</Button>
-							</Tip>
-						)}
-						<Tip content="Controls">
-							<Button
-								type="button"
-								aria-label="Controls"
-								aria-pressed={controlsOpen}
-								onClick={() => {
-									setPreview(null);
-									setControlsOpen(!controlsOpen);
-								}}
-								variant={controlsOpen ? 'secondary' : 'ghost'}
-								size="icon-sm"
-							>
-								<SlidersHorizontal className="size-4" />
-							</Button>
-						</Tip>
-						{id && (
-							<ChatMenu
-								chatId={id}
-								title={session.title}
-								onControls={() => {
-									setPreview(null);
-									setControlsOpen(true);
-								}}
-							/>
-						)}
-					</div>
-				</header>
+				)}
 
 				{session.loading ? (
 					<div className="flex flex-1 items-center justify-center">
 						<Spinner className="size-5" />
 					</div>
-				) : empty && folderId ? (
-					// The folder's own page (#998): its name, instructions and chats, above the message box.
-					folder.data ? (
-						<FolderHome folder={folder.data} />
-					) : (
-						<div aria-hidden className="mx-auto w-full max-w-3xl flex-1 px-6 py-8" data-testid="folder-home-loading">
-							<div className="bg-surface-3 h-7 w-48 animate-pulse rounded-lg" />
-						</div>
-					)
 				) : empty ? (
-					<>
-						{!id && <ChatBanners />}
-						<ChatPlaceholder
-							model={firstModel}
-							temporary={temporary && !id}
-							onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
-						/>
-					</>
+					// On a short phone the bar's buttons float over the top: the page's first row starts below them (A11Y-5).
+					<div className={`flex min-h-0 flex-1 flex-col ${SHORT_PHONE_TOP}`}>
+						{folderId ? (
+							// The folder's own page (#998): its name, instructions and chats, above the message box.
+							folder.data ? (
+								<FolderHome folder={folder.data} />
+							) : (
+								<div
+									aria-hidden
+									className="mx-auto w-full max-w-3xl flex-1 px-6 py-8"
+									data-testid="folder-home-loading"
+								>
+									<div className="bg-surface-3 h-7 w-48 animate-pulse rounded-lg" />
+								</div>
+							)
+						) : (
+							<>
+								{!id && <ChatBanners />}
+								<ChatPlaceholder
+									model={firstModel}
+									temporary={temporary && !id}
+									onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
+								/>
+							</>
+						)}
+					</div>
 				) : (
 					<div
 						ref={scroller}
-						className="min-h-0 flex-1 overflow-y-auto"
+						// The first message starts below the short phone's floating buttons, and scrolls under them.
+						className={`min-h-0 flex-1 overflow-y-auto ${SHORT_PHONE_TOP}`}
 						data-testid="chat-messages"
 						onScroll={(e) => {
 							const el = e.currentTarget;
 							atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+							setAwayFromEnd(!atBottom.current);
 						}}
 					>
 						<ChatMessages history={session.history} h={handlers} chatId={session.chatId} />
 					</div>
 				)}
+				{!session.loading && !empty && (
+					// Centred just above the composer, whatever its height.
+					<div className="relative h-0">
+						<JumpToLatest
+							shown={awayFromEnd}
+							streaming={session.generating}
+							onJump={jumpToLatest}
+							scroller={scroller}
+							className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2"
+						/>
+					</div>
+				)}
 
+				{temporaryLive && !isMd && (
+					// The phone bar has no room for it beside the chat's name: above the composer instead.
+					<div className="flex justify-center px-4 pt-2">
+						<TemporaryNotice />
+					</div>
+				)}
 				<ChatInput
 					ref={input}
+					draftKey={user ? draftKeyFor(user.id, id, folderId) : undefined}
 					generating={session.generating}
 					queued={session.queue}
 					onRemoveQueued={session.removeQueued}
@@ -547,6 +657,17 @@ export function ChatPage() {
 					onAtModel={setAtModel}
 					toolbar={
 						<>
+							{!isMd && (
+								<div className="flex min-w-0">
+									<ModelSelector
+										compact
+										models={models}
+										selected={selectedModels}
+										onChange={changeModels}
+										disabled={session.generating}
+									/>
+								</div>
+							)}
 							<AttachMenu
 								onFiles={attachments.addFiles}
 								onWeb={(urls) => void attachments.addWeb(urls)}
@@ -600,10 +721,19 @@ export function ChatPage() {
 				/>
 				<CitationDialog source={citation} onClose={() => setCitation(null)} />
 			</div>
-			{preview !== null ? (
-				<ArtifactPanel code={preview} onClose={() => setPreview(null)} />
-			) : (
-				controlsOpen && (
+			{/* One side panel (CNV-2): the preview while one is open, else Controls. */}
+			<SidePanel
+				key={preview !== null ? 'preview' : 'controls'}
+				open={preview !== null || controlsOpen}
+				onClose={() => (preview !== null ? setPreview(null) : setControlsOpen(false))}
+				{...(preview !== null
+					? { title: 'Preview', storageKey: 'sidePanel.preview', defaultWidth: 448, minWidth: 320 }
+					: { title: 'Controls', storageKey: 'sidePanel.controls', defaultWidth: 320, minWidth: 288 })}
+				actions={preview !== null && <ArtifactDownload code={preview} />}
+			>
+				{preview !== null ? (
+					<ArtifactPanel code={preview} />
+				) : (
 					<ChatControls
 						params={session.params}
 						onParams={(p) => {
@@ -611,11 +741,11 @@ export function ChatPage() {
 							saveParams(p);
 						}}
 						files={session.chatFiles}
-						onClose={() => setControlsOpen(false)}
 						admin={admin}
+						defaults={(settings as { params?: Record<string, unknown> } | null)?.params}
 					/>
-				)
-			)}
+				)}
+			</SidePanel>
 		</div>
 	);
 }

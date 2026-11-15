@@ -2,7 +2,16 @@
 import { describe, expect, it } from 'vitest';
 import { processDetails, removeAllDetails, replaceTokens } from './content';
 import { lexMessage } from './lexer';
-import { alertOf, detailTitle, groupDetails, htmlKind, inAppPath, sourceLabel, tableToCsv } from './markdownModel';
+import {
+	alertOf,
+	detailTitle,
+	groupDetails,
+	htmlKind,
+	inAppPath,
+	sourceLabel,
+	tableToCsv,
+	tableToTsv
+} from './markdownModel';
 
 describe('chat lexer', () => {
 	it('recognises math, citations, mentions, details and colon fences', () => {
@@ -58,6 +67,10 @@ describe('blocks', () => {
 	it('exports tables as CSV with formulas neutralised', () => {
 		const table = lexMessage('| a | b |\n|---|---|\n| 1 | =SUM(A1) |')[0];
 		expect(tableToCsv(table)).toBe("a,b\n1,'=SUM(A1)");
+	});
+	it('copies tables as tab-separated cells, formulas neutralised and tabs flattened', () => {
+		const table = lexMessage('| a | b c |\n|---|---:|\n| 1.2e-131 | =SUM(A1) |\n| x&amp;y | `t\tu` |')[0];
+		expect(tableToTsv(table)).toBe("a\tb c\n1.2e-131\t'=SUM(A1)\nx&y\tt u");
 	});
 });
 

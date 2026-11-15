@@ -11,6 +11,18 @@ describe('neutralizeFormula', () => {
 	it('leaves ordinary text and plain numbers alone', () => {
 		for (const s of ['hello', 'a=b', '1+1', '-1', '0', '12.5', '-3.75', '']) expect(neutralizeFormula(s)).toBe(s);
 	});
+	it.each(['-5%', '-1.2e-3', '-1,234', '1,234.5', '-1,234,567.89', '-2E+10', '-0.5%'])(
+		'leaves the number %j as a number',
+		(s) => {
+			expect(neutralizeFormula(s)).toBe(s);
+		}
+	);
+	it.each(['-1,2', '-1e', '-5%%', '-1.2e-3+A1', '-1,234|calc', '- 5', '-cmd', '+5', '=5', '@5', '\t5', '\r5'])(
+		'still prefixes %j, which is not a plain number',
+		(s) => {
+			expect(neutralizeFormula(s)).toBe(`'${s}`);
+		}
+	);
 });
 
 describe('csvCell', () => {

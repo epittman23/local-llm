@@ -77,8 +77,9 @@ test('attach a web page from the menu, and one typed after #', async ({ page }) 
 	const chat = await mockChat(page);
 	const seen = await mockExtras(page);
 	await page.goto('/');
-	await page.getByRole('button', { name: 'More' }).click();
-	await page.getByRole('menuitem', { name: 'Attach Webpage' }).click();
+	await page.getByRole('button', { name: 'Attach' }).click();
+	await page.getByRole('menuitem', { name: 'Attach a web page' }).click();
+	await expect(page.getByRole('dialog', { name: 'Attach a web page' })).toBeVisible();
 	await page.getByLabel('Webpage URLs').fill('https://example.com/a');
 	await page.getByRole('button', { name: 'Add' }).click();
 	await expect(page.getByTestId('input-file')).toContainText('Example page');
@@ -109,8 +110,8 @@ async function attachSlowPage(page: Page) {
 		if (!ok) return json(route, { detail: 'The page could not be fetched.' }, 500);
 		return json(route, { status: true, collection_name: 'web-col', name: 'Slow page', content: 'text', url: 'u' });
 	});
-	await page.getByRole('button', { name: 'More' }).click();
-	await page.getByRole('menuitem', { name: 'Attach Webpage' }).click();
+	await page.getByRole('button', { name: 'Attach' }).click();
+	await page.getByRole('menuitem', { name: 'Attach a web page' }).click();
 	await page.getByLabel('Webpage URLs').fill('https://example.com/slow');
 	await page.getByRole('button', { name: 'Add' }).click();
 	await expect(page.getByTestId('input-file').locator('.animate-spin')).toHaveCount(1);
@@ -209,11 +210,11 @@ test('tools and web search from the integrations menu go with the request', asyn
 	await mockExtras(page);
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Integrations' }).click();
-	await page.getByRole('switch', { name: 'Web Search' }).click();
+	await page.getByRole('button', { name: 'Tools' }).click();
+	await page.getByRole('switch', { name: 'Web search' }).click();
 	await page.getByRole('switch', { name: 'Calculator' }).click();
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('button', { name: 'Web Search (on)' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Web search (on)' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Message' }).fill('What is new?');
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
@@ -226,4 +227,23 @@ test('a youtube link from /watch is attached to the new chat', async ({ page }) 
 	await page.goto('/?youtube=dQw4w9WgXcQ');
 	await expect(page.getByTestId('input-file')).toBeVisible();
 	expect(seen.urls).toEqual(['https://www.youtube.com/watch?v=dQw4w9WgXcQ']);
+});
+
+test.describe('on a touch screen', () => {
+	test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+	test('Enter is a new line and the Send button sends (#947)', async ({ page }) => {
+		const chat = await mockChat(page);
+		await page.goto('/');
+		await chat.socket.connected;
+		const box = page.getByRole('textbox', { name: 'Message' });
+		await box.fill('first line');
+		await box.press('Enter');
+		await box.pressSequentially('second line');
+		await expect(box).toHaveValue('first line\nsecond line');
+		expect(chat.seen.completions).toHaveLength(0);
+		await page.getByRole('button', { name: 'Send message' }).click();
+		await expect.poll(() => chat.seen.completions.length).toBe(1);
+		expect(chat.seen.completions[0].user_message.content).toBe('first line\nsecond line');
+	});
 });

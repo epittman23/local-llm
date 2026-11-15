@@ -51,6 +51,10 @@ export type Message = {
 	favorite?: boolean;
 	originalContent?: string;
 	annotation?: Record<string, unknown>;
+	/** Stopped by the person before it finished (S3-D4); the server saves it too. */
+	stopped?: boolean;
+	/** Why the provider ended a streamed reply ('stop', 'length', ...), as the server saved it. */
+	finish_reason?: string;
 	[k: string]: unknown;
 };
 export type History = { messages: Record<string, Message>; currentId: string | null };
@@ -427,7 +431,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			if (!data?.active) effects.push({ kind: 'inactive', messageId: id });
 			break;
 		case 'chat:completion': {
-			const { done, choices, content, output, sources, selected_model_id, error, usage } = data ?? {};
+			const { done, choices, content, output, sources, selected_model_id, error, usage, finish_reason } = data ?? {};
 			const m: Message = { ...message };
 			if (output) {
 				m.output = output;
@@ -451,6 +455,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 				m.arena = true;
 			}
 			if (usage) m.usage = usage;
+			if (finish_reason) m.finish_reason = finish_reason;
 			if (done) {
 				m.done = true;
 				effects.push({ kind: 'done', messageId: id, content: visibleText(m) });
@@ -475,12 +480,9 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 				kind: 'cancelled',
 				current: id === history.currentId || (Boolean(message.parentId) && current?.parentId === message.parentId)
 			});
-			if (id === history.currentId && message.parentId) {
-				let h = history;
-				for (const c of history.messages[message.parentId]?.childrenIds ?? []) h = updateMessage(h, c, { done: true });
-				return { history: h, effects };
-			}
-			patch = { done: true };
+			if (id === history.currentId && message.parentId)
+				return { history: stopReplies(history, message.parentId), effects };
+			patch = message.done ? { done: true } : { done: true, stopped: true };
 			break;
 		}
 		case 'chat:message:delta':
@@ -718,6 +720,24 @@ export function deleteMessage(history: History, id: string): History {
 		kids = messages[next]?.childrenIds ?? [];
 	}
 	return { messages, currentId: next };
+}
+
+/**
+ * The replies to `parentId` marked done, and those still being written also
+ * marked `stopped` (S3-D4): what Stop, or the server's cancel, leaves behind.
+ */
+export function stopReplies(history: History, parentId: string): History {
+	let h = history;
+	for (const c of history.messages[parentId]?.childrenIds ?? [])
+		h = updateMessage(h, c, (m) => (m.done ? { done: true } : { done: true, stopped: true }));
+	return h;
+}
+
+/** Why a finished reply ended early: the token limit, or Stop. Null for one that ended on its own. */
+export function cutOffReason(m: Message): 'length' | 'stopped' | null {
+	if (m.role !== 'assistant') return null;
+	if (m.finish_reason === 'length' || m.finish_reason === 'max_output_tokens') return 'length';
+	return m.stopped ? 'stopped' : null;
 }
 
 /** A reply stopped part-way can be continued. */

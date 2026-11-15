@@ -468,6 +468,75 @@
 	outline-offset: -2px;
 }
 
+/*
+ * CNT-2, CNT-3, A11Y-2: a scroll region outside the shared Table (a code
+ * block, a display equation). The frame (`scroll-edges`) shades each edge
+ * that hides content, as the Table does (DAT-6); components/chat/markdown's
+ * useScrollEdges sets its data-clipped-start and data-clipped-end. The
+ * region inside (`scroll-region`) keeps a thin scrollbar visible where the
+ * platform allows, and draws its focus inside, where a rounded parent
+ * cannot clip it.
+ */
+:root .scroll-edges {
+	position: relative;
+}
+:root .scroll-edges::before,
+:root .scroll-edges::after {
+	content: "";
+	pointer-events: none;
+	position: absolute;
+	inset-block: 0;
+	z-index: 1;
+	width: 1rem;
+	opacity: 0;
+	transition: opacity var(--motion-fast);
+}
+:root .scroll-edges::before {
+	left: 0;
+	background-image: linear-gradient(to right, var(--scrim), transparent);
+}
+:root .scroll-edges::after {
+	right: 0;
+	background-image: linear-gradient(to left, var(--scrim), transparent);
+}
+:root .scroll-edges[data-clipped-start]::before,
+:root .scroll-edges[data-clipped-end]::after {
+	opacity: 1;
+}
+:root .scroll-region::-webkit-scrollbar {
+	width: 4px;
+	height: 4px;
+}
+:root .scroll-region::-webkit-scrollbar-thumb {
+	border-radius: 2px;
+	background-color: var(--border-control);
+}
+:root .scroll-region::-webkit-scrollbar-track {
+	background-color: transparent;
+}
+@supports not selector(::-webkit-scrollbar) {
+	:root .scroll-region {
+		scrollbar-width: thin;
+		scrollbar-color: var(--border-control) transparent;
+	}
+}
+:root[data-focus="keyboard"] .scroll-region:focus-visible {
+	outline-offset: -2px;
+}
+
+/*
+ * CNT-3: mathematics inherits the text colour. Black and white the model
+ * wrote (\color{black}) reach the page as `color:var(--math-black,black)`
+ * (components/chat/markdown/Katex.tsx); where that colour would vanish (black
+ * in dark and black themes, white in light) it is the text colour instead.
+ */
+.dark .katex {
+	--math-black: currentColor;
+}
+:root:not(.dark) .katex {
+	--math-white: currentColor;
+}
+
 /* DAT-2: figures line up. */
 :root :is(table, [data-numeric]) {
 	font-variant-numeric: tabular-nums;

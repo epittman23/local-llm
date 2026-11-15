@@ -13,7 +13,7 @@ import {
 	Share2,
 	Trash2
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -43,7 +43,8 @@ import { type ChatListItem, chatAsText, type Folder, fileSafe, isUnread } from '
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { ShareChatDialog } from './ChatDialogs';
-import { patchCachedChat, usePinnedChats } from './useChatList';
+import { patchCachedChat } from './useChatList';
+import { usePinChat } from './usePinChat';
 
 /** A sidebar row: the link takes the width and truncates; its menu button sits over its right end (#904). */
 export const rowClass = 'group relative flex min-w-0 items-center';
@@ -88,9 +89,7 @@ export function ChatItem({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const unread = isUnread(chat, openId);
 	const inFolder = chat.folder_id ?? listedIn ?? null;
-	// The list items carry no `pinned`; the pinned list says which are (#948).
-	const pinnedList = usePinnedChats().data;
-	const pinned = useMemo(() => new Set((pinnedList ?? []).map((c) => c.id)), [pinnedList]).has(chat.id);
+	const { pinned, toggle: togglePin } = usePinChat(chat.id);
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ['chats'] });
 
 	const rename = async () => {
@@ -236,11 +235,7 @@ export function ChatItem({
 						<DropdownMenuItem onSelect={() => void act(() => markChatUnreadById(token, chat.id))}>
 							<MailOpen /> Mark as unread
 						</DropdownMenuItem>
-						<DropdownMenuItem
-							onSelect={() =>
-								void act(() => toggleChatPinnedStatusById(token, chat.id), pinned ? 'Chat unpinned' : 'Chat pinned')
-							}
-						>
+						<DropdownMenuItem onSelect={() => void togglePin()}>
 							{pinned ? <PinOff /> : <Pin />} {pinned ? 'Unpin' : 'Pin'}
 						</DropdownMenuItem>
 						<DropdownMenuItem

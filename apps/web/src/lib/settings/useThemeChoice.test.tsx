@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getUserSettings, updateUserSettings } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { applyTheme } from '@/lib/theme';
+import { useUserSettings } from './userSettings';
 import { useThemeChoice } from './useThemeChoice';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
@@ -15,13 +16,15 @@ vi.mock('@/lib/apis/users', async (orig) => ({
 	updateUserSettings: vi.fn()
 }));
 
+// One client per test, not per render: a wrapper that built a new client
+// whenever it rendered could throw away settings that had already loaded.
+let client: QueryClient;
 const wrapper = ({ children }: { children: ReactNode }) => (
-	<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-		{children}
-	</QueryClientProvider>
+	<QueryClientProvider client={client}>{children}</QueryClientProvider>
 );
 
 beforeEach(() => {
+	client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	vi.clearAllMocks();
 	localStorage.clear();
 	useAuthStore.setState({ status: 'authenticated', token: 't', user: { id: 'u1', role: 'user' } } as never);
@@ -38,16 +41,12 @@ describe('useThemeChoice (#1089)', () => {
 	});
 
 	it('applies a choice at once, caches it in this browser and saves it with the account', async () => {
-		const { result } = renderHook(() => useThemeChoice(), { wrapper });
-		await waitFor(() => expect(getUserSettings).toHaveBeenCalled());
-		// Wait until the account's settings have loaded (the hook merges a change
-		// into them), not merely been asked for: under load the answer can lag.
-		await act(async () => {
-			await vi.mocked(getUserSettings).mock.results[0].value;
-		});
-		await act(async () => {});
-		act(() => result.current[1]('oled-dark'));
-		expect(result.current[0]).toBe('oled-dark');
+		// The settings and the choice share one client, so waiting for the
+		// settings to have loaded (not merely been asked for) is observable.
+		const { result } = renderHook(() => ({ choice: useThemeChoice(), account: useUserSettings() }), { wrapper });
+		await waitFor(() => expect(result.current.account.settings).not.toBeNull());
+		act(() => result.current.choice[1]('oled-dark'));
+		expect(result.current.choice[0]).toBe('oled-dark');
 		expect(localStorage.theme).toBe('oled-dark');
 		expect(document.documentElement.classList.contains('oled')).toBe(true);
 		await waitFor(() =>
@@ -60,13 +59,11 @@ describe('useThemeChoice (#1089)', () => {
 
 	it('says the theme changed in this browser only when the account save fails', async () => {
 		vi.mocked(updateUserSettings).mockRejectedValue('down');
-		const { result } = renderHook(() => useThemeChoice(), { wrapper });
-		await waitFor(() => expect(getUserSettings).toHaveBeenCalled());
-		await act(async () => {
-			await vi.mocked(getUserSettings).mock.results[0].value;
-		});
-		await act(async () => {});
-		act(() => result.current[1]('light'));
+		// The settings and the choice share one client, so waiting for the
+		// settings to have loaded (not merely been asked for) is observable.
+		const { result } = renderHook(() => ({ choice: useThemeChoice(), account: useUserSettings() }), { wrapper });
+		await waitFor(() => expect(result.current.account.settings).not.toBeNull());
+		act(() => result.current.choice[1]('light'));
 		expect(localStorage.theme).toBe('light');
 		await waitFor(() =>
 			expect(toast.error).toHaveBeenCalledWith(

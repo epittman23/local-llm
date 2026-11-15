@@ -73,6 +73,33 @@ test("Run shows the endpoint's refusal", async ({ page }) => {
 	await expect(page.getByTestId('code-run-output')).toContainText('could not find');
 });
 
+test("Run says when the sandbox isn't set up, and is disabled for the session (S3-D6)", async ({ page }) => {
+	await mockChat(page, { chats: [reply('```python\nprint(1)\n```\n\n```python\nprint(2)\n```\n')], user: sandbox });
+	let runs = 0;
+	await page.route('**/api/v1/utils/code/execute', (route) => {
+		runs += 1;
+		return json(route, { error: 'The sandbox is not available on this server' });
+	});
+	await page.goto('/c/c1');
+	const first = page.getByTestId('code-block').first();
+	const second = page.getByTestId('code-block').nth(1);
+	await first.getByRole('button', { name: 'Run' }).click();
+	const output = first.getByTestId('code-run-output');
+	await expect(output).toContainText("The code sandbox isn't set up on this machine");
+	await expect(output).toContainText('KVM, the Kata runtime and the sandbox images');
+	await expect(output).not.toContainText('Run failed');
+	await expect(output.getByRole('link', { name: 'Read the sandbox guide' })).toHaveAttribute(
+		'href',
+		/docs\/guides\/sandbox\.md$/
+	);
+	// Every block's Run now says why it cannot run, and a press does nothing.
+	const blocked = second.getByRole('button', { name: "Run: the code sandbox isn't set up on this machine" });
+	await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+	await blocked.click({ force: true });
+	await expect(second.getByTestId('code-run-output')).toHaveCount(0);
+	expect(runs).toBe(1);
+});
+
 for (const legacy of ['pyodide', 'jupyter']) {
 	test(`a Python block has no Run button when the server still holds the legacy engine ${legacy}`, async ({ page }) => {
 		await mockChat(page, {

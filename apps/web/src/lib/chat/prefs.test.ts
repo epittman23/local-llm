@@ -40,6 +40,11 @@ describe('chat prefs', () => {
 		});
 		expect(chatPrefs({ chatDirection: 'LTR' }).direction).toBe('ltr');
 	});
+	it('fills the message box with a follow-up by default, and keeps a choice to send it at once (S3-D5)', () => {
+		expect(chatPrefs(null).insertFollowUp).toBe(true);
+		expect(chatPrefs({ insertFollowUpPrompt: null }).insertFollowUp).toBe(true);
+		expect(chatPrefs({ insertFollowUpPrompt: false }).insertFollowUp).toBe(false);
+	});
 	it('quotes a background URL so it cannot end the CSS declaration', () => {
 		expect(cssUrl('data:image/png;base64,AAA=')).toBe('url("data:image/png;base64,AAA=")');
 		expect(cssUrl('a"); background: red; ("')).toBe('url("a\\22 ); background: red; (\\22 ")');
