@@ -67,10 +67,13 @@ export const rowMenuButtonClass =
 export function ChatItem({
 	chat,
 	folders,
+	folderId: listedIn,
 	onNavigate
 }: {
 	chat: ChatListItem;
 	folders: Folder[];
+	/** The folder whose list shows this row: a folder's chat list does not say which folder its chats are in. */
+	folderId?: string;
 	onNavigate?: () => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -84,6 +87,7 @@ export function ChatItem({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const unread = isUnread(chat, openId);
+	const inFolder = chat.folder_id ?? listedIn ?? null;
 	// The list items carry no `pinned`; the pinned list says which are (#948).
 	const pinnedList = usePinnedChats().data;
 	const pinned = useMemo(() => new Set((pinnedList ?? []).map((c) => c.id)), [pinnedList]).has(chat.id);
@@ -126,7 +130,7 @@ export function ChatItem({
 	 * server, so Undo re-files it, then pins it again if it was pinned.
 	 */
 	const archive = async () => {
-		const folderId = chat.folder_id ?? null;
+		const folderId = inFolder;
 		const wasPinned = pinned;
 		const ok = await act(() => archiveChatById(token, chat.id));
 		if (!ok) return;
@@ -259,7 +263,7 @@ export function ChatItem({
 									<FolderInput className="size-4" /> Move
 								</DropdownMenuSubTrigger>
 								<DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-									{chat.folder_id && (
+									{inFolder && (
 										<DropdownMenuItem
 											onSelect={() => void act(() => updateChatFolderIdById(token, chat.id, undefined), 'Chat moved')}
 										>
@@ -267,7 +271,7 @@ export function ChatItem({
 										</DropdownMenuItem>
 									)}
 									{folders
-										.filter((f) => f.id !== chat.folder_id)
+										.filter((f) => f.id !== inFolder)
 										.map((f) => (
 											<DropdownMenuItem
 												key={f.id}

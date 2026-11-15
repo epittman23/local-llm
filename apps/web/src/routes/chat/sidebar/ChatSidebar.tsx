@@ -300,7 +300,7 @@ function FolderItem({
 					) : (
 						(chats.data?.pages ?? [])
 							.flat()
-							.map((c) => <ChatItem key={c.id} chat={c} folders={folders} onNavigate={onNavigate} />)
+							.map((c) => <ChatItem key={c.id} chat={c} folders={folders} folderId={node.id} onNavigate={onNavigate} />)
 					)}
 					{!chats.isLoading && !chats.isError && !(chats.data?.pages ?? []).flat().length && !node.children.length && (
 						<p className="text-foreground-muted text-caption px-2 py-1">No chats yet. Move one here from its menu.</p>

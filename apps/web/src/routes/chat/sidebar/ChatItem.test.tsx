@@ -31,12 +31,12 @@ vi.mock('@/lib/stores/authStore', () => ({
 
 const LONG = 'A very long title about comparing the bias and variance of three estimators';
 
-function show(chat: Partial<ChatListItem> = {}) {
+function show(chat: Partial<ChatListItem> = {}, folderId?: string) {
 	const item = { id: 'c1', title: LONG, updated_at: 50, last_read_at: 60, ...chat } as ChatListItem;
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<MemoryRouter>
-				<ChatItem chat={item} folders={[{ id: 'f1', name: 'Work' } as never]} />
+				<ChatItem chat={item} folders={[{ id: 'f1', name: 'Work' } as never]} folderId={folderId} />
 			</MemoryRouter>
 		</QueryClientProvider>
 	);
@@ -131,6 +131,25 @@ describe('ChatItem archive', () => {
 		await waitFor(() => expect(updateChatFolderIdById).toHaveBeenCalledWith('t', 'c1', 'f1'));
 		await waitFor(() => expect(toggleChatPinnedStatusById).toHaveBeenCalledWith('t', 'c1'));
 		expect(archiveChatById).toHaveBeenCalledTimes(1);
+	});
+
+	it("files a chat back into the folder whose list showed it, which the folder's list items do not say", async () => {
+		show({}, 'f1');
+		await openMenu();
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Archive' }));
+		await waitFor(() => expect(undoOfLastToast()?.label).toBe('Undo'));
+		undoOfLastToast()?.onClick();
+		await waitFor(() => expect(updateChatFolderIdById).toHaveBeenCalledWith('t', 'c1', 'f1'));
+		expect(toggleChatPinnedStatusById).not.toHaveBeenCalled();
+	});
+
+	it('moves a chat out of the folder whose list showed it', async () => {
+		show({}, 'f1');
+		await openMenu();
+		fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Move' }), { key: 'ArrowRight' });
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Out of the folder' }));
+		await waitFor(() => expect(updateChatFolderIdById).toHaveBeenCalledWith('t', 'c1', undefined));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Chat moved'));
 	});
 
 	it('offers no Undo when archiving failed', async () => {
