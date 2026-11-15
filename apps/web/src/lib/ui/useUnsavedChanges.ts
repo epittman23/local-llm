@@ -25,6 +25,7 @@ export function useUnsavedChanges(
 	const dirtyNow = useRef(dirty);
 	dirtyNow.current = dirty;
 	const allowed = useRef(false);
+	const confirmed = useRef(false);
 
 	const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
 		if (allowed.current) {
@@ -52,7 +53,10 @@ export function useUnsavedChanges(
 		{
 			open: blocker.state === 'blocked',
 			onOpenChange: (open: boolean) => {
-				if (!open && blocker.state === 'blocked') blocker.reset();
+				// The dialog closes after Discard changes too; resetting then would cancel a browser Back
+				// still on its way (the router replays it once its history move settles).
+				if (!open && blocker.state === 'blocked' && !confirmed.current) blocker.reset();
+				confirmed.current = false;
 			},
 			title: 'Discard changes?',
 			confirmLabel: 'Discard changes',
@@ -60,8 +64,7 @@ export function useUnsavedChanges(
 			destructive: true,
 			onConfirm: () => {
 				if (blocker.state !== 'blocked') return;
-				// A history move (the browser's Back) is replayed on proceed and checked again: let it through.
-				allowed.current = true;
+				confirmed.current = true;
 				blocker.proceed();
 			}
 		},
