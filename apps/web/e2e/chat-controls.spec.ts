@@ -62,13 +62,13 @@ test('a controls edit is saved to the chat it was made in when another chat open
 test('the header menu downloads, and deletes after confirming', async ({ page }) => {
 	const chat = await mockChat(page, { chats: convo() });
 	await page.goto('/c/c1');
-	await page.getByRole('button', { name: 'Chat menu' }).click();
+	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Download' }).click();
 	const download = page.waitForEvent('download');
 	await page.getByRole('menuitem', { name: 'Plain text (.txt)' }).click();
 	expect((await download).suggestedFilename()).toBe('chat-Arithmetic.txt');
 
-	await page.getByRole('button', { name: 'Chat menu' }).click();
+	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
 	await page.locator('#delete-chat-button').click();
 	await page.getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect.poll(() => chat.seen.actions).toContain('delete:c1');

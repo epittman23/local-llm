@@ -114,7 +114,8 @@ test.describe('admin shell', () => {
 		await mockAdminApi(page, { users: [user(1)] });
 		await page.goto('/admin');
 		await expect(page).toHaveURL(/\/admin\/users\/overview$/);
-		const nav = page.getByRole('navigation').first();
+		// The page's own tab bar, not the sidebar's Main navigation, which is open by default (#930).
+		const nav = page.getByRole('main').getByRole('navigation').first();
 		for (const name of ['Users', 'Evaluations', 'Functions', 'Settings']) {
 			await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
 		}
