@@ -4,6 +4,7 @@ import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { dayjs } from '@/lib/utils/dates';
 
 // The compact form vocabulary of the admin Settings tabs. In the Svelte app each
 // tab repeats these class strings and (in the older tabs) hand-rolls the layout;
@@ -239,4 +240,17 @@ export function SettingNumber({
 
 export function SettingTextarea({ className, ...rest }: ComponentProps<'textarea'>) {
 	return <textarea className={cn(settingTextareaClass, className)} {...rest} />;
+}
+
+/** DAT-5: relative while recent (under a week), else the absolute record time; the exact time on hover. */
+export function ChatTime({ seconds }: { seconds?: number }) {
+	if (!seconds) return <span>–</span>;
+	const date = dayjs(seconds * 1000);
+	const exact = date.format('YYYY-MM-DD HH:mm');
+	const recent = dayjs().diff(date, 'day') < 7;
+	return (
+		<time dateTime={date.toISOString()} title={exact}>
+			{recent ? date.fromNow() : exact}
+		</time>
+	);
 }
