@@ -155,16 +155,18 @@ describe('ModelEditor layout (#1009)', () => {
 
 	it('takes a GIF as the picture, as it is, and offers to remove it', async () => {
 		renderEditor();
-		await screen.findByRole('button', { name: 'Upload a picture' });
+		// It shows the initials until there is a picture, and its name says them (WCAG 2.5.3).
+		await screen.findByRole('button', { name: 'MM, upload a picture' });
 		const input = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
 		fireEvent.change(input, { target: { files: [new File(['GIF89a'], 'a.gif', { type: 'image/gif' })] } });
 		expect(await screen.findByRole('button', { name: 'Remove picture' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Upload a picture' })).toBeInTheDocument();
 		expect(status()).toHaveTextContent('Unsaved changes');
 	});
 
 	it('refuses a picture of another type in words (#1095)', async () => {
 		renderEditor();
-		await screen.findByRole('button', { name: 'Upload a picture' });
+		await screen.findByRole('button', { name: /upload a picture$/ });
 		const input = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
 		fireEvent.change(input, { target: { files: [new File(['x'], 'a.bmp', { type: 'image/bmp' })] } });
 		expect(toast.error).toHaveBeenCalledWith('Use a PNG, JPEG, WebP or GIF image.');
@@ -387,9 +389,10 @@ describe('ModelEditor attachments and capabilities', () => {
 		const { onSubmit } = renderEditor({ model: { ...existing, meta: { ...existing.meta, filterIds: ['f1'] } } });
 		fireEvent.click(await screen.findByRole('button', { name: 'Choose filters on by default' }));
 		fireEvent.click(await screen.findByRole('option', { name: 'Redact' }));
+		// Each pick lands (its popover closes) before the next popover opens.
+		await waitFor(() => expect(screen.queryByRole('option')).toBeNull());
 		fireEvent.click(screen.getByRole('button', { name: 'Choose actions' }));
 		fireEvent.click(await screen.findByRole('option', { name: 'Explain' }));
-		// Each pick lands (its checkbox shows, its popover closes) before the next popover opens.
 		expect(await screen.findByRole('checkbox', { name: 'Explain' })).toBeChecked();
 		await waitFor(() => expect(screen.queryByRole('option', { name: 'Explain' })).toBeNull());
 		fireEvent.click(screen.getByRole('button', { name: 'Choose filters' }));
