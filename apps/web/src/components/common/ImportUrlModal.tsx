@@ -15,20 +15,19 @@ type Imported = { id?: string; name: string; content: string; meta?: Record<stri
  * backend's loader), fill in id/name/description from its docstring header, and
  * hand it to `onImport` -- which for Tools stashes it and opens the create page,
  * where the user still reviews it and confirms the code-execution warning.
+ * It raises no success toast of its own, since nothing exists until that page saves.
  */
 export function ImportUrlModal({
 	open,
 	onOpenChange,
 	loadUrl,
-	onImport,
-	successMessage
+	onImport
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	loadUrl: (url: string) => Promise<Imported | null>;
 	/** Gets the item and the URL it came from, which the create page names (S4-D4). */
 	onImport: (item: Imported, url: string) => void;
-	successMessage: string;
 }) {
 	const [url, setUrl] = useState('');
 	const [loading, setLoading] = useState(false);
@@ -44,8 +43,8 @@ export function ImportUrlModal({
 			return null;
 		});
 		setLoading(false);
+		// Nothing is created yet: the create page says so once it is saved.
 		if (!res) return;
-		toast.success(successMessage);
 		const fm = extractFrontmatter(res.content ?? '');
 		const name = fm.title || res.name;
 		onImport(

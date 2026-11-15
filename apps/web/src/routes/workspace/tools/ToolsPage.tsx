@@ -202,7 +202,6 @@ export function ToolsPage() {
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
 				loadUrl={(url) => loadToolByUrl(token, url)}
-				successMessage="Tool imported successfully"
 				onImport={(tool, url) => {
 					sessionStorage.tool = JSON.stringify({ ...tool, source: { kind: 'link', from: url } });
 					navigate(routePaths.workspaceToolsCreate);

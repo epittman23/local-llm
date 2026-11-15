@@ -258,7 +258,6 @@ export function FunctionsPage() {
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
 				loadUrl={(url) => loadFunctionByUrl(token, url)}
-				successMessage="Function imported successfully"
 				onImport={(fn, url) => {
 					sessionStorage.function = JSON.stringify({ ...fn, source: { kind: 'link', from: url } });
 					navigate(routePaths.adminFunctionsCreate);
