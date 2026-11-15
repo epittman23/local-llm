@@ -172,8 +172,8 @@ test.describe('workspace prompts', () => {
 		await page.getByRole('button', { name: 'Prompt Menu', exact: true }).first().click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
 		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('This will delete');
-		await dialog.getByRole('button', { name: 'Delete' }).click();
+		await expect(dialog).toContainText('stops working');
+		await dialog.getByRole('button', { name: 'Delete prompt' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' || c.path.endsWith('/delete'))).toBe(true);
 		await expect(
 			page.getByText('Prompt 1', { exact: true }).or(page.getByText('Prompt 2', { exact: true }))

@@ -110,7 +110,7 @@ test.describe('workspace models list', () => {
 
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete model' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/model/delete')).toBe(true);
 	});
 

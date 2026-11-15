@@ -37,7 +37,6 @@ import { capitalizeFirstLetter, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { parseSkillImport, type SkillListItem } from './skillTypes';
@@ -74,7 +73,6 @@ export function SkillsPage() {
 	const [page, setPage] = useState(1);
 	const [deleting, setDeleting] = useState<SkillListItem | null>(null);
 	const [activeOverride, setActiveOverride] = useState<Record<string, boolean>>({});
-	const shiftKey = useShiftKey();
 	const importInput = useRef<HTMLInputElement>(null);
 
 	const isAdmin = user?.role === 'admin';
@@ -237,14 +235,15 @@ export function SkillsPage() {
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete skill?"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete skill"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				Models that use it lose it. It can't be undone.
 			</ConfirmDialog>
 
 			<input
@@ -360,71 +359,54 @@ export function SkillsPage() {
 
 									{skill.write_access && (
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
-											{shiftKey ? (
-												<Tip content="Delete">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete"
-														onClick={(e) => {
-															e.stopPropagation();
-															deleteMutation.mutate(skill);
-														}}
-													>
-														<Trash2 className="size-4" />
-													</Button>
-												</Tip>
-											) : (
-												<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
-													<DropdownMenu>
-														<Tip content="More">
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	type="button"
-																	aria-label="Skill Menu"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<MoreHorizontal className="size-4" />
-																</Button>
-															</DropdownMenuTrigger>
-														</Tip>
-														<DropdownMenuContent align="end" className="min-w-40">
-															<DropdownMenuItem onSelect={() => openSkill(skill)}>
-																<Pencil />
-																Edit
-															</DropdownMenuItem>
-															<DropdownMenuItem onSelect={() => cloneHandler(skill)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-															{canExport && (
-																<DropdownMenuItem onSelect={() => exportHandler(skill)}>
-																	<Download />
-																	Export
-																</DropdownMenuItem>
-															)}
-															<DropdownMenuSeparator />
-															<DropdownMenuItem onSelect={() => setDeleting(skill)}>
-																<Trash2 />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-
-													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center">
-															<Switch
-																aria-label={isActive ? 'Enabled' : 'Disabled'}
-																checked={isActive}
-																onCheckedChange={(next) => toggleActive(skill, next)}
-															/>
-														</span>
+											<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
+												<DropdownMenu>
+													<Tip content="More">
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																type="button"
+																aria-label="Skill Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<MoreHorizontal className="size-4" />
+															</Button>
+														</DropdownMenuTrigger>
 													</Tip>
-												</div>
-											)}
+													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem onSelect={() => openSkill(skill)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => cloneHandler(skill)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+														{canExport && (
+															<DropdownMenuItem onSelect={() => exportHandler(skill)}>
+																<Download />
+																Export
+															</DropdownMenuItem>
+														)}
+														<DropdownMenuSeparator />
+														<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(skill)}>
+															<Trash2 />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+
+												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
+													<span className="flex h-6 items-center">
+														<Switch
+															aria-label={isActive ? 'Enabled' : 'Disabled'}
+															checked={isActive}
+															onCheckedChange={(next) => toggleActive(skill, next)}
+														/>
+													</span>
+												</Tip>
+											</div>
 										</div>
 									)}
 								</div>

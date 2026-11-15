@@ -106,8 +106,8 @@ test.describe('workspace skills', () => {
 
 		await page.getByRole('button', { name: 'Skill Menu', exact: true }).first().click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await expect(page.getByRole('alertdialog')).toContainText('This will delete');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await expect(page.getByRole('alertdialog')).toContainText('Models that use it lose it.');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete skill' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 

@@ -39,7 +39,6 @@ import { useDocumentTitle } from '@/lib/stores/configStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { FunctionCodeWarning } from './FunctionEditor';
@@ -59,8 +58,8 @@ const LIST_KEY = ['functions', 'list'];
  * filters and sorting all happen here; the header count is the *filtered* length.
  *
  * Each row: a type badge, name, version, description, author, and on the right
- * the Support / Valves / More icons and the enable switch (Shift swaps them all
- * for a one-click Delete). Filters and Actions get a "Global" switch in the
+ * the Support / Valves / More icons and the enable switch. Delete is in the
+ * menu and always confirms (ACT-3, S4-D5). Filters and Actions get a "Global" switch in the
  * menu. Toggles are optimistic and revert on failure -- the original's enable
  * switch does not, and leaves the switch lying when the request fails.
  *
@@ -74,7 +73,6 @@ export function FunctionsPage() {
 	const user = useAuthStore((s) => s.user);
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const shiftKey = useShiftKey();
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
@@ -256,14 +254,15 @@ export function FunctionsPage() {
 			<ConfirmDialog
 				open={showDelete}
 				onOpenChange={setShowDelete}
-				title="Delete function?"
-				confirmLabel="Delete"
+				title={`Delete “${selected?.name ?? ''}”?`}
+				confirmLabel="Delete function"
+				destructive
 				onConfirm={() => {
 					if (selected) deleteMutation.mutate(selected);
 					setShowDelete(false);
 				}}
 			>
-				This will delete <span className="font-normal">{selected?.name}</span>.
+				What it adds stops working in every chat. It can't be undone.
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={pendingImport !== null}
@@ -427,124 +426,108 @@ export function FunctionsPage() {
 									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
-										{shiftKey ? (
-											<Tip content="Delete">
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													type="button"
-													aria-label="Delete"
-													onClick={(e) => {
-														e.stopPropagation();
-														deleteMutation.mutate(fn);
-													}}
-												>
-													<Trash2 className="size-4" />
-												</Button>
-											</Tip>
-										) : (
-											<>
-												{fn.meta?.manifest?.funding_url && (
-													<Tip content="Support">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															type="button"
-															aria-label="Support"
-															onClick={(e) => {
-																e.stopPropagation();
-																setSelected(fn);
-																setShowManifest(true);
-															}}
-														>
-															<Heart className="size-4" />
-														</Button>
-													</Tip>
-												)}
-												<Tip content="Valves">
+										<>
+											{fn.meta?.manifest?.funding_url && (
+												<Tip content="Support">
 													<Button
 														variant="ghost"
 														size="icon-sm"
 														type="button"
-														aria-label="Valves"
+														aria-label="Support"
 														onClick={(e) => {
 															e.stopPropagation();
 															setSelected(fn);
-															setShowValves(true);
+															setShowManifest(true);
 														}}
 													>
-														<Settings className="size-4" />
+														<Heart className="size-4" />
 													</Button>
 												</Tip>
-												<DropdownMenu>
-													<Tip content="More">
-														<DropdownMenuTrigger asChild>
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Function Menu"
-																onClick={(e) => e.stopPropagation()}
-															>
-																<MoreHorizontal className="size-4" />
-															</Button>
-														</DropdownMenuTrigger>
-													</Tip>
-													<DropdownMenuContent align="end" className="min-w-[11.25rem]">
-														{(fn.type === 'filter' || fn.type === 'action') && (
-															<>
-																{/* A row with a switch, not an action: keep the menu open when it is used. */}
-																<DropdownMenuItem onSelect={(e) => e.preventDefault()} className="justify-between">
-																	<span className="flex items-center gap-2">
-																		<Globe />
-																		Global
-																	</span>
-																	<Switch
-																		size="sm"
-																		aria-label="Global"
-																		checked={Boolean(fn.is_global)}
-																		onCheckedChange={() => toggleGlobal(fn)}
-																	/>
-																</DropdownMenuItem>
-																<DropdownMenuSeparator />
-															</>
-														)}
-														<DropdownMenuItem onSelect={() => openFunction(fn)}>
-															<Pencil />
-															Edit
-														</DropdownMenuItem>
-														<DropdownMenuItem onSelect={() => cloneHandler(fn)}>
-															<Copy />
-															Clone
-														</DropdownMenuItem>
-														<DropdownMenuItem onSelect={() => exportHandler(fn)}>
-															<Download />
-															Export
-														</DropdownMenuItem>
-														<DropdownMenuSeparator />
-														<DropdownMenuItem
-															onSelect={() => {
-																setSelected(fn);
-																setShowDelete(true);
-															}}
+											)}
+											<Tip content="Valves">
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													type="button"
+													aria-label="Valves"
+													onClick={(e) => {
+														e.stopPropagation();
+														setSelected(fn);
+														setShowValves(true);
+													}}
+												>
+													<Settings className="size-4" />
+												</Button>
+											</Tip>
+											<DropdownMenu>
+												<Tip content="More">
+													<DropdownMenuTrigger asChild>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															type="button"
+															aria-label="Function Menu"
+															onClick={(e) => e.stopPropagation()}
 														>
-															<Trash2 />
-															Delete
-														</DropdownMenuItem>
-													</DropdownMenuContent>
-												</DropdownMenu>
-												<div className="flex h-6 items-center">
-													<Tip content={fn.is_active ? 'Enabled' : 'Disabled'}>
-														<Switch
-															size="sm"
-															aria-label={`Enable ${fn.name}`}
-															checked={Boolean(fn.is_active)}
-															onCheckedChange={() => toggleActive(fn)}
-														/>
-													</Tip>
-												</div>
-											</>
-										)}
+															<MoreHorizontal className="size-4" />
+														</Button>
+													</DropdownMenuTrigger>
+												</Tip>
+												<DropdownMenuContent align="end" className="min-w-[11.25rem]">
+													{(fn.type === 'filter' || fn.type === 'action') && (
+														<>
+															{/* A row with a switch, not an action: keep the menu open when it is used. */}
+															<DropdownMenuItem onSelect={(e) => e.preventDefault()} className="justify-between">
+																<span className="flex items-center gap-2">
+																	<Globe />
+																	Global
+																</span>
+																<Switch
+																	size="sm"
+																	aria-label="Global"
+																	checked={Boolean(fn.is_global)}
+																	onCheckedChange={() => toggleGlobal(fn)}
+																/>
+															</DropdownMenuItem>
+															<DropdownMenuSeparator />
+														</>
+													)}
+													<DropdownMenuItem onSelect={() => openFunction(fn)}>
+														<Pencil />
+														Edit
+													</DropdownMenuItem>
+													<DropdownMenuItem onSelect={() => cloneHandler(fn)}>
+														<Copy />
+														Clone
+													</DropdownMenuItem>
+													<DropdownMenuItem onSelect={() => exportHandler(fn)}>
+														<Download />
+														Export
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														variant="destructive"
+														onSelect={() => {
+															setSelected(fn);
+															setShowDelete(true);
+														}}
+													>
+														<Trash2 />
+														Delete
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+											<div className="flex h-6 items-center">
+												<Tip content={fn.is_active ? 'Enabled' : 'Disabled'}>
+													<Switch
+														size="sm"
+														aria-label={`Enable ${fn.name}`}
+														checked={Boolean(fn.is_active)}
+														onCheckedChange={() => toggleActive(fn)}
+													/>
+												</Tip>
+											</div>
+										</>
 									</div>
 								</div>
 							))}

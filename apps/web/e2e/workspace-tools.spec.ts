@@ -112,7 +112,7 @@ test.describe('workspace tools', () => {
 		await page.goto('/workspace/tools');
 		await page.getByRole('button', { name: 'Tool Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete tool' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 

@@ -29,7 +29,6 @@ import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { CodeExecutionWarning } from './ToolkitEditor';
@@ -53,7 +52,6 @@ export function ToolsPage() {
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
 	const setCount = useWorkspaceStore((s) => s.setCount);
-	const shiftKey = useShiftKey();
 
 	const [query, setQuery] = useState('');
 	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
@@ -206,14 +204,15 @@ export function ToolsPage() {
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete tool?"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete tool"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				Models that use it lose it. It can't be undone.
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={pendingImport !== null}
@@ -361,91 +360,74 @@ export function ToolsPage() {
 
 									{tool.write_access && (
 										<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
-											{shiftKey ? (
-												<Tip content="Delete">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete"
-														onClick={(e) => {
-															e.stopPropagation();
-															deleteMutation.mutate(tool);
-														}}
-													>
-														<Trash2 className="size-4" />
-													</Button>
-												</Tip>
-											) : (
-												<>
-													{tool.meta?.manifest?.funding_url && (
-														<Tip content="Support">
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Support"
-																onClick={(e) => {
-																	e.stopPropagation();
-																	setManifestFor(tool);
-																}}
-															>
-																<Heart className="size-4" />
-															</Button>
-														</Tip>
-													)}
-													<Tip content="Valves">
+											<>
+												{tool.meta?.manifest?.funding_url && (
+													<Tip content="Support">
 														<Button
 															variant="ghost"
 															size="icon-sm"
 															type="button"
-															aria-label="Valves"
+															aria-label="Support"
 															onClick={(e) => {
 																e.stopPropagation();
-																setValvesFor(tool);
+																setManifestFor(tool);
 															}}
 														>
-															<Settings className="size-4" />
+															<Heart className="size-4" />
 														</Button>
 													</Tip>
-													<DropdownMenu>
-														<Tip content="More">
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	type="button"
-																	aria-label="Tool Menu"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<MoreHorizontal className="size-4" />
-																</Button>
-															</DropdownMenuTrigger>
-														</Tip>
-														<DropdownMenuContent align="end" className="min-w-40">
-															<DropdownMenuItem onSelect={() => openTool(tool)}>
-																<Pencil />
-																Edit
+												)}
+												<Tip content="Valves">
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														type="button"
+														aria-label="Valves"
+														onClick={(e) => {
+															e.stopPropagation();
+															setValvesFor(tool);
+														}}
+													>
+														<Settings className="size-4" />
+													</Button>
+												</Tip>
+												<DropdownMenu>
+													<Tip content="More">
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																type="button"
+																aria-label="Tool Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<MoreHorizontal className="size-4" />
+															</Button>
+														</DropdownMenuTrigger>
+													</Tip>
+													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem onSelect={() => openTool(tool)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => cloneHandler(tool)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+														{canExport && (
+															<DropdownMenuItem onSelect={() => exportHandler(tool)}>
+																<Download />
+																Export
 															</DropdownMenuItem>
-															<DropdownMenuItem onSelect={() => cloneHandler(tool)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-															{canExport && (
-																<DropdownMenuItem onSelect={() => exportHandler(tool)}>
-																	<Download />
-																	Export
-																</DropdownMenuItem>
-															)}
-															<DropdownMenuSeparator />
-															<DropdownMenuItem onSelect={() => setDeleting(tool)}>
-																<Trash2 />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-												</>
-											)}
+														)}
+														<DropdownMenuSeparator />
+														<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(tool)}>
+															<Trash2 />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</>
 										</div>
 									)}
 								</div>

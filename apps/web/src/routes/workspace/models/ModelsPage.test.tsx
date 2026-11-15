@@ -157,3 +157,25 @@ describe('ModelsPage with one account or several (WRD-4, S4-D1)', () => {
 		expect(row).toContainElement(screen.getByText('Sam Rivera'));
 	});
 });
+
+describe('ModelsPage delete (ACT-3, #1012)', () => {
+	it('confirms in the danger colour, naming the model and what is kept, with Delete last in the menu', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		// No Shift shortcut: holding Shift leaves the row's menu in place (S4-D5).
+		fireEvent.keyDown(window, { key: 'Shift', shiftKey: true });
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model Menu' }), { button: 0, pointerType: 'mouse' });
+		const menu = await screen.findByRole('menu');
+		const items = within(menu).getAllByRole('menuitem');
+		const last = items[items.length - 1];
+		expect(last).toHaveTextContent('Delete');
+		expect(last).toHaveAttribute('data-variant', 'destructive');
+		fireEvent.click(last);
+
+		const dialog = await screen.findByRole('alertdialog');
+		expect(within(dialog).getByRole('heading')).toHaveTextContent('Delete “Statistics tutor”?');
+		expect(dialog).toHaveTextContent('Chats that used it keep their messages.');
+		expect(within(dialog).getByRole('button', { name: 'Delete model' })).toHaveAttribute('data-variant', 'destructive');
+	});
+});

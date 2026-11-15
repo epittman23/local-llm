@@ -141,7 +141,7 @@ test.describe('admin functions', () => {
 		await page.goto('/admin/functions');
 		await page.getByRole('button', { name: 'Function Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete function' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/id/fn_1/delete')).toBe(true);
 		await expect(page.getByRole('heading', { name: 'No functions yet' })).toBeVisible();
 	});

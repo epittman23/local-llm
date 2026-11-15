@@ -47,7 +47,6 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { type BulkAction, runBulkAction, setVisibility } from './modelBulk';
@@ -91,7 +90,6 @@ export function ModelsPage() {
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
 	const setCount = useWorkspaceStore((s) => s.setCount);
-	const shiftKey = useShiftKey();
 	const { pinnedModels, togglePinned } = useUserSettings();
 
 	const [query, setQuery] = useState('');
@@ -286,14 +284,15 @@ export function ModelsPage() {
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete model"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteModel(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				It can't be undone. Chats that used it keep their messages.
 			</ConfirmDialog>
 
 			<input
@@ -484,110 +483,77 @@ export function ModelsPage() {
 												</Link>
 											</Button>
 										</Tip>
-										{shiftKey && model.write_access ? (
-											<>
-												<Tip content={hidden ? 'Show' : 'Hide'}>
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label={hidden ? 'Show' : 'Hide'}
-														onClick={(e) => {
-															e.stopPropagation();
-															setHidden(model, !hidden);
-														}}
-													>
-														{hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-													</Button>
+										<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
+											<DropdownMenu>
+												<Tip content="More">
+													<DropdownMenuTrigger asChild>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															type="button"
+															aria-label="Model Menu"
+															onClick={(e) => e.stopPropagation()}
+														>
+															<MoreHorizontal className="size-4" />
+														</Button>
+													</DropdownMenuTrigger>
 												</Tip>
-												<Tip content="Delete">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete"
-														onClick={(e) => {
-															e.stopPropagation();
-															deleteModel(model);
-														}}
-													>
-														<Trash2 className="size-4" />
-													</Button>
+												<DropdownMenuContent align="end" className="min-w-44">
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => openModel(model)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+													)}
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => setHidden(model, !hidden)}>
+															{hidden ? <Eye /> : <EyeOff />}
+															{hidden ? 'Show Model' : 'Hide Model'}
+														</DropdownMenuItem>
+													)}
+													<DropdownMenuItem onSelect={() => togglePinned(model.id)}>
+														{pinned ? <PinOff /> : <Pin />}
+														{pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'}
+													</DropdownMenuItem>
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => cloneModel(model)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+													)}
+													<DropdownMenuItem onSelect={() => copyLink(model)}>
+														<Link2 />
+														Copy Link
+													</DropdownMenuItem>
+													{model.write_access && canExport && (
+														<DropdownMenuItem onSelect={() => exportModel(model)}>
+															<Download />
+															Export
+														</DropdownMenuItem>
+													)}
+													{model.write_access && (
+														<>
+															<DropdownMenuSeparator />
+															<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(model)}>
+																<Trash2 />
+																Delete
+															</DropdownMenuItem>
+														</>
+													)}
+												</DropdownMenuContent>
+											</DropdownMenu>
+											{model.write_access && (
+												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
+													<span className="flex h-6 items-center">
+														<Switch
+															aria-label={isActive ? 'Enabled' : 'Disabled'}
+															checked={isActive}
+															onCheckedChange={(next) => toggleActive(model, next)}
+														/>
+													</span>
 												</Tip>
-											</>
-										) : (
-											<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
-												<DropdownMenu>
-													<Tip content="More">
-														<DropdownMenuTrigger asChild>
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Model Menu"
-																onClick={(e) => e.stopPropagation()}
-															>
-																<MoreHorizontal className="size-4" />
-															</Button>
-														</DropdownMenuTrigger>
-													</Tip>
-													<DropdownMenuContent align="end" className="min-w-44">
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => openModel(model)}>
-																<Pencil />
-																Edit
-															</DropdownMenuItem>
-														)}
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => setHidden(model, !hidden)}>
-																{hidden ? <Eye /> : <EyeOff />}
-																{hidden ? 'Show Model' : 'Hide Model'}
-															</DropdownMenuItem>
-														)}
-														<DropdownMenuItem onSelect={() => togglePinned(model.id)}>
-															{pinned ? <PinOff /> : <Pin />}
-															{pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'}
-														</DropdownMenuItem>
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => cloneModel(model)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-														)}
-														<DropdownMenuItem onSelect={() => copyLink(model)}>
-															<Link2 />
-															Copy Link
-														</DropdownMenuItem>
-														{model.write_access && canExport && (
-															<DropdownMenuItem onSelect={() => exportModel(model)}>
-																<Download />
-																Export
-															</DropdownMenuItem>
-														)}
-														{model.write_access && (
-															<>
-																<DropdownMenuSeparator />
-																<DropdownMenuItem onSelect={() => setDeleting(model)}>
-																	<Trash2 />
-																	Delete
-																</DropdownMenuItem>
-															</>
-														)}
-													</DropdownMenuContent>
-												</DropdownMenu>
-												{model.write_access && (
-													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center">
-															<Switch
-																aria-label={isActive ? 'Enabled' : 'Disabled'}
-																checked={isActive}
-																onCheckedChange={(next) => toggleActive(model, next)}
-															/>
-														</span>
-													</Tip>
-												)}
-											</div>
-										)}
+											)}
+										</div>
 									</div>
 								</div>
 							);

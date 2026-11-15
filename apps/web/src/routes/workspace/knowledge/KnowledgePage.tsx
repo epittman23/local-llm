@@ -17,6 +17,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
@@ -186,14 +187,18 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete knowledge base"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				{deleting?.file_count === undefined
+					? 'Its files, their extracted text and embeddings are deleted.'
+					: `Its ${deleting.file_count} ${deleting.file_count === 1 ? 'file' : 'files'}, their extracted text and embeddings are deleted.`}{' '}
+				It can't be undone.
 			</ConfirmDialog>
 
 			<CreateKnowledgeDialog
@@ -350,7 +355,8 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 															Export
 														</DropdownMenuItem>
 													)}
-													<DropdownMenuItem onSelect={() => setDeleting(item)}>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(item)}>
 														<Trash2 />
 														Delete
 													</DropdownMenuItem>

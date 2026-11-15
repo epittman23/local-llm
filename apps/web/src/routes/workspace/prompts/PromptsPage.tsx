@@ -29,7 +29,6 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { PromptCreateDialog } from './PromptCreateDialog';
@@ -81,7 +80,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const [createDraft, setCreateDraft] = useState<PromptDraft | null>(null);
 	const [deleting, setDeleting] = useState<PromptListItem | null>(null);
 	const [copiedId, setCopiedId] = useState<string | null>(null);
-	const shiftKey = useShiftKey();
 	// Enable/disable is optimistic: the switch flips at once and rolls back if the call fails.
 	const [activeOverride, setActiveOverride] = useState<Record<string, boolean>>({});
 	const importInput = useRef<HTMLInputElement>(null);
@@ -263,14 +261,15 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete prompt?"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete prompt"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.command}</span>.
+				<code>/{deleting?.command}</code> stops working. It can't be undone.
 			</ConfirmDialog>
 
 			<PromptCreateDialog open={showCreate} draft={createDraft} onSubmit={createPrompt} onClose={closeCreate} />
@@ -397,99 +396,82 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
-										{shiftKey ? (
-											<Tip content="Delete">
+										<>
+											<Tip content="Copy Prompt">
 												<Button
 													variant="ghost"
 													size="icon-sm"
 													type="button"
-													aria-label="Delete"
+													aria-label="Copy Prompt"
 													onClick={(e) => {
 														e.stopPropagation();
-														deleteMutation.mutate(prompt);
+														copyHandler(prompt);
 													}}
 												>
-													<Trash2 className="size-4" />
+													{copiedId === prompt.command ? (
+														<Check className="size-4" strokeWidth={1.5} />
+													) : (
+														<Clipboard className="size-4" strokeWidth={1.5} />
+													)}
 												</Button>
 											</Tip>
-										) : (
-											<>
-												<Tip content="Copy Prompt">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Copy Prompt"
-														onClick={(e) => {
-															e.stopPropagation();
-															copyHandler(prompt);
-														}}
-													>
-														{copiedId === prompt.command ? (
-															<Check className="size-4" strokeWidth={1.5} />
-														) : (
-															<Clipboard className="size-4" strokeWidth={1.5} />
-														)}
-													</Button>
-												</Tip>
 
-												<div className="ml-0.5 flex shrink-0 flex-row items-center gap-1.5 self-center">
-													<DropdownMenu>
-														<Tip content="More">
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	type="button"
-																	aria-label="Prompt Menu"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<MoreHorizontal className="size-4" />
-																</Button>
-															</DropdownMenuTrigger>
-														</Tip>
-														<DropdownMenuContent align="end" className="min-w-40">
-															<DropdownMenuItem onSelect={() => openPrompt(prompt)}>
-																<Pencil />
-																Edit
-															</DropdownMenuItem>
-															<DropdownMenuItem onSelect={() => cloneHandler(prompt)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-															{canExport && (
-																<DropdownMenuItem
-																	onSelect={() =>
-																		saveAs(
-																			new Blob([JSON.stringify([prompt])], { type: 'application/json' }),
-																			`prompt-export-${Date.now()}.json`
-																		)
-																	}
-																>
-																	<Download />
-																	Export
-																</DropdownMenuItem>
-															)}
-															<DropdownMenuSeparator />
-															<DropdownMenuItem onSelect={() => setDeleting(prompt)}>
-																<Trash2 />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-
-													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center">
-															<Switch
-																aria-label={isActive ? 'Enabled' : 'Disabled'}
-																checked={isActive}
-																onCheckedChange={(next) => toggleActive(prompt, next)}
-															/>
-														</span>
+											<div className="ml-0.5 flex shrink-0 flex-row items-center gap-1.5 self-center">
+												<DropdownMenu>
+													<Tip content="More">
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																type="button"
+																aria-label="Prompt Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<MoreHorizontal className="size-4" />
+															</Button>
+														</DropdownMenuTrigger>
 													</Tip>
-												</div>
-											</>
-										)}
+													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem onSelect={() => openPrompt(prompt)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => cloneHandler(prompt)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+														{canExport && (
+															<DropdownMenuItem
+																onSelect={() =>
+																	saveAs(
+																		new Blob([JSON.stringify([prompt])], { type: 'application/json' }),
+																		`prompt-export-${Date.now()}.json`
+																	)
+																}
+															>
+																<Download />
+																Export
+															</DropdownMenuItem>
+														)}
+														<DropdownMenuSeparator />
+														<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(prompt)}>
+															<Trash2 />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+
+												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
+													<span className="flex h-6 items-center">
+														<Switch
+															aria-label={isActive ? 'Enabled' : 'Disabled'}
+															checked={isActive}
+															onCheckedChange={(next) => toggleActive(prompt, next)}
+														/>
+													</span>
+												</Tip>
+											</div>
+										</>
 									</div>
 								</div>
 							);
