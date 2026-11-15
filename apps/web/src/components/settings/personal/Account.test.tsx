@@ -76,6 +76,38 @@ describe('Account tab after its loads (#259)', () => {
 		await waitFor(() => expect(screen.getByText('All changes saved')).toBeInTheDocument());
 	});
 
+	it('marks Bio, Gender and Birth date optional, each help naming the prompt variable it fills (#1088)', async () => {
+		render(<Account />);
+		await screen.findByDisplayValue('my bio');
+		const bio = screen.getByRole('textbox', { name: 'Bio (optional)' });
+		expect(bio).toHaveAccessibleDescription('Fills {{USER_BIO}} in any prompt that uses it.');
+		expect(bio).not.toHaveAttribute('placeholder');
+		expect(screen.getByRole('combobox', { name: 'Gender (optional)' })).toHaveAccessibleDescription(
+			'Fills {{USER_GENDER}} in any prompt that uses it.'
+		);
+		expect(screen.getByLabelText('Birth date (optional)')).toHaveAccessibleDescription(
+			'Fills {{USER_BIRTH_DATE}} and {{USER_AGE}} in any prompt that uses them.'
+		);
+		expect(screen.getByLabelText('Name')).not.toHaveAccessibleDescription();
+	});
+
+	it('a custom gender is a field of its own, described like the select', async () => {
+		vi.mocked(auths.getSessionUser).mockResolvedValue({ ...sessionUser, gender: 'nonbinary' });
+		render(<Account />);
+		const custom = await screen.findByRole('textbox', { name: 'Custom gender' });
+		expect(custom).toHaveValue('nonbinary');
+		expect(custom).not.toHaveAttribute('placeholder');
+		expect(custom).toHaveAccessibleDescription('Fills {{USER_GENDER}} in any prompt that uses it.');
+		fireEvent.change(screen.getByLabelText('Birth date (optional)'), { target: { value: '1991-03-04' } });
+		fireEvent.click(saveButton());
+		await waitFor(() =>
+			expect(auths.updateUserProfile).toHaveBeenCalledWith(
+				'jwt',
+				expect.objectContaining({ gender: 'nonbinary', date_of_birth: '1991-03-04' })
+			)
+		);
+	});
+
 	it('Discard changes puts back what was loaded', async () => {
 		render(<Account />);
 		await screen.findByDisplayValue('my bio');

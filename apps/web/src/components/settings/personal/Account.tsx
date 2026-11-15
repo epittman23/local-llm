@@ -277,17 +277,39 @@ export default function Account() {
 								onChange={(e) => set({ name: e.target.value })}
 							/>
 						</SettingField>
-						<SettingField label="Bio" htmlFor="account-bio">
+						{/* Bio, gender and birth date are not a profile anyone sees: each fills a
+						    variable in any prompt that uses it (utils/task.py), so each says which (#1088). */}
+						<SettingField
+							label="Bio"
+							optional
+							htmlFor="account-bio"
+							descriptionId="account-bio-help"
+							description={
+								<>
+									Fills <code>{'{{USER_BIO}}'}</code> in any prompt that uses it.
+								</>
+							}
+						>
 							<SettingTextarea
 								id="account-bio"
 								rows={2}
 								value={profile.bio ?? ''}
-								placeholder="Share your background and interests"
+								aria-describedby="account-bio-help"
 								onChange={(e) => set({ bio: e.target.value })}
 							/>
 						</SettingField>
-						<SettingField label="Gender" htmlFor="account-gender">
-							<div className="flex flex-col gap-1">
+						<SettingField
+							label="Gender"
+							optional
+							htmlFor="account-gender"
+							descriptionId="account-gender-help"
+							description={
+								<>
+									Fills <code>{'{{USER_GENDER}}'}</code> in any prompt that uses it.
+								</>
+							}
+						>
+							<div className="flex flex-col gap-1.5">
 								<Select
 									value={customGender ? 'custom' : profile.gender || 'unset'}
 									onValueChange={(v) => {
@@ -295,7 +317,7 @@ export default function Account() {
 										set({ gender: v === 'custom' || v === 'unset' ? '' : v });
 									}}
 								>
-									<SelectTrigger id="account-gender" className="w-56">
+									<SelectTrigger id="account-gender" aria-describedby="account-gender-help" className="w-56 max-w-full">
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
@@ -309,18 +331,31 @@ export default function Account() {
 								{customGender && (
 									<SettingInput
 										aria-label="Custom gender"
+										aria-describedby="account-gender-help"
 										value={profile.gender ?? ''}
-										placeholder="Enter your gender"
 										onChange={(e) => set({ gender: e.target.value })}
 									/>
 								)}
 							</div>
 						</SettingField>
-						<SettingField label="Birth Date" htmlFor="account-birth-date">
+						<SettingField
+							label="Birth date"
+							optional
+							htmlFor="account-birth-date"
+							descriptionId="account-birth-date-help"
+							description={
+								<>
+									Fills <code>{'{{USER_BIRTH_DATE}}'}</code> and <code>{'{{USER_AGE}}'}</code> in any prompt that uses
+									them.
+								</>
+							}
+						>
 							<SettingInput
 								id="account-birth-date"
 								type="date"
 								value={profile.date_of_birth ?? ''}
+								aria-describedby="account-birth-date-help"
+								className="w-56 max-w-full"
 								onChange={(e) => set({ date_of_birth: e.target.value })}
 							/>
 						</SettingField>
