@@ -59,7 +59,10 @@ export function useUnsavedChanges(
 			cancelLabel: 'Keep editing',
 			destructive: true,
 			onConfirm: () => {
-				if (blocker.state === 'blocked') blocker.proceed();
+				if (blocker.state !== 'blocked') return;
+				// A history move (the browser's Back) is replayed on proceed and checked again: let it through.
+				allowed.current = true;
+				blocker.proceed();
 			}
 		},
 		message
