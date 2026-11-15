@@ -23,6 +23,11 @@ vi.mock('./Sidebar', () => ({
 		<nav aria-label="Main">
 			<a href="/workspace">Workspace</a>
 		</nav>
+	),
+	SidebarRail: () => (
+		<nav aria-label="Main">
+			<button type="button">Open sidebar</button>
+		</nav>
 	)
 }));
 
@@ -135,12 +140,21 @@ describe('AppShell', () => {
 		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
 	});
 
-	it('collapses the sidebar to nothing when it is closed, leaving Open sidebar', () => {
+	it('collapses the sidebar to the 48 px rail, with no row of its own above the page (#930)', () => {
 		useUIStore.setState({ sidebarOpen: false } as never);
 		renderAt('/notes');
-		expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-0');
-		fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }));
-		expect(useUIStore.getState().sidebarOpen).toBe(true);
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-12');
+		expect(aside).toContainElement(screen.getByRole('button', { name: 'Open sidebar' }));
+		expect(screen.getAllByRole('button', { name: 'Open sidebar' })).toHaveLength(1);
+		expect(screen.queryByRole('link', { name: 'Workspace' })).toBeNull();
+	});
+
+	it('shows the whole sidebar, 256 px, when open', () => {
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-64');
+		expect(within(aside).getByRole('link', { name: 'Workspace' })).toBeTruthy();
 	});
 
 	describe('the theme saved with the account (#1089)', () => {
@@ -172,6 +186,7 @@ describe('AppShell', () => {
 			account.settings = { theme: 'light' };
 			// Any re-render of the shell reads the settings again.
 			act(() => useUIStore.setState({ sidebarOpen: false } as never));
+			expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-12');
 			expect(localStorage.theme).toBe('dark');
 		});
 	});

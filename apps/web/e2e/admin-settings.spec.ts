@@ -137,7 +137,6 @@ test.describe('settings modal host', () => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/subagents': {} });
 		await page.goto('/');
-		await page.getByRole('button', { name: 'Open sidebar' }).click();
 		await page.getByRole('button', { name: /Test User/ }).click();
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
 		await expect(modal(page)).toBeVisible();

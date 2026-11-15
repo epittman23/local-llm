@@ -6,7 +6,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
-import { SidebarContent } from './Sidebar';
+import { SidebarContent, SidebarRail } from './Sidebar';
 
 vi.mock('@/routes/chat/sidebar/ChatSidebar', () => ({ ChatSidebar: () => <div /> }));
 vi.mock('@/routes/channels/SidebarChannels', () => ({ SidebarChannels: () => <div /> }));
@@ -135,11 +135,12 @@ describe('SidebarContent layout', () => {
 		expect(link.className).toContain('bg-accent');
 	});
 
-	it('closes the sidebar from its header when asked to offer that', () => {
+	it('closes the sidebar from its header when asked to offer that, remembering it', () => {
 		useUIStore.setState({ sidebarOpen: true } as never);
 		show({ showCollapseToggle: true });
 		fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
 		expect(useUIStore.getState().sidebarOpen).toBe(false);
+		expect(localStorage.sidebar).toBe('false');
 	});
 });
 
@@ -188,5 +189,59 @@ describe('SidebarContent user menu', () => {
 		expect(localStorage.theme).toBe('oled-dark');
 		await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
 		expect(toastError.mock.calls[0][0]).toContain('could not be saved to your account');
+	});
+});
+
+/** AppShell's aside: the rail when closed, the sidebar when open. */
+function Aside() {
+	const open = useUIStore((state) => state.sidebarOpen);
+	return open ? <SidebarContent showCollapseToggle /> : <SidebarRail />;
+}
+
+describe('SidebarRail', () => {
+	function rail() {
+		return render(
+			<TooltipProvider>
+				<MemoryRouter>
+					<SidebarRail />
+				</MemoryRouter>
+			</TooltipProvider>
+		);
+	}
+
+	it('offers Open sidebar, New chat, Search and the account menu, each named (#930, ACT-4)', () => {
+		rail();
+		const nav = screen.getByRole('navigation', { name: 'Main' });
+		const named = [...nav.querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'));
+		expect(named).toEqual(['Open sidebar', 'New chat', 'Search', 'Ada']);
+		expect(screen.getByRole('link', { name: 'New chat' }).getAttribute('href')).toBe('/');
+		fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+		expect(useUIStore.getState().searchOpen).toBe(true);
+	});
+
+	it('opens the sidebar, remembers it, and moves focus to the toggle that replaces it (NAV-4)', async () => {
+		useUIStore.setState({ sidebarOpen: false } as never);
+		render(
+			<TooltipProvider>
+				<MemoryRouter>
+					<Aside />
+				</MemoryRouter>
+			</TooltipProvider>
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }));
+		expect(localStorage.sidebar).toBe('true');
+		await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close sidebar' })));
+		fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
+		expect(localStorage.sidebar).toBe('false');
+		await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open sidebar' })));
+	});
+
+	it('opens the account menu beside the rail, with the same items', async () => {
+		useAuthStore.setState({ user: { id: 'u1', name: 'Ada', role: 'user', email: 'ada@example.com' } } as never);
+		rail();
+		press(screen.getByRole('button', { name: 'Ada' }));
+		expect(await screen.findByRole('menuitem', { name: 'Theme' })).toBeTruthy();
+		expect(screen.getByText('ada@example.com')).toBeTruthy();
+		expect(screen.getByRole('menu').getAttribute('data-side')).toBe('right');
 	});
 });

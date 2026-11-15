@@ -23,7 +23,7 @@ import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { routePaths } from '@/routes/routePaths';
 import { BootSplash } from './BootSplash';
-import { SidebarContent } from './Sidebar';
+import { SidebarContent, SidebarRail } from './Sidebar';
 import { useTopBand } from './topBand';
 
 /** The id of the region the skip link moves to. */
@@ -62,7 +62,6 @@ export function AppShell() {
 	// listeners, so nothing sent right after a sign-in is lost (#674).
 	useSocketReady(authStatus === 'authenticated');
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
-	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
 	const searchOpen = useUIStore((state) => state.searchOpen);
 	const appName = useWebUIName();
@@ -119,16 +118,14 @@ export function AppShell() {
 			</a>
 			<aside
 				aria-label="Sidebar"
-				className={cn('hidden h-svh shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}
+				className={cn('hidden h-svh shrink-0 border-r md:block', sidebarOpen ? 'w-64' : 'w-12')}
 			>
-				{/* Not just visually collapsed (w-0 + overflow-hidden): unmounted
-				    entirely when closed. A flex child's default min-width is its
-				    content's own intrinsic size, so a nav link's text can force
-				    real (if visually clipped) width and stay a real click target
-				    through several more layers of flex descendants than expected --
-				    found by a Playwright smoke test clicking a "hidden" sidebar
-				    link. Not rendering it at all sidesteps that whole chain. */}
-				{sidebarOpen && <SidebarContent showCollapseToggle />}
+				{/* Closed, the sidebar is a 48 px rail (#930), and its content is
+				    unmounted, not just clipped: a flex child's default min-width
+				    is its content's intrinsic size, so a clipped nav link could
+				    stay a real click target -- found by a Playwright smoke test
+				    clicking a "hidden" sidebar link. */}
+				{sidebarOpen ? <SidebarContent showCollapseToggle /> : <SidebarRail />}
 			</aside>
 
 			<div className={cn('flex min-w-0 flex-1 flex-col', foldsBar && SHORT_PHONE_INSET)}>
@@ -179,19 +176,6 @@ export function AppShell() {
 						<TooltipContent side="bottom">New chat</TooltipContent>
 					</Tooltip>
 				</header>
-
-				{!sidebarOpen && (
-					<div className="hidden p-2 md:block">
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button variant="ghost" size="icon" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
-									<PanelLeft className="h-5 w-5" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent side="right">Open sidebar</TooltipContent>
-						</Tooltip>
-					</div>
-				)}
 
 				<main id={CONTENT_ID} tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
 					{heading === 'sr' && <h1 className="sr-only">{page}</h1>}

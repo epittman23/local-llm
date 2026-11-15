@@ -35,6 +35,7 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { ImageButton } from '@/components/ui/image-button';
 import { RowButton } from '@/components/ui/row-button';
 import { Separator } from '@/components/ui/separator';
 import { canUseFeature } from '@/lib/access/features';
@@ -49,6 +50,138 @@ import { cn } from '@/lib/utils';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
+
+/**
+ * Opens or closes the desktop sidebar from its own toggle, then moves focus
+ * to the toggle that replaces it (Close sidebar in the header, Open sidebar
+ * on the rail), since the one pressed is unmounted (NAV-4).
+ */
+function toggleSidebarFrom(open: boolean) {
+	useUIStore.getState().setSidebarOpen(open);
+	requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-sidebar-toggle]')?.focus());
+}
+
+/**
+ * The account menu: Settings, Archived chats, Theme (saved with the account,
+ * #1089) and Sign out. In the sidebar its trigger is the user's row; on the
+ * closed sidebar's rail (`compact`) it is the avatar alone, named and
+ * tooltipped with the user's name (ACT-4).
+ */
+export function UserMenu({ compact = false }: { compact?: boolean }) {
+	const user = useAuthStore((state) => state.user);
+	const config = useConfigStore((state) => state.config);
+	const openSettings = useSettingsModalStore((state) => state.openSettings);
+	const tabs = availableTabs(user, config, implementedTabIds);
+	const hasSettings = tabs.length > 0;
+	const hasArchived = tabs.some((t) => t.id === 'archived_chats');
+	const [theme, chooseTheme] = useThemeChoice();
+	const name = user?.name ?? 'Signed out';
+
+	const trigger = compact ? (
+		<ImageButton shape="circle" aria-label={name} className="size-8 border-0">
+			<ProfileAvatar src={user?.profile_image_url} name={user?.name} />
+		</ImageButton>
+	) : (
+		<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
+			<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
+			<span className="truncate text-sm">{name}</span>
+		</RowButton>
+	);
+
+	return (
+		<DropdownMenu>
+			{compact ? (
+				<Tip content={name} side="right">
+					<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+				</Tip>
+			) : (
+				<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+			)}
+			<DropdownMenuContent
+				align={compact ? 'end' : 'start'}
+				side={compact ? 'right' : undefined}
+				sideOffset={compact ? 8 : undefined}
+				className="w-56"
+			>
+				<DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
+				<DropdownMenuSeparator />
+				{hasSettings && (
+					<DropdownMenuItem onSelect={() => openSettings()}>
+						<Settings className="h-4 w-4" />
+						Settings
+					</DropdownMenuItem>
+				)}
+				{hasArchived && (
+					<DropdownMenuItem onSelect={() => openSettings('archived_chats')}>
+						<Archive className="h-4 w-4" />
+						Archived chats
+					</DropdownMenuItem>
+				)}
+				<DropdownMenuSub>
+					<DropdownMenuSubTrigger>
+						<SunMoon className="size-4" />
+						Theme
+					</DropdownMenuSubTrigger>
+					<DropdownMenuSubContent>
+						<DropdownMenuRadioGroup value={theme} onValueChange={(id) => isThemeId(id) && chooseTheme(id)}>
+							{THEMES.map(({ id, label, icon: Icon }) => (
+								<DropdownMenuRadioItem key={id} value={id}>
+									<Icon className="size-4" />
+									{label}
+								</DropdownMenuRadioItem>
+							))}
+						</DropdownMenuRadioGroup>
+					</DropdownMenuSubContent>
+				</DropdownMenuSub>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={() => void signOut()}>
+					<LogOut className="h-4 w-4" />
+					Sign out
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/**
+ * The closed desktop sidebar (#930): a 48 px rail with Open sidebar, New chat
+ * and Search at the top and the account menu at the foot, each an icon named
+ * by its tooltip (ACT-4, OVL-4), so closing the sidebar loses none of them.
+ * Phones have the drawer instead.
+ */
+export function SidebarRail() {
+	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
+	return (
+		<nav aria-label="Main" className="flex h-full flex-col items-center gap-1 py-3">
+			<Tip content="Open sidebar" side="right">
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label="Open sidebar"
+					data-sidebar-toggle
+					onClick={() => toggleSidebarFrom(true)}
+				>
+					<PanelLeft aria-hidden className="size-4" />
+				</Button>
+			</Tip>
+			<Tip content="New chat" side="right">
+				<Button asChild variant="ghost" size="icon" aria-label="New chat">
+					<Link to={routePaths.home}>
+						<SquarePen aria-hidden className="size-4" />
+					</Link>
+				</Button>
+			</Tip>
+			<Tip content="Search" side="right">
+				<Button variant="ghost" size="icon" aria-label="Search" onClick={() => setSearchOpen(true)}>
+					<Search aria-hidden className="size-4" />
+				</Button>
+			</Tip>
+			<div className="mt-auto">
+				<UserMenu compact />
+			</div>
+		</nav>
+	);
+}
 
 /**
  * A destination at the foot of the sidebar (#931). With a pointer it is an
@@ -103,16 +236,10 @@ export function SidebarContent({
 }) {
 	const user = useAuthStore((state) => state.user);
 	const config = useConfigStore((state) => state.config);
-	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
-	const openSettings = useSettingsModalStore((state) => state.openSettings);
 	const isAdmin = user?.role === 'admin';
-	const tabs = availableTabs(user, config, implementedTabIds);
-	const hasSettings = tabs.length > 0;
-	const hasArchived = tabs.some((t) => t.id === 'archived_chats');
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 	const appName = useWebUIName();
-	const [theme, chooseTheme] = useThemeChoice();
 
 	const destinations: { to: string; icon: LucideIcon; label: string }[] = [
 		{ to: routePaths.workspace, icon: LayoutGrid, label: 'Workspace' },
@@ -137,7 +264,13 @@ export function SidebarContent({
 				<span className="text-body font-title min-w-0 flex-1 truncate">{appName}</span>
 				{showCollapseToggle && (
 					<Tip content="Close sidebar" side="right">
-						<Button variant="ghost" size="icon" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label="Close sidebar"
+							data-sidebar-toggle
+							onClick={() => toggleSidebarFrom(false)}
+						>
 							<PanelLeft aria-hidden className="h-4 w-4" />
 						</Button>
 					</Tip>
@@ -177,51 +310,7 @@ export function SidebarContent({
 			</ul>
 
 			<div className="p-2">
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
-							<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
-							<span className="truncate text-sm">{user?.name ?? 'Signed out'}</span>
-						</RowButton>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="start" className="w-56">
-						<DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
-						<DropdownMenuSeparator />
-						{hasSettings && (
-							<DropdownMenuItem onSelect={() => openSettings()}>
-								<Settings className="h-4 w-4" />
-								Settings
-							</DropdownMenuItem>
-						)}
-						{hasArchived && (
-							<DropdownMenuItem onSelect={() => openSettings('archived_chats')}>
-								<Archive className="h-4 w-4" />
-								Archived chats
-							</DropdownMenuItem>
-						)}
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								<SunMoon className="size-4" />
-								Theme
-							</DropdownMenuSubTrigger>
-							<DropdownMenuSubContent>
-								<DropdownMenuRadioGroup value={theme} onValueChange={(id) => isThemeId(id) && chooseTheme(id)}>
-									{THEMES.map(({ id, label, icon: Icon }) => (
-										<DropdownMenuRadioItem key={id} value={id}>
-											<Icon className="size-4" />
-											{label}
-										</DropdownMenuRadioItem>
-									))}
-								</DropdownMenuRadioGroup>
-							</DropdownMenuSubContent>
-						</DropdownMenuSub>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem onSelect={() => void signOut()}>
-							<LogOut className="h-4 w-4" />
-							Sign out
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<UserMenu />
 			</div>
 		</nav>
 	);
