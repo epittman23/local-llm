@@ -13,7 +13,7 @@ import {
 	Share2,
 	Trash2
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -43,13 +43,23 @@ import { type ChatListItem, chatAsText, type Folder, fileSafe, isUnread } from '
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { ShareChatDialog } from './ChatDialogs';
-import { patchCachedChat } from './useChatList';
+import { patchCachedChat, usePinnedChats } from './useChatList';
+
+/** A sidebar row: the link takes the width and truncates; its menu button sits over its right end (#904). */
+export const rowClass = 'group relative flex min-w-0 items-center';
+/**
+ * A row's menu button: shown on hover and on focus, and always on touch,
+ * where there is no hover (A11Y-4). Transparent, not removed, while hidden,
+ * so focus can return to it when its menu closes (NAV-4).
+ */
+export const rowMenuButtonClass =
+	'absolute inset-y-0 right-1 my-auto opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100';
 
 /**
  * Ports layout/Sidebar/ChatItem.svelte and ChatMenu.svelte: a chat's link
  * (bold with a dot when unread), double-click or Rename to rename in place,
  * and its menu: Share, Download (JSON or text), Rename, Mark as unread,
- * Pin/Unpin, Clone, Move to a folder, Archive, Delete. The PDF download is
+ * Pin/Unpin, Clone, Move to a folder, Archive (with Undo), Delete. The PDF download is
  * not ported (it drew the chat into a canvas with jsPDF). Moving uses the
  * menu; the Svelte sidebar's drag-and-drop is not ported (it is not
  * reachable from the keyboard).
@@ -74,6 +84,9 @@ export function ChatItem({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const unread = isUnread(chat, openId);
+	// The list items carry no `pinned`; the pinned list says which are (#948).
+	const pinnedList = usePinnedChats().data;
+	const pinned = useMemo(() => new Set((pinnedList ?? []).map((c) => c.id)), [pinnedList]).has(chat.id);
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ['chats'] });
 
 	const rename = async () => {
@@ -107,6 +120,30 @@ export function ChatItem({
 		if (openId === chat.id) navigate('/');
 	};
 
+	/**
+	 * Archives the chat with Undo on its toast (ACT-3). Archiving takes a chat
+	 * out of its folder, and moving it back unarchives and unpins it on the
+	 * server, so Undo re-files it, then pins it again if it was pinned.
+	 */
+	const archive = async () => {
+		const folderId = chat.folder_id ?? null;
+		const wasPinned = pinned;
+		const ok = await act(() => archiveChatById(token, chat.id));
+		if (!ok) return;
+		leaveIfOpen();
+		toast.success('Chat archived', {
+			action: {
+				label: 'Undo',
+				onClick: () =>
+					void act(async () => {
+						if (!folderId) return archiveChatById(token, chat.id);
+						await updateChatFolderIdById(token, chat.id, folderId);
+						if (wasPinned) await toggleChatPinnedStatusById(token, chat.id);
+					}, 'Chat restored')
+			}
+		});
+	};
+
 	const download = async (kind: 'json' | 'txt') => {
 		const full = await getChatById(token, chat.id).catch(() => null);
 		if (!full) return;
@@ -120,7 +157,7 @@ export function ChatItem({
 	};
 
 	return (
-		<div className="group relative" data-testid="chat-item">
+		<div className={rowClass} data-testid="chat-item">
 			{renaming ? (
 				<Input
 					ref={inputRef}
@@ -151,14 +188,16 @@ export function ChatItem({
 					}}
 					className={({ isActive }) =>
 						cn(
-							'flex items-center gap-1.5 rounded-md px-2 py-1.5 pr-7 text-sm',
+							'flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 pr-7 text-sm pointer-coarse:min-h-11 pointer-coarse:pr-12',
 							isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
 							unread && 'text-foreground font-medium'
 						)
 					}
 				>
 					{unread && <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-label="Unread" />}
-					<span className="truncate">{chat.title}</span>
+					<span className="truncate" title={chat.title}>
+						{chat.title}
+					</span>
 				</NavLink>
 			)}
 			{!renaming && (
@@ -169,7 +208,7 @@ export function ChatItem({
 							aria-label={`Chat menu: ${chat.title}`}
 							variant="ghost"
 							size="icon-xs"
-							className="absolute top-1 right-1 hidden group-focus-within:inline-flex group-hover:inline-flex data-[state=open]:inline-flex"
+							className={rowMenuButtonClass}
 						>
 							<MoreHorizontal className="size-4" />
 						</Button>
@@ -193,8 +232,12 @@ export function ChatItem({
 						<DropdownMenuItem onSelect={() => void act(() => markChatUnreadById(token, chat.id))}>
 							<MailOpen /> Mark as unread
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => void act(() => toggleChatPinnedStatusById(token, chat.id))}>
-							{chat.pinned ? <PinOff /> : <Pin />} {chat.pinned ? 'Unpin' : 'Pin'}
+						<DropdownMenuItem
+							onSelect={() =>
+								void act(() => toggleChatPinnedStatusById(token, chat.id), pinned ? 'Chat unpinned' : 'Chat pinned')
+							}
+						>
+							{pinned ? <PinOff /> : <Pin />} {pinned ? 'Unpin' : 'Pin'}
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onSelect={async () => {
@@ -218,9 +261,7 @@ export function ChatItem({
 								<DropdownMenuSubContent className="max-h-72 overflow-y-auto">
 									{chat.folder_id && (
 										<DropdownMenuItem
-											onSelect={() =>
-												void act(() => updateChatFolderIdById(token, chat.id, undefined), 'Chat moved successfully')
-											}
+											onSelect={() => void act(() => updateChatFolderIdById(token, chat.id, undefined), 'Chat moved')}
 										>
 											Out of the folder
 										</DropdownMenuItem>
@@ -230,9 +271,7 @@ export function ChatItem({
 										.map((f) => (
 											<DropdownMenuItem
 												key={f.id}
-												onSelect={() =>
-													void act(() => updateChatFolderIdById(token, chat.id, f.id), 'Chat moved successfully')
-												}
+												onSelect={() => void act(() => updateChatFolderIdById(token, chat.id, f.id), 'Chat moved')}
 											>
 												{f.name}
 											</DropdownMenuItem>
@@ -240,11 +279,7 @@ export function ChatItem({
 								</DropdownMenuSubContent>
 							</DropdownMenuSub>
 						)}
-						<DropdownMenuItem
-							onSelect={async () => {
-								if (await act(() => archiveChatById(token, chat.id), 'Chat archived.')) leaveIfOpen();
-							}}
-						>
+						<DropdownMenuItem onSelect={() => void archive()}>
 							<Archive /> Archive
 						</DropdownMenuItem>
 						<DropdownMenuSeparator />

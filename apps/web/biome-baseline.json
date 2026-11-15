@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 733,
+	"total": 732,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -645,7 +645,6 @@
 			"lint/a11y/useAriaPropsSupportedByRole": 1
 		},
 		"apps/web/src/routes/chat/sidebar/ChatSidebar.tsx": {
-			"lint/a11y/useAriaPropsSupportedByRole": 1,
 			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/chat/useAttachments.ts": {

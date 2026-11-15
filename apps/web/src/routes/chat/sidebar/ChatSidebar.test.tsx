@@ -73,16 +73,90 @@ describe('ChatSidebar chat list', () => {
 	});
 });
 
+const workChats = (n: number, from = 0) =>
+	Array.from({ length: n }, (_, i) => ({ id: `w${from + i}`, title: `Work chat ${from + i}`, last_read_at: 99 }));
+
+describe('ChatSidebar empty and failed', () => {
+	it('says what will appear when there are no chats and no folders (#1092, STA-3)', async () => {
+		vi.mocked(getChatList).mockResolvedValue([] as never);
+		show();
+		expect(await screen.findByText('Your chats will appear here.')).toBeInTheDocument();
+		expect(screen.getByText('Group chats and give them shared instructions.')).toBeInTheDocument();
+	});
+
+	it('shows a failed load in place with Try again, not an empty list (STA-4)', async () => {
+		vi.mocked(getChatList)
+			.mockRejectedValueOnce('Database is locked')
+			.mockResolvedValue([] as never);
+		show();
+		expect(await screen.findByText("Couldn't load chats")).toBeInTheDocument();
+		expect(screen.queryByText('Your chats will appear here.')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Your chats will appear here.')).toBeInTheDocument();
+	});
+
+	it('shows a failed folder in place with Try again', async () => {
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		vi.mocked(getChatListByFolderId)
+			.mockRejectedValueOnce('nope')
+			.mockResolvedValue(workChats(1) as never);
+		show();
+		fireEvent.click(await screen.findByRole('button', { name: 'Expand Work' }));
+		expect(await screen.findByText("Couldn't load this folder's chats.")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('link', { name: /Work chat 0/ })).toBeInTheDocument();
+	});
+});
+
 describe('ChatSidebar folders', () => {
-	it('loads more of an open folder with "Show more"', async () => {
+	it('offers no "Show more" under a folder whose first page is short (#1070)', async () => {
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		vi.mocked(getChatListByFolderId).mockResolvedValue(workChats(1) as never);
+		show();
+		fireEvent.click(await screen.findByRole('button', { name: 'Expand Work' }));
+		expect(await screen.findByRole('link', { name: /Work chat 0/ })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+	});
+
+	it('says an empty folder is empty, and says nothing under one that holds only folders', async () => {
+		vi.mocked(getFolders).mockResolvedValue([
+			{ id: 'f1', name: 'Work', parent_id: null, is_expanded: true },
+			{ id: 'f2', name: 'Sub', parent_id: 'f1' }
+		] as never);
+		show();
+		fireEvent.click(await screen.findByRole('button', { name: 'Expand Sub' }));
+		await waitFor(() => expect(screen.getAllByText('No chats yet. Move one here from its menu.')).toHaveLength(1));
+	});
+
+	it('names the folder menu after what each item does, Delete last (#1071, ACT-2, ACT-3)', async () => {
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		show();
+		expect(await screen.findByRole('button', { name: 'New folder' })).toBeInTheDocument();
+		fireEvent.pointerDown(await screen.findByRole('button', { name: 'Folder menu: Work' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		const items = await screen.findAllByRole('menuitem');
+		expect(items.map((i) => i.textContent?.trim())).toEqual([
+			'New subfolder',
+			'Mark all as read',
+			'Edit folder',
+			'Delete folder'
+		]);
+		expect(screen.getByRole('menu').className).toContain('w-52');
+	});
+
+	it('loads more of an open folder with "Show more" when a page is full', async () => {
 		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
 		vi.mocked(getChatListByFolderId).mockImplementation(async (_t, _f, page) =>
-			page === 1 ? ([{ id: 'w1', title: 'Work chat 1', last_read_at: 99 }] as never) : ([] as never)
+			page === 1 ? (workChats(10) as never) : (workChats(1, 10) as never)
 		);
 		show();
 		fireEvent.click(await screen.findByRole('button', { name: 'Expand Work' }));
 		fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
 		await waitFor(() => expect(getChatListByFolderId).toHaveBeenCalledWith('t', 'f1', 2));
+		expect(await screen.findByRole('link', { name: /Work chat 10/ })).toBeInTheDocument();
 		await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull());
 	});
 });
