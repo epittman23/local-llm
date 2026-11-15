@@ -1,5 +1,5 @@
 import { ChevronLeft } from 'lucide-react';
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { CodeEditorHandle } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -44,6 +44,7 @@ export function FunctionEditor({
 	const navigate = useNavigate();
 	const form = useRef<HTMLFormElement>(null);
 	const editor = useRef<CodeEditorHandle>(null);
+	const codeHelp = useId();
 
 	const [name, setName] = useState(fn?.name ?? '');
 	const [id, setId] = useState(fn?.id ?? '');
@@ -194,7 +195,8 @@ export function FunctionEditor({
 					</div>
 				</div>
 
-				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
+				<span className="px-1 pb-1.5 text-sm leading-none font-medium">Function code</span>
+				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1">
 					<Suspense
 						fallback={
 							<div className="flex h-full items-center justify-center">
@@ -208,11 +210,17 @@ export function FunctionEditor({
 							boilerplate={filterBoilerplate}
 							lang="python"
 							className="text-caption"
+							placeholder=""
+							ariaLabel="Function code"
+							describedBy={codeHelp}
 							onChange={onCodeChange}
 							onSave={() => form.current?.requestSubmit()}
 						/>
 					</Suspense>
 				</div>
+				<p id={codeHelp} className="text-foreground-muted text-dense px-1 pt-1.5">
+					Tab indents. Press Esc, then Tab, to leave the editor.
+				</p>
 
 				<div className="text-muted-foreground shrink-0 py-2 text-xs">
 					<div className="flex items-center justify-between gap-3">

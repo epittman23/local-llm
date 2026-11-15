@@ -2,7 +2,7 @@ import { acceptCompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, Prec } from '@codemirror/state';
 import { keymap, placeholder } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import { basicSetup, EditorView } from 'codemirror';
@@ -94,7 +94,14 @@ export type CodeEditorHandle = {
 /**
  * Ports common/CodeEditor.svelte: a CodeMirror 6 editor with basicSetup, the
  * language picked from `lang`, the standard's code colours (CNT-2), Tab to accept a
- * completion, Ctrl/Cmd+S to `onSave`, and Ctrl/Cmd+Shift+F to format.
+ * completion, Ctrl/Cmd+S to `onSave`, and Ctrl/Cmd+Shift+F to format. The keys
+ * act only while the editor has focus, so a page holding two editors, or other
+ * fields, keeps its own Ctrl+S.
+ *
+ * A field (CNT-2, A11Y-2): `ariaLabel` names the editable content and
+ * `describedBy` points at the caller's help line, which sits outside the
+ * caller's clipped panel. Tab indents here, so the help line says how to leave:
+ * Esc, then Tab (CodeMirror's tab-focus mode).
  *
  * Uncontrolled after mount, on purpose: CodeMirror owns the document, `value`
  * seeds it (falling back to `boilerplate` when empty) and later changes to
@@ -115,6 +122,9 @@ export default function CodeEditor({
 	boilerplate = '',
 	lang = '',
 	className = 'text-sm',
+	placeholder: placeholderText = 'Enter your code here...',
+	ariaLabel,
+	describedBy,
 	onChange,
 	onSave,
 	ref
@@ -123,6 +133,12 @@ export default function CodeEditor({
 	boilerplate?: string;
 	lang?: string;
 	className?: string;
+	/** Shown while the document is empty; '' shows none. */
+	placeholder?: string;
+	/** The field's name, on the editable content: "Tool code". */
+	ariaLabel?: string;
+	/** The id of the help line under the editor. */
+	describedBy?: string;
 	onChange?: (value: string) => void;
 	onSave?: () => void;
 	ref?: Ref<CodeEditorHandle>;
@@ -134,6 +150,8 @@ export default function CodeEditor({
 	// Latest callbacks, read from inside listeners created once at mount.
 	const cb = useRef({ onChange, onSave });
 	cb.current = { onChange, onSave };
+	// Read once at mount, like `value`: the field's name, help and placeholder.
+	const field = useRef({ placeholderText, ariaLabel, describedBy });
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const token = useAuthStore((s) => s.token) ?? '';
 
@@ -164,8 +182,36 @@ export default function CodeEditor({
 				extensions: [
 					basicSetup,
 					keymap.of([{ key: 'Tab', run: acceptCompletion }, indentWithTab]),
+					// Scoped to the editor: these run only while it has focus.
+					Prec.high(
+						keymap.of([
+							{
+								key: 'Mod-s',
+								preventDefault: true,
+								run: () => {
+									cb.current.onSave?.();
+									return true;
+								}
+							},
+							{
+								key: 'Mod-Shift-f',
+								preventDefault: true,
+								run: () => {
+									formatRef.current();
+									return true;
+								}
+							}
+						])
+					),
 					indentUnit.of('    '),
-					placeholder('Enter your code here...'),
+					field.current.placeholderText ? placeholder(field.current.placeholderText) : [],
+					// tabindex on the content (already the one Tab stop) tells checkers the
+					// scroller holds something focusable (axe scrollable-region-focusable).
+					EditorView.contentAttributes.of({
+						tabindex: '0',
+						...(field.current.ariaLabel ? { 'aria-label': field.current.ariaLabel } : {}),
+						...(field.current.describedBy ? { 'aria-describedby': field.current.describedBy } : {})
+					}),
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) cb.current.onChange?.(update.state.doc.toString());
 					}),
@@ -186,21 +232,8 @@ export default function CodeEditor({
 		);
 		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-		const onKeyDown = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-				e.preventDefault();
-				cb.current.onSave?.();
-			}
-			if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
-				e.preventDefault();
-				formatRef.current();
-			}
-		};
-		document.addEventListener('keydown', onKeyDown);
-
 		return () => {
 			observer.disconnect();
-			document.removeEventListener('keydown', onKeyDown);
 			// CodeMirror keeps a DOM observer and references until destroyed.
 			editor.destroy();
 			view.current = null;

@@ -1,4 +1,5 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import CodeEditor from './CodeEditor';
 
@@ -60,5 +61,40 @@ describe('CodeEditor (CNT-2)', () => {
 			document.documentElement.classList.remove('dark');
 		});
 		await waitFor(() => expect(editor.className).toBe(light));
+	});
+});
+
+describe('CodeEditor as a field (#987, #910)', () => {
+	const mount = async (ui: ReactElement) => {
+		const { container } = render(ui);
+		return waitFor(() => {
+			const content = container.querySelector<HTMLElement>('.cm-content');
+			expect(content).not.toBeNull();
+			return { container, content: content as HTMLElement };
+		});
+	};
+
+	it('names its editable content and ties it to the caller’s help line', async () => {
+		const { content } = await mount(<CodeEditor value="x = 1" ariaLabel="Tool code" describedBy="help" />);
+		expect(content).toHaveAttribute('aria-label', 'Tool code');
+		expect(content).toHaveAttribute('aria-describedby', 'help');
+		// Focusable for checkers, without a second Tab stop: it is the contenteditable itself.
+		expect(content).toHaveAttribute('tabindex', '0');
+	});
+
+	it('shows the placeholder it is given, or none', async () => {
+		const first = await mount(<CodeEditor placeholder="def run(): ..." />);
+		expect(first.container.querySelector('.cm-placeholder')).toHaveTextContent('def run(): ...');
+		const second = await mount(<CodeEditor placeholder="" />);
+		expect(second.container.querySelector('.cm-placeholder')).toBeNull();
+	});
+
+	it('saves on Ctrl+S only while the editor has focus, not from anywhere on the page', async () => {
+		const onSave = vi.fn();
+		const { content } = await mount(<CodeEditor value="x = 1" onSave={onSave} />);
+		fireEvent.keyDown(document.body, { key: 's', ctrlKey: true });
+		expect(onSave).not.toHaveBeenCalled();
+		fireEvent.keyDown(content, { key: 's', code: 'KeyS', keyCode: 83, ctrlKey: true });
+		expect(onSave).toHaveBeenCalledTimes(1);
 	});
 });

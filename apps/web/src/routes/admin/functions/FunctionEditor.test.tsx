@@ -96,3 +96,12 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 		expect(screen.getByTitle('fn_1')).toHaveTextContent('fn_1');
 	});
 });
+
+describe('FunctionEditor code field (#910, #987)', () => {
+	afterEach(cleanup);
+	it('labels the code and says how to leave it with the keyboard', async () => {
+		show();
+		expect(await screen.findByText('Function code')).toBeInTheDocument();
+		expect(screen.getByText('Tab indents. Press Esc, then Tab, to leave the editor.')).toHaveAttribute('id');
+	});
+});

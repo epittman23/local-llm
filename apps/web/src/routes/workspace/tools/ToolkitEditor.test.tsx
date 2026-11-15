@@ -125,3 +125,11 @@ describe('ToolkitEditor fields (#1057, #983)', () => {
 		expect(screen.getByTitle('calc')).toHaveTextContent('calc');
 	});
 });
+
+describe('ToolkitEditor code field (#910, #987)', () => {
+	it('labels the code and says how to leave it with the keyboard', () => {
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		expect(screen.getByText('Tool code')).toBeInTheDocument();
+		expect(screen.getByText('Tab indents. Press Esc, then Tab, to leave the editor.')).toHaveAttribute('id');
+	});
+});
