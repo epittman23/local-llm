@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useState } from 'react';
+import { type RefObject, useId, useRef, useState } from 'react';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { EditorError, type EditorProblem } from '@/components/common/EditorError';
@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { getPromptTags } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn, slugify } from '@/lib/utils';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { commandProblem, INVALID_COMMAND, isValidCommand, type PromptDraft } from './promptTypes';
@@ -39,14 +41,29 @@ export function PromptCreateDialog({
 	onSubmit: (prompt: PromptDraft) => Promise<void>;
 	onClose: () => void;
 }) {
+	// Esc, the scrim and × close through the form, which asks first while it holds a draft (FRM-3).
+	const requestClose = useRef(onClose);
 	return (
-		<Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+		<Dialog open={open} onOpenChange={(next) => !next && requestClose.current()}>
 			<DialogContent
 				showCloseButton={false}
-				className="flex h-[min(54rem,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] flex-col gap-0 p-0 sm:max-w-5xl"
+				// OVL-1: a large form is 48 rem; it opens on its first field, Name.
+				className="flex h-[min(54rem,calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] flex-col gap-0 p-0 sm:max-w-3xl"
+				onOpenAutoFocus={(e) => {
+					e.preventDefault();
+					(e.currentTarget as HTMLElement).querySelector<HTMLElement>('[data-initial-focus]')?.focus();
+				}}
 			>
 				{/* Remounted per open, so the form always starts from the current draft. */}
-				{open && <CreateForm key={draft ? 'clone' : 'new'} draft={draft} onSubmit={onSubmit} onClose={onClose} />}
+				{open && (
+					<CreateForm
+						key={draft ? 'clone' : 'new'}
+						draft={draft}
+						onSubmit={onSubmit}
+						onClose={onClose}
+						requestClose={requestClose}
+					/>
+				)}
 			</DialogContent>
 		</Dialog>
 	);
@@ -55,11 +72,13 @@ export function PromptCreateDialog({
 function CreateForm({
 	draft,
 	onSubmit,
-	onClose
+	onClose,
+	requestClose
 }: {
 	draft: PromptDraft | null;
 	onSubmit: (prompt: PromptDraft) => Promise<void>;
 	onClose: () => void;
+	requestClose: RefObject<() => void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
@@ -81,12 +100,40 @@ function CreateForm({
 	const singleUser = useSingleUser();
 	const ids = {
 		name: useId(),
+		nameMsg: useId(),
 		command: useId(),
 		commandMsg: useId(),
 		content: useId(),
 		contentMsg: useId(),
 		problem: useId()
 	};
+
+	// FRM-3: what was typed is a draft; closing it, or leaving the page, asks first.
+	const [initial] = useState(() => ({ name, command, content, tags: tags.map((t) => t.name).join('\n') }));
+	const dirty =
+		name !== initial.name ||
+		command !== initial.command ||
+		content !== initial.content ||
+		tags.map((t) => t.name).join('\n') !== initial.tags;
+	const guard = useUnsavedChanges(dirty, {
+		message: 'This prompt is not created yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(onClose);
+	requestClose.current = close;
+	// FRM-2: each field says what is wrong under itself (#1010), never in a browser bubble.
+	const {
+		errors,
+		field,
+		submit: checkFields
+	} = useFieldErrors(
+		{
+			name: name.trim() ? undefined : 'Enter a name for this prompt.',
+			command: isValidCommand(command) ? undefined : INVALID_COMMAND,
+			content: content.trim() ? undefined : 'Write the prompt: its command puts this text in the message.'
+		},
+		['name', 'command', 'content'] as const
+	);
+	const commandMessage = errors.command ?? commandError;
 
 	const { data: suggestionTags } = useQuery({
 		queryKey: ['prompt-tags'],
@@ -95,10 +142,7 @@ function CreateForm({
 
 	const submit = async () => {
 		setProblem(null);
-		if (!isValidCommand(command)) {
-			setCommandError(INVALID_COMMAND);
-			return;
-		}
+		if (!checkFields()) return;
 		setCommandError(null);
 		setLoading(true);
 		try {
@@ -109,6 +153,10 @@ function CreateForm({
 				tags: tags.map((t) => t.name),
 				access_grants: accessGrants
 			});
+			// Created: the draft is kept, so closing (and leaving /workspace/prompts/create) does not ask.
+			guard.allowNext();
+			onClose();
+			return;
 		} catch (error) {
 			const taken = commandProblem(error, command);
 			if (taken) setCommandError(taken);
@@ -119,6 +167,7 @@ function CreateForm({
 
 	return (
 		<>
+			{guard.dialog}
 			<AccessControlModal
 				open={showAccess}
 				onOpenChange={setShowAccess}
@@ -141,7 +190,7 @@ function CreateForm({
 					className="ml-2 shrink-0"
 					type="button"
 					aria-label="Close"
-					onClick={onClose}
+					onClick={close}
 				>
 					<X className="size-5" />
 				</Button>
@@ -149,6 +198,7 @@ function CreateForm({
 
 			<form
 				className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-3"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
@@ -164,21 +214,25 @@ function CreateForm({
 						<Label htmlFor={ids.name}>Name</Label>
 						<Input
 							id={ids.name}
+							data-initial-focus
 							placeholder="e.g. Summarise a topic"
 							value={name}
-							required
+							{...field('name')}
+							{...fieldProps(ids.nameMsg, { error: errors.name })}
 							onChange={(e) => {
 								setName(e.target.value);
 								if (!manualCommand) setCommand(e.target.value !== '' ? slugify(e.target.value) : '');
 							}}
 						/>
+						<FieldMessage id={ids.nameMsg} error={errors.name} />
 					</div>
 					<div className="flex min-w-0 flex-col gap-1.5">
 						<Label htmlFor={ids.command}>Command</Label>
 						<CommandField
 							id={ids.command}
 							value={command}
-							{...fieldProps(ids.commandMsg, { error: commandError, help: true })}
+							{...fieldProps(ids.commandMsg, { error: commandMessage, help: true })}
+							{...field('command')}
 							onChange={(value) => {
 								setManualCommand(true);
 								setCommand(value);
@@ -187,7 +241,7 @@ function CreateForm({
 						/>
 						<FieldMessage
 							id={ids.commandMsg}
-							error={commandError}
+							error={commandMessage}
 							help={command ? `Type /${command} in a chat to use it.` : 'Letters, numbers, hyphens and underscores.'}
 						/>
 					</div>
@@ -213,19 +267,20 @@ function CreateForm({
 						className="min-h-0 flex-1 resize-none"
 						placeholder="e.g. Summarise {{topic}} in 50 words."
 						value={content}
-						required
-						aria-describedby={ids.contentMsg}
+						{...field('content')}
+						{...fieldProps(ids.contentMsg, { error: errors.content, help: true })}
 						onChange={(e) => setContent(e.target.value)}
 					/>
 					<FieldMessage
 						id={ids.contentMsg}
+						error={errors.content}
 						help={<>Use {'{{variable}}'} for a placeholder you fill in when you use it.</>}
 					/>
 				</div>
 
 				{problem && <EditorError id={ids.problem} problem={problem} />}
 				<div className="flex shrink-0 justify-end gap-2 pt-1">
-					<Button type="button" variant="ghost" onClick={onClose}>
+					<Button type="button" variant="ghost" onClick={close}>
 						Cancel
 					</Button>
 					<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
@@ -247,7 +302,7 @@ export function CommandField({
 	value,
 	disabled,
 	onChange,
-	...aria
+	...rest
 }: {
 	id: string;
 	value: string;
@@ -255,6 +310,8 @@ export function CommandField({
 	onChange: (value: string) => void;
 	'aria-describedby'?: string;
 	'aria-invalid'?: true;
+	ref?: (element: HTMLElement | null) => void;
+	onBlur?: () => void;
 }) {
 	return (
 		<div
@@ -269,12 +326,11 @@ export function CommandField({
 				className="text-body h-full w-full min-w-0 bg-transparent font-mono"
 				placeholder="summarise"
 				value={value}
-				required
 				disabled={disabled}
 				autoComplete="off"
 				spellCheck={false}
 				onChange={(e) => onChange(e.target.value)}
-				{...aria}
+				{...rest}
 			/>
 		</div>
 	);

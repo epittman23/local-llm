@@ -172,14 +172,13 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	};
 
 	// A failure is thrown to the dialog, which says it at the field it concerns (FRM-2: COMMAND_TAKEN under Command).
+	// The dialog closes itself once this resolves, so its unsaved-draft guard lets that close through.
 	const createPrompt = async (draft: PromptDraft) => {
 		const res = await createNewPrompt(token, draft);
-		if (res) {
-			toast.success('Prompt created');
-			setPage(1);
-			await refetchList();
-			closeCreate();
-		}
+		if (!res) throw new Error('The server sent no prompt back.');
+		toast.success('Prompt created');
+		setPage(1);
+		await refetchList();
 	};
 
 	const deleteMutation = useMutation({

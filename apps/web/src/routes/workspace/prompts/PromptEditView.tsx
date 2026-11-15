@@ -31,6 +31,8 @@ import {
 } from '@/lib/apis/prompts';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
@@ -91,6 +93,7 @@ export function PromptEditView({
 		command: useId(),
 		commandMsg: useId(),
 		content: useId(),
+		contentMsg: useId(),
 		message: useId(),
 		problem: useId()
 	};
@@ -209,6 +212,31 @@ export function PromptEditView({
 
 	// After a save the parent hands down the new content.
 	useEffect(() => setContent(prompt.content), [prompt.content]);
+
+	// FRM-3: an open Edit prompt with changes is a draft. Closing the dialog (Esc, ×, the scrim)
+	// or leaving the page asks first; the name, command and tags save at once and need no guard.
+	const editDirty = showEdit && (content !== prompt.content || commitMessage !== '' || !isProduction);
+	const guard = useUnsavedChanges(editDirty, {
+		message: 'This version is not saved. What you changed is lost if you leave.'
+	});
+	// FRM-2: an empty prompt is said under the field (#1010), never in a browser bubble.
+	const {
+		errors: versionErrors,
+		field: versionField,
+		submit: checkVersion,
+		reset: resetVersionErrors
+	} = useFieldErrors(
+		{ content: content.trim() ? undefined : 'Write the prompt: its command puts this text in the message.' },
+		['content'] as const
+	);
+	const closeEdit = () => {
+		setContent(prompt.content);
+		setCommitMessage('');
+		setIsProduction(true);
+		setVersionProblem(null);
+		resetVersionErrors();
+		setShowEdit(false);
+	};
 
 	const saveNewVersion = async () => {
 		if (disabled) return;
@@ -357,7 +385,8 @@ export function PromptEditView({
 				onChange={changeAccess}
 			/>
 
-			<Dialog open={showEdit} onOpenChange={setShowEdit}>
+			{guard.dialog}
+			<Dialog open={showEdit} onOpenChange={(next) => (next ? setShowEdit(true) : guard.confirmLeave(closeEdit))}>
 				<DialogContent className="sm:max-w-2xl">
 					<DialogHeader>
 						<DialogTitle>Edit prompt</DialogTitle>
@@ -365,9 +394,10 @@ export function PromptEditView({
 					</DialogHeader>
 					<form
 						className="flex flex-col gap-3"
+						noValidate
 						onSubmit={(e) => {
 							e.preventDefault();
-							saveNewVersion();
+							if (checkVersion()) saveNewVersion();
 						}}
 					>
 						<div className="flex flex-col gap-1.5">
@@ -377,10 +407,12 @@ export function PromptEditView({
 								className="max-h-[50dvh] resize-none"
 								placeholder="e.g. Summarise {{topic}} in 50 words."
 								rows={6}
-								required
 								value={content}
+								{...versionField('content')}
+								{...fieldProps(ids.contentMsg, { error: versionErrors.content })}
 								onChange={(e) => setContent(e.target.value)}
 							/>
+							<FieldMessage id={ids.contentMsg} error={versionErrors.content} />
 						</div>
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor={ids.message}>What changed (optional)</Label>

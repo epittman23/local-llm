@@ -111,6 +111,49 @@ describe('PromptCreateDialog fields (#911, #1095)', () => {
 		expect(onSubmit).toHaveBeenCalledTimes(2);
 	});
 
+	it('is a 48 rem form that opens on Name, and says what is missing under each field (OVL-1, #1010)', async () => {
+		const onSubmit = open();
+		const name = screen.getByLabelText('Name');
+		expect(screen.getByRole('dialog')).toHaveClass('sm:max-w-3xl');
+		await waitFor(() => expect(document.activeElement).toBe(name));
+		expect(name.closest('form')).toHaveAttribute('novalidate');
+		fireEvent.submit(name.closest('form') as HTMLFormElement);
+		expect(name).toHaveAccessibleDescription('Enter a name for this prompt.');
+		expect(screen.getByLabelText('Prompt content')).toHaveAccessibleDescription(
+			'Write the prompt: its command puts this text in the message.'
+		);
+		expect(document.activeElement).toBe(name);
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it('closes at once while untouched, and asks before Esc, × or Cancel drops a draft (FRM-3)', async () => {
+		const onClose = vi.fn();
+		wrap(<PromptCreateDialog open draft={null} onSubmit={vi.fn()} onClose={onClose} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(onClose).toHaveBeenCalledTimes(1);
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Weekly report' } });
+		fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This prompt is not created yet.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(onClose).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onClose).toHaveBeenCalledTimes(2);
+	});
+
+	it('closes without asking once the prompt is created', async () => {
+		const onClose = vi.fn();
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		wrap(<PromptCreateDialog open draft={null} onSubmit={onSubmit} onClose={onClose} />);
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Weekly report' } });
+		fireEvent.change(screen.getByLabelText('Prompt content'), { target: { value: 'Summarise the week.' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create prompt' }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
 	it('hides Access while the install has one account', async () => {
 		accounts.total = 1;
 		open();
@@ -181,6 +224,36 @@ describe('PromptEditView (#911, #957, #1095)', () => {
 		fireEvent.click(await within(sheet).findByText('First'));
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'History' })).toBeNull());
 		expect(screen.getByText('One')).toBeInTheDocument();
+	});
+
+	it('asks before Esc drops an edited version, puts the content back on Discard, and says an empty prompt under it', async () => {
+		const onSubmit = vi.fn();
+		view(onSubmit);
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		let dialog = await screen.findByRole('dialog', { name: 'Edit prompt' });
+		// Untouched, it closes at once.
+		fireEvent.keyDown(dialog, { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit prompt' })).toBeNull());
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		dialog = await screen.findByRole('dialog', { name: 'Edit prompt' });
+		const content = within(dialog).getByLabelText('Prompt content');
+		fireEvent.change(content, { target: { value: '' } });
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+		expect(content).toHaveAccessibleDescription('Write the prompt: its command puts this text in the message.');
+		expect(onSubmit).not.toHaveBeenCalled();
+		fireEvent.keyDown(dialog, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This version is not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(screen.getByRole('dialog', { name: 'Edit prompt' })).toBeInTheDocument();
+		fireEvent.keyDown(screen.getByRole('dialog', { name: 'Edit prompt' }), { key: 'Escape' });
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit prompt' })).toBeNull());
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		dialog = await screen.findByRole('dialog', { name: 'Edit prompt' });
+		expect(within(dialog).getByLabelText('Prompt content')).toHaveValue('Summarise this.');
+		expect(within(dialog).getByLabelText('Prompt content')).not.toHaveAttribute('aria-invalid');
 	});
 
 	it('saves a new version from labelled fields, and keeps a failure in the dialog', async () => {

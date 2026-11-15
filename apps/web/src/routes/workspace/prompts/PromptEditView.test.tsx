@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -56,13 +57,18 @@ const prompt = {
 	access_grants: []
 };
 
+// The view guards an unsaved version with useBlocker, which needs a data router.
+const Routed = ({ children }: { children: ReactNode }) => (
+	<RouterProvider router={createMemoryRouter([{ path: '*', element: children }])} />
+);
+
 const renderView = (disabled = false) =>
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<MemoryRouter>
+				<Routed>
 					<PromptEditView prompt={prompt} disabled={disabled} onSubmit={vi.fn()} />
-				</MemoryRouter>
+				</Routed>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -145,13 +151,13 @@ describe('PromptEditView production switch (#222)', () => {
 		render(
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 				<TooltipProvider>
-					<MemoryRouter>
+					<Routed>
 						<PromptEditView
 							prompt={{ ...prompt, content: 'V2 content', version_id: 'v2' }}
 							disabled={false}
 							onSubmit={vi.fn()}
 						/>
-					</MemoryRouter>
+					</Routed>
 				</TooltipProvider>
 			</QueryClientProvider>
 		);
