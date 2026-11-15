@@ -1,11 +1,23 @@
 import saveAs from 'file-saver';
-import { ArrowRightCircle, ChevronDown, ChevronUp, Copy, Download, Info, Lightbulb, Star, Zap } from 'lucide-react';
+import {
+	ArrowRightCircle,
+	Check,
+	ChevronDown,
+	ChevronUp,
+	Copy,
+	Download,
+	Info,
+	Lightbulb,
+	Star,
+	Zap
+} from 'lucide-react';
 import { Fragment, type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { CheckboxMark } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Table as DataTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { unescapeHtml } from '@/lib/markdown/content';
@@ -20,10 +32,12 @@ import {
 	htmlKind,
 	inAppPath,
 	sourceLabel,
-	tableToCsv
+	tableToCsv,
+	tableToTsv
 } from '@/lib/markdown/markdownModel';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn, copyToClipboard } from '@/lib/utils';
+import { useCopy } from '@/lib/ui/useCopy';
+import { cn } from '@/lib/utils';
 import { CodeBlock } from './CodeBlock';
 import { Katex } from './Katex';
 import { useMarkdownEnv } from './MarkdownContext';
@@ -242,6 +256,8 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 						);
 					case 'citation':
 						return <Citation key={i} token={t} />;
+					case 'checkbox':
+						return null;
 					case 'text':
 						return t.tokens ? <Inline key={i} tokens={t.tokens} /> : <Text key={i} token={t} />;
 					default:
@@ -361,88 +377,83 @@ function DetailGroupView({ group }: { group: DetailGroup }) {
 	);
 }
 
+/** A table's name for its scrolling region (DAT-6): its first few headings. */
+function tableLabel(token: MdToken): string {
+	const headings: string[] = token.header.map((h: MdToken) => unescapeHtml(h.text).trim()).filter(Boolean);
+	return `Table: ${headings.slice(0, 3).join(', ')}${headings.length > 3 ? ', …' : ''}`;
+}
+
+/**
+ * A Markdown table in the shared Table (DAT-1, DAT-6): cells never wrap, so a
+ * wide table scrolls inside its frame with its hidden edge shaded, and its
+ * Copy (tab-separated, so it pastes into a spreadsheet as cells) and Download
+ * CSV sit above it, always visible, never over a heading (A11Y-4).
+ */
 function Table({ token, index }: { token: MdToken; index: number }) {
 	const env = useMarkdownEnv();
+	const { copied, copy } = useCopy();
+	const align = (i: number) => (token.align[i] ? { textAlign: token.align[i] } : undefined);
 	return (
-		<div className="group relative my-2 w-full">
-			<div className="max-w-full overflow-x-auto rounded-lg border">
-				<table className="w-full text-left text-sm">
-					<thead className="bg-muted/50 text-xs">
-						<tr>
-							{token.header.map((h: MdToken, i: number) => (
-								<th
-									key={i}
-									className="px-3 py-1.5 font-medium"
-									style={token.align[i] ? { textAlign: token.align[i] } : undefined}
-								>
-									<Inline tokens={h.tokens} />
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{token.rows.map((row: MdToken[], r: number) => (
-							<tr key={r} className="border-t">
-								{row.map((cell, c) => (
-									<td
-										key={c}
-										className="px-3 py-1.5"
-										style={token.align[c] ? { textAlign: token.align[c] } : undefined}
-									>
-										<Inline tokens={cell.tokens} />
-									</td>
-								))}
-							</tr>
-						))}
-					</tbody>
-				</table>
+		<div className="my-2 w-full" data-testid="markdown-table">
+			<div className="flex justify-end gap-0.5">
+				<Button type="button" variant="ghost" size="xs" onClick={() => void copy(tableToTsv(token), 'table')}>
+					{copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+					{copied ? 'Copied' : 'Copy table'}
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					size="xs"
+					onClick={() =>
+						saveAs(
+							new Blob([`\uFEFF${tableToCsv(token)}`], { type: 'text/csv;charset=UTF-8' }),
+							`table-${env.id}-${index}.csv`
+						)
+					}
+				>
+					<Download aria-hidden />
+					Download CSV
+				</Button>
 			</div>
-			<div className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
-				<Tip content="Copy">
-					<Button
-						type="button"
-						aria-label="Copy table"
-						variant="ghost"
-						size="icon-xs"
-						onClick={() => void copyToClipboard(token.raw.trim())}
-					>
-						<Copy className="size-3.5" />
-					</Button>
-				</Tip>
-				<Tip content="Export to CSV">
-					<Button
-						type="button"
-						aria-label="Export to CSV"
-						variant="ghost"
-						size="icon-xs"
-						onClick={() =>
-							saveAs(
-								new Blob([`﻿${tableToCsv(token)}`], { type: 'text/csv;charset=UTF-8' }),
-								`table-${env.id}-${index}.csv`
-							)
-						}
-					>
-						<Download className="size-3.5" />
-					</Button>
-				</Tip>
+			<div className="overflow-hidden rounded-lg border">
+				<DataTable aria-label={tableLabel(token)} className="text-body">
+					<TableHeader className="bg-muted/50">
+						<TableRow className="hover:bg-transparent">
+							{token.header.map((h: MdToken, i: number) => (
+								<TableHead key={i} scope="col" className="h-auto px-3 py-1.5" style={align(i)}>
+									<Inline tokens={h.tokens} />
+								</TableHead>
+							))}
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{token.rows.map((row: MdToken[], r: number) => (
+							<TableRow key={r}>
+								{row.map((cell, c) => (
+									<TableCell key={c} className="px-3 py-1.5" style={align(c)}>
+										<Inline tokens={cell.tokens} />
+									</TableCell>
+								))}
+							</TableRow>
+						))}
+					</TableBody>
+				</DataTable>
 			</div>
 		</div>
 	);
 }
 
+/** A task item's box is a picture of its state (CheckboxMark), read out as "Done" or "Not done". */
 function ListItems({ token }: { token: MdToken }) {
 	return (
 		<>
 			{token.items.map((item: MdToken, i: number) => (
 				<li key={i} className={item.task ? 'flex list-none gap-2' : undefined}>
 					{item.task && (
-						<input
-							type="checkbox"
-							checked={item.checked}
-							readOnly
-							className="mt-1"
-							aria-label={item.checked ? 'Done' : 'Not done'}
-						/>
+						<>
+							<CheckboxMark checked={Boolean(item.checked)} className={token.loose ? 'mt-3' : 'mt-1'} />
+							<span className="sr-only">{item.checked ? 'Done: ' : 'Not done: '}</span>
+						</>
 					)}
 					<div className="min-w-0">
 						<Blocks tokens={item.tokens} top={token.loose} />
@@ -570,6 +581,7 @@ export function Blocks({
 							</div>
 						);
 					case 'space':
+					case 'checkbox':
 						return null;
 					default:
 						return <Fragment key={i}>{token.raw}</Fragment>;

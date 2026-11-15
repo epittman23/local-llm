@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Markdown } from './Markdown';
+
+const { saveAs, copyToClipboard, toastError } = vi.hoisted(() => ({
+	saveAs: vi.fn(),
+	copyToClipboard: vi.fn(),
+	toastError: vi.fn()
+}));
+vi.mock('file-saver', () => ({ default: saveAs }));
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+vi.mock('@/lib/utils', async (original) => ({ ...(await original<typeof import('@/lib/utils')>()), copyToClipboard }));
+afterEach(() => vi.clearAllMocks());
 
 const renderMd = (content: string, props: Partial<Parameters<typeof Markdown>[0]> = {}) =>
 	render(
@@ -74,5 +84,59 @@ describe('Markdown', () => {
 			'@gpt-4o',
 			'#general'
 		]);
+	});
+
+	it('draws a task item as a box and its text, without the Markdown marker (#940)', () => {
+		const { container } = renderMd('- [ ] an open task\n- [x] a done **task**\n\n1. [ ] loose\n\n2. [x] two\n');
+		const items = screen.getAllByRole('listitem');
+		expect(items.map((li) => li.textContent)).toEqual([
+			'Not done: an open task',
+			'Done: a done task',
+			'Not done: loose',
+			'Done: two'
+		]);
+		expect(container.querySelector('input')).toBeNull();
+		const marks = [...container.querySelectorAll('[data-slot="checkbox-mark"]')];
+		expect(marks.map((m) => m.getAttribute('data-state'))).toEqual(['unchecked', 'checked', 'unchecked', 'checked']);
+	});
+
+	const WIDE =
+		'| Model | Coef | Std. err | p-value |\n|---|---:|---:|---:|\n| OLS | 0.4123 | 0.0012 | 1.2e-131 |\n| GLS | =1+1 | 0.0020 | 3.4e-12 |\n';
+
+	it('renders a table in the shared Table: named, cells unwrapped, figures aligned as written (#946)', () => {
+		renderMd(WIDE);
+		const region = screen.getByRole('region', { name: 'Table: Model, Coef, Std. err, …' });
+		const table = within(region).getByRole('table');
+		const headings = within(table).getAllByRole('columnheader');
+		expect(headings.map((h) => h.getAttribute('scope'))).toEqual(['col', 'col', 'col', 'col']);
+		expect(headings[3].style.textAlign).toBe('right');
+		const cell = within(table).getByRole('cell', { name: '1.2e-131' });
+		expect(cell.className).toContain('whitespace-nowrap');
+		expect(cell.style.textAlign).toBe('right');
+	});
+
+	it('names a short table by all its headings', () => {
+		renderMd('| a | b |\n|---|---|\n| 1 | 2 |\n');
+		expect(screen.getByRole('region', { name: 'Table: a, b' })).toBeTruthy();
+	});
+
+	it('copies a table as tab-separated cells and says Copied; a refused copy says so (#942)', async () => {
+		copyToClipboard.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+		renderMd(WIDE);
+		fireEvent.click(screen.getByRole('button', { name: 'Copy table' }));
+		expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
+		expect(copyToClipboard).toHaveBeenCalledWith(
+			"Model\tCoef\tStd. err\tp-value\nOLS\t0.4123\t0.0012\t1.2e-131\nGLS\t'=1+1\t0.0020\t3.4e-12"
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
+		await vi.waitFor(() =>
+			expect(toastError).toHaveBeenCalledWith("Couldn't copy the table: the browser blocked clipboard access")
+		);
+	});
+
+	it('downloads a table as CSV from its always-visible toolbar', () => {
+		renderMd(WIDE);
+		fireEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+		expect(saveAs).toHaveBeenCalledWith(expect.any(Blob), 'table-m1-0.csv');
 	});
 });
