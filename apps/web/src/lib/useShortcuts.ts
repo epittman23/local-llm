@@ -126,7 +126,7 @@ export function useShortcuts() {
 					break;
 				case Shortcut.OPEN_SETTINGS:
 					event.preventDefault();
-					if (modal.open) modal.closeSettings();
+					if (modal.open) modal.requestClose();
 					else modal.openSettings();
 					break;
 				case Shortcut.SHOW_SHORTCUTS:

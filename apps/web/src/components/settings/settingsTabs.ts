@@ -87,13 +87,13 @@ export const personalTabs: SettingsTab[] = [
 	},
 	{
 		id: 'data_controls',
-		title: 'Data Controls',
+		title: 'Data controls',
 		group: 'Data',
 		keywords: ['data', 'import chats', 'export chats', 'archive all chats', 'delete all chats', 'chat history']
 	},
 	{
 		id: 'archived_chats',
-		title: 'Archived Chats',
+		title: 'Archived chats',
 		group: 'Data',
 		keywords: ['archived', 'archive', 'unarchive', 'archived chats']
 	},
@@ -158,7 +158,7 @@ function personalTabVisible(id: string, user: SessionUser, config: BackendConfig
 export const adminTabs: SettingsTab[] = [
 	{
 		id: 'admin:general',
-		title: 'General',
+		title: 'Server: General',
 		group: 'System',
 		keywords: ['general', 'admin', 'settings', 'version', 'update', 'community', 'channels']
 	},
@@ -170,7 +170,7 @@ export const adminTabs: SettingsTab[] = [
 	},
 	{
 		id: 'admin:connections',
-		title: 'Connections',
+		title: 'Server: Connections',
 		group: 'AI',
 		keywords: ['connections', 'ollama', 'openai', 'api', 'base url', 'direct connections', 'proxy']
 	},
@@ -188,13 +188,13 @@ export const adminTabs: SettingsTab[] = [
 	},
 	{
 		id: 'admin:interface',
-		title: 'Interface',
+		title: 'Server: Interface',
 		group: 'Experience',
 		keywords: ['interface', 'ui', 'appearance', 'banners', 'tasks', 'prompt suggestions', 'tags']
 	},
 	{
 		id: 'admin:audio',
-		title: 'Audio',
+		title: 'Server: Audio',
 		group: 'Experience',
 		keywords: ['audio', 'voice', 'speech', 'tts', 'stt', 'whisper', 'deepgram', 'azure']
 	},
@@ -218,7 +218,7 @@ export const adminTabs: SettingsTab[] = [
 	},
 	{
 		id: 'admin:integrations',
-		title: 'Integrations',
+		title: 'Server: Integrations',
 		group: 'Tools',
 		keywords: ['tools', 'integrations', 'plugins', 'extensions', 'functions', 'openapi', 'server']
 	},
@@ -255,6 +255,9 @@ export const adminTabs: SettingsTab[] = [
 ];
 
 export const isAdminTab = (id: string) => id.startsWith('admin:');
+
+/** The two labelled halves of the tab list (#1000): what is yours, and what the server does for everyone. */
+export const sectionOf = (id: string) => (isAdminTab(id) ? 'Server' : 'Your settings');
 
 /**
  * Tabs this user can open: their personal tabs, then (for an admin) the admin ones. `implemented` is the set of tab ids that have a
