@@ -55,6 +55,20 @@ describe('Archived chats (#954)', () => {
 		expect(table.querySelector('time')?.textContent).toMatch(/ago/);
 	});
 
+	it('stacks each row below 640 px, the title on its own line in full, so nothing scrolls sideways (DAT-6, LAY-4)', async () => {
+		api.getArchivedChatList.mockResolvedValue([row(1)]);
+		mount();
+		const title = await screen.findByTitle('Monte Carlo integration 1');
+		const row1 = title.closest('tr');
+		expect(row1).toHaveClass('max-sm:grid', 'max-sm:grid-cols-[minmax(0,1fr)_auto]');
+		expect(title).toHaveClass('max-sm:col-span-2', 'max-sm:max-w-none', 'max-sm:whitespace-normal');
+		expect(screen.getByRole('columnheader', { name: 'Title' }).closest('tr')).toHaveClass('max-sm:sr-only');
+		// Still a table to assistive technology once laid out as grids.
+		expect(screen.getByRole('table')).toBeInTheDocument();
+		expect(screen.getAllByRole('row')).toHaveLength(2);
+		expect(within(row1 as HTMLElement).getAllByRole('cell')).toHaveLength(3);
+	});
+
 	it('asks for the next page only after a full page (no endless paging)', async () => {
 		api.getArchivedChatList.mockResolvedValue([row(1), row(2)]);
 		mount();
