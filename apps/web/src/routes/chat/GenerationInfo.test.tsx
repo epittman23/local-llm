@@ -16,7 +16,7 @@ describe('generationInfo (#994)', () => {
 				output_tokens: 255
 			})
 		).toEqual({
-			tokens: '42 prompt + 255 completion tokens',
+			tokens: '42 prompt + 255 completion',
 			reasoning: null,
 			speed: null,
 			promptSpeed: null,
@@ -37,7 +37,7 @@ describe('generationInfo (#994)', () => {
 				predicted_ms: 8170
 			})
 		).toMatchObject({
-			tokens: '1,200 prompt + 255 completion tokens',
+			tokens: '1,200 prompt + 255 completion',
 			speed: '31.2 tokens/s',
 			promptSpeed: '74.0 tokens/s',
 			total: '24.4 s'
@@ -48,7 +48,7 @@ describe('generationInfo (#994)', () => {
 		expect(
 			generationInfo({ completion_tokens: '90', completion_tokens_details: { reasoning_tokens: 60 } })
 		).toMatchObject({
-			tokens: '90 completion tokens',
+			tokens: '90 completion',
 			reasoning: '60 tokens'
 		});
 		expect(generationInfo({ output_tokens_details: { reasoning_tokens: 3 }, predicted_ms: 500 })).toMatchObject({
@@ -74,7 +74,7 @@ describe('GenerationInfo', () => {
 
 	it('opens by click, not hover, and says when the provider reports no speed', async () => {
 		const dialog = await open({ prompt_tokens: 42, completion_tokens: 255 });
-		expect(dialog.textContent).toContain('42 prompt + 255 completion tokens');
+		expect(dialog.textContent).toContain('42 prompt + 255 completion');
 		expect(dialog.textContent).toContain('Speed not reported by this provider');
 	});
 

@@ -1,6 +1,7 @@
 import {
 	ChevronDown,
 	MoreHorizontal,
+	NotebookPen,
 	Pencil,
 	PlayCircle,
 	RotateCcw,
@@ -144,7 +145,7 @@ function RateNote({
 				}}
 			/>
 			<div className="flex justify-end">
-				<Button size="sm" onClick={() => onSave(comment)}>
+				<Button size="sm" variant="outline" onClick={() => onSave(comment)}>
 					Save note
 				</Button>
 			</div>
@@ -345,7 +346,9 @@ export function useMessageActions(
 								aria-expanded={noteId === m.id}
 								onClick={() => setNoteId(m.id)}
 							>
-								{hasNote ? 'Edit note' : 'Add a note'}
+								<NotebookPen data-icon="inline-start" aria-hidden />
+								{/* On a phone the icon alone, so the row stays one line; the words still name it. */}
+								<span className="max-sm:sr-only">{hasNote ? 'Edit note' : 'Add a note'}</span>
 							</Button>
 						)}
 					</>

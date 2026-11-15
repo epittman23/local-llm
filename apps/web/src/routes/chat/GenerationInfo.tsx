@@ -43,7 +43,7 @@ export function generationInfo(usage: Usage) {
 	const predictedMs = first(usage, 'predicted_ms');
 	const totalMs = promptMs !== null || predictedMs !== null ? (promptMs ?? 0) + (predictedMs ?? 0) : null;
 	return {
-		tokens: parts.length ? `${parts.join(' + ')} tokens` : null,
+		tokens: parts.length ? parts.join(' + ') : null,
 		reasoning: reasoning !== null ? `${figure(reasoning)} tokens` : null,
 		speed: generated !== null ? `${figure(generated, 1)} tokens/s` : null,
 		promptSpeed: read !== null ? `${figure(read, 1)} tokens/s` : null,

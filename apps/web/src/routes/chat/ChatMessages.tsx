@@ -323,8 +323,9 @@ export function ResponseMessage({
 				<ProfileAvatar src={modelImage(message.model ?? '')} name={modelName} className="mt-1 size-7 max-sm:hidden" />
 			)}
 			<div className="min-w-0 flex-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<span className="text-body font-strong min-w-0 truncate" title={modelName}>
+				{/* Wraps rather than squeezing: the time, then a column's Selected or Continue, go to the next line. */}
+				<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="text-body font-strong max-w-full min-w-0 truncate" title={modelName}>
 						{modelName}
 					</span>
 					{time && (
