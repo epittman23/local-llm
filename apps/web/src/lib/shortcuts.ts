@@ -269,7 +269,7 @@ export const shortcuts: ShortcutRegistry = {
 		configurable: true
 	},
 	[Shortcut.CLOSE_MODAL]: {
-		name: 'Close Modal',
+		name: 'Close the top layer',
 		keys: ['Escape'],
 		category: 'Global',
 		configurable: true
