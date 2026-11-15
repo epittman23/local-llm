@@ -7,13 +7,13 @@ import {
 	Code,
 	FileText,
 	Globe,
-	Loader2,
 	type LucideIcon,
 	SquareTerminal,
 	Wrench
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { type OrbState, ThinkingOrb } from 'thinking-orbs';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import type { MarkdownEnv } from '@/components/chat/markdown/MarkdownContext';
 import { Button } from '@/components/ui/button';
@@ -122,11 +122,23 @@ export function ReplySteps({
 	);
 }
 
+/** The animation a running step shows, by what it is doing. */
+const ORBS: Record<StepKind, OrbState> = {
+	reasoning: 'solving',
+	command: 'working',
+	file: 'shaping',
+	search: 'searching',
+	question: 'listening',
+	code: 'working',
+	tool: 'connecting'
+};
+
 function StepIndicator({ step }: { step: Step }) {
+	// The row says "Running" to a screen reader, so the orb itself is not announced.
 	if (step.status === 'running')
-		return <Loader2 className="text-muted-foreground size-4 shrink-0 animate-spin" aria-hidden />;
+		return <ThinkingOrb state={ORBS[step.kind]} size={20} aria-hidden className="-m-0.5 shrink-0" />;
 	const Icon = ICONS[step.kind];
-	return <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden />;
+	return <Icon className="text-foreground-muted size-4 shrink-0" aria-hidden />;
 }
 
 /** The step's state as a word (COL-3): only where it is not plainly done. */
@@ -136,22 +148,22 @@ function StatusWord({ step }: { step: Step }) {
 			return <span className="sr-only">Running</span>;
 		case 'failed':
 			return (
-				<span className="text-danger flex shrink-0 items-center gap-1 text-xs">
+				<span className="text-danger flex shrink-0 items-center gap-1 text-caption">
 					<CircleAlert className="size-3.5" aria-hidden />
 					Failed
 				</span>
 			);
 		case 'waiting':
 			return (
-				<span className="text-warning shrink-0 text-xs">
+				<span className="text-warning shrink-0 text-caption">
 					{step.kind === 'question' ? 'Waiting for your answer' : 'Waiting for approval'}
 				</span>
 			);
 		case 'denied':
-			return <span className="text-muted-foreground shrink-0 text-xs">Denied</span>;
+			return <span className="text-foreground-muted shrink-0 text-caption">Denied</span>;
 		case 'unanswered':
 			return (
-				<span className="text-muted-foreground shrink-0 text-xs">
+				<span className="text-foreground-muted shrink-0 text-caption">
 					{step.kind === 'question' ? 'No answer' : 'No result'}
 				</span>
 			);
@@ -206,16 +218,16 @@ function StepRow({
 				type="button"
 				variant="ghost"
 				size="sm"
-				className="text-muted-foreground w-full justify-start gap-2 px-1.5 text-left font-normal"
+				className="text-foreground-muted w-full justify-start gap-2 px-1.5 text-left font-normal"
 				aria-expanded={hasDetail ? open : undefined}
 				disabled={!hasDetail}
 				onClick={() => setOpen((o) => !o)}
 			>
 				<StepIndicator step={step} />
-				<span className={cn('min-w-0 flex-1 truncate', step.kind === 'command' && 'font-mono text-xs')}>
+				<span className={cn('min-w-0 flex-1 truncate', step.kind === 'command' && 'font-mono text-dense')}>
 					{step.title}
 				</span>
-				{step.meta && <span className="shrink-0 text-xs tabular-nums">{step.meta}</span>}
+				{step.meta && <span className="shrink-0 text-caption tabular-nums">{step.meta}</span>}
 				<StatusWord step={step} />
 				{hasDetail && (open ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />)}
 			</Button>
@@ -230,9 +242,9 @@ function StepRow({
 				</div>
 			)}
 			{open && hasDetail && (
-				<div className="mt-1 mb-2 ml-7 flex min-w-0 flex-col gap-2 text-sm">
+				<div className="mt-1 mb-2 ml-7 flex min-w-0 flex-col gap-2 text-body">
 					{step.reasoning && (
-						<Markdown id={`step-${step.id}-reasoning`} content={step.reasoning} className="text-muted-foreground" />
+						<Markdown id={`step-${step.id}-reasoning`} content={step.reasoning} className="text-foreground-muted" />
 					)}
 					{step.input && <Markdown id={`step-${step.id}-input`} content={step.input} />}
 					<StepResultView step={step} />
@@ -255,7 +267,7 @@ function LongText({ id, text, language, label }: { id: string; text: string; lan
 	const shown = all || text.length <= PREVIEW ? text : text.slice(0, PREVIEW);
 	return (
 		<div className="flex min-w-0 flex-col gap-1">
-			{label && <div className="text-muted-foreground text-xs">{label}</div>}
+			{label && <div className="text-foreground-muted text-caption">{label}</div>}
 			<Markdown id={id} content={fence(shown, language)} />
 			{shown !== text && (
 				<Button type="button" variant="link" size="xs" className="self-start" onClick={() => setAll(true)}>
@@ -272,7 +284,7 @@ function StepResultView({ step }: { step: Step }) {
 		case 'command':
 			return (
 				<div className="flex flex-col gap-1">
-					<div className="text-muted-foreground text-xs">
+					<div className="text-foreground-muted text-caption">
 						{result.exitCode === null ? 'Finished' : `Exit code ${result.exitCode}`}
 						{result.timedOut && ' · stopped at its time limit'}
 						{result.truncated && ' · output cut short'}
@@ -286,7 +298,7 @@ function StepResultView({ step }: { step: Step }) {
 				</div>
 			);
 		case 'error':
-			return <p className="text-danger text-sm">{result.message}</p>;
+			return <p className="text-danger text-body">{result.message}</p>;
 		case 'text':
 			return <LongText id={`step-${step.id}-result`} text={result.text} language={result.language} label="Result" />;
 		default:

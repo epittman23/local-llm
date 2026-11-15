@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
@@ -8,10 +9,13 @@ import { UiStandardPage } from './UiStandardPage';
 
 const renderPage = () =>
 	render(
-		<TooltipProvider>
-			<UiStandardPage />
-			<Toaster />
-		</TooltipProvider>
+		// The reply-steps example reads the user's settings, as every page can.
+		<QueryClientProvider client={new QueryClient()}>
+			<TooltipProvider>
+				<UiStandardPage />
+				<Toaster />
+			</TooltipProvider>
+		</QueryClientProvider>
 	);
 
 describe('UiStandardPage (/ui)', () => {

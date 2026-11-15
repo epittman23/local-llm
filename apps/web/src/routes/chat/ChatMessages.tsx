@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Copy, FileText, RotateCcw } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { ThinkingOrb } from 'thinking-orbs';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplySteps } from '@/components/chat/ReplySteps';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
@@ -272,10 +273,8 @@ export function ResponseMessage({
 				<StatusLine message={message} />
 				{edit ??
 					(empty && !message.done ? (
-						<div className="flex gap-1 py-3" aria-label="Loading">
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full" />
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:150ms]" />
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:300ms]" />
+						<div className="py-2">
+							<ThinkingOrb state="breathing" size={20} aria-label="Waiting for the reply" />
 						</div>
 					) : message.output?.length ? (
 						// The reply as it happened: its texts and every step between them.

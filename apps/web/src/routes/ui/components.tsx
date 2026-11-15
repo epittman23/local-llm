@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Katex } from '@/components/chat/markdown/Katex';
+import { ReplySteps } from '@/components/chat/ReplySteps';
 import { Gone } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from '@/components/settings/SettingsNav';
@@ -858,7 +859,7 @@ export function ContentSection() {
 			id="content"
 			title="Answers: prose, mathematics and code"
 			lead="What a model writes is the reason the app exists, so it gets the reading size, a measured line and one treatment wherever it appears: chat, notes, the playground, reports. Code takes its colours from the same tokens in both themes."
-			rules={['CNT-1', 'CNT-2', 'CNT-3', 'TYP-5']}
+			rules={['CNT-1', 'CNT-2', 'CNT-3', 'CNT-5', 'TYP-5']}
 		>
 			<Example title="A rendered answer">
 				<div className="text-reading flex max-w-[72ch] flex-col gap-4">
@@ -890,6 +891,89 @@ export function ContentSection() {
 					</figure>
 				</div>
 			</Example>
+			<Example
+				title="A reply's steps"
+				note="Each step is one line that says what it did; it opens to what it was given and what came back. Only the running step moves."
+			>
+				<div className="max-w-[72ch]">
+					<ReplySteps id="ui-steps" output={SAMPLE_STEPS} done={false} />
+				</div>
+			</Example>
 		</Section>
 	);
 }
+
+/** An invented reply part-way through: a thought, two commands (one failed), a file written, one running. */
+const SAMPLE_STEPS = [
+	{
+		type: 'reasoning',
+		id: 's1',
+		status: 'completed',
+		duration: 4,
+		content: [{ type: 'output_text', text: 'Count the rows first.' }]
+	},
+	{
+		type: 'message',
+		id: 's2',
+		role: 'assistant',
+		content: [{ type: 'output_text', text: 'I will check the data first.' }]
+	},
+	{
+		type: 'function_call',
+		id: 's3',
+		call_id: 's3',
+		name: 'bash',
+		arguments: JSON.stringify({ command: 'wc -l data/trials.csv' }),
+		status: 'completed'
+	},
+	{
+		type: 'function_call_output',
+		call_id: 's3',
+		output: [
+			{ type: 'input_text', text: JSON.stringify({ returncode: 0, stdout: '1201 data/trials.csv\n', stderr: '' }) }
+		]
+	},
+	{
+		type: 'function_call',
+		id: 's4',
+		call_id: 's4',
+		name: 'bash',
+		arguments: JSON.stringify({ command: 'python3 regress.py --model logit' }),
+		status: 'completed'
+	},
+	{
+		type: 'function_call_output',
+		call_id: 's4',
+		output: [
+			{
+				type: 'input_text',
+				text: JSON.stringify({
+					returncode: 1,
+					stdout: '',
+					stderr: "ModuleNotFoundError: No module named 'statsmodel'\n"
+				})
+			}
+		]
+	},
+	{
+		type: 'function_call',
+		id: 's5',
+		call_id: 's5',
+		name: 'write_file',
+		arguments: JSON.stringify({ path: '/workspace/regress.py', content: 'import statsmodels.api as sm\n' }),
+		status: 'completed'
+	},
+	{
+		type: 'function_call_output',
+		call_id: 's5',
+		output: [{ type: 'input_text', text: JSON.stringify({ path: '/workspace/regress.py', bytes_written: 29 }) }]
+	},
+	{
+		type: 'function_call',
+		id: 's6',
+		call_id: 's6',
+		name: 'bash',
+		arguments: JSON.stringify({ command: 'python3 regress.py --model logit' }),
+		status: 'in_progress'
+	}
+];

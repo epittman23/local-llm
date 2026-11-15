@@ -559,6 +559,19 @@ with no background of its own assumes white, and a dark one would put its
 black text on dark. The white is the page's, so it is framed (an edge, the
 themed surround) and never fills a panel edge to edge.
 
+**CNT-5. A reply shows its steps where they happened.** Between the texts a
+model writes, each step it took (a thought, a command, a file written, a
+search, a question) is one line on a divider rule that says what it did: the
+command, "Wrote /path", "Thought" with how long. A fact follows the title
+("11 s", "exit 1"), and the step's state is a word where it is not plainly
+done (COL-3): Failed, Waiting for approval, Waiting for your answer, No
+answer, Denied. The line opens to the reasoning, what the step was given and
+what came back (output and errors apart, a file in its language, images in a
+frame, CNT-4). Only the running step moves: a 20 px thinking orb
+(`thinking-orbs`) in place of its icon, which counts as the reply's spinner
+(MOT-1) and is a still frame under reduced motion (MOT-2). The orb draws its
+own monochrome ink for the theme, not a token.
+
 ## Canvas
 
 The panel beside a chat that shows a document: a file the model produced, a
