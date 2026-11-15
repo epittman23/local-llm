@@ -212,6 +212,25 @@ test.describe('workspace skills', () => {
 		await expect(page.locator('pre')).toHaveText('Instructions 2');
 	});
 
+	test('Back with unsaved changes asks first; Keep editing stays, Discard changes leaves (#905, FRM-3)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockSkillsApi(page, [skill(1)]);
+		await page.goto('/workspace/skills/edit?id=skill-1');
+		await page.getByLabel('Skill Instructions').fill('Half-written instructions');
+		await page.getByRole('button', { name: 'Back' }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await expect(ask).toBeVisible();
+		await ask.getByRole('button', { name: 'Keep editing' }).click();
+		await expect(page).toHaveURL(/\/workspace\/skills\/edit\?id=skill-1$/);
+		await expect(page.getByLabel('Skill Instructions')).toHaveValue('Half-written instructions');
+		await page.getByRole('button', { name: 'Back' }).click();
+		await ask.getByRole('button', { name: 'Discard changes' }).click();
+		await expect(page).toHaveURL(/\/workspace\/skills$/);
+		expect(calls.some((c) => c.path === '/id/skill-1/update')).toBe(false);
+	});
+
 	test('edit without an id returns to the list; an unknown one says it no longer exists', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockSkillsApi(page, []);

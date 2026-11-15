@@ -158,6 +158,36 @@ test.describe('workspace tools', () => {
 			});
 	});
 
+	test('the Settings dialog is named for its tool and keeps its height when a switch flips (#1016)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		await mockToolsApi(page, [tool(1)], {
+			valvesSpec: {
+				properties: {
+					verbose: { title: 'Verbose', type: 'boolean', default: false },
+					units: { title: 'Units', type: 'string', default: 'SI' }
+				}
+			},
+			valves: { verbose: null, units: null }
+		});
+		await page.goto('/workspace/tools');
+		await page.getByRole('button', { name: 'Settings for Tool 1' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Settings for Tool 1' });
+		await expect(dialog.getByRole('switch')).toBeVisible();
+		// Measured once the dialog's opening animation has finished.
+		const settled = () =>
+			dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+		await settled();
+		const before = await dialog.boundingBox();
+		await dialog.getByRole('switch').click();
+		await expect(dialog.getByRole('switch')).toBeChecked();
+		await settled();
+		const after = await dialog.boundingBox();
+		expect(after?.height).toBe(before?.height);
+		expect(after?.y).toBe(before?.y);
+	});
+
 	test('import from a JSON file asks for acknowledgement, and drops grants', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockToolsApi(page, []);

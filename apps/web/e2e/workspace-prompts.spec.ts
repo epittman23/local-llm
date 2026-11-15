@@ -256,6 +256,21 @@ test.describe('workspace prompts', () => {
 		});
 	});
 
+	test('edit page at 390: History is a header button that opens a sheet (#957, LAY-4)', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await mockWorkspaceBackend(page);
+		await mockPromptsApi(page, [makePrompt(1)]);
+		await page.goto('/workspace/prompts/p1');
+		await expect(page.locator('pre')).toHaveText('Newest content');
+		await expect(page.getByText('Second draft')).toBeHidden();
+		await page.getByRole('button', { name: 'History' }).click();
+		const sheet = page.getByRole('dialog', { name: 'History' });
+		await expect(sheet).toBeVisible();
+		await sheet.getByText('Update', { exact: true }).click();
+		await expect(sheet).toBeHidden();
+		await expect(page.locator('pre')).toHaveText('Original content');
+	});
+
 	test('edit page: an invalid command is said under the field without calling the API', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockPromptsApi(page, [makePrompt(1)]);
