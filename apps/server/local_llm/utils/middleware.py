@@ -4971,6 +4971,10 @@ class _StreamingReply:
         self.output = []
         self.prior_output = []
         self.usage = None
+        # Why the provider ended the last streamed response ('stop', 'length', ...), saved with the reply (S3-D4).
+        self.finish_reason: str | None = None
+        # A continued reply that was stopped or cut off: how this run ends replaces those marks.
+        self.clear_marks = False
         self.last_response_id = None
 
         # Joined content_parts, cached until content_parts grows
@@ -5009,6 +5013,7 @@ class _StreamingReply:
         except Exception:
             pass
 
+        self.clear_marks = bool(message and (message.get('stopped') or message.get('finish_reason')))
         initial_content = (
             message.get('content', '') if message else last_assistant_message if last_assistant_message else ''
         )
@@ -5142,6 +5147,7 @@ class _StreamingReply:
                 if 'data: [DONE]' not in line:
                     log.debug('Error: %s', e)
         await stream.deltas.flush()
+        self.finish_reason = stream.finish_reason or stream.cut_off
 
         self._finish_stream_output()
         await self._queue_tool_calls(stream)
@@ -5340,6 +5346,8 @@ class _StreamingReply:
 
         if not choices:
             return False
+        if choices[0].get('finish_reason'):
+            stream.finish_reason = choices[0]['finish_reason']
         if choices[0].get('finish_reason') == 'length':
             stream.cut_off = 'length'
 
@@ -5881,11 +5889,15 @@ class _StreamingReply:
 
         current_output = self.full_output()
         title = await Chats.get_chat_title_by_id(self.metadata['chat_id']) if self.save_to_chat else ''
+        finish = {'finish_reason': self.finish_reason} if self.finish_reason else {}
+        if self.clear_marks:
+            finish = {'stopped': False, 'finish_reason': self.finish_reason}
         data = {
             'done': True,
             'output': current_output,
             'title': title,
             **({'usage': self.usage} if self.usage else {}),
+            **finish,
         }
 
         if self.save_to_chat:
@@ -5898,6 +5910,7 @@ class _StreamingReply:
                     'done': True,
                     'output': current_output,
                     **({'usage': self.usage} if self.usage else {}),
+                    **finish,
                 },
             )
 
@@ -5952,6 +5965,9 @@ class _StreamingReply:
                     {
                         'done': True,
                         'output': self.full_output(),
+                        # Stopped by the person: the chat says so where the reply ends (S3-D4).
+                        **({'stopped': True} if cancelled else {'stopped': False} if self.clear_marks else {}),
+                        **({'finish_reason': None} if self.clear_marks else {}),
                     },
                 )
             await clear_response_stream(self.request.app.state.redis, self.response_stream_task_id)
@@ -6240,6 +6256,8 @@ class _StreamPass:
         self.errored = False
         # Why the provider cut this response off ('length', 'max_output_tokens', ...); its calls are not run (#662).
         self.cut_off: str | None = None
+        # The finish_reason the provider gave this response, if any.
+        self.finish_reason: str | None = None
         self.deltas = _DeltaBuffer(
             reply.event_emitter,
             reply.save_stream,

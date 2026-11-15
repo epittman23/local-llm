@@ -31,6 +31,7 @@ import {
 	normalizeHistory,
 	rewrittenMessage,
 	saveReplyAsCopy,
+	stopReplies,
 	updateMessage
 } from '@/lib/chat/history';
 import {
@@ -592,12 +593,10 @@ export function useChatSession({
 		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
 		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
 		setTaskIds(null);
+		// A reply still being written is marked stopped (S3-D4); the server saves the mark with what it streamed.
 		setHistory((h) => {
 			const m = h.currentId ? h.messages[h.currentId] : null;
-			if (!m?.parentId) return h;
-			let next = h;
-			for (const c of h.messages[m.parentId]?.childrenIds ?? []) next = updateMessage(next, c, { done: true });
-			return next;
+			return m?.parentId ? stopReplies(h, m.parentId) : h;
 		});
 	}, [token, taskIds, setHistory]);
 
@@ -701,7 +700,8 @@ export function useChatSession({
 				toast.error('Model not found');
 				return;
 			}
-			setHistory((h) => updateMessage(h, message.id, { done: false }));
+			// Continued, it no longer ends where it was stopped or cut off (S3-D4); the server clears its copy too.
+			setHistory((h) => updateMessage(h, message.id, { done: false, stopped: undefined, finish_reason: undefined }));
 			const req = await beginRequest();
 			if (!req) return;
 			const chatId = chatIdRef.current;
