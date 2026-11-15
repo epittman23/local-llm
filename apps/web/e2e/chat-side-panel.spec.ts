@@ -113,3 +113,44 @@ test('at 1024 px with the sidebar open Controls is a column', async ({ page }) =
 	await expect(page.getByRole('complementary', { name: 'Controls' })).toBeVisible();
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test('at 390 px the chat has one header row, the app bar, holding its title, Controls and menu (#1091)', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await mockChat(page, { chats: convo() });
+	await page.goto('/c/c1');
+	const bar = page.getByRole('banner');
+	await expect(bar.getByText('Arithmetic')).toBeVisible();
+	await expect(bar.getByRole('button', { name: 'Controls', exact: true })).toBeVisible();
+	await expect(bar.getByRole('button', { name: 'Chat menu', exact: true })).toBeVisible();
+	await expect(page.locator('header[data-page-top]')).toHaveCount(0);
+	// The model picker moved to the composer.
+	await expect(page.locator('#model-selector-model-button')).toBeVisible();
+	const message = await page.getByRole('textbox', { name: 'Message' }).boundingBox();
+	const picker = await page.locator('#model-selector-model-button').boundingBox();
+	expect(picker && message && picker.y > message.y).toBe(true);
+	// Nothing in the bar is pushed off the screen.
+	const box = await bar.boundingBox();
+	expect(box?.width).toBe(390);
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('on a short phone the bar folds and the chat’s buttons float at the top right, still reachable (A11Y-5)', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 500 });
+	await mockChat(page, { chats: convo() });
+	await page.goto('/c/c1');
+	const controls = page.getByRole('button', { name: 'Controls', exact: true });
+	await expect(controls).toBeVisible();
+	const slot = page.getByTestId('shell-bar-slot');
+	expect(await slot.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+	const box = await slot.boundingBox();
+	expect(box && box.x + box.width).toBeGreaterThan(370);
+	expect(box?.y).toBe(8);
+	await controls.click();
+	await expect(page.getByRole('dialog', { name: 'Controls' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(controls).toBeFocused();
+});
