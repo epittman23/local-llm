@@ -589,7 +589,7 @@ async function startup(): Promise<void> {
 		if (plan.buildUi) {
 			dispatch({ type: 'begin', step: 'build', at: now() });
 			const code = await runBuild(repo, abort.signal);
-			if (code !== 0) return fail(`The UI build stopped (exit code ${code}). The log shows why.`);
+			if (code !== 0) return fail(`Building the interface stopped (exit code ${code}). The log below shows the cause.`);
 			dispatch({ type: 'finish', step: 'build', at: now() });
 		} else {
 			dispatch({
@@ -608,7 +608,9 @@ async function startup(): Promise<void> {
 		if (!child.pid) {
 			const error = await Promise.race([spawnError, sleep(1000).then(() => null)]);
 			if (abort.signal.aborted) throw new Cancelled();
-			return fail(`Could not start make backend${error ? ` (${error.message})` : ''}.`);
+			return fail(
+				`Could not start the server${error ? ` (${error.message})` : ''}. Check that make and the login shell work in a terminal.`
+			);
 		}
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
@@ -623,7 +625,7 @@ async function startup(): Promise<void> {
 			() =>
 				started.exitCode === undefined
 					? null
-					: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`,
+					: `The server stopped before it was ready (exit code ${started.exitCode}). The log below shows the cause.`,
 			true
 		);
 		dispatch({ type: 'finish', step: 'backend', at: now() });

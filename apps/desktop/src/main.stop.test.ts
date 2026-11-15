@@ -1028,7 +1028,7 @@ test('a login shell that cannot be spawned fails the start, saying why, with no 
 
 	expect(uncaught).toEqual([]);
 	const shown = (await statusCall('status:ready')) as Shown;
-	expect(shown.progress.error).toContain('Could not start make backend');
+	expect(shown.progress.error).toContain('Could not start the server');
 	expect(shown.progress.error).toContain('spawn /nonexistent/shell ENOENT');
 	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
 });
