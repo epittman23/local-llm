@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,7 +9,8 @@ import { AppShell } from './AppShell';
 const auth = vi.hoisted(() => ({ status: 'authenticated' as 'authenticated' | 'pending' | 'anonymous' }));
 vi.mock('@/lib/auth/useAuthGate', () => ({ useAuthGate: () => auth.status }));
 vi.mock('@/lib/settings/useSettingsUrl', () => ({ useSettingsUrl: () => {} }));
-vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
+const account = vi.hoisted(() => ({ settings: {} as Record<string, unknown> | null }));
+vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: account.settings }) }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocketReady: () => {} }));
 vi.mock('@/lib/useShortcuts', () => ({ useShortcuts: () => {} }));
 vi.mock('@/routes/calendar/useCalendarAlerts', () => ({ useCalendarAlerts: () => {} }));
@@ -51,6 +52,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
 	auth.status = 'authenticated';
+	account.settings = {};
 	useUIStore.setState({ sidebarOpen: true, searchOpen: false } as never);
 });
 afterEach(() => {
@@ -139,6 +141,39 @@ describe('AppShell', () => {
 		expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-0');
 		fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }));
 		expect(useUIStore.getState().sidebarOpen).toBe(true);
+	});
+
+	describe('the theme saved with the account (#1089)', () => {
+		beforeEach(() => {
+			localStorage.theme = 'dark';
+			document.documentElement.className = 'dark';
+		});
+
+		it("applies and caches the account's theme when it differs from this browser's", () => {
+			account.settings = { theme: 'light' };
+			renderAt('/notes');
+			expect(localStorage.theme).toBe('light');
+			expect(document.documentElement.classList.contains('light')).toBe(true);
+		});
+
+		it('leaves the cached theme alone without a valid saved one, and before settings load', () => {
+			for (const settings of [null, {}, { theme: 'her' }]) {
+				account.settings = settings;
+				renderAt('/notes');
+				cleanup();
+			}
+			expect(localStorage.theme).toBe('dark');
+			expect(document.documentElement.className).toBe('dark');
+		});
+
+		it('applies it once per load, so a later change of the saved value does not override this page', () => {
+			account.settings = { theme: 'dark' };
+			renderAt('/notes');
+			account.settings = { theme: 'light' };
+			// Any re-render of the shell reads the settings again.
+			act(() => useUIStore.setState({ sidebarOpen: false } as never));
+			expect(localStorage.theme).toBe('dark');
+		});
 	});
 
 	it('keeps the shell exactly viewport-tall, so only the sidebar list scrolls (#903, LAY-7)', () => {

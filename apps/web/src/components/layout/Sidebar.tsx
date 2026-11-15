@@ -2,24 +2,19 @@ import {
 	Archive,
 	Calendar,
 	ChartBar,
-	Circle,
 	Clock,
 	FlaskConical,
 	LayoutGrid,
 	LogOut,
 	type LucideIcon,
-	Monitor,
-	Moon,
 	NotebookText,
 	PanelLeft,
 	Search,
 	Settings,
 	ShieldCheck,
 	SquarePen,
-	Sun,
 	SunMoon
 } from 'lucide-react';
-import { useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { Tip } from '@/components/common/Tip';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
@@ -44,23 +39,16 @@ import { RowButton } from '@/components/ui/row-button';
 import { Separator } from '@/components/ui/separator';
 import { canUseFeature } from '@/lib/access/features';
 import { signOut } from '@/lib/auth/session';
+import { useThemeChoice } from '@/lib/settings/useThemeChoice';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
-import { applyTheme, getTheme } from '@/lib/theme';
+import { isThemeId, THEMES } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
-
-/** The theme choices in the user menu: lib/theme.ts's ids, named as the standard names the themes (WRD-6: icons, not emoji). */
-const THEME_CHOICES: { id: string; label: string; icon: LucideIcon }[] = [
-	{ id: 'system', label: 'System', icon: Monitor },
-	{ id: 'dark', label: 'Dark', icon: Moon },
-	{ id: 'oled-dark', label: 'Black', icon: Circle },
-	{ id: 'light', label: 'Light', icon: Sun }
-];
 
 /**
  * A destination at the foot of the sidebar (#931). With a pointer it is an
@@ -124,7 +112,7 @@ export function SidebarContent({
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 	const appName = useWebUIName();
-	const [theme, setTheme] = useState(getTheme);
+	const [theme, chooseTheme] = useThemeChoice();
 
 	const destinations: { to: string; icon: LucideIcon; label: string }[] = [
 		{ to: routePaths.workspace, icon: LayoutGrid, label: 'Workspace' },
@@ -189,8 +177,7 @@ export function SidebarContent({
 			</ul>
 
 			<div className="p-2">
-				{/* Re-read the theme on open: Settings may have changed it since. */}
-				<DropdownMenu onOpenChange={(open) => open && setTheme(getTheme())}>
+				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
 							<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
@@ -218,14 +205,8 @@ export function SidebarContent({
 								Theme
 							</DropdownMenuSubTrigger>
 							<DropdownMenuSubContent>
-								<DropdownMenuRadioGroup
-									value={theme}
-									onValueChange={(id) => {
-										applyTheme(id);
-										setTheme(id);
-									}}
-								>
-									{THEME_CHOICES.map(({ id, label, icon: Icon }) => (
+								<DropdownMenuRadioGroup value={theme} onValueChange={(id) => isThemeId(id) && chooseTheme(id)}>
+									{THEMES.map(({ id, label, icon: Icon }) => (
 										<DropdownMenuRadioItem key={id} value={id}>
 											<Icon className="size-4" />
 											{label}

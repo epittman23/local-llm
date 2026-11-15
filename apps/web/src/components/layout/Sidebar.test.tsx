@@ -10,6 +10,10 @@ import { SidebarContent } from './Sidebar';
 
 vi.mock('@/routes/chat/sidebar/ChatSidebar', () => ({ ChatSidebar: () => <div /> }));
 vi.mock('@/routes/channels/SidebarChannels', () => ({ SidebarChannels: () => <div /> }));
+const account = vi.hoisted(() => ({ update: vi.fn() }));
+vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ update: account.update }) }));
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
 beforeEach(() => {
 	useAuthStore.setState({
@@ -18,6 +22,8 @@ beforeEach(() => {
 		user: { id: 'u1', name: 'Ada', role: 'user' }
 	} as never);
 	useUIStore.setState({ searchOpen: false } as never);
+	account.update.mockReset().mockResolvedValue({});
+	toastError.mockReset();
 });
 afterEach(cleanup);
 
@@ -169,5 +175,18 @@ describe('SidebarContent user menu', () => {
 		fireEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
 		expect(localStorage.theme).toBe('light');
 		expect(document.documentElement.classList.contains('light')).toBe(true);
+		// Saved with the account too (S2-D4), through the settings merge.
+		expect(account.update).toHaveBeenCalledWith({ theme: 'light' });
+	});
+
+	it('keeps the theme in this browser and says so when the account save fails', async () => {
+		account.update.mockRejectedValue(new Error('offline'));
+		show();
+		press(screen.getByRole('button', { name: /Ada/ }));
+		fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Theme' }), { key: 'ArrowRight' });
+		fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Black' }));
+		expect(localStorage.theme).toBe('oled-dark');
+		await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
+		expect(toastError.mock.calls[0][0]).toContain('could not be saved to your account');
 	});
 });

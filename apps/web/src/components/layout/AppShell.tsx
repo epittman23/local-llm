@@ -1,5 +1,5 @@
 import { PanelLeft, SquarePen } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Outlet } from 'react-router';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { AppMark } from '@/components/ui/app-mark';
@@ -12,6 +12,7 @@ import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useSocketReady } from '@/lib/socket/SocketProvider';
 import { useWebUIName } from '@/lib/stores/configStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { applyTheme, getTheme, isThemeId } from '@/lib/theme';
 import { useRouteTitle } from '@/lib/ui/pageTitle';
 import { useShortcuts } from '@/lib/useShortcuts';
 import { cn } from '@/lib/utils';
@@ -84,6 +85,17 @@ export function AppShell() {
 		setTextScale(typeof textScale === 'number' ? textScale : 1);
 		setAppFontFamily(typeof fontFamily === 'string' ? fontFamily : null);
 	}, [textScale, fontFamily]);
+
+	// The theme saved with the account (#1089) wins over this browser's cached
+	// one, once per load: another device may have changed it since. Only once,
+	// so a failed save's rollback never undoes a choice made on this page.
+	const accountThemeApplied = useRef(false);
+	useEffect(() => {
+		if (!settings || accountThemeApplied.current) return;
+		accountThemeApplied.current = true;
+		const saved = (settings as Record<string, unknown>).theme;
+		if (isThemeId(saved) && saved !== getTheme()) applyTheme(saved);
+	}, [settings]);
 
 	// 'pending': the session bootstrap (lib/auth/session.ts) hasn't resolved
 	// yet -- show the boot splash rather than flash the shell before we know if
