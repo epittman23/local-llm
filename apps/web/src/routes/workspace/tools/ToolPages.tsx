@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { type CodeSource, readCodeSource } from '@/components/common/codeSource';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { createNewTool, getToolById, updateToolById } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { refusedForVersion } from '@/lib/utils/pluginVersion';
@@ -60,6 +63,9 @@ export function ToolEditPage() {
 	const [params] = useSearchParams();
 	const id = params.get('id');
 	const [tool, setTool] = useState<ToolDraft | null>(null);
+	// A missing one is said in place (NAV-3); a failed load offers to try again (STA-4).
+	const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		if (!id) {
@@ -68,19 +74,17 @@ export function ToolEditPage() {
 		}
 		let cancelled = false;
 		setTool(null);
-		getToolById(token, id)
-			.catch((error) => {
-				toast.error(`${error}`);
-				return null;
-			})
-			.then((res) => {
+		setFailure(null);
+		void attempt;
+		getToolById(token, id).then(
+			(res) => {
 				if (cancelled) return;
 				if (!res) {
-					navigate(routePaths.workspaceTools);
+					setFailure({ error: undefined });
 					return;
 				}
 				if (!res.write_access) {
-					toast.error('You do not have permission to edit this tool');
+					toast.error('You can open this tool but not edit it.');
 					navigate(routePaths.workspaceTools);
 					return;
 				}
@@ -91,11 +95,15 @@ export function ToolEditPage() {
 					content: res.content ?? '',
 					access_grants: res.access_grants ?? []
 				});
-			});
+			},
+			(error) => {
+				if (!cancelled) setFailure({ error });
+			}
+		);
 		return () => {
 			cancelled = true;
 		};
-	}, [id, token, navigate]);
+	}, [id, token, navigate, attempt]);
 
 	const onSave = async (data: ToolDraft) => {
 		if (!tool || refusedForVersion(data.content)) return false;
@@ -104,6 +112,22 @@ export function ToolEditPage() {
 		return true;
 	};
 
+	if (failure) {
+		return isNotFound(failure.error) ? (
+			<Gone
+				level={2}
+				title="This tool no longer exists."
+				description="It may have been deleted, or the link may be mistyped."
+				actions={
+					<Button asChild>
+						<Link to={routePaths.workspaceTools}>Tools</Link>
+					</Button>
+				}
+			/>
+		) : (
+			<LoadFailed what="this tool" error={failure.error} onRetry={() => setAttempt((n) => n + 1)} />
+		);
+	}
 	if (!tool) {
 		return (
 			<div className="flex h-full items-center justify-center pb-16">

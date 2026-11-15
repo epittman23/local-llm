@@ -58,3 +58,32 @@ describe('SkillEditPage', () => {
 		expect(sent).not.toHaveProperty('meta');
 	});
 });
+
+describe('SkillEditPage when the skill is not there (#1095, NAV-3, STA-4)', () => {
+	const open = () =>
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<RouterProvider
+						router={createMemoryRouter([{ path: '/workspace/skills/edit', element: <SkillEditPage /> }], {
+							initialEntries: ['/workspace/skills/edit?id=gone']
+						})}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+
+	it('says in place that it no longer exists, with a way back', async () => {
+		vi.mocked(getSkillById).mockRejectedValueOnce("We could not find what you're looking for :/");
+		open();
+		expect(await screen.findByRole('heading', { name: 'This skill no longer exists.' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Skills' })).toHaveAttribute('href', '/workspace/skills');
+	});
+
+	it('offers to try again when it failed to load', async () => {
+		vi.mocked(getSkillById).mockRejectedValueOnce('Internal error');
+		open();
+		fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+		expect(await screen.findByLabelText('Skill name')).toBeInTheDocument();
+	});
+});

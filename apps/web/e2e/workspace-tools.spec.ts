@@ -245,7 +245,7 @@ test.describe('workspace tools', () => {
 			.toMatchObject({ id: 'tool_1', meta: { description: 'Changed' } });
 
 		await page.goto('/workspace/tools/edit?id=tool_3');
-		await expect(page.getByText('You do not have permission to edit this tool')).toBeVisible();
+		await expect(page.getByText('You can open this tool but not edit it.')).toBeVisible();
 		await expect(page).toHaveURL(/\/workspace\/tools$/);
 	});
 

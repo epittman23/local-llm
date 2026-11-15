@@ -212,12 +212,18 @@ test.describe('workspace skills', () => {
 		await expect(page.locator('pre')).toHaveText('Instructions 2');
 	});
 
-	test('edit without an id, or with an unknown one, returns to the list', async ({ page }) => {
+	test('edit without an id returns to the list; an unknown one says it no longer exists', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockSkillsApi(page, []);
+		// The server's own words for a missing item (ERROR_MESSAGES.NOT_FOUND).
+		await page.route('**/api/v1/skills/id/missing', (route) =>
+			route.fulfill({ status: 401, json: { detail: "We could not find what you're looking for :/" } })
+		);
 		await page.goto('/workspace/skills/edit');
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 		await page.goto('/workspace/skills/edit?id=missing');
+		await expect(page.getByRole('heading', { name: 'This skill no longer exists.' })).toBeVisible();
+		await page.getByRole('link', { name: 'Skills', exact: true }).last().click();
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 	});
 });
