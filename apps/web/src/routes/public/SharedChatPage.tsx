@@ -60,9 +60,13 @@ export function SharedChatPage() {
 		return createMessagesList(history, history.currentId);
 	}, [chatContent]);
 
-	// The tab names the chat through the shared title mechanism (LAY-5).
+	// The tab names the chat through the shared title mechanism (LAY-5), or says
+	// the link is gone, as the page does (NAV-3).
 	const title = chatContent?.title;
-	useDocumentTitle(title ? (title.length > 30 ? `${title.slice(0, 30)}...` : title) : null);
+	const linkGone = chatQuery.isError && authStatus !== 'anonymous' && isNotFound(chatQuery.error as unknown);
+	useDocumentTitle(
+		linkGone ? 'Shared link not available' : title ? (title.length > 30 ? `${title.slice(0, 30)}...` : title) : null
+	);
 
 	const canClone = !!user && (user.role === 'admin' || (user.permissions as any)?.chat?.import !== false);
 

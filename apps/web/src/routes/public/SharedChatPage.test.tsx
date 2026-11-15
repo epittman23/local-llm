@@ -119,6 +119,7 @@ describe('SharedChatPage: a link that no longer works (NAV-3, #953)', () => {
 			await screen.findByRole('heading', { level: 1, name: 'This shared link is no longer available.' })
 		).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: 'Go to your chats' })).toHaveAttribute('href', '/');
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Shared link not available'));
 	});
 
 	it('tells a signed-in viewer a private share is not open to them', async () => {
