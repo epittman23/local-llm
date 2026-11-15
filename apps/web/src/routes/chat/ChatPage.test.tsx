@@ -54,12 +54,14 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChatPage header', () => {
-	it('toggles Temporary Chat on a new chat', () => {
+	it('toggles Temporary chat on a new chat, its icon changing with it (#1080)', () => {
 		show();
-		const toggle = screen.getByRole('button', { name: 'Temporary Chat' });
+		const toggle = screen.getByRole('button', { name: 'Temporary chat' });
 		expect(toggle.getAttribute('aria-pressed')).toBe('false');
+		expect(screen.getByTestId('temporary-off')).toBeInTheDocument();
 		fireEvent.click(toggle);
 		expect(toggle.getAttribute('aria-pressed')).toBe('true');
+		expect(screen.getByTestId('temporary-on')).toBeInTheDocument();
 	});
 
 	it('names a new chat "New chat" in the tab and the phone bar, in sentence case (WRD-1, #1091)', async () => {
@@ -198,7 +200,7 @@ describe('ChatPage on a phone (#1091)', () => {
 		);
 		expect(document.querySelector('header[data-page-top]')).toBeNull();
 		expect(slot).toContainElement(screen.getByRole('button', { name: 'Controls' }));
-		expect(slot).toContainElement(screen.getByRole('button', { name: 'Temporary Chat' }));
+		expect(slot).toContainElement(screen.getByRole('button', { name: 'Temporary chat' }));
 		const picker = document.getElementById('model-selector-model-button');
 		expect(picker).not.toBeNull();
 		expect(slot.contains(picker)).toBe(false);

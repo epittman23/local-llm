@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, EyeOff, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
+import { Archive, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -50,6 +50,7 @@ import { JumpToLatest } from './JumpToLatest';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
+import { TemporaryNotice, TemporaryToggle, useLeaveWarning } from './TemporaryNotice';
 import { useAttachments } from './useAttachments';
 import { useChatPrefs } from './useChatPrefs';
 import { useChatSession } from './useChatSession';
@@ -437,27 +438,26 @@ export function ChatPage() {
 	) : null;
 	const isMd = useMdUp();
 	const fileDrag = useFileDrag();
+	// A temporary chat with messages says so for as long as it lasts, and a reload asks first (#1080).
+	const temporaryLive = temporary && !id && !empty;
+	useLeaveWarning(temporaryLive);
 	const iconSize = isMd ? 'icon-sm' : 'icon';
 	const modelSelector = (
 		<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
 	);
 	const headerActions = (
 		<>
-			{!id && temporaryAllowed && (
-				<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
-					<Button
-						type="button"
-						aria-label="Temporary Chat"
-						aria-pressed={temporary}
-						disabled={temporaryEnforced}
-						onClick={() => setTemporary((t) => !t)}
-						variant={temporary ? 'secondary' : 'ghost'}
-						size={iconSize}
-					>
-						<EyeOff className="size-4" />
-					</Button>
-				</Tip>
-			)}
+			{temporaryLive
+				? isMd && <TemporaryNotice />
+				: !id &&
+					temporaryAllowed && (
+						<TemporaryToggle
+							on={temporary}
+							disabled={temporaryEnforced}
+							onToggle={() => setTemporary((t) => !t)}
+							size={iconSize}
+						/>
+					)}
 			<Tip content="Controls">
 				<Button
 					type="button"
@@ -587,6 +587,12 @@ export function ChatPage() {
 					</div>
 				)}
 
+				{temporaryLive && !isMd && (
+					// The phone bar has no room for it beside the chat's name: above the composer instead.
+					<div className="flex justify-center px-4 pt-2">
+						<TemporaryNotice />
+					</div>
+				)}
 				<ChatInput
 					ref={input}
 					generating={session.generating}
