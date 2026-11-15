@@ -43,7 +43,7 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 	await expect(page.getByText('Sign in to local-llm')).toBeVisible();
 
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page).toHaveURL(/\/notes$/);
@@ -66,7 +66,7 @@ test('a socket event sent right after signing in is not lost (#674)', async ({ p
 
 	await page.goto('/auth?redirect=%2Fnotes');
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	// The socket is created on the sign-in page but connects only once the
@@ -108,7 +108,7 @@ test('a redirect that would leave the app is ignored: signing in lands home inst
 
 	await page.goto(`/auth?redirect=${encodeURIComponent('https://evil.example/pwned')}`);
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page).toHaveURL(/localhost:5174\/$/);
@@ -139,7 +139,7 @@ for (const [what, redirect] of [
 		// reads as `//evil.example`; `/.//evil.example` resolves to that path.
 		await page.goto(`/auth?redirect=${redirect}`);
 		await page.getByLabel('Email').fill('user@example.com');
-		await page.getByLabel('Password').fill('hunter2');
+		await page.getByLabel('Password', { exact: true }).fill('hunter2');
 		await page.getByRole('button', { name: 'Sign in' }).click();
 
 		await expect(page).toHaveURL(/localhost:5174\/$/);
@@ -158,7 +158,7 @@ test('a failed sign-in shows the backend error inline and stays on /auth', async
 
 	await page.goto('/auth');
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('wrong');
+	await page.getByLabel('Password', { exact: true }).fill('wrong');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page.getByText('Incorrect email or password')).toBeVisible();
