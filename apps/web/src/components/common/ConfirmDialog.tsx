@@ -23,7 +23,8 @@ export function ConfirmDialog({
 	confirmLabel = 'Confirm',
 	cancelLabel = 'Cancel',
 	onConfirm,
-	onCloseAutoFocus
+	onCloseAutoFocus,
+	destructive = false
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -34,6 +35,8 @@ export function ConfirmDialog({
 	onConfirm: () => void | Promise<void>;
 	/** Where focus goes when the dialog closes (Radix's own handler: call `preventDefault` to move it yourself). */
 	onCloseAutoFocus?: (event: Event) => void;
+	/** ACT-3: confirms something that cannot be undone, so the confirming button is filled in the danger colour. */
+	destructive?: boolean;
 }) {
 	return (
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -46,7 +49,9 @@ export function ConfirmDialog({
 				</AlertDialogHeader>
 				<AlertDialogFooter>
 					<AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-					<AlertDialogAction onClick={() => onConfirm()}>{confirmLabel}</AlertDialogAction>
+					<AlertDialogAction variant={destructive ? 'destructive' : 'default'} onClick={() => onConfirm()}>
+						{confirmLabel}
+					</AlertDialogAction>
 				</AlertDialogFooter>
 			</AlertDialogContent>
 		</AlertDialog>

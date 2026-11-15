@@ -200,6 +200,8 @@ describe('SharedChatPage: the owner’s own share (#1005)', () => {
 		const ask = await screen.findByRole('alertdialog', { name: 'Stop sharing “Kaplan-Meier curves”?' });
 		expect(ask).toHaveTextContent('The link stops working for everyone who has it.');
 		expect(deleteSharedChatById).not.toHaveBeenCalled();
+		// It cannot be undone (a new share is a new link), so the confirming button is the danger one.
+		expect(within(ask).getByRole('button', { name: 'Stop sharing' })).toHaveAttribute('data-variant', 'destructive');
 		fireEvent.click(within(ask).getByRole('button', { name: 'Stop sharing' }));
 		expect(
 			await screen.findByRole('heading', { level: 1, name: 'This shared link is no longer available.' })

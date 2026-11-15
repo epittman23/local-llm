@@ -223,6 +223,7 @@ export function SharedChatPage() {
 				onOpenChange={setConfirmStop}
 				title={`Stop sharing “${chatContent.title ?? 'this chat'}”?`}
 				confirmLabel="Stop sharing"
+				destructive
 				onConfirm={stopSharing}
 			>
 				The link stops working for everyone who has it. The chat itself stays in your chats.
