@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -19,6 +19,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	createNewKnowledge,
@@ -250,51 +251,47 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 							const preview = knowledgeMetaPreview(item);
 							const external = item.meta?.source === 'external';
 							return (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={item.id}
-									role="button"
-									tabIndex={0}
-									className="group hover:bg-muted/50 flex min-h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left"
-									onClick={(e) => !isControlClick(e.target) && openKnowledge(item)}
-									onKeyDown={(e) => {
-										if (e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openKnowledge(item);
-										}
-									}}
+									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
 								>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<Tip content={item.description ?? item.name} side="top">
-												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{item.name}</div>
-											</Tip>
-											{external && (
-												<>
-													<Badge variant="secondary">{item.meta?.external?.provider ?? 'Connected'}</Badge>
-													<Badge variant="secondary">Read Only</Badge>
-												</>
+									<RowButton
+										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+										onClick={() => openKnowledge(item)}
+									>
+										<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+											<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+												<Tip content={item.description ?? item.name} side="top">
+													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{item.name}</div>
+												</Tip>
+												{external && (
+													<>
+														<Badge variant="secondary">{item.meta?.external?.provider ?? 'Connected'}</Badge>
+														<Badge variant="secondary">Read Only</Badge>
+													</>
+												)}
+												{!item.write_access && !external && <Badge variant="secondary">Read Only</Badge>}
+												<Tip content={dayjs(item.updated_at * 1000).format('LLLL')}>
+													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+														{dayjs(item.updated_at * 1000).fromNow()}
+													</div>
+												</Tip>
+											</div>
+											{preview && (
+												<Tip content={preview} side="top">
+													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{preview}</div>
+												</Tip>
 											)}
-											{!item.write_access && !external && <Badge variant="secondary">Read Only</Badge>}
-											<Tip content={dayjs(item.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(item.updated_at * 1000).fromNow()}
+										</div>
+										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
+											<Tip content={item.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
 												</div>
 											</Tip>
 										</div>
-										{preview && (
-											<Tip content={preview} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{preview}</div>
-											</Tip>
-										)}
-									</div>
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={item.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+									</RowButton>
 									{(item.write_access || isAdmin) && (
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
 											<DropdownMenu>
