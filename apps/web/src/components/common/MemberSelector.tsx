@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxMark } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { RowButton } from '@/components/ui/row-button';
 import { getGroups } from '@/lib/apis/groups';
@@ -195,6 +196,8 @@ export function MemberSelector({
 									<RowButton
 										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={group.id}
+										role="checkbox"
+										aria-checked={groupIds.includes(group.id)}
 										onClick={() => toggleGroup(group)}
 									>
 										<span className="flex flex-1 items-center gap-1 px-3 py-1.5 font-normal">
@@ -202,7 +205,7 @@ export function MemberSelector({
 											<span className="text-muted-foreground">{group.member_count}</span>
 										</span>
 										<span className="px-3 py-1">
-											<Checkbox checked={groupIds.includes(group.id)} tabIndex={-1} aria-label={group.name} />
+											<CheckboxMark checked={groupIds.includes(group.id)} />
 										</span>
 									</RowButton>
 								))}
@@ -217,13 +220,15 @@ export function MemberSelector({
 									<RowButton
 										className="flex items-center justify-between rounded-none p-0 text-xs"
 										key={user.id}
+										role="checkbox"
+										aria-checked={userIds.includes(user.id)}
 										onClick={() => toggleUser(user)}
 									>
 										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
-											<img
-												className="size-6 shrink-0 rounded-2xl object-cover"
+											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-												alt=""
+												name={user.name}
+												size="sm"
 											/>
 											<Tip content={user.email} side="top">
 												<span className="truncate">{user.name}</span>
@@ -236,7 +241,7 @@ export function MemberSelector({
 											)}
 										</span>
 										<span className="px-3 py-1">
-											<Checkbox checked={userIds.includes(user.id)} tabIndex={-1} aria-label={user.name} />
+											<CheckboxMark checked={userIds.includes(user.id)} />
 										</span>
 									</RowButton>
 								))}

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CalendarViews } from './CalendarViews';
+import { CalendarViews, dayName } from './CalendarViews';
 import { NS } from './calendarModel';
 
 // The day and week grids show an event on every day it touches (#319), as
@@ -73,7 +73,7 @@ describe('day and week grids', () => {
 		const band = screen.getByRole('region', { name: 'All-day and continuing events' });
 		// Vacation is on all seven days (18 to 24 Oct); Monday 19 Oct has four trips too.
 		expect(within(band).getAllByRole('button', { name: 'Vacation' })).toHaveLength(7);
-		const monday = within(band).getByRole('list', { name: new Date(2026, 9, 19).toDateString() });
+		const monday = within(band).getByRole('list', { name: '19 October 2026' });
 		expect(
 			within(monday)
 				.getAllByRole('button')
@@ -81,6 +81,80 @@ describe('day and week grids', () => {
 		).toEqual(['Vacation', 'Trip 1', 'Trip 2', '+2 more']);
 		fireEvent.click(within(band).getByRole('button', { name: '+2 more' }));
 		expect(onOpenDay).toHaveBeenCalledWith(new Date(2026, 9, 19));
+	});
+});
+
+describe('month cells (#923, #987)', () => {
+	const showMonth = (events: never[]) =>
+		render(
+			<TooltipProvider>
+				<CalendarViews
+					view="month"
+					date={new Date(2026, 10, 14)}
+					events={events}
+					calendars={calendars}
+					onCreate={() => {}}
+					onEventClick={() => {}}
+					onOpenDay={() => {}}
+				/>
+			</TooltipProvider>
+		);
+
+	it('names each cell by its visible day number, date and event count', () => {
+		showMonth([
+			event('a', 'Seminar', new Date(2026, 10, 14, 10), new Date(2026, 10, 14, 11)),
+			event('b', 'Review', new Date(2026, 10, 14, 15), new Date(2026, 10, 14, 16)),
+			event('c', 'Call', new Date(2026, 10, 3, 9), new Date(2026, 10, 3, 10))
+		]);
+		const cell = screen.getByRole('button', { name: '14 November 2026, 2 events' });
+		expect(cell.querySelector('span')?.textContent).toBe('14');
+		expect(screen.getByRole('button', { name: '3 November 2026, 1 event' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: '20 November 2026, no events' })).toBeInTheDocument();
+	});
+
+	it('mutes another month’s day numbers instead of dimming the whole cell', () => {
+		showMonth([]);
+		const outside = screen.getByRole('button', { name: '1 December 2026, no events' });
+		expect(outside).toHaveAttribute('data-outside-month', 'true');
+		expect(outside.className).not.toMatch(/opacity/);
+		expect(outside.querySelector('span')?.className).toContain('text-foreground-muted');
+		const inside = screen.getByRole('button', { name: '2 November 2026, no events' });
+		expect(inside).not.toHaveAttribute('data-outside-month');
+		expect(inside.querySelector('span')?.className).toMatch(/(^|\s)text-foreground(\s|$)/);
+	});
+
+	it('draws an event of a calendar with no colour in the --series-1 token (#989, D1b)', () => {
+		render(
+			<TooltipProvider>
+				<CalendarViews
+					view="day"
+					date={new Date(2026, 9, 20)}
+					events={[Object.assign({}, lunch, { calendar_id: 'plain' })] as never[]}
+					calendars={[{ id: 'plain', name: 'Plain', color: null }] as never[]}
+					onCreate={() => {}}
+					onEventClick={() => {}}
+					onOpenDay={() => {}}
+				/>
+			</TooltipProvider>
+		);
+		const dot = screen.getByRole('button', { name: /Lunch/ }).querySelector('span') as HTMLElement;
+		expect(dot.style.backgroundColor).toBe('var(--series-1)');
+	});
+
+	it('shows an automation run in the muted foreground rather than dimming it', () => {
+		const run = Object.assign(event('r', 'Nightly report', new Date(2026, 10, 14, 2), new Date(2026, 10, 14, 3)), {
+			meta: { automation_id: 'a1' }
+		});
+		showMonth([run, event('m', 'Seminar', new Date(2026, 10, 14, 10), new Date(2026, 10, 14, 11))]);
+		const chip = screen.getByRole('button', { name: /Nightly report/ });
+		expect(chip.className).toContain('text-foreground-muted');
+		expect(chip.className).not.toMatch(/opacity/);
+		expect(screen.getByRole('button', { name: /Seminar/ }).className).not.toContain('text-foreground-muted');
+	});
+
+	it('names the hour cells with the same date', () => {
+		show('day', new Date(2026, 10, 14), []);
+		expect(screen.getByRole('button', { name: 'New event 14 November 2026, 9 AM' })).toBeInTheDocument();
 	});
 });
 
@@ -101,7 +175,7 @@ describe('today in the grids', () => {
 			</TooltipProvider>
 		);
 		const marked = (d: Date) =>
-			screen.getAllByRole('button', { name: `New event on ${d.toDateString()}` })[0].querySelector('span');
+			screen.getAllByRole('button', { name: new RegExp(`^${dayName(d)}, `) })[0].querySelector('span');
 		expect(marked(now)?.className).toContain('bg-brand');
 		const other = new Date(now.getFullYear(), now.getMonth(), now.getDate() === 15 ? 16 : 15);
 		expect(marked(other)?.className).not.toContain('bg-brand');

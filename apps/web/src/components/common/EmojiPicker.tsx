@@ -59,7 +59,7 @@ export function EmojiPicker({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="text-xl"
+								className="text-title"
 								key={`${e.group}-${e.name}`}
 								type="button"
 								role="option"

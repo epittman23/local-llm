@@ -15,7 +15,7 @@ import {
 import { Link, NavLink } from 'react-router';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
 import { availableTabs } from '@/components/settings/settingsTabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -31,7 +31,7 @@ import { Separator } from '@/components/ui/separator';
 import { canUseFeature } from '@/lib/access/features';
 import { signOut } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore } from '@/lib/stores/configStore';
+import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { cn } from '@/lib/utils';
@@ -65,11 +65,12 @@ export function SidebarContent({
 	const hasSettings = availableTabs(user, config, implementedTabIds).length > 0;
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
+	const appName = useWebUIName();
 
 	return (
-		<div className="flex h-full w-full flex-col">
+		<nav aria-label="Main" className="flex h-full w-full flex-col">
 			<div className="flex items-center justify-between px-3 py-3">
-				<span className="text-sm font-semibold">local-llm</span>
+				<span className="text-body font-title">{appName}</span>
 				{showCollapseToggle && (
 					<Button variant="ghost" size="icon" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
 						<PanelLeft className="h-4 w-4" />
@@ -95,7 +96,7 @@ export function SidebarContent({
 			<Separator className="my-2" />
 
 			<ScrollArea className="flex-1 px-2">
-				<nav className="flex flex-col gap-1">
+				<div className="flex flex-col gap-1">
 					<NavLink to={routePaths.workspace} onClick={onNavigate} className={navLinkClass}>
 						<LayoutGrid className="h-4 w-4" />
 						Workspace
@@ -136,7 +137,7 @@ export function SidebarContent({
 							Admin
 						</NavLink>
 					)}
-				</nav>
+				</div>
 				<SidebarChannels onNavigate={onNavigate} />
 				<ChatSidebar onNavigate={onNavigate} />
 			</ScrollArea>
@@ -147,10 +148,7 @@ export function SidebarContent({
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
-							<Avatar className="h-6 w-6">
-								<AvatarImage src={user?.profile_image_url} alt={user?.name ?? ''} />
-								<AvatarFallback>{user?.name?.at(0)?.toUpperCase() ?? '?'}</AvatarFallback>
-							</Avatar>
+							<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
 							<span className="truncate text-sm">{user?.name ?? 'Signed out'}</span>
 						</RowButton>
 					</DropdownMenuTrigger>
@@ -170,6 +168,6 @@ export function SidebarContent({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</div>
-		</div>
+		</nav>
 	);
 }

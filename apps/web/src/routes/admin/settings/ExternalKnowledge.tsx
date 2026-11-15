@@ -320,7 +320,7 @@ function SourceDialog({
 							</label>
 							<select
 								id="external-source-provider"
-								className="block w-full bg-transparent text-sm [&>option]:bg-popover"
+								className="block w-full bg-transparent text-sm"
 								value={f.provider}
 								onChange={(e) => change({ provider: e.target.value as Provider, ...schemaDefaults(e.target.value) })}
 							>
@@ -433,7 +433,7 @@ function SourceDialog({
 							<div className="mt-1 text-xs text-success">Test passed: {testResult?.documents?.length} result(s).</div>
 						)}
 						<div className="text-muted-foreground mt-1 text-xs">
-							External vectors must be generated with the same embedding model configured in Local LLM.
+							External vectors must be generated with the same embedding model configured in local-llm.
 						</div>
 					</div>
 

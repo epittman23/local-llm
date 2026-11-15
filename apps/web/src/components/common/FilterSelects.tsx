@@ -58,7 +58,8 @@ export function ViewSelector({ value, onChange }: { value: string; onChange: (va
 			items={viewItems}
 			onChange={onChange}
 			trigger={
-				<Button variant="ghost" size="sm" aria-label="View">
+				<Button variant="ghost" size="sm">
+					<span className="sr-only">View: </span>
 					<span className="truncate">{label}</span>
 					<ChevronDown />
 				</Button>
@@ -94,7 +95,8 @@ export function TagSelector({
 				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
 				trigger={
-					<Button variant="ghost" size="sm" aria-label="Tag" className="capitalize">
+					<Button variant="ghost" size="sm" className="capitalize">
+						<span className="sr-only">Tag: </span>
 						<span className="truncate">{value ? (labels[value] ?? value) : placeholder}</span>
 						{!value && <ChevronDown />}
 					</Button>

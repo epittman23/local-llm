@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import { json, MODELS, mockChat, savedChat } from './chat-helpers';
+import { expect, test } from './test';
 
 test('a new chat: greeting and suggestions, send, stream, and the URL becomes the saved chat', async ({ page }) => {
 	const chat = await mockChat(page);
@@ -138,7 +138,7 @@ test('two models answer side by side', async ({ page }) => {
 	await page.goto('/');
 	await chat.socket.connected;
 	await page.getByRole('button', { name: 'Add Model' }).click();
-	await page.getByRole('button', { name: 'Select a model' }).nth(1).click();
+	await page.getByRole('button', { name: 'Model: Select a model' }).click();
 	await page.getByRole('option', { name: 'Llama' }).click();
 	await page.getByRole('textbox', { name: 'Message' }).fill('Compare');
 	await page.keyboard.press('Enter');
@@ -279,9 +279,10 @@ test('a dropped connection is announced, and so is getting it back', async ({ pa
 	await page.goto('/');
 	await chat.socket.connected;
 	chat.socket.drop();
-	await expect(page.getByText('Connection lost. Reconnecting...')).toBeVisible({ timeout: 10_000 });
+	await expect(page.getByText("Can't reach the server. Reconnecting…")).toBeVisible({ timeout: 10_000 });
 	chat.socket.restore();
 	await expect(page.getByText('Reconnected')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByText("Can't reach the server. Reconnecting…")).toHaveCount(0);
 });
 
 test('a request refused because the session expired signs out and says so', async ({ page }) => {
@@ -300,8 +301,8 @@ test('a request refused because the session expired signs out and says so', asyn
 	await chat.socket.connected;
 	await page.getByRole('textbox', { name: 'Message' }).fill('Hi');
 	await page.keyboard.press('Enter');
-	await expect(page.getByText('Session expired. Please sign in again.')).toBeVisible();
-	await expect(page).toHaveURL(/\/auth\?redirect=/);
+	await expect(page).toHaveURL(/\/auth\?redirect=.*&reason=expired$/);
+	await expect(page.getByRole('alert')).toHaveText('Your session expired. Sign in to continue where you left off.');
 });
 
 test('a message sent the moment the box appears waits for the model list, then goes (#373)', async ({ page }) => {

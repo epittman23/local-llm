@@ -14,6 +14,7 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,9 +34,6 @@ function authorImage(m: Pick<ChannelMessage, 'meta' | 'user'>) {
 }
 const authorName = (m: Pick<ChannelMessage, 'meta' | 'user'>) =>
 	m.meta?.model_name ?? m.meta?.model_id ?? m.user?.name ?? 'Unknown User';
-const fallbackImage = (e: React.SyntheticEvent<HTMLImageElement>) => {
-	e.currentTarget.src = '/static/favicon.png';
-};
 
 function timeLabel(ns: number) {
 	const d = dayjs(ns / 1_000_000);
@@ -234,7 +232,7 @@ export function ChannelMessageView({
 					className="mb-1 ml-12 flex w-auto min-w-0 items-center justify-start gap-2 px-3 py-2"
 					onClick={() => jumpTo(replyTo.id)}
 				>
-					<img src={authorImage(replyTo)} alt="" className="size-4 rounded-full object-cover" onError={fallbackImage} />
+					<ProfileAvatar src={authorImage(replyTo)} name={authorName(replyTo)} size="sm" className="size-5" />
 					<span className="shrink-0">{authorName(replyTo)}</span>
 					<span className="text-muted-foreground line-clamp-1 flex-1 italic">{mentionsToText(replyTo.content)}</span>
 				</RowButton>
@@ -243,12 +241,7 @@ export function ChannelMessageView({
 			<div className="flex w-full">
 				<div className="mr-1 w-9 shrink-0">
 					{showAuthor ? (
-						<img
-							src={authorImage(message)}
-							alt=""
-							className="ml-0.5 size-8 translate-y-1 rounded-full object-cover"
-							onError={fallbackImage}
-						/>
+						<ProfileAvatar src={authorImage(message)} name={authorName(message)} className="ml-0.5 translate-y-1" />
 					) : (
 						message.created_at > 0 && (
 							<Tip content={dayjs(message.created_at / 1_000_000).format('LLLL')}>

@@ -35,6 +35,15 @@ describe('App', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('takes down the static boot splash once React has drawn', async () => {
+		const splash = document.createElement('div');
+		splash.id = 'boot-splash';
+		document.body.append(splash);
+		render(<App />);
+		expect(document.getElementById('boot-splash')).toBeNull();
+		expect(await screen.findByRole('textbox', { name: 'Message' })).toBeInTheDocument();
+	});
+
 	it('renders the app shell and the home route', async () => {
 		render(<App />);
 

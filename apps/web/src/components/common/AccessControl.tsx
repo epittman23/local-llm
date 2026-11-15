@@ -2,6 +2,7 @@ import { Globe, Lock, Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AddAccessModal } from '@/components/common/AddAccessModal';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -30,7 +31,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 type Group = { id: string; name: string; member_count?: number };
 type UserInfo = { id: string; name: string; email?: string };
 
-const nativeSelectClass = 'bg-transparent text-sm [&>option]:bg-popover [&>option]:text-popover-foreground';
+const nativeSelectClass = 'bg-transparent text-sm';
 
 /**
  * Ports workspace/common/AccessControl.svelte: the visibility picker
@@ -274,10 +275,11 @@ export function AccessControl({
 									className="flex w-full items-center justify-between gap-2 border-b pb-1.5 text-sm last:border-0"
 								>
 									<div className="flex min-w-0 flex-1 items-center gap-2">
-										<img
-											className="size-5 rounded-full object-cover"
+										<ProfileAvatar
 											src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-											alt={user.name ?? user.id}
+											name={user.name ?? user.id}
+											size="sm"
+											className="size-5"
 										/>
 										<Tip content={user.email} side="top">
 											<div className="truncate text-sm">{user.name ?? user.id}</div>

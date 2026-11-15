@@ -107,7 +107,7 @@ test('display settings: no bubbles, Markdown in user messages, widescreen, direc
 	await expect(column).not.toHaveClass(/max-w-3xl/);
 	await expect(page.getByRole('button', { name: 'Regenerate', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Regenerate options' })).toHaveCount(0);
-	await expect(page).toHaveTitle('local-llm');
+	await expect(page).toHaveTitle('Chat · local-llm');
 });
 
 test('Insert Follow-Up Prompt to Input puts a follow-up in the input instead of sending it', async ({ page }) => {

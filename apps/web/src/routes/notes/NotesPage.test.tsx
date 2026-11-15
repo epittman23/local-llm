@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +31,7 @@ const open = (entry: string) => {
 		{ initialEntries: [entry] }
 	);
 	render(
-		<QueryClientProvider client={new QueryClient()}>
+		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<RouterProvider router={router} />
 		</QueryClientProvider>
 	);
@@ -59,4 +59,21 @@ describe('a ?title= link to Notes (#210)', () => {
 			expect(toast.error).not.toHaveBeenCalled();
 		});
 	}
+});
+
+describe('a Notes list that cannot load (STA-4, #981)', () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it('shows the failure in place of the list, with no toast, and tries again', async () => {
+		vi.mocked(searchNotes).mockRejectedValueOnce('Database is locked');
+		open('/notes');
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load notes");
+		expect(screen.queryByText('No Notes')).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('No Notes')).toBeTruthy();
+		expect(screen.queryByRole('alert')).toBeNull();
+	});
 });

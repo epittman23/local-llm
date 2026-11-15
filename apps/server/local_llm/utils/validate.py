@@ -27,6 +27,15 @@ _SAFE_STATIC_PATHS = frozenset(
 )
 
 
+def is_default_profile_image(url: str | None) -> bool:
+    """Whether ``url`` means "no picture of its own": empty, or one of the stock
+    paths the app assigned as a default. Their images (Open WebUI's) no longer
+    exist; the picture endpoints answer 404 for them, and the frontend draws
+    initials instead (decision D1, 2026-11-14). Stored values are left as they are.
+    """
+    return not url or url in _SAFE_STATIC_PATHS
+
+
 def validate_profile_image_url(url: str) -> str:
     """
     Pydantic-compatible validator for profile image URLs.

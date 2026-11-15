@@ -2,8 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { describe, expect, it } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Markdown } from './Markdown';
 
 const renderMd = (content: string, props: Partial<Parameters<typeof Markdown>[0]> = {}) =>
@@ -18,6 +18,15 @@ const renderMd = (content: string, props: Partial<Parameters<typeof Markdown>[0]
 	);
 
 describe('Markdown', () => {
+	it('sizes headings on the standard’s scale (TYP-2)', () => {
+		renderMd('# One\n\n## Two\n\n### Three\n\n#### Four\n');
+		const size = (name: string) => screen.getByRole('heading', { name }).className;
+		expect(size('One')).toContain('text-heading');
+		expect(size('Two')).toContain('text-title');
+		expect(size('Three')).toContain('text-reading');
+		expect(size('Four')).toContain('text-body');
+	});
+
 	it('renders headings, lists, tables and highlighted code', () => {
 		const { container } = renderMd(
 			'# Title\n\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```python\nprint("hi")\n```\n'

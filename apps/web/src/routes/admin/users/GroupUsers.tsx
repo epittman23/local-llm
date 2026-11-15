@@ -6,6 +6,7 @@ import { SortHeaderButton } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -283,10 +284,10 @@ export function GroupUsers({
 											<td className="text-foreground max-w-48 px-3 py-1 font-normal">
 												<Tip content={user.email} side="top">
 													<div className="flex items-center gap-2">
-														<img
-															className="size-6 shrink-0 rounded-full object-cover"
+														<ProfileAvatar
 															src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-															alt="user"
+															name={user.name}
+															size="sm"
 														/>
 														<div className="truncate font-normal">{user.name}</div>
 													</div>

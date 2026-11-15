@@ -3,6 +3,7 @@ import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,9 +53,9 @@ export function GroupsPanel() {
 	const groups = groupsQuery.data ?? [];
 	const filtered = filterAndSortGroups(groups, query, sortBy);
 
-	useEffect(() => {
-		if (groupsQuery.isError) toast.error(`${groupsQuery.error}`);
-	}, [groupsQuery.isError, groupsQuery.error]);
+	// Both are needed: without the defaults, New Group and Default permissions
+	// would start from nothing and could save that over the stored ones.
+	const failedQuery = [groupsQuery, defaultsQuery].find((q) => q.isError || (q.isPaused && q.data === undefined));
 	useEffect(() => {
 		if (groupsQuery.data) setCount('groups', filtered.length);
 	}, [groupsQuery.data, filtered.length, setCount]);
@@ -87,6 +88,20 @@ export function GroupsPanel() {
 			await queryClient.invalidateQueries({ queryKey: ['admin', 'default-permissions'] });
 		}
 	};
+
+	if (failedQuery) {
+		return (
+			<LoadFailed
+				what="groups"
+				error={failedQuery.error}
+				onRetry={() => {
+					groupsQuery.refetch();
+					defaultsQuery.refetch();
+				}}
+				retrying={groupsQuery.isFetching || defaultsQuery.isFetching}
+			/>
+		);
+	}
 
 	if (groupsQuery.isPending || defaultsQuery.isPending) {
 		return (

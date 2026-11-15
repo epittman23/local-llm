@@ -126,7 +126,7 @@ test('clicking a day creates a 9 AM event in the default calendar; the scheduled
 	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
 	const seen = await mockCalendar(page);
 	await page.goto('/calendar');
-	await page.getByRole('button', { name: `New event on ${new Date('2026-09-18T00:00:00').toDateString()}` }).click();
+	await page.getByRole('button', { name: /^18 September 2026, / }).click();
 	const d = page.getByRole('dialog', { name: 'New event' });
 	await expect(d.getByLabel('Start time')).toHaveValue('09:00');
 	await expect(d.getByLabel('End time')).toHaveValue('10:00');
@@ -212,9 +212,12 @@ test('a new calendar is created with its color; deleting one asks first', async 
 	await page.getByRole('button', { name: 'New calendar' }).click();
 	const d = page.getByRole('dialog', { name: 'New Calendar' });
 	await d.getByLabel('Name').fill('Gym');
-	await d.getByRole('button', { name: '#22c55e' }).click();
+	// The presets are the series tokens in the current theme (dark): --series-4 is the green (#989, D1b).
+	await expect(d.locator('button[aria-pressed]')).toHaveCount(6);
+	await expect(d.getByRole('button', { name: '#82c7f0' })).toHaveAttribute('aria-pressed', 'true');
+	await d.getByRole('button', { name: '#83d494' }).click();
 	await d.getByRole('button', { name: 'Create' }).click();
-	await expect.poll(() => seen.calendarsCreated[0]).toEqual({ name: 'Gym', color: '#22c55e' });
+	await expect.poll(() => seen.calendarsCreated[0]).toEqual({ name: 'Gym', color: '#83d494' });
 	await expect(page.getByRole('button', { name: 'Delete calendar Personal' })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Delete calendar Work' }).click();
 	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();

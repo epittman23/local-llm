@@ -353,9 +353,9 @@ export function TestsPage() {
 				<>
 					<div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
 						<div className="flex flex-col gap-1">
-							<Label>Tier</Label>
+							<Label htmlFor="tests-tier">Tier</Label>
 							<Select value={effectiveSuite} onValueChange={setSuite}>
-								<SelectTrigger className="w-full">
+								<SelectTrigger id="tests-tier" className="w-full">
 									<SelectValue placeholder="Select a tier" />
 								</SelectTrigger>
 								<SelectContent>
@@ -368,9 +368,9 @@ export function TestsPage() {
 							</Select>
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label>Benchmark</Label>
+							<Label htmlFor="tests-benchmark">Benchmark</Label>
 							<Select value={benchmark} onValueChange={setBenchmark}>
-								<SelectTrigger className="w-full">
+								<SelectTrigger id="tests-benchmark" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -384,9 +384,9 @@ export function TestsPage() {
 							</Select>
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label>System</Label>
+							<Label htmlFor="tests-system">System</Label>
 							<Select value={system} onValueChange={setSystem}>
-								<SelectTrigger className="w-full">
+								<SelectTrigger id="tests-system" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>

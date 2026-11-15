@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
 import type { CodeRunner } from '@/lib/chat/codeRun';
@@ -127,8 +128,6 @@ function Attachments({ files }: { files: NonNullable<Message['files']> }) {
 	);
 }
 
-const hideBrokenImage = (e: React.SyntheticEvent<HTMLImageElement>) => (e.currentTarget.style.visibility = 'hidden');
-
 /**
  * Ports chat/Messages/UserMessage.svelte: the prompt as a bubble (or, with
  * "Chat Bubble UI" off, beside the user's picture and name, like a reply),
@@ -163,11 +162,10 @@ function UserMessage({
 	if (!prefs.chatBubble) {
 		return (
 			<div className="group flex w-full gap-3" data-testid="user-message" id={`message-${message.id}`}>
-				<img
+				<ProfileAvatar
 					src={`${WEBUI_API_BASE_URL}/users/${user?.id}/profile/image`}
-					alt=""
-					className="mt-1 size-7 shrink-0 rounded-full object-cover"
-					onError={hideBrokenImage}
+					name={user?.name}
+					className="mt-1 size-7"
 				/>
 				<div className="min-w-0 flex-1">
 					<div className="text-sm font-medium">{prefs.showUsername ? (user?.name ?? 'You') : 'You'}</div>
@@ -260,14 +258,7 @@ export function ResponseMessage({
 	const empty = !message.content && !message.error && !message.output?.length;
 	return (
 		<div className="group flex w-full gap-3" data-testid="response-message" id={`message-${message.id}`}>
-			{!compact && (
-				<img
-					src={modelImage(message.model ?? '')}
-					alt=""
-					className="mt-1 size-7 shrink-0 rounded-full object-cover"
-					onError={hideBrokenImage}
-				/>
-			)}
+			{!compact && <ProfileAvatar src={modelImage(message.model ?? '')} name={modelName} className="mt-1 size-7" />}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline gap-2">
 					<span className="text-sm font-medium">{modelName}</span>

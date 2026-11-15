@@ -37,8 +37,8 @@ const OAUTH_PROVIDER_LABELS: Record<string, string> = {
  *
  * LDAP sign-in, which the source also had, was removed on 2026-10-17.
  *
- * Toasts are still absent everywhere in this app (see lib/auth/session.ts's
- * own note) -- errors render as an inline banner instead.
+ * Errors render as an inline banner, not toasts, and so does the reason a
+ * session ended (`?reason=expired`, FBK-1).
  */
 export function AuthPage() {
 	const navigate = useNavigate();
@@ -61,6 +61,8 @@ export function AuthPage() {
 	const form = searchParams.get('form');
 	const redirectParam = safeRedirect(searchParams.get('redirect'));
 	const isLogout = searchParams.get('state') === 'logout';
+	// Set by the route gate when the session ran out (lib/auth/useAuthGate.ts).
+	const expired = searchParams.get('reason') === 'expired';
 
 	const finishSignIn = async (sessionUser: any, redirectPath?: string | null) => {
 		if (!sessionUser) return;
@@ -127,9 +129,11 @@ export function AuthPage() {
 		ranOnce.current = true;
 
 		// Settled with no config at all: the backend was unreachable.
-		// +layout.svelte's own onMount sends this case to /error.
+		// +layout.svelte's own onMount sends this case to /error, which comes
+		// back to where the person was going once the server answers.
 		if (!config) {
-			navigate(routePaths.error, { replace: true });
+			const back = redirectParam ? `?redirect=${encodeURIComponent(redirectParam)}` : '';
+			navigate(`${routePaths.error}${back}`, { replace: true });
 			return;
 		}
 
@@ -205,9 +209,9 @@ export function AuthPage() {
 
 	if (onboarding) {
 		return (
-			<div className="flex h-screen w-full items-center justify-center px-10 text-center">
+			<main className="flex h-screen w-full items-center justify-center px-10 text-center">
 				<div className="flex max-w-md flex-col items-center gap-4">
-					<h1 className="text-2xl font-normal">Welcome to {WEBUI_NAME}</h1>
+					<h1 className="text-heading font-title tracking-tight">Welcome to {WEBUI_NAME}</h1>
 					<p className="text-muted-foreground text-sm">
 						Get started by creating the first admin account for this instance.
 					</p>
@@ -220,29 +224,38 @@ export function AuthPage() {
 						Get Started
 					</Button>
 				</div>
-			</div>
+			</main>
 		);
 	}
 
 	if (trustedOrNoAuth) {
 		return (
-			<div className="flex h-screen w-full items-center justify-center">
-				<p className="text-lg">Signing in to {WEBUI_NAME}…</p>
-			</div>
+			<main className="flex h-screen w-full items-center justify-center">
+				<p className="text-title">Signing in to {WEBUI_NAME}…</p>
+			</main>
 		);
 	}
 
 	return (
-		<div className="flex h-screen w-full items-center justify-center px-10">
+		<main className="flex h-screen w-full items-center justify-center px-10">
 			<div className="w-full max-w-md">
 				<form className="flex flex-col justify-center" onSubmit={submitHandler}>
-					<div className="mb-4 text-center text-2xl font-normal">
+					<h1 className="text-heading font-title mb-4 text-center tracking-tight">
 						{config?.onboarding
 							? `Get started with ${WEBUI_NAME}`
 							: mode === 'signin'
 								? `Sign in to ${WEBUI_NAME}`
 								: `Sign up to ${WEBUI_NAME}`}
-					</div>
+					</h1>
+
+					{expired && !error && (
+						<div
+							role="alert"
+							className="border-destructive/20 bg-destructive/10 text-destructive mb-3 rounded-lg border px-3 py-2 text-dense"
+						>
+							Your session expired. Sign in to continue where you left off.
+						</div>
+					)}
 
 					{error && (
 						<div className="border-destructive/20 bg-destructive/10 text-destructive mb-3 rounded-lg border px-3 py-2 text-sm">
@@ -359,6 +372,6 @@ export function AuthPage() {
 					</div>
 				)}
 			</div>
-		</div>
+		</main>
 	);
 }

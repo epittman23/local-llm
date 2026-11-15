@@ -51,3 +51,25 @@ export function applyTheme(theme: string) {
 		root.classList.contains('oled') ? '#000000' : root.classList.contains('dark') ? '#121916' : '#f8f7f2'
 	);
 }
+
+let systemThemeListenerInstalled = false;
+
+/**
+ * Keeps "System" following the OS while the page is open (COL-6): one
+ * `prefers-color-scheme` change listener re-applies the theme, but only while
+ * the chosen theme is still "system". Installed once, by RootLayout; the
+ * returned function removes it.
+ */
+export function installSystemThemeListener(): () => void {
+	const query = typeof window === 'undefined' ? undefined : window.matchMedia?.('(prefers-color-scheme: dark)');
+	if (!query || systemThemeListenerInstalled) return () => {};
+	const onChange = () => {
+		if (getTheme() === 'system') applyTheme('system');
+	};
+	query.addEventListener('change', onChange);
+	systemThemeListenerInstalled = true;
+	return () => {
+		query.removeEventListener('change', onChange);
+		systemThemeListenerInstalled = false;
+	};
+}

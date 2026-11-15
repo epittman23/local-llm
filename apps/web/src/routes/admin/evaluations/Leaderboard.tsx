@@ -3,7 +3,9 @@ import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Table } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
 import { getLeaderboard } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -107,7 +109,7 @@ export function Leaderboard() {
 					</div>
 				</div>
 
-				<div className="relative max-w-full min-h-[6.25rem] overflow-x-auto rounded-sm whitespace-nowrap">
+				<div className="relative max-w-full min-h-[6.25rem] rounded-sm">
 					{loading && (
 						<div className="bg-background/50 absolute inset-0 z-10 flex items-center justify-center">
 							<Spinner />
@@ -118,7 +120,10 @@ export function Leaderboard() {
 						<div className="text-muted-foreground py-1 text-center text-xs">No models found</div>
 					) : (
 						ranked.length > 0 && (
-							<table className={cn('text-muted-foreground w-full text-left text-sm', loading && 'opacity-20')}>
+							<Table
+								aria-label="Leaderboard"
+								className={cn('text-muted-foreground text-left whitespace-nowrap', loading && 'opacity-20')}
+							>
 								<thead className="text-foreground bg-transparent text-xs uppercase">
 									<tr className="border-b">
 										{COLUMNS.map((col, i) => (
@@ -159,13 +164,11 @@ export function Leaderboard() {
 											<td className="text-foreground px-3 py-1.5 font-normal">{ranks.get(model.id) ?? '-'}</td>
 											<td className="px-3 py-1.5">
 												<div className="flex items-center gap-2">
-													<img
+													<ProfileAvatar
 														src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
-														alt={model.name}
-														className="size-5 shrink-0 rounded-full object-cover"
-														onError={(e) => {
-															e.currentTarget.src = '/favicon.png';
-														}}
+														name={model.name}
+														size="sm"
+														className="size-5"
 													/>
 													<Tip content={`${model.name} (${model.id})`} side="top">
 														<span className="text-foreground line-clamp-1 font-normal">{model.name}</span>
@@ -200,7 +203,7 @@ export function Leaderboard() {
 										</tr>
 									))}
 								</tbody>
-							</table>
+							</Table>
 						)
 					)}
 				</div>

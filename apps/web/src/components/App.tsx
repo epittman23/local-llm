@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
@@ -25,6 +26,7 @@ export default function App() {
 					<SocketProvider>
 						<TooltipProvider>
 							<AppRouter />
+							<ConnectionBanner />
 							<Toaster />
 						</TooltipProvider>
 					</SocketProvider>

@@ -414,7 +414,7 @@ async def dispatch_notification_event(app: Any, event: Any) -> None:
 
     from local_llm.events import event_user_ids
 
-    app_name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'Local LLM')
+    app_name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'local-llm')
     for user_id in event_user_ids(event):
         try:
             for target in await _matching_targets(user_id, event.event):

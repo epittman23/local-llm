@@ -31,4 +31,21 @@ describe('ChatPlaceholder suggestions', () => {
 		render(<ChatPlaceholder model={{ id: 'm', name: 'M' }} temporary={false} onSelect={vi.fn()} />);
 		expect(screen.queryByRole('button')).toBeNull();
 	});
+
+	it('shows only the model, with no empty "Suggested" box, under the new default of none (#1065)', () => {
+		const { container } = render(
+			<ChatPlaceholder model={{ id: 'qwen', name: 'Qwen Coder' }} temporary={false} onSelect={vi.fn()} />
+		);
+		expect(screen.getByRole('heading', { level: 1, name: 'Qwen Coder' })).toBeInTheDocument();
+		expect(screen.queryByText('Suggested')).toBeNull();
+		// A model without a picture shows its initials (#924).
+		expect(container.querySelector('[data-slot="avatar-fallback"]')?.textContent).toBe('QC');
+	});
+});
+
+describe('ChatPlaceholder heading', () => {
+	it('shows the model name on the standard’s heading step (TYP-2)', () => {
+		render(<ChatPlaceholder model={model} temporary={false} onSelect={vi.fn()} />);
+		expect(screen.getByRole('heading', { level: 1, name: 'Coder' }).className).toContain('text-heading');
+	});
 });

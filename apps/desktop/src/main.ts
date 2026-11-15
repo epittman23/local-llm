@@ -89,7 +89,7 @@ import {
 const STATUS_HTML = join(__dirname, '..', 'static', 'status.html');
 const ICON = app.isPackaged
 	? join(process.resourcesPath, 'icon.png')
-	: join(__dirname, '..', '..', 'web', 'public', 'favicon.png');
+	: join(__dirname, '..', '..', 'web', 'public', 'icon-512.png');
 
 // userData is ~/.config/Local LLM: package.json's productName, the same in
 // development (`electron .`) and packaged, so both share one session.
@@ -109,7 +109,7 @@ let appOrigin = '';
 let mainWindow: BrowserWindow | null = null;
 let statusWindow: BrowserWindow | null = null;
 let statusView: 'progress' | 'settings' = 'progress';
-let progress: Progress = createProgress('startup', 'Starting Local LLM', [], Date.now());
+let progress: Progress = createProgress('startup', 'Starting local-llm', [], Date.now());
 /** The stack this app started (or adopted) and so must stop. */
 let owned: { pgid: number; child?: ChildProcess; exitCode?: number | null } | null = null;
 let buildChild: ChildProcess | null = null;
@@ -192,7 +192,7 @@ function openStatus(view: 'progress' | 'settings'): void {
 			maximizable: false,
 			fullscreenable: false,
 			center: true,
-			title: 'Local LLM',
+			title: 'local-llm',
 			icon: ICON,
 			autoHideMenuBar: true,
 			show: false,
@@ -280,7 +280,7 @@ function openApp(url: string): Promise<void> {
 		backgroundColor: '#121916',
 		minWidth: 480,
 		minHeight: 400,
-		title: 'Local LLM',
+		title: 'local-llm',
 		icon: ICON,
 		autoHideMenuBar: true,
 		show: false,
@@ -507,7 +507,7 @@ async function startup(): Promise<void> {
 		}
 
 		if (!isLocalOrigin(origin)) {
-			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
+			setProgress(createProgress('startup', 'Connecting to local-llm', startupRemote(origin), now()));
 			openStatus('progress');
 			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			if ((await probe(`${origin}/health`, 5000)) === null) {
@@ -548,14 +548,14 @@ async function startup(): Promise<void> {
 		});
 
 		if (plan.mode === 'refuse' && plan.held) {
-			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
+			setProgress(createProgress('startup', 'Starting local-llm', STARTUP_OWN, now()));
 			openStatus('progress');
 			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			return fail(refuseMessage(plan.held, origin, port, repo));
 		}
 
 		if (plan.mode === 'attach' || plan.mode === 'adopt') {
-			setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_ATTACH, now()));
+			setProgress(createProgress('startup', 'Starting local-llm', STARTUP_ATTACH, now()));
 			openStatus('progress');
 			const found =
 				plan.mode === 'adopt' ? 'found the backend this app started earlier' : `found a running backend at ${origin}`;
@@ -576,7 +576,7 @@ async function startup(): Promise<void> {
 			return await openApp(plan.loadUrl);
 		}
 
-		setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
+		setProgress(createProgress('startup', 'Starting local-llm', STARTUP_OWN, now()));
 		openStatus('progress');
 		dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 		if (!isRepoRoot(repo)) {
@@ -589,7 +589,7 @@ async function startup(): Promise<void> {
 		if (plan.buildUi) {
 			dispatch({ type: 'begin', step: 'build', at: now() });
 			const code = await runBuild(repo, abort.signal);
-			if (code !== 0) return fail(`The UI build stopped (exit code ${code}). The log shows why.`);
+			if (code !== 0) return fail(`Building the interface stopped (exit code ${code}). The log below shows the cause.`);
 			dispatch({ type: 'finish', step: 'build', at: now() });
 		} else {
 			dispatch({
@@ -608,7 +608,9 @@ async function startup(): Promise<void> {
 		if (!child.pid) {
 			const error = await Promise.race([spawnError, sleep(1000).then(() => null)]);
 			if (abort.signal.aborted) throw new Cancelled();
-			return fail(`Could not start make backend${error ? ` (${error.message})` : ''}.`);
+			return fail(
+				`Could not start the server${error ? ` (${error.message})` : ''}. Check that make and the login shell work in a terminal.`
+			);
 		}
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
@@ -623,7 +625,7 @@ async function startup(): Promise<void> {
 			() =>
 				started.exitCode === undefined
 					? null
-					: `make backend stopped (exit code ${started.exitCode}) before the backend was ready. The log shows why.`,
+					: `The server stopped before it was ready (exit code ${started.exitCode}). The log below shows the cause.`,
 			true
 		);
 		dispatch({ type: 'finish', step: 'backend', at: now() });
@@ -642,7 +644,7 @@ async function startup(): Promise<void> {
  * what is left running after a forced stop, or null.
  */
 async function stopEarlier(record: OwnedRecord): Promise<string | null> {
-	setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_STOP_EARLIER, Date.now()));
+	setProgress(createProgress('startup', 'Starting local-llm', STARTUP_STOP_EARLIER, Date.now()));
 	openStatus('progress');
 	dispatch({
 		type: 'begin',
@@ -741,7 +743,7 @@ async function shutdown(): Promise<void> {
 		return;
 	}
 
-	setProgress(createProgress('shutdown', 'Stopping Local LLM', SHUTDOWN, Date.now()));
+	setProgress(createProgress('shutdown', 'Stopping local-llm', SHUTDOWN, Date.now()));
 	openStatus('progress');
 	dispatch({ type: 'begin', step: 'window', at: Date.now() });
 	// destroy() fires no unload events, so each page first goes to a blank one:
@@ -1003,6 +1005,27 @@ function applyPolicy(): void {
 	);
 }
 
+/** The build's commit, recorded by scripts/build-info.mjs; absent in an older build. */
+function buildCommit(): string | undefined {
+	try {
+		return JSON.parse(readFileSync(join(__dirname, 'build-info.json'), 'utf8')).commit;
+	} catch {
+		return undefined;
+	}
+}
+
+function showAbout(): void {
+	const lines = [
+		`Version ${app.getVersion()}`,
+		`Build ${buildCommit() ?? 'not recorded'}`,
+		`Electron ${process.versions.electron ?? 'unknown'}`,
+		`Server ${config.serverUrl}`
+	];
+	const parent = mainWindow ?? statusWindow;
+	const options = { type: 'info' as const, title: 'About local-llm', message: 'local-llm', detail: lines.join('\n') };
+	void (parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options));
+}
+
 function buildMenu(): void {
 	Menu.setApplicationMenu(
 		Menu.buildFromTemplate([
@@ -1015,8 +1038,24 @@ function buildMenu(): void {
 				]
 			},
 			{ role: 'editMenu' },
-			{ role: 'viewMenu' },
-			{ role: 'windowMenu' }
+			{
+				label: 'View',
+				// Zoom stays: with the menu bar hidden, an accelerator works only while its item exists.
+				submenu: [
+					{ role: 'resetZoom' },
+					{ role: 'zoomIn' },
+					{ role: 'zoomOut' },
+					{ type: 'separator' },
+					{ role: 'togglefullscreen' },
+					{ type: 'separator' },
+					{
+						label: 'Developer',
+						submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }]
+					}
+				]
+			},
+			{ role: 'windowMenu' },
+			{ label: 'Help', submenu: [{ label: 'About local-llm', click: showAbout }] }
 		])
 	);
 }

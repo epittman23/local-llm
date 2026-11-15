@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -9,6 +10,10 @@ import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import type { ChatModel } from './useModels';
+
+/** Shown everywhere except a screen under 520 px tall, and the reverse (A11Y-5). */
+const SHORT_HIDDEN = '[@media(max-height:520px)]:hidden';
+const SHORT_ONLY = 'hidden [@media(max-height:520px)]:inline-flex';
 
 export const modelImage = (id: string) =>
 	`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(id)}`;
@@ -36,9 +41,16 @@ export function ModelSelector({
 		user?.role === 'admin' ||
 		((user?.permissions as { chat?: { multiple_models?: boolean } } | undefined)?.chat?.multiple_models ?? true);
 	const visible = useMemo(() => models.filter((m) => !m.info?.meta?.hidden), [models]);
+	const setAsDefault = () =>
+		update({ models: selected }).then(
+			() => toast.success('Default model updated'),
+			(e) => toast.error(`${e?.message ?? e}`)
+		);
 
 	return (
-		<div className="flex min-w-0 flex-col items-start gap-0.5">
+		// The start inset keeps the first row clear of the shell's floating menu
+		// button on a short phone screen (AppShell, A11Y-5).
+		<div className="flex min-w-0 flex-col items-start gap-0.5 ps-[var(--shell-menu-inset,0px)]">
 			{selected.map((id, idx) => (
 				<div key={idx} className="flex max-w-full items-center gap-1">
 					<Picker
@@ -47,6 +59,7 @@ export function ModelSelector({
 						value={id}
 						disabled={disabled}
 						onPick={(pick) => onChange(selected.map((s, i) => (i === idx ? pick : s)))}
+						onSetDefault={setAsDefault}
 					/>
 					{idx === 0 && multiple && (
 						<Button
@@ -74,17 +87,9 @@ export function ModelSelector({
 					)}
 				</div>
 			))}
-			<Button
-				type="button"
-				variant="ghost"
-				size="xs"
-				onClick={() =>
-					update({ models: selected }).then(
-						() => toast.success('Default model updated'),
-						(e) => toast.error(`${e?.message ?? e}`)
-					)
-				}
-			>
+			{/* On a short screen (200% zoom, a phone on its side) this moves into the
+			    model menu, so the conversation keeps the height (A11Y-5). */}
+			<Button type="button" variant="ghost" size="xs" className={SHORT_HIDDEN} onClick={setAsDefault}>
 				Set as default
 			</Button>
 		</div>
@@ -96,17 +101,20 @@ function Picker({
 	models,
 	value,
 	onPick,
+	onSetDefault,
 	disabled
 }: {
 	id?: string;
 	models: ChatModel[];
 	value: string;
 	onPick: (id: string) => void;
+	onSetDefault: () => void;
 	disabled?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
 	const current = models.find((m) => m.id === value);
+	const shownName = current?.name ?? (value ? value : 'Select a model');
 	const q = query.trim().toLowerCase();
 	const shown = q
 		? models.filter(
@@ -131,9 +139,9 @@ function Picker({
 					disabled={disabled}
 					variant="ghost"
 					className="text-title min-w-0 shrink"
-					aria-label="Select a model"
+					aria-label={`Model: ${shownName}`}
 				>
-					<span className="truncate">{current?.name ?? (value ? value : 'Select a model')}</span>
+					<span className="truncate">{shownName}</span>
 					<ChevronDown className="size-4 shrink-0" />
 				</Button>
 			</PopoverTrigger>
@@ -161,17 +169,23 @@ function Picker({
 								setOpen(false);
 							}}
 						>
-							<img
-								src={modelImage(m.id)}
-								alt=""
-								className="size-5 rounded-full object-cover"
-								onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-							/>
+							<ProfileAvatar src={modelImage(m.id)} name={m.name} size="sm" className="size-5" />
 							<span className="min-w-0 flex-1 truncate">{m.name}</span>
 							{m.id === value && <Check className="size-3.5" />}
 						</Button>
 					))}
 				</div>
+				<Button
+					type="button"
+					variant="ghost"
+					className={cn('mt-1 w-full justify-start', SHORT_ONLY)}
+					onClick={() => {
+						onSetDefault();
+						setOpen(false);
+					}}
+				>
+					Set as default
+				</Button>
 			</PopoverContent>
 		</Popover>
 	);

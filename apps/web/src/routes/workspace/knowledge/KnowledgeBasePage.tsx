@@ -82,7 +82,7 @@ type FilesPage = {
 	hasPending: boolean;
 };
 
-const selectClass = 'bg-transparent text-xs [&>option]:bg-popover [&>option]:text-popover-foreground';
+const selectClass = 'bg-transparent text-xs';
 
 /**
  * Ports workspace/Knowledge/KnowledgeBase.svelte (the 1,745-line detail page):

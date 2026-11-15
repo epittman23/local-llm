@@ -21,10 +21,10 @@ describe('UiStandardPage (/ui)', () => {
 		document.documentElement.className = '';
 	});
 
-	it('sets the tab title while mounted, and restores it', () => {
+	it('leaves the tab title to its route, so it reads like every other page (LAY-5)', () => {
 		document.title = 'before';
 		const { unmount } = renderPage();
-		expect(document.title).toBe('Interface standard · local-llm');
+		expect(document.title).toBe('before');
 		unmount();
 		expect(document.title).toBe('before');
 	});
@@ -111,7 +111,16 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'No results' }));
 		expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
-		expect(screen.getByText('Prompts could not be loaded')).toBeTruthy();
+		const failed = screen.getByRole('alert');
+		expect(failed.textContent).toContain("Couldn't load prompts");
+		expect(within(failed).getByText('The server did not answer. It may be restarting or stopped.')).toBeTruthy();
+		expect(within(failed).getByRole('button', { name: 'Try again' })).toBeTruthy();
+	});
+
+	it('raises a failure toast that names what was not saved (FBK-2)', async () => {
+		renderPage();
+		fireEvent.click(screen.getByRole('button', { name: 'Show a save failure' }));
+		expect(await screen.findByText('Prompt could not be saved')).toBeTruthy();
 	});
 
 	it('gives every icon-only button a name, and toggles line wrapping in code', () => {
@@ -123,6 +132,7 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Copy configuration example00a1' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a confirmation' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a failure' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Show a save failure' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
 		const wrap = screen.getByRole('button', { name: 'Wrap lines' });
 		fireEvent.click(wrap);

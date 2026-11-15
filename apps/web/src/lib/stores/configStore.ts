@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { create } from 'zustand';
 import { APP_NAME } from '@/lib/constants';
+import { clearDynamicTitle, setDynamicTitle } from '@/lib/ui/pageTitle';
 
 // A minimal slice of d863707:apps/openwebui/src/lib/stores/index.ts's much larger
 // `Config` type -- that one carries every feature flag the whole app reads
@@ -53,10 +54,16 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // SvelteKit app would read `$WEBUI_NAME` rather than the constant directly.
 export const useWebUIName = () => useConfigStore((state) => state.config?.name || APP_NAME);
 
-/** Sets the tab title to `<section> / <app name>`, as every Svelte page does in its <svelte:head>, or to the app name alone for null. */
-export function useDocumentTitle(section: string | null) {
-	const name = useWebUIName();
+/**
+ * Names the current page in the tab title (`<page> · <app name>`, LAY-5) while
+ * the calling page is mounted, for a name only the page knows (a chat's title).
+ * Null leaves the title to the route's own name. RootLayout writes the title;
+ * see lib/ui/pageTitle.ts.
+ */
+export function useDocumentTitle(page: string | null) {
+	const owner = useRef({}).current;
 	useEffect(() => {
-		document.title = section === null ? name : `${section} / ${name}`;
-	}, [section, name]);
+		setDynamicTitle(owner, page);
+		return () => clearDynamicTitle(owner);
+	}, [owner, page]);
 }

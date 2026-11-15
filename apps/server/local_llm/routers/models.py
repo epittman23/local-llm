@@ -41,6 +41,7 @@ from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.chat_variables import get_chat_variables_schema
 from local_llm.utils.models import get_all_models
+from local_llm.utils.validate import is_default_profile_image
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,11 @@ def add_chat_variables_schema(model_dict: dict) -> dict:
     if schema:
         model_dict.setdefault('meta', {})['chat_variables_schema'] = schema
     return model_dict
+
+
+def _no_profile_image() -> HTTPException:
+    """No picture of its own: the frontend draws the initials (decision D1, 2026-11-14)."""
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No profile image')
 
 
 def _safe_static_redirect_path(url: str) -> str | None:
@@ -730,10 +736,7 @@ async def get_model_profile_image(
 
                 # only serve known-safe raster types inline; reject SVG/unknown (can run script on our origin)
                 if media_type not in PROFILE_IMAGE_ALLOWED_MIME_TYPES:
-                    return RedirectResponse(
-                        url='/static/favicon.png',
-                        status_code=status.HTTP_302_FOUND,
-                    )
+                    raise _no_profile_image()
 
                 headers = {
                     'Content-Disposition': 'inline',
@@ -749,7 +752,7 @@ async def get_model_profile_image(
                 )
             except Exception:
                 pass
-        else:
+        elif not is_default_profile_image(profile_image_url):
             safe_static = _safe_static_redirect_path(profile_image_url)
             if safe_static:
                 return RedirectResponse(
@@ -757,10 +760,7 @@ async def get_model_profile_image(
                     status_code=status.HTTP_302_FOUND,
                 )
 
-    return RedirectResponse(
-        url='/static/favicon.png',
-        status_code=status.HTTP_302_FOUND,
-    )
+    raise _no_profile_image()
 
 
 ############################

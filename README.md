@@ -187,8 +187,8 @@ Anything marked *admin* also needs `role === 'admin'`.
 
 | Path | What you get |
 |---|---|
-| `/auth` | Sign in / sign up / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
-| `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
+| `/auth` | Sign in / sign up / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>`, `?reason=expired` (shows "Your session expired. Sign in to continue where you left off."; set when a session ends while the app is open, or when the token saved from an earlier visit is refused on load) |
+| `/error` | "Can't reach the server": shown when the server does not answer. Asks it again every 3 s and on "Try now"; once it answers, loads `?redirect=<path>` (a same-origin app path; home if none) |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
 | `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch, and a mock of the planned canvas ([docs/plans/canvas.md](docs/plans/canvas.md)). Static; shows nothing from the backend |

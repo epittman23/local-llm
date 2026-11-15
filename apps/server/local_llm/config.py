@@ -109,8 +109,8 @@ except Exception:
     pass
 
 # Fork change: fall back to the frontend's source public/static when there is
-# no build yet (`make backend` + `make frontend` in a fresh clone), so
-# /static/favicon.png -- the model-avatar fallback -- still exists
+# no build yet (`make backend` + `make frontend` in a fresh clone), so what it
+# holds (the user-import CSV template) is served even then
 # (docs/history/bug-review-2026-09-27.md L14). FRONTEND_BUILD_DIR is apps/web/dist.
 FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR / 'static'
 if not FRONTEND_STATIC_DIR.exists() and (FRONTEND_BUILD_DIR.parent / 'public' / 'static').exists():
@@ -125,24 +125,19 @@ for file_path in FRONTEND_STATIC_DIR.glob('**/*'):
         except Exception as e:
             logging.error(f'An error occurred: {e}')
 
-# The default avatar (profile/image falls back to {STATIC_DIR}/user.png) lives
-# at the frontend's root, not under static/, so the loop above never copied it
-# and every default avatar was a 500 (#299). The build first, then the source.
-for default_avatar in (FRONTEND_BUILD_DIR / 'user.png', FRONTEND_BUILD_DIR.parent / 'public' / 'user.png'):
-    if default_avatar.exists():
+# Since decision D1 (2026-11-14) the model and user picture endpoints answer
+# 404 for one without a picture, and the frontend draws initials, so Open
+# WebUI's user.png and favicon.png are gone. A webhook without a picture still
+# gets an image, the mark (lucide's Sigma): it lives at the frontend's root,
+# not under static/, so it is copied here by name. The build first, then the source.
+WEBHOOK_FALLBACK_IMAGE = STATIC_DIR / 'icon-512.png'
+for mark in (FRONTEND_BUILD_DIR / 'icon-512.png', FRONTEND_BUILD_DIR.parent / 'public' / 'icon-512.png'):
+    if mark.exists():
         try:
-            shutil.copyfile(default_avatar, STATIC_DIR / 'user.png')
+            shutil.copyfile(mark, WEBHOOK_FALLBACK_IMAGE)
         except Exception as e:
             logging.error(f'An error occurred: {e}')
         break
-
-frontend_favicon = FRONTEND_STATIC_DIR / 'favicon.png'
-
-if frontend_favicon.exists():
-    try:
-        shutil.copyfile(frontend_favicon, STATIC_DIR / 'favicon.png')
-    except Exception as e:
-        logging.error(f'An error occurred: {e}')
 
 frontend_splash = FRONTEND_STATIC_DIR / 'splash.png'
 
@@ -1417,51 +1412,14 @@ DEFAULT_MODELS = os.getenv('DEFAULT_MODELS', None)
 
 DEFAULT_PINNED_MODELS = os.getenv('DEFAULT_PINNED_MODELS', None)
 
+# The new-chat screen offers no suggestions unless an admin adds some (owner's
+# decision, 2026-11-14: the stock Open WebUI list misstated what this is for).
+# Revision 52b5a00a0e74 clears that stock list from existing installs.
 try:
     default_prompt_suggestions = JSONCodec.loads(os.getenv('DEFAULT_PROMPT_SUGGESTIONS', '[]'))
 except Exception as e:
     log.exception(f'Error loading DEFAULT_PROMPT_SUGGESTIONS: {e}')
     default_prompt_suggestions = []
-if default_prompt_suggestions == []:
-    default_prompt_suggestions = [
-        {
-            'title': ['Help me study', 'vocabulary for a college entrance exam'],
-            'content': (
-                "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the "
-                'correct option.'
-            ),
-        },
-        {
-            'title': ['Give me ideas', "for what to do with my kids' art"],
-            'content': (
-                "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's "
-                'also '
-                'so much clutter.'
-            ),
-        },
-        {
-            'title': ['Tell me a fun fact', 'about the Roman Empire'],
-            'content': 'Tell me a random fun fact about the Roman Empire',
-        },
-        {
-            'title': ['Show me a code snippet', "of a website's sticky header"],
-            'content': "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
-        },
-        {
-            'title': [
-                'Explain options trading',
-                "if I'm familiar with buying and selling stocks",
-            ],
-            'content': "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
-        },
-        {
-            'title': ['Overcome procrastination', 'give me tips'],
-            'content': (
-                'Could you start by asking me about instances when I procrastinate the most and then give me some '
-                'suggestions to overcome it?'
-            ),
-        },
-    ]
 
 DEFAULT_PROMPT_SUGGESTIONS = default_prompt_suggestions
 

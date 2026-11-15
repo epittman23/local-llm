@@ -324,7 +324,9 @@ class CalendarTable:
                 id=str(uuid4()),
                 user_id=user_id,
                 name='Personal',
-                color='#3b82f6',
+                # No stored colour: the frontend draws a calendar without one in the
+                # --series-1 token of the current theme (#989, decision D1b).
+                color=None,
                 is_default=True,
                 created_at=now,
                 updated_at=now,

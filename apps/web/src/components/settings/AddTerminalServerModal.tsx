@@ -35,7 +35,7 @@ import { specRequestUrl } from './toolServerModel';
 
 const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const mono = `${bare} font-mono`;
-const select = 'bg-transparent pr-5 text-sm [&>option]:bg-popover';
+const select = 'bg-transparent pr-5 text-sm';
 const label = 'text-muted-foreground text-xs';
 
 /**

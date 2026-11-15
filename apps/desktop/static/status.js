@@ -7,6 +7,8 @@ const api = window.lllmStatus;
 
 let progress = null;
 let followLog = true;
+/** Where render() last scrolled the log (to a pixel or two, on a scaled display), so its own scroll is not taken for the reader's. */
+let autoScrollTop = -1;
 
 function formatDuration(ms) {
 	const seconds = Math.max(0, ms) / 1000;
@@ -49,39 +51,53 @@ function renderActions() {
 	} else if (progress.offerStopLlama) {
 		actions.append(
 			button('Open log', 'open-log'),
-			button('Leave it', 'quit'),
-			button('Stop llama-server', 'stop-llama', true)
+			button('Leave it running', 'quit'),
+			button('Stop it', 'stop-llama', true)
 		);
 	} else if (progress.kind === 'startup' && !progress.finished) {
 		actions.append(button('Cancel', 'cancel'));
 	}
 }
 
+function stepItem(state, text) {
+	const li = document.createElement('li');
+	li.className = state;
+	const icon = document.createElement('span');
+	icon.className = 'icon';
+	icon.setAttribute('aria-label', state);
+	const label = document.createElement('span');
+	label.className = 'label';
+	label.textContent = text;
+	li.append(icon, label);
+	return li;
+}
+
 function renderSteps(now) {
 	const list = $('steps');
 	list.replaceChildren();
+	// Once something needs an answer, the steps that went well fold into one
+	// line, so the problem and its buttons fit the window (#926).
+	const fold = Boolean(progress.error || progress.offerStopLlama);
+	const done = progress.steps.filter((step) => step.state === 'done').length;
+	if (fold && done > 0) list.append(stepItem('done', done === 1 ? '1 step done' : `${done} steps done`));
 	for (const step of progress.steps) {
 		if (step.optional && (step.state === 'pending' || step.state === 'skipped')) continue;
-		const li = document.createElement('li');
-		li.className = step.state;
-		const icon = document.createElement('span');
-		icon.className = 'icon';
-		icon.setAttribute('aria-label', step.state);
-		const label = document.createElement('span');
-		label.className = 'label';
-		label.textContent = step.label;
+		if (fold && (step.state === 'done' || step.state === 'skipped')) continue;
+		const li = stepItem(step.state, step.label);
 		const time = document.createElement('span');
 		time.className = 'time';
 		time.textContent = stepTime(step, now);
-		li.append(icon, label, time);
-		if (step.detail) {
+		li.append(time);
+		const hinted = step.state === 'running' && step.hint && now - step.startedAt >= step.hint.afterMs;
+		// A hint, once it shows, says more than the raw output line it replaces.
+		if (step.detail && !(hinted && step.detailIsOutput)) {
 			const sub = document.createElement('span');
-			sub.className = 'sub';
+			sub.className = step.detailIsOutput ? 'sub output' : 'sub';
 			sub.textContent = step.detail;
 			sub.title = step.detail;
 			li.append(sub);
 		}
-		if (step.state === 'running' && step.hint && now - step.startedAt >= step.hint.afterMs) {
+		if (hinted) {
 			const hint = document.createElement('span');
 			hint.className = 'hint';
 			hint.textContent = step.hint.text;
@@ -99,15 +115,25 @@ function render() {
 	$('elapsed').textContent = formatDuration((progress.endedAt ?? now) - progress.startedAt);
 	renderSteps(now);
 	$('error').hidden = !progress.error;
-	$('error').textContent = progress.error ?? '';
+	$('cause').hidden = !progress.cause;
+	$('cause').textContent = progress.cause ?? '';
+	$('error-message').textContent = progress.error ?? '';
+	$('notice').hidden = !(progress.offerStopLlama && !progress.error);
 	$('details').hidden = progress.log.length === 0;
 	const log = $('log');
 	const text = progress.log.join('\n');
-	if (log.textContent !== text) {
-		log.textContent = text;
-		if (followLog) log.scrollTop = log.scrollHeight;
+	if (log.textContent !== text) log.textContent = text;
+	// Every tick, not only on new text: the log's font arrives after its first
+	// lines, and the longer wrap it gives would leave the end out of view.
+	if (followLog) {
+		log.scrollTop = log.scrollHeight;
+		autoScrollTop = log.scrollTop;
 	}
 }
+
+$('details').addEventListener('toggle', () => {
+	$('details-toggle').textContent = $('details').open ? 'Hide log' : 'Show log';
+});
 
 function onProgress(next) {
 	const failedNow = next.error && !progress?.error;
@@ -137,9 +163,18 @@ async function loadSettings() {
 	$('restart').hidden = true;
 }
 
+/**
+ * Settings opened from the app's menu, once the app is running, has no
+ * progress to go back to: main.ts closes the window, so the button says Close.
+ */
+function hasProgressView() {
+	return Boolean(progress?.steps.length) && !(progress.kind === 'startup' && progress.finished);
+}
+
 function showView(view) {
 	$('progress-view').hidden = view !== 'progress';
 	$('settings-view').hidden = view !== 'settings';
+	$('settings-back').textContent = hasProgressView() ? 'Back' : 'Close';
 	if (view === 'settings') void loadSettings();
 }
 
@@ -165,7 +200,7 @@ $('settings-form').addEventListener('submit', async (event) => {
 		// A launch with the override again uses it again; Restart now leaves it out (#424).
 		message.textContent = result.replaced
 			? `Saved. Restart now starts with it, without ${result.replaced.url} from ${result.replaced.from}.`
-			: 'Saved. It applies the next time Local LLM starts.';
+			: 'Saved. It applies the next time local-llm starts.';
 		$('restart').hidden = false;
 	} else {
 		message.textContent = `Saved. Retry to start with it${instead}.`;
@@ -181,11 +216,12 @@ $('restart').addEventListener('click', () => void api.action('restart'));
 
 $('settings-back').addEventListener('click', () => {
 	void api.action('close-settings');
-	if (progress?.steps.length) showView('progress');
+	if (hasProgressView()) showView('progress');
 });
 
 $('log').addEventListener('scroll', () => {
 	const log = $('log');
+	if (Math.abs(log.scrollTop - autoScrollTop) <= 2) return;
 	followLog = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
 });
 

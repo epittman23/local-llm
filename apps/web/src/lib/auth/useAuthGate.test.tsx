@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { sessionEndReason } from './session';
 import { useAuthGate } from './useAuthGate';
+
+vi.mock('./session', () => ({ sessionEndReason: vi.fn(() => null) }));
 
 // A tiny host so useAuthGate runs inside real router context -- matching how
 // AppShell.tsx actually calls it, and how AppRouter.tsx builds its router
@@ -56,5 +59,15 @@ describe('useAuthGate', () => {
 
 		expect(router.state.location.pathname).toBe('/workspace');
 		expect(screen.getByText('protected content')).toBeInTheDocument();
+	});
+
+	it('tells the sign-in page when the session ran out (#1061)', async () => {
+		vi.mocked(sessionEndReason).mockReturnValueOnce('expired');
+		useAuthStore.setState({ status: 'anonymous' });
+
+		const { router } = renderGate('/c/abc');
+
+		expect(await screen.findByText('auth page')).toBeInTheDocument();
+		expect(router.state.location.search).toBe('?redirect=%2Fc%2Fabc&reason=expired');
 	});
 });

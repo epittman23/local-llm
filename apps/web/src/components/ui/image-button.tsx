@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 
 /**
  * A picture that is itself the click target (the interface standard, ACT-8):

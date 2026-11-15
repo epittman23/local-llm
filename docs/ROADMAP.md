@@ -97,6 +97,8 @@ timeline
       2026-11-14 : Canvas beside the chat planned (docs/plans/canvas.md) : files and HTML a model provides become cards that open in a right-hand viewer and text editor : design shown on /ui, rules CNV-1 to CNV-8 : nothing built, its five decisions settled by the owner
       2026-11-14 : The interface standard becomes the app's theme on every page, dark by default : Geist and the neutral theme removed : a ratchet counts 963 remaining bypasses per file and only lets them fall
       2026-11-14 : 962 of 963 bypasses of the interface standard replaced, the last an exception the owner accepted : RowButton, ImageButton, a white canvas colour and an Important colour added to the standard : about 60 unit-test files added
+      2026-11-14 : The instance name defaults to local-llm : LLLM_NAME's default, its fallbacks, the OpenAPI title and the manifest changed from Local LLM : an LLLM_NAME in infra/.env still overrides it
+      2026-11-14 : Owner decisions for the UX review's cross-cutting section : the Sigma glyph as mark and favicon, initials for imageless models and users (their picture endpoints answer 404), default colours from the tokens, no stock prompt suggestions : the ratchet counts three more patterns
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

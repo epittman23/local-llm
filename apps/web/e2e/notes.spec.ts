@@ -170,6 +170,14 @@ test('importing: md/txt become notes, anything else is refused', async ({ page }
 	await expect(page.getByText('Only txt and md files are allowed')).toBeVisible();
 });
 
+test('an open note has one h1, named for the note (A11Y-3)', async ({ page }) => {
+	await mockWorkspaceBackend(page, enabled);
+	await mockNotes(page, [note('a', 'Groceries')]);
+	await page.goto('/notes/a');
+	await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Groceries');
+});
+
 test('editing autosaves the title and the body as html, markdown and json', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page, [note('a', 'Groceries')]);

@@ -10,6 +10,7 @@ import { MemberSelector } from '@/components/common/MemberSelector';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,7 +53,7 @@ import { usePinnedMessages } from './usePinnedMessages';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
-const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm [&>option]:bg-popover';
+const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm';
 
 /**
  * Ports channel/PinnedMessagesModal.svelte: the channel's pinned messages,
@@ -209,11 +210,7 @@ export function ChannelInfoDialog({
 					<ul className="max-h-80 overflow-y-auto" aria-label="Members">
 						{members.data.users.map((u) => (
 							<li key={u.id} className="flex items-center gap-2 py-1.5 text-sm">
-								<img
-									src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
-									alt=""
-									className="size-6 rounded-full object-cover"
-								/>
+								<ProfileAvatar src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`} name={u.name} size="sm" />
 								<Tip content={u.email}>
 									<span className="truncate">{u.name}</span>
 								</Tip>
@@ -444,7 +441,6 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 					<ul className="flex max-h-96 flex-col gap-1 overflow-y-auto">
 						{webhooks.map((w) => {
 							const v = current(w);
-							const image = v.profile_image_url || '/static/favicon.png';
 							return (
 								<li key={w.id} className="rounded-xl border">
 									<RowButton
@@ -452,7 +448,7 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 										aria-expanded={expanded === w.id}
 										onClick={() => setExpanded((x) => (x === w.id ? null : w.id))}
 									>
-										<img src={image} alt="" className="size-8 rounded-full object-cover" />
+										<ProfileAvatar src={v.profile_image_url} name={v.name} />
 										<div className="min-w-0 flex-1">
 											<div className="truncate text-sm">{v.name}</div>
 											<div className="text-muted-foreground text-xs">
@@ -471,7 +467,7 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 												aria-label="Change picture"
 												onClick={() => fileInput.current?.click()}
 											>
-												<img src={image} alt="" className="size-8 rounded-full object-cover" />
+												<ProfileAvatar src={v.profile_image_url} name={v.name} />
 											</Button>
 											<Input
 												value={v.name}

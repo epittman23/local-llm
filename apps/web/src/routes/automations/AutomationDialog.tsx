@@ -81,7 +81,7 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 			<div className="px-1.5 py-0.5">
 				<select
 					aria-label="Frequency"
-					className="w-full bg-transparent text-sm [&>option]:bg-popover"
+					className="w-full bg-transparent text-sm"
 					value={value.frequency}
 					onChange={(e) => onChange(withFrequency(value, e.target.value as Frequency))}
 				>

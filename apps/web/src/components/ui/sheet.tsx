@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { cn } from 'cn';
+import { cn } from '@/lib/utils';
 import { Dialog as SheetPrimitive } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
 import { XIcon } from 'lucide-react';
+import { useReturnFocus } from '@/lib/ui/returnFocus';
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
 	return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -41,11 +42,14 @@ function SheetContent({
 	children,
 	side = 'right',
 	showCloseButton = true,
+	onOpenAutoFocus,
+	onCloseAutoFocus,
 	...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
 	side?: 'top' | 'right' | 'bottom' | 'left';
 	showCloseButton?: boolean;
 }) {
+	const returnFocus = useReturnFocus(onOpenAutoFocus, onCloseAutoFocus);
 	return (
 		<SheetPortal>
 			<SheetOverlay />
@@ -57,6 +61,7 @@ function SheetContent({
 					className
 				)}
 				{...props}
+				{...returnFocus}
 			>
 				{children}
 				{showCloseButton && (

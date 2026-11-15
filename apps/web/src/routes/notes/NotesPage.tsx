@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +33,7 @@ import {
 	safeFileName
 } from './notesModel';
 
-const filterSelect = 'bg-transparent px-1.5 text-dense [&>option]:bg-popover';
+const filterSelect = 'bg-transparent px-1.5 text-dense';
 
 /** Creates a note and returns its id (title defaults to today's date, as in the original). */
 export async function createNote(token: string, title = dayjs().format('YYYY-MM-DD'), md = '') {
@@ -87,13 +88,17 @@ function Notes() {
 	const list = useInfiniteQuery({
 		queryKey: ['notes', 'list', query, viewOption, perm, sort.key, sort.direction],
 		queryFn: async ({ pageParam }) =>
-			(await searchNotes(token, query, viewOption || null, perm, sort.key, pageParam, sort.direction).catch(
-				() => null
-			)) ?? { items: [], total: 0 },
+			(await searchNotes(token, query, viewOption || null, perm, sort.key, pageParam, sort.direction)) ?? {
+				items: [],
+				total: 0
+			},
 		initialPageParam: 1,
 		getNextPageParam: (last, pages) => ((last.items ?? []).length === 0 ? undefined : pages.length + 1),
 		enabled: !creating
 	});
+	// A failed first page is shown in place of the list (STA-4); a failed later
+	// page leaves the notes already shown alone.
+	const failed = list.data === undefined && (list.isError || list.isPaused);
 	const seen = new Set<string>();
 	const items: NoteListItem[] = (list.data?.pages ?? [])
 		.flatMap((p) => p.items ?? [])
@@ -295,7 +300,9 @@ function Notes() {
 					</select>
 				</ListSearchBar>
 
-				{list.isLoading ? (
+				{failed ? (
+					<LoadFailed what="notes" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+				) : list.isLoading ? (
 					<div className="flex min-h-[50vh] items-center justify-center">
 						<Spinner className="size-5" />
 					</div>

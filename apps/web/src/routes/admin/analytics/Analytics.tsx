@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { SettingSelect } from '@/components/settings/controls';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { getModels } from '@/lib/apis';
 import { getDailyStats, getModelAnalytics, getSummary, getTokenUsage, getUserAnalytics } from '@/lib/apis/analytics';
 import { getGroups } from '@/lib/apis/groups';
@@ -347,13 +348,11 @@ export default function Analytics() {
 											<td className="px-2.5 py-1.5">{idx + 1}</td>
 											<td className="px-2.5 py-1.5">
 												<div className="flex items-center gap-2">
-													<img
+													<ProfileAvatar
 														src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.model_id)}`}
-														alt={model.name}
-														className="size-5 shrink-0 rounded-full object-cover"
-														onError={(e) => {
-															e.currentTarget.src = '/favicon.png';
-														}}
+														name={model.name}
+														size="sm"
+														className="size-5"
 													/>
 													<span className="text-foreground line-clamp-1">{model.name}</span>
 												</div>
@@ -413,13 +412,11 @@ export default function Analytics() {
 											<td className="px-2.5 py-1.5">{idx + 1}</td>
 											<td className="px-2.5 py-1.5">
 												<div className="flex items-center gap-2">
-													<img
+													<ProfileAvatar
 														src={`${WEBUI_API_BASE_URL}/users/${user.user_id}/profile/image`}
-														alt={user.name || 'User'}
-														className="size-5 shrink-0 rounded-full object-cover"
-														onError={(e) => {
-															e.currentTarget.src = '/user.png';
-														}}
+														name={user.name || user.email}
+														size="sm"
+														className="size-5"
 													/>
 													<span className="text-foreground line-clamp-1">
 														{user.name || user.email || user.user_id.substring(0, 8)}

@@ -78,13 +78,13 @@
 		@apply text-sm leading-relaxed;
 	}
 	.rich-text :where(h1) {
-		@apply mt-4 mb-2 text-2xl font-semibold;
+		@apply mt-4 mb-2 text-heading font-title;
 	}
 	.rich-text :where(h2) {
-		@apply mt-4 mb-2 text-xl font-semibold;
+		@apply mt-4 mb-2 text-title font-title;
 	}
 	.rich-text :where(h3) {
-		@apply mt-3 mb-1.5 text-lg font-semibold;
+		@apply mt-3 mb-1.5 text-reading font-title;
 	}
 	.rich-text :where(p) {
 		@apply my-1;

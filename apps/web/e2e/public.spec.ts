@@ -228,7 +228,25 @@ test('an unreachable backend (no config) lands on /error', async ({ page }) => {
 	await page.goto('/auth');
 
 	await expect(page).toHaveURL(/\/error$/);
-	await expect(page.getByText('Backend Required', { exact: false })).toBeVisible();
+	await expect(page.getByRole('heading', { level: 1, name: "Can't reach the server" })).toBeVisible();
+	await expect(page.getByRole('status')).toContainText('the server answered with an error (503)');
+});
+
+test('the unreachable page goes back to where the person was going once the server answers', async ({ page }) => {
+	let down = true;
+	await page.route('**/api/config', (route) =>
+		down
+			? route.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"down"}' })
+			: route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(baseConfig) })
+	);
+
+	await page.goto('/auth?redirect=%2Fauth%3Fform%3D1');
+	await expect(page).toHaveURL(/\/error\?redirect=%2Fauth%3Fform%3D1$/);
+	await expect(page.getByRole('heading', { level: 1, name: "Can't reach the server" })).toBeVisible();
+
+	down = false;
+	await page.getByRole('button', { name: 'Try now' }).click();
+	await expect(page).toHaveURL(/\/auth\?form=1$/);
 });
 
 test('/watch forwards a video id to the chat home as ?youtube=', async ({ page }) => {
@@ -281,7 +299,7 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page.locator('strong', { hasText: 'monad' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Clone Chat' })).toHaveCount(0);
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
-	await expect(page).toHaveTitle('Explaining monads / local-llm');
+	await expect(page).toHaveTitle('Explaining monads · local-llm');
 });
 
 test('a shared chat shows HTML in a message as text: no page styles, forms or overlays from the sharer', async ({

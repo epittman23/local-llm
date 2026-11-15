@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	type CompareBy,
@@ -94,8 +95,11 @@ export function ComparePage() {
 				<h2 className="shrink-0 text-lg font-medium">Compare</h2>
 
 				<div className="flex flex-wrap items-center justify-end gap-2">
+					<Label htmlFor="compare-by" className="text-muted-foreground font-normal">
+						Compare by
+					</Label>
 					<Select value={by} onValueChange={(v) => setBy(v as CompareBy)}>
-						<SelectTrigger className="w-36">
+						<SelectTrigger id="compare-by" className="w-36">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -107,8 +111,11 @@ export function ComparePage() {
 						</SelectContent>
 					</Select>
 
+					<Label htmlFor="compare-tier" className="text-muted-foreground font-normal">
+						Tier
+					</Label>
 					<Select value={tier} onValueChange={setTier}>
-						<SelectTrigger className="w-36">
+						<SelectTrigger id="compare-tier" className="w-36">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>

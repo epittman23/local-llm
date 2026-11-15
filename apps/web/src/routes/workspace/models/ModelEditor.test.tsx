@@ -88,12 +88,55 @@ describe('ModelEditor toggles and reset', () => {
 		expect(screen.getByRole('button', { name: 'Default prompt suggestions' })).toBeInTheDocument();
 	});
 
-	it('puts the default profile image back from Reset', async () => {
+	it('puts the default profile image back from Reset, which then shows the initials (#924)', async () => {
+		// jsdom never loads an image; this one loads at once, as a browser's would.
+		class LoadingImage {
+			listeners: Record<string, (event: { currentTarget: LoadingImage }) => void> = {};
+			complete = false;
+			naturalWidth = 0;
+			addEventListener(type: string, listener: (event: { currentTarget: LoadingImage }) => void) {
+				this.listeners[type] = listener;
+			}
+			removeEventListener() {}
+			set src(_: string) {
+				this.complete = true;
+				this.naturalWidth = 10;
+				queueMicrotask(() => this.listeners.load?.({ currentTarget: this }));
+			}
+		}
+		vi.stubGlobal('Image', LoadingImage);
 		renderEditor({ profile_image_url: 'data:image/png;base64,AAAA' });
-		const picture = await screen.findByAltText('model profile');
-		expect(picture.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+		const upload = await screen.findByRole('button', { name: 'Upload profile image' });
+		await waitFor(() => expect(upload.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AAAA'));
 		fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+		vi.unstubAllGlobals();
 		expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
-		expect(screen.getByAltText('model profile').getAttribute('src')).not.toBe('data:image/png;base64,AAAA');
+		expect(upload.querySelector('[data-slot="avatar-fallback"]')).not.toBeNull();
+	});
+});
+
+describe('ModelEditor fields (#1057, #983)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'jwt', user: { id: 'u1', role: 'admin' } } as never);
+	});
+
+	it('labels the name, id, system prompt and voice visibly, on the shared fields', async () => {
+		renderEditor();
+		const name = await screen.findByLabelText('Model name');
+		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveValue('My model');
+		expect(screen.getByText('Model name').tagName).toBe('LABEL');
+		const id = screen.getByLabelText('Model ID');
+		expect(id).toBeDisabled();
+		expect(id).toHaveClass('font-mono');
+		expect(screen.getByLabelText('System prompt')).toHaveAttribute('data-slot', 'textarea');
+		expect(screen.getByLabelText('System prompt').getAttribute('placeholder')).toMatch(/^e\.g\. /);
+		expect(screen.getByLabelText('TTS voice')).toHaveAttribute('list', 'tts-voices');
+	});
+
+	it('ties the Description label to its field once a custom description is on', async () => {
+		renderEditor({ description: 'Explains statistics' });
+		expect(await screen.findByLabelText('Description')).toHaveValue('Explains statistics');
+		expect(screen.getByLabelText('Description')).toHaveAttribute('data-slot', 'textarea');
 	});
 });

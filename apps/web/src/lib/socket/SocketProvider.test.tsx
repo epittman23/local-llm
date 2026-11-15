@@ -1,8 +1,21 @@
-import { render, waitFor } from '@testing-library/react';
-import { useEffect } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, render as rtlRender, waitFor } from '@testing-library/react';
+import { type ReactNode, useEffect } from 'react';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConnectionStore } from './connectionStore';
 import { SocketProvider, useSocket, useSocketReady } from './SocketProvider';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), warning: vi.fn() } }));
+
+let queryClient = new QueryClient();
+const render = (ui: React.ReactElement) =>
+	rtlRender(ui, {
+		wrapper: ({ children }: { children: ReactNode }) => (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		)
+	});
 
 // #519: the backend joins the user's room while the socket connects, so an
 // event can arrive in the same moment. A listener that attaches only after
@@ -88,12 +101,18 @@ function Probe() {
 }
 
 describe('SocketProvider', () => {
-	beforeEach(() => useAuthStore.setState({ token: 't' } as never));
+	beforeEach(() => {
+		queryClient = new QueryClient();
+		useAuthStore.setState({ token: 't' } as never);
+	});
 	afterEach(() => {
 		useAuthStore.setState({ token: null } as never);
+		useConnectionStore.setState({ lost: false });
 		made.length = 0;
 		slowHandshake = false;
+		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.mocked(toast.success).mockClear();
 	});
 
 	it('gives the socket to its children before it connects, so the first event is not lost (#519)', async () => {
@@ -229,5 +248,68 @@ describe('SocketProvider', () => {
 
 		await waitFor(() => expect(current).toBeNull());
 		expect(made[0].disconnect).toHaveBeenCalled();
+	});
+
+	it('shows the banner for a drop that lasts, then says Reconnected once and refetches what is on screen', async () => {
+		const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+		render(
+			<SocketProvider>
+				<Shell />
+			</SocketProvider>
+		);
+		await waitFor(() => expect(made[0]?.connected).toBe(true));
+		// The first connect is not a reconnect: nothing to refetch.
+		expect(invalidate).not.toHaveBeenCalled();
+
+		vi.useFakeTimers();
+		act(() => {
+			made[0].connected = false;
+			made[0].fire('disconnect', 'transport close');
+		});
+		// A blip is not announced.
+		act(() => vi.advanceTimersByTime(1000));
+		expect(useConnectionStore.getState().lost).toBe(false);
+		act(() => vi.advanceTimersByTime(1500));
+		expect(useConnectionStore.getState().lost).toBe(true);
+		expect(toast.warning).not.toHaveBeenCalled();
+
+		act(() => made[0].answer());
+		expect(useConnectionStore.getState().lost).toBe(false);
+		expect(toast.success).toHaveBeenCalledTimes(1);
+		expect(toast.success).toHaveBeenCalledWith('Reconnected');
+		expect(invalidate).toHaveBeenCalledTimes(1);
+	});
+
+	it('refetches after a quick reconnect too, without the banner or a toast', async () => {
+		const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+		render(
+			<SocketProvider>
+				<Shell />
+			</SocketProvider>
+		);
+		await waitFor(() => expect(made[0]?.connected).toBe(true));
+
+		act(() => {
+			made[0].connected = false;
+			made[0].fire('disconnect', 'transport close');
+			made[0].answer();
+		});
+
+		expect(useConnectionStore.getState().lost).toBe(false);
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(invalidate).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows no banner when this client closed the connection itself', async () => {
+		render(
+			<SocketProvider>
+				<Shell />
+			</SocketProvider>
+		);
+		await waitFor(() => expect(made[0]?.connected).toBe(true));
+		vi.useFakeTimers();
+		act(() => made[0].fire('disconnect', 'io client disconnect'));
+		act(() => vi.advanceTimersByTime(5000));
+		expect(useConnectionStore.getState().lost).toBe(false);
 	});
 });

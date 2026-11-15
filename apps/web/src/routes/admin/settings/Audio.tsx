@@ -355,7 +355,7 @@ export default function Audio() {
 						{stt.ENGINE === '' && (
 							<SettingField
 								label="STT Model"
-								description="Local LLM uses faster-whisper internally."
+								description="local-llm uses faster-whisper internally."
 								htmlFor="stt-WHISPER_MODEL"
 							>
 								<div className="flex w-full gap-2">
@@ -447,7 +447,7 @@ export default function Audio() {
 						{tts.ENGINE === 'transformers' && (
 							<SettingField
 								label="TTS Model"
-								description="Local LLM uses SpeechT5 and CMU Arctic speaker embeddings."
+								description="local-llm uses SpeechT5 and CMU Arctic speaker embeddings."
 								htmlFor="tts-MODEL"
 							>
 								<SettingInput

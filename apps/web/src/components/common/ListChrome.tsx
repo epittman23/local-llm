@@ -1,7 +1,7 @@
-import { cn } from 'cn';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * The search box + filter cluster every workspace list opens with (the same
@@ -20,11 +20,15 @@ export function ListSearchBar({
 	children?: ReactNode;
 }) {
 	return (
-		<div className="flex h-8 w-full items-center gap-2">
-			<div className="flex min-w-0 flex-1 items-center">
-				<Search className="text-muted-foreground mr-3 ml-1 size-3.5" />
+		<div className="flex w-full flex-wrap items-center gap-2">
+			{/* FRM-1, A11Y-1: the box is the field (edge, fill, focus outline); the input inside is bare. */}
+			<div
+				data-composite-field
+				className="border-border-control bg-surface-1 flex h-(--control) min-w-48 flex-1 items-center gap-2 rounded-lg border ps-2.5 pe-1 pointer-coarse:h-(--control-touch)"
+			>
+				<Search aria-hidden className="text-muted-foreground size-3.5 shrink-0" />
 				<input
-					className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
+					className="text-body h-full w-full min-w-0 bg-transparent"
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
 					aria-label={placeholder}
@@ -36,7 +40,7 @@ export function ListSearchBar({
 					</Button>
 				)}
 			</div>
-			<div className="flex max-w-[55%] shrink-0 overflow-x-auto">
+			<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
 				<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
 			</div>
 		</div>
@@ -77,7 +81,3 @@ export function ListEmptyState({ title }: { title: string }) {
 		</div>
 	);
 }
-
-/** A click on a control inside a clickable row belongs to the control, not the row. */
-export const isControlClick = (target: EventTarget | null) =>
-	target instanceof Element && !!target.closest('button, a, input, [role="menu"]');

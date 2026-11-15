@@ -35,12 +35,12 @@ describe('FunctionEditor (create): the code header fills only a blank name or de
 
 	it('fills a blank name and description from the code header', async () => {
 		show();
-		await screen.findByLabelText('Function Name');
+		await screen.findByLabelText('Function name');
 		await vi.waitFor(() => expect(onChanges.length).toBeGreaterThan(0));
 		act(() => onChanges[0](code));
-		expect(screen.getByLabelText('Function Name')).toHaveValue('Example Filter');
+		expect(screen.getByLabelText('Function name')).toHaveValue('Example Filter');
 		expect(screen.getByLabelText('Function ID')).toHaveValue('example_filter');
-		expect(screen.getByLabelText('Function Description')).toHaveValue('Filters things');
+		expect(screen.getByLabelText('Function description')).toHaveValue('Filters things');
 	});
 
 	it('keeps a typed name when the editor reports through a callback from before it was typed', async () => {
@@ -51,11 +51,48 @@ describe('FunctionEditor (create): the code header fills only a blank name or de
 		show();
 		await vi.waitFor(() => expect(onChanges.length).toBeGreaterThan(0));
 		const stale = onChanges[0];
-		fireEvent.change(screen.getByLabelText('Function Name'), { target: { value: 'Mine' } });
-		fireEvent.change(screen.getByLabelText('Function Description'), { target: { value: 'My own' } });
+		fireEvent.change(screen.getByLabelText('Function name'), { target: { value: 'Mine' } });
+		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'My own' } });
 		act(() => stale(code));
-		expect(screen.getByLabelText('Function Name')).toHaveValue('Mine');
+		expect(screen.getByLabelText('Function name')).toHaveValue('Mine');
 		expect(screen.getByLabelText('Function ID')).toHaveValue('mine');
-		expect(screen.getByLabelText('Function Description')).toHaveValue('My own');
+		expect(screen.getByLabelText('Function description')).toHaveValue('My own');
+	});
+});
+
+describe('FunctionEditor fields (#1057, #983)', () => {
+	afterEach(cleanup);
+
+	it('gives each field a visible label tied to the shared input, with an example as its placeholder', async () => {
+		show();
+		const name = await screen.findByLabelText('Function name');
+		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveAttribute('placeholder', 'e.g. My Filter');
+		expect(screen.getByLabelText('Function ID')).toHaveAttribute('placeholder', 'e.g. my_filter');
+		expect(screen.getByLabelText('Function description')).toBeRequired();
+		expect(screen.getByText('Function description').tagName).toBe('LABEL');
+	});
+
+	it('takes a hand-typed id', async () => {
+		show();
+		fireEvent.change(await screen.findByLabelText('Function ID'), { target: { value: 'profanity_filter' } });
+		expect(screen.getByLabelText('Function ID')).toHaveValue('profanity_filter');
+	});
+
+	it('shows an existing function’s id as text, not as a field', async () => {
+		render(
+			<MemoryRouter>
+				<TooltipProvider>
+					<FunctionEditor
+						fn={{ id: 'fn_1', name: 'Function 1', meta: { description: 'd' }, content: 'x' }}
+						edit
+						onSave={vi.fn(async () => {})}
+					/>
+				</TooltipProvider>
+			</MemoryRouter>
+		);
+		await screen.findByLabelText('Function name');
+		expect(screen.queryByLabelText('Function ID')).toBeNull();
+		expect(screen.getByTitle('fn_1')).toHaveTextContent('fn_1');
 	});
 });

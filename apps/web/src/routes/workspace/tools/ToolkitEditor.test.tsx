@@ -96,3 +96,32 @@ describe('ToolkitEditor access dialog (#676)', () => {
 		expect(success).not.toHaveBeenCalled();
 	});
 });
+
+describe('ToolkitEditor fields (#1057, #983)', () => {
+	it('gives each field a visible label tied to it, and an example as its placeholder', () => {
+		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave: vi.fn() });
+		const name = screen.getByLabelText('Tool name');
+		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveAttribute('placeholder', 'e.g. My Tools');
+		expect(screen.getByLabelText('Tool ID')).toHaveClass('font-mono');
+		expect(screen.getByLabelText('Tool description')).toHaveValue('d');
+		expect(screen.getByText('Tool name').tagName).toBe('LABEL');
+	});
+
+	it('edits the name, id and description through the labelled fields', () => {
+		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave: vi.fn() });
+		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Unit Converter' } });
+		fireEvent.change(screen.getByLabelText('Tool ID'), { target: { value: 'units' } });
+		fireEvent.change(screen.getByLabelText('Tool description'), { target: { value: 'Converts units' } });
+		expect(screen.getByLabelText('Tool name')).toHaveValue('Unit Converter');
+		expect(screen.getByLabelText('Tool ID')).toHaveValue('units');
+		expect(screen.getByLabelText('Tool description')).toHaveValue('Converts units');
+	});
+
+	it('shows a created tool’s fixed id as text, not as a field', () => {
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		expect(screen.queryByLabelText('Tool ID')).toBeNull();
+		expect(screen.getByText('Tool ID')).toBeInTheDocument();
+		expect(screen.getByTitle('calc')).toHaveTextContent('calc');
+	});
+});

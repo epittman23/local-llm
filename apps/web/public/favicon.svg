@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>local-llm</title>
+  <!-- local-llm's mark until a real one exists (decision D1, 2026-11-14): lucide's
+       Sigma glyph (ISC licence; copyright (c) for portions of Lucide are held by
+       Cole Bemis 2013-2022 as part of Feather (MIT); all other copyright (c) for
+       Lucide are held by Lucide Contributors 2022). An asset file cannot read the tokens, so the
+       colours are the dark theme's, as hex (styles/standard.css): page,
+       oklch(0.205 0.012 170) = #121916, and brand, oklch(0.8 0.09 235) = #82c7f0.
+       XML comments cannot hold two hyphens, so the token names are spelled bare. -->
+  <rect width="32" height="32" rx="7" fill="#121916"/>
+  <path transform="translate(4 4)" d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2" fill="none" stroke="#82c7f0" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

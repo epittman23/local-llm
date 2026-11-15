@@ -14,6 +14,7 @@ import {
 	updateCalendarEvent
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { seriesHexes } from '@/lib/ui/tokenColour';
 import { cn } from '@/lib/utils';
 import {
 	CUSTOM_REPEAT,
@@ -27,7 +28,7 @@ import {
 
 const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
 const label = 'text-muted-foreground mb-1 text-xs';
-const select = 'w-full cursor-pointer bg-transparent text-sm [&>option]:bg-popover';
+const select = 'w-full cursor-pointer bg-transparent text-sm';
 
 const REPEATS: [string, string][] = [
 	['', 'No Repeat'],
@@ -317,9 +318,13 @@ export function EventDialog({
 	);
 }
 
-const PRESET_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
-
-/** Ports components/calendar/CreateCalendarModal.svelte: a name and a color. */
+/**
+ * Ports components/calendar/CreateCalendarModal.svelte: a name and a color.
+ * The preset colours are the six chart-series tokens' values in the current
+ * theme, and a new calendar starts on `--series-1` (#989, decision D1b). The
+ * colour is saved as hex: the API stores a colour string, and the custom
+ * colour input only takes hex.
+ */
 export function CreateCalendarDialog({
 	open,
 	onOpenChange,
@@ -331,12 +336,15 @@ export function CreateCalendarDialog({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [name, setName] = useState('');
-	const [color, setColor] = useState(PRESET_COLORS[0]);
+	const [presets, setPresets] = useState(seriesHexes);
+	const [color, setColor] = useState(presets[0]);
 	const [loading, setLoading] = useState(false);
 	useEffect(() => {
 		if (!open) return;
+		const now = seriesHexes();
 		setName('');
-		setColor(PRESET_COLORS[0]);
+		setPresets(now);
+		setColor(now[0]);
 	}, [open]);
 
 	const create = async () => {
@@ -385,7 +393,7 @@ export function CreateCalendarDialog({
 					<div>
 						<div className={label}>Color</div>
 						<div className="flex flex-wrap items-center gap-2">
-							{PRESET_COLORS.map((c) => (
+							{presets.map((c) => (
 								<Button
 									key={c}
 									type="button"
@@ -405,7 +413,7 @@ export function CreateCalendarDialog({
 								title="Custom color"
 								className={cn(
 									'relative size-6 cursor-pointer overflow-hidden rounded-full border-2 transition-all',
-									!PRESET_COLORS.includes(color) ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
+									!presets.includes(color) ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
 								)}
 								style={{ backgroundColor: color }}
 							>

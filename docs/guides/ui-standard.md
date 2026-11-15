@@ -182,7 +182,9 @@ No italics for emphasis in the interface; bold is for the one thing in a
 sentence that must not be missed.
 
 **TYP-4. Fields are 16 px on touch devices**, so iOS does not zoom the page
-when one is focused.
+when one is focused. `standard.css` applies this to every field on a coarse
+pointer (`font-size: max(16px, 1em)`); a field set larger on purpose
+(`text-title` and up) keeps its size.
 
 **TYP-5. Long-form text is set at `text-reading` and no wider than 72
 characters** (`max-w-[72ch]`). This is what a model writes, a note, a report,
@@ -212,18 +214,30 @@ applied by the `pointer: coarse` rule in `standard.css`. A row of controls
 has one height.
 
 **LAY-3. A target is at least 24 by 24 px with a pointer and 44 by 44 px on
-touch**, including the space that belongs to it.
+touch**, including the space that belongs to it. `Checkbox` and `Switch` reach
+44 by 44 on touch through their `::after` hit area; `CheckboxMark` is a
+checkbox's picture for a row that is itself `role="checkbox"`.
 
 **LAY-4. Every page works at 390 px wide.** The page itself never scrolls
 sideways. A side panel becomes a sheet over the page below `md`; it never
 squeezes the content beside it. A bar of tabs that does not fit scrolls, shows
 that it scrolls, and keeps the open tab in view. Nothing is reachable only by
-hover (A11Y-4).
+hover (A11Y-4). Section tabs are `components/layout/SectionTabs.tsx`: a strip
+that does not fit scrolls sideways, fades at an edge only while tabs are
+hidden past it, and scrolls the open tab into view on arrival, on a change of
+tab and when a tab changes size.
 
 **LAY-5. Every page opens the same way:** an `h1` with the page's name, one
 sentence saying what the page is for, and the page's primary action at the
 right (`/ui`, "Page header and tabs"). The browser tab reads
-`<Page> · local-llm`.
+`<Page> · local-llm`. The header is `components/ui/page-header.tsx`
+(`PageHeader`): the h1, the sentence, and the primary action in its `action`
+slot, wrapping below the text on a phone. In a section (Workspace, Admin,
+Benchmarks, Playground) the h1 is the section's name and a page's own title is
+an h2. The tab title comes from each route's `handle.title` in
+`AppRouter.tsx`, written by `RootLayout`; a page whose name is only known once
+it loads (a chat, a note) sets it with `useDocumentTitle(name)`. Nothing
+writes `document.title` directly.
 
 **LAY-6. Widths.** Reading text 72 characters; a form 40 rem; a table the full
 width of its container.
@@ -234,7 +248,7 @@ bar) stays reachable. A table's header stays visible while its body scrolls.
 
 **SHP-1. A corner says what kind of thing something is.** 4 px (`rounded`):
 checkboxes, inline code. 8 px (`rounded-lg`): buttons, fields, menu items.
-12 px (`rounded-panel`): panels, dialogs, menus. Full: badges, avatars,
+12 px (`rounded-panel`): panels, dialogs, menus. Full: badges, avatars (`ProfileAvatar`),
 switches. Not one radius on everything.
 
 **SHP-2. Two shadows, only on floating layers** (menus and popovers; dialogs),
@@ -281,6 +295,15 @@ and is not stretched into a row.
 picture fills it; an icon appears over a scrim on hover and on focus; it has
 an `aria-label`.
 
+**Profile pictures.** A model's or user's picture is the shared
+`ProfileAvatar` (`components/ui/avatar.tsx`), always round. Without a picture
+of its own (none, a stored default such as `/user.png`, or one that fails to
+load) it shows the name's initials, first and last word, on `--surface-3` in
+`--foreground-strong`: never a stock image. It is decorative (hidden from
+assistive technology) because the name is beside it; pass `label` when it
+stands alone. A stored default is never fetched, and the picture endpoints
+answer 404 for one.
+
 ## Forms
 
 **FRM-1. A field has a visible edge (`--border-control`) and a fill
@@ -303,7 +326,11 @@ two without labelling the instant ones.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A native control is allowed only where the shared one cannot do
-the job (a date), and then it relies on COL-6.
+the job (a date), and then it relies on COL-6. A native `<select>` that
+remains gets the field's edge, fill, `rounded-lg` and least height
+(`--control-compact`, 44 px on touch) from `standard.css`, so it needs no
+classes of its own; Radix's hidden form select, list boxes and a select inside
+a composite field are skipped.
 
 **FRM-5. A switch is for a setting that applies at once; a checkbox is for a
 value in a form that is saved.** The label names the setting ("Name new chats
@@ -328,9 +355,10 @@ chat no longer exists", with a way onward. It never silently opens something
 else.
 
 **NAV-4. Escape closes the topmost layer only.** When a layer closes, focus
-returns to what opened it. Dialogs and menus are opened through their trigger
-components (`DialogTrigger`, `DropdownMenuTrigger`), which is what makes that
-work.
+returns to what opened it. The shared `DialogContent`, `AlertDialogContent`
+and `SheetContent` return focus to the element that had it when they opened
+(or to a menu's trigger, when a menu item opened them), so a dialog opened
+from state needs no `DialogTrigger`.
 
 **NAV-5. Everything can be done from the keyboard.** A list of choices
 (search results, a model picker, a command palette) moves with the arrow keys
@@ -348,7 +376,10 @@ separated; a missing value is an en dash, never blank and never `0`.
 Headings are words, not field names ("Peak VRAM, MiB", not `peak_vram_mib`).
 
 **DAT-3. A status in a table is a status badge** (COL-3): the same word and
-colour for the same state on every page.
+colour for the same state on every page. The status badge is the shared
+`Badge` with `variant="success" | "warning" | "danger"` (the status colour on
+`--surface-3`) and an icon marked `data-icon="inline-start"`; a neutral state
+is `variant="secondary"` with no icon.
 
 **DAT-4. An identifier is monospaced, can be copied, and links to the thing it
 identifies** when that thing has a page.
@@ -359,11 +390,19 @@ when it is a record.
 
 **DAT-6. On a narrow screen a table scrolls inside its own frame**, or its
 rows become stacked label and value pairs. The page does not scroll sideways
-(LAY-4).
+(LAY-4). The shared `Table` scrolls inside its own frame and shades the edge
+that hides columns. Give it `aria-label`: the scrolling container becomes a
+named region and, while it overflows, a tab stop the arrow keys scroll.
+`stickyFirstColumn` keeps the first column in view (set `--table-surface` if
+the table does not sit on `--page`).
 
 ## Feedback
 
-**FBK-1. A message appears where the thing it is about is.**
+**FBK-1. A message appears where the thing it is about is.** A lost live
+connection is `components/layout/ConnectionBanner`: a fixed pill at the top,
+below the phone's top band (FBK-2), while the socket is down for more than
+2 s, then one 'Reconnected' toast.
+Every reconnect refetches what is on screen.
 
 | Situation | Where |
 |---|---|
@@ -377,7 +416,25 @@ rows become stacked label and value pairs. The page does not scroll sideways
 over the control that was just used or the message box. A confirmation leaves
 after 4 seconds. A failure stays until dismissed, says what failed and why,
 and offers the next step. Several results of one action are one toast
-("3 files uploaded"), not one each.
+("3 files uploaded"), not one each. Implemented once in
+`components/ui/sonner.tsx`: position follows the width live (bottom-right from
+768 px, top-centre below). Below 768 px toasts start 8 px under the top band
+and under the connection banner while it shows, so they cover neither. The top
+band reaches down to the lowest of the app bar (or its floating menu button
+where the bar folds) and the visible part of the page's own header, marked
+`data-page-top` (the shared `PageHeader` at `h1`, the chat's model row): a
+toast is never over the control just used, and those rows hold the controls a
+page starts with. A header scrolled out of view stops counting.
+`components/layout/topBand.ts` keeps it in `--top-band-bottom` (0 from 768 px,
+where nothing is watched) and ConnectionBanner its height in
+`--connection-banner-space`. On a wide screen toasts rise above any
+`data-composite-field` whose top edge is in the lower half of the viewport,
+with 8 px clear. Every toast has a close button with a 24 px hit area (44 px
+on touch). `toast.error` and `toast.warning` default to no time limit and an
+id taken from the message, so a repeated failure updates one toast. A caller's
+`duration` or `id` still wins. Once a session has expired, failure toasts are
+held back until the next sign-in; the sign-in page's inline message explains
+them.
 
 **FBK-3. Every action answers.** Something visible changes within 100 ms of a
 press (the pressed or busy state), and the result is confirmed: "Copied",
@@ -395,7 +452,9 @@ empty, failed and full. All four are checked.
 
 **STA-2. Loading** that lasts longer than about 300 ms shows a skeleton in the
 shape of what is coming. A spinner is for inside a button. Loading is never
-shown as an empty state or as zeros.
+shown as an empty state or as zeros. While the app starts, the boot splash
+(the name on the page colour, a spinner after 400 ms, 'Still waiting for the
+server… Retry' after 8 s) stands in for the page, never a bare 'Loading…'.
 
 **STA-3. Empty says what belongs here and offers the first step** ("No prompts
 yet. A prompt is text you reuse. [New prompt]"). "Nothing matches your
@@ -403,7 +462,11 @@ search" is a different message, names the search, and offers to clear it. A
 fresh install never says "Try adjusting your search".
 
 **STA-4. Failed is shown in place, with a way to try again.** A failure is
-never shown as an empty list, a `0` or a spinner that does not end.
+never shown as an empty list, a `0` or a spinner that does not end. Use
+`components/common/LoadFailed` (`what`, `error`, `onRetry`, `retrying`). It is
+shown in place of the list and says 'Couldn't load <what>'. The cause is in
+plain words (offline, no answer, or an error from the server), the server's
+own message sits behind 'Details', and it offers 'Try again'.
 
 ## Overlays
 
@@ -536,20 +599,27 @@ the outline is drawn only under that mark. No `outline-none`, and no
 translucent ring. A box that draws the edge around a bare text field (the
 chat's message box) is a composite field: it carries `data-composite-field`
 and shows the focus on the box, as a field does. One exception: the canvas's
-editor (CNV-6) shows its caret and no outline.
+editor (CNV-6) shows its caret and no outline. Components transition colour,
+background and border only, never the outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
 label tied to it, or an `aria-label` (ACT-4).
 
 **A11Y-3. A page has one `h1`, headings in order, and landmarks:** `header`,
-`nav`, `main`.
+`nav`, `main`. The shell's first tab stop is a 'Skip to content' link that
+moves focus to `<main id="content">`. The sidebar is `nav aria-label="Main"`,
+a section's tab strip is a `nav` named after the section, and the shell's
+aside is named 'Sidebar'. A route whose visible heading is not text (a chat, a
+folder) gets a visually hidden h1 with its name (`handle.heading: 'sr'`).
 
 **A11Y-4. Nothing is available only on hover.** What appears on hover also
 appears on focus and is reachable by touch: on touch devices a row's actions
 are always shown or are in a menu.
 
 **A11Y-5. The page works at 200% zoom and reflows at 320 CSS px** without
-losing content or the main action.
+losing content or the main action. On a phone screen under 520 px tall, routes
+with `handle.foldsBar` fold the phone bar into a floating menu button; their
+first row starts at `--shell-menu-inset`.
 
 **A11Y-6. Motion is small and answers an action** (MOT-1), and is removed
 under `prefers-reduced-motion`.
@@ -571,8 +641,13 @@ through `apps/web`. Its own windows (the progress and error dialogs in
 `apps/desktop`) are separate HTML. They are always dark, in the standard's
 dark colours (`apps/desktop/static/status.css`, as hex, since the two builds
 share nothing), because such a window cannot read the theme chosen in the
-app. They must also use the standard's type and words (WRD-3) and never let
-content overflow a fixed window; they do not yet (#926, #1115).
+app. They use the standard's type, Atkinson Hyperlegible Next and Mono (the
+latin woff2 files bundled in `apps/desktop/static/fonts/` with their OFL
+licences, loaded under the page's own `font-src 'self'`), and its words
+(WRD-3: "local-llm"). Content never overflows the fixed window: the progress
+view is a grid whose log row scrolls inside itself, and the buttons sit on
+their own opaque row with a top divider; once something needs an answer, the
+finished steps fold into one line.
 
 ## Verifying a change
 
@@ -601,7 +676,7 @@ was decided.
 ## The ratchet
 
 `apps/web/src/styles/standard.ratchet.test.ts` (part of `make test-web`)
-counts, in every source file outside `components/ui`, six patterns the
+counts, in every source file outside `components/ui`, nine patterns the
 standard forbids:
 
 | Pattern | Rule | What it catches |
@@ -612,6 +687,9 @@ standard forbids:
 | `outline-removed` | A11Y-1 | `outline-none`, `outline-hidden` |
 | `raw-button` | ACT-6 | `<button` instead of the shared `Button` |
 | `dark-one-off` | COL-1 | `dark:` variants, which tokens make unnecessary |
+| `text-opacity` | COL-2 | `opacity-50`, `disabled:opacity-60`, `opacity-[0.6]`: any partial opacity (not `opacity-0` or `opacity-100`). The source cannot show whether the element holds text, so a dimmed picture or decoration is counted too |
+| `native-select` | FRM-4 | `<select` instead of the shared `Select` |
+| `raw-input` | FRM-4 | `<input` instead of the shared `Input`, `Checkbox` or `Switch`, a color or range input included. A file input and a hidden input are not counted: no shared component replaces them |
 
 It compares the counts with `apps/web/ui-standard-baseline.json`:
 
@@ -620,6 +698,15 @@ It compares the counts with `apps/web/ui-standard-baseline.json`:
   is recorded. Lower it with
   `cd apps/web && UPDATE_UI_BASELINE=1 bunx vitest run src/styles/standard.ratchet.test.ts`,
   which refuses to raise any count, and commit the smaller file.
+
+The baseline also lists the patterns it has counted (`patterns`). A pattern
+added to the test is new until the baseline lists it: the update records its
+counts as they stand, the one time a count may start above zero, and lists
+it, so a listed pattern is never recorded from scratch again. Adding a
+pattern therefore needs the owner's acceptance of its starting counts. The
+owner accepted `text-opacity`, `native-select` and `raw-input` on 2026-11-14,
+starting from the counts at the end of the UX review's cross-cutting section
+(#1116): 43 in 33 files, 51 in 30 files and 126 in 50 files.
 
 The aim is zero. A count that stays above zero for good is an exception: an
 entry under `exceptions` in the baseline naming the file, the pattern, the

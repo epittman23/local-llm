@@ -1,9 +1,11 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CalendarPage } from './CalendarPage';
+import { dayName } from './CalendarViews';
 
 const { getCalendars, getCalendarEvents, deleteCalendar } = vi.hoisted(() => ({
 	getCalendars: vi.fn(),
@@ -49,18 +51,25 @@ afterEach(cleanup);
 describe('the calendar sidebar mini month', () => {
 	it('highlights today with the default variant', async () => {
 		show();
-		const today = await screen.findByRole('button', { name: new Date().toDateString() });
+		const today = await screen.findByRole('button', { name: dayName(new Date()) });
 		expect(today.getAttribute('data-variant')).toBe('default');
+	});
+
+	it('names each day by its visible number, so the name contains what it shows (A11Y-2)', async () => {
+		show();
+		const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+		const day = await screen.findByRole('button', { name: dayName(first) });
+		expect(day.textContent).toBe('1');
 	});
 
 	it('jumps the main date to the day that is pressed', async () => {
 		show();
 		const first = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 		const target = new Date(first.getFullYear(), first.getMonth(), 2);
-		const day = await screen.findByRole('button', { name: target.toDateString() });
+		const day = await screen.findByRole('button', { name: dayName(target) });
 		fireEvent.click(day);
 		await waitFor(() =>
-			expect(screen.getByRole('button', { name: target.toDateString() }).getAttribute('data-variant')).toBe('secondary')
+			expect(screen.getByRole('button', { name: dayName(target) }).getAttribute('data-variant')).toBe('secondary')
 		);
 	});
 
@@ -88,5 +97,43 @@ describe('the calendar list', () => {
 		show();
 		expect(await screen.findByRole('button', { name: 'Delete calendar Work' })).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Delete calendar Personal' })).toBeNull();
+	});
+});
+
+describe('a calendar that cannot load (STA-4, #981)', () => {
+	it('shows failed calendars in place of the page, with no toast, and tries again', async () => {
+		getCalendars.mockRejectedValue('Database is locked');
+		show();
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load calendars");
+		expect(toast.error).not.toHaveBeenCalled();
+
+		getCalendars.mockResolvedValue(calendars);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Work')).toBeInTheDocument();
+	});
+
+	it('shows failed events in place of the grid, keeping the dates to step through', async () => {
+		getCalendarEvents.mockRejectedValue('Database is locked');
+		show();
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load events");
+		expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		getCalendarEvents.mockResolvedValue([]);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+	});
+
+	it('shows an offline load as a failure, not an empty calendar', async () => {
+		onlineManager.setOnline(false);
+		try {
+			show();
+			expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load calendars");
+			expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		} finally {
+			onlineManager.setOnline(true);
+		}
 	});
 });

@@ -421,7 +421,7 @@ function WebhookDialog({
 									))}
 								</div>
 								<p className="text-muted-foreground text-xs">
-									Event names may change as Local LLM evolves. Use broad patterns like user.* for integrations that
+									Event names may change as local-llm evolves. Use broad patterns like user.* for integrations that
 									should continue across new related events.
 								</p>
 							</div>

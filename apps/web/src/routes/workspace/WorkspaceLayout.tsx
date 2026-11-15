@@ -1,6 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { SplitCreateButton } from '@/components/common/SplitCreateButton';
+import { SectionSkeleton, SectionTabs } from '@/components/layout/SectionTabs';
+import { PageHeader } from '@/components/ui/page-header';
 import { searchKnowledgeBases } from '@/lib/apis/knowledge';
 import { getModelItems } from '@/lib/apis/models';
 import { getPromptItems } from '@/lib/apis/prompts';
@@ -9,7 +12,7 @@ import { getToolList } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useWorkspaceStore, type WorkspaceSection } from '@/lib/stores/workspaceStore';
-import { cn, formatNumber } from '@/lib/utils';
+import { formatNumber } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { canEnterSection, canSeeTab, sectionOfPath, sectionPaths, tabOrder } from './workspaceAccess';
 
@@ -28,13 +31,8 @@ const countOf = (res: unknown): number | null => {
 	return Array.isArray(res) ? res.length : null;
 };
 
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-	cn(
-		'inline-flex min-w-fit items-center gap-1 border-b-2 px-1 pb-2 text-sm transition-colors',
-		isActive
-			? 'border-foreground text-foreground font-medium'
-			: 'border-transparent text-muted-foreground hover:text-foreground'
-	);
+/** A tab's count: an en dash while it is loading or could not be read, never 0 (DAT-2, STA-2). */
+export const countLabel = (count: number | null | undefined) => (typeof count === 'number' ? formatNumber(count) : '–');
 
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/workspace/+layout.svelte: the
@@ -72,60 +70,64 @@ export function WorkspaceLayout() {
 		navigate(routePaths.home, { replace: true });
 	}, [settled, allowed, navigate]);
 
-	useEffect(() => {
-		if (!allowed || !token) return;
-		let cancelled = false;
-		const can = (s: WorkspaceSection) => canSeeTab(user, config, s);
-		(async () => {
+	// Fetched on each entry to /workspace, not on every move inside it (the
+	// layout stays mounted), and again whenever something invalidates
+	// ['workspace-counts'], such as reconnecting. The sections keep their own
+	// count current in between through setCount.
+	const countsQuery = useQuery({
+		queryKey: ['workspace-counts'],
+		enabled: allowed && !!token,
+		queryFn: async (): Promise<Record<WorkspaceSection, number | null>> => {
+			const can = (s: WorkspaceSection) => canSeeTab(user, config, s);
+			const auth = token ?? '';
 			const [models, knowledge, prompts, skills, tools] = await Promise.all([
-				can('models') ? getModelItems(token, null, null, null, null, null, 1).catch(() => null) : null,
-				can('knowledge') ? searchKnowledgeBases(token, null, null, 1, null).catch(() => null) : null,
-				can('prompts') ? getPromptItems(token, null, null, null, null, null, 1).catch(() => null) : null,
-				can('skills') ? getSkillItems(token, null, null, 1).catch(() => null) : null,
-				can('tools') ? getToolList(token).catch(() => null) : null
+				can('models') ? getModelItems(auth, null, null, null, null, null, 1).catch(() => null) : null,
+				can('knowledge') ? searchKnowledgeBases(auth, null, null, 1, null).catch(() => null) : null,
+				can('prompts') ? getPromptItems(auth, null, null, null, null, null, 1).catch(() => null) : null,
+				can('skills') ? getSkillItems(auth, null, null, 1).catch(() => null) : null,
+				can('tools') ? getToolList(auth).catch(() => null) : null
 			]);
-			if (cancelled) return;
-			setCounts({
+			return {
 				models: countOf(models),
 				knowledge: countOf(knowledge),
 				prompts: countOf(prompts),
 				skills: countOf(skills),
 				tools: countOf(tools)
-			});
-		})();
-		return () => {
-			cancelled = true;
-		};
-		// Once per entry to /workspace: user/config are settled by then, and the
-		// sections keep their own count current after this initial fetch.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [allowed, token]);
+			};
+		}
+	});
 
-	if (!allowed) {
-		return (
-			<div className="flex flex-1 items-center justify-center p-8">
-				<p className="text-muted-foreground text-sm">{settled ? 'Redirecting…' : 'Loading…'}</p>
-			</div>
-		);
-	}
+	useEffect(() => {
+		if (countsQuery.data) setCounts(countsQuery.data);
+	}, [countsQuery.data, setCounts]);
+
+	if (!allowed) return <SectionSkeleton label="the workspace" />;
 
 	return (
 		<div className="flex h-full min-w-0 flex-col">
-			<nav className="flex items-end gap-4 border-b px-4 pt-3">
-				<div className="flex min-w-0 gap-4 overflow-x-auto">
-					{tabOrder
+			<div className="flex flex-col gap-3 border-b px-4 pt-4">
+				<div className="ps-[var(--shell-menu-inset,0px)]">
+					<PageHeader
+						title="Workspace"
+						description="The models, knowledge, prompts, skills and tools your chats draw on."
+						action={<SplitCreateButton actions={actions} />}
+					/>
+				</div>
+				<SectionTabs
+					label="Workspace"
+					tabs={tabOrder
 						.filter((s) => canSeeTab(user, config, s))
-						.map((s) => (
-							<NavLink key={s} to={sectionPaths[s]} className={tabClass}>
-								<span>{tabLabels[s]}</span>
-								<span className="text-sm opacity-60">{formatNumber(counts[s] ?? 0)}</span>
-							</NavLink>
-						))}
-				</div>
-				<div className="mb-1.5 ml-auto flex shrink-0 items-center gap-1">
-					<SplitCreateButton actions={actions} />
-				</div>
-			</nav>
+						.map((s) => ({
+							to: sectionPaths[s],
+							label: (
+								<>
+									<span>{tabLabels[s]}</span>
+									<span className="text-caption text-muted-foreground tabular-nums">{countLabel(counts[s])}</span>
+								</>
+							)
+						}))}
+				/>
+			</div>
 			<div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4" id="workspace-container">
 				<Outlet />
 			</div>

@@ -7,8 +7,12 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
+import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ImageButton } from '@/components/ui/image-button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { getModels } from '@/lib/apis';
 import { getVoices } from '@/lib/apis/audio';
 import { getModelsDefaults } from '@/lib/apis/configs';
@@ -38,7 +42,6 @@ const sectionLabel = 'text-xs text-muted-foreground';
 
 /** An endpoint that fails or answers with something unexpected counts as an empty list. */
 const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
-const fieldClass = 'bg-transparent placeholder:text-foreground-muted';
 
 /** Resizes a picked image to a 250px square (cover-cropped) WebP data URL; animated formats are kept as they are. */
 function readProfileImage(file: File): Promise<string> {
@@ -260,17 +263,14 @@ function EditorForm({
 								<div className="group relative size-12 shrink-0 md:size-14">
 									<ImageButton
 										aria-label="Upload profile image"
+										shape="circle"
 										className="size-full"
 										overlay={<Camera />}
 										onClick={() => imageInput.current?.click()}
 									>
-										<img
-											src={meta.profile_image_url || DEFAULT_PROFILE_IMAGE}
-											alt="model profile"
-											className="size-full object-cover"
-										/>
+										<ProfileAvatar src={meta.profile_image_url} name={state.name} className="size-full text-base" />
 									</ImageButton>
-									{meta.profile_image_url && meta.profile_image_url !== DEFAULT_PROFILE_IMAGE && (
+									{hasPicture(meta.profile_image_url) && (
 										<Button
 											variant="ghost"
 											size="xs"
@@ -282,12 +282,13 @@ function EditorForm({
 										</Button>
 									)}
 								</div>
-								<div className="min-w-0 flex-1">
+								<div className="flex min-w-0 flex-1 flex-col gap-1.5">
+									<Label htmlFor="model-name">Model name</Label>
 									<div className="flex min-w-0 items-center gap-2">
-										<input
-											className={cn(fieldClass, 'min-w-0 flex-1 text-base leading-tight')}
-											placeholder="Model Name"
-											aria-label="Model Name"
+										<Input
+											id="model-name"
+											className="min-w-0 flex-1"
+											placeholder="e.g. Statistics tutor"
 											value={state.name}
 											required
 											onChange={(e) => {
@@ -298,10 +299,13 @@ function EditorForm({
 										/>
 										<AccessButton onClick={() => setShowAccess(true)} />
 									</div>
-									<input
-										className={cn(fieldClass, 'text-muted-foreground block w-full py-0.5 text-xs')}
-										placeholder="Model ID"
-										aria-label="Model ID"
+									<Label htmlFor="model-id" className="mt-1.5">
+										Model ID
+									</Label>
+									<Input
+										id="model-id"
+										className="font-mono"
+										placeholder="e.g. statistics-tutor"
 										value={state.id}
 										disabled={edit}
 										required
@@ -324,7 +328,7 @@ function EditorForm({
 
 							<div>
 								<div className="mb-1 flex w-full items-center justify-between">
-									<div className={sectionLabel}>Description</div>
+									<Label htmlFor="model-description">Description</Label>
 									<Button
 										variant="ghost"
 										size="xs"
@@ -336,11 +340,11 @@ function EditorForm({
 									</Button>
 								</div>
 								{state.enableDescription && (
-									<textarea
-										className={cn(fieldClass, 'w-full resize-none text-xs')}
+									<Textarea
+										id="model-description"
+										className="resize-none"
 										rows={2}
-										aria-label="Description"
-										placeholder="Add a short description about what this model does"
+										placeholder="e.g. Explains statistics step by step"
 										value={meta.description ?? ''}
 										onChange={(e) => setMeta({ description: e.target.value })}
 									/>
@@ -360,12 +364,14 @@ function EditorForm({
 						<div className="my-2">
 							<div className="mb-1 text-sm">Model Params</div>
 							<div className="my-2">
-								<div className={cn(sectionLabel, 'mb-1')}>System Prompt</div>
-								<textarea
-									className={cn(fieldClass, 'w-full resize-none text-xs')}
+								<Label htmlFor="model-system-prompt" className="mb-1.5">
+									System prompt
+								</Label>
+								<Textarea
+									id="model-system-prompt"
+									className="resize-none"
 									rows={4}
-									aria-label="System Prompt"
-									placeholder={`Write your model system prompt content here\ne.g.) You are Mario from Super Mario Bros, acting as an assistant.`}
+									placeholder="e.g. You are a careful statistics tutor. Show each step."
 									value={state.system}
 									onChange={(e) => patch({ system: e.target.value })}
 								/>
@@ -597,11 +603,12 @@ function EditorForm({
 						)}
 
 						<div className="my-3">
-							<div className="text-muted-foreground mb-1 text-xs">TTS Voice</div>
-							<input
-								className="border-border bg-background w-full rounded-lg border px-2 py-1.5 text-sm"
+							<Label htmlFor="model-tts-voice" className="mb-1.5">
+								TTS voice
+							</Label>
+							<Input
+								id="model-tts-voice"
 								list="tts-voices"
-								aria-label="TTS Voice"
 								placeholder="e.g. alloy, echo, shimmer"
 								autoComplete="off"
 								value={state.tts.voice}

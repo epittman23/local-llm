@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { deleteUserById, getUsers } from '@/lib/apis/users';
@@ -79,7 +80,7 @@ describe('UserList', () => {
 
 	it('opens the edit dialog from the role button', async () => {
 		await renderList();
-		fireEvent.click(screen.getAllByRole('button', { name: 'Change User Role' })[1]);
+		fireEvent.click(screen.getByRole('button', { name: 'Role: user, change' }));
 		expect(await screen.findByText('Edit User', { selector: '[role="dialog"] *' })).toBeTruthy();
 	});
 
@@ -105,5 +106,49 @@ describe('UserList', () => {
 		fireEvent.change(box, { target: { value: 'be' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 		expect(box.value).toBe('');
+	});
+});
+
+describe('UserList table (#987, #1062)', () => {
+	it('names each role button by the role it shows and what it does', async () => {
+		await renderList();
+		expect(screen.getByRole('button', { name: 'Role: admin, change' })).toHaveTextContent('admin');
+		expect(screen.getByRole('button', { name: 'Role: user, change' })).toHaveTextContent('user');
+	});
+
+	it('gives the actions column a header a screen reader can read', async () => {
+		await renderList();
+		expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
+	});
+
+	it('sits in the shared table container, labelled, with the dates left out on a phone', async () => {
+		await renderList();
+		expect(screen.getByRole('region', { name: 'Users' })).toHaveAttribute('data-slot', 'table-container');
+		expect(screen.getByRole('columnheader', { name: /Last Active/ }).className).toContain('hidden md:table-cell');
+		expect(screen.getByRole('columnheader', { name: /Created at/ }).className).toContain('hidden md:table-cell');
+		expect(screen.getByRole('columnheader', { name: /Name/ }).className).not.toContain('hidden');
+	});
+});
+
+describe('UserList when the load fails (STA-4, #981)', () => {
+	it('shows the failure in place of a spinner that never ends, with no toast, and tries again', async () => {
+		vi.mocked(getUsers).mockRejectedValue('Database is locked');
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<MemoryRouter>
+					<TooltipProvider>
+						<UserList />
+					</TooltipProvider>
+				</MemoryRouter>
+			</QueryClientProvider>
+		);
+
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load users");
+		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+
+		vi.mocked(getUsers).mockResolvedValue({ users: [row('b', 'Ben', 'user')], total: 1 } as never);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('Ben')).toBeInTheDocument();
 	});
 });

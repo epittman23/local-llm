@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-	type DailyPoint,
-	type ModelStat,
+	CHART_COLORS,
 	chartModels,
 	chartPeriod,
+	type DailyPoint,
 	dateRange,
 	isCustomIncomplete,
+	type ModelStat,
 	parsePeriod,
 	sharePercent,
 	sortModels,
@@ -85,12 +86,15 @@ describe('small helpers', () => {
 		expect(sharePercent(1, 3)).toBe('33.3');
 		expect(sharePercent(5, 0)).toBe('0');
 	});
-	it('picks the chart models in first-seen order, capped at eight', () => {
+	it('colours the chart with the six series tokens, in order', () => {
+		expect(CHART_COLORS).toEqual([1, 2, 3, 4, 5, 6].map((n) => `var(--series-${n})`));
+	});
+	it('picks the chart models in first-seen order, capped at the six series colours', () => {
 		const daily: DailyPoint[] = [
 			{ date: 'd1', models: { a: 1, b: 2 } },
 			{ date: 'd2', models: { b: 1, c: 1, d: 1, e: 1, f: 1, g: 1, h: 1, i: 1, j: 1 } }
 		];
-		expect(chartModels(daily)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+		expect(chartModels(daily)).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
 	});
 	it('maps periods to chart label styles, defaulting to week', () => {
 		expect([chartPeriod('24h'), chartPeriod('90d'), chartPeriod('custom')]).toEqual(['hour', 'year', 'week']);

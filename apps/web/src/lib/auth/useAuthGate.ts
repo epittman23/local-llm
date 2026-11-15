@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { sessionEndReason } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
 
@@ -37,7 +38,9 @@ export function useAuthGate() {
 		if (firedFor.current === key) return;
 		firedFor.current = key;
 
-		navigate(`${routePaths.auth}?redirect=${encodeURIComponent(currentUrl)}`, { replace: true });
+		// A session that ran out says so on the sign-in page (FBK-1).
+		const reason = sessionEndReason() === 'expired' ? '&reason=expired' : '';
+		navigate(`${routePaths.auth}?redirect=${encodeURIComponent(currentUrl)}${reason}`, { replace: true });
 	}, [status, currentUrl, navigate]);
 
 	return status;

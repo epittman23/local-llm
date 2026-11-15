@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { createNewChannel, updateChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -151,11 +152,12 @@ function ChannelItem({
 					members.length ? (
 						<span className="relative flex shrink-0">
 							{members.slice(0, 2).map((u, i) => (
-								<img
+								<ProfileAvatar
 									key={u.id}
 									src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
-									alt=""
-									className={cn('border-background size-5 rounded-full border', i === 1 && '-ml-2.5')}
+									name={u.name}
+									size="sm"
+									className={cn('ring-background size-5 ring-1', i === 1 && '-ml-2.5')}
 								/>
 							))}
 							{members.length === 1 && (

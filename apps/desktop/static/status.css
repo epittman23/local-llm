@@ -2,7 +2,11 @@
    theme (apps/web/src/lib/theme.ts), and this window cannot read the theme
    chosen in the app, which lives in the server's origin. The colours are the
    interface standard's dark tokens (apps/web/src/styles/standard.css), as
-   hex because nothing is shared between the two builds. */
+   hex because nothing is shared between the two builds. The type is the
+   standard's too: Atkinson Hyperlegible Next and Mono, latin subset, copied
+   from apps/web's @fontsource-variable packages with their OFL licences
+   (fonts/). They load from disk, so they block rather than swap: a swap
+   would reflow the log after it has scrolled to its end. */
 :root {
 	color-scheme: dark;
 	--bg: #121916;
@@ -16,6 +20,20 @@
 	--bad: #f68482;
 	--warn: #ebc669;
 }
+@font-face {
+	font-family: "Atkinson Hyperlegible Next Variable";
+	font-style: normal;
+	font-display: block;
+	font-weight: 200 800;
+	src: url("fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Atkinson Hyperlegible Mono Variable";
+	font-style: normal;
+	font-display: block;
+	font-weight: 200 800;
+	src: url("fonts/atkinson-hyperlegible-mono-latin-wght-normal.woff2") format("woff2");
+}
 * {
 	box-sizing: border-box;
 }
@@ -28,37 +46,82 @@ body {
 	background: var(--bg);
 	color: var(--fg);
 	font:
-		14px / 1.45 system-ui,
+		14px / 20px "Atkinson Hyperlegible Next Variable",
+		system-ui,
 		sans-serif;
 }
-main {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	height: 100%;
-	padding: 20px 22px 16px;
+code,
+pre,
+input,
+.output {
+	font-family: "Atkinson Hyperlegible Mono Variable", ui-monospace, monospace;
 }
-main[hidden] {
-	display: none;
+p {
+	margin: 0;
 }
 header {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
 }
+/* A fixed 560 x 480 window (src/main.ts): every row but the log keeps its
+   height, the log takes what is left and scrolls inside itself, and the
+   buttons sit on their own opaque row, so nothing is ever drawn over the
+   log or pushed out of the window (#926). Rows are named, so a hidden one
+   (no error, no log yet) takes no space. */
+#progress-view {
+	display: grid;
+	grid-template-rows: auto minmax(0, auto) auto auto minmax(0, 1fr) auto;
+	grid-template-areas: "header" "steps" "error" "notice" "log" "actions";
+	height: 100%;
+	padding: 20px 22px 0;
+}
+#progress-view > header {
+	grid-area: header;
+}
+#steps {
+	grid-area: steps;
+	overflow: auto;
+}
+#error {
+	grid-area: error;
+}
+#notice {
+	grid-area: notice;
+}
+#details {
+	grid-area: log;
+}
+#actions {
+	grid-area: actions;
+}
+#progress-view > * + * {
+	margin-top: 12px;
+}
+/* The mark beside the window's heading (#1115): the app's Sigma, the same
+   file as the web app's favicon. */
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.mark {
+	flex: none;
+	border-radius: 6px;
+}
 h1 {
 	margin: 0;
-	font-size: 17px;
-	font-weight: 600;
+	font-size: 18px;
+	font-weight: 650;
+	line-height: 24px;
 }
 .muted {
 	color: var(--muted);
 }
 code {
-	font:
-		12px ui-monospace,
-		monospace;
+	font-size: 12px;
 }
 ol {
 	margin: 0;
@@ -72,7 +135,7 @@ li {
 	padding: 5px 0;
 }
 li .label {
-	font-weight: 500;
+	font-weight: 550;
 }
 li .time {
 	color: var(--muted);
@@ -83,6 +146,7 @@ li .sub {
 	overflow: hidden;
 	color: var(--muted);
 	font-size: 12px;
+	line-height: 16px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -90,6 +154,7 @@ li .hint {
 	grid-column: 2 / 4;
 	color: var(--warn);
 	font-size: 12px;
+	line-height: 16px;
 }
 li.pending .label,
 li.skipped .label {
@@ -139,48 +204,69 @@ li.skipped .label {
 		border-top-color: var(--warn);
 	}
 }
-.error {
-	margin: 0;
+.error,
+.notice {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 	padding: 8px 10px;
 	border: 1px solid var(--bad);
 	border-radius: 6px;
-	color: var(--bad);
+	background: var(--panel);
+	overflow-wrap: anywhere;
 }
+.notice {
+	border-color: var(--warn);
+}
+.error .cause {
+	font-weight: 550;
+}
+.error .cause:not([hidden]) + p {
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 16px;
+}
+/* The log fills its row and scrolls inside itself. Positioned, not flexed:
+   Chromium wraps a <details> element's content in its own box. */
 details {
-	display: flex;
-	flex-direction: column;
+	position: relative;
 	min-height: 0;
 }
-details[open] {
-	flex: 1;
-}
-details[hidden] {
-	display: none;
-}
 summary {
+	width: fit-content;
 	color: var(--muted);
 	cursor: pointer;
 }
 pre {
-	flex: 1;
-	min-height: 120px;
-	max-height: 100%;
-	margin: 8px 0 0;
+	position: absolute;
+	inset: 28px 0 12px;
+	margin: 0;
 	padding: 8px;
 	overflow: auto;
 	border-radius: 6px;
 	background: var(--panel);
-	font:
-		11.5px / 1.4 ui-monospace,
-		monospace;
+	font-size: 12px;
+	line-height: 16px;
 	white-space: pre-wrap;
 	word-break: break-all;
+}
+/* With the log closed, its row keeps only the toggle. */
+details:not([open]) {
+	align-self: start;
 }
 footer {
 	display: flex;
 	justify-content: flex-end;
 	gap: 8px;
-	margin-top: auto;
+}
+#actions {
+	margin-inline: -22px;
+	padding: 12px 22px 16px;
+	border-top: 1px solid var(--line);
+	background: var(--bg);
+}
+#actions:empty {
+	display: none;
 }
 button {
 	padding: 6px 14px;
@@ -189,6 +275,7 @@ button {
 	background: transparent;
 	color: var(--fg);
 	font: inherit;
+	font-weight: 550;
 	cursor: pointer;
 }
 button.primary {
@@ -198,19 +285,27 @@ button.primary {
 }
 button:focus-visible,
 input:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+pre:focus-visible {
 	outline: 2px solid var(--fg);
 	outline-offset: 2px;
+}
+#settings-view {
+	height: 100%;
+	padding: 20px 22px 16px;
 }
 form {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	height: 100%;
+	height: calc(100% - 24px);
+}
+form footer {
+	margin-top: auto;
 }
 label {
 	margin-top: 6px;
-	font-weight: 500;
+	font-weight: 550;
 }
 input {
 	width: 100%;
@@ -219,19 +314,25 @@ input {
 	border-radius: 6px;
 	background: var(--bg);
 	color: var(--fg);
-	font:
-		13px ui-monospace,
-		monospace;
+	font-size: 13px;
 }
 .row {
 	display: flex;
 	gap: 8px;
 }
-form p {
-	margin: 0;
+#settings-form p {
 	font-size: 12px;
+	line-height: 16px;
 }
 #settings-message.error-text,
 #server-problem {
 	color: var(--bad);
+}
+/* Last, so it beats the display each of these sets above. */
+#progress-view[hidden],
+#settings-view[hidden],
+#error[hidden],
+#notice[hidden],
+#details[hidden] {
+	display: none;
 }

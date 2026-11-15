@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +19,7 @@ import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
-import { CalendarViews } from './CalendarViews';
+import { CalendarViews, dayName } from './CalendarViews';
 import {
 	automationTarget,
 	type CalendarViewMode,
@@ -95,7 +96,7 @@ function CalendarSidebar({
 							type="button"
 							variant={isSameDay(day, today) ? 'default' : isSameDay(day, date) ? 'secondary' : 'ghost'}
 							size="icon-xs"
-							aria-label={day.toDateString()}
+							aria-label={dayName(day)}
 							className={cn('rounded-full text-caption', day.getMonth() !== mini.getMonth() && 'text-foreground-muted')}
 							onClick={() => onSelectDate(day)}
 						>
@@ -126,7 +127,7 @@ function CalendarSidebar({
 								>
 									<span
 										className="size-2.5 shrink-0 rounded-sm"
-										style={{ backgroundColor: c.color || '#3b82f6', opacity: shown ? 1 : 0.25 }}
+										style={{ backgroundColor: c.color || 'var(--series-1)', opacity: shown ? 1 : 0.25 }}
 									/>
 									<span className={cn('flex-1 truncate', !shown && 'text-muted-foreground')}>{c.name}</span>
 								</Button>
@@ -179,7 +180,7 @@ function Calendar() {
 
 	const calendars = useQuery({
 		queryKey: ['calendars'],
-		queryFn: async () => (await getCalendars(token).catch(() => [])) ?? []
+		queryFn: async () => (await getCalendars(token)) ?? []
 	});
 	const range = visibleRange(view, date);
 	const events = useQuery({
@@ -187,9 +188,11 @@ function Calendar() {
 		queryFn: () => getCalendarEvents(token, range.start, range.end),
 		placeholderData: (prev) => prev
 	});
-	useEffect(() => {
-		if (events.isError) toast.error(`${events.error}`);
-	}, [events.isError, events.error]);
+	// A failed load is shown in place of what it would have filled (STA-4). The
+	// events kept on screen while a new range loads belong to the old range, so
+	// a range that cannot load is not shown as them.
+	const calendarsFailed = calendars.isError || (calendars.isPaused && calendars.data === undefined);
+	const eventsFailed = events.isError || (events.isPaused && (events.data === undefined || events.isPlaceholderData));
 
 	const list = calendars.data ?? [];
 	const visibleEvents = (events.data ?? []).filter((e) => !hidden.has(e.calendar_id));
@@ -215,6 +218,17 @@ function Calendar() {
 		}
 		setDeleting(null);
 	};
+
+	if (calendarsFailed) {
+		return (
+			<LoadFailed
+				what="calendars"
+				error={calendars.error}
+				onRetry={() => calendars.refetch()}
+				retrying={calendars.isFetching}
+			/>
+		);
+	}
 
 	if (calendars.isLoading) {
 		return (
@@ -278,7 +292,7 @@ function Calendar() {
 					</Button>
 					<select
 						aria-label="View"
-						className="bg-transparent px-2 py-1 text-xs [&>option]:bg-popover"
+						className="bg-transparent px-2 py-1 text-xs"
 						value={view}
 						onChange={(e) => setView(e.target.value as CalendarViewMode)}
 					>
@@ -316,18 +330,27 @@ function Calendar() {
 					/>
 				</aside>
 				<div className="flex min-h-0 flex-1 flex-col">
-					<CalendarViews
-						view={view}
-						date={date}
-						events={visibleEvents}
-						calendars={list}
-						onCreate={(startAt) => setEventDialog({ event: null, startAt })}
-						onEventClick={openEvent}
-						onOpenDay={(day) => {
-							setDate(day);
-							setView('day');
-						}}
-					/>
+					{eventsFailed ? (
+						<LoadFailed
+							what="events"
+							error={events.error}
+							onRetry={() => events.refetch()}
+							retrying={events.isFetching}
+						/>
+					) : (
+						<CalendarViews
+							view={view}
+							date={date}
+							events={visibleEvents}
+							calendars={list}
+							onCreate={(startAt) => setEventDialog({ event: null, startAt })}
+							onEventClick={openEvent}
+							onOpenDay={(day) => {
+								setDate(day);
+								setView('day');
+							}}
+						/>
+					)}
 				</div>
 			</div>
 		</div>

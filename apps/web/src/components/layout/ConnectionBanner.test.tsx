@@ -1,0 +1,51 @@
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useConnectionStore } from '@/lib/socket/connectionStore';
+import { ConnectionBanner } from './ConnectionBanner';
+
+describe('ConnectionBanner', () => {
+	afterEach(() => {
+		useConnectionStore.setState({ lost: false });
+		vi.unstubAllGlobals();
+	});
+
+	it('shows while the connection is lost and leaves when it is back, in a live region', () => {
+		const { container } = render(<ConnectionBanner />);
+		// A polite live region, always present, without role=status so it is not mistaken for a page's own status line.
+		const region = container.firstElementChild as HTMLElement;
+		expect(region).toHaveAttribute('aria-live', 'polite');
+		expect(screen.queryByRole('status')).toBeNull();
+		expect(region).toBeEmptyDOMElement();
+
+		act(() => useConnectionStore.getState().setLost(true));
+		expect(region).toHaveTextContent("Can't reach the server. Reconnecting…");
+
+		act(() => useConnectionStore.getState().setLost(false));
+		expect(region).toBeEmptyDOMElement();
+	});
+
+	it('sits below the phone bar and keeps its height in --connection-banner-space while it shows (FBK-2)', () => {
+		const { container } = render(<ConnectionBanner />);
+		expect((container.firstElementChild as HTMLElement).className).toContain(
+			'top-[calc(var(--top-band-bottom,0px)+0.5rem)]'
+		);
+		const root = document.documentElement;
+		expect(root.style.getPropertyValue('--connection-banner-space')).toBe('');
+
+		const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(30);
+		act(() => useConnectionStore.getState().setLost(true));
+		// Its height and the 8 px gap under it.
+		expect(root.style.getPropertyValue('--connection-banner-space')).toBe('38px');
+		height.mockRestore();
+
+		act(() => useConnectionStore.getState().setLost(false));
+		expect(root.style.getPropertyValue('--connection-banner-space')).toBe('');
+	});
+
+	it('says the computer is offline when the browser knows it is', () => {
+		vi.stubGlobal('navigator', { onLine: false });
+		useConnectionStore.setState({ lost: true });
+		render(<ConnectionBanner />);
+		expect(screen.getByText('This computer is offline. Reconnecting…')).toBeInTheDocument();
+	});
+});

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -29,7 +30,6 @@ import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { DEFAULT_PROFILE_IMAGE } from '@/routes/workspace/models/modelEditorLogic';
 import { accessLabel, isPublicModel, type ModelItem } from './adminModels';
 
 const accessClass = {
@@ -130,16 +130,11 @@ export function ModelRow({
 			</div>
 
 			<RowButton className="group/item flex flex-1 gap-2.5 px-1 py-1" onClick={handlers.open}>
-				<div className={cn('self-center rounded-xl', !active && 'opacity-50')}>
-					<img
+				<div className={cn('self-center rounded-full', !active && 'opacity-50')}>
+					<ProfileAvatar
 						src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
-						alt=""
-						className="size-7 rounded-xl object-cover"
-						loading="lazy"
-						decoding="async"
-						onError={(e) => {
-							if (e.currentTarget.src !== DEFAULT_PROFILE_IMAGE) e.currentTarget.src = DEFAULT_PROFILE_IMAGE;
-						}}
+						name={model.name ?? model.id}
+						className="size-7"
 					/>
 				</div>
 				<div className={cn('flex min-w-0 flex-1 self-center pr-1', !active && 'text-muted-foreground')}>

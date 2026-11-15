@@ -1,6 +1,6 @@
 // import { version } from '../../package.json';
 
-export const APP_NAME = 'Local LLM';
+export const APP_NAME = 'local-llm';
 
 export const WEBUI_HOSTNAME = '';
 export const WEBUI_BASE_URL = '';

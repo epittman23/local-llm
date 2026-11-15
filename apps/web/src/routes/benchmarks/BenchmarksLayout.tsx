@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router';
-import { cn } from '@/lib/utils';
+import { Outlet } from 'react-router';
+import { SectionSkeleton, SectionTabs } from '@/components/layout/SectionTabs';
+import { PageHeader } from '@/components/ui/page-header';
 import { routePaths } from '@/routes/routePaths';
 import { useBenchmarksGate } from './useBenchmarksGate';
 
@@ -14,14 +15,6 @@ const tabs = [
 	{ to: routePaths.benchmarksPrescreen, label: 'Pre-screen' }
 ];
 
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-	cn(
-		'min-w-fit border-b-2 px-1 pb-2 text-sm transition-colors',
-		isActive
-			? 'border-foreground text-foreground font-medium'
-			: 'border-transparent text-muted-foreground hover:text-foreground'
-	);
-
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte: the same
  * gate (admin + features.enable_benchmarks, see useBenchmarksGate.ts) and
@@ -32,23 +25,16 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 export function BenchmarksLayout() {
 	const gate = useBenchmarksGate();
 
-	if (gate !== 'allowed') {
-		return (
-			<div className="flex flex-1 items-center justify-center p-8">
-				<p className="text-muted-foreground text-sm">{gate === 'pending' ? 'Loading…' : 'Redirecting…'}</p>
-			</div>
-		);
-	}
+	if (gate !== 'allowed') return <SectionSkeleton label="benchmarks" />;
 
 	return (
 		<div className="flex h-full flex-col">
-			<nav className="flex gap-4 overflow-x-auto border-b px-4 pt-3">
-				{tabs.map((tab) => (
-					<NavLink key={tab.to} to={tab.to} className={tabClass}>
-						{tab.label}
-					</NavLink>
-				))}
-			</nav>
+			<div className="flex flex-col gap-3 border-b px-4 pt-4">
+				<div className="ps-[var(--shell-menu-inset,0px)]">
+					<PageHeader title="Benchmarks" description="Serve a local model, measure it, and compare configurations." />
+				</div>
+				<SectionTabs label="Benchmarks" tabs={tabs} />
+			</div>
 			<div className="flex-1 overflow-y-auto p-4">
 				<Outlet />
 			</div>
