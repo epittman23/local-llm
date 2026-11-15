@@ -60,9 +60,30 @@ export function settingLabel(title: string): string {
 		.join(' ');
 }
 
-/** A setting whose value should not show on screen: by its input type, its format, or its name. */
-export const isSecret = (name: string, p: ValveProperty) =>
-	p.input?.type === 'password' || p.format === 'password' || /key|secret|token|password/i.test(name);
+// Words that name a secret wherever they stand in a setting's name.
+const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'apikey', 'credential', 'credentials']);
+// A name ending in "key" is a secret (api_key, OPENAI_KEY, key) unless the word before
+// it says it is a lookup key instead.
+const LOOKUP_KEYS = new Set(['sort', 'primary', 'foreign', 'partition', 'cache', 'group', 'index', 'lookup', 'hot']);
+
+/**
+ * A setting whose value should not show on screen: by its input type, its
+ * format, or its name. The name is read as words (split on `_`, `-`, spaces
+ * and camelCase), so `keywords`, `tokenizer` and `sort_key` show and
+ * `github_token`, `apiKey` and `OPENAI_API_KEY` are masked.
+ */
+export function isSecret(name: string, p: ValveProperty): boolean {
+	if (p.input?.type === 'password' || p.format === 'password') return true;
+	const words = name
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+		.toLowerCase()
+		.split(/[\s_\-.]+/)
+		.filter(Boolean);
+	if (words.some((word) => SECRET_WORDS.has(word))) return true;
+	const last = words.length - 1;
+	return words[last] === 'key' && (last === 0 || !LOOKUP_KEYS.has(words[last - 1]));
+}
 
 /** The default as the help line says it (FRM-2): "Default: 100", "Default: off", or none. */
 export function defaultText(p: ValveProperty): string | null {

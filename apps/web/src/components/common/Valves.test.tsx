@@ -176,6 +176,39 @@ describe('settings shown at once (#1016)', () => {
 		expect(isSecret('github_token', {})).toBe(true);
 		expect(isSecret('units', { format: 'password' })).toBe(true);
 		expect(isSecret('units', {})).toBe(false);
+	});
+
+	it('masks a setting whose name has a secret word in it, never one that only contains its letters', () => {
+		for (const name of [
+			'github_token',
+			'api_key',
+			'OPENAI_API_KEY',
+			'apiKey',
+			'APIKey',
+			'APIKEY',
+			'openai_key',
+			'KEY',
+			'client_secret',
+			'accessToken',
+			'db-password',
+			'smtp passwd',
+			'private_key',
+			'aws.credentials'
+		]) {
+			expect(isSecret(name, {}), name).toBe(true);
+		}
+		for (const name of [
+			'keywords',
+			'sort_key',
+			'tokenizer',
+			'max_tokens',
+			'passwordless',
+			'key_count',
+			'primaryKey',
+			'monkey'
+		]) {
+			expect(isSecret(name, {}), name).toBe(false);
+		}
 		expect(defaultText({ default: true })).toBe('Default: on');
 		expect(defaultText({ default: ['a', 'b'] })).toBe('Default: a, b');
 		expect(defaultText({ default: '' })).toBeNull();
