@@ -115,23 +115,23 @@ test.describe('workspace models list', () => {
 		await expect.poll(() => calls.some((c) => c.path === '/model/delete')).toBe(true);
 	});
 
-	test('"Keep in Sidebar" saves the user\'s pinned list, keeping their other settings', async ({ page }) => {
+	test('"Keep in sidebar" saves the user\'s pinned list, keeping their other settings', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)], { settings: { theme: 'dark', pinnedModels: ['other'] } });
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
-		await page.getByRole('menuitem', { name: 'Keep in Sidebar' }).click();
+		await page.getByRole('menuitem', { name: 'Keep in sidebar' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/settings/update')?.body)
 			.toEqual({ ui: { theme: 'dark', pinnedModels: ['other', 'model-1'] } });
 	});
 
-	test('Hide Model saves meta.hidden; Hide All hides every visible model', async ({ page }) => {
+	test('Hide model saves meta.hidden; Hide All hides every visible model', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1), model(2)]);
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).first().click();
-		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await page.getByRole('menuitem', { name: 'Hide model' }).click();
 		await expect.poll(() => calls.filter((c) => c.path === '/model/update').length).toBe(1);
 		expect(calls.find((c) => c.path === '/model/update')?.body.meta.hidden).toBe(true);
 

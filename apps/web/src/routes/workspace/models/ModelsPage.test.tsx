@@ -160,6 +160,19 @@ describe('ModelsPage with one account or several (WRD-4, S4-D1)', () => {
 	});
 });
 
+describe('ModelsPage row menu words (WRD-1)', () => {
+	it('names its items in sentence case', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model Menu' }), { button: 0, pointerType: 'mouse' });
+		const menu = await screen.findByRole('menu');
+		for (const name of ['Hide model', 'Keep in sidebar', 'Copy link']) {
+			expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
+		}
+	});
+});
+
 describe('ModelsPage delete (ACT-3, #1012)', () => {
 	it('confirms in the danger colour, naming the model and what is kept, with Delete last in the menu', async () => {
 		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });

@@ -58,7 +58,7 @@ export function visibilityUpdate(m: BulkRow, hidden: boolean): Json {
 }
 
 /**
- * Saves one writable model's visibility (the row's Hide / Show Model) with the
+ * Saves one writable model's visibility (the row's Hide / Show model) with the
  * body visibilityUpdate builds, and toasts the outcome. Returns whether it was
  * saved.
  */

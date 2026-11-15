@@ -973,7 +973,7 @@ function Header({
 									<MoreHorizontal />
 								</Button>
 							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="min-w-48">
+							<DropdownMenuContent align="end" className="w-max min-w-48">
 								{writeAccess && (
 									<DropdownMenuItem onSelect={onEditDetails}>
 										<Pencil />

@@ -74,7 +74,7 @@ type ModelRow = {
  * list of model presets, with per-row menu, enable switch, and bulk Enable / Disable /
  * Show / Hide All. Differences from the Svelte version worth knowing:
  *
- * - Pinning ("Keep in Sidebar") reads and writes the user's saved UI settings
+ * - Pinning ("Keep in sidebar") reads and writes the user's saved UI settings
  *   through `useUserSettings`, optimistically, instead of a global store.
  * - The global `models` store the Svelte page refreshes after every change is
  *   the ['models-all'] query here, invalidated the same way.
@@ -552,12 +552,12 @@ export function ModelsPage() {
 													{model.write_access && (
 														<DropdownMenuItem onSelect={() => setHidden(model, !hidden)}>
 															{hidden ? <Eye /> : <EyeOff />}
-															{hidden ? 'Show Model' : 'Hide Model'}
+															{hidden ? 'Show model' : 'Hide model'}
 														</DropdownMenuItem>
 													)}
 													<DropdownMenuItem onSelect={() => togglePinned(model.id)}>
 														{pinned ? <PinOff /> : <Pin />}
-														{pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'}
+														{pinned ? 'Hide from sidebar' : 'Keep in sidebar'}
 													</DropdownMenuItem>
 													{model.write_access && (
 														<DropdownMenuItem onSelect={() => cloneModel(model)}>
@@ -567,7 +567,7 @@ export function ModelsPage() {
 													)}
 													<DropdownMenuItem onSelect={() => copyLink(model)}>
 														<Link2 />
-														Copy Link
+														Copy link
 													</DropdownMenuItem>
 													{model.write_access && canExport && (
 														<DropdownMenuItem onSelect={() => exportModel(model)}>

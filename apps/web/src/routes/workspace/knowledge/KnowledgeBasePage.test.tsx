@@ -309,6 +309,8 @@ describe('KnowledgeBasePage name and description dialog (#228, #1017)', () => {
 		renderPage();
 		await screen.findByText('file1.txt');
 		openMenu('More actions');
+		// The menu is as wide as its longest item, so this one stays on one line.
+		expect(await screen.findByRole('menu')).toHaveClass('w-max');
 		fireEvent.click(await screen.findByText('Edit name and description'));
 		return screen.findByRole('dialog', { name: 'Edit name and description' });
 	};
@@ -377,6 +379,8 @@ describe('KnowledgeBasePage name and description dialog (#228, #1017)', () => {
 		const view = renderPage(client);
 		await screen.findByText('file1.txt');
 		openMenu('More actions');
+		// The menu is as wide as its longest item, so this one stays on one line.
+		expect(await screen.findByRole('menu')).toHaveClass('w-max');
 		fireEvent.click(await screen.findByText('Edit name and description'));
 		fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Renamed' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
@@ -510,6 +514,8 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 		send([grant('a')]);
 		await waitFor(() => expect(shown()).toBe('a'));
 		openMenu('More actions');
+		// The menu is as wide as its longest item, so this one stays on one line.
+		expect(await screen.findByRole('menu')).toHaveClass('w-max');
 		fireEvent.click(await screen.findByText('Edit name and description'));
 		fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Renamed' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
