@@ -2029,3 +2029,66 @@ def test_a_cancelled_reply_saves_its_unrun_call_as_failed(monkeypatch):
 
     assert not [c for c in observed['calls'] if c[0] == 'tool']
     assert _call_statuses(observed) == ['failed']
+
+
+def test_a_reply_cut_off_by_the_token_limit_saves_its_finish_reason(monkeypatch):
+    """S3-D4 (#1081): the chat can say a reply reached the token limit, after a reload too."""
+    observed = _run(
+        [[chunk('The answer is'), sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'length'}]}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done')]
+    assert final and final[-1]['finish_reason'] == 'length'
+    assert [d for d in _emitted(observed) if d.get('done')][-1]['finish_reason'] == 'length'
+
+
+RESP_INCOMPLETE = sse(
+    {'type': 'response.incomplete', 'response': {'incomplete_details': {'reason': 'max_output_tokens'}}}
+)
+
+
+def test_a_responses_api_reply_cut_off_saves_why(monkeypatch):
+    observed = _run(
+        [
+            [
+                *RESP_TEXT[:3],
+                RESP_INCOMPLETE,
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert [s for s in _saved(observed) if s.get('done')][-1]['finish_reason'] == 'max_output_tokens'
+
+
+def test_a_stopped_reply_is_saved_as_stopped(monkeypatch):
+    """S3-D4 (#1081): a reply the person stopped is saved with `stopped`, so it still reads as stopped later."""
+    observed = _run([[chunk('partial'), 'CANCEL']], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
+
+    final = [s for s in _saved(observed) if s.get('done')]
+    assert final and final[-1]['stopped'] is True
+    assert 'finish_reason' not in final[-1]
+
+
+def test_a_reply_that_failed_mid_stream_is_not_saved_as_stopped(monkeypatch):
+    log = []
+    _install(monkeypatch, {}, log, [])
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('The answer is'), 'RESET'], log, 'first')
+
+    with pytest.raises(ConnectionResetError):
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+
+    saved = [c[2] for c in log if c[0] == 'chats.upsert_message']
+    assert any(s.get('done') for s in saved)
+    assert not [s for s in saved if s.get('stopped')]
