@@ -198,6 +198,75 @@ test('a server confirmation is answered through the socket', async ({ page }) =>
 	expect(await answer).toBe(true);
 });
 
+test('a reply paused on an ask_user call asks its question, and the answer resumes it', async ({ page }) => {
+	// Native function calling stores the question in the reply and pauses; nothing comes over the socket.
+	const questions = [
+		{
+			id: 'layout',
+			header: 'Page content',
+			question: 'What should each page hold?',
+			options: [
+				{ label: 'Blank space', description: 'Room to work' },
+				{ label: 'Worked solution', description: 'An answer key' }
+			]
+		}
+	];
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c1', 'Paused chat', [
+				{ id: 'u1', role: 'user', content: 'Make a PDF' },
+				{
+					id: 'a1',
+					role: 'assistant',
+					content: 'Before I build it, one question.',
+					model: 'qwen',
+					done: false,
+					output: [
+						{
+							type: 'message',
+							id: 'm1',
+							role: 'assistant',
+							content: [{ type: 'output_text', text: 'Before I build it, one question.' }]
+						},
+						{
+							type: 'function_call',
+							id: 'call_1',
+							call_id: 'call_1',
+							name: 'ask_user',
+							arguments: JSON.stringify({ questions, allow_other: true, timeout_ms: 120000 }),
+							status: 'pending'
+						}
+					]
+				}
+			])
+		]
+	});
+	const resolved: unknown[] = [];
+	await page.route('**/api/v1/chats/c1/messages/a1/resolve', async (route) => {
+		resolved.push(route.request().postDataJSON());
+		return json(route, { paused: false });
+	});
+	await page.goto('/c/c1');
+	await chat.socket.connected;
+
+	const dialog = page.getByRole('dialog', { name: 'Input needed' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toContainText('What should each page hold?');
+	await dialog.getByRole('button', { name: /Blank space/ }).click();
+	await dialog.getByRole('button', { name: 'Submit answers' }).click();
+
+	await expect
+		.poll(() => resolved)
+		.toEqual([
+			{
+				call_id: 'call_1',
+				action: 'answer',
+				answers: { layout: { type: 'option', option_index: 0, label: 'Blank space', description: 'Room to work' } }
+			}
+		]);
+	await expect(dialog).toHaveCount(0);
+});
+
 test('a missing chat says so in place and keeps its address (#953)', async ({ page }) => {
 	await mockChat(page);
 	await page.goto('/c/nope');
