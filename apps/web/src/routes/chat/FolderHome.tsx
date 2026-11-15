@@ -13,6 +13,9 @@ import { shownTime } from '@/lib/utils/dates';
 import { FolderDialog } from './sidebar/ChatDialogs';
 import { useFolderChats } from './sidebar/useChatList';
 
+/** How many chats the server's folder list sends per page (`routers/chats.py`, the folder list's `limit`). */
+const FOLDER_PAGE_SIZE = 10;
+
 /**
  * The page at /folders/:id (#998): a folder is a project, so its page says
  * which one. The folder's name is the page's h1 (A11Y-3, LAY-5) with Edit
@@ -27,6 +30,9 @@ export function FolderHome({ folder }: { folder: Folder }) {
 	const [editing, setEditing] = useState(false);
 	const chats = useFolderChats(folder.id, true);
 	const list = chats.data?.pages.flat() ?? [];
+	// Another page can exist only when the last one was full (the folder endpoint
+	// pages by FOLDER_PAGE_SIZE), so a short folder offers no Show more (#1070).
+	const more = chats.hasNextPage && (chats.data?.pages.at(-1)?.length ?? 0) >= FOLDER_PAGE_SIZE;
 	const instructions = String(folder.data?.system_prompt ?? '').trim();
 
 	const save = async (v: { name: string; system_prompt: string }) => {
@@ -115,7 +121,7 @@ export function FolderHome({ folder }: { folder: Folder }) {
 							})}
 						</ul>
 					)}
-					{chats.hasNextPage && list.length > 0 && (
+					{more && (
 						<Button
 							variant="ghost"
 							className="self-start"

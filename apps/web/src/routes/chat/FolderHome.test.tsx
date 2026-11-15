@@ -79,16 +79,15 @@ describe('FolderHome (#998)', () => {
 		await waitFor(() => expect(screen.queryByTestId('folder-chats-loading')).toBeNull());
 	});
 
-	it('pages through a folder with more chats than one page', async () => {
+	it('pages through a folder with more chats than one page, and offers no more after a short page', async () => {
+		const firstPage = Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, title: `Chat ${i}`, updated_at: now }));
 		vi.mocked(getChatListByFolderId).mockImplementation(
-			async (_t, _f, page) =>
-				(page === 1
-					? [{ id: 'c1', title: 'First', updated_at: now }]
-					: [{ id: 'c2', title: 'Second', updated_at: now }]) as never
+			async (_t, _f, page) => (page === 1 ? firstPage : [{ id: 'c10', title: 'Second', updated_at: now }]) as never
 		);
 		show();
 		fireEvent.click(await screen.findByRole('button', { name: 'Show more chats' }));
 		expect(await screen.findByRole('button', { name: /Second/ })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Show more chats' })).toBeNull();
 	});
 
 	it('edits the folder from its page, keeping its other data, and refreshes it', async () => {
@@ -108,6 +107,17 @@ describe('FolderHome (#998)', () => {
 		await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Folder updated'));
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['folders'] });
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['folder', 'f1'] });
+	});
+
+	it('starts in the name field and gives focus back to Edit folder when the dialog closes (NAV-4)', async () => {
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		show();
+		const edit = screen.getByRole('button', { name: 'Edit folder' });
+		edit.focus();
+		fireEvent.click(edit);
+		await waitFor(() => expect(screen.getByLabelText('Name')).toHaveFocus());
+		fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+		await waitFor(() => expect(edit).toHaveFocus());
 	});
 
 	it('keeps the dialog open and says why when the save fails', async () => {

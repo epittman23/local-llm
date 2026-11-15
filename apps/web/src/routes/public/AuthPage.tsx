@@ -332,7 +332,7 @@ export function AuthPage() {
 											type="button"
 											variant="ghost"
 											size="icon-sm"
-											className="absolute end-1 top-1/2 -translate-y-1/2"
+											className="absolute inset-y-0 end-1 my-auto"
 											aria-label={showPassword ? 'Hide password' : 'Show password'}
 											aria-controls="password"
 											onClick={() => setShowPassword((v) => !v)}

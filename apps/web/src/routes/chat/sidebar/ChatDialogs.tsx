@@ -348,13 +348,13 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg gap-2 p-3" showCloseButton={false}>
+			<DialogContent className="gap-2 p-3 sm:max-w-lg" showCloseButton={false}>
 				<DialogHeader className="sr-only">
 					<DialogTitle>Search chats</DialogTitle>
 					<DialogDescription>Search your chats by text or filters</DialogDescription>
 				</DialogHeader>
 				<Command shouldFilter={false} loop label="Search chats" value={highlighted} onValueChange={setHighlighted}>
-					<CommandInput autoFocus value={query} onValueChange={setQuery} placeholder="Search chats" />
+					<CommandInput value={query} onValueChange={setQuery} placeholder="Search chats" />
 					<CommandList label="Search results" className="mt-2">
 						{body}
 					</CommandList>
@@ -394,7 +394,7 @@ export function FolderDialog({
 	const editing = Boolean(folder);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>{editing ? 'Edit folder' : 'New folder'}</DialogTitle>
 					<DialogDescription className="sr-only">
@@ -422,7 +422,6 @@ export function FolderDialog({
 						<Input
 							id="folder-name"
 							ref={nameField}
-							autoFocus
 							value={name}
 							aria-invalid={nameError ? true : undefined}
 							aria-describedby={nameError ? 'folder-name-error' : undefined}
