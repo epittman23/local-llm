@@ -173,8 +173,8 @@ test('first-run onboarding is shown once config arrives, and leads into admin si
 	await page.goto('/auth');
 
 	await expect(page.getByText('Welcome to local-llm')).toBeVisible();
-	await page.getByRole('button', { name: 'Get Started' }).click();
-	await expect(page.getByRole('button', { name: 'Create Admin Account' })).toBeVisible();
+	await page.getByRole('button', { name: 'Get started' }).click();
+	await expect(page.getByRole('button', { name: 'Create admin account' })).toBeVisible();
 });
 
 test('OAuth provider buttons are listed and point at the backend login URL', async ({ page }) => {
