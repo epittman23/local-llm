@@ -11,10 +11,7 @@ import type { Folder } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { shownTime } from '@/lib/utils/dates';
 import { FolderDialog } from './sidebar/ChatDialogs';
-import { useFolderChats } from './sidebar/useChatList';
-
-/** How many chats the server's folder list sends per page (`routers/chats.py`, the folder list's `limit`). */
-const FOLDER_PAGE_SIZE = 10;
+import { FOLDER_PAGE_SIZE, useFolderChats } from './sidebar/useChatList';
 
 /**
  * The page at /folders/:id (#998): a folder is a project, so its page says

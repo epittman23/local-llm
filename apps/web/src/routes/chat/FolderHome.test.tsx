@@ -6,6 +6,7 @@ import { getChatListByFolderId } from '@/lib/apis/chats';
 import { updateFolderById } from '@/lib/apis/folders';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { FolderHome } from './FolderHome';
+import { FOLDER_PAGE_SIZE } from './sidebar/useChatList';
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn() }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: toastSuccess, error: toastError }) }));
@@ -80,7 +81,11 @@ describe('FolderHome (#998)', () => {
 	});
 
 	it('pages through a folder with more chats than one page, and offers no more after a short page', async () => {
-		const firstPage = Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, title: `Chat ${i}`, updated_at: now }));
+		const firstPage = Array.from({ length: FOLDER_PAGE_SIZE }, (_, i) => ({
+			id: `c${i}`,
+			title: `Chat ${i}`,
+			updated_at: now
+		}));
 		vi.mocked(getChatListByFolderId).mockImplementation(
 			async (_t, _f, page) => (page === 1 ? firstPage : [{ id: 'c10', title: 'Second', updated_at: now }]) as never
 		);
