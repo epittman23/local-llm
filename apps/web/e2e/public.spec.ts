@@ -43,7 +43,7 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 	await expect(page.getByText('Sign in to local-llm')).toBeVisible();
 
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page).toHaveURL(/\/notes$/);
@@ -66,7 +66,7 @@ test('a socket event sent right after signing in is not lost (#674)', async ({ p
 
 	await page.goto('/auth?redirect=%2Fnotes');
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	// The socket is created on the sign-in page but connects only once the
@@ -108,7 +108,7 @@ test('a redirect that would leave the app is ignored: signing in lands home inst
 
 	await page.goto(`/auth?redirect=${encodeURIComponent('https://evil.example/pwned')}`);
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('hunter2');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page).toHaveURL(/localhost:5174\/$/);
@@ -139,7 +139,7 @@ for (const [what, redirect] of [
 		// reads as `//evil.example`; `/.//evil.example` resolves to that path.
 		await page.goto(`/auth?redirect=${redirect}`);
 		await page.getByLabel('Email').fill('user@example.com');
-		await page.getByLabel('Password').fill('hunter2');
+		await page.getByLabel('Password', { exact: true }).fill('hunter2');
 		await page.getByRole('button', { name: 'Sign in' }).click();
 
 		await expect(page).toHaveURL(/localhost:5174\/$/);
@@ -158,7 +158,7 @@ test('a failed sign-in shows the backend error inline and stays on /auth', async
 
 	await page.goto('/auth');
 	await page.getByLabel('Email').fill('user@example.com');
-	await page.getByLabel('Password').fill('wrong');
+	await page.getByLabel('Password', { exact: true }).fill('wrong');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page.getByText('Incorrect email or password')).toBeVisible();
@@ -173,8 +173,8 @@ test('first-run onboarding is shown once config arrives, and leads into admin si
 	await page.goto('/auth');
 
 	await expect(page.getByText('Welcome to local-llm')).toBeVisible();
-	await page.getByRole('button', { name: 'Get Started' }).click();
-	await expect(page.getByRole('button', { name: 'Create Admin Account' })).toBeVisible();
+	await page.getByRole('button', { name: 'Get started' }).click();
+	await expect(page.getByRole('button', { name: 'Create admin account' })).toBeVisible();
 });
 
 test('OAuth provider buttons are listed and point at the backend login URL', async ({ page }) => {
@@ -261,7 +261,9 @@ test('/watch forwards a video id to the chat home as ?youtube=', async ({ page }
 	await expect(page).toHaveURL(/\/\?youtube=dQw4w9WgXcQ$/);
 });
 
-test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Clone button', async ({ page }) => {
+test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Continue button', async ({
+	page
+}) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/chats/share/abc123', (route) =>
 		route.fulfill({
@@ -297,7 +299,7 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page.getByRole('heading', { name: 'Explaining monads' })).toBeVisible();
 	await expect(page.getByText('What is a monad?')).toBeVisible();
 	await expect(page.locator('strong', { hasText: 'monad' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Clone Chat' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Continue this chat' })).toHaveCount(0);
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
 	await expect(page).toHaveTitle('Explaining monads · local-llm');
 });

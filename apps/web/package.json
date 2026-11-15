@@ -46,6 +46,7 @@
     "astro": "^7.4.7",
     "chart.js": "^4.6.1",
     "class-variance-authority": "^0.7.1",
+    "cmdk": "1.1.1",
     "cn": "^0.5.2",
     "codemirror": "^6.0.2",
     "dayjs": "^1.11.23",

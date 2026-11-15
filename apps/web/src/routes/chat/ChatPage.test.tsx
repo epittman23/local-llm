@@ -1,9 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getChatById } from '@/lib/apis/chats';
+import { getFolderById } from '@/lib/apis/folders';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+import { useUIStore } from '@/lib/stores/uiStore';
+import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { ChatPage } from './ChatPage';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), warning: vi.fn() }) }));
@@ -16,6 +21,12 @@ vi.mock('@/lib/settings/userSettings', () => ({
 }));
 vi.mock('@/lib/apis/configs', () => ({ getBanners: vi.fn(async () => []) }));
 vi.mock('@/lib/apis/tools', () => ({ getTools: vi.fn(async () => []) }));
+vi.mock('@/lib/apis/chats', async (orig) => ({
+	...(await orig<object>()),
+	getChatById: vi.fn(),
+	getChatListByFolderId: vi.fn(async () => [])
+}));
+vi.mock('@/lib/apis/folders', async (orig) => ({ ...(await orig<object>()), getFolderById: vi.fn() }));
 
 function show() {
 	render(
@@ -59,5 +70,75 @@ describe('ChatPage header', () => {
 		expect(controls.getAttribute('aria-pressed')).toBe('false');
 		fireEvent.click(controls);
 		expect(controls.getAttribute('aria-pressed')).toBe('true');
+	});
+});
+
+const NOT_FOUND = "We could not find what you're looking for :/";
+const Where = () => <div data-testid="where">{useLocation().pathname}</div>;
+
+function showAt(path: string) {
+	render(
+		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+			<TooltipProvider>
+				<MemoryRouter initialEntries={[path]}>
+					<Routes>
+						<Route path="/" element={<Where />} />
+						<Route path="/c/:id" element={<ChatPage />} />
+						<Route path="/folders/:folderId" element={<ChatPage />} />
+					</Routes>
+				</MemoryRouter>
+			</TooltipProvider>
+		</QueryClientProvider>
+	);
+}
+
+describe('ChatPage: a link to something that is not there (NAV-3, #953)', () => {
+	it('says a missing chat no longer exists, in place, and offers the ways onward', async () => {
+		vi.mocked(getChatById).mockRejectedValueOnce(NOT_FOUND);
+		showAt('/c/gone');
+
+		expect(await screen.findByRole('heading', { level: 2, name: 'This chat no longer exists.' })).toBeInTheDocument();
+		expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
+		expect(usePageTitleStore.getState().dynamic).toBe('Chat not found');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Search chats' }));
+		expect(useUIStore.getState().searchOpen).toBe(true);
+		fireEvent.click(screen.getByRole('button', { name: 'Archived chats' }));
+		expect(useSettingsModalStore.getState()).toMatchObject({ open: true, requestedTab: 'archived_chats' });
+		fireEvent.click(screen.getByRole('link', { name: 'New chat' }));
+		expect(screen.getByTestId('where').textContent).toBe('/');
+	});
+
+	it('offers to try again when the chat failed to load, keeping the page (STA-4)', async () => {
+		vi.mocked(getChatById).mockRejectedValueOnce('Database is locked');
+		showAt('/c/c1');
+		expect(await screen.findByText("Couldn't load this chat")).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+	});
+
+	it('says a missing folder no longer exists, as the page heading, with no toast', async () => {
+		vi.mocked(getFolderById).mockRejectedValueOnce(NOT_FOUND);
+		showAt('/folders/gone');
+		expect(await screen.findByRole('heading', { level: 1, name: 'This folder no longer exists.' })).toBeInTheDocument();
+		expect(usePageTitleStore.getState().dynamic).toBe('Folder not found');
+		expect(screen.queryByTestId('where')).toBeNull();
+	});
+
+	it('offers to try again when the folder failed to load', async () => {
+		vi.mocked(getFolderById).mockRejectedValueOnce('Database is locked');
+		showAt('/folders/f1');
+		expect(await screen.findByText("Couldn't load this folder")).toBeInTheDocument();
+	});
+});
+
+describe('ChatPage: a folder’s page (#998)', () => {
+	it('is headed by the folder, once, names the tab after it, and says where a new chat goes', async () => {
+		vi.mocked(getFolderById).mockResolvedValueOnce({ id: 'f1', name: 'Statistics', data: {} });
+		showAt('/folders/f1');
+		expect(await screen.findByRole('heading', { level: 1, name: 'Statistics' })).toBeInTheDocument();
+		expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Statistics'));
+		expect(screen.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'New chat in Statistics');
+		expect(screen.queryByTestId('chat-folder')).toBeNull();
 	});
 });
