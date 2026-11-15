@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import General from './General';
 
 const stable = vi.hoisted(() => ({
-	settings: { system: 'be brief', params: {} },
+	settings: { system: 'be brief', params: {} } as Record<string, unknown>,
 	update: vi.fn(async () => undefined)
 }));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => stable }));
@@ -61,5 +61,30 @@ describe('General settings tab', () => {
 		expect(localStorage.theme).toBe('dark');
 		// Instant, unlike the rest of the tab: nothing to save.
 		expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+		// Saved with the account as it applies (S2-D4).
+		expect(stable.update).toHaveBeenCalledWith({ theme: 'dark' });
+		expect(screen.getByText(/saved with your account/)).toBeInTheDocument();
+	});
+
+	it('keeps an unsaved prompt when saving the theme replaces the settings object', () => {
+		stable.settings = { system: 'be brief', params: {} };
+		// A new element each time, so React renders General again rather than bailing out.
+		const ui = () => (
+			<TooltipProvider>
+				<General />
+			</TooltipProvider>
+		);
+		const view = render(ui());
+		const prompt = screen.getByRole('textbox', { name: 'System prompt' });
+		fireEvent.change(prompt, { target: { value: 'be thorough' } });
+		fireEvent.click(screen.getByRole('radio', { name: 'Light' }));
+		// What the optimistic save puts in the query cache: a new object, the same prompt and params.
+		stable.settings = { system: 'be brief', params: {}, theme: 'light' };
+		view.rerender(ui());
+		expect(prompt).toHaveValue('be thorough');
+		// A saved value that really changed still resets the form to it.
+		stable.settings = { system: 'be kind', params: {}, theme: 'light' };
+		view.rerender(ui());
+		expect(prompt).toHaveValue('be kind');
 	});
 });

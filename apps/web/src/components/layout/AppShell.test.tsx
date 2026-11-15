@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,7 +9,8 @@ import { AppShell } from './AppShell';
 const auth = vi.hoisted(() => ({ status: 'authenticated' as 'authenticated' | 'pending' | 'anonymous' }));
 vi.mock('@/lib/auth/useAuthGate', () => ({ useAuthGate: () => auth.status }));
 vi.mock('@/lib/settings/useSettingsUrl', () => ({ useSettingsUrl: () => {} }));
-vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
+const account = vi.hoisted(() => ({ settings: {} as Record<string, unknown> | null }));
+vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: account.settings }) }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocketReady: () => {} }));
 vi.mock('@/lib/useShortcuts', () => ({ useShortcuts: () => {} }));
 vi.mock('@/routes/calendar/useCalendarAlerts', () => ({ useCalendarAlerts: () => {} }));
@@ -21,6 +22,11 @@ vi.mock('./Sidebar', () => ({
 	SidebarContent: () => (
 		<nav aria-label="Main">
 			<a href="/workspace">Workspace</a>
+		</nav>
+	),
+	SidebarRail: () => (
+		<nav aria-label="Main">
+			<button type="button">Open sidebar</button>
 		</nav>
 	)
 }));
@@ -51,6 +57,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
 	auth.status = 'authenticated';
+	account.settings = {};
 	useUIStore.setState({ sidebarOpen: true, searchOpen: false } as never);
 });
 afterEach(() => {
@@ -133,12 +140,55 @@ describe('AppShell', () => {
 		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
 	});
 
-	it('collapses the sidebar to nothing when it is closed, leaving Open sidebar', () => {
+	it('collapses the sidebar to the 48 px rail, with no row of its own above the page (#930)', () => {
 		useUIStore.setState({ sidebarOpen: false } as never);
 		renderAt('/notes');
-		expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-0');
-		fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }));
-		expect(useUIStore.getState().sidebarOpen).toBe(true);
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-12');
+		expect(aside).toContainElement(screen.getByRole('button', { name: 'Open sidebar' }));
+		expect(screen.getAllByRole('button', { name: 'Open sidebar' })).toHaveLength(1);
+		expect(screen.queryByRole('link', { name: 'Workspace' })).toBeNull();
+	});
+
+	it('shows the whole sidebar, 256 px, when open', () => {
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-64');
+		expect(within(aside).getByRole('link', { name: 'Workspace' })).toBeTruthy();
+	});
+
+	describe('the theme saved with the account (#1089)', () => {
+		beforeEach(() => {
+			localStorage.theme = 'dark';
+			document.documentElement.className = 'dark';
+		});
+
+		it("applies and caches the account's theme when it differs from this browser's", () => {
+			account.settings = { theme: 'light' };
+			renderAt('/notes');
+			expect(localStorage.theme).toBe('light');
+			expect(document.documentElement.classList.contains('light')).toBe(true);
+		});
+
+		it('leaves the cached theme alone without a valid saved one, and before settings load', () => {
+			for (const settings of [null, {}, { theme: 'her' }]) {
+				account.settings = settings;
+				renderAt('/notes');
+				cleanup();
+			}
+			expect(localStorage.theme).toBe('dark');
+			expect(document.documentElement.className).toBe('dark');
+		});
+
+		it('applies it once per load, so a later change of the saved value does not override this page', () => {
+			account.settings = { theme: 'dark' };
+			renderAt('/notes');
+			account.settings = { theme: 'light' };
+			// Any re-render of the shell reads the settings again.
+			act(() => useUIStore.setState({ sidebarOpen: false } as never));
+			expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-12');
+			expect(localStorage.theme).toBe('dark');
+		});
 	});
 
 	it('keeps the shell exactly viewport-tall, so only the sidebar list scrolls (#903, LAY-7)', () => {

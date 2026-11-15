@@ -36,11 +36,15 @@ test('the app shell renders the home route with a working sidebar link', async (
 	await page.goto('/');
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 
-	// The sidebar defaults closed (mirrors d863707:apps/openwebui/src/lib/components/
-	// layout/Sidebar.svelte's own localStorage.sidebar default), so its nav
-	// links don't exist in the DOM until it's opened.
-	await page.getByRole('button', { name: /open sidebar/i }).click();
-	await expect(page.getByRole('link', { name: /new chat/i })).toBeVisible();
+	// The sidebar starts open in a browser that has never closed it (#930);
+	// closed, it is a rail with Open sidebar, New chat, Search and the account menu.
+	await page.getByRole('button', { name: 'Close sidebar' }).click();
+	const rail = page.getByRole('complementary', { name: 'Sidebar' });
+	await expect(rail.getByRole('link', { name: 'New chat' })).toBeVisible();
+	await expect(rail.getByRole('button', { name: 'Search' })).toBeVisible();
+	await expect(rail.getByRole('link', { name: /notes/i })).toHaveCount(0);
+	await rail.getByRole('button', { name: 'Open sidebar' }).click();
+	await expect(rail.getByRole('link', { name: /new chat/i })).toBeVisible();
 
 	await page.getByRole('link', { name: /notes/i }).click();
 	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();

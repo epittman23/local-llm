@@ -1,4 +1,3 @@
-import { Circle, type LucideIcon, Monitor, Moon, Sun } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
@@ -6,32 +5,36 @@ import type { Params } from '@/components/common/advancedParamDefs';
 import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useUserSettings } from '@/lib/settings/userSettings';
-import { applyTheme, getTheme, THEMES, type ThemeId } from '@/lib/theme';
+import { useThemeChoice } from '@/lib/settings/useThemeChoice';
+import { isThemeId, THEMES } from '@/lib/theme';
 import { SettingField, SettingRow, SettingsForm, SettingsSection, SettingTextarea } from '../controls';
 import { generalPatch, paramsForForm } from './personalSettings';
 
-const THEME_ICONS: Record<ThemeId, LucideIcon> = { system: Monitor, dark: Moon, 'oled-dark': Circle, light: Sun };
-
 /**
- * Ports Settings/General.svelte: theme (applied at once, kept in this
- * browser, labelled as instant since the rest of the tab saves on request:
- * FRM-3), the default system prompt for new chats, and the user's default
+ * Ports Settings/General.svelte: theme (applied at once and saved with the
+ * account, labelled as instant since the rest of the tab saves on request:
+ * FRM-3, #1089), the default system prompt for new chats, and the user's default
  * generation parameters (saved with the SaveBar). There is no language picker:
  * the app ships only the en-US locale.
  */
 export default function General() {
 	const { settings, update } = useUserSettings();
-	const [theme, setTheme] = useState(() => getTheme() as ThemeId);
+	const [theme, chooseTheme] = useThemeChoice();
 	const [system, setSystem] = useState('');
 	const [params, setParams] = useState<Params>({});
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [saving, setSaving] = useState(false);
 
+	// Keyed on the saved values, not the settings object: saving the theme
+	// replaces that object, and must not throw away unsaved edits below.
+	const loaded = Boolean(settings);
+	const savedSystem = String(settings?.system ?? '');
+	const savedParams = JSON.stringify(settings?.params ?? null);
 	const reset = useCallback(() => {
-		if (!settings) return;
-		setSystem(String(settings.system ?? ''));
-		setParams(paramsForForm(settings.params as Params | undefined));
-	}, [settings]);
+		if (!loaded) return;
+		setSystem(savedSystem);
+		setParams(paramsForForm((JSON.parse(savedParams) ?? undefined) as Params | undefined));
+	}, [loaded, savedSystem, savedParams]);
 	useEffect(reset, [reset]);
 	// Compared as they would be saved, so an emptied field that was never set is not a change.
 	const dirty =
@@ -59,17 +62,14 @@ export default function General() {
 			<SettingsSection title="Appearance" first>
 				<SettingRow
 					label="Theme"
-					description="Applies at once, in this browser. Black uses pure black surfaces, for OLED screens."
+					description="Applies at once and is saved with your account. Black uses pure black surfaces, for OLED screens."
 				>
 					{(id) => (
 						<SegmentedControl
 							aria-labelledby={id}
 							value={theme}
-							onValueChange={(v) => {
-								setTheme(v);
-								applyTheme(v);
-							}}
-							options={THEMES.map((t) => ({ value: t.id, label: t.label, icon: THEME_ICONS[t.id] }))}
+							onValueChange={(v) => isThemeId(v) && chooseTheme(v)}
+							options={THEMES.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))}
 						/>
 					)}
 				</SettingRow>

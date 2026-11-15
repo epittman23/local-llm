@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyTheme, DEFAULT_THEME, getTheme, installSystemThemeListener, THEMES, themeClasses } from './theme';
+import {
+	applyTheme,
+	DEFAULT_THEME,
+	getTheme,
+	installSystemThemeListener,
+	isThemeId,
+	subscribeTheme,
+	THEMES,
+	themeClasses
+} from './theme';
 
 describe('themeClasses', () => {
 	it('maps each theme to its classes, following the OS for system', () => {
@@ -125,5 +134,24 @@ describe('THEMES (#1089, WRD-6)', () => {
 			['light', 'Light']
 		]);
 		for (const t of THEMES) expect(t.label).toMatch(/^[A-Za-z]+$/);
+	});
+	it('gives each theme a line icon, and knows its ids from anything else', () => {
+		for (const t of THEMES) expect(t.icon).toBeTruthy();
+		expect(isThemeId('oled-dark')).toBe(true);
+		expect(isThemeId('her')).toBe(false);
+		expect(isThemeId(undefined)).toBe(false);
+	});
+});
+
+describe('subscribeTheme', () => {
+	it('calls a listener after every applyTheme until it unsubscribes', () => {
+		const listener = vi.fn();
+		const stop = subscribeTheme(listener);
+		applyTheme('light');
+		expect(listener).toHaveBeenCalledTimes(1);
+		stop();
+		applyTheme('dark');
+		expect(listener).toHaveBeenCalledTimes(1);
+		localStorage.removeItem('theme');
 	});
 });

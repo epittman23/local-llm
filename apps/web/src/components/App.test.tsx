@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
@@ -52,11 +52,8 @@ describe('App', () => {
 		// mounted without throwing, not just that some JSX came back.
 		expect(await screen.findByRole('textbox', { name: 'Message' })).toBeInTheDocument();
 
-		// The sidebar defaults closed (mirrors d863707:apps/openwebui/src/lib/components/
-		// layout/Sidebar.svelte's own localStorage.sidebar default) and is not
-		// rendered at all until opened -- see AppShell.tsx's own comment on why
-		// it's unmounted rather than just visually collapsed.
-		fireEvent.click(screen.getByRole('button', { name: /open sidebar/i }));
+		// The sidebar starts open in a browser that has never closed it (#930).
 		expect(screen.getAllByRole('link', { name: /new chat/i }).length).toBeGreaterThan(0);
+		expect(screen.getByRole('button', { name: 'Close sidebar' })).toBeInTheDocument();
 	});
 });
