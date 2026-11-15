@@ -127,7 +127,53 @@ describe('AdvancedParams: custom parameters', () => {
 		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '2' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Remove a' }));
 		expect(onChange).toHaveBeenLastCalledWith({ custom_params: {} });
+	});
+
+	it('keeps a new row to itself until it has a name, then adds it (no unnamed key ever reaches the caller)', () => {
+		const onChange = show({ admin: true, custom: true, params: { custom_params: { a: '1' } } });
 		fireEvent.click(screen.getByRole('button', { name: /Add custom parameter/ }));
-		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '1', '': '' } });
+		expect(onChange).not.toHaveBeenCalled();
+		const [, name] = screen.getAllByRole('textbox', { name: 'Custom parameter name' });
+		const [, value] = screen.getAllByRole('textbox', { name: 'Custom parameter value' });
+		expect(document.activeElement).toBe(name);
+		// A value typed before the name, and focus moving inside the row, add nothing yet.
+		fireEvent.change(value, { target: { value: 'v' } });
+		fireEvent.blur(name, { relatedTarget: value });
+		fireEvent.blur(value);
+		expect(onChange).not.toHaveBeenCalled();
+		// Add again while the row has no name goes back to its name.
+		fireEvent.click(screen.getByRole('button', { name: /Add custom parameter/ }));
+		expect(document.activeElement).toBe(name);
+		fireEvent.change(name, { target: { value: ' top_k ' } });
+		fireEvent.blur(name);
+		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '1', top_k: 'v' } });
+	});
+
+	it('adds a named row on Enter, and drops a new row on Remove this parameter', () => {
+		const onChange = show({ admin: true, custom: true, params: {} });
+		fireEvent.click(screen.getByRole('button', { name: /Add custom parameter/ }));
+		fireEvent.change(screen.getByRole('textbox', { name: 'Custom parameter name' }), { target: { value: 'gone' } });
+		const remove = screen.getByRole('button', { name: 'Remove this parameter' });
+		fireEvent.keyDown(remove, { key: 'Enter' });
+		fireEvent.click(remove);
+		expect(onChange).not.toHaveBeenCalled();
+		expect(screen.queryByRole('textbox', { name: 'Custom parameter name' })).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: /Add custom parameter/ }));
+		const name = screen.getByRole('textbox', { name: 'Custom parameter name' });
+		fireEvent.keyDown(name, { key: 'Enter' });
+		expect(onChange).not.toHaveBeenCalled();
+		fireEvent.change(name, { target: { value: 'seed_offset' } });
+		fireEvent.keyDown(name, { key: 'Enter' });
+		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { seed_offset: '' } });
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it('drops an unnamed key stored from before at the next edit, and names its Remove', () => {
+		const onChange = show({ admin: true, custom: true, params: { custom_params: { '': '', a: '1' } } });
+		expect(screen.getByRole('button', { name: 'Remove this parameter' })).toBeInTheDocument();
+		fireEvent.change(screen.getAllByRole('textbox', { name: 'Custom parameter value' })[1], {
+			target: { value: '2' }
+		});
+		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '2' } });
 	});
 });
