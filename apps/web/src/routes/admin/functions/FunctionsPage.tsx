@@ -39,8 +39,8 @@ import { useDocumentTitle } from '@/lib/stores/configStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { FunctionCodeWarning } from './FunctionEditor';
 import {
 	FUNCTION_TYPES,
@@ -58,8 +58,8 @@ const LIST_KEY = ['functions', 'list'];
  * filters and sorting all happen here; the header count is the *filtered* length.
  *
  * Each row: a type badge, name, version, description, author, and on the right
- * the Support / Valves / More icons and the enable switch (Shift swaps them all
- * for a one-click Delete). Filters and Actions get a "Global" switch in the
+ * the Support / Valves / More icons and the enable switch. Delete is in the
+ * menu and always confirms (ACT-3, S4-D5). Filters and Actions get a "Global" switch in the
  * menu. Toggles are optimistic and revert on failure -- the original's enable
  * switch does not, and leaves the switch lying when the request fails.
  *
@@ -73,11 +73,13 @@ export function FunctionsPage() {
 	const user = useAuthStore((s) => s.user);
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const shiftKey = useShiftKey();
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [selectedType, setSelectedType] = useState('');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -88,6 +90,7 @@ export function FunctionsPage() {
 	const [showImportUrl, setShowImportUrl] = useState(false);
 	const [pendingImport, setPendingImport] = useState<File | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
+	const importedFrom = useRef('');
 
 	const list = useQuery({
 		queryKey: LIST_KEY,
@@ -176,7 +179,13 @@ export function FunctionsPage() {
 	const cloneHandler = async (fn: FunctionListItem) => {
 		const full = await fetchFull(fn);
 		if (!full) return;
-		sessionStorage.function = JSON.stringify({ ...full, id: `${full.id}_clone`, name: `${full.name} (Clone)` });
+		// S4-D4: the stash says where the code came from (`source`, P4's CodeSource), so the editor confirms code it did not write.
+		sessionStorage.function = JSON.stringify({
+			...full,
+			id: `${full.id}_clone`,
+			name: `${full.name} (Clone)`,
+			source: { kind: 'clone', from: full.name }
+		});
 		navigate(routePaths.adminFunctionsCreate);
 	};
 
@@ -242,24 +251,28 @@ export function FunctionsPage() {
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
-				loadUrl={(url) => loadFunctionByUrl(token, url)}
+				loadUrl={(url) => {
+					importedFrom.current = url;
+					return loadFunctionByUrl(token, url);
+				}}
 				successMessage="Function imported successfully"
 				onImport={(fn) => {
-					sessionStorage.function = JSON.stringify(fn);
+					sessionStorage.function = JSON.stringify({ ...fn, source: { kind: 'link', from: importedFrom.current } });
 					navigate(routePaths.adminFunctionsCreate);
 				}}
 			/>
 			<ConfirmDialog
 				open={showDelete}
 				onOpenChange={setShowDelete}
-				title="Delete function?"
-				confirmLabel="Delete"
+				title={`Delete “${selected?.name ?? ''}”?`}
+				confirmLabel="Delete function"
+				destructive
 				onConfirm={() => {
 					if (selected) deleteMutation.mutate(selected);
 					setShowDelete(false);
 				}}
 			>
-				This will delete <span className="font-normal">{selected?.name}</span>.
+				What it adds stops working in every chat. It can't be undone.
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={pendingImport !== null}
@@ -269,7 +282,9 @@ export function FunctionsPage() {
 						clearImportInput();
 					}
 				}}
-				title="Confirm"
+				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
+				title={`Create functions from “${pendingImport?.name ?? ''}”?`}
+				confirmLabel="Create functions"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);
@@ -305,8 +320,8 @@ export function FunctionsPage() {
 					<div className="flex w-full justify-end">
 						<SplitCreateButton
 							actions={[
-								{ id: 'functions-new', label: 'Create', href: routePaths.adminFunctionsCreate },
-								{ id: 'functions-import-link', label: 'Import From Link', onClick: () => setShowImportUrl(true) },
+								{ id: 'functions-new', label: 'New function', href: routePaths.adminFunctionsCreate },
+								{ id: 'functions-import-link', label: 'Import from link', onClick: () => setShowImportUrl(true) },
 								{
 									id: 'functions-import',
 									label: 'Import JSON',
@@ -327,19 +342,22 @@ export function FunctionsPage() {
 
 			<div className="space-y-1">
 				<ListSearchBar value={query} placeholder="Search Functions" onChange={setQuery}>
-					<ViewSelector
-						value={viewOption}
-						onChange={(value) => {
-							localStorage.workspaceViewOption = value;
-							setViewOption(value);
-						}}
-					/>
+					{!singleUser && (
+						<ViewSelector
+							value={viewOption}
+							onChange={(value) => {
+								localStorage.workspaceViewOption = value;
+								setViewOption(value);
+							}}
+						/>
+					)}
 					<TagSelector
 						value={selectedType}
 						onChange={setSelectedType}
 						tags={FUNCTION_TYPES.map((t) => t.value)}
 						labels={Object.fromEntries(FUNCTION_TYPES.map((t) => [t.value, t.label]))}
-						placeholder="Type"
+						placeholder="All types"
+						name="Type"
 					/>
 				</ListSearchBar>
 
@@ -355,7 +373,7 @@ export function FunctionsPage() {
 								className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 								onClick={() => changeSort('name')}
 							/>
-							<div className="hidden w-44 shrink-0 md:block" />
+							{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 							<SortHeaderButton
 								label="Updated at"
 								active={sortKey === 'updated_at'}
@@ -370,7 +388,7 @@ export function FunctionsPage() {
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={fn.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -385,160 +403,174 @@ export function FunctionsPage() {
 													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
 												</Tip>
 												{fn.meta?.manifest?.version && (
-													<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+													>
 														v{fn.meta.manifest.version}
 													</div>
 												)}
 												<Tip content={dayjs(fn.updated_at * 1000).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(fn.updated_at * 1000).fromNow()}
 													</div>
 												</Tip>
 											</div>
-											{fn.meta?.description && (
-												<Tip content={fn.meta.description} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-														{fn.meta.description}
-													</div>
-												</Tip>
-											)}
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												{fn.meta?.description && (
+													<Tip content={fn.meta?.description} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{fn.meta?.description}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(fn.updated_at * 1000).fromNow()}
+												</span>
+											</div>
 										</div>
 
-										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-											<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
-												<div className="truncate">
-													{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
-												</div>
-											</Tip>
-										</div>
+										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+										{!singleUser && (
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+											>
+												<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
+													<div className="truncate">
+														{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
+													</div>
+												</Tip>
+											</div>
+										)}
 									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
-										{shiftKey ? (
-											<Tip content="Delete">
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													type="button"
-													aria-label="Delete"
-													onClick={(e) => {
-														e.stopPropagation();
-														deleteMutation.mutate(fn);
-													}}
-												>
-													<Trash2 className="size-4" />
-												</Button>
-											</Tip>
-										) : (
-											<>
-												{fn.meta?.manifest?.funding_url && (
-													<Tip content="Support">
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															type="button"
-															aria-label="Support"
-															onClick={(e) => {
-																e.stopPropagation();
-																setSelected(fn);
-																setShowManifest(true);
-															}}
-														>
-															<Heart className="size-4" />
-														</Button>
-													</Tip>
-												)}
-												<Tip content="Valves">
+										<>
+											{fn.meta?.manifest?.funding_url && (
+												<Tip content="Support">
 													<Button
 														variant="ghost"
 														size="icon-sm"
 														type="button"
-														aria-label="Valves"
+														aria-label="Support"
 														onClick={(e) => {
 															e.stopPropagation();
 															setSelected(fn);
-															setShowValves(true);
+															setShowManifest(true);
 														}}
 													>
-														<Settings className="size-4" />
+														<Heart className="size-4" />
 													</Button>
 												</Tip>
-												<DropdownMenu>
-													<Tip content="More">
-														<DropdownMenuTrigger asChild>
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Function Menu"
-																onClick={(e) => e.stopPropagation()}
-															>
-																<MoreHorizontal className="size-4" />
-															</Button>
-														</DropdownMenuTrigger>
-													</Tip>
-													<DropdownMenuContent align="end" className="min-w-[11.25rem]">
-														{(fn.type === 'filter' || fn.type === 'action') && (
-															<>
-																{/* A row with a switch, not an action: keep the menu open when it is used. */}
-																<DropdownMenuItem onSelect={(e) => e.preventDefault()} className="justify-between">
-																	<span className="flex items-center gap-2">
-																		<Globe />
-																		Global
-																	</span>
-																	<Switch
-																		size="sm"
-																		aria-label="Global"
-																		checked={Boolean(fn.is_global)}
-																		onCheckedChange={() => toggleGlobal(fn)}
-																	/>
-																</DropdownMenuItem>
-																<DropdownMenuSeparator />
-															</>
-														)}
-														<DropdownMenuItem onSelect={() => openFunction(fn)}>
-															<Pencil />
-															Edit
-														</DropdownMenuItem>
-														<DropdownMenuItem onSelect={() => cloneHandler(fn)}>
-															<Copy />
-															Clone
-														</DropdownMenuItem>
-														<DropdownMenuItem onSelect={() => exportHandler(fn)}>
-															<Download />
-															Export
-														</DropdownMenuItem>
-														<DropdownMenuSeparator />
-														<DropdownMenuItem
-															onSelect={() => {
-																setSelected(fn);
-																setShowDelete(true);
-															}}
+											)}
+											<Tip content="Valves">
+												<Button
+													variant="ghost"
+													size="icon-sm"
+													type="button"
+													aria-label="Valves"
+													onClick={(e) => {
+														e.stopPropagation();
+														setSelected(fn);
+														setShowValves(true);
+													}}
+												>
+													<Settings className="size-4" />
+												</Button>
+											</Tip>
+											<DropdownMenu>
+												<Tip content="More">
+													<DropdownMenuTrigger asChild>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															type="button"
+															aria-label="Function Menu"
+															onClick={(e) => e.stopPropagation()}
 														>
-															<Trash2 />
-															Delete
-														</DropdownMenuItem>
-													</DropdownMenuContent>
-												</DropdownMenu>
-												<div className="flex h-6 items-center">
-													<Tip content={fn.is_active ? 'Enabled' : 'Disabled'}>
-														<Switch
-															size="sm"
-															aria-label={`Enable ${fn.name}`}
-															checked={Boolean(fn.is_active)}
-															onCheckedChange={() => toggleActive(fn)}
-														/>
-													</Tip>
-												</div>
-											</>
-										)}
+															<MoreHorizontal className="size-4" />
+														</Button>
+													</DropdownMenuTrigger>
+												</Tip>
+												<DropdownMenuContent align="end" className="min-w-[11.25rem]">
+													{(fn.type === 'filter' || fn.type === 'action') && (
+														<>
+															{/* A row with a switch, not an action: keep the menu open when it is used. */}
+															<DropdownMenuItem onSelect={(e) => e.preventDefault()} className="justify-between">
+																<span className="flex items-center gap-2">
+																	<Globe />
+																	Global
+																</span>
+																<Switch
+																	size="sm"
+																	aria-label="Global"
+																	checked={Boolean(fn.is_global)}
+																	onCheckedChange={() => toggleGlobal(fn)}
+																/>
+															</DropdownMenuItem>
+															<DropdownMenuSeparator />
+														</>
+													)}
+													<DropdownMenuItem onSelect={() => openFunction(fn)}>
+														<Pencil />
+														Edit
+													</DropdownMenuItem>
+													<DropdownMenuItem onSelect={() => cloneHandler(fn)}>
+														<Copy />
+														Clone
+													</DropdownMenuItem>
+													<DropdownMenuItem onSelect={() => exportHandler(fn)}>
+														<Download />
+														Export
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														variant="destructive"
+														onSelect={() => {
+															setSelected(fn);
+															setShowDelete(true);
+														}}
+													>
+														<Trash2 />
+														Delete
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+											<div className="flex h-6 items-center">
+												<Switch
+													size="sm"
+													aria-label={`Enable ${fn.name}`}
+													checked={Boolean(fn.is_active)}
+													onCheckedChange={() => toggleActive(fn)}
+												/>
+											</div>
+										</>
 									</div>
 								</div>
 							))}
 						</div>
 					</div>
 				) : (
-					<ListEmptyState title="No functions found" />
+					<ListEmptyState
+						title="No functions yet"
+						description="A function is Python code that adds a model, filters messages, or adds a button to replies."
+						action={
+							<Button size="sm" type="button" onClick={() => navigate(routePaths.adminFunctionsCreate)}>
+								New function
+							</Button>
+						}
+						query={debouncedQuery}
+						filtered={viewOption !== '' || selectedType !== ''}
+						onClear={() => {
+							setQuery('');
+							localStorage.workspaceViewOption = '';
+							setViewOption('');
+							setSelectedType('');
+						}}
+					/>
 				)}
 			</div>
 		</div>

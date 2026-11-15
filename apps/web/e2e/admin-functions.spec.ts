@@ -87,7 +87,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('filter', { exact: true })).toBeVisible();
 		await expect(page.getByText('3', { exact: true }).first()).toBeVisible();
 
-		await page.getByRole('button', { name: 'Tag: Type', exact: true }).click();
+		await page.getByRole('button', { name: 'Type: All types', exact: true }).click();
 		await page.getByRole('menuitemradio', { name: 'Filter' }).click();
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 1', { exact: true })).toHaveCount(0);
@@ -141,9 +141,9 @@ test.describe('admin functions', () => {
 		await page.goto('/admin/functions');
 		await page.getByRole('button', { name: 'Function Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete function' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/id/fn_1/delete')).toBe(true);
-		await expect(page.getByText('No functions found')).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'No functions yet' })).toBeVisible();
 	});
 
 	test('create: the id follows the name, the warning gates the save, and only four fields are sent', async ({
@@ -244,7 +244,7 @@ test.describe('admin functions', () => {
 		};
 		await page.locator('#documents-import-input').setInputFiles(file);
 		await expect(page.getByRole('alertdialog')).toContainText('Functions allow arbitrary code execution.');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Create functions' }).click();
 		await expect.poll(() => calls.filter((c) => c.path === '/create').length).toBe(1);
 		const created = calls.find((c) => c.path === '/create')!.body;
 		expect(created).toEqual({ id: 'imp', name: 'Imported', content: 'class Filter: pass', meta: { description: 'x' } });
@@ -270,7 +270,7 @@ test.describe('admin functions', () => {
 			)
 		};
 		await page.locator('#documents-import-input').setInputFiles(file);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Create functions' }).click();
 		await expect(page.getByText('No functions were imported')).toBeVisible();
 		expect(await page.getByText('Functions imported successfully').count()).toBe(0);
 	});

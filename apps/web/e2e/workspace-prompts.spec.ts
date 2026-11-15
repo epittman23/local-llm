@@ -158,10 +158,10 @@ test.describe('workspace prompts', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockPromptsApi(page, [makePrompt(1)]);
 		await page.goto('/workspace/prompts');
-		const toggle = page.getByRole('switch', { name: 'Enabled' });
+		const toggle = page.getByRole('switch', { name: 'Enable Prompt 1' });
 		await expect(toggle).toBeChecked();
 		await toggle.click();
-		await expect(page.getByRole('switch', { name: 'Disabled' })).not.toBeChecked();
+		await expect(toggle).not.toBeChecked();
 		await expect.poll(() => calls.some((c) => c.path === '/id/p1/toggle')).toBe(true);
 	});
 
@@ -172,8 +172,8 @@ test.describe('workspace prompts', () => {
 		await page.getByRole('button', { name: 'Prompt Menu', exact: true }).first().click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
 		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('This will delete');
-		await dialog.getByRole('button', { name: 'Delete' }).click();
+		await expect(dialog).toContainText('stops working');
+		await dialog.getByRole('button', { name: 'Delete prompt' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' || c.path.endsWith('/delete'))).toBe(true);
 		await expect(
 			page.getByText('Prompt 1', { exact: true }).or(page.getByText('Prompt 2', { exact: true }))

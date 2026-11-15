@@ -89,7 +89,6 @@
 			"src/routes/ui/canvas.tsx": 1,
 			"src/routes/workspace/knowledge/ExternalKnowledgePanel.tsx": 1,
 			"src/routes/workspace/knowledge/KnowledgeFileList.tsx": 1,
-			"src/routes/workspace/knowledge/KnowledgePage.tsx": 1,
 			"src/routes/workspace/knowledge/useKnowledgeUploads.ts": 1,
 			"src/routes/workspace/prompts/PromptCreateDialog.tsx": 2,
 			"src/routes/workspace/prompts/PromptEditView.tsx": 3
@@ -119,10 +118,9 @@
 			"src/routes/channels/ChannelMessageView.tsx": 1,
 			"src/routes/notes/NoteEditorPage.tsx": 1,
 			"src/routes/playground/PlaygroundPages.tsx": 1,
-			"src/routes/workspace/models/ModelsPage.tsx": 3,
+			"src/routes/workspace/models/ModelsPage.tsx": 1,
 			"src/routes/workspace/prompts/PromptsPage.tsx": 1,
-			"src/routes/workspace/skills/SkillsPage.tsx": 1,
-			"src/routes/workspace/tools/ToolsPage.tsx": 1
+			"src/routes/workspace/skills/SkillsPage.tsx": 1
 		}
 	}
 }

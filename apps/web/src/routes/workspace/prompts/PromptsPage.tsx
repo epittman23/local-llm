@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -29,8 +29,8 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { PromptCreateDialog } from './PromptCreateDialog';
 import {
 	type PromptDraft,
@@ -41,6 +41,9 @@ import {
 } from './promptTypes';
 
 const PER_PAGE = 30;
+
+/** A command as typed in chat: one leading slash, whether or not the stored command carries one. */
+const slashCommand = (command?: string) => `/${(command ?? '').replace(/^\//, '')}`;
 
 /**
  * Ports workspace/Prompts.svelte: the searchable, filterable, sortable,
@@ -67,7 +70,10 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [selectedTag, setSelectedTag] = useState('');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -77,7 +83,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const [createDraft, setCreateDraft] = useState<PromptDraft | null>(null);
 	const [deleting, setDeleting] = useState<PromptListItem | null>(null);
 	const [copiedId, setCopiedId] = useState<string | null>(null);
-	const shiftKey = useShiftKey();
 	// Enable/disable is optimistic: the switch flips at once and rolls back if the call fails.
 	const [activeOverride, setActiveOverride] = useState<Record<string, boolean>>({});
 	const importInput = useRef<HTMLInputElement>(null);
@@ -103,9 +108,12 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const tags = tagsQuery.data ?? [];
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = debouncedQuery !== '' || viewOption !== '' || selectedTag !== '';
+	const wholeCount = useWorkspaceStore((s) => s.counts.prompts);
 	useEffect(() => {
-		if (list.data) setCount('prompts', list.data.total);
-	}, [list.data, setCount]);
+		if (list.data && !list.isPlaceholderData && !filtered) setCount('prompts', list.data.total);
+	}, [list.data, list.isPlaceholderData, filtered, setCount]);
 	const refetchList = () => queryClient.invalidateQueries({ queryKey: ['prompts'] });
 
 	// --- the layout's Create button --------------------------------------
@@ -113,7 +121,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		setActions([
 			{
 				id: 'prompts-new',
-				label: 'Create',
+				label: 'New prompt',
 				onClick: () => {
 					setCreateDraft(null);
 					setShowCreate(true);
@@ -162,13 +170,11 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		if (showCreateOnMount) navigate(routePaths.workspacePrompts);
 	};
 
+	// A failure is thrown to the dialog, which says it at the field it concerns (FRM-2: COMMAND_TAKEN under Command).
 	const createPrompt = async (draft: PromptDraft) => {
-		const res = await createNewPrompt(token, draft).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		const res = await createNewPrompt(token, draft);
 		if (res) {
-			toast.success('Prompt created successfully');
+			toast.success('Prompt created');
 			setPage(1);
 			await refetchList();
 			closeCreate();
@@ -178,7 +184,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const deleteMutation = useMutation({
 		mutationFn: (prompt: PromptListItem) => deletePromptById(token, prompt.id),
 		onSuccess: (res, prompt) => {
-			if (res) toast.success(`Deleted ${prompt.command}`);
+			if (res) toast.success(`Deleted “${prompt.name}”`);
 		},
 		onError: (error) => toast.error(`${error}`),
 		onSettled: () => {
@@ -256,14 +262,15 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete prompt?"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete prompt"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.command}</span>.
+				<code>{slashCommand(deleting?.command)}</code> stops working. It can't be undone.
 			</ConfirmDialog>
 
 			<PromptCreateDialog open={showCreate} draft={createDraft} onSubmit={createPrompt} onClose={closeCreate} />
@@ -285,14 +292,16 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 					setPage(1);
 				}}
 			>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-						setPage(1);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+							setPage(1);
+						}}
+					/>
+				)}
 				{tags.length > 0 && (
 					<TagSelector
 						value={selectedTag}
@@ -313,6 +322,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				</div>
 			) : prompts.length !== 0 ? (
 				<div className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
+					{filtered && !list.isPlaceholderData && <ListMatchCount shown={total} total={wholeCount} noun="prompts" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"
@@ -321,7 +331,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -339,7 +349,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={prompt.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -352,128 +362,128 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 														{prompt.name}
 													</div>
 												</Tip>
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
-													/{prompt.command}
-												</div>
 												<Tip content={dayjs(updatedAt).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(updatedAt).fromNow()}
 													</div>
 												</Tip>
-												{!prompt.write_access && <Badge variant="secondary">Read Only</Badge>}
+												{!prompt.write_access && <Badge variant="secondary">Read only</Badge>}
 											</div>
-											{prompt.content && (
-												<Tip content={prompt.content} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-														{prompt.content}
-													</div>
-												</Tip>
-											)}
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												<span className="text-muted-foreground max-w-[50%] min-w-0 shrink-0 truncate font-mono">
+													{slashCommand(prompt.command)}
+												</span>
+												{prompt.content && (
+													<Tip content={prompt.content} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{prompt.content}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(updatedAt).fromNow()}
+												</span>
+											</div>
 										</div>
 
-										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-											<Tip content={prompt.user?.email ?? 'Deleted User'} side="top">
-												<div className="truncate">
-													{capitalizeFirstLetter(prompt.user?.name ?? prompt.user?.email ?? 'Deleted User')}
-												</div>
-											</Tip>
-										</div>
+										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+										{!singleUser && (
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+											>
+												<Tip content={prompt.user?.email ?? 'Deleted User'} side="top">
+													<div className="truncate">
+														{capitalizeFirstLetter(prompt.user?.name ?? prompt.user?.email ?? 'Deleted User')}
+													</div>
+												</Tip>
+											</div>
+										)}
 									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
-										{shiftKey ? (
-											<Tip content="Delete">
+										<>
+											{/* LAY-4: below sm the row keeps the menu and switch; Copy moves into the menu. */}
+											<Tip content="Copy Prompt">
 												<Button
 													variant="ghost"
 													size="icon-sm"
 													type="button"
-													aria-label="Delete"
+													className="hidden sm:inline-flex"
+													aria-label="Copy Prompt"
 													onClick={(e) => {
 														e.stopPropagation();
-														deleteMutation.mutate(prompt);
+														copyHandler(prompt);
 													}}
 												>
-													<Trash2 className="size-4" />
+													{copiedId === prompt.command ? (
+														<Check className="size-4" strokeWidth={1.5} />
+													) : (
+														<Clipboard className="size-4" strokeWidth={1.5} />
+													)}
 												</Button>
 											</Tip>
-										) : (
-											<>
-												<Tip content="Copy Prompt">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Copy Prompt"
-														onClick={(e) => {
-															e.stopPropagation();
-															copyHandler(prompt);
-														}}
-													>
-														{copiedId === prompt.command ? (
-															<Check className="size-4" strokeWidth={1.5} />
-														) : (
-															<Clipboard className="size-4" strokeWidth={1.5} />
-														)}
-													</Button>
-												</Tip>
 
-												<div className="ml-0.5 flex shrink-0 flex-row items-center gap-1.5 self-center">
-													<DropdownMenu>
-														<Tip content="More">
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	type="button"
-																	aria-label="Prompt Menu"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<MoreHorizontal className="size-4" />
-																</Button>
-															</DropdownMenuTrigger>
-														</Tip>
-														<DropdownMenuContent align="end" className="min-w-40">
-															<DropdownMenuItem onSelect={() => openPrompt(prompt)}>
-																<Pencil />
-																Edit
-															</DropdownMenuItem>
-															<DropdownMenuItem onSelect={() => cloneHandler(prompt)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-															{canExport && (
-																<DropdownMenuItem
-																	onSelect={() =>
-																		saveAs(
-																			new Blob([JSON.stringify([prompt])], { type: 'application/json' }),
-																			`prompt-export-${Date.now()}.json`
-																		)
-																	}
-																>
-																	<Download />
-																	Export
-																</DropdownMenuItem>
-															)}
-															<DropdownMenuSeparator />
-															<DropdownMenuItem onSelect={() => setDeleting(prompt)}>
-																<Trash2 />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-
-													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center">
-															<Switch
-																aria-label={isActive ? 'Enabled' : 'Disabled'}
-																checked={isActive}
-																onCheckedChange={(next) => toggleActive(prompt, next)}
-															/>
-														</span>
+											<div className="ml-0.5 flex shrink-0 flex-row items-center gap-1.5 self-center">
+												<DropdownMenu>
+													<Tip content="More">
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																type="button"
+																aria-label="Prompt Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<MoreHorizontal className="size-4" />
+															</Button>
+														</DropdownMenuTrigger>
 													</Tip>
-												</div>
-											</>
-										)}
+													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem className="sm:hidden" onSelect={() => copyHandler(prompt)}>
+															<Clipboard />
+															Copy prompt
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => openPrompt(prompt)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => cloneHandler(prompt)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+														{canExport && (
+															<DropdownMenuItem
+																onSelect={() =>
+																	saveAs(
+																		new Blob([JSON.stringify([prompt])], { type: 'application/json' }),
+																		`prompt-export-${Date.now()}.json`
+																	)
+																}
+															>
+																<Download />
+																Export
+															</DropdownMenuItem>
+														)}
+														<DropdownMenuSeparator />
+														<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(prompt)}>
+															<Trash2 />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+
+												<span className="flex h-6 items-center">
+													<Switch
+														aria-label={`Enable ${prompt.name}`}
+														checked={isActive}
+														onCheckedChange={(next) => toggleActive(prompt, next)}
+													/>
+												</span>
+											</div>
+										</>
 									</div>
 								</div>
 							);
@@ -481,7 +491,24 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 					</div>
 				</div>
 			) : (
-				<ListEmptyState title="No prompts found" />
+				<ListEmptyState
+					title="No prompts yet"
+					description="A prompt is text you reuse: type / and its command in a chat to insert it."
+					action={
+						<Button size="sm" type="button" onClick={() => setShowCreate(true)}>
+							New prompt
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || selectedTag !== ''}
+					onClear={() => {
+						setQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+						setSelectedTag('');
+						setPage(1);
+					}}
+				/>
 			)}
 
 			{total > PER_PAGE && (

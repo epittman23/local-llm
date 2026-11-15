@@ -247,7 +247,7 @@
  */
 :root[data-focus="keyboard"] [data-composite-field]:has(:is(input, textarea, [contenteditable="true"]):focus-visible) {
 	border-color: var(--focus);
-	outline: 1px solid var(--focus);
+	outline: 2px solid var(--focus);
 	outline-offset: 0;
 }
 :root[data-focus="keyboard"] [data-composite-field] :is(input, textarea, [contenteditable="true"]):focus-visible {

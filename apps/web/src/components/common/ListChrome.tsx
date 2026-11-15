@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -40,9 +40,12 @@ export function ListSearchBar({
 					</Button>
 				)}
 			</div>
-			<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
-				<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
-			</div>
+			{/* A list whose filters are all hidden (one account, no tags) gives the search the whole row. */}
+			{Children.toArray(children).length > 0 && (
+				<div className="flex max-w-full shrink-0 overflow-x-auto sm:max-w-[55%]">
+					<div className="flex w-fit gap-0.5 whitespace-nowrap">{children}</div>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -69,15 +72,60 @@ export function SortHeaderButton({
 	);
 }
 
-export function ListEmptyState({ title }: { title: string }) {
+/**
+ * STA-3: an empty list says one of two things. With nothing searched or
+ * filtered, what belongs here and the first step (`action`); with a search or
+ * a filter, that nothing matches it, naming the search, and a way to clear it.
+ */
+export function ListEmptyState({
+	title,
+	description,
+	action,
+	query = '',
+	filtered = false,
+	onClear
+}: {
+	/** The fresh-install heading: "No models yet". */
+	title: string;
+	/** One line saying what a thing in this list is. */
+	description?: string;
+	/** The first step, usually the section's New button. */
+	action?: ReactNode;
+	/** The search as typed. */
+	query?: string;
+	/** Whether a filter other than the search narrows the list. */
+	filtered?: boolean;
+	/** Clears the search and the filters. */
+	onClear?: () => void;
+}) {
+	const searched = query.trim() !== '';
+	const narrowed = searched || filtered;
 	return (
 		<div className="flex w-full flex-col items-center justify-center py-16 pb-24">
-			<div className="max-w-sm text-center">
-				<div className="mb-1.5 text-sm">{title}</div>
-				<div className="text-muted-foreground text-center text-xs leading-5">
-					Try adjusting your search or filter to find what you are looking for.
+			<div className="flex max-w-sm flex-col items-center gap-3 text-center">
+				<div className="flex flex-col gap-1">
+					<h2 className="text-body font-medium">
+						{narrowed ? (searched ? `Nothing matches “${query.trim()}”` : 'Nothing matches these filters') : title}
+					</h2>
+					{!narrowed && description && <p className="text-muted-foreground text-body">{description}</p>}
 				</div>
+				{narrowed
+					? onClear && (
+							<Button variant="outline" size="sm" type="button" onClick={onClear}>
+								{searched ? 'Clear search' : 'Clear filters'}
+							</Button>
+						)
+					: action}
 			</div>
 		</div>
+	);
+}
+
+/** DAT-2: while a search or filter narrows a list, how many of the whole it shows. */
+export function ListMatchCount({ shown, total, noun }: { shown: number; total: number | null; noun: string }) {
+	return (
+		<p role="status" className="text-muted-foreground text-caption px-1.5 tabular-nums">
+			{total === null ? `${shown} ${noun}` : `${shown} of ${total} ${noun}`}
+		</p>
 	);
 }

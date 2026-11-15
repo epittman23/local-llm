@@ -91,10 +91,11 @@ test.describe('workspace models list', () => {
 		]);
 		await page.goto('/workspace/models');
 		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toBeVisible();
-		await expect(page.getByText('Preset 1')).toBeVisible();
-		await expect(page.getByText('llama3').first()).toBeVisible(); // description falls back to the base model
-		await expect(page.getByText('Read Only')).toHaveCount(1);
-		await expect(page.locator('#model-item-model-3')).toHaveClass(/opacity-50/);
+		await expect(page.locator('#model-item-model-1')).not.toContainText('Preset 1');
+		await expect(page.getByText('llama3').first()).toBeVisible(); // line 2 is the base model (#1097)
+		await expect(page.getByText('Read only', { exact: true })).toHaveCount(1);
+		// A hidden model says so with a badge, not a dimmed row (DAT-3, COL-2).
+		await expect(page.locator('#model-item-model-3').getByText('Hidden', { exact: true })).toBeVisible();
 
 		await page.getByLabel('Search Models').fill('Model 2');
 		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toHaveCount(0);
@@ -105,12 +106,12 @@ test.describe('workspace models list', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)]);
 		await page.goto('/workspace/models');
-		await page.getByRole('switch', { name: 'Enabled' }).click();
+		await page.getByRole('switch', { name: 'Enable Model 1' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/model/toggle')).toBe(true);
 
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete model' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/model/delete')).toBe(true);
 	});
 

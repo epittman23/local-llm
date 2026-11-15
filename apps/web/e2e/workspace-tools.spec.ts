@@ -83,8 +83,9 @@ test.describe('workspace tools', () => {
 		await page.getByLabel('Search Tools').fill('Tool 2');
 		await expect(page.getByText('Tool 1', { exact: true })).toHaveCount(0);
 		await expect(page.getByText('Tool 2', { exact: true })).toBeVisible();
-		// The tab count follows the filtered list.
-		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('1');
+		// The tab counts every tool; the list says how many of them match (#955, DAT-2).
+		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('3');
+		await expect(page.getByRole('status').filter({ hasText: 'of 3 tools' })).toHaveText('1 of 3 tools');
 	});
 
 	test('the Support dialog only links http(s) funding URLs', async ({ page }) => {
@@ -112,7 +113,7 @@ test.describe('workspace tools', () => {
 		await page.goto('/workspace/tools');
 		await page.getByRole('button', { name: 'Tool Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete tool' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 
@@ -132,7 +133,10 @@ test.describe('workspace tools', () => {
 			valves: { api_key: null, tags: ['a', 'b'], verbose: null }
 		});
 		await page.goto('/workspace/tools');
-		await page.getByRole('button', { name: 'Valves', exact: true }).click();
+		await page
+			.getByRole('button', { name: /^Settings for Tool / })
+			.first()
+			.click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('API Key')).toBeVisible();
 		await expect(dialog.getByText('*required')).toBeVisible();
@@ -179,7 +183,7 @@ test.describe('workspace tools', () => {
 		const dialog = page.getByRole('alertdialog');
 		await expect(dialog).toContainText('arbitrary code execution');
 		expect(calls.some((c) => c.path === '/create')).toBe(false); // nothing before the acknowledgement
-		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await dialog.getByRole('button', { name: 'Create tools' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/create')?.body)
 			.toMatchObject({ id: 'imp', access_grants: [] });
