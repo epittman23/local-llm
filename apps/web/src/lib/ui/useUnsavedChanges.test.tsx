@@ -103,6 +103,17 @@ describe('useUnsavedChanges', () => {
 		expect(router.state.location.pathname).toBe('/editor');
 	});
 
+	it('leaves on the browser’s Back after Discard changes', async () => {
+		const router = setup();
+		type('x');
+		act(() => {
+			router.navigate(-1);
+		});
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('The list')).toBeTruthy();
+		expect(router.state.location.pathname).toBe('/list');
+	});
+
 	it('asks when only the query changes (another item in the same editor)', async () => {
 		const router = setup();
 		type('x');
