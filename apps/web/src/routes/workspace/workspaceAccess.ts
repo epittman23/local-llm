@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
+import { searchUsers } from '@/lib/apis/users';
 import type { SessionUser } from '@/lib/stores/authStore';
+import { useAuthStore } from '@/lib/stores/authStore';
 import type { BackendConfig } from '@/lib/stores/configStore';
 import type { WorkspaceSection } from '@/lib/stores/workspaceStore';
 import { routePaths } from '@/routes/routePaths';
@@ -55,4 +58,22 @@ export function defaultWorkspacePath(user: SessionUser | null, config: BackendCo
 export function sectionOfPath(pathname: string): WorkspaceSection | null {
 	const segment = pathname.split('/')[2] ?? '';
 	return (tabOrder as string[]).includes(segment) ? (segment as WorkspaceSection) : null;
+}
+
+/**
+ * Whether this install has one account (WRD-4): owners, the View filter and
+ * Access say nothing then, so the workspace hides them. The count is
+ * GET /users/search's `total`, cached under the same key as the share
+ * dialog's (S2-D2). Until it is known, and if it cannot be read, the install
+ * counts as one account, so the multi-user chrome never flashes in and out.
+ */
+export function useSingleUser(): boolean {
+	const token = useAuthStore((s) => s.token) ?? '';
+	const accounts = useQuery({
+		queryKey: ['account-count'],
+		enabled: Boolean(token),
+		staleTime: Number.POSITIVE_INFINITY,
+		queryFn: async () => ((await searchUsers(token)) as { total?: number } | null)?.total ?? 1
+	});
+	return (accounts.data ?? 1) <= 1;
 }
