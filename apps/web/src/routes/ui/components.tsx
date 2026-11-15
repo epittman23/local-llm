@@ -69,7 +69,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
+import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ServerUnreachableError } from '@/lib/apis/errors';
 import type { History, Message } from '@/lib/chat/history';
@@ -319,6 +319,21 @@ export function FormsSection() {
 							}}
 						/>
 					</form>
+				</Panel>
+			</Example>
+			<Example
+				title="A name that may be long"
+				note="A name field is one line that wraps to show the whole name, up to three lines, then scrolls (the shared LineTextarea). Enter submits, as in an input, and a pasted line break becomes a space."
+			>
+				<Panel className="max-w-[24rem]">
+					<Field label="Tool name">
+						{(props) => (
+							<LineTextarea
+								{...props}
+								defaultValue="Regression diagnostics with residual plots, leverage and Cook's distance"
+							/>
+						)}
+					</Field>
 				</Panel>
 			</Example>
 			<Example

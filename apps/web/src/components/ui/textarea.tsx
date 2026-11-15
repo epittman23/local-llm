@@ -23,4 +23,30 @@ function Textarea({ className, rows = 2, style, ...props }: React.ComponentProps
 	);
 }
 
-export { Textarea };
+/**
+ * A one-line field for a name that may be long (#958): it wraps to show all
+ * of it, up to three lines, then scrolls. Like an input, Enter submits its
+ * form and a line break never gets in (a pasted one becomes a space).
+ */
+function LineTextarea({ className, onChange, onKeyDown, ...props }: Omit<React.ComponentProps<'textarea'>, 'rows'>) {
+	return (
+		<Textarea
+			rows={1}
+			className={cn('max-h-[calc(3lh_+_1rem_+_2px)] resize-none', className)}
+			onKeyDown={(e) => {
+				onKeyDown?.(e);
+				if (e.key === 'Enter' && !e.defaultPrevented && !e.nativeEvent.isComposing) {
+					e.preventDefault();
+					e.currentTarget.form?.requestSubmit();
+				}
+			}}
+			onChange={(e) => {
+				if (/[\r\n]/.test(e.target.value)) e.target.value = e.target.value.replace(/[\r\n]+/g, ' ');
+				onChange?.(e);
+			}}
+			{...props}
+		/>
+	);
+}
+
+export { LineTextarea, Textarea };

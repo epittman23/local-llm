@@ -183,7 +183,7 @@ describe('SkillEditor fields (#1057, #983)', () => {
 
 	it('labels every field visibly, the instructions included, on the shared input', () => {
 		renderEditor({ skill: null, onSubmit: vi.fn() });
-		expect(screen.getByLabelText('Skill name')).toHaveAttribute('data-slot', 'input');
+		expect(screen.getByLabelText('Skill name')).toHaveAttribute('data-slot', 'textarea'); // wraps a long name (#958)
 		expect(screen.getByLabelText('Skill ID')).toHaveAttribute('placeholder', 'e.g. code-review-guidelines');
 		expect(screen.getByLabelText('Skill description')).not.toBeRequired();
 		expect(screen.getByText('Skill instructions').tagName).toBe('LABEL');

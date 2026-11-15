@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
+import { LineTextarea } from '@/components/ui/textarea';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
@@ -196,9 +197,8 @@ export function FunctionEditor({
 					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
 						<div className="flex min-w-0 flex-col gap-1.5">
 							<Label htmlFor="function-name">Function name</Label>
-							<Input
+							<LineTextarea
 								id="function-name"
-								type="text"
 								placeholder="e.g. My Filter"
 								value={name}
 								required

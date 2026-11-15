@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { Textarea } from '@/components/ui/textarea';
+import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -189,9 +189,8 @@ export function SkillEditor({
 					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
 						<div className="flex min-w-0 flex-col gap-1.5">
 							<Label htmlFor="skill-name">Skill name</Label>
-							<Input
+							<LineTextarea
 								id="skill-name"
-								type="text"
 								placeholder="e.g. Code Review Guidelines"
 								value={name}
 								required

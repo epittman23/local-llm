@@ -131,7 +131,7 @@ describe('ToolkitEditor fields (#1057, #983)', () => {
 	it('gives each field a visible label tied to it, and an example as its placeholder', () => {
 		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave: vi.fn() });
 		const name = screen.getByLabelText('Tool name');
-		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveAttribute('data-slot', 'textarea'); // the shared Textarea, one line that wraps (#958)
 		expect(name).toHaveAttribute('placeholder', 'e.g. My Tools');
 		expect(screen.getByLabelText('Tool ID')).toHaveClass('font-mono');
 		expect(screen.getByLabelText('Tool description')).toHaveValue('d');

@@ -84,7 +84,7 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 	it('gives each field a visible label tied to the shared input, with an example as its placeholder', async () => {
 		show();
 		const name = await screen.findByLabelText('Function name');
-		expect(name).toHaveAttribute('data-slot', 'input');
+		expect(name).toHaveAttribute('data-slot', 'textarea'); // the shared Textarea, one line that wraps (#958)
 		expect(name).toHaveAttribute('placeholder', 'e.g. My Filter');
 		expect(screen.getByLabelText('Function ID')).toHaveAttribute('placeholder', 'e.g. my_filter');
 		expect(screen.getByLabelText('Function description')).toBeRequired();

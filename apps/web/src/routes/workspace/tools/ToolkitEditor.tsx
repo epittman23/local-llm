@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
-import { Textarea } from '@/components/ui/textarea';
+import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -209,9 +209,8 @@ export function ToolkitEditor({
 					<div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
 						<div className="flex min-w-0 flex-col gap-1.5">
 							<Label htmlFor="tool-name">Tool name</Label>
-							<Input
+							<LineTextarea
 								id="tool-name"
-								type="text"
 								placeholder="e.g. My Tools"
 								value={name}
 								required
