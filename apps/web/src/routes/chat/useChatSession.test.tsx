@@ -602,6 +602,53 @@ describe('useChatSession loadChat', () => {
 		expect(session.history.messages['B-m'].annotation).toBeUndefined();
 	});
 
+	it('a second press while a rating is saved adds no second feedback row (ACT-5)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		vi.mocked(evaluationsApi.createNewFeedback).mockClear();
+		const message = session.history.messages['A-m'];
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(message, 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		expect(session.ratingIds.has('A-m')).toBe(true);
+		await act(() => session.rate(message, -1));
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(evaluationsApi.createNewFeedback).toHaveBeenCalledTimes(1);
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		expect(session.ratingIds.size).toBe(0);
+	});
+
+	it('an un-rate pressed before the first rating answers waits, and leaves no orphan row (ACT-5)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockClear();
+		const message = session.history.messages['A-m'];
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(message, 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		await act(() => session.unrate(message));
+		// Refused while the rating is saved: nothing removed, nothing saved.
+		expect(chatsApi.updateChatById).not.toHaveBeenCalled();
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(evaluationsApi.deleteFeedbackById).not.toHaveBeenCalled();
+		// The row and the rating agree, so the thumb removes it with its row once pressed again.
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		await act(() => session.unrate(session.history.messages['A-m']));
+		expect(evaluationsApi.deleteFeedbackById).toHaveBeenCalledWith(expect.anything(), 'fb1');
+		expect(session.history.messages['A-m'].feedbackId).toBeUndefined();
+	});
+
 	/** Chat A open with its message rated good (feedback fb1, tagged). */
 	async function rateA() {
 		const router = await openChatA();
