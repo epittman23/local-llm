@@ -121,7 +121,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		setActions([
 			{
 				id: 'prompts-new',
-				label: 'Create',
+				label: 'New prompt',
 				onClick: () => {
 					setCreateDraft(null);
 					setShowCreate(true);

@@ -148,7 +148,7 @@ export function ModelsPage() {
 	// --- the layout's Create button ------------------------------------------
 	useEffect(() => {
 		setActions([
-			{ id: 'models-new', label: 'Create', href: routePaths.workspaceModelsCreate },
+			{ id: 'models-new', label: 'New model', href: routePaths.workspaceModelsCreate },
 			{ id: 'models-import', label: 'Import JSON', onClick: () => importInput.current?.click(), visible: canImport },
 			{
 				id: 'models-export',

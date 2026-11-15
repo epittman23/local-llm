@@ -191,7 +191,7 @@ test.describe('workspace knowledge list', () => {
 		const dialog = page.getByRole('dialog');
 		await dialog.getByLabel('Name').fill('Handbook');
 		await dialog.getByLabel('Description').fill('Everything about us');
-		await dialog.getByRole('button', { name: 'Create Knowledge' }).click();
+		await dialog.getByRole('button', { name: 'Create knowledge base' }).click();
 		// The base itself, not only its URL: a base the page cannot load sends it
 		// back to the list, after a URL check alone could already have passed.
 		await expect(page.getByLabel('Knowledge Name')).toHaveValue('Handbook');

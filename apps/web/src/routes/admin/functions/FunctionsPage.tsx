@@ -308,8 +308,8 @@ export function FunctionsPage() {
 					<div className="flex w-full justify-end">
 						<SplitCreateButton
 							actions={[
-								{ id: 'functions-new', label: 'Create', href: routePaths.adminFunctionsCreate },
-								{ id: 'functions-import-link', label: 'Import From Link', onClick: () => setShowImportUrl(true) },
+								{ id: 'functions-new', label: 'New function', href: routePaths.adminFunctionsCreate },
+								{ id: 'functions-import-link', label: 'Import from link', onClick: () => setShowImportUrl(true) },
 								{
 									id: 'functions-import',
 									label: 'Import JSON',

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, MoreHorizontal, Trash2 } from 'lucide-react';
+import { CircleAlert, Download, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -13,6 +13,8 @@ import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -21,6 +23,7 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
+import { Textarea } from '@/components/ui/textarea';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	createNewKnowledge,
@@ -128,7 +131,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 	}, [list.hasNextPage, list.isFetchingNextPage, list.fetchNextPage, items.length]);
 
 	useEffect(() => {
-		setActions([{ id: 'knowledge-new', label: 'Create', onClick: () => setShowCreate(true) }]);
+		setActions([{ id: 'knowledge-new', label: 'New knowledge base', onClick: () => setShowCreate(true) }]);
 		return () => setActions([]);
 	}, [setActions]);
 
@@ -412,21 +415,24 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	// WRD-4, S4-D1: who may see it is a question only with several accounts.
+	const singleUser = useSingleUser();
 	const [name, setName] = useState('');
+	const [nameError, setNameError] = useState<string | null>(null);
 	const [description, setDescription] = useState('');
 	const [accessGrants, setAccessGrants] = useState<AccessGrant[]>([]);
 	const [loading, setLoading] = useState(false);
+	const nameField = useRef<HTMLInputElement>(null);
 
 	const submit = async () => {
-		setLoading(true);
-		if (name.trim() === '' || description.trim() === '') {
-			toast.error('Please fill in all fields.');
-			setName('');
-			setDescription('');
-			setLoading(false);
+		// FRM-2: an empty name is said at the field, not in a toast.
+		if (name.trim() === '') {
+			setNameError('Give the knowledge base a name.');
+			nameField.current?.focus();
 			return;
 		}
-		const res = await createNewKnowledge(token, name, description, accessGrants).catch((e) => {
+		setLoading(true);
+		const res = await createNewKnowledge(token, name.trim(), description.trim(), accessGrants).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		});
@@ -439,42 +445,49 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 
 	return (
 		<>
-			<DialogTitle className="text-base font-normal">Create a knowledge base</DialogTitle>
-			<DialogDescription className="sr-only">Name it, describe it, and choose who can see it.</DialogDescription>
+			{/* ACT-2, #1011: the dialog, its button and the Create menu say the same thing. */}
+			<DialogTitle>New knowledge base</DialogTitle>
+			<DialogDescription className="sr-only">Name it, and say what it is for.</DialogDescription>
 			<form
-				className="flex flex-col"
+				className="flex flex-col gap-4"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
 				}}
 			>
-				<div className="flex w-full flex-col gap-2.5">
-					<div>
-						<div className="text-muted-foreground mb-2 text-xs">What are you working on?</div>
-						<input
-							className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
-							type="text"
-							aria-label="Name"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="Name your knowledge base"
-							required
-						/>
-					</div>
-					<div>
-						<div className="text-muted-foreground mb-2 text-xs">What are you trying to achieve?</div>
-						<textarea
-							className="placeholder:text-foreground-muted w-full resize-none bg-transparent text-sm"
-							rows={6}
-							aria-label="Description"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder="Describe your knowledge base and objectives"
-							required
-						/>
-					</div>
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="knowledge-name">Name</Label>
+					<Input
+						id="knowledge-name"
+						ref={nameField}
+						value={name}
+						placeholder="e.g. Statistics textbooks"
+						aria-invalid={nameError ? true : undefined}
+						aria-describedby={nameError ? 'knowledge-name-error' : undefined}
+						onChange={(e) => {
+							setName(e.target.value);
+							if (e.target.value.trim()) setNameError(null);
+						}}
+					/>
+					{nameError && (
+						<p id="knowledge-name-error" className="text-dense text-danger flex items-center gap-1.5">
+							<CircleAlert aria-hidden className="size-4 shrink-0" />
+							{nameError}
+						</p>
+					)}
 				</div>
-				<div className="mt-2">
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="knowledge-description">Description (optional)</Label>
+					<Textarea
+						id="knowledge-description"
+						rows={4}
+						value={description}
+						onChange={(e) => setDescription(e.target.value)}
+						placeholder="What these files are, and what to use them for"
+					/>
+				</div>
+				{!singleUser && (
 					<AccessControl
 						accessGrants={accessGrants}
 						onChange={setAccessGrants}
@@ -483,14 +496,14 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 						sharePublic={Boolean(user?.permissions?.sharing?.public_knowledge) || isAdmin}
 						shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
 					/>
-				</div>
-				<div className="flex justify-end gap-2 pt-3">
+				)}
+				<div className="flex justify-end gap-2">
 					<Button type="button" variant="ghost" size="sm" onClick={onClose}>
 						Cancel
 					</Button>
 					<Button type="submit" size="sm" disabled={loading}>
-						Create Knowledge
 						{loading && <Spinner className="size-3.5" />}
+						Create knowledge base
 					</Button>
 				</div>
 			</form>

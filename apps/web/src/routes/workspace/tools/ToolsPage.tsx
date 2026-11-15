@@ -100,8 +100,8 @@ export function ToolsPage() {
 
 	useEffect(() => {
 		setActions([
-			{ id: 'tools-new', label: 'Create', href: routePaths.workspaceToolsCreate },
-			{ id: 'tools-import-link', label: 'Import From Link', onClick: () => setShowImportUrl(true), visible: isAdmin },
+			{ id: 'tools-new', label: 'New tool', href: routePaths.workspaceToolsCreate },
+			{ id: 'tools-import-link', label: 'Import from link', onClick: () => setShowImportUrl(true), visible: isAdmin },
 			{ id: 'tools-import', label: 'Import JSON', onClick: () => importInput.current?.click(), visible: canImport },
 			{
 				id: 'tools-export',

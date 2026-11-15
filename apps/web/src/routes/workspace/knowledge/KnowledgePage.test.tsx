@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -87,5 +87,45 @@ describe('KnowledgePage rows', () => {
 		fireEvent.click((await screen.findByText('Loose file')).closest('[data-slot="row-button"]') as HTMLElement);
 		expect(toast.error).toHaveBeenCalled();
 		expect(router.state.location.pathname).toBe('/workspace/knowledge');
+	});
+});
+
+describe('KnowledgePage create and delete (#1011, #1012, STA-3)', () => {
+	beforeAll(() => {
+		vi.stubGlobal(
+			'IntersectionObserver',
+			class {
+				observe() {}
+				disconnect() {}
+			}
+		);
+	});
+
+	it('offers New knowledge base on a fresh install; the dialog says the same and asks for a name at the field', async () => {
+		vi.mocked(searchKnowledgeBases).mockResolvedValue({ items: [], total: 0 });
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'New knowledge base' }));
+		const dialog = await screen.findByRole('dialog', { name: 'New knowledge base' });
+		expect(within(dialog).getByLabelText('Description (optional)')).toBeVisible();
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Create knowledge base' }));
+		const name = within(dialog).getByLabelText('Name');
+		expect(name).toHaveAttribute('aria-invalid', 'true');
+		expect(within(dialog).getByText('Give the knowledge base a name.')).toBeVisible();
+		expect(toast.error).not.toHaveBeenCalled();
+		fireEvent.change(name, { target: { value: 'Textbooks' } });
+		expect(name).not.toHaveAttribute('aria-invalid');
+	});
+
+	it('confirms a delete by name, saying how many files and their embeddings go', async () => {
+		vi.mocked(searchKnowledgeBases).mockResolvedValue({ items: [base('kb1', 'Textbooks')], total: 1 });
+		renderPage();
+		await screen.findByText('Textbooks');
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'More Options' }), { button: 0, pointerType: 'mouse' });
+		const menu = await screen.findByRole('menu');
+		fireEvent.click(within(menu).getByRole('menuitem', { name: 'Delete' }));
+		const confirm = await screen.findByRole('alertdialog');
+		expect(within(confirm).getByRole('heading')).toHaveTextContent('Delete “Textbooks”?');
+		expect(confirm).toHaveTextContent('Its 2 files, their extracted text and embeddings are deleted.');
+		expect(within(confirm).getByRole('button', { name: 'Delete knowledge base' })).toBeVisible();
 	});
 });

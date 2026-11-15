@@ -104,7 +104,7 @@ export function SkillsPage() {
 
 	useEffect(() => {
 		setActions([
-			{ id: 'skills-new', label: 'Create', href: routePaths.workspaceSkillsCreate, visible: canCreate },
+			{ id: 'skills-new', label: 'New skill', href: routePaths.workspaceSkillsCreate, visible: canCreate },
 			{
 				id: 'skills-import',
 				label: 'Import JSON',
