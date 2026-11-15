@@ -142,7 +142,7 @@ export default function Personalization() {
 
 	return (
 		<SettingsForm title="Personalization" footer={false}>
-			<SettingsSection title="Memory" first>
+			<SettingsSection first>
 				<SettingRow label="Memory" description="Let the model remember things you share across chats.">
 					{(id) => (
 						<SettingSwitch
@@ -153,7 +153,7 @@ export default function Personalization() {
 					)}
 				</SettingRow>
 			</SettingsSection>
-			<SettingsSection title="Saved Memories">
+			<SettingsSection title="Saved memories">
 				<div className="flex items-center gap-2">
 					<div className="relative flex-1">
 						<Search className="text-muted-foreground absolute top-2 left-2 size-3.5" />

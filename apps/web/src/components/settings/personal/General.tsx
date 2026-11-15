@@ -41,7 +41,7 @@ export default function General() {
 				setSaving(false);
 			}}
 		>
-			<SettingsSection title="WebUI Settings" first>
+			<SettingsSection title="Appearance" first>
 				<SettingRow label="Theme" description="Choose the color theme used by the interface.">
 					{(id) => (
 						<SettingSelect

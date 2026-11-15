@@ -98,7 +98,7 @@ export default function Audio() {
 		>
 			{/* Voice input is not ported (docs/decisions.md), so its engine and auto-send switches are not
 			    offered (docs/history/code-review.md M7); the language is, since audio uploads use it. */}
-			<SettingsSection title="STT Settings" first>
+			<SettingsSection title="Speech to text" first>
 				<SettingField label="Language" htmlFor="stt-language">
 					<SettingInput
 						id="stt-language"
@@ -109,7 +109,7 @@ export default function Audio() {
 					/>
 				</SettingField>
 			</SettingsSection>
-			<SettingsSection title="TTS Settings">
+			<SettingsSection title="Read aloud">
 				<SettingRow label="Auto-Playback Response" description="Play assistant responses aloud automatically.">
 					{(id) => (
 						<SettingSwitch

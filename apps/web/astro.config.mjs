@@ -1,8 +1,10 @@
 // @ts-check
+
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
-import { readFileSync } from 'node:fs';
 import { devServerIdentity } from './dev-server-identity.mjs';
 
 // Mirrors d863707:apps/openwebui/vite.config.ts's dev-server proxy: the backend
@@ -16,6 +18,18 @@ const backendTarget = process.env.LLLM_BACKEND_URL || 'http://localhost:4000';
 // version, which the About tab and plugin version checks compare against.
 const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
 
+// The commit and day a build was made, for Settings > About (#1003). An
+// APP_BUILD_HASH in the environment wins; outside a git checkout it is "unknown".
+const gitShortSha = () => {
+	try {
+		return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim() || 'unknown';
+	} catch {
+		return 'unknown';
+	}
+};
+const buildHash = process.env.APP_BUILD_HASH || gitShortSha();
+const buildDate = process.env.APP_BUILD_DATE || new Date().toISOString().slice(0, 10);
+
 // https://astro.build/config
 export default defineConfig({
 	output: 'static',
@@ -26,7 +40,8 @@ export default defineConfig({
 		// than import.meta.env, so the port didn't have to touch that file.
 		define: {
 			APP_VERSION: JSON.stringify(appVersion),
-			APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
+			APP_BUILD_HASH: JSON.stringify(buildHash),
+			APP_BUILD_DATE: JSON.stringify(buildDate)
 		},
 		// devServerIdentity: the desktop app's check that :5174 is this checkout's (#432).
 		plugins: [tailwindcss(), devServerIdentity()],

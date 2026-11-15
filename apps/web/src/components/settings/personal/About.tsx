@@ -1,17 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { getOllamaVersion } from '@/lib/apis/ollama';
-import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '@/lib/constants';
+import { WEBUI_BUILD_HASH } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWebUIName } from '@/lib/stores/configStore';
 import { SettingRow, SettingsForm, SettingsSection } from '../controls';
 
+/** The Open WebUI release this app was forked from (NOTICE). */
+export const FORKED_FROM = 'v0.11.3';
+
+/** NOTICE's copyright line, word for word: About "shows the same license and copyright lines" (NOTICE). */
+export const UPSTREAM_COPYRIGHT =
+	'Copyright (c) 2023- Open WebUI Inc. [Created by Timothy Jaeryang Baek] All rights reserved.';
+
 /**
- * Ports Settings/About.svelte: the installed version and build, the Ollama
- * version when there is one, and the license attribution. There is no update
- * check (this is a hard fork with no upstream releases to compare against) and
- * no community links. The license and copyright lines below are kept exactly
- * as the original has them; the repository's NOTICE file records what is
- * derived from Open WebUI and under which license.
+ * Ports Settings/About.svelte, rewritten for this app (#1003): what was built
+ * (the git commit and the build day), the server it talks to, the Ollama
+ * version when there is one, then where it came from. There is no update
+ * check (a hard fork has no upstream releases to compare against). The
+ * attribution matches NOTICE word for word; a test reads NOTICE to keep it so.
  */
 export default function About() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -23,39 +29,28 @@ export default function About() {
 
 	return (
 		<SettingsForm title="About" footer={false}>
-			<SettingsSection title={`${name} Version`} first>
-				<SettingRow label={`v${WEBUI_VERSION}`} description="The installed version and build.">
+			<SettingsSection title={name} first>
+				<SettingRow label="Build" description="The commit this copy was built from, and the day it was built.">
 					{() => (
-						<span className="text-muted-foreground text-xs" title={WEBUI_BUILD_HASH}>
-							{WEBUI_BUILD_HASH}
+						<span className="font-mono text-dense">
+							{WEBUI_BUILD_HASH} · {APP_BUILD_DATE}
 						</span>
 					)}
 				</SettingRow>
+				<SettingRow label="Server" description="The address this app talks to.">
+					{() => <span className="font-mono text-dense">{window.location.origin}</span>}
+				</SettingRow>
+				{ollama.data && (
+					<SettingRow label="Ollama" description="The version of the Ollama server, when one is connected.">
+						{() => <span className="font-mono text-dense">{ollama.data}</span>}
+					</SettingRow>
+				)}
 			</SettingsSection>
-			{ollama.data && (
-				<SettingsSection title="Ollama Version">
-					<div className="text-muted-foreground text-xs">{ollama.data}</div>
-				</SettingsSection>
-			)}
 			<SettingsSection title="License">
-				<div className="text-muted-foreground text-xs">
-					Portions are derived from Open WebUI and remain under its license; see NOTICE in the repository.
-				</div>
-				<div className="text-muted-foreground text-xs">
-					Copyright (c) {new Date().getFullYear()}{' '}
-					<a href="https://openwebui.com" target="_blank" rel="noreferrer" className="underline">
-						Open WebUI Inc.
-					</a>{' '}
-					<a href="https://github.com/open-webui/open-webui/blob/main/LICENSE" target="_blank" rel="noreferrer">
-						All rights reserved.
-					</a>
-				</div>
-				<div className="text-muted-foreground text-xs">
-					Created by{' '}
-					<a href="https://github.com/tjbck" target="_blank" rel="noreferrer">
-						Tim J. Baek
-					</a>
-				</div>
+				<p className="text-foreground-muted text-dense">
+					Derived from Open WebUI {FORKED_FROM} (see NOTICE). Portions remain under its license.
+				</p>
+				<p className="text-foreground-muted text-dense">{UPSTREAM_COPYRIGHT}</p>
 			</SettingsSection>
 		</SettingsForm>
 	);
