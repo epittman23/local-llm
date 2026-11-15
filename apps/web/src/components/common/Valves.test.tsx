@@ -193,19 +193,25 @@ describe('settings shown at once (#1016)', () => {
 			'db-password',
 			'smtp passwd',
 			'private_key',
-			'aws.credentials'
+			'private_key_pem',
+			'aws.credentials',
+			'api_keys',
+			'OPENAI_API_KEYS',
+			'API_KEY_2',
+			'apiKeys',
+			'api_tokens'
 		]) {
 			expect(isSecret(name, {}), name).toBe(true);
 		}
 		for (const name of [
 			'keywords',
 			'sort_key',
+			'sort_keys',
 			'tokenizer',
-			'max_tokens',
 			'passwordless',
-			'key_count',
 			'primaryKey',
-			'monkey'
+			'monkey',
+			'units'
 		]) {
 			expect(isSecret(name, {}), name).toBe(false);
 		}

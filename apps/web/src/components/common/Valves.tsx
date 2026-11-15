@@ -60,17 +60,18 @@ export function settingLabel(title: string): string {
 		.join(' ');
 }
 
-// Words that name a secret wherever they stand in a setting's name.
-const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'apikey', 'credential', 'credentials']);
-// A name ending in "key" is a secret (api_key, OPENAI_KEY, key) unless the word before
-// it says it is a lookup key instead.
+// Words that name a secret wherever they stand in a setting's name, singular
+// (a plural is read as its singular: api_keys, api_tokens).
+const SECRET_WORDS = new Set(['secret', 'token', 'password', 'passwd', 'apikey', 'credential']);
+// "key" names a secret (api_key, OPENAI_KEY, API_KEY_2, key) unless the word
+// before it says it is a lookup key instead.
 const LOOKUP_KEYS = new Set(['sort', 'primary', 'foreign', 'partition', 'cache', 'group', 'index', 'lookup', 'hot']);
 
 /**
  * A setting whose value should not show on screen: by its input type, its
- * format, or its name. The name is read as words (split on `_`, `-`, spaces
- * and camelCase), so `keywords`, `tokenizer` and `sort_key` show and
- * `github_token`, `apiKey` and `OPENAI_API_KEY` are masked.
+ * format, or its name. The name is read as words (split on `_`, `-`, `.`,
+ * spaces and camelCase), so `keywords`, `tokenizer` and `sort_key` show and
+ * `github_token`, `apiKeys` and `OPENAI_API_KEY` are masked.
  */
 export function isSecret(name: string, p: ValveProperty): boolean {
 	if (p.input?.type === 'password' || p.format === 'password') return true;
@@ -79,10 +80,11 @@ export function isSecret(name: string, p: ValveProperty): boolean {
 		.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
 		.toLowerCase()
 		.split(/[\s_\-.]+/)
-		.filter(Boolean);
-	if (words.some((word) => SECRET_WORDS.has(word))) return true;
-	const last = words.length - 1;
-	return words[last] === 'key' && (last === 0 || !LOOKUP_KEYS.has(words[last - 1]));
+		.filter(Boolean)
+		.map((word) => (word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word));
+	return words.some(
+		(word, i) => SECRET_WORDS.has(word) || (word === 'key' && (i === 0 || !LOOKUP_KEYS.has(words[i - 1])))
+	);
 }
 
 /** The default as the help line says it (FRM-2): "Default: 100", "Default: off", or none. */
