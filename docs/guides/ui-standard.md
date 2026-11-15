@@ -341,10 +341,12 @@ colour with an icon, tied to the field with `aria-describedby`, and the field
 is `aria-invalid`. An error says what is wrong and how to put it right
 ("Enter a whole number of tokens between 512 and 32768"). A field's error is
 never only a toast. Validate when the person leaves the field or submits, not
-on every keystroke before they have finished. A required choice left empty
-(a model slot with no model) is `aria-invalid`, with the help line 'Choose a
-model or remove this one' under it; sending opens that picker instead of a
-toast.
+on every keystroke before they have finished. A required choice is never
+left empty by the person: adding a model opens its picker at once, and leaving
+the picker without a choice removes the empty slot. A slot that arrives empty
+(an old saved chat, or no model available) is `aria-invalid`, with the help
+line 'Choose a model or remove this one' under it, and sending opens that
+picker instead of a toast.
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads
