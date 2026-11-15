@@ -1,4 +1,14 @@
-import { ChevronRight, Download, File as FileIcon, Folder, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import {
+	ChevronRight,
+	CircleAlert,
+	Download,
+	File as FileIcon,
+	Folder,
+	MoreHorizontal,
+	Pencil,
+	RotateCw,
+	Trash2
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -7,6 +17,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
@@ -15,6 +26,7 @@ import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { formatFileSize } from '@/lib/utils/files';
 import { type Breadcrumb, KB_DIR_MOVE, KB_FILE_MOVE, readMovePayload } from './knowledgeFiles';
+import { ErrorDetails } from './knowledgeToasts';
 import type { UploadingItem } from './useKnowledgeUploads';
 
 export type KnowledgeFile = {
@@ -49,7 +61,7 @@ function RenameInput({
 			ref={ref}
 			value={value}
 			aria-label="Rename"
-			className="w-full border-none bg-transparent text-xs"
+			className="w-full border-none bg-transparent"
 			onChange={(e) => setValue(e.target.value)}
 			onKeyDown={(e) => {
 				if (e.key === 'Enter') onCommit(value);
@@ -148,7 +160,10 @@ export function KnowledgeFileList({
 	onOpenDirectory,
 	onRenameDirectory,
 	onDeleteDirectory,
-	onMove
+	onMove,
+	onRetryUpload,
+	onDismissUpload,
+	showOwner = true
 }: {
 	files: KnowledgeFile[];
 	uploading: UploadingItem[];
@@ -162,6 +177,10 @@ export function KnowledgeFileList({
 	onRenameDirectory: (id: string, name: string) => void;
 	onDeleteDirectory: (id: string) => void;
 	onMove: (payload: { kind: 'file' | 'dir'; id: string }, targetDirectoryId: string | null) => void;
+	onRetryUpload: (itemId: string) => void;
+	onDismissUpload: (itemId: string) => void;
+	/** Who added each file; off while the install has one account (WRD-4, S4-D1). */
+	showOwner?: boolean;
 }) {
 	const [renamingFile, setRenamingFile] = useState<string | null>(null);
 	const [renamingDir, setRenamingDir] = useState<string | null>(null);
@@ -208,10 +227,10 @@ export function KnowledgeFileList({
 						</Button>
 					</div>
 					<RowButton
-						className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
+						className="relative flex w-auto min-w-0 flex-1 flex-col items-stretch gap-0.5 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
 						onClick={() => renamingDir !== dir.id && onOpenDirectory(dir.id)}
 					>
-						<div className="line-clamp-1 text-xs">
+						<div className="min-w-0 truncate">
 							{renamingDir === dir.id ? (
 								<RenameInput
 									initial={dir.name}
@@ -227,7 +246,9 @@ export function KnowledgeFileList({
 						</div>
 						{dir.updated_at && (
 							<Tip content={dayjs(dir.updated_at * 1000).format('LLLL')}>
-								<div className="text-foreground-muted shrink-0 text-xs">{dayjs(dir.updated_at * 1000).fromNow()}</div>
+								<div className="text-foreground-muted text-dense shrink-0">
+									{dayjs(dir.updated_at * 1000).fromNow()}
+								</div>
 							</Tip>
 						)}
 					</RowButton>
@@ -244,7 +265,8 @@ export function KnowledgeFileList({
 										<Pencil />
 										Rename
 									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={() => onDeleteDirectory(dir.id)}>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem variant="destructive" onSelect={() => onDeleteDirectory(dir.id)}>
 										<Trash2 />
 										Delete
 									</DropdownMenuItem>
@@ -255,17 +277,56 @@ export function KnowledgeFileList({
 				</div>
 			))}
 
-			{uploading.map((item) => (
-				<div key={item.itemId} role="listitem" className="flex w-full items-center rounded-xl px-2 py-2 text-xs">
-					<Spinner className="mr-2 size-3.5" />
-					<span className="line-clamp-1">
-						{item.name}
-						{item.size ? (
-							<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(item.size)}</span>
-						) : null}
-					</span>
-				</div>
-			))}
+			{uploading.map((item) => {
+				const failed = item.status === 'failed';
+				return (
+					<div
+						key={item.itemId}
+						role="listitem"
+						data-upload-status={item.status}
+						className={cn(
+							'flex w-full gap-2 rounded-xl px-2 py-2',
+							failed ? 'flex-wrap items-start gap-y-1' : 'items-center'
+						)}
+					>
+						{failed ? (
+							<>
+								<CircleAlert aria-hidden className="text-danger mt-0.5 size-4 shrink-0" />
+								<div className="min-w-0 flex-1 max-sm:basis-[calc(100%-1.5rem)]">
+									<div className="truncate">{item.name}</div>
+									<div className="text-dense text-foreground-muted">{item.reason}</div>
+									{item.detail && (
+										<div className="text-foreground-muted">
+											<ErrorDetails detail={item.detail} />
+										</div>
+									)}
+								</div>
+								<div className="flex shrink-0 items-center gap-1 max-sm:ms-5">
+									{!item.duplicate && (
+										<Button variant="outline" size="sm" type="button" onClick={() => onRetryUpload(item.itemId)}>
+											<RotateCw aria-hidden />
+											Retry
+											<span className="sr-only"> {item.name}</span>
+										</Button>
+									)}
+									<Button variant="ghost" size="sm" type="button" onClick={() => onDismissUpload(item.itemId)}>
+										Dismiss
+										<span className="sr-only"> {item.name}</span>
+									</Button>
+								</div>
+							</>
+						) : (
+							<>
+								<Spinner className="size-3.5 shrink-0" />
+								<span className="min-w-0 flex-1 truncate">{item.name}</span>
+								<span className="text-dense text-foreground-muted shrink-0">
+									{item.status === 'processing' ? 'Processing…' : 'Uploading…'}
+								</span>
+							</>
+						)}
+					</div>
+				);
+			})}
 
 			{files.map((file) => {
 				const fileId = file.id ?? file.tempId;
@@ -297,12 +358,13 @@ export function KnowledgeFileList({
 								</Button>
 							)}
 						</div>
+						{/* LAY-4: at 390 the name has the row's width, with size and date on a second line. */}
 						<RowButton
-							className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
+							className="relative flex w-auto min-w-0 flex-1 flex-col items-stretch gap-0.5 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
 							onClick={() => renamingFile === null && fileId && onSelect(fileId)}
 							onDoubleClick={() => writeAccess && setRenamingFile(fileId ?? null)}
 						>
-							<div className="line-clamp-1 text-xs">
+							<div className="min-w-0 truncate">
 								{renamingFile === fileId ? (
 									<RenameInput
 										initial={name}
@@ -313,25 +375,22 @@ export function KnowledgeFileList({
 										}}
 									/>
 								) : (
-									<>
-										{name}
-										{file.meta?.size ? (
-											<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(file.meta.size)}</span>
-										) : null}
-									</>
+									name
 								)}
 							</div>
-							<div className="flex shrink-0 items-center gap-2">
+							<div className="text-foreground-muted text-dense flex shrink-0 items-center gap-1.5">
+								{file.meta?.size ? <span>{formatFileSize(file.meta.size)}</span> : null}
+								{file.meta?.size && file.updated_at ? <span aria-hidden>·</span> : null}
 								{file.updated_at && (
 									<Tip content={dayjs(file.updated_at * 1000).format('LLLL')}>
-										<div className="text-foreground-muted text-xs">{dayjs(file.updated_at * 1000).fromNow()}</div>
+										<span>{dayjs(file.updated_at * 1000).fromNow()}</span>
 									</Tip>
 								)}
-								{file.user && (
+								{showOwner && file.user && (
 									<Tip content={file.user.email ?? 'Deleted User'} side="top">
-										<div className="text-muted-foreground shrink-0">
-											By {capitalizeFirstLetter(file.user.name ?? file.user.email ?? 'Deleted User')}
-										</div>
+										<span className="truncate">
+											· By {capitalizeFirstLetter(file.user.name ?? file.user.email ?? 'Deleted User')}
+										</span>
 									</Tip>
 								)}
 							</div>
@@ -360,9 +419,10 @@ export function KnowledgeFileList({
 											<Download />
 											Download
 										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => fileId && onDeleteFile(fileId)}>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem variant="destructive" onSelect={() => fileId && onDeleteFile(fileId)}>
 											<Trash2 />
-											Delete
+											Remove
 										</DropdownMenuItem>
 									</DropdownMenuContent>
 								</DropdownMenu>

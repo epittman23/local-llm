@@ -1,9 +1,25 @@
-import { ArrowUpCircle, FolderOpen, FolderPlus, Globe, Plus, RefreshCw, RotateCcw, Type } from 'lucide-react';
+import {
+	ArrowUpCircle,
+	CircleAlert,
+	FolderOpen,
+	FolderPlus,
+	Globe,
+	Plus,
+	RefreshCw,
+	RotateCcw,
+	Type
+} from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -11,6 +27,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 export type AddContentKind = 'files' | 'directory' | 'new_directory' | 'web' | 'text';
 
@@ -24,57 +43,159 @@ export function AddContentMenu({
 	onSync: () => void;
 	onReset: () => void;
 }) {
+	// Verbs that name what each item adds; the destructive Reset last, below a separator (ACT-2, ACT-3).
 	return (
 		<DropdownMenu>
-			<Tip content="Add Content">
+			<Tip content="Add content">
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon-sm" aria-label="Add Content">
+					<Button variant="ghost" size="icon-sm" aria-label="Add content">
 						<Plus />
 					</Button>
 				</DropdownMenuTrigger>
 			</Tip>
-			<DropdownMenuContent align="end" className="min-w-44">
-				<DropdownMenuItem onSelect={() => onUpload('new_directory')}>
-					<FolderPlus />
-					New directory
-				</DropdownMenuItem>
-				<DropdownMenuSeparator />
+			<DropdownMenuContent align="end" className="min-w-48">
 				<DropdownMenuItem onSelect={() => onUpload('files')}>
 					<ArrowUpCircle />
 					Upload files
 				</DropdownMenuItem>
 				<DropdownMenuItem onSelect={() => onUpload('directory')}>
 					<FolderOpen />
-					Upload directory
+					Upload a folder
 				</DropdownMenuItem>
 				<Tip
 					side="left"
-					content="Sync a local directory with this knowledge base. Only new and modified files will be uploaded. The directory structure will be mirrored."
+					content="Mirror a folder on this computer: only new and changed files are uploaded, and files gone from it are removed here."
 				>
 					<DropdownMenuItem onSelect={onSync}>
 						<RefreshCw />
-						Sync directory
+						Sync a folder
 					</DropdownMenuItem>
 				</Tip>
 				<DropdownMenuItem onSelect={() => onUpload('web')}>
 					<Globe />
-					Add webpage
+					Add a web page
 				</DropdownMenuItem>
 				<DropdownMenuItem onSelect={() => onUpload('text')}>
 					<Type />
-					Add text content
+					Add text
+				</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => onUpload('new_directory')}>
+					<FolderPlus />
+					New folder
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
-				<DropdownMenuItem onSelect={onReset}>
+				<DropdownMenuItem variant="destructive" onSelect={onReset}>
 					<RotateCcw />
-					Reset
+					Reset knowledge base
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
 }
 
-/** Ports KnowledgeBase/NewDirectoryModal.svelte. */
+/**
+ * The knowledge base's name and description, edited in a dialog with an
+ * explicit save (FRM-3; it used to save itself a second after each keystroke).
+ * An empty name is refused under the field (FRM-2); the description may be
+ * empty. The dialog stays open when the save fails.
+ */
+export function EditDetailsDialog({
+	open,
+	onOpenChange,
+	name,
+	description,
+	onSave
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	name: string;
+	description: string;
+	onSave: (next: { name: string; description: string }) => Promise<boolean>;
+}) {
+	const [draftName, setDraftName] = useState(name);
+	const [draftDescription, setDraftDescription] = useState(description);
+	const [error, setError] = useState<string | null>(null);
+	const [saving, setSaving] = useState(false);
+	const changed = draftName !== name || draftDescription !== description;
+	return (
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (next) {
+					setDraftName(name);
+					setDraftDescription(description);
+					setError(null);
+				}
+				onOpenChange(next);
+			}}
+		>
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>Edit name and description</DialogTitle>
+					<DialogDescription className="sr-only">The knowledge base's name and description.</DialogDescription>
+				</DialogHeader>
+				<form
+					className="flex flex-col gap-4"
+					onSubmit={async (e) => {
+						e.preventDefault();
+						if (!draftName.trim()) {
+							setError('Give the knowledge base a name.');
+							return;
+						}
+						setSaving(true);
+						const ok = await onSave({ name: draftName.trim(), description: draftDescription.trim() });
+						setSaving(false);
+						if (ok) onOpenChange(false);
+					}}
+				>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-name">Name</Label>
+						<Input
+							id="kb-name"
+							value={draftName}
+							aria-invalid={error ? true : undefined}
+							aria-describedby={error ? 'kb-name-error' : undefined}
+							onChange={(e) => {
+								setDraftName(e.target.value);
+								if (e.target.value.trim()) setError(null);
+							}}
+						/>
+						{error && <FieldError id="kb-name-error">{error}</FieldError>}
+					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-description">Description (optional)</Label>
+						<Textarea
+							id="kb-description"
+							rows={3}
+							value={draftDescription}
+							onChange={(e) => setDraftDescription(e.target.value)}
+						/>
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={!changed || saving} aria-busy={saving || undefined}>
+							{saving ? 'Saving…' : 'Save changes'}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/** A field's error under it, tied to it by `aria-describedby` (FRM-2). */
+function FieldError({ id, children }: { id: string; children: string }) {
+	return (
+		<p id={id} className="text-danger text-dense flex items-center gap-1.5">
+			<CircleAlert aria-hidden className="size-3.5 shrink-0" />
+			{children}
+		</p>
+	);
+}
+
+/** Ports KnowledgeBase/NewDirectoryModal.svelte: a 32 rem form titled after its menu item (OVL-1, ACT-2). */
 export function NewDirectoryDialog({
 	open,
 	onOpenChange,
@@ -85,24 +206,29 @@ export function NewDirectoryDialog({
 	onSubmit: (name: string) => void;
 }) {
 	const [name, setName] = useState('');
+	const [error, setError] = useState<string | null>(null);
 	return (
 		<Dialog
 			open={open}
 			onOpenChange={(next) => {
-				if (!next) setName('');
+				if (!next) {
+					setName('');
+					setError(null);
+				}
 				onOpenChange(next);
 			}}
 		>
-			<DialogContent className="sm:max-w-sm">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle className="text-base font-normal">New Directory</DialogTitle>
+					<DialogTitle>New folder</DialogTitle>
 					<DialogDescription className="sr-only">Create a folder in this knowledge base.</DialogDescription>
 				</DialogHeader>
 				<form
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
 						if (!name.trim()) {
-							toast.error('Name is required');
+							setError('Give the folder a name.');
 							return;
 						}
 						onSubmit(name.trim());
@@ -110,22 +236,26 @@ export function NewDirectoryDialog({
 						onOpenChange(false);
 					}}
 				>
-					<div className="text-muted-foreground mb-1 text-xs">Name</div>
-					<input
-						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
-						aria-label="Name"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						placeholder="Directory name"
-					/>
-					<div className="flex justify-end gap-2 pt-3">
-						<Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-folder-name">Name</Label>
+						<Input
+							id="kb-folder-name"
+							value={name}
+							aria-invalid={error ? true : undefined}
+							aria-describedby={error ? 'kb-folder-name-error' : undefined}
+							onChange={(e) => {
+								setName(e.target.value);
+								if (e.target.value.trim()) setError(null);
+							}}
+						/>
+						{error && <FieldError id="kb-folder-name-error">{error}</FieldError>}
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
 							Cancel
 						</Button>
-						<Button type="submit" size="sm">
-							Create
-						</Button>
-					</div>
+						<Button type="submit">Create folder</Button>
+					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>
@@ -133,9 +263,10 @@ export function NewDirectoryDialog({
 }
 
 /**
- * Ports KnowledgeBase/AddTextContentModal.svelte: a title and a body that become
- * a `.txt` file. (Not ported: the Svelte modal's microphone button, which
- * dictates into the body through the chat input's recorder -- Phase 10.)
+ * Ports KnowledgeBase/AddTextContentModal.svelte: a title and a text that become
+ * a `.txt` file, in a 48 rem form (OVL-1). (Not ported: the Svelte modal's
+ * microphone button, which dictates into the body through the chat input's
+ * recorder -- Phase 10.)
  */
 export function AddTextDialog({
 	open,
@@ -148,47 +279,63 @@ export function AddTextDialog({
 }) {
 	const [name, setName] = useState('Untitled');
 	const [content, setContent] = useState('');
+	const [errors, setErrors] = useState<{ name?: string; content?: string }>({});
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-2xl">
+			<DialogContent className="sm:max-w-3xl">
 				<DialogHeader>
-					<DialogTitle className="text-sm">Add text content</DialogTitle>
-					<DialogDescription className="sr-only">Saved as a text file in this knowledge base.</DialogDescription>
+					<DialogTitle>Add text</DialogTitle>
+					<DialogDescription>Saved as a text file in this knowledge base.</DialogDescription>
 				</DialogHeader>
 				<form
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
-						if (name.trim() === '' || content.trim() === '') {
-							toast.error('Please fill in all fields.');
-							setName(name.trim());
-							setContent(content.trim());
+						const next = {
+							name: name.trim() ? undefined : 'Give the text a title.',
+							content: content.trim() ? undefined : 'Write or paste the text to add.'
+						};
+						if (next.name || next.content) {
+							setErrors(next);
 							return;
 						}
-						onSubmit(name, content);
+						onSubmit(name.trim(), content);
 						setName('Untitled');
 						setContent('');
+						setErrors({});
 						onOpenChange(false);
 					}}
 				>
-					<input
-						className="w-full bg-transparent text-sm"
-						aria-label="Title"
-						placeholder="Title"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-					/>
-					<textarea
-						className="placeholder:text-foreground-muted mt-2 h-64 w-full resize-none bg-transparent text-sm"
-						aria-label="Content"
-						placeholder="Write something..."
-						value={content}
-						onChange={(e) => setContent(e.target.value)}
-					/>
-					<div className="flex justify-end pt-2">
-						<Button type="submit" size="sm">
-							Save
-						</Button>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-text-title">Title</Label>
+						<Input
+							id="kb-text-title"
+							value={name}
+							aria-invalid={errors.name ? true : undefined}
+							aria-describedby={errors.name ? 'kb-text-title-error' : undefined}
+							onChange={(e) => setName(e.target.value)}
+						/>
+						{errors.name && <FieldError id="kb-text-title-error">{errors.name}</FieldError>}
 					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-text-content">Text</Label>
+						<Textarea
+							id="kb-text-content"
+							rows={10}
+							className="max-h-[50vh] field-sizing-fixed"
+							value={content}
+							aria-invalid={errors.content ? true : undefined}
+							aria-describedby={errors.content ? 'kb-text-content-error' : undefined}
+							onChange={(e) => setContent(e.target.value)}
+						/>
+						{errors.content && <FieldError id="kb-text-content-error">{errors.content}</FieldError>}
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button type="submit">Add text</Button>
+					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>

@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Call = { method: string; path: string; search: string; body: any };
@@ -194,7 +194,7 @@ test.describe('workspace knowledge list', () => {
 		await dialog.getByRole('button', { name: 'Create Knowledge' }).click();
 		// The base itself, not only its URL: a base the page cannot load sends it
 		// back to the list, after a URL check alone could already have passed.
-		await expect(page.getByLabel('Knowledge Name')).toHaveValue('Handbook');
+		await expect(page.getByRole('heading', { name: 'Handbook' })).toBeVisible();
 		await expect(page).toHaveURL(/\/workspace\/knowledge\/new-kb$/);
 		expect(calls.find((c) => c.path === '/create')?.body).toMatchObject({
 			name: 'Handbook',
@@ -218,7 +218,7 @@ test.describe('workspace knowledge base', () => {
 		await mockWorkspaceBackend(page);
 		await mockKnowledgeApi(page, [kb(1)]);
 		await page.goto('/workspace/knowledge/kb1');
-		await expect(page.getByLabel('Knowledge Name')).toHaveValue('Base 1');
+		await expect(page.getByRole('heading', { name: 'Base 1' })).toBeVisible();
 		await expect(page.getByText('Reports', { exact: true })).toBeVisible();
 		await expect(page.getByText('intro.txt')).toBeVisible();
 		await expect(page.getByText('2.0 KB')).toBeVisible();
@@ -244,7 +244,7 @@ test.describe('workspace knowledge base', () => {
 		await page
 			.locator('#files-input')
 			.setInputFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
-		await expect(page.getByText('File added successfully.')).toBeVisible();
+		await expect(page.getByText('Added "new.txt"')).toBeVisible();
 		const post = calls.find((c) => c.method === 'POST' && c.path === '/');
 		expect(String(post?.body)).toContain('"knowledge_id":"kb1"');
 		expect(String(post?.body)).toContain('"directory_id":"dir1"');
@@ -257,7 +257,7 @@ test.describe('workspace knowledge base', () => {
 		await page
 			.locator('#files-input')
 			.setInputFiles({ name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.from('') });
-		await expect(page.getByText('You cannot upload an empty file.')).toBeVisible();
+		await expect(page.getByText('"empty.txt" is empty, so it wasn\'t uploaded.')).toBeVisible();
 		expect(calls.some((c) => c.method === 'POST' && c.path === '/')).toBe(false);
 	});
 
@@ -266,67 +266,76 @@ test.describe('workspace knowledge base', () => {
 		const { calls } = await mockKnowledgeApi(page, [kb(1)]);
 		await page.goto('/workspace/knowledge/kb1');
 
-		await page.getByRole('button', { name: 'Add Content' }).click();
-		await page.getByRole('menuitem', { name: 'Add text content' }).click();
-		let dialog = page.getByRole('dialog');
+		await page.getByRole('button', { name: 'Add content' }).click();
+		await page.getByRole('menuitem', { name: 'Add text' }).click();
+		let dialog = page.getByRole('dialog', { name: 'Add text' });
 		await dialog.getByLabel('Title').fill('Notes');
-		await dialog.getByLabel('Content').fill('Some notes');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByLabel('Text', { exact: true }).fill('Some notes');
+		await dialog.getByRole('button', { name: 'Add text' }).click();
 		await expect
 			.poll(() => String(calls.find((c) => c.method === 'POST' && c.path === '/')?.body ?? ''))
 			.toContain('Notes.txt');
 
-		await page.getByRole('button', { name: 'Add Content' }).click();
-		await page.getByRole('menuitem', { name: 'Add webpage' }).click();
-		dialog = page.getByRole('dialog');
+		await page.getByRole('button', { name: 'Add content' }).click();
+		await page.getByRole('menuitem', { name: 'Add a web page' }).click();
+		dialog = page.getByRole('dialog', { name: 'Add a web page' });
 		await dialog
 			.getByLabel('Webpage URLs')
 			.fill('not a url\nhttps://example.com/a\nhttps://example.com/a\njavascript:alert(1)');
-		await dialog.getByRole('button', { name: 'Add' }).click();
+		await dialog.getByRole('button', { name: 'Add web page' }).click();
 		// Only the one valid, de-duplicated http(s) URL is fetched.
 		await expect
 			.poll(() => calls.filter((c) => c.path === '/retrieval/process/url').map((c) => c.body?.url))
 			.toEqual(['https://example.com/a']);
 	});
 
-	test('new directory, delete file, and reset all call the API', async ({ page }) => {
+	test('new folder, remove file, and reset all call the API, the last two after a confirmation', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockKnowledgeApi(page, [kb(1)]);
 		await page.goto('/workspace/knowledge/kb1');
 
-		await page.getByRole('button', { name: 'Add Content' }).click();
-		await page.getByRole('menuitem', { name: 'New directory' }).click();
-		await page.getByRole('dialog').getByLabel('Name').fill('Archive');
-		await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click();
+		await page.getByRole('button', { name: 'Add content' }).click();
+		await page.getByRole('menuitem', { name: 'New folder' }).click();
+		await page.getByRole('dialog', { name: 'New folder' }).getByLabel('Name').fill('Archive');
+		await page.getByRole('dialog').getByRole('button', { name: 'Create folder' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/kb1/dirs/create' || c.path.endsWith('/dirs/create'))?.body)
 			.toMatchObject({ name: 'Archive' });
 
 		await page.getByRole('button', { name: 'intro.txt menu' }).click();
-		await page.getByRole('menuitem', { name: 'Delete' }).click();
+		await page.getByRole('menuitem', { name: 'Remove' }).click();
+		await expect(page.getByRole('alertdialog')).toContainText('Remove "intro.txt"?');
+		expect(calls.some((c) => c.path.endsWith('/file/remove'))).toBe(false);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Remove file' }).click();
 		await expect.poll(() => calls.find((c) => c.path.endsWith('/file/remove'))?.body).toMatchObject({ file_id: 'f1' });
 
-		await page.getByRole('button', { name: 'Add Content' }).click();
-		await page.getByRole('menuitem', { name: 'Reset' }).click();
-		await expect(page.getByRole('alertdialog')).toContainText('cannot be undone');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Add content' }).click();
+		await page.getByRole('menuitem', { name: 'Reset knowledge base' }).click();
+		await expect(page.getByRole('alertdialog')).toContainText("can't be undone");
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset knowledge base' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/reset'))).toBe(true);
 	});
 
-	test('the name saves itself after a pause; a blank name does not save', async ({ page }) => {
+	test('the name saves from its dialog with Save changes; a blank name does not save', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockKnowledgeApi(page, [kb(1)]);
 		await page.goto('/workspace/knowledge/kb1');
-		await page.getByLabel('Knowledge Name').fill('Renamed base');
-		await expect.poll(() => calls.filter((c) => c.path === '/kb1/update' || c.path.endsWith('/update')).length).toBe(1);
+		await page.getByRole('button', { name: 'More actions' }).click();
+		await page.getByRole('menuitem', { name: 'Edit name and description' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Edit name and description' });
+		await dialog.getByLabel('Name').fill('');
+		await dialog.getByRole('button', { name: 'Save changes' }).click();
+		await expect(dialog.getByText('Give the knowledge base a name.')).toBeVisible();
+		expect(calls.filter((c) => c.path.endsWith('/update')).length).toBe(0);
+
+		await dialog.getByLabel('Name').fill('Renamed base');
+		await dialog.getByRole('button', { name: 'Save changes' }).click();
+		await expect.poll(() => calls.filter((c) => c.path.endsWith('/update')).length).toBe(1);
 		expect(calls.find((c) => c.path.endsWith('/update'))?.body).toMatchObject({
 			name: 'Renamed base',
 			description: 'About base 1'
 		});
-
-		await page.getByLabel('Knowledge Name').fill('');
-		await expect(page.getByText('Please fill in all fields.')).toBeVisible();
-		expect(calls.filter((c) => c.path.endsWith('/update')).length).toBe(1);
+		await expect(page.getByRole('heading', { name: 'Renamed base' })).toBeVisible();
 	});
 
 	test('opening a file shows its text in a sheet and saves edits', async ({ page }) => {
@@ -335,9 +344,11 @@ test.describe('workspace knowledge base', () => {
 		await page.goto('/workspace/knowledge/kb1');
 		await page.getByRole('button', { name: 'Open intro.txt' }).click();
 		const sheet = page.getByRole('dialog');
-		await expect(sheet.getByLabel('File content')).toHaveValue('Hello intro');
-		await sheet.getByLabel('File content').fill('Edited intro');
-		await sheet.getByRole('button', { name: 'Save' }).click();
+		await expect(sheet.getByText('Hello intro')).toBeVisible();
+		await sheet.getByRole('button', { name: 'Edit text' }).click();
+		await expect(sheet.getByLabel('File text')).toHaveValue('Hello intro');
+		await sheet.getByLabel('File text').fill('Edited intro');
+		await sheet.getByRole('button', { name: 'Save text' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/f1/data/content/update')?.body)
 			.toMatchObject({ content: 'Edited intro' });
@@ -348,10 +359,11 @@ test.describe('workspace knowledge base', () => {
 		await mockKnowledgeApi(page, [kb(1, { write_access: false })]);
 		await page.goto('/workspace/knowledge/kb1');
 		await expect(page.getByText('intro.txt')).toBeVisible();
-		await expect(page.getByText('Read Only')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Add Content' })).toHaveCount(0);
+		await expect(page.getByText('Read only')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Add content' })).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Access' })).toHaveCount(0);
-		await expect(page.getByLabel('Knowledge Name')).toBeDisabled();
+		await page.getByRole('button', { name: 'More actions' }).click();
+		await expect(page.getByRole('menuitem', { name: 'Edit name and description' })).toHaveCount(0);
 	});
 
 	test('a connected base shows its source and a working test query instead of files', async ({ page }) => {
@@ -382,10 +394,82 @@ test.describe('workspace knowledge base', () => {
 		await expect(page.getByText('doc.pdf')).toBeVisible();
 	});
 
-	test('an unknown base returns to the list', async ({ page }) => {
+	test('an unknown base says so in place, with the way back to the list', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockKnowledgeApi(page, [kb(1)]);
+		// What the server answers for a base that is gone.
+		await page.route('**/api/v1/knowledge/nope', (route) =>
+			route.fulfill({
+				status: 404,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: "We could not find what you're looking for :/" })
+			})
+		);
 		await page.goto('/workspace/knowledge/nope');
+		await expect(page.getByRole('heading', { name: 'Knowledge base not found' })).toBeVisible();
+		await page.getByRole('button', { name: 'Back to Knowledge' }).click();
 		await expect(page).toHaveURL(/\/workspace\/knowledge$/);
+	});
+
+	test('a failed upload stays in the list with its reason, and Dismiss removes it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockKnowledgeApi(page, [kb(1)]);
+		await page.route('**/api/v1/files/?**', (route) =>
+			route.request().method() === 'POST'
+				? route.fulfill({
+						status: 400,
+						contentType: 'application/json',
+						body: JSON.stringify({ detail: 'Embedding model is not available offline' })
+					})
+				: route.fallback()
+		);
+		await page.goto('/workspace/knowledge/kb1');
+		await page
+			.locator('#files-input')
+			.setInputFiles({ name: 'paper.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+		const row = page.locator('[data-upload-status="failed"]');
+		await expect(row).toContainText('paper.txt');
+		await expect(row).toContainText('The server refused the upload.');
+		await page.waitForTimeout(1500);
+		await expect(row).toBeVisible();
+		await row.getByRole('button', { name: 'Dismiss paper.txt' }).click();
+		await expect(row).toHaveCount(0);
+	});
+
+	test('four files make four rows and one toast, even while the server lists them as pending', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const pending: { id: string; filename: string; meta: { name: string } }[] = [];
+		await mockKnowledgeApi(page, [kb(1)], { pending });
+		let n = 0;
+		await page.route('**/api/v1/files/?**', async (route) => {
+			if (route.request().method() !== 'POST') return route.fallback();
+			const id = `up-${n++}`;
+			pending.push({ id, filename: `file${n}.txt`, meta: { name: `file${n}.txt` } });
+			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id, meta: {} }) });
+		});
+		// Processing takes a moment, so the list reloads (after each finished file)
+		// while the next one is still in flight and listed as pending.
+		await page.route('**/api/v1/files/*/process/status**', async (route) => {
+			await new Promise((r) => setTimeout(r, 600));
+			return route.fulfill({
+				status: 200,
+				contentType: 'text/event-stream',
+				body: 'data: {"status":"completed"}\n\ndata: [DONE]\n\n'
+			});
+		});
+		await page.goto('/workspace/knowledge/kb1');
+		await page
+			.locator('#files-input')
+			.setInputFiles(
+				[1, 2, 3, 4].map((i) => ({ name: `file${i}.txt`, mimeType: 'text/plain', buffer: Buffer.from(`hello ${i}`) }))
+			);
+		const rows = page.locator('#collection-container [role=listitem]');
+		for (let i = 0; i < 8; i++) {
+			for (const name of ['file1.txt', 'file2.txt', 'file3.txt', 'file4.txt'])
+				expect(await rows.filter({ hasText: name }).count()).toBeLessThanOrEqual(1);
+			await page.waitForTimeout(300);
+		}
+		await expect(page.getByText('4 files added')).toBeVisible();
+		await expect(page.locator('[data-sonner-toast]')).toHaveCount(1);
 	});
 });

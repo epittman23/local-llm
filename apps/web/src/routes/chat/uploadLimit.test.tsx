@@ -168,7 +168,7 @@ describe('knowledge base uploads and the upload size limit', () => {
 		limit(1);
 		expect(await upload()).toEqual([]);
 		expect(uploadFile).not.toHaveBeenCalled();
-		expect(toast.error).toHaveBeenCalledWith('File size should not exceed 1 MB.');
+		expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('is larger than the 1 MB limit'));
 	});
 });
 

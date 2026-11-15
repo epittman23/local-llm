@@ -2,10 +2,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { toast } from 'sonner';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { searchKnowledgeFilesById, updateKnowledgeAccessGrants, updateKnowledgeById } from '@/lib/apis/knowledge';
+import { getFileById, uploadFile } from '@/lib/apis/files';
+import {
+	createKnowledgeDirectory,
+	deleteKnowledgeDirectory,
+	getKnowledgeById,
+	removeFileFromKnowledgeById,
+	resetKnowledgeById,
+	searchKnowledgeFilesById,
+	updateKnowledgeAccessGrants,
+	updateKnowledgeById
+} from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgeBasePage } from './KnowledgeBasePage';
 import { KB_FILE_MOVE } from './knowledgeFiles';
@@ -75,6 +85,9 @@ vi.mock('@/components/common/AccessControlModal', () => ({
 	)
 }));
 
+const accounts = vi.hoisted(() => ({ total: 1 }));
+vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: accounts.total })) }));
+
 vi.mock('@/lib/apis/files', () => ({
 	uploadFile: vi.fn(async (_t: string, file: File) => {
 		const f = { id: `new-${file.name}`, meta: { name: file.name } };
@@ -113,6 +126,9 @@ const openPageTwo = async () => {
 const sixtyOneFiles = () =>
 	Array.from({ length: 61 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
 
+const openMenu = (label: string) =>
+	fireEvent.pointerDown(screen.getByLabelText(label), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+
 const upload = (container: HTMLElement, name: string) => {
 	const input = container.ownerDocument.getElementById('files-input') as HTMLInputElement;
 	fireEvent.change(input, { target: { files: [new File(['hello'], name, { type: 'text/plain' })] } });
@@ -124,6 +140,7 @@ beforeEach(() => {
 		user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' }
 	} as never);
 	state.name = 'KB';
+	accounts.total = 1;
 	state.files = Array.from({ length: 31 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
 });
 afterEach(() => {
@@ -143,7 +160,42 @@ describe('KnowledgeBasePage file filter (#230)', () => {
 
 		await screen.findByText('file1.txt');
 		expect(vi.mocked(searchKnowledgeFilesById).mock.calls[0][3]).toBe('');
-		expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('');
+		// One account: there is nobody else's to filter by, so no View menu (WRD-4, S4-D1).
+		expect(screen.queryByRole('button', { name: /^View:/ })).toBeNull();
+	});
+});
+
+describe('KnowledgeBasePage header and toolbar (#1017, S4-D1)', () => {
+	it('offers View and Access, and names who added each file, once a second account exists', async () => {
+		accounts.total = 2;
+		state.files = [{ id: 'f1', meta: { name: 'file1.txt' }, user: { name: 'sam' } } as never];
+		renderPage();
+		expect(await screen.findByRole('button', { name: 'View: All' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Access' })).toBeInTheDocument();
+		expect(screen.getByText(/By Sam/)).toBeInTheDocument();
+	});
+
+	it('hides Access and who added each file while the install has one account', async () => {
+		state.files = [{ id: 'f1', meta: { name: 'file1.txt' }, user: { name: 'sam' } } as never];
+		renderPage();
+		await screen.findByText('file1.txt');
+		expect(screen.queryByRole('button', { name: 'Access' })).toBeNull();
+		expect(screen.queryByText(/By Sam/)).toBeNull();
+	});
+
+	it('sorts with one menu over the server sort key and direction', async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Sort: Recently updated' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		fireEvent.click(await screen.findByText('Name, A to Z'));
+		await waitFor(() => {
+			const last = vi.mocked(searchKnowledgeFilesById).mock.calls.at(-1) ?? [];
+			expect([last[4], last[5]]).toEqual(['name', 'asc']);
+		});
 	});
 });
 
@@ -155,7 +207,8 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('No content found')).toBeNull();
 	});
@@ -168,21 +221,22 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('file32.txt')).toBeNull();
 	});
 
 	it('lists a file uploaded after a reset made from page 2', async () => {
 		const { container } = await openPageTwo();
-		fireEvent.pointerDown(screen.getByLabelText('Add Content'), { button: 0, ctrlKey: false, pointerType: 'mouse' });
-		fireEvent.click(await screen.findByText('Reset'));
-		fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+		fireEvent.pointerDown(screen.getByLabelText('Add content'), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+		fireEvent.click(await screen.findByText('Reset knowledge base', { selector: '[role=menuitem]' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Reset knowledge base' }));
 		await waitFor(() => expect(screen.queryByText('file31.txt')).toBeNull());
 		upload(container, 'notes.txt');
 		// The in-flight row also reads "notes.txt", until the upload settles and
-		// the reloaded list (header "1 files") replaces it.
-		await screen.findByText('1 files');
+		// the reloaded list (header "1 file") replaces it.
+		await screen.findByText(/\b1 file$/);
 		await waitFor(() => {
 			expect(screen.queryByText('No content found')).toBeNull();
 			expect(screen.getByText('notes.txt')).toBeInTheDocument();
@@ -206,7 +260,7 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		state.files = sixtyOneFiles();
 		const { container } = await openPageTwo();
 		upload(container, 'notes.txt');
-		expect(await screen.findByText('62 files')).toBeInTheDocument();
+		expect(await screen.findByText(/62 files/)).toBeInTheDocument();
 		await waitFor(() => {
 			expect(screen.getByText('file1.txt')).toBeInTheDocument();
 			expect(screen.queryByText('file31.txt')).toBeNull();
@@ -217,9 +271,9 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		state.files = sixtyOneFiles();
 		await openPageTwo();
 		fireEvent.click(screen.getByRole('button', { name: 'Open file31.txt' }));
-		const save = await screen.findByRole('button', { name: 'Save' });
-		await waitFor(() => expect(save).toBeEnabled());
-		fireEvent.click(save);
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit text' }));
+		fireEvent.change(await screen.findByLabelText('File text'), { target: { value: 'edited' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save text' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('file32.txt')).toBeNull();
 	});
@@ -234,11 +288,12 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		await waitFor(() => expect(screen.queryByRole('navigation')).toBeNull());
 		upload(container, 'notes.txt');
-		await screen.findByText('31 files');
+		await screen.findByText(/\b31 files/);
 		fireEvent.click(await screen.findByText('2'));
 		expect(await screen.findByText('file30.txt')).toBeInTheDocument();
 		await new Promise((resolve) => setTimeout(resolve, 200));
@@ -247,76 +302,69 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 	});
 });
 
-describe('KnowledgeBasePage name and description autosave (#228)', () => {
-	/** Opens the knowledge base, then hands the clock to the test. */
-	const openWithFakeTimers = async () => {
+describe('KnowledgeBasePage name and description dialog (#228, #1017)', () => {
+	/** Opens the knowledge base and its Edit name and description dialog. */
+	const openDialog = async () => {
 		vi.mocked(updateKnowledgeById).mockResolvedValue({ id: 'kb1' } as never);
 		renderPage();
 		await screen.findByText('file1.txt');
-		vi.useFakeTimers();
+		openMenu('More actions');
+		fireEvent.click(await screen.findByText('Edit name and description'));
+		return screen.findByRole('dialog', { name: 'Edit name and description' });
 	};
 
-	it('saves an edit made just before leaving with Back instead of dropping it', async () => {
-		await openWithFakeTimers();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
-		fireEvent.click(screen.getByText('Back'));
-		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
-		expect(updateKnowledgeById).toHaveBeenCalledWith(
-			't',
-			'kb1',
-			expect.objectContaining({ name: 'Renamed', description: 'desc' }),
-			false
+	it('saves the name and description from the dialog, and only those', async () => {
+		await openDialog();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		await waitFor(() =>
+			expect(updateKnowledgeById).toHaveBeenCalledExactlyOnceWith('t', 'kb1', { name: 'Renamed', description: 'desc' })
 		);
+		expect(await screen.findByRole('heading', { name: 'Renamed' })).toBeInTheDocument();
 	});
 
-	it('saves only the last of several quick edits when leaving', async () => {
-		await openWithFakeTimers();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
-		fireEvent.change(screen.getByLabelText('Knowledge Description'), { target: { value: 'new desc' } });
-		fireEvent.click(screen.getByText('Back'));
-		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
-		expect(updateKnowledgeById).toHaveBeenCalledWith(
-			't',
-			'kb1',
-			expect.objectContaining({ name: 'Renamed', description: 'new desc' }),
-			false
+	it('saves a changed description, trimmed, and closes', async () => {
+		await openDialog();
+		fireEvent.change(screen.getByLabelText('Description (optional)'), { target: { value: ' new desc ' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		await waitFor(() =>
+			expect(updateKnowledgeById).toHaveBeenCalledWith('t', 'kb1', { name: 'KB', description: 'new desc' })
 		);
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 	});
 
-	it('saves an edit as the page goes away, with keepalive (#675)', async () => {
-		await openWithFakeTimers();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+	it('Cancel drops the edits and saves nothing', async () => {
+		await openDialog();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		expect(updateKnowledgeById).not.toHaveBeenCalled();
+		expect(screen.getByRole('heading', { name: 'KB' })).toBeInTheDocument();
+	});
+
+	it('keeps Save changes off until something changed', async () => {
+		await openDialog();
+		expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'KB2' } });
+		expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+	});
+
+	it('saves nothing after a pause or on leaving: there is no save-after-a-pause', async () => {
+		vi.mocked(updateKnowledgeById).mockResolvedValue({ id: 'kb1' } as never);
+		renderPage();
+		await screen.findByText('file1.txt');
 		window.dispatchEvent(new Event('pagehide'));
-		expect(updateKnowledgeById).toHaveBeenCalledExactlyOnceWith(
-			't',
-			'kb1',
-			expect.objectContaining({ name: 'Renamed', description: 'desc' }),
-			true
-		);
-	});
-
-	it('does not save again on leaving once the pause has saved the edit', async () => {
-		await openWithFakeTimers();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
-		vi.advanceTimersByTime(1000);
-		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
-		fireEvent.click(screen.getByText('Back'));
-		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
-	});
-
-	it('saves nothing on leaving when nothing was edited', async () => {
-		await openWithFakeTimers();
 		fireEvent.click(screen.getByText('Back'));
 		expect(updateKnowledgeById).not.toHaveBeenCalled();
 	});
 
-	it('still refuses an emptied name on leaving, saying so', async () => {
-		const error = vi.spyOn(toast, 'error');
-		await openWithFakeTimers();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: ' ' } });
-		fireEvent.click(screen.getByText('Back'));
+	it('refuses an empty name under the field, saying so', async () => {
+		await openDialog();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: ' ' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		expect(await screen.findByText('Give the knowledge base a name.')).toBeInTheDocument();
+		expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
 		expect(updateKnowledgeById).not.toHaveBeenCalled();
-		expect(error).toHaveBeenCalledWith('Please fill in all fields.');
 	});
 
 	it('shows the saved name when the knowledge base is opened again from the cache', async () => {
@@ -328,23 +376,31 @@ describe('KnowledgeBasePage name and description autosave (#228)', () => {
 		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 		const view = renderPage(client);
 		await screen.findByText('file1.txt');
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		openMenu('More actions');
+		fireEvent.click(await screen.findByText('Edit name and description'));
+		fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Saved "Renamed"'));
 		view.unmount();
-		await waitFor(() => expect(success).toHaveBeenCalledWith('Knowledge updated successfully'));
 		renderPage(client);
 		await screen.findByText('file1.txt');
 		// The background refetch has settled too, so a stale name would stay put.
 		await waitFor(() => expect(client.isFetching()).toBe(0));
-		expect(screen.getByLabelText('Knowledge Name')).toHaveValue('Renamed');
+		expect(screen.getByRole('heading', { name: 'Renamed' })).toBeInTheDocument();
 	});
 
-	it('reports a save made on leaving that the server rejects', async () => {
+	it('reports a save the server rejects and keeps the dialog open', async () => {
 		const error = vi.spyOn(toast, 'error');
-		await openWithFakeTimers();
+		await openDialog();
 		vi.mocked(updateKnowledgeById).mockRejectedValue('Name taken');
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
-		fireEvent.click(screen.getByText('Back'));
-		await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Name taken'));
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith("Couldn't save the name and description. Try again.", {
+				description: expect.anything()
+			})
+		);
+		expect(screen.getByRole('dialog', { name: 'Edit name and description' })).toBeInTheDocument();
 	});
 });
 
@@ -381,7 +437,7 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 
 		send([grant('a')]);
 
-		await waitFor(() => expect(success).toHaveBeenCalledWith('Saved'));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Access saved'));
 		expect(shown()).toBe('a');
 	});
 
@@ -418,7 +474,11 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 
 		send([grant('a')]);
 
-		await waitFor(() => expect(error).toHaveBeenCalledWith('Not allowed'));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith("Couldn't save who has access. The previous access is back.", {
+				description: expect.objectContaining({ props: { detail: 'Not allowed' } })
+			})
+		);
 		expect(shown()).toBe('');
 	});
 
@@ -434,7 +494,11 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 		await waitFor(() => expect(shown()).toBe('b'));
 
 		failFirst('offline');
-		await waitFor(() => expect(error).toHaveBeenCalledWith('offline'));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith("Couldn't save who has access. The previous access is back.", {
+				description: expect.objectContaining({ props: { detail: 'offline' } })
+			})
+		);
 
 		expect(shown()).toBe('b');
 	});
@@ -443,13 +507,254 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 		vi.mocked(updateKnowledgeAccessGrants).mockResolvedValue({ id: 'kb1', access_grants: [grant('a')] });
 		vi.mocked(updateKnowledgeById).mockResolvedValue({ id: 'kb1' } as never);
 		await open();
-		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
 		send([grant('a')]);
 		await waitFor(() => expect(shown()).toBe('a'));
+		openMenu('More actions');
+		fireEvent.click(await screen.findByText('Edit name and description'));
+		fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-		fireEvent.click(screen.getByText('Back'));
-
-		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(updateKnowledgeById).toHaveBeenCalledTimes(1));
 		expect(vi.mocked(updateKnowledgeById).mock.calls[0][2]).not.toHaveProperty('access_grants');
+	});
+});
+
+describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
+	it('asks before removing a file, naming it and what goes with it', async () => {
+		const success = vi.spyOn(toast, 'success');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Remove "file1.txt"?');
+		expect(dialog).toHaveTextContent('Its extracted text and embeddings are deleted.');
+		expect(removeFileFromKnowledgeById).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Remove file' }));
+		await waitFor(() => expect(removeFileFromKnowledgeById).toHaveBeenCalledWith('t', 'kb1', 'f1'));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Removed "file1.txt"'));
+	});
+
+	it('removes nothing when the file confirmation is cancelled', async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(removeFileFromKnowledgeById).not.toHaveBeenCalled();
+	});
+
+	it('says why a removal failed, with the server text behind Details', async () => {
+		const error = vi.spyOn(toast, 'error');
+		vi.mocked(removeFileFromKnowledgeById).mockRejectedValueOnce('boom');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith('Couldn\'t remove "file1.txt".', { description: expect.anything() })
+		);
+	});
+
+	it('names the folder, keeps its files unless asked, and says which happens', async () => {
+		vi.mocked(deleteKnowledgeDirectory).mockResolvedValue({ status: true });
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Folder menu');
+		fireEvent.click(await screen.findByText('Delete'));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Delete the folder "Folder"?');
+		expect(dialog).toHaveTextContent('The files in them move up to the folder above.');
+		const box = screen.getByRole('checkbox', { name: 'Also delete the files inside' });
+		expect(box).not.toBeChecked();
+		fireEvent.click(box);
+		expect(dialog).toHaveTextContent('every file in them are deleted');
+		fireEvent.click(screen.getByRole('button', { name: 'Delete folder' }));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', false));
+	});
+
+	it("moves a deleted folder's files up by default", async () => {
+		vi.mocked(deleteKnowledgeDirectory).mockRejectedValueOnce('kept');
+		const error = vi.spyOn(toast, 'error');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Folder menu');
+		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete folder' }));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', true));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith('Couldn\'t delete the folder "Folder".', { description: expect.anything() })
+		);
+	});
+
+	it('names the knowledge base in the reset confirmation and says what is lost', async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Add content');
+		fireEvent.click(await screen.findByText('Reset knowledge base', { selector: '[role=menuitem]' }));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Reset "KB"?');
+		expect(dialog).toHaveTextContent(
+			'Every file and folder is removed from it, with their extracted text and embeddings.'
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Reset knowledge base' }));
+		await waitFor(() => expect(resetKnowledgeById).toHaveBeenCalled());
+	});
+});
+
+describe('KnowledgeBasePage failed uploads (#907)', () => {
+	it('keeps a failed upload in the list with its reason, Retry and Dismiss', async () => {
+		vi.mocked(uploadFile).mockRejectedValueOnce('Embedding model is not available offline');
+		const { container } = renderPage();
+		await screen.findByText('file1.txt');
+		upload(container, 'notes.txt');
+		expect(await screen.findByText('The server refused the upload.')).toBeInTheDocument();
+		expect(screen.getByText('Embedding model is not available offline')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Retry notes.txt' })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Dismiss notes.txt' }));
+		await waitFor(() => expect(screen.queryByText('The server refused the upload.')).toBeNull());
+	});
+});
+
+describe('KnowledgeBasePage missing or failed base (#1095)', () => {
+	it('says in place that a base no longer exists, with the way back', async () => {
+		vi.mocked(getKnowledgeById).mockResolvedValueOnce(null);
+		renderPage();
+		expect(await screen.findByRole('heading', { name: 'Knowledge base not found' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Back to Knowledge' })).toBeInTheDocument();
+	});
+
+	it('treats the server not-found answer the same way', async () => {
+		vi.mocked(getKnowledgeById).mockRejectedValueOnce("We could not find what you're looking for :/");
+		renderPage();
+		expect(await screen.findByRole('heading', { name: 'Knowledge base not found' })).toBeInTheDocument();
+	});
+
+	it('offers to try again when the base could not be loaded', async () => {
+		vi.mocked(getKnowledgeById).mockRejectedValueOnce('database down');
+		renderPage();
+		expect(await screen.findByText("Couldn't load this knowledge base")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('heading', { name: 'KB' })).toBeInTheDocument();
+	});
+});
+
+describe('KnowledgeBasePage header menu (#1017)', () => {
+	it('copies the id from the menu instead of showing it', async () => {
+		const writeText = vi.fn(async () => undefined);
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+		renderPage();
+		await screen.findByText('file1.txt');
+		expect(screen.queryByText('kb1')).toBeNull();
+		openMenu('More actions');
+		fireEvent.click(await screen.findByText('Copy ID'));
+		await waitFor(() => expect(writeText).toHaveBeenCalledWith('kb1'));
+	});
+
+	it('says what an empty base holds and what matches nothing', async () => {
+		state.files = [];
+		const listing = vi.mocked(searchKnowledgeFilesById).getMockImplementation();
+		onTestFinished(() => {
+			if (listing) vi.mocked(searchKnowledgeFilesById).mockImplementation(listing);
+		});
+		vi.mocked(searchKnowledgeFilesById).mockImplementation(async () => ({
+			items: [],
+			total: 0,
+			directories: [],
+			breadcrumbs: []
+		}));
+		renderPage();
+		expect(await screen.findByText(/No files yet\./)).toBeInTheDocument();
+		const input = document.getElementById('files-input') as HTMLInputElement;
+		const pick = vi.spyOn(input, 'click');
+		fireEvent.click(screen.getByRole('button', { name: 'Upload files' }));
+		expect(pick).toHaveBeenCalled();
+		fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'zzz' } });
+		expect(await screen.findByText('Nothing matches "zzz".')).toBeInTheDocument();
+		// The empty state's own button, besides the field's clear icon.
+		fireEvent.click(screen.getAllByRole('button', { name: 'Clear search' }).at(-1) as HTMLElement);
+		expect(screen.getByLabelText('Search files')).toHaveValue('');
+		expect(await screen.findByText(/No files yet\./)).toBeInTheDocument();
+	});
+});
+
+describe('KnowledgeBasePage file sheet (#1096)', () => {
+	it('opens on the rendered text, and edits only after Edit text', async () => {
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Open file1.txt' }));
+		expect(await screen.findByRole('heading', { name: 'file1.txt' })).toBeInTheDocument();
+		expect(await screen.findByText('text')).toBeInTheDocument();
+		expect(screen.queryByLabelText('File text')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit text' }));
+		const box = await screen.findByLabelText('File text');
+		expect(screen.getByRole('button', { name: 'Save text' })).toBeDisabled();
+		fireEvent.change(box, { target: { value: 'changed' } });
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.queryByLabelText('File text')).toBeNull();
+		expect(screen.getByText('text')).toBeInTheDocument();
+	});
+
+	it('says when a file has no extracted text', async () => {
+		vi.mocked(getFileById).mockResolvedValueOnce({ id: 'f1', data: { content: '' } });
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Open file1.txt' }));
+		expect(await screen.findByText('No text was extracted from this file.')).toBeInTheDocument();
+	});
+});
+
+describe('KnowledgeBasePage add-content dialogs (#1096)', () => {
+	const choose = async (item: string) => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Add content');
+		fireEvent.click(await screen.findByText(item));
+	};
+
+	it('titles the web page dialog after its menu item, with Cancel and Add web page', async () => {
+		await choose('Add a web page');
+		expect(await screen.findByRole('dialog', { name: 'Add a web page' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Add web page' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+	});
+
+	it('adds text as a .txt file, refusing empty fields under them', async () => {
+		await choose('Add text');
+		await screen.findByRole('dialog', { name: 'Add text' });
+		fireEvent.change(screen.getByLabelText('Title'), { target: { value: ' ' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Add text' }));
+		expect(await screen.findByText('Give the text a title.')).toBeInTheDocument();
+		expect(screen.getByText('Write or paste the text to add.')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Notes' } });
+		fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'hello' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Add text' }));
+		await waitFor(() => expect(vi.mocked(uploadFile).mock.calls.at(-1)?.[1].name).toBe('Notes.txt'));
+	});
+
+	it('creates a folder, naming it in the toast, and refuses an empty name', async () => {
+		vi.mocked(createKnowledgeDirectory).mockResolvedValue({ id: 'd2' });
+		const success = vi.spyOn(toast, 'success');
+		await choose('New folder');
+		await screen.findByRole('dialog', { name: 'New folder' });
+		fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
+		expect(await screen.findByText('Give the folder a name.')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Papers' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
+		await waitFor(() => expect(createKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'Papers', null));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Created the folder "Papers"'));
+	});
+});
+
+describe('knowledgeToasts', () => {
+	it('reads the server words from a detail, a message, a string or anything else', async () => {
+		const { errorText } = await import('./knowledgeToasts');
+		expect(errorText({ detail: 'd' })).toBe('d');
+		expect(errorText(new Error('m'))).toBe('m');
+		expect(errorText(' s ')).toBe('s');
+		expect(errorText(42)).toBe('42');
+		expect(errorText('')).toBeNull();
+		expect(errorText(undefined)).toBeNull();
 	});
 });

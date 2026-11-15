@@ -127,7 +127,7 @@ describe('announceContentSaved', () => {
 		const notify = { success: vi.fn(), warning: vi.fn() };
 		announceContentSaved({ failed_knowledge: ['Research', 'Ops'] }, notify);
 		expect(notify.warning).toHaveBeenCalledWith(
-			'File content saved, but these knowledge bases still use the old text: Research, Ops.'
+			'Text saved, but Research, Ops still answer from the old text. Save again to retry.'
 		);
 		announceContentSaved({ failed_knowledge: [] }, notify);
 		announceContentSaved(null, notify);
