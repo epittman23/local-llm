@@ -1,8 +1,8 @@
 import { X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 
 type Tag = { name: string };
 
@@ -22,12 +22,15 @@ export function Tags({
 	tags,
 	suggestionTags = [],
 	disabled = false,
+	id,
 	onAdd,
 	onDelete
 }: {
 	tags: Tag[];
 	suggestionTags?: Array<Tag | string | null | undefined>;
 	disabled?: boolean;
+	/** Give it when a visible `Label` names the field (FRM-1); otherwise it is named "Add a tag". */
+	id?: string;
 	onAdd: (name: string) => void;
 	onDelete: (name: string) => void;
 }) {
@@ -57,7 +60,7 @@ export function Tags({
 	};
 
 	return (
-		<div className="flex w-full flex-wrap items-center gap-1">
+		<div className="flex w-full flex-wrap items-center gap-1.5">
 			{tags.map((tag) =>
 				disabled ? (
 					<span
@@ -77,17 +80,14 @@ export function Tags({
 			{!disabled && (
 				<Popover open={open && suggestions.length > 0} onOpenChange={setOpen}>
 					<PopoverAnchor asChild>
-						<div className="min-w-24 flex-1">
-							<input
+						<div className="min-w-40 flex-1">
+							<Input
 								ref={inputRef}
+								id={id}
 								value={value}
-								className={cn(
-									'placeholder:text-muted-foreground w-full bg-transparent text-xs',
-									tags.length > 0 && 'px-0.5'
-								)}
-								placeholder="Add a tag..."
+								placeholder="Type a tag, then Enter"
 								role="combobox"
-								aria-label="Add a tag"
+								aria-label={id ? undefined : 'Add a tag'}
 								aria-autocomplete="list"
 								aria-expanded={open && suggestions.length > 0}
 								autoComplete="off"
