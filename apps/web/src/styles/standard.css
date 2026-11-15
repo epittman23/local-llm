@@ -384,6 +384,46 @@
 	border-color: transparent;
 	color: var(--foreground-disabled);
 }
+/*
+ * ACT-1, COL-7: a toast's action (Undo, Open) is a secondary action, drawn as
+ * the small outline Button, not sonner's white filled pill. Sonner injects its
+ * own unlayered stylesheet after this one at run time, hence the extra
+ * attribute in each selector. Its hit area grows to 44 px on touch (LAY-3)
+ * without the toast growing, as the close button's does.
+ */
+:root [data-sonner-toast][data-styled="true"] [data-button][data-action] {
+	position: relative;
+	height: var(--control-compact);
+	padding-inline: 0.625rem;
+	border: 1px solid var(--border-control);
+	border-radius: var(--radius-lg);
+	background-color: transparent;
+	color: var(--foreground-strong);
+	font-size: var(--text-dense);
+	line-height: var(--text-dense--line-height);
+	font-weight: var(--font-weight-strong);
+	transition: background-color var(--motion-fast);
+}
+:root [data-sonner-toast][data-styled="true"] [data-button][data-action]:hover {
+	background-color: var(--surface-3);
+}
+:root [data-sonner-toast][data-styled="true"] [data-button][data-action]:focus-visible {
+	box-shadow: none;
+}
+:root[data-focus="keyboard"] [data-sonner-toast][data-styled="true"] [data-button][data-action]:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+:root [data-sonner-toast][data-styled="true"] [data-button][data-action]::after {
+	content: "";
+	position: absolute;
+	inset: -0.25rem;
+}
+@media (pointer: coarse) {
+	:root [data-sonner-toast][data-styled="true"] [data-button][data-action]::after {
+		inset: -0.5rem;
+	}
+}
 /* LAY-3: on touch, every control grows to the 44px target. */
 @media (pointer: coarse) {
 	:root :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
