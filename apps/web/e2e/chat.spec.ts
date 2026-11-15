@@ -254,6 +254,8 @@ test("a reply's steps show inline between its texts, and a new step appears as i
 	const live = page.getByTestId('response-message').last();
 	await expect(live.getByTestId('reply-step')).toHaveAttribute('data-status', 'running');
 	await expect(live.getByTestId('reply-step')).toContainText('wc -l notes.txt');
+	// The reply's spinner sits below it while it runs, showing what it is doing.
+	await expect(live.getByTestId('reply-orb')).toHaveAttribute('data-activity', 'command');
 	chat.event('chat:completion', {
 		output: [
 			...running.slice(0, 1),
@@ -267,6 +269,7 @@ test("a reply's steps show inline between its texts, and a new step appears as i
 		done: true
 	});
 	await expect(live.getByTestId('reply-step')).toHaveAttribute('data-status', 'done');
+	await expect(live.getByTestId('reply-orb')).toHaveCount(0);
 });
 
 test('a missing chat says so in place and keeps its address (#953)', async ({ page }) => {

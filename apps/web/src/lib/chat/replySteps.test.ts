@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { fence, parseResult, reasoningSeconds, replySegments, type Step } from './replySteps';
+import {
+	currentStep,
+	fence,
+	parseResult,
+	reasoningSeconds,
+	replyActivity,
+	replySegments,
+	type Step
+} from './replySteps';
 import type { OutputItem } from './structuredOutput';
 
 const text = (id: string, t: string): OutputItem => ({
@@ -144,8 +152,9 @@ describe('replySegments', () => {
 				id: 'ci',
 				status: 'completed',
 				code: 'print(1)',
+				// The sandbox's {stdout, stderr, result}, where the type expects content parts.
 				output: { stdout: '1\n', stderr: 'warn\n', result: '' }
-			} as OutputItem
+			} as unknown as OutputItem
 		]);
 		expect(code).toMatchObject({ title: 'Ran code', input: '```python\nprint(1)\n```' });
 		expect(code.result).toMatchObject({ type: 'command', stdout: '1\n', stderr: 'warn\n' });
@@ -229,5 +238,37 @@ describe('fence', () => {
 	it('outgrows any backtick run inside', () => {
 		expect(fence('a\n', 'x')).toBe('```x\na\n```');
 		expect(fence('````', '')).toBe('`````\n````\n`````');
+	});
+});
+
+describe('currentStep', () => {
+	it('is the running step, else one waiting on the person, else the last', () => {
+		const [a, b, c] = steps(
+			[
+				call('a', 'bash', { command: 'a' }),
+				result('a', 'ok'),
+				call('b', 'bash', { command: 'b' }),
+				call('c', 'view', { path: '/c' })
+			],
+			false
+		);
+		expect(currentStep([a, b, c]).title).toBe('b');
+		const waiting = steps([call('w', 'bash', { command: 'w' }, { status: 'pending' })]);
+		expect(currentStep([a, ...waiting]).title).toBe('w');
+		expect(currentStep([a]).title).toBe('a');
+	});
+});
+
+describe('replyActivity', () => {
+	it('says what a reply being written is doing', () => {
+		expect(replyActivity([])).toBe('starting');
+		expect(replyActivity([text('m', 'Hel')])).toBe('writing');
+		expect(replyActivity([reasoning('r', 'hm', { status: 'in_progress' })])).toBe('reasoning');
+		expect(replyActivity([call('a', 'bash', { command: 'ls' }, { status: 'in_progress' })])).toBe('command');
+		expect(replyActivity([call('a', 'bash', { command: 'ls' }), result('a', 'ok')])).toBe('between');
+	});
+	it('is null while the reply waits on the person', () => {
+		expect(replyActivity([call('a', 'bash', { command: 'rm' }, { status: 'pending' })])).toBeNull();
+		expect(replyActivity([call('q', 'ask_user', { questions: [] }, { status: 'pending' })])).toBeNull();
 	});
 });

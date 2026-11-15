@@ -18,7 +18,16 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import type { MarkdownEnv } from '@/components/chat/markdown/MarkdownContext';
 import { Button } from '@/components/ui/button';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
-import { fence, replySegments, type Step, type StepKind, type StepResult } from '@/lib/chat/replySteps';
+import {
+	currentStep,
+	fence,
+	type ReplyActivity,
+	replyActivity,
+	replySegments,
+	type Step,
+	type StepKind,
+	type StepResult
+} from '@/lib/chat/replySteps';
 import type { OutputItem } from '@/lib/chat/structuredOutput';
 import { removeAllDetails } from '@/lib/markdown/content';
 import { useUserSettings } from '@/lib/settings/userSettings';
@@ -61,8 +70,9 @@ type Props = {
  * A reply as it happened (StructuredOutputRenderer.svelte): the texts the
  * model wrote, and between them every step it took, one line each, in order.
  * A step opens to show its reasoning, what the tool was given and what came
- * back. While the reply is written the running step says so, so the work can
- * be followed as it goes.
+ * back. Two or more steps in a row are one chain, collapsed to the step it is
+ * at, so a long run reads as the texts with one line between them. While the
+ * reply is written its spinner (ReplyOrb) sits below it.
  */
 export function ReplySteps({
 	id,
@@ -106,16 +116,23 @@ export function ReplySteps({
 					)
 				) : (
 					<ol key={segment.id} className="border-border my-1 flex flex-col border-l pl-2" aria-label="Steps">
-						{segment.steps.map((step) => (
-							<StepRow
-								key={step.id || step.title}
-								step={step}
+						{segment.steps.length > 1 ? (
+							<StepChain
+								steps={segment.steps}
 								chatId={chatId}
 								messageId={messageId}
 								resolvable={resolvable}
 								onToolCallResolved={onToolCallResolved}
 							/>
-						))}
+						) : (
+							<StepRow
+								step={segment.steps[0]}
+								chatId={chatId}
+								messageId={messageId}
+								resolvable={resolvable}
+								onToolCallResolved={onToolCallResolved}
+							/>
+						)}
 					</ol>
 				)
 			)}
@@ -123,21 +140,37 @@ export function ReplySteps({
 	);
 }
 
-/** The animation a running step shows, by what it is doing. */
-const ORBS: Record<StepKind, OrbState> = {
-	reasoning: 'solving',
-	command: 'working',
-	file: 'shaping',
-	search: 'searching',
-	question: 'listening',
-	code: 'working',
-	tool: 'connecting'
+/** The spinner's animation and words, by what the reply is doing. */
+const ACTIVITY: Record<ReplyActivity, { orb: OrbState; label: string }> = {
+	starting: { orb: 'breathing', label: 'Waiting for the reply' },
+	between: { orb: 'breathing', label: 'Working' },
+	writing: { orb: 'composing', label: 'Writing' },
+	reasoning: { orb: 'solving', label: 'Thinking' },
+	command: { orb: 'working', label: 'Running a command' },
+	file: { orb: 'shaping', label: 'Working on a file' },
+	search: { orb: 'searching', label: 'Searching' },
+	question: { orb: 'listening', label: 'Asking you' },
+	code: { orb: 'working', label: 'Running code' },
+	tool: { orb: 'connecting', label: 'Using a tool' }
 };
 
+/**
+ * The reply's spinner: one thinking orb below everything the reply has shown
+ * so far, so it stays at the bottom of the chat as the reply grows, animated
+ * by what the reply is doing. Nothing while the reply waits on the person.
+ */
+export function ReplyOrb({ output }: { output?: OutputItem[] }) {
+	const activity = useMemo(() => replyActivity(output), [output]);
+	if (!activity) return null;
+	const { orb, label } = ACTIVITY[activity];
+	return (
+		<div className="py-2" data-testid="reply-orb" data-activity={activity}>
+			<ThinkingOrb state={orb} size={20} aria-label={label} />
+		</div>
+	);
+}
+
 function StepIndicator({ step }: { step: Step }) {
-	// The row says "Running" to a screen reader, so the orb itself is not announced.
-	if (step.status === 'running')
-		return <ThinkingOrb state={ORBS[step.kind]} size={20} aria-hidden className="-m-0.5 shrink-0" />;
 	const Icon = ICONS[step.kind];
 	return <Icon className="text-foreground-muted size-4 shrink-0" aria-hidden />;
 }
@@ -173,6 +206,74 @@ function StatusWord({ step }: { step: Step }) {
 		default:
 			return null;
 	}
+}
+
+/**
+ * Two or more steps in a row, between two texts: one line naming the step the
+ * chain is at (the running one, else one waiting on the person, else the
+ * last), opening to every step. A chain with a call to approve stays open, so
+ * Allow and Deny are never hidden.
+ */
+function StepChain({
+	steps,
+	chatId,
+	messageId,
+	resolvable,
+	onToolCallResolved
+}: {
+	steps: Step[];
+	chatId?: string;
+	messageId?: string;
+	resolvable: boolean;
+	onToolCallResolved?: () => void;
+}) {
+	const { settings } = useUserSettings();
+	const [open, setOpen] = useState(Boolean((settings as Record<string, unknown> | undefined)?.expandDetails));
+	const current = currentStep(steps);
+	const mustOpen = resolvable && steps.some((s) => s.approvable);
+	const shown = open || mustOpen;
+	const failed = steps.filter((s) => s.status === 'failed').length;
+	return (
+		<li className="flex flex-col" data-testid="step-chain">
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				className="text-foreground-muted w-full justify-start gap-2 px-1.5 text-left font-normal"
+				aria-expanded={shown}
+				onClick={() => setOpen((o) => !o)}
+			>
+				<StepIndicator step={current} />
+				<span className={cn('min-w-0 flex-1 truncate', current.kind === 'command' && 'font-mono text-dense')}>
+					{current.title}
+				</span>
+				{current.meta && <span className="shrink-0 text-caption tabular-nums">{current.meta}</span>}
+				<StatusWord step={current} />
+				{failed > 0 && current.status !== 'failed' && (
+					<span className="text-danger flex shrink-0 items-center gap-1 text-caption">
+						<CircleAlert className="size-3.5" aria-hidden />
+						{failed} failed
+					</span>
+				)}
+				<span className="shrink-0 text-caption tabular-nums">{steps.length} steps</span>
+				{shown ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
+			</Button>
+			{shown && (
+				<ol className="border-border mt-1 ml-3 flex flex-col border-l pl-2" aria-label={`${steps.length} steps`}>
+					{steps.map((step) => (
+						<StepRow
+							key={step.id || step.title}
+							step={step}
+							chatId={chatId}
+							messageId={messageId}
+							resolvable={resolvable}
+							onToolCallResolved={onToolCallResolved}
+						/>
+					))}
+				</ol>
+			)}
+		</li>
+	);
 }
 
 function StepRow({

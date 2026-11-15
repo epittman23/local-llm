@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OutputItem } from '@/lib/chat/structuredOutput';
-import { ReplySteps } from './ReplySteps';
+import { ReplyOrb, ReplySteps } from './ReplySteps';
 
 const resolveChatMessageToolCall = vi.fn();
 vi.mock('@/lib/apis/chats', () => ({
@@ -145,5 +145,85 @@ describe('ReplySteps', () => {
 		render(<ReplySteps id="a1" output={[output[1]]} done plain formatText={(t) => t.replace('file', 'FILE')} />);
 		expect(screen.getByText('Let me look at the FILE.')).toBeTruthy();
 		expect(screen.queryByTestId('markdown')).toBeNull();
+	});
+
+	it('collapses steps in a row to the step the chain is at, and opens to all of them', () => {
+		const chain: OutputItem[] = [
+			{
+				type: 'function_call',
+				id: 'a',
+				call_id: 'a',
+				name: 'bash',
+				arguments: '{"command":"ls"}',
+				status: 'completed'
+			},
+			{
+				type: 'function_call_output',
+				call_id: 'a',
+				output: [{ type: 'input_text', text: '{"returncode":0,"stdout":"x","stderr":""}' }]
+			},
+			{
+				type: 'function_call',
+				id: 'b',
+				call_id: 'b',
+				name: 'view',
+				arguments: '{"path":"/w/x"}',
+				status: 'in_progress'
+			}
+		];
+		render(<ReplySteps id="a1" output={chain} done={false} />);
+		const group = screen.getByTestId('step-chain');
+		const toggle = within(group).getAllByRole('button')[0];
+		expect(toggle.textContent).toContain('Viewed /w/x');
+		expect(toggle.textContent).toContain('Running');
+		expect(toggle.textContent).toContain('2 steps');
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		expect(screen.queryAllByTestId('reply-step')).toHaveLength(0);
+		fireEvent.click(toggle);
+		expect(screen.getAllByTestId('reply-step')).toHaveLength(2);
+	});
+
+	it('keeps a chain open when a call in it waits for approval', () => {
+		const chain: OutputItem[] = [
+			{
+				type: 'function_call',
+				id: 'a',
+				call_id: 'a',
+				name: 'bash',
+				arguments: '{"command":"rm a"}',
+				status: 'pending'
+			},
+			{ type: 'function_call', id: 'b', call_id: 'b', name: 'bash', arguments: '{"command":"rm b"}', status: 'queued' }
+		];
+		render(<ReplySteps id="a1" output={chain} done chatId="c" messageId="m" resolvable />);
+		expect(within(screen.getByTestId('step-chain')).getAllByRole('button')[0].getAttribute('aria-expanded')).toBe(
+			'true'
+		);
+		expect(screen.getByRole('button', { name: 'Allow command' })).toBeTruthy();
+	});
+});
+
+describe('ReplyOrb', () => {
+	it('shows what the reply is doing, and nothing while it waits on the person', () => {
+		const { rerender } = render(<ReplyOrb output={[]} />);
+		expect(screen.getByTestId('reply-orb').dataset.activity).toBe('starting');
+		expect(screen.getByRole('img', { name: 'Waiting for the reply' })).toBeTruthy();
+		rerender(<ReplyOrb output={[output[0], output[1]]} />);
+		expect(screen.getByTestId('reply-orb').dataset.activity).toBe('writing');
+		rerender(
+			<ReplyOrb
+				output={[
+					{
+						type: 'function_call',
+						id: 'p',
+						call_id: 'p',
+						name: 'bash',
+						arguments: '{"command":"rm"}',
+						status: 'pending'
+					}
+				]}
+			/>
+		);
+		expect(screen.queryByTestId('reply-orb')).toBeNull();
 	});
 });

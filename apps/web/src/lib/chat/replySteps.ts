@@ -338,3 +338,31 @@ export function replySegments(output: OutputItem[] = [], replyDone = true): Repl
 	flush();
 	return segments;
 }
+
+/** The step a chain of steps is at: the running one, else one waiting on the person, else the last. */
+export function currentStep(steps: Step[]): Step {
+	return (
+		steps.find((s) => s.status === 'running') ??
+		steps.find((s) => s.status === 'waiting' || s.status === 'queued') ??
+		steps[steps.length - 1]
+	);
+}
+
+/** What a reply that is being written is doing now: nothing yet, writing text, or a kind of step. */
+export type ReplyActivity = 'starting' | 'between' | 'writing' | StepKind;
+
+/**
+ * What the reply's spinner shows while it is written. Null when the reply is
+ * paused on the person (a call waiting for approval or an answer): nothing is
+ * being worked on then.
+ */
+export function replyActivity(output: OutputItem[] = []): ReplyActivity | null {
+	const segments = replySegments(output, false);
+	const steps = segments.flatMap((s) => (s.type === 'steps' ? s.steps : []));
+	if (steps.some((s) => s.status === 'waiting' || s.status === 'queued')) return null;
+	const last = segments.at(-1);
+	if (!last) return 'starting';
+	if (last.type === 'text') return 'writing';
+	const running = last.steps.find((s) => s.status === 'running');
+	return running ? running.kind : 'between';
+}

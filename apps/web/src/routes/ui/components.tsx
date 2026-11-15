@@ -19,7 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Katex } from '@/components/chat/markdown/Katex';
-import { ReplySteps } from '@/components/chat/ReplySteps';
+import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { Gone } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from '@/components/settings/SettingsNav';
@@ -893,10 +893,11 @@ export function ContentSection() {
 			</Example>
 			<Example
 				title="A reply's steps"
-				note="Each step is one line that says what it did; it opens to what it was given and what came back. Only the running step moves."
+				note="Each step is one line that says what it did; steps in a row collapse to the one the chain is at. The orb below the reply is its spinner while it is written."
 			>
 				<div className="max-w-[72ch]">
 					<ReplySteps id="ui-steps" output={SAMPLE_STEPS} done={false} />
+					<ReplyOrb output={SAMPLE_STEPS} />
 				</div>
 			</Example>
 		</Section>

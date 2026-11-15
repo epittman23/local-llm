@@ -568,12 +568,17 @@ done (COL-3): Running, Queued, Failed, Waiting for approval, Waiting for
 your answer, No answer, No result, Denied. A line with nothing more to show
 is text, not a disabled control. Otherwise it opens to the reasoning, what
 the step was given and what came back (output and errors apart, a file in
-its language, inline images in a frame, CNT-4). Only the running step
-moves: a 20 px thinking orb (`thinking-orbs`) in place of its icon, a still
-frame under reduced motion (MOT-2). *Awaiting the owner's decision:* the
-orb is an exception to MOT-1 (it would count as the reply's spinner) and to
-COL-1 (it draws its own monochrome ink for the theme, not a token); until
-that is settled, neither exception is part of the standard.
+its language, inline images in a frame, CNT-4). Two or more steps in a row
+are one chain, collapsed to a line naming the step it is at (the running
+one, else one waiting on the person, else the last) with how many steps it
+holds; a chain with a call to approve stays open. While the reply is
+written, its spinner is one 20 px thinking orb (`thinking-orbs`) below
+everything shown so far, animated by what the reply is doing and named for
+it ("Running a command"), a still frame under reduced motion (MOT-2), and
+gone while the reply waits on the person. *Awaiting the owner's decision:*
+the orb is an exception to MOT-1 (as the reply's spinner) and to COL-1 (it
+draws its own monochrome ink for the theme, not a token); until that is
+settled, neither exception is part of the standard.
 
 ## Canvas
 

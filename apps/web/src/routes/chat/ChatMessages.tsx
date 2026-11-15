@@ -1,8 +1,7 @@
 import { ChevronLeft, ChevronRight, Copy, FileText, RotateCcw } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { ThinkingOrb } from 'thinking-orbs';
 import { Markdown } from '@/components/chat/markdown/Markdown';
-import { ReplySteps } from '@/components/chat/ReplySteps';
+import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
@@ -272,11 +271,7 @@ export function ResponseMessage({
 				</div>
 				<StatusLine message={message} />
 				{edit ??
-					(empty && !message.done ? (
-						<div className="py-2">
-							<ThinkingOrb state="breathing" size={20} aria-label="Waiting for the reply" />
-						</div>
-					) : message.output?.length ? (
+					(empty && !message.done ? null : message.output?.length ? (
 						// The reply as it happened: its texts and every step between them.
 						<ReplySteps
 							id={message.id}
@@ -322,6 +317,8 @@ export function ResponseMessage({
 							}
 						/>
 					))}
+				{/* The reply's spinner, below everything shown so far, while it is written. */}
+				{!edit && message.done === false && !message.error && <ReplyOrb output={message.output} />}
 				{!edit && <SandboxOutputs files={message.files} />}
 				{message.error ? (
 					<div
