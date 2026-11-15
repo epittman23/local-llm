@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { describe, expect, it, vi } from 'vitest';
@@ -124,5 +124,16 @@ describe('ToolsPage counts and empty states', () => {
 		expect(await screen.findByRole('heading', { name: 'No tools yet' })).toBeVisible();
 		fireEvent.click(screen.getByRole('button', { name: 'New tool' }));
 		await waitFor(() => expect(router.state.location.pathname).toBe('/workspace/tools/create'));
+	});
+
+	it('confirms a JSON import by naming the file the code came from (S4-D4)', async () => {
+		vi.mocked(getToolList).mockResolvedValue([tool('a', 'Calculator')]);
+		renderList();
+		await screen.findByText('Calculator');
+		const input = document.getElementById('documents-import-input') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [new File(['[]'], 'tools.json', { type: 'application/json' })] } });
+		const dialog = await screen.findByRole('alertdialog');
+		expect(within(dialog).getByRole('heading')).toHaveTextContent('Create tools from “tools.json”?');
+		expect(within(dialog).getByRole('button', { name: 'Create tools' })).toBeVisible();
 	});
 });

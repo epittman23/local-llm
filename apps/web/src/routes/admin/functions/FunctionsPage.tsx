@@ -272,7 +272,9 @@ export function FunctionsPage() {
 						clearImportInput();
 					}
 				}}
-				title="Confirm"
+				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
+				title={`Create functions from “${pendingImport?.name ?? ''}”?`}
+				confirmLabel="Create functions"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);

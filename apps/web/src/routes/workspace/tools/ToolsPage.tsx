@@ -222,7 +222,9 @@ export function ToolsPage() {
 						if (importInput.current) importInput.current.value = '';
 					}
 				}}
-				title="Confirm"
+				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
+				title={`Create tools from “${pendingImport?.name ?? ''}”?`}
+				confirmLabel="Create tools"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);
