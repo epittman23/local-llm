@@ -56,20 +56,27 @@ export function FunctionEditor({
 	const editor = useRef<CodeEditorHandle>(null);
 	const codeHelp = useId();
 
-	const [name, setName] = useState(fn?.name ?? '');
-	const [id, setId] = useState(fn?.id ?? '');
-	const [meta, setMeta] = useState(fn?.meta ?? { description: '' });
+	// A new function starts with the name, ID and description its boilerplate's
+	// header gives, so the untouched page is not a change (#905): taken before
+	// the editor reports the boilerplate, not after.
+	const [seed] = useState(() => {
+		if (fn) return { name: fn.name ?? '', id: fn.id ?? '', description: fn.meta?.description ?? '' };
+		const fm = extractFrontmatter(filterBoilerplate);
+		return {
+			name: fm.title ? formatSkillName(fm.title) : '',
+			id: fm.title ? nameToId(fm.title) : '',
+			description: fm.description ?? ''
+		};
+	});
+	const [name, setName] = useState(seed.name);
+	const [id, setId] = useState(seed.id);
+	const [meta, setMeta] = useState(fn?.meta ?? { description: seed.description });
 	const [starter, setStarter] = useState<Starter>('filter');
 	// `code` is what the editor holds now, for a save right after a format; `codeNow` renders it.
 	const code = useRef(fn?.content || filterBoilerplate);
 	const [codeNow, setCodeNow] = useState(code.current);
 	// What Discard goes back to and "saved" compares with (see ToolkitEditor).
-	const [saved, setSaved] = useState(() => ({
-		name: fn?.name ?? '',
-		id: fn?.id ?? '',
-		description: fn?.meta?.description ?? '',
-		content: code.current
-	}));
+	const [saved, setSaved] = useState(() => ({ ...seed, content: code.current }));
 	const dirty =
 		(!edit && fn !== null) ||
 		name !== saved.name ||

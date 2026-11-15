@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { FunctionEditor } from './FunctionEditor';
+import { filterBoilerplate } from './functionBoilerplate';
 
 // The code editor, reduced to what FunctionEditor gives it: every onChange it
 // was rendered with, oldest first.
@@ -39,11 +40,22 @@ describe('FunctionEditor (create): the code header fills only a blank name or de
 		onChanges.length = 0;
 	});
 
+	it('starts from the boilerplate header, and an untouched page is not a change (#905)', async () => {
+		show();
+		expect(await screen.findByLabelText('Function name')).toHaveValue('Example Filter');
+		expect(screen.getByLabelText('Function ID')).toHaveValue('example_filter');
+		await vi.waitFor(() => expect(onChanges.length).toBeGreaterThan(0));
+		// The editor reports its seeded boilerplate, as CodeMirror does on mount.
+		act(() => onChanges[0](filterBoilerplate));
+		expect(screen.getByRole('button', { name: 'Create function' })).toBeDisabled();
+		expect(screen.getByText('Nothing to save yet')).toBeInTheDocument();
+	});
+
 	it('fills a blank name and description from the code header', async () => {
 		show();
-		await screen.findByLabelText('Function name');
+		fireEvent.change(await screen.findByLabelText('Function name'), { target: { value: '' } });
 		await vi.waitFor(() => expect(onChanges.length).toBeGreaterThan(0));
-		act(() => onChanges[0](code));
+		act(() => onChanges[onChanges.length - 1](code));
 		expect(screen.getByLabelText('Function name')).toHaveValue('Example Filter');
 		expect(screen.getByLabelText('Function ID')).toHaveValue('example_filter');
 		expect(screen.getByLabelText('Function description')).toHaveValue('Filters things');
