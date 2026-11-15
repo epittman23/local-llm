@@ -73,6 +73,19 @@ describe('ModelSelector: the list (NAV-5, #943)', () => {
 		expect(screen.queryByRole('listbox')).toBeNull();
 	});
 
+	it('keeps the picker when another model is chosen, so focus returns to it (NAV-4)', async () => {
+		const { onChange, view } = show(['coder']);
+		open('Coder');
+		const before = screen.getByRole('button', { name: 'Model: Coder' });
+		fireEvent.click(screen.getByRole('option', { name: /Math/ }));
+		view.rerender(
+			<TooltipProvider>
+				<ModelSelector models={MODELS} selected={onChange.mock.calls[0][0]} onChange={onChange} />
+			</TooltipProvider>
+		);
+		expect(screen.getByRole('button', { name: 'Model: Math' })).toBe(before);
+	});
+
 	it('picks the model pressed, and says when nothing matches', () => {
 		const { onChange } = show();
 		open('Coder');

@@ -362,11 +362,12 @@ export function ModelSelector({
 		// The start inset keeps the first row clear of the shell's floating menu
 		// button on a short phone screen (AppShell, A11Y-5).
 		<div ref={root} className="flex min-w-0 flex-col items-start gap-0.5 ps-[var(--shell-menu-inset,0px)]">
-			{withKeys(slots).map(({ id, i: idx, key }) => {
+			{slots.map((id, idx) => {
 				const stored = idx < selected.length;
 				const invalid = stored && !id && openSlot !== idx;
 				return (
-					<div key={key} className="flex max-w-full flex-col items-start">
+					// Keyed by position: choosing another model keeps the row, and focus returns to its picker.
+					<div key={idx} className="flex max-w-full flex-col items-start">
 						<div className="flex max-w-full items-center gap-1">
 							<Popover
 								open={openSlot === idx}
