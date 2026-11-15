@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getToolValvesById, getToolValvesSpecById, updateToolValvesById } from '@/lib/apis/tools';
+import {
+	getToolValvesById,
+	getToolValvesSpecById,
+	getUserValvesById,
+	getUserValvesSpecById,
+	updateToolValvesById
+} from '@/lib/apis/tools';
 import { ValvesModal } from './ValvesModal';
 
 vi.mock('@/lib/apis/tools', () => ({
@@ -43,6 +49,21 @@ describe('ValvesModal (#1016, WRD-2)', () => {
 			})
 		);
 		expect(success).toHaveBeenCalledWith('Settings for Unit converter saved');
+	});
+
+	it("says in a sentence whose settings these are: the tool's, or the user's own", async () => {
+		vi.mocked(getToolValvesById).mockResolvedValue({});
+		vi.mocked(getToolValvesSpecById).mockResolvedValue(spec);
+		vi.mocked(getUserValvesById).mockResolvedValue({});
+		vi.mocked(getUserValvesSpecById).mockResolvedValue(spec);
+		const { unmount } = show();
+		expect(screen.getByText('Settings this tool takes. Leave a field empty to use its default.')).toBeInTheDocument();
+		unmount();
+		render(<ValvesModal open onOpenChange={vi.fn()} id="calc" name="Unit converter" userValves />);
+		expect(
+			screen.getByText('Your own settings for this tool. Leave a field empty to use its default.')
+		).toBeInTheDocument();
+		await screen.findByLabelText('Tags');
 	});
 
 	it('says a tool has no settings, with Save off', async () => {

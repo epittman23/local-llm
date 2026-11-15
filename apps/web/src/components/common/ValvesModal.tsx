@@ -130,8 +130,8 @@ export function ValvesModal({
 				<DialogHeader className="shrink-0 border-b px-5 pt-5 pb-3">
 					<DialogTitle>{name ? `Settings for ${name}` : 'Settings'}</DialogTitle>
 					<DialogDescription>
-						{userValves ? 'Your own settings for this ' : 'Settings this '}
-						{type} takes. Leave a field empty to use its default.
+						{userValves ? `Your own settings for this ${type}.` : `Settings this ${type} takes.`} Leave a field empty to
+						use its default.
 					</DialogDescription>
 				</DialogHeader>
 				<form
