@@ -7,10 +7,12 @@ import { acknowledgement, type CodeSource } from '@/components/common/codeSource
 import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
-import { LineTextarea } from '@/components/ui/textarea';
+import { LineTextarea, Textarea } from '@/components/ui/textarea';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
@@ -90,6 +92,19 @@ export function FunctionEditor({
 	// Shown in place of the code's help line: Black's parse error, or why the save failed.
 	const [problem, setProblem] = useState<EditorProblem | null>(null);
 	const onParseError = (error: CodeParseError | null) => setProblem(error ? parseProblem(error) : null);
+	// FRM-2: the fields are checked here and say what is wrong under themselves (#1010).
+	const {
+		errors,
+		field,
+		submit: checkFields,
+		reset: resetErrors
+	} = useFieldErrors(
+		{
+			name: name.trim() ? undefined : 'Enter a name for this function.',
+			id: edit || id.trim() ? undefined : 'Enter an ID: it names the function in the API.'
+		},
+		['name', 'id'] as const
+	);
 
 	// The name as of now, for onCodeChange: the code editor can report its
 	// seeded boilerplate through a callback from a render before the user typed a
@@ -146,6 +161,7 @@ export function FunctionEditor({
 	};
 
 	const discard = () => {
+		resetErrors();
 		setName(saved.name);
 		nameNow.current = saved.name;
 		setId(saved.id);
@@ -174,8 +190,10 @@ export function FunctionEditor({
 			<form
 				ref={form}
 				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
+					if (!checkFields()) return;
 					// Code from elsewhere is acknowledged before it is created; code written
 					// here is the person's own, and saves without asking (S4-D4).
 					if (!edit && clone) setShowConfirm(true);
@@ -201,9 +219,11 @@ export function FunctionEditor({
 								id="function-name"
 								placeholder="e.g. My Filter"
 								value={name}
-								required
 								onChange={(e) => onNameChange(e.target.value)}
+								{...field('name')}
+								{...fieldProps('function-name-note', { error: errors.name })}
 							/>
+							<FieldMessage id="function-name-note" error={errors.name} />
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
@@ -223,20 +243,25 @@ export function FunctionEditor({
 										type="text"
 										placeholder="e.g. my_filter"
 										value={id}
-										required
 										onChange={(e) => setId(e.target.value)}
+										{...field('id')}
+										{...fieldProps('function-id-note', { error: errors.id })}
 									/>
+									<FieldMessage id="function-id-note" error={errors.id} />
 								</>
 							)}
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
-							<Label htmlFor="function-description">Function description</Label>
-							<Input
+							<Label htmlFor="function-description">
+								Function description <span className="text-foreground-muted font-normal">(optional)</span>
+							</Label>
+							<Textarea
 								id="function-description"
-								type="text"
+								rows={2}
+								// Two lines, growing with the text to six, then scrolling (FRM-1).
+								className="max-h-40 resize-none"
 								placeholder="e.g. A filter to remove profanity from text"
 								value={meta.description}
-								required
 								onChange={(e) => setMeta({ ...meta, description: e.target.value })}
 							/>
 						</div>

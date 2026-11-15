@@ -134,7 +134,7 @@ describe('ToolkitEditor fields (#1057, #983)', () => {
 		expect(name).toHaveAttribute('data-slot', 'textarea'); // the shared Textarea, one line that wraps (#958)
 		expect(name).toHaveAttribute('placeholder', 'e.g. My Tools');
 		expect(screen.getByLabelText('Tool ID')).toHaveClass('font-mono');
-		expect(screen.getByLabelText('Tool description')).toHaveValue('d');
+		expect(screen.getByLabelText(/^Tool description/)).toHaveValue('d');
 		expect(screen.getByText('Tool name').tagName).toBe('LABEL');
 	});
 
@@ -142,10 +142,10 @@ describe('ToolkitEditor fields (#1057, #983)', () => {
 		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave: vi.fn() });
 		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Unit Converter' } });
 		fireEvent.change(screen.getByLabelText('Tool ID'), { target: { value: 'units' } });
-		fireEvent.change(screen.getByLabelText('Tool description'), { target: { value: 'Converts units' } });
+		fireEvent.change(screen.getByLabelText(/^Tool description/), { target: { value: 'Converts units' } });
 		expect(screen.getByLabelText('Tool name')).toHaveValue('Unit Converter');
 		expect(screen.getByLabelText('Tool ID')).toHaveValue('units');
-		expect(screen.getByLabelText('Tool description')).toHaveValue('Converts units');
+		expect(screen.getByLabelText(/^Tool description/)).toHaveValue('Converts units');
 	});
 
 	it('shows a created tool’s fixed id as text, not as a field', () => {
@@ -224,7 +224,7 @@ describe('ToolkitEditor acknowledgement (#1098, S4-D4)', () => {
 		const onSave = vi.fn().mockResolvedValue(false);
 		renderEditor({ tool: null, onSave });
 		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Mine' } });
-		fireEvent.change(screen.getByLabelText('Tool description'), { target: { value: 'Mine' } });
+		fireEvent.change(screen.getByLabelText(/^Tool description/), { target: { value: 'Mine' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Create tool' }));
 		await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
 		expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -261,9 +261,26 @@ describe('ToolkitEditor with one account (#1013, S4-D1)', () => {
 describe('ToolkitEditor description (#958)', () => {
 	it('is a two-line field that grows with its text', () => {
 		renderEditor({ tool, edit: true, onSave: vi.fn() });
-		const description = screen.getByLabelText('Tool description');
+		const description = screen.getByLabelText(/^Tool description/);
 		expect(description.tagName).toBe('TEXTAREA');
 		expect(description).toHaveAttribute('rows', '2');
 		expect(description).toHaveClass('max-h-40');
+	});
+});
+
+describe('ToolkitEditor validation (#1010, FRM-2)', () => {
+	it('checks the name and ID under themselves, not with a browser bubble, and the description is optional', () => {
+		const onSave = vi.fn();
+		renderEditor({ tool: { ...tool, id: '', name: '' }, edit: false, onSave });
+		const name = screen.getByLabelText('Tool name');
+		expect(name.closest('form')).toHaveAttribute('novalidate');
+		expect(screen.getByLabelText(/^Tool description/)).not.toBeRequired();
+		expect(screen.getByLabelText(/^Tool description/)).toHaveAccessibleName('Tool description (optional)');
+		fireEvent.blur(name);
+		expect(name).toHaveAccessibleDescription('Enter a name for this tool.');
+		fireEvent.submit(name.closest('form') as HTMLFormElement);
+		expect(screen.getByLabelText('Tool ID')).toHaveAccessibleDescription('Enter an ID: it names the tool in the API.');
+		expect(document.activeElement).toBe(name);
+		expect(onSave).not.toHaveBeenCalled();
 	});
 });

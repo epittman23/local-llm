@@ -365,6 +365,11 @@ line 'Choose a model or remove this one' under it, and sending opens that
 picker instead of a toast. The line under a field is
 `components/ui/field-message.tsx` (`FieldMessage`, with `fieldProps(id,
 { error, help })` for the field's `aria-describedby` and `aria-invalid`).
+A form is `noValidate` and never shows the browser's bubbles; one without
+validation of its own uses `lib/ui/useFieldErrors(problems, order)`, which
+shows a field's error once it is left or the form submitted, clears it when
+put right, and on submit focuses the first wrong field. A field the API does
+not require is marked '(optional)', never `required`.
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads

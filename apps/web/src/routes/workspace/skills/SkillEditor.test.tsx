@@ -321,15 +321,37 @@ describe('SkillEditor instructions (#1094)', () => {
 		expect(screen.getByLabelText('Skill instructions')).toHaveValue('# Steps\n\n- **Read** the diff');
 	});
 
-	it('says there is nothing to preview yet, and sends an empty draft back to Write on save', () => {
+	it('says there is nothing to preview yet, and sends an empty draft back to Write on save', async () => {
 		const onSubmit = vi.fn();
 		renderEditor({ skill: null, onSubmit });
 		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'New' } });
 		fireEvent.click(screen.getByRole('radio', { name: 'Preview' }));
 		expect(screen.getByText('Nothing to preview yet. Write the instructions first.')).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
-		expect(screen.getByLabelText('Skill instructions')).toBeInTheDocument();
+		const instructions = screen.getByLabelText('Skill instructions');
+		expect(instructions).toHaveAttribute('aria-invalid', 'true');
+		expect(instructions).toHaveAccessibleDescription(
+			'Write the instructions: the model reads them when this skill is on.'
+		);
+		await waitFor(() => expect(document.activeElement).toBe(instructions));
 		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it('checks the name and ID under themselves, never with a browser bubble (#1010, FRM-2)', () => {
+		const onSubmit = vi.fn();
+		renderEditor({ skill: null, onSubmit });
+		const name = screen.getByLabelText('Skill name');
+		expect(name.closest('form')).toHaveAttribute('novalidate');
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'Read the diff.' } });
+		fireEvent.submit(name.closest('form') as HTMLFormElement);
+		expect(name).toHaveAccessibleDescription('Enter a name for this skill.');
+		expect(screen.getByLabelText('Skill ID')).toHaveAccessibleDescription(
+			'Enter an ID: it names the skill in the API.'
+		);
+		expect(document.activeElement).toBe(name);
+		expect(onSubmit).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(name).not.toHaveAttribute('aria-invalid');
 	});
 
 	it('counts one character in the singular', () => {

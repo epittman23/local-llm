@@ -9,6 +9,7 @@ import { acknowledgement, type CodeSource } from '@/components/common/codeSource
 import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
@@ -16,6 +17,7 @@ import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
@@ -104,6 +106,19 @@ export function ToolkitEditor({
 	// Shown in place of the code's help line: Black's parse error, or why the save failed.
 	const [problem, setProblem] = useState<EditorProblem | null>(null);
 	const onParseError = (error: CodeParseError | null) => setProblem(error ? parseProblem(error) : null);
+	// FRM-2: the fields are checked here and say what is wrong under themselves (#1010).
+	const {
+		errors,
+		field,
+		submit: checkFields,
+		reset: resetErrors
+	} = useFieldErrors(
+		{
+			name: name.trim() ? undefined : 'Enter a name for this tool.',
+			id: edit || id.trim() ? undefined : 'Enter an ID: it names the tool in the API.'
+		},
+		['name', 'id'] as const
+	);
 
 	const onNameChange = (value: string) => {
 		setName(value);
@@ -147,6 +162,7 @@ export function ToolkitEditor({
 	};
 
 	const discard = () => {
+		resetErrors();
 		setName(saved.name);
 		setId(saved.id);
 		setMeta((m) => ({ ...m, description: saved.description }));
@@ -186,8 +202,10 @@ export function ToolkitEditor({
 			<form
 				ref={form}
 				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
+					if (!checkFields()) return;
 					// Code from elsewhere is acknowledged before it is created; code written
 					// here is the person's own, and saves without asking (S4-D4).
 					if (!edit && clone) setShowConfirm(true);
@@ -213,9 +231,11 @@ export function ToolkitEditor({
 								id="tool-name"
 								placeholder="e.g. My Tools"
 								value={name}
-								required
 								onChange={(e) => onNameChange(e.target.value)}
+								{...field('name')}
+								{...fieldProps('tool-name-note', { error: errors.name })}
 							/>
+							<FieldMessage id="tool-name-note" error={errors.name} />
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
@@ -235,14 +255,18 @@ export function ToolkitEditor({
 										type="text"
 										placeholder="e.g. my_tools"
 										value={id}
-										required
 										onChange={(e) => setId(e.target.value)}
+										{...field('id')}
+										{...fieldProps('tool-id-note', { error: errors.id })}
 									/>
+									<FieldMessage id="tool-id-note" error={errors.id} />
 								</>
 							)}
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
-							<Label htmlFor="tool-description">Tool description</Label>
+							<Label htmlFor="tool-description">
+								Tool description <span className="text-foreground-muted font-normal">(optional)</span>
+							</Label>
 							<Textarea
 								id="tool-description"
 								rows={2}
@@ -250,7 +274,6 @@ export function ToolkitEditor({
 								className="max-h-40 resize-none"
 								placeholder="e.g. Tools for performing various operations"
 								value={meta.description}
-								required
 								onChange={(e) => setMeta({ ...meta, description: e.target.value })}
 							/>
 						</div>

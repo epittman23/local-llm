@@ -6,6 +6,7 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { EditorError, type EditorProblem, saveProblem } from '@/components/common/EditorError';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
@@ -14,6 +15,7 @@ import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { slugify } from '@/lib/utils';
 import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
@@ -96,6 +98,20 @@ export function SkillEditor({
 			description !== saved.description ||
 			content !== saved.content);
 	const { dialog: leaveDialog, allowNext } = useUnsavedChanges(dirty);
+	// FRM-2: the fields are checked here and say what is wrong under themselves (#1010).
+	const {
+		errors,
+		field,
+		submit: checkFields,
+		reset: resetErrors
+	} = useFieldErrors(
+		{
+			name: name.trim() ? undefined : 'Enter a name for this skill.',
+			id: edit || id.trim() ? undefined : 'Enter an ID: it names the skill in the API.',
+			content: content.trim() ? undefined : 'Write the instructions: the model reads them when this skill is on.'
+		},
+		['name', 'id', 'content'] as const
+	);
 
 	const onNameChange = (value: string) => {
 		setName(value);
@@ -141,6 +157,7 @@ export function SkillEditor({
 	};
 
 	const discard = () => {
+		resetErrors();
 		setName(saved.name);
 		setId(saved.id);
 		setDescription(saved.description);
@@ -164,14 +181,12 @@ export function SkillEditor({
 
 			<form
 				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
-					// Required instructions are checked by the field, which only Write shows.
-					if (view === 'preview' && !content.trim()) {
-						setView('write');
-						return;
-					}
-					submit();
+					// Missing instructions are pointed out in Write, the view that has the field.
+					if (!content.trim()) setView('write');
+					if (checkFields()) submit();
 				}}
 			>
 				<Button
@@ -193,10 +208,12 @@ export function SkillEditor({
 								id="skill-name"
 								placeholder="e.g. Code Review Guidelines"
 								value={name}
-								required
 								disabled={disabled}
 								onChange={(e) => onNameChange(e.target.value)}
+								{...field('name')}
+								{...fieldProps('skill-name-note', { error: errors.name })}
 							/>
+							<FieldMessage id="skill-name-note" error={errors.name} />
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5">
 							{edit ? (
@@ -216,9 +233,11 @@ export function SkillEditor({
 										type="text"
 										placeholder="e.g. code-review-guidelines"
 										value={id}
-										required
 										onChange={(e) => setId(e.target.value)}
+										{...field('id')}
+										{...fieldProps('skill-id-note', { error: errors.id })}
 									/>
+									<FieldMessage id="skill-id-note" error={errors.id} />
 								</>
 							)}
 						</div>
@@ -279,7 +298,8 @@ export function SkillEditor({
 							onChange={(e) => onContentChange(e.target.value)}
 							placeholder="e.g. Read the diff first, then list risks before style notes."
 							aria-describedby={instructionsHelp}
-							required
+							aria-invalid={errors.content ? true : undefined}
+							{...field('content')}
 						/>
 					) : (
 						<div className="h-full overflow-y-auto px-3 py-2" data-testid="skill-preview">
@@ -291,11 +311,14 @@ export function SkillEditor({
 						</div>
 					)}
 				</div>
-				{!disabled && (
-					<p id={instructionsHelp} className="text-foreground-muted text-dense shrink-0 px-1 pt-1.5">
-						Shown to the model when this skill is on. Markdown. {size(content)}
-					</p>
-				)}
+				{!disabled &&
+					(errors.content ? (
+						<FieldMessage id={instructionsHelp} error={errors.content} className="shrink-0 px-1 pt-1.5" />
+					) : (
+						<p id={instructionsHelp} className="text-foreground-muted text-dense shrink-0 px-1 pt-1.5">
+							Shown to the model when this skill is on. Markdown. {size(content)}
+						</p>
+					))}
 
 				{problem && <EditorError id={problemId} problem={problem} />}
 				{!disabled && (

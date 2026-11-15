@@ -58,7 +58,7 @@ describe('FunctionEditor (create): the code header fills only a blank name or de
 		act(() => onChanges[onChanges.length - 1](code));
 		expect(screen.getByLabelText('Function name')).toHaveValue('Example Filter');
 		expect(screen.getByLabelText('Function ID')).toHaveValue('example_filter');
-		expect(screen.getByLabelText('Function description')).toHaveValue('Filters things');
+		expect(screen.getByLabelText(/^Function description/)).toHaveValue('Filters things');
 	});
 
 	it('keeps a typed name when the editor reports through a callback from before it was typed', async () => {
@@ -70,11 +70,11 @@ describe('FunctionEditor (create): the code header fills only a blank name or de
 		await vi.waitFor(() => expect(onChanges.length).toBeGreaterThan(0));
 		const stale = onChanges[0];
 		fireEvent.change(screen.getByLabelText('Function name'), { target: { value: 'Mine' } });
-		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'My own' } });
+		fireEvent.change(screen.getByLabelText(/^Function description/), { target: { value: 'My own' } });
 		act(() => stale(code));
 		expect(screen.getByLabelText('Function name')).toHaveValue('Mine');
 		expect(screen.getByLabelText('Function ID')).toHaveValue('mine');
-		expect(screen.getByLabelText('Function description')).toHaveValue('My own');
+		expect(screen.getByLabelText(/^Function description/)).toHaveValue('My own');
 	});
 });
 
@@ -87,8 +87,11 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 		expect(name).toHaveAttribute('data-slot', 'textarea'); // the shared Textarea, one line that wraps (#958)
 		expect(name).toHaveAttribute('placeholder', 'e.g. My Filter');
 		expect(screen.getByLabelText('Function ID')).toHaveAttribute('placeholder', 'e.g. my_filter');
-		expect(screen.getByLabelText('Function description')).toBeRequired();
-		expect(screen.getByText('Function description').tagName).toBe('LABEL');
+		// The API stores a function without a description, so it is optional, and a multi-line field.
+		const description = screen.getByLabelText(/^Function description/);
+		expect(description).not.toBeRequired();
+		expect(description.tagName).toBe('TEXTAREA');
+		expect(screen.getByText('(optional)').closest('label')).toHaveAttribute('for', 'function-description');
 	});
 
 	it('takes a hand-typed id', async () => {
@@ -168,7 +171,7 @@ describe('FunctionEditor saves on request (#905, #1011, FRM-3)', () => {
 		);
 		render(<RouterProvider router={router} />);
 		expect(await screen.findByRole('button', { name: 'Save changes' })).toBeDisabled();
-		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'changed' } });
+		fireEvent.change(screen.getByLabelText(/^Function description/), { target: { value: 'changed' } });
 		expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
 		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 		expect(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
@@ -194,7 +197,7 @@ describe('FunctionEditor saves on request (#905, #1011, FRM-3)', () => {
 		);
 		render(<RouterProvider router={router} />);
 		fireEvent.change(await screen.findByLabelText('Function name'), { target: { value: 'Mine' } });
-		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'Mine' } });
+		fireEvent.change(screen.getByLabelText(/^Function description/), { target: { value: 'Mine' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Create function' }));
 		// Code written here is the person's own: no acknowledgement (S4-D4).
 		expect(await screen.findByText('Functions list')).toBeInTheDocument();
@@ -226,5 +229,36 @@ describe('FunctionEditor acknowledgement (#1098, S4-D4)', () => {
 		expect(onSave).not.toHaveBeenCalled();
 		fireEvent.click(within(ack).getByRole('button', { name: 'Create function' }));
 		await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+	});
+});
+
+describe('FunctionEditor validation (#1010, FRM-2)', () => {
+	afterEach(cleanup);
+	it('says what is missing under each field, with no browser bubble, focuses the first, and sends nothing', async () => {
+		const onSave = vi.fn();
+		render(
+			<Routed>
+				<TooltipProvider>
+					<FunctionEditor fn={null} onSave={onSave} />
+				</TooltipProvider>
+			</Routed>
+		);
+		const name = await screen.findByLabelText('Function name');
+		expect(name.closest('form')).toHaveAttribute('novalidate');
+		expect(name).not.toBeRequired();
+		fireEvent.change(name, { target: { value: '' } });
+		fireEvent.change(screen.getByLabelText('Function ID'), { target: { value: '' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create function' }));
+		expect(name).toHaveAttribute('aria-invalid', 'true');
+		expect(name).toHaveAccessibleDescription('Enter a name for this function.');
+		expect(screen.getByLabelText('Function ID')).toHaveAccessibleDescription(
+			'Enter an ID: it names the function in the API.'
+		);
+		expect(document.activeElement).toBe(name);
+		expect(onSave).not.toHaveBeenCalled();
+		fireEvent.change(name, { target: { value: 'Redact' } });
+		expect(name).not.toHaveAttribute('aria-invalid');
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Function ID')).not.toHaveAttribute('aria-invalid');
 	});
 });
