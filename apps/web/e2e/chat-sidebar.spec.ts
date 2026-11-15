@@ -170,3 +170,35 @@ test('folders: create, edit with a system prompt, and delete', async ({ page }) 
 	await page.getByRole('dialog', { name: 'Delete folder?' }).getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' })).toHaveCount(0);
 });
+
+test.describe('on a touch phone', () => {
+	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+	test('the drawer shows every destination name whole, since touch has no tooltips (TYP-7, OVL-4)', async ({
+		page
+	}) => {
+		const features = {
+			enable_notes: true,
+			enable_calendar: true,
+			enable_automations: true,
+			enable_benchmarks: true
+		};
+		await mockChat(page, { chats: chats(), folders, user: { role: 'admin', features } });
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Open navigation menu' }).click();
+		const destinations = page.getByRole('dialog', { name: 'Navigation' }).getByRole('list', { name: 'Destinations' });
+		const links = destinations.getByRole('link');
+		await expect(links.filter({ hasText: 'Automations' })).toBeVisible();
+		await expect(links.filter({ hasText: 'Benchmarks' })).toBeVisible();
+		for (const link of await links.all()) {
+			const label = link.locator('span');
+			const { name, fits, oneLine } = await label.evaluate((el) => ({
+				name: el.textContent,
+				fits: el.scrollWidth <= el.clientWidth,
+				oneLine: el.getClientRects().length === 1 && el.getBoundingClientRect().height < 24
+			}));
+			expect(fits, `${name} fits its column`).toBe(true);
+			expect(oneLine, `${name} sits on one line`).toBe(true);
+		}
+	});
+});

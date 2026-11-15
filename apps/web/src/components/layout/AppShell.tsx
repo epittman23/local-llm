@@ -148,8 +148,12 @@ export function AppShell() {
 								<PanelLeft className="h-5 w-5" />
 							</Button>
 						</SheetTrigger>
-						{/* 256 px, as the desktop sidebar: the variant's own width is `data-[side=left]:w-3/4`. */}
-						<SheetContent side="left" className="gap-0 p-0 data-[side=left]:w-64">
+						{/*
+						 * 320 px, or 85% of a narrower screen, so that on touch every destination's
+						 * name fits beside its icon in two columns (TYP-7, OVL-4); the variant's own
+						 * width is `data-[side=left]:w-3/4`.
+						 */}
+						<SheetContent side="left" className="gap-0 p-0 data-[side=left]:w-[min(20rem,85vw)]">
 							<SheetTitle className="sr-only">Navigation</SheetTitle>
 							<SidebarContent onNavigate={closeDrawer} />
 						</SheetContent>

@@ -101,6 +101,9 @@ describe('SidebarContent layout', () => {
 		expect(screen.getByRole('list', { name: 'Destinations' }).className).toContain('grid-cols-8');
 		// The name is hidden with a pointer, where the tooltip shows it, and shown on touch (OVL-4).
 		expect(group.getByText('Workspace').className).toContain('pointer-fine:sr-only');
+		// On touch nothing cuts a name off without a tooltip to show the rest: it wraps instead (TYP-7).
+		expect(group.getByText('Benchmarks')).not.toHaveClass('truncate');
+		expect(group.getByText('Benchmarks')).toHaveClass('wrap-break-word');
 		expect(screen.getByRole('list', { name: 'Destinations' }).className).toContain('pointer-coarse:grid-cols-2');
 		useConfigStore.setState({ config: null });
 	});

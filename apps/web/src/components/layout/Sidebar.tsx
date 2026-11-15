@@ -186,7 +186,10 @@ export function SidebarRail() {
 /**
  * A destination at the foot of the sidebar (#931). With a pointer it is an
  * icon whose name is its tooltip (ACT-4); on touch, where there are no
- * tooltips (OVL-4), the name shows beside the icon in a two-column grid.
+ * tooltips (OVL-4), the name shows beside the icon in a two-column grid. The
+ * drawer is wide enough for every name on one line; a name that still does
+ * not fit (a narrow touch screen's sidebar) wraps rather than being cut off,
+ * since there is no tooltip to show the rest (TYP-7).
  */
 function Destination({
 	to,
@@ -210,7 +213,7 @@ function Destination({
 				className="text-body text-foreground-strong hover:bg-surface-3 aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground flex h-8 min-w-0 items-center justify-center gap-2 rounded-lg transition-colors pointer-coarse:min-h-11 pointer-coarse:justify-start pointer-coarse:px-2"
 			>
 				<Icon aria-hidden className="size-4 shrink-0" />
-				<span className="truncate pointer-fine:sr-only">{label}</span>
+				<span className="min-w-0 leading-tight wrap-break-word hyphens-auto pointer-fine:sr-only">{label}</span>
 			</NavLink>
 		</Tip>
 	);

@@ -132,11 +132,11 @@ describe('AppShell', () => {
 		expect(bar.lastElementChild).toBe(newChat);
 	});
 
-	it('opens the drawer at the sidebar width, 256 px, not the sheet default', () => {
+	it('opens the drawer wide enough for the names of the destinations on touch, 320 px or 85% of a phone, not the sheet default', () => {
 		renderAt('/notes');
 		fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
 		const drawer = screen.getByRole('dialog', { name: 'Navigation' });
-		expect(drawer.className).toContain('data-[side=left]:w-64');
+		expect(drawer.className).toContain('data-[side=left]:w-[min(20rem,85vw)]');
 		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
 	});
 
