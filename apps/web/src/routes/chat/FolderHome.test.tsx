@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getChatListByFolderId } from '@/lib/apis/chats';
-import { updateFolderById } from '@/lib/apis/folders';
+import { getSharedFolders, updateFolderById } from '@/lib/apis/folders';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { FolderHome } from './FolderHome';
 import { FOLDER_PAGE_SIZE } from './sidebar/useChatList';
@@ -11,7 +11,11 @@ import { FOLDER_PAGE_SIZE } from './sidebar/useChatList';
 const { toastSuccess, toastError } = vi.hoisted(() => ({ toastSuccess: vi.fn(), toastError: vi.fn() }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: toastSuccess, error: toastError }) }));
 vi.mock('@/lib/apis/chats', () => ({ getChatListByFolderId: vi.fn(), getChatList: vi.fn(async () => []) }));
-vi.mock('@/lib/apis/folders', async (orig) => ({ ...(await orig<object>()), updateFolderById: vi.fn() }));
+vi.mock('@/lib/apis/folders', async (orig) => ({
+	...(await orig<object>()),
+	updateFolderById: vi.fn(),
+	getSharedFolders: vi.fn()
+}));
 
 const now = Math.floor(Date.now() / 1000);
 const STATS = { id: 'f1', name: 'Statistics', data: { system_prompt: 'Answer as a statistics tutor.' } };
@@ -133,5 +137,43 @@ describe('FolderHome (#998)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Save folder' }));
 		await waitFor(() => expect(toastError).toHaveBeenCalledWith('Name taken'));
 		expect(screen.getByRole('dialog', { name: 'Edit folder' })).toBeInTheDocument();
+	});
+});
+
+describe('FolderHome: who may edit the folder', () => {
+	const asUser = () =>
+		useAuthStore.setState({ status: 'authenticated', token: 't', user: { id: 'u2', role: 'user' } } as never);
+	const theirs = { ...STATS, user_id: 'u1' };
+
+	it('offers Edit folder to its owner, without asking what is shared', async () => {
+		asUser();
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		show({ ...STATS, user_id: 'u2' });
+		expect(screen.getByRole('button', { name: 'Edit folder' })).toBeInTheDocument();
+		expect(getSharedFolders).not.toHaveBeenCalled();
+	});
+
+	it('hides Edit folder from someone it is shared with for reading', async () => {
+		asUser();
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		vi.mocked(getSharedFolders).mockResolvedValue([{ id: 'f1', permission: 'read' }] as never);
+		show(theirs);
+		await waitFor(() => expect(getSharedFolders).toHaveBeenCalledWith('t'));
+		await screen.findByText(/No chats in this folder yet/);
+		expect(screen.queryByRole('button', { name: 'Edit folder' })).toBeNull();
+	});
+
+	it('offers Edit folder to someone it is shared with for writing', async () => {
+		asUser();
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		vi.mocked(getSharedFolders).mockResolvedValue([{ id: 'f1', permission: 'write' }] as never);
+		show(theirs);
+		expect(await screen.findByRole('button', { name: 'Edit folder' })).toBeInTheDocument();
+	});
+
+	it('offers Edit folder to an admin, whoever owns it', () => {
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		show(theirs);
+		expect(screen.getByRole('button', { name: 'Edit folder' })).toBeInTheDocument();
 	});
 });
