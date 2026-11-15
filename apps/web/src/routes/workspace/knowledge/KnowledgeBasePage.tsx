@@ -56,6 +56,7 @@ import {
 	type DirectoryFileEntry,
 	gatherDroppedFiles
 } from './knowledgeFiles';
+import { failed } from './knowledgeToasts';
 import {
 	collectDirectoryFiles,
 	collectDroppedEntryFiles,
@@ -318,7 +319,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [showReset, setShowReset] = useState(false);
 	const [pendingSync, setPendingSync] = useState<DirectoryFileEntry[] | null>(null);
 	const [deletingDir, setDeletingDir] = useState<string | null>(null);
-	const [deleteContents, setDeleteContents] = useState(true);
+	// Off at first: deleting a folder's files deletes their extracted text and embeddings too (#1012).
+	const [deleteContents, setDeleteContents] = useState(false);
 	const fileInput = useRef<HTMLInputElement>(null);
 
 	// --- drag files anywhere onto the page to upload -------------------------
@@ -374,6 +376,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		}
 		return false;
 	};
+	const deletingDirName = listed?.directories.find((d) => d.id === deletingDir)?.name ?? '';
 	const navigateToDirectory = (dirId: string | null) => {
 		setDirectoryId(dirId);
 		setPage(1);
@@ -384,15 +387,17 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		else if (payload.id !== target)
 			report(updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }), 'Directory moved.');
 	};
-	const deleteFile = async (fileId: string) => {
+	// Removing deletes the file's extracted text and embeddings at once, so it confirms first (ACT-3, #906).
+	const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+	const deleteFile = async ({ id: fileId, name }: { id: string; name: string }) => {
 		setSelectedFileId(null);
 		try {
 			if (await removeFileFromKnowledgeById(token, id, fileId)) {
-				toast.success('File removed successfully.');
+				toast.success(`Removed "${name}"`);
 				reload();
 			}
 		} catch (e) {
-			toast.error(`${e}`);
+			failed(`Couldn't remove "${name}".`, e);
 		}
 	};
 
@@ -511,39 +516,71 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				removed. The folder structure will be mirrored. Continue?
 			</ConfirmDialog>
 			<ConfirmDialog
+				open={removing !== null}
+				onOpenChange={(open) => !open && setRemoving(null)}
+				title={`Remove "${removing?.name ?? ''}"?`}
+				confirmLabel="Remove file"
+				destructive
+				onConfirm={() => {
+					const file = removing;
+					setRemoving(null);
+					if (file) deleteFile(file);
+				}}
+			>
+				Its extracted text and embeddings are deleted. Adding it again processes it from the start.
+			</ConfirmDialog>
+			<ConfirmDialog
 				open={deletingDir !== null}
 				onOpenChange={(open) => !open && setDeletingDir(null)}
-				title="Delete directory?"
-				confirmLabel="Delete"
+				title={`Delete the folder "${deletingDirName}"?`}
+				confirmLabel="Delete folder"
+				destructive
 				onConfirm={async () => {
 					const dirId = deletingDir;
 					setDeletingDir(null);
-					if (dirId) await report(deleteKnowledgeDirectory(token, id, dirId, !deleteContents), 'Directory deleted.');
+					if (!dirId) return;
+					try {
+						if (await deleteKnowledgeDirectory(token, id, dirId, !deleteContents)) {
+							toast.success(`Deleted the folder "${deletingDirName}"`);
+							refresh();
+						}
+					} catch (e) {
+						failed(`Couldn't delete the folder "${deletingDirName}".`, e);
+					}
 				}}
 			>
-				<div className="mb-2 text-sm">Are you sure you want to delete this directory?</div>
-				<label className="flex items-center gap-1.5">
-					<Checkbox checked={deleteContents} onCheckedChange={(c) => setDeleteContents(c === true)} />
-					<span className="text-muted-foreground text-xs">Delete all contents inside this directory</span>
+				<p>
+					{deleteContents
+						? 'The folder, its subfolders and every file in them are deleted, with their extracted text and embeddings.'
+						: 'The folder and its subfolders are deleted. The files in them move up to the folder above.'}
+				</p>
+				<label className="mt-3 flex items-start gap-2">
+					<Checkbox
+						className="mt-0.5"
+						checked={deleteContents}
+						onCheckedChange={(c) => setDeleteContents(c === true)}
+					/>
+					<span>Also delete the files inside</span>
 				</label>
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={showReset}
 				onOpenChange={setShowReset}
-				title="Reset knowledge base?"
-				confirmLabel="Confirm"
+				title={`Reset "${knowledge.name}"?`}
+				confirmLabel="Reset knowledge base"
+				destructive
 				onConfirm={async () => {
 					setShowReset(false);
 					try {
 						await resetKnowledgeById(token, id);
-						toast.success('Knowledge base has been reset');
+						toast.success(`Reset "${knowledge.name}"`);
 						reload();
 					} catch (e) {
-						toast.error(`${e}`);
+						failed(`Couldn't reset "${knowledge.name}".`, e);
 					}
 				}}
 			>
-				This will remove all files and directories from this knowledge base. This action cannot be undone.
+				Every file and folder is removed from it, with their extracted text and embeddings. This can't be undone.
 			</ConfirmDialog>
 
 			<AttachWebpageDialog open={showWeb} onOpenChange={setShowWeb} onSubmit={uploadWeb} />
@@ -715,14 +752,19 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 										writeAccess={writeAccess}
 										selectedFileId={selectedFileId}
 										onSelect={setSelectedFileId}
-										onDeleteFile={deleteFile}
+										onDeleteFile={(fileId) =>
+											setRemoving({
+												id: fileId,
+												name: listed.items.find((f) => f.id === fileId)?.meta?.name ?? 'this file'
+											})
+										}
 										onRenameFile={(fileId, name) => report(renameFileById(token, fileId, name), 'File renamed.')}
 										onOpenDirectory={navigateToDirectory}
 										onRenameDirectory={(dirId, name) =>
 											report(updateKnowledgeDirectory(token, id, dirId, { name }), 'Directory renamed.')
 										}
 										onDeleteDirectory={(dirId) => {
-											setDeleteContents(true);
+											setDeleteContents(false);
 											setDeletingDir(dirId);
 										}}
 										onMove={move}

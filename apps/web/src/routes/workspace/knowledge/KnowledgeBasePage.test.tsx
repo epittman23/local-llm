@@ -5,7 +5,14 @@ import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { searchKnowledgeFilesById, updateKnowledgeAccessGrants, updateKnowledgeById } from '@/lib/apis/knowledge';
+import {
+	deleteKnowledgeDirectory,
+	removeFileFromKnowledgeById,
+	resetKnowledgeById,
+	searchKnowledgeFilesById,
+	updateKnowledgeAccessGrants,
+	updateKnowledgeById
+} from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgeBasePage } from './KnowledgeBasePage';
 import { KB_FILE_MOVE } from './knowledgeFiles';
@@ -155,7 +162,8 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('No content found')).toBeNull();
 	});
@@ -168,7 +176,8 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('file32.txt')).toBeNull();
 	});
@@ -177,7 +186,7 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		const { container } = await openPageTwo();
 		fireEvent.pointerDown(screen.getByLabelText('Add Content'), { button: 0, ctrlKey: false, pointerType: 'mouse' });
 		fireEvent.click(await screen.findByText('Reset'));
-		fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Reset knowledge base' }));
 		await waitFor(() => expect(screen.queryByText('file31.txt')).toBeNull());
 		upload(container, 'notes.txt');
 		// The in-flight row also reads "notes.txt", until the upload settles and
@@ -234,7 +243,8 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 			ctrlKey: false,
 			pointerType: 'mouse'
 		});
-		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		await waitFor(() => expect(screen.queryByRole('navigation')).toBeNull());
 		upload(container, 'notes.txt');
@@ -451,5 +461,93 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 
 		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
 		expect(vi.mocked(updateKnowledgeById).mock.calls[0][2]).not.toHaveProperty('access_grants');
+	});
+});
+
+const openMenu = (label: string) =>
+	fireEvent.pointerDown(screen.getByLabelText(label), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+
+describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
+	it('asks before removing a file, naming it and what goes with it', async () => {
+		const success = vi.spyOn(toast, 'success');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Remove "file1.txt"?');
+		expect(dialog).toHaveTextContent('Its extracted text and embeddings are deleted.');
+		expect(removeFileFromKnowledgeById).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Remove file' }));
+		await waitFor(() => expect(removeFileFromKnowledgeById).toHaveBeenCalledWith('t', 'kb1', 'f1'));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Removed "file1.txt"'));
+	});
+
+	it('removes nothing when the file confirmation is cancelled', async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(removeFileFromKnowledgeById).not.toHaveBeenCalled();
+	});
+
+	it('says why a removal failed, with the server text behind Details', async () => {
+		const error = vi.spyOn(toast, 'error');
+		vi.mocked(removeFileFromKnowledgeById).mockRejectedValueOnce('boom');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('file1.txt menu');
+		fireEvent.click(await screen.findByText('Remove'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith('Couldn\'t remove "file1.txt".', { description: expect.anything() })
+		);
+	});
+
+	it('names the folder, keeps its files unless asked, and says which happens', async () => {
+		vi.mocked(deleteKnowledgeDirectory).mockResolvedValue({ status: true });
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Folder menu');
+		fireEvent.click(await screen.findByText('Delete'));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Delete the folder "Folder"?');
+		expect(dialog).toHaveTextContent('The files in them move up to the folder above.');
+		const box = screen.getByRole('checkbox', { name: 'Also delete the files inside' });
+		expect(box).not.toBeChecked();
+		fireEvent.click(box);
+		expect(dialog).toHaveTextContent('every file in them are deleted');
+		fireEvent.click(screen.getByRole('button', { name: 'Delete folder' }));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', false));
+	});
+
+	it("moves a deleted folder's files up by default", async () => {
+		vi.mocked(deleteKnowledgeDirectory).mockRejectedValueOnce('kept');
+		const error = vi.spyOn(toast, 'error');
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Folder menu');
+		fireEvent.click(await screen.findByText('Delete'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete folder' }));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', true));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith('Couldn\'t delete the folder "Folder".', { description: expect.anything() })
+		);
+	});
+
+	it('names the knowledge base in the reset confirmation and says what is lost', async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+		openMenu('Add Content');
+		fireEvent.click(await screen.findByText('Reset'));
+		const dialog = await screen.findByRole('alertdialog');
+		expect(dialog).toHaveTextContent('Reset "KB"?');
+		expect(dialog).toHaveTextContent(
+			'Every file and folder is removed from it, with their extracted text and embeddings.'
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Reset knowledge base' }));
+		await waitFor(() => expect(resetKnowledgeById).toHaveBeenCalled());
 	});
 });

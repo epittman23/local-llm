@@ -7,6 +7,7 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
@@ -244,7 +245,8 @@ export function KnowledgeFileList({
 										<Pencil />
 										Rename
 									</DropdownMenuItem>
-									<DropdownMenuItem onSelect={() => onDeleteDirectory(dir.id)}>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem variant="destructive" onSelect={() => onDeleteDirectory(dir.id)}>
 										<Trash2 />
 										Delete
 									</DropdownMenuItem>
@@ -360,9 +362,10 @@ export function KnowledgeFileList({
 											<Download />
 											Download
 										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => fileId && onDeleteFile(fileId)}>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem variant="destructive" onSelect={() => fileId && onDeleteFile(fileId)}>
 											<Trash2 />
-											Delete
+											Remove
 										</DropdownMenuItem>
 									</DropdownMenuContent>
 								</DropdownMenu>
