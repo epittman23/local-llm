@@ -5,8 +5,7 @@ import { cn } from '@/lib/utils';
  * A picture that is itself the click target (the interface standard, ACT-8):
  * a profile image you press to change it. The picture fills the button, with
  * no padding. `overlay` (an icon) is shown over a scrim on hover and on
- * keyboard focus. Both are decoration, hidden from assistive technology, so
- * the button needs an `aria-label`.
+ * keyboard focus; it is decoration, so the button needs an `aria-label`.
  * Hand-written, not shadcn output.
  */
 function ImageButton({
@@ -28,11 +27,7 @@ function ImageButton({
 			)}
 			{...props}
 		>
-			{/* The picture is decoration: the button's aria-label names it, and initials drawn in it
-			    would otherwise have to appear in that name (WCAG 2.5.3). */}
-			<span aria-hidden className="contents">
-				{children}
-			</span>
+			{children}
 			{overlay && (
 				<span
 					aria-hidden

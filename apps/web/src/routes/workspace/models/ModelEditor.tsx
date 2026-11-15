@@ -31,6 +31,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
+import { initials } from '@/lib/utils/initials';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { BaseModelSelect, CheckboxGrid, groupLabel, ItemPicker } from './EditorPickers';
@@ -406,7 +407,12 @@ function EditorForm({
 							<div className="flex min-w-0 items-start gap-4">
 								<div className="flex shrink-0 flex-col items-center gap-1 pt-7">
 									<ImageButton
-										aria-label="Upload a picture"
+										// WCAG 2.5.3: a name that holds the initials the button shows, when it shows them.
+										aria-label={
+											hasPicture(meta.profile_image_url)
+												? 'Upload a picture'
+												: `${initials(state.name)}, upload a picture`
+										}
 										shape="circle"
 										className="size-12 md:size-14"
 										overlay={<Camera />}
