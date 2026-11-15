@@ -439,7 +439,22 @@ export function ToolsPage() {
 					</div>
 				</div>
 			) : (
-				<ListEmptyState title="No tools found" />
+				<ListEmptyState
+					title="No tools yet"
+					description="A tool is Python code a model can call while it answers, such as a calculator or a web lookup."
+					action={
+						<Button size="sm" type="button" onClick={() => navigate(routePaths.workspaceToolsCreate)}>
+							New tool
+						</Button>
+					}
+					query={query}
+					filtered={viewOption !== ''}
+					onClear={() => {
+						setQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+					}}
+				/>
 			)}
 		</div>
 	);

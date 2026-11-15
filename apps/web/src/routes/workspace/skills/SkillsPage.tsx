@@ -417,7 +417,25 @@ export function SkillsPage() {
 					</div>
 				</div>
 			) : (
-				<ListEmptyState title="No skills found" />
+				<ListEmptyState
+					title="No skills yet"
+					description="A skill is a set of instructions a model can follow when a task calls for it."
+					action={
+						canCreate && (
+							<Button size="sm" type="button" onClick={() => navigate(routePaths.workspaceSkillsCreate)}>
+								New skill
+							</Button>
+						)
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== ''}
+					onClear={() => {
+						setQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+						setPage(1);
+					}}
+				/>
 			)}
 
 			{total > PER_PAGE && (

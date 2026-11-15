@@ -481,7 +481,24 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 					</div>
 				</div>
 			) : (
-				<ListEmptyState title="No prompts found" />
+				<ListEmptyState
+					title="No prompts yet"
+					description="A prompt is text you reuse: type / and its command in a chat to insert it."
+					action={
+						<Button size="sm" type="button" onClick={() => setShowCreate(true)}>
+							New prompt
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || selectedTag !== ''}
+					onClear={() => {
+						setQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+						setSelectedTag('');
+						setPage(1);
+					}}
+				/>
 			)}
 
 			{total > PER_PAGE && (

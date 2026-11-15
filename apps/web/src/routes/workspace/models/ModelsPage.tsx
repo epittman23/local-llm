@@ -257,6 +257,14 @@ export function ModelsPage() {
 		if (importInput.current) importInput.current.value = '';
 	};
 
+	const clearFilters = () => {
+		setQuery('');
+		localStorage.workspaceViewOption = '';
+		setViewOption('');
+		setSelectedTag('');
+		setPage(1);
+	};
+
 	const sortBy = (key: string) => {
 		if (sortKey === key) setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
 		else {
@@ -352,7 +360,18 @@ export function ModelsPage() {
 					<Spinner className="size-4" />
 				</div>
 			) : models.length === 0 ? (
-				<ListEmptyState title="No models found" />
+				<ListEmptyState
+					title="No models yet"
+					description="A model is a base model with your own name, system prompt, knowledge and tools."
+					action={
+						<Button size="sm" asChild>
+							<Link to={routePaths.workspaceModelsCreate}>New model</Link>
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || selectedTag !== ''}
+					onClear={clearFilters}
+				/>
 			) : (
 				<div id="model-list" className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">

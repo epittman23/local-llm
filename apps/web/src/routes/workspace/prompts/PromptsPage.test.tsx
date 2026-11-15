@@ -60,7 +60,7 @@ describe('PromptsPage', () => {
 
 		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load prompts");
 		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
-		expect(screen.queryByText('No prompts found')).toBeNull();
+		expect(screen.queryByText('No prompts yet')).toBeNull();
 		expect(toast.error).not.toHaveBeenCalled();
 
 		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));

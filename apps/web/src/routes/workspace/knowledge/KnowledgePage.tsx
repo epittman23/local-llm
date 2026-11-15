@@ -225,7 +225,25 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 					<Spinner />
 				</div>
 			) : items.length === 0 ? (
-				<ListEmptyState title="No knowledge found" />
+				<ListEmptyState
+					title="No knowledge bases yet"
+					description="A knowledge base holds files a chat or a model can search for answers."
+					action={
+						<Button size="sm" type="button" onClick={() => setShowCreate(true)}>
+							New knowledge base
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || sourceOption !== ''}
+					onClear={() => {
+						setQuery('');
+						setDebouncedQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+						localStorage.workspaceKnowledgeSourceOption = '';
+						setSourceOption('');
+					}}
+				/>
 			) : (
 				<div className="my-1">
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">

@@ -143,7 +143,7 @@ test.describe('admin functions', () => {
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/id/fn_1/delete')).toBe(true);
-		await expect(page.getByText('No functions found')).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'No functions yet' })).toBeVisible();
 	});
 
 	test('create: the id follows the name, the warning gates the save, and only four fields are sent', async ({

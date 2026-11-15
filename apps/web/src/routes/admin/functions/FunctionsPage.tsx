@@ -538,7 +538,23 @@ export function FunctionsPage() {
 						</div>
 					</div>
 				) : (
-					<ListEmptyState title="No functions found" />
+					<ListEmptyState
+						title="No functions yet"
+						description="A function is Python code that adds a model, filters messages, or adds a button to replies."
+						action={
+							<Button size="sm" type="button" onClick={() => navigate(routePaths.adminFunctionsCreate)}>
+								New function
+							</Button>
+						}
+						query={debouncedQuery}
+						filtered={viewOption !== '' || selectedType !== ''}
+						onClear={() => {
+							setQuery('');
+							localStorage.workspaceViewOption = '';
+							setViewOption('');
+							setSelectedType('');
+						}}
+					/>
 				)}
 			</div>
 		</div>
