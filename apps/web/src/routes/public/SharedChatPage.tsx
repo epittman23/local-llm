@@ -1,14 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
+import { BootSplash } from '@/components/layout/BootSplash';
 import { Button } from '@/components/ui/button';
 import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { convertMessagesToHistory, createMessagesList } from '@/lib/utils/auth-helpers';
 import { routePaths } from '@/routes/routePaths';
+
+/** The server's detail for a share this signed-in user may not read (`ERROR_MESSAGES.ACCESS_PROHIBITED`). */
+const ACCESS_PROHIBITED_DETAIL =
+	'You do not have permission to access this resource. Please contact your administrator for assistance.';
 
 /**
  * Ports d863707:apps/openwebui/src/routes/s/[id]/+page.svelte as the "read-only
@@ -36,11 +43,11 @@ export function SharedChatPage() {
 	});
 
 	useEffect(() => {
-		if (!chatQuery.isError) return;
-		// Anonymous and not an open share: sign in, then come back.
-		if (authStatus === 'anonymous')
+		// Anonymous and not an open share: sign in, then come back. The server
+		// answers a missing share and a private one alike (401), so an anonymous
+		// visitor cannot be told which it is. A signed-in one is told in place.
+		if (chatQuery.isError && authStatus === 'anonymous')
 			navigate(`${routePaths.auth}?redirect=${encodeURIComponent(`/s/${id}`)}`, { replace: true });
-		else navigate(routePaths.home, { replace: true });
 	}, [chatQuery.isError, authStatus, id, navigate]);
 
 	const chatContent = chatQuery.data?.chat;
@@ -72,11 +79,38 @@ export function SharedChatPage() {
 		}
 	};
 
-	if (chatQuery.isLoading) {
+	// STA-2: the boot splash's look while the share loads, never a bare "Loading…".
+	if (chatQuery.isLoading || authStatus === 'pending') return <BootSplash />;
+
+	if (chatQuery.isError && authStatus !== 'anonymous') {
+		// NAV-3: a revoked or mistyped link says so, on a page of its own rather
+		// than a bounce to a new chat. Any other failure can be tried again.
+		const notFound = isNotFound(chatQuery.error);
 		return (
-			<div className="flex h-screen w-full items-center justify-center">
-				<p className="text-muted-foreground text-sm">Loading…</p>
-			</div>
+			<main className="bg-page flex min-h-svh w-full flex-col justify-center">
+				{notFound || chatQuery.error === ACCESS_PROHIBITED_DETAIL ? (
+					<Gone
+						title={notFound ? 'This shared link is no longer available.' : 'This shared chat is not open to you.'}
+						description={
+							notFound
+								? 'Whoever shared it may have stopped sharing it, or the link may be mistyped.'
+								: 'It is shared only with certain accounts. Ask whoever sent the link to share it with you.'
+						}
+						actions={
+							<Button asChild>
+								<Link to={routePaths.home}>Go to your chats</Link>
+							</Button>
+						}
+					/>
+				) : (
+					<LoadFailed
+						what="this shared chat"
+						error={chatQuery.error}
+						onRetry={() => void chatQuery.refetch()}
+						retrying={chatQuery.isFetching}
+					/>
+				)}
+			</main>
 		);
 	}
 

@@ -2,32 +2,31 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { chatAction, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
+import { isNotFound } from '@/components/common/Gone';
+import { chatAction, generateTags, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
+import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
+import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import { getAndUpdateUserLocation } from '@/lib/apis/users';
-import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
-import { generateTags } from '@/lib/apis';
-import { type FeedbackDetails, annotate, feedbackItem } from '@/lib/chat/feedback';
-import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
-import { WEBUI_BASE_URL } from '@/lib/constants';
+import { annotate, type FeedbackDetails, feedbackItem } from '@/lib/chat/feedback';
 import {
-	type ChatEffect,
-	type ChatEvent,
-	type ChatFile,
-	type History,
-	type Message,
 	addResponses,
 	addUserMessage,
 	applyChatEvent,
+	type ChatEffect,
+	type ChatEvent,
+	type ChatFile,
 	deleteMessage,
 	editContent,
 	emptyHistory,
 	errorText,
 	failMessage,
 	finishReplies,
+	type History,
 	hasPendingAssistantLeaf,
 	isGenerating,
+	type Message,
 	messagesList,
 	normalizeHistory,
 	rewrittenMessage,
@@ -35,8 +34,8 @@ import {
 	updateMessage
 } from '@/lib/chat/history';
 import {
-	type FeatureToggles,
 	completionBody,
+	type FeatureToggles,
 	isTemporaryChatId,
 	pathFiles,
 	promptVariables,
@@ -44,15 +43,16 @@ import {
 	temporaryChatId
 } from '@/lib/chat/request';
 import { getOutputText } from '@/lib/chat/structuredOutput';
+import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
+import { uuid } from '@/lib/utils/uuid';
 import { patchCachedChat } from './sidebar/useChatList';
 import { uploadCountLimit } from './useAttachments';
 import type { ChatModel } from './useModels';
-import { uuid } from '@/lib/utils/uuid';
 
 export const CHAT_LIST_KEY = ['chats'] as const;
 
@@ -120,6 +120,12 @@ export function useChatSession({
 	const [title, setTitle] = useState('');
 	const [params, setParams] = useState<Record<string, any>>({});
 	const [loading, setLoading] = useState(Boolean(routeChatId));
+	/**
+	 * Why the route's chat could not be opened: it is not there (or not this
+	 * user's: the server answers both alike), or the load failed and may work
+	 * when tried again. The page says so in place, keeping the URL (NAV-3, STA-4).
+	 */
+	const [missing, setMissing] = useState<{ kind: 'not-found' | 'failed'; error: unknown } | null>(null);
 	const [taskIds, setTaskIds] = useState<string[] | null>(null);
 	const [queue, setQueue] = useState<Queued[]>([]);
 	const queueRef = useRef(queue);
@@ -188,7 +194,12 @@ export function useChatSession({
 	const loadChat = useCallback(
 		async (id: string) => {
 			setLoading(true);
-			const record = (await getChatById(token, id).catch(() => null)) as ChatRecord | null;
+			setMissing(null);
+			let failure: unknown = null;
+			const record = (await getChatById(token, id).catch((e) => {
+				failure = e ?? new Error('Request failed');
+				return null;
+			})) as ChatRecord | null;
 			if (chatIdRef.current !== id) return;
 			if (!record?.chat) {
 				// A queue given back to this chat cannot go anywhere now: drop it, saying
@@ -197,7 +208,7 @@ export function useChatSession({
 				if (queueRef.current.length) toast.error('The chat could not be opened; its queued prompts were dropped.');
 				setQueue([]);
 				setLoading(false);
-				navigate('/', { replace: true });
+				setMissing({ kind: failure === null || isNotFound(failure) ? 'not-found' : 'failed', error: failure });
 				return;
 			}
 			const content = record.chat;
@@ -226,7 +237,7 @@ export function useChatSession({
 			setHistory(h);
 			setLoading(false);
 		},
-		[token, navigate, setHistory]
+		[token, setHistory]
 	);
 
 	// Opening, leaving, or finishing a reply in a saved chat marks it read (Chat.svelte's updateLastReadAt).
@@ -260,6 +271,7 @@ export function useChatSession({
 		setQueue(kept ?? []);
 		setDialog(null);
 		setTaskIds(null);
+		setMissing(null);
 		if (routeChatId) void loadChat(routeChatId);
 		else {
 			setChat(null);
@@ -910,6 +922,7 @@ export function useChatSession({
 		setParams,
 		chatFiles,
 		loading,
+		missing,
 		generating,
 		taskIds,
 		queue,

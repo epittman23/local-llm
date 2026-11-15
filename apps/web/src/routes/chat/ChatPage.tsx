@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { EyeOff, SlidersHorizontal } from 'lucide-react';
+import { Archive, EyeOff, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -28,6 +30,7 @@ import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
+import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { ArtifactPanel } from './ArtifactPanel';
 import { ChatBanners } from './ChatBanners';
@@ -187,7 +190,20 @@ export function ChatPage() {
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
 
-	useDocumentTitle(prefs.titleInTab ? session.title || 'New Chat' : null);
+	// A chat or folder that is not there says so in the tab as on the page (NAV-3).
+	const chatGone = session.missing?.kind === 'not-found';
+	const folderGone = folder.isError && isNotFound(folder.error);
+	useDocumentTitle(
+		chatGone
+			? 'Chat not found'
+			: folderGone
+				? 'Folder not found'
+				: prefs.titleInTab
+					? session.title || 'New Chat'
+					: null
+	);
+	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
+	const openSettings = useSettingsModalStore((s) => s.openSettings);
 
 	/** Set by the reader's own actions (sending, switching versions) to move to the end once, whatever the auto-scroll setting. */
 	const scrollOnce = useRef(false);
@@ -237,14 +253,6 @@ export function ChatPage() {
 		input.current?.setText(text);
 		input.current?.focus();
 	};
-
-	// A folder that cannot be read: say why and go home (folders/[folderId]/+page.svelte).
-	const navigate = useNavigate();
-	useEffect(() => {
-		if (!folder.isError) return;
-		toast.error(`${folder.error}`);
-		navigate('/', { replace: true });
-	}, [folder.isError, folder.error, navigate]);
 
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
 	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
@@ -341,6 +349,63 @@ export function ChatPage() {
 
 	const empty = !session.history.currentId;
 	const firstModel = models.find((m) => m.id === selectedModels[0]);
+
+	// A link to a chat or folder that is not there says so in place and keeps
+	// its URL (NAV-3); one that failed to load offers to try again (STA-4).
+	const searchChats = (
+		<Button variant="outline" onClick={() => setSearchOpen(true)}>
+			<Search aria-hidden /> Search chats
+		</Button>
+	);
+	const newChat = (
+		<Button asChild>
+			<Link to="/">
+				<SquarePen aria-hidden /> New chat
+			</Link>
+		</Button>
+	);
+	const gone = chatGone ? (
+		<Gone
+			level={2}
+			title="This chat no longer exists."
+			description="It may have been deleted or archived, or the link may be mistyped."
+			actions={
+				<>
+					{newChat}
+					{searchChats}
+					<Button variant="outline" onClick={() => openSettings('archived_chats')}>
+						<Archive aria-hidden /> Archived chats
+					</Button>
+				</>
+			}
+		/>
+	) : session.missing ? (
+		<LoadFailed
+			what="this chat"
+			error={session.missing.error}
+			onRetry={() => void session.reload()}
+			retrying={session.loading}
+		/>
+	) : folderGone ? (
+		<Gone
+			title="This folder no longer exists."
+			description="It may have been deleted, or the link may be mistyped."
+			actions={
+				<>
+					{newChat}
+					{searchChats}
+				</>
+			}
+		/>
+	) : folder.isError ? (
+		<LoadFailed
+			what="this folder"
+			error={folder.error}
+			onRetry={() => void folder.refetch()}
+			retrying={folder.isFetching}
+		/>
+	) : null;
+	if (gone) return <div className="flex h-full min-h-0 w-full flex-col justify-center overflow-y-auto">{gone}</div>;
 
 	return (
 		<div className="flex h-full min-h-0 w-full">
