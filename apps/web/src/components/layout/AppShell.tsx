@@ -38,6 +38,36 @@ const SHORT_PHONE_MENU =
 const SHORT_PHONE_NAME = '[@media(max-height:520px)]:hidden';
 
 /**
+ * Keeps `--shell-bar-bottom` on <html> at how far down the phone's app bar
+ * reaches: its bottom edge, or on a short screen where it has folded, the
+ * bottom of its floating menu button. 0 from md up, where the bar is hidden.
+ * The fixed layers outside the shell (the connection banner, toasts) start
+ * below it, so they cover neither the menu button nor the name (FBK-2).
+ */
+function useShellBarBottom(element: HTMLElement | null) {
+	useEffect(() => {
+		if (!element) return;
+		const root = document.documentElement;
+		const measure = () => {
+			const menu = element.querySelector('button')?.getBoundingClientRect().bottom ?? 0;
+			const bottom = Math.max(element.getBoundingClientRect().bottom, menu);
+			root.style.setProperty('--shell-bar-bottom', `${Math.ceil(bottom)}px`);
+		};
+		measure();
+		// The bar changes size when the screen does (it folds and unfolds by
+		// media query) and when its own content does.
+		const resize = new ResizeObserver(measure);
+		resize.observe(element);
+		window.addEventListener('resize', measure);
+		return () => {
+			resize.disconnect();
+			window.removeEventListener('resize', measure);
+			root.style.removeProperty('--shell-bar-bottom');
+		};
+	}, [element]);
+}
+
+/**
  * The persistent shell every React route renders inside (see AppRouter.tsx):
  * a collapsible desktop sidebar, a Sheet-based mobile drawer sharing the same
  * nav content, and the route's own element in <Outlet />. Reach-for-this-first
@@ -63,6 +93,9 @@ export function AppShell() {
 	const appName = useWebUIName();
 	const { page, heading, foldsBar } = useRouteTitle();
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
+	// A state, not a ref: the bar mounts only once the shell replaces the splash.
+	const [bar, setBar] = useState<HTMLElement | null>(null);
+	useShellBarBottom(bar);
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
 	useShortcuts();
@@ -116,7 +149,10 @@ export function AppShell() {
 				    away and only its menu button stays, floating at the top left, on
 				    routes whose handle says foldsBar: their first row leaves room for
 				    it (--shell-menu-inset). Other pages keep the bar. */}
-				<header className={cn('flex items-center gap-2 border-b p-2 md:hidden', foldsBar && SHORT_PHONE_BAR)}>
+				<header
+					ref={setBar}
+					className={cn('flex items-center gap-2 border-b p-2 md:hidden', foldsBar && SHORT_PHONE_BAR)}
+				>
 					<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
 						<SheetTrigger asChild>
 							<Button

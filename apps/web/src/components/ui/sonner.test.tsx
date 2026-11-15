@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionEndReason } from '@/lib/auth/session';
 import { useConnectionStore } from '@/lib/socket/connectionStore';
-import { keepClearOffset, messageId, Toaster, WIDE_QUERY } from './sonner';
+import { keepClearOffset, messageId, PHONE_TOP, Toaster, WIDE_QUERY } from './sonner';
 
 vi.mock('@/lib/auth/session', () => ({ sessionEndReason: vi.fn(() => null) }));
 
@@ -113,14 +113,16 @@ describe('Toaster', () => {
 		await waitFor(() => expect(toaster()?.getAttribute('style')).toContain('--offset-bottom: 168px'));
 	});
 
-	it('leaves the offset alone on a phone, and moves toasts below the connection banner', async () => {
+	it('starts toasts below the app bar and the connection banner on a phone, whichever layout Sonner uses (FBK-2)', async () => {
 		mockWidth(false);
 		composer(640);
-		useConnectionStore.setState({ lost: true });
 		render(<Toaster />);
 		act(() => void toast.success('Saved'));
-		await waitFor(() => expect(toaster()?.getAttribute('style')).toContain('--mobile-offset-top: 56px'));
+		await waitFor(() => expect(toaster()?.getAttribute('style')).toContain(`--mobile-offset-top: ${PHONE_TOP}`));
+		// From 600 to 767 px Sonner reads its wide offset, so that starts there too; the message box is not lifted for.
+		expect(toaster()?.getAttribute('style')).toContain(`--offset-top: ${PHONE_TOP}`);
 		expect(toaster()?.getAttribute('style')).toContain('--offset-bottom: 24px');
+		expect(PHONE_TOP).toBe('calc(var(--shell-bar-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)');
 	});
 });
 
