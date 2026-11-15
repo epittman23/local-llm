@@ -226,6 +226,37 @@ describe('unsaved changes (#951, FRM-3)', () => {
 		expect(store().open).toBe(false);
 	});
 
+	it('has the browser ask before a reload while a tab has unsaved changes, and not once it is clean', async () => {
+		const unload = () => {
+			const event = new Event('beforeunload', { cancelable: true });
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+		render(<SettingsModal />);
+		openOn('general');
+		const draft = await screen.findByRole('textbox', { name: 'Draft' });
+		expect(unload()).toBe(false);
+		fireEvent.change(draft, { target: { value: 'x' } });
+		expect(unload()).toBe(true);
+		fireEvent.change(draft, { target: { value: '' } });
+		expect(unload()).toBe(false);
+		fireEvent.change(draft, { target: { value: 'y' } });
+		expect(unload()).toBe(true);
+		act(() => store().closeSettings());
+		expect(unload()).toBe(false);
+	});
+
+	it('leaves the desktop app’s unload alone, since Electron would refuse it without asking', async () => {
+		Object.assign(window, { lllmDesktop: {} });
+		render(<SettingsModal />);
+		openOn('general');
+		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
+		const event = new Event('beforeunload', { cancelable: true });
+		window.dispatchEvent(event);
+		expect(event.defaultPrevented).toBe(false);
+		delete (window as { lllmDesktop?: unknown }).lllmDesktop;
+	});
+
 	it('closes at once when nothing changed', async () => {
 		render(<SettingsModal />);
 		openOn('general');
