@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
+import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
@@ -337,12 +338,28 @@ export function ResponseMessage({
 				</div>
 				<StatusLine message={message} />
 				{edit ??
-					(empty && !message.done ? (
-						<div className="flex gap-1 py-3" aria-label="Loading">
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full" />
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:150ms]" />
-							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:300ms]" />
-						</div>
+					(empty && !message.done ? null : message.output?.length ? (
+						// The reply as it happened: its texts and every step between them.
+						<ReplySteps
+							id={message.id}
+							output={message.output}
+							done={message.done !== false}
+							plain={!prefs.markdownInAssistantMessages}
+							formatText={citationsEnabled ? undefined : stripCitations}
+							modelName={message.modelName}
+							chatId={chatId ?? undefined}
+							messageId={message.id}
+							resolvable={Boolean(chatId) && message.role === 'assistant' && userId !== undefined}
+							sourceIds={sourceIds}
+							onSourceClick={(id) => h.onSourceClick?.(message, id)}
+							onToolCallResolved={h.onToolCallResolved}
+							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
+							onRun={
+								message.role === 'assistant' && h.onRun && chatId
+									? (code) => (h.onRun as CodeRunner)(code, chatId)
+									: undefined
+							}
+						/>
 					) : !prefs.markdownInAssistantMessages ? (
 						<div className="text-reading whitespace-pre-wrap" dir="auto">
 							{removeAllDetails(citationsEnabled ? message.content : stripCitations(message.content))}
@@ -367,6 +384,8 @@ export function ResponseMessage({
 							}
 						/>
 					))}
+				{/* The reply's spinner, below everything shown so far, while it is written. */}
+				{!edit && message.done === false && !message.error && <ReplyOrb output={message.output} />}
 				{!edit && <SandboxOutputs files={message.files} />}
 				{message.error ? (
 					<ErrorReply

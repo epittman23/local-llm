@@ -126,16 +126,16 @@ function isDoneStatus(status?: string): boolean {
 	return status === 'completed' || status === 'failed' || status === 'incomplete';
 }
 
-function getMessageText(item: OutputItem): string {
+export function getMessageText(item: OutputItem): string {
 	return getTextFromParts(item.content ?? []);
 }
 
-function getReasoningText(item: OutputItem): string {
+export function getReasoningText(item: OutputItem): string {
 	const summary = Array.isArray(item.summary) && item.summary.length ? item.summary : null;
 	return getTextFromParts(summary ?? item.content ?? []);
 }
 
-function getToolResultText(item?: OutputItem): string {
+export function getToolResultText(item?: OutputItem): string {
 	return (item?.output ?? [])
 		.filter((part) => part?.type !== 'input_image')
 		.map((part) => {
