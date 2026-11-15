@@ -99,8 +99,7 @@
 			"src/routes/workspace/models/EditorPickers.tsx": 2,
 			"src/routes/workspace/models/KnowledgePicker.tsx": 1,
 			"src/routes/workspace/models/PromptSuggestionsEditor.tsx": 2,
-			"src/routes/workspace/prompts/PromptCreateDialog.tsx": 2,
-			"src/routes/workspace/prompts/PromptEditView.tsx": 3
+			"src/routes/workspace/prompts/PromptCreateDialog.tsx": 1
 		},
 		"text-opacity": {
 			"src/components/common/MemberSelector.tsx": 1,

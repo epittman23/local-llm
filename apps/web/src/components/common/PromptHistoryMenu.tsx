@@ -12,10 +12,20 @@ import {
 
 /**
  * Ports workspace/Prompts/PromptHistoryMenu.svelte: the "..." menu on the
- * selected history version. Delete is disabled (with a reason) for the live
- * production version, and asks first otherwise.
+ * selected history version. Delete version is disabled (with a reason) for
+ * the live version, and otherwise asks first, naming the version by its date,
+ * with the danger-coloured button (ACT-3, #1012).
  */
-export function PromptHistoryMenu({ isProduction, onDelete }: { isProduction: boolean; onDelete: () => void }) {
+export function PromptHistoryMenu({
+	isProduction,
+	date,
+	onDelete
+}: {
+	isProduction: boolean;
+	/** When the version was saved, as the history shows it. */
+	date: string;
+	onDelete: () => void;
+}) {
 	const [confirming, setConfirming] = useState(false);
 
 	return (
@@ -23,32 +33,33 @@ export function PromptHistoryMenu({ isProduction, onDelete }: { isProduction: bo
 			<ConfirmDialog
 				open={confirming}
 				onOpenChange={setConfirming}
-				title="Delete Version"
-				confirmLabel="Delete"
+				title={`Delete version from ${date}?`}
+				confirmLabel="Delete version"
+				destructive
 				onConfirm={onDelete}
 			>
-				Are you sure you want to delete this version? Child versions will be relinked to this version's parent.
+				The versions saved after it are kept, linked to the version before it.
 			</ConfirmDialog>
 			<DropdownMenu>
 				<Tip content="More">
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="icon-sm" aria-label="More Options">
+						<Button variant="ghost" size="icon-sm" aria-label="Version options">
 							<MoreHorizontal />
 						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="end" className="min-w-40">
 					{isProduction ? (
-						<Tip content="Cannot delete the production version" side="top">
+						<Tip content="The live version can't be deleted. Make another version live first." side="top">
 							<div className="flex cursor-not-allowed items-center gap-2 px-1.5 py-1 text-sm opacity-40">
 								<Trash2 className="size-3.5" />
-								Delete
+								Delete version
 							</div>
 						</Tip>
 					) : (
-						<DropdownMenuItem onSelect={() => setConfirming(true)}>
+						<DropdownMenuItem variant="destructive" onSelect={() => setConfirming(true)}>
 							<Trash2 />
-							Delete
+							Delete version
 						</DropdownMenuItem>
 					)}
 				</DropdownMenuContent>

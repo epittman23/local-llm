@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Prompt = {
@@ -186,11 +186,11 @@ test.describe('workspace prompts', () => {
 		await page.goto('/workspace/prompts/create');
 
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByText('Create Prompt')).toBeVisible();
+		await expect(dialog.getByText('New prompt')).toBeVisible();
 		await dialog.getByLabel('Name').fill('Summarise This Thing');
 		await expect(dialog.getByLabel('Command')).toHaveValue('summarise-this-thing');
 		await dialog.getByLabel('Prompt Content').fill('Summarise {{topic}}');
-		await dialog.getByRole('button', { name: /Save & Create/ }).click();
+		await dialog.getByRole('button', { name: 'Create prompt' }).click();
 
 		await expect(page).toHaveURL(/\/workspace\/prompts$/);
 		const create = calls.find((c) => c.path === '/create');
@@ -211,12 +211,10 @@ test.describe('workspace prompts', () => {
 		await dialog.getByLabel('Name').fill('Ok name');
 		await dialog.getByLabel('Command').fill('has spaces!');
 		await dialog.getByLabel('Prompt Content').fill('x');
-		await dialog.getByRole('button', { name: /Save & Create/ }).click();
-		// The toast: a tooltip with the same text can be in the page too (closing),
-		// and a bare getByText then matched two elements.
-		await expect(
-			page.locator('[data-sonner-toast]').filter({ hasText: 'Only alphanumeric characters and hyphens are allowed' })
-		).toBeVisible();
+		await dialog.getByRole('button', { name: 'Create prompt' }).click();
+		// Said under the field, not in a toast (FRM-2).
+		await expect(dialog.getByRole('alert')).toHaveText('Use only letters, numbers, hyphens and underscores.');
+		await expect(dialog.getByLabel('Command')).toHaveAttribute('aria-invalid', 'true');
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
 
@@ -247,7 +245,7 @@ test.describe('workspace prompts', () => {
 		await expect(page.locator('pre')).toHaveText('Original content');
 		await page.getByRole('button', { name: 'Set as Production' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/id/p1/update/version')).toBe(true);
-		await expect(page.getByText('Production version updated')).toBeVisible();
+		await expect(page.getByText(/is now live$/)).toBeVisible();
 
 		// Name edits save themselves after a pause, as ONE request for the settled value.
 		await page.getByLabel('Prompt Name').fill('Renamed');
@@ -258,13 +256,13 @@ test.describe('workspace prompts', () => {
 		});
 	});
 
-	test('edit page: an invalid command reverts locally without calling the API', async ({ page }) => {
+	test('edit page: an invalid command is said under the field without calling the API', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockPromptsApi(page, [makePrompt(1)]);
 		await page.goto('/workspace/prompts/p1');
 		await page.getByLabel('Command').fill('bad command');
-		await expect(page.getByText('Only alphanumeric characters and hyphens are allowed')).toBeVisible();
-		await expect(page.getByLabel('Command')).toHaveValue('prompt-1');
+		await expect(page.getByRole('alert')).toHaveText('Use only letters, numbers, hyphens and underscores.');
+		await expect(page.getByLabel('Command')).toHaveValue('bad command');
 		expect(calls.some((c) => c.path.endsWith('/update/meta'))).toBe(false);
 	});
 
@@ -284,8 +282,8 @@ test.describe('workspace prompts', () => {
 		await page.getByRole('button', { name: 'Edit', exact: true }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByLabel('Prompt Content').fill('Brand new content');
-		await dialog.getByLabel('Commit Message').fill('rewrite');
-		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+		await dialog.getByLabel('What changed').fill('rewrite');
+		await dialog.getByRole('button', { name: 'Save new version' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/p1/update')?.body)
 			.toMatchObject({
@@ -294,7 +292,7 @@ test.describe('workspace prompts', () => {
 				commit_message: 'rewrite',
 				is_production: true
 			});
-		await expect(page.getByText('Prompt updated successfully')).toBeVisible();
+		await expect(page.getByText('New version saved')).toBeVisible();
 	});
 
 	test('access control: changing visibility saves the new grants', async ({ page }) => {
@@ -303,6 +301,8 @@ test.describe('workspace prompts', () => {
 		await page.route('**/api/v1/groups/**', (route) =>
 			route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
 		);
+		// Access shows only with a second account (S4-D1).
+		await page.route('**/api/v1/users/search**', (route) => route.fulfill({ json: { users: [], total: 2 } }));
 		await page.goto('/workspace/prompts/p1');
 		await page.getByRole('button', { name: 'Access' }).click();
 		const dialog = page.getByRole('dialog');

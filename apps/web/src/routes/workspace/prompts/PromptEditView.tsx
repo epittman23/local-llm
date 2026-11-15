@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronLeft, Clipboard } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, ChevronLeft, Clipboard, History } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
+import { EditorError, type EditorProblem } from '@/components/common/EditorError';
 import { PromptHistoryMenu } from '@/components/common/PromptHistoryMenu';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
@@ -13,7 +14,12 @@ import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import {
 	deletePromptHistoryVersion,
@@ -29,7 +35,9 @@ import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { routePaths } from '@/routes/routePaths';
-import { type EditablePrompt, isValidCommand, type PromptDraft } from './promptTypes';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { CommandField } from './PromptCreateDialog';
+import { commandProblem, type EditablePrompt, INVALID_COMMAND, isValidCommand, type PromptDraft } from './promptTypes';
 
 type HistoryEntry = {
 	id: string;
@@ -75,6 +83,20 @@ export function PromptEditView({
 	const [showAccess, setShowAccess] = useState(false);
 	const [showEdit, setShowEdit] = useState(false);
 	const [contentCopied, setContentCopied] = useState(false);
+	// At 390 the history is a sheet opened from the header (#957); at md and up, a column.
+	const [showHistory, setShowHistory] = useState(false);
+	const singleUser = useSingleUser();
+	const ids = {
+		name: useId(),
+		command: useId(),
+		commandMsg: useId(),
+		content: useId(),
+		message: useId(),
+		problem: useId()
+	};
+	// FRM-2: the command's error under it. FRM-3 "at once": the line that says the fields saved.
+	const [commandError, setCommandError] = useState<string | null>(null);
+	const [metaStatus, setMetaStatus] = useState<'idle' | 'saved' | 'failed'>('idle');
 
 	// The last metadata that the server accepted, for revert-on-failure.
 	const saved = useRef({ name: prompt.name, command, tags });
@@ -143,8 +165,7 @@ export function PromptEditView({
 	const debouncedMetadataSave = useDebouncedCallback(
 		async (next: { name: string; command: string; tags: { name: string }[] }, unloading: boolean) => {
 			if (!isValidCommand(next.command)) {
-				toast.error('Only alphanumeric characters and hyphens are allowed in the command string.');
-				setCommand(saved.current.command);
+				setCommandError(INVALID_COMMAND);
 				return;
 			}
 			try {
@@ -157,12 +178,20 @@ export function PromptEditView({
 					unloading
 				);
 				saved.current = next;
-				toast.success('Saved');
+				setCommandError(null);
+				setMetaStatus('saved');
 			} catch (error) {
-				toast.error(`${error}`);
+				// A taken command stays in the field with the reason under it, to put right;
+				// any other failure puts back what last saved and says so beside the fields.
+				const taken = commandProblem(error, next.command);
+				if (taken) {
+					setCommandError(taken);
+					return;
+				}
 				setName(saved.current.name);
 				setCommand(saved.current.command);
 				setTags(saved.current.tags);
+				setMetaStatus('failed');
 			}
 		},
 		METADATA_SAVE_DELAY_MS
@@ -176,17 +205,19 @@ export function PromptEditView({
 	const [commitMessage, setCommitMessage] = useState('');
 	const [isProduction, setIsProduction] = useState(true);
 	const [saving, setSaving] = useState(false);
+	const [versionProblem, setVersionProblem] = useState<EditorProblem | null>(null);
 
 	// After a save the parent hands down the new content.
 	useEffect(() => setContent(prompt.content), [prompt.content]);
 
 	const saveNewVersion = async () => {
-		if (disabled) {
-			toast.error('You do not have permission to edit this prompt.');
-			return;
-		}
+		if (disabled) return;
+		setVersionProblem(null);
 		if (!isValidCommand(command)) {
-			toast.error('Only alphanumeric characters and hyphens are allowed in the command string.');
+			setVersionProblem({
+				message: `The command can't be saved: ${INVALID_COMMAND.toLowerCase()} Fix it first.`,
+				detail: null
+			});
 			return;
 		}
 		setSaving(true);
@@ -207,25 +238,25 @@ export function PromptEditView({
 			const entries = await loadHistory(true);
 			if (entries.length > 0) setSelected(entries[0]);
 		} catch (error) {
-			toast.error(`${error}`);
+			setVersionProblem({
+				message: commandProblem(error, command) ?? `Couldn't save the version. ${error}`,
+				detail: null
+			});
 		}
 		setSaving(false);
 	};
 
 	const setAsProduction = async (entry: HistoryEntry) => {
-		if (disabled) {
-			toast.error('You do not have permission to edit this prompt.');
-			return;
-		}
+		if (disabled) return;
 		try {
 			await setProductionPromptVersion(token, prompt.id, entry.id);
 			setVersionId(entry.id);
 			// That version's content is live now, so a new version starts from it;
 			// the dialog kept the previous one and saving would undo the switch (#222).
 			if (entry.snapshot?.content !== undefined) setContent(entry.snapshot.content);
-			toast.success('Production version updated');
+			toast.success(`The version from ${formatSecondsTimestamp(entry.created_at)} is now live`);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(`Couldn't make that version live. ${error}`);
 		}
 	};
 
@@ -237,7 +268,7 @@ export function PromptEditView({
 			const entries = await loadHistory(true);
 			if (selected?.id === id) setSelected(entries[0] ?? null);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(`Couldn't delete the version. ${error}`);
 		}
 	};
 
@@ -264,7 +295,10 @@ export function PromptEditView({
 									'relative px-1.5 py-1.5 pl-3',
 									active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
 								)}
-								onClick={() => setSelected(entry)}
+								onClick={() => {
+									setSelected(entry);
+									setShowHistory(false);
+								}}
 							>
 								<span
 									className={cn(
@@ -326,68 +360,97 @@ export function PromptEditView({
 			<Dialog open={showEdit} onOpenChange={setShowEdit}>
 				<DialogContent className="sm:max-w-2xl">
 					<DialogHeader>
-						<DialogTitle className="text-xs">Edit Prompt</DialogTitle>
-						<DialogDescription className="sr-only">Saving creates a new version of this prompt.</DialogDescription>
+						<DialogTitle>Edit prompt</DialogTitle>
+						<DialogDescription>Saving keeps this version and adds a new one.</DialogDescription>
 					</DialogHeader>
 					<form
+						className="flex flex-col gap-3"
 						onSubmit={(e) => {
 							e.preventDefault();
 							saveNewVersion();
 						}}
 					>
-						<div className="my-2">
-							<div className="text-muted-foreground text-xs">Prompt Content</div>
-							<textarea
-								className="mt-1 w-full resize-none bg-transparent text-xs"
-								placeholder="Write a summary in 50 words that summarizes {{topic}}."
-								aria-label="Prompt Content"
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={ids.content}>Prompt content</Label>
+							<Textarea
+								id={ids.content}
+								className="max-h-[50dvh] resize-none"
+								placeholder="e.g. Summarise {{topic}} in 50 words."
 								rows={6}
 								required
 								value={content}
 								onChange={(e) => setContent(e.target.value)}
 							/>
 						</div>
-						<div className="my-2">
-							<div className="text-muted-foreground text-xs">Commit Message (optional)</div>
-							<input
-								className="mt-1 w-full bg-transparent text-xs"
-								placeholder="Describe what changed..."
-								aria-label="Commit Message"
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor={ids.message}>What changed (optional)</Label>
+							<Input
+								id={ids.message}
+								placeholder="e.g. Asks for a shorter summary"
 								value={commitMessage}
 								onChange={(e) => setCommitMessage(e.target.value)}
 							/>
 						</div>
-						<div className="mt-4 flex items-center justify-between">
+						{versionProblem && <EditorError id={ids.problem} problem={versionProblem} />}
+						<div className="flex flex-wrap items-center justify-between gap-2">
 							<label className="flex cursor-pointer items-center gap-2">
 								<Checkbox checked={isProduction} onCheckedChange={(c) => setIsProduction(c === true)} />
-								<span className="text-xs">Set as Production</span>
+								<span>Make it the live version</span>
 							</label>
-							<Button type="submit" size="sm" disabled={saving}>
-								Save
+							<Button type="submit" disabled={saving} aria-busy={saving || undefined}>
 								{saving && <Spinner className="size-3.5" />}
+								Save new version
 							</Button>
 						</div>
 					</form>
 				</DialogContent>
 			</Dialog>
 
-			<Button
-				variant="ghost"
-				size="sm"
-				className="mb-1 w-fit"
-				type="button"
-				onClick={() => navigate(routePaths.workspacePrompts)}
-			>
-				<ChevronLeft className="size-3" strokeWidth={2} />
-				<span>Back</span>
-			</Button>
+			<Sheet open={showHistory} onOpenChange={setShowHistory}>
+				<SheetContent side="right" className="w-[min(20rem,85vw)] p-4">
+					<SheetHeader className="p-0">
+						<SheetTitle>History</SheetTitle>
+						<SheetDescription>Pick a version to see its content.</SheetDescription>
+					</SheetHeader>
+					<div className="min-h-0 flex-1 overflow-y-auto">{historySection}</div>
+				</SheetContent>
+			</Sheet>
 
-			<div className="flex shrink-0 items-start justify-between gap-3 pb-1">
-				<div className="min-w-0 flex-1">
-					<input
-						className="w-full bg-transparent text-sm"
-						placeholder="Prompt Name"
-						aria-label="Prompt Name"
+			<div className="mb-1 flex shrink-0 flex-wrap items-center justify-between gap-2">
+				<Button
+					variant="ghost"
+					size="sm"
+					className="w-fit"
+					type="button"
+					onClick={() => navigate(routePaths.workspacePrompts)}
+				>
+					<ChevronLeft className="size-3" strokeWidth={2} />
+					<span>Back</span>
+				</Button>
+				<div className="flex items-center gap-1.5 pr-0.5">
+					<Button variant="outline" size="sm" className="md:hidden" type="button" onClick={() => setShowHistory(true)}>
+						<History aria-hidden />
+						History
+					</Button>
+					{disabled ? (
+						<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">Read Only</span>
+					) : (
+						<>
+							<Button variant="outline" size="sm" type="button" onClick={() => setShowEdit(true)}>
+								Edit
+							</Button>
+							{!singleUser && <AccessButton onClick={() => setShowAccess(true)} />}
+						</>
+					)}
+				</div>
+			</div>
+
+			<div className="grid shrink-0 gap-3 pb-2 sm:grid-cols-2">
+				<div className="flex min-w-0 flex-col gap-1.5">
+					<Label htmlFor={ids.name}>Prompt name</Label>
+					<Input
+						id={ids.name}
+						placeholder="e.g. Summarise a topic"
 						value={name}
 						disabled={disabled}
 						onChange={(e) => {
@@ -395,40 +458,42 @@ export function PromptEditView({
 							scheduleMetadataSave({ name: e.target.value, command, tags });
 						}}
 					/>
-					<div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-2 text-xs">
-						<div className="flex min-w-0 flex-1 items-center gap-0.5">
-							<span>/</span>
-							<input
-								className="min-w-0 flex-1 bg-transparent"
-								placeholder="command"
-								aria-label="Command"
-								value={command}
-								disabled={disabled}
-								onChange={(e) => {
-									setCommand(e.target.value);
-									scheduleMetadataSave({ name, command: e.target.value, tags });
-								}}
-							/>
-						</div>
-					</div>
 				</div>
-
-				<div className="flex shrink-0 items-center gap-1.5 pr-0.5">
-					{!disabled ? (
-						<>
-							<Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
-								Edit
-							</Button>
-							<AccessButton onClick={() => setShowAccess(true)} />
-						</>
-					) : (
-						<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">Read Only</span>
-					)}
+				<div className="flex min-w-0 flex-col gap-1.5">
+					<Label htmlFor={ids.command}>Command</Label>
+					<CommandField
+						id={ids.command}
+						value={command}
+						disabled={disabled}
+						{...fieldProps(ids.commandMsg, { error: commandError, help: true })}
+						onChange={(value) => {
+							setCommand(value);
+							setCommandError(null);
+							scheduleMetadataSave({ name, command: value, tags });
+						}}
+					/>
+					<FieldMessage
+						id={ids.commandMsg}
+						error={commandError}
+						help={
+							disabled
+								? `Type /${command} in a chat to use it.`
+								: `Type /${command} in a chat to use it. The name, command and tags save as you change them.`
+						}
+					/>
 				</div>
 			</div>
+			{!disabled && metaStatus !== 'idle' && (
+				<p
+					role="status"
+					className={cn('text-dense shrink-0 pb-1', metaStatus === 'failed' ? 'text-danger' : 'text-foreground-muted')}
+				>
+					{metaStatus === 'saved' ? 'Saved' : "Couldn't save the name, command or tags. They are back as they were."}
+				</p>
+			)}
 
-			<div className="mb-1 flex items-center justify-between gap-2">
-				<div className="min-w-0 flex-1">
+			<div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+				<div className="min-w-0 flex-1 basis-48">
 					<Tags
 						tags={tags}
 						disabled={disabled}
@@ -449,14 +514,14 @@ export function PromptEditView({
 					<Button
 						variant="ghost"
 						size="xs"
-						className="max-w-56 min-w-0 shrink-0 truncate font-mono"
+						className="max-w-56 min-w-0 shrink truncate font-mono"
 						type="button"
 						onClick={() => {
 							copyToClipboard(prompt.id);
-							toast.success('ID copied to clipboard');
+							toast.success('ID copied');
 						}}
 					>
-						{prompt.id}
+						<span className="truncate">{prompt.id}</span>
 					</Button>
 				</Tip>
 			</div>
@@ -469,7 +534,7 @@ export function PromptEditView({
 				<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 					<div className="mb-1 flex shrink-0 items-center justify-between">
 						<div className="flex items-center gap-2">
-							<div className="text-muted-foreground text-xs">Prompt Content</div>
+							<div className="text-muted-foreground text-xs">Prompt content</div>
 							{selected && (
 								<span className="text-muted-foreground px-1 font-mono text-xs">{selected.id.slice(0, 7)}</span>
 							)}
@@ -485,6 +550,7 @@ export function PromptEditView({
 								)}
 								<PromptHistoryMenu
 									isProduction={selected.id === versionId}
+									date={formatSecondsTimestamp(selected.created_at)}
 									onDelete={() => deleteVersion(selected.id)}
 								/>
 							</div>
