@@ -12,7 +12,7 @@ import { getToolList } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useWorkspaceStore, type WorkspaceSection } from '@/lib/stores/workspaceStore';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { canEnterSection, canSeeTab, sectionOfPath, sectionPaths, tabOrder } from './workspaceAccess';
 
@@ -33,6 +33,9 @@ const countOf = (res: unknown): number | null => {
 
 /** A tab's count: an en dash while it is loading or could not be read, never 0 (DAT-2, STA-2). */
 export const countLabel = (count: number | null | undefined) => (typeof count === 'number' ? formatNumber(count) : '–');
+
+/** An editor's route (create or edit a model, skill or tool; edit a prompt), which has its own header and Back. */
+const EDITOR_PATH = /^\/workspace\/((models|skills|tools)\/(create|edit)|prompts\/(?!create$)[^/]+)$/;
 
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/workspace/+layout.svelte: the
@@ -103,9 +106,14 @@ export function WorkspaceLayout() {
 
 	if (!allowed) return <SectionSkeleton label="the workspace" />;
 
+	// LAY-4: on a phone an editor gets the height the workspace header and tabs
+	// would take; its own header has Back, and the app bar names the page.
+	const editing = EDITOR_PATH.test(pathname);
+
 	return (
 		<div className="flex h-full min-w-0 flex-col">
-			<div className="flex flex-col gap-3 border-b px-4 pt-4">
+			{editing && <h1 className="sr-only sm:hidden">Workspace</h1>}
+			<div className={cn('flex flex-col gap-3 border-b px-4 pt-4', editing && 'max-sm:hidden')}>
 				<div className="ps-[var(--shell-menu-inset,0px)]">
 					<PageHeader
 						title="Workspace"
