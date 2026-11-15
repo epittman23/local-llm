@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -105,9 +105,12 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 	const total = list.data?.pages[0]?.total ?? null;
 	const failed = list.isError || (list.isPaused && list.data === undefined);
 
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = debouncedQuery !== '' || viewOption !== '' || sourceOption !== '';
+	const wholeCount = useWorkspaceStore((s) => s.counts.knowledge);
 	useEffect(() => {
-		if (total !== null) setCount('knowledge', total);
-	}, [total, setCount]);
+		if (total !== null && !filtered) setCount('knowledge', total);
+	}, [total, filtered, setCount]);
 
 	useEffect(() => {
 		const node = sentinel.current;
@@ -247,6 +250,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 				/>
 			) : (
 				<div className="my-1">
+					{filtered && <ListMatchCount shown={total ?? items.length} total={wholeCount} noun="knowledge bases" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"

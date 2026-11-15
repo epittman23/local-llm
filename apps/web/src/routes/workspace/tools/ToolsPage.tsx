@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
@@ -89,9 +89,11 @@ export function ToolsPage() {
 	);
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = query.trim() !== '' || viewOption !== '';
 	useEffect(() => {
-		if (list.data) setCount('tools', items.length);
-	}, [list.data, items.length, setCount]);
+		if (list.data) setCount('tools', list.data.length);
+	}, [list.data, setCount]);
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['tools'] });
 
 	useEffect(() => {
@@ -265,6 +267,7 @@ export function ToolsPage() {
 				</div>
 			) : items.length !== 0 ? (
 				<div className="my-1">
+					{filtered && <ListMatchCount shown={items.length} total={list.data?.length ?? null} noun="tools" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"

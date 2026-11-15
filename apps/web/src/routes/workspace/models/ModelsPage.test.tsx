@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getModelItems } from '@/lib/apis/models';
+import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { ModelsPage } from './ModelsPage';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -80,5 +81,47 @@ describe('ModelsPage rows', () => {
 		const link = screen.getByRole('link', { name: 'New chat with Shared reviewer' });
 		expect(link.getAttribute('href')).toBe('/?model=shared');
 		expect(screen.queryByRole('switch')).toBeNull();
+	});
+});
+
+describe('ModelsPage counts and empty states', () => {
+	it('keeps the tab count while a search narrows the list, and says how many of the whole it shows (#955)', async () => {
+		useWorkspaceStore.setState({ counts: { models: null, knowledge: null, prompts: null, skills: null, tools: null } });
+		vi.mocked(getModelItems).mockImplementation(async (_t, query) =>
+			query
+				? { items: [model('tutor', 'Statistics tutor', true)], total: 1 }
+				: { items: [model('tutor', 'Statistics tutor', true), model('coder', 'Coder', true)], total: 2 }
+		);
+		renderPage();
+		await screen.findByText('Coder');
+		await waitFor(() => expect(useWorkspaceStore.getState().counts.models).toBe(2));
+		expect(screen.queryByRole('status')).toBeNull();
+
+		fireEvent.change(screen.getByRole('textbox', { name: 'Search Models' }), { target: { value: 'tutor' } });
+		expect(await screen.findByRole('status')).toHaveTextContent('1 of 2 models');
+		expect(useWorkspaceStore.getState().counts.models).toBe(2);
+	});
+
+	it('offers the first step on a fresh install (STA-3)', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({ items: [], total: 0 });
+		const router = renderPage();
+		expect(await screen.findByRole('heading', { name: 'No models yet' })).toBeVisible();
+		fireEvent.click(screen.getByRole('link', { name: 'New model' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/workspace/models/create'));
+	});
+
+	it('names the search that matched nothing and clears it (STA-3)', async () => {
+		vi.mocked(getModelItems).mockImplementation(async (_t, query) =>
+			query ? { items: [], total: 0 } : { items: [model('tutor', 'Statistics tutor', true)], total: 1 }
+		);
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		fireEvent.change(screen.getByRole('textbox', { name: 'Search Models' }), { target: { value: 'zzzz' } });
+		expect(await screen.findByRole('heading', { name: 'Nothing matches “zzzz”' })).toBeVisible();
+		const empty = screen.getByRole('heading', { name: 'Nothing matches “zzzz”' }).parentElement
+			?.parentElement as HTMLElement;
+		fireEvent.click(within(empty).getByRole('button', { name: 'Clear search' }));
+		expect(await screen.findByText('Statistics tutor')).toBeVisible();
+		expect(screen.getByRole('textbox', { name: 'Search Models' })).toHaveValue('');
 	});
 });

@@ -21,7 +21,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -126,9 +126,12 @@ export function ModelsPage() {
 	const total = list.data?.total ?? 0;
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = debouncedQuery !== '' || viewOption !== '' || selectedTag !== '';
+	const wholeCount = useWorkspaceStore((s) => s.counts.models);
 	useEffect(() => {
-		if (list.data) setCount('models', list.data.total);
-	}, [list.data, setCount]);
+		if (list.data && !list.isPlaceholderData && !filtered) setCount('models', list.data.total);
+	}, [list.data, list.isPlaceholderData, filtered, setCount]);
 	useDocumentTitle('Models');
 
 	const refetch = async () => {
@@ -374,6 +377,7 @@ export function ModelsPage() {
 				/>
 			) : (
 				<div id="model-list" className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
+					{filtered && !list.isPlaceholderData && <ListMatchCount shown={total} total={wholeCount} noun="models" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"
