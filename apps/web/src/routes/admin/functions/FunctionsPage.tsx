@@ -216,7 +216,13 @@ export function FunctionsPage() {
 					toast.error('No valid functions found in that file.');
 					return;
 				}
-				await importFunctions(functions, (fn) => createNewFunction(token, fn), toast);
+				// A refused create says which function, with the server's words behind Details (FBK-4).
+				const create = (fn: (typeof functions)[number]) =>
+					createNewFunction(token, fn).catch((error) => {
+						toastFailure(`Couldn't import “${fn.name}”.`, error);
+						return null;
+					});
+				await importFunctions(functions, create, toast);
 				refresh();
 			} catch (error) {
 				toast.error(`${error}`);

@@ -69,10 +69,12 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     its rendered text, and editing the extracted text is behind "Edit text".
     The Models row's second line is the base model and tags; the model's
     description is no longer shown on the row. Knowledge's description is
-    optional. A tool's or function's "Valves" are its "Settings". Code Black
+    optional. On Tools and Admin > Functions a tool's or function's "Valves"
+    are its "Settings". Code Black
     cannot parse is not sent, and the editor marks the line. Below 640 px an
-    editor does not repeat the workspace header and tabs. Failure toasts in
-    the workspace keep the server's words behind Details.
+    editor does not repeat the workspace header and tabs. The lists' failed
+    delete, export, import and clone toasts keep the server's words behind
+    Details.
 - **2026-11-15** (later): **The chat: the owner's decisions for the UX review's
   section 3 (#1116), and canvas Phase 1, the side panel.**
   - **The Arena model is off (#990, S3-D1 A).** `ENABLE_EVALUATION_ARENA_MODELS`

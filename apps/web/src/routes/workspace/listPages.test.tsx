@@ -241,6 +241,25 @@ describe.each(cases)('$name list', (c) => {
 		await waitFor(() => expect(c.deleted()).toHaveBeenCalled());
 	});
 
+	it('says a failed delete in plain words, with the server words behind Details (FBK-4)', async () => {
+		c.seed(c.items);
+		vi.mocked(c.deleted() as () => unknown).mockRejectedValueOnce('Database is locked');
+		const error = vi.spyOn(toast, 'error');
+		renderAt(c);
+		await screen.findByText(c.item);
+		fireEvent.pointerDown(screen.getAllByRole('button', { name: c.menu, exact: true } as never)[0], {
+			button: 0,
+			pointerType: 'mouse'
+		});
+		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: c.confirm }));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith(`Couldn't delete “${c.item}”.`, {
+				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
+			})
+		);
+	});
+
 	it('offers the first step when empty, and clears a filter that matched nothing (STA-3)', async () => {
 		c.seed([]);
 		renderAt(c);
@@ -273,6 +292,27 @@ describe('a row that could not be loaded for Clone says so, with the server word
 		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Clone' }));
 		await waitFor(() =>
 			expect(error).toHaveBeenCalledWith(`Couldn't load “${c.item}”.`, {
+				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
+			})
+		);
+	});
+});
+
+describe('a failed export of a whole list says so, with the server words behind Details (FBK-4)', () => {
+	it.each([
+		['Tools', 'tools-export', "Couldn't export the tools.", () => vi.mocked(toolsApi.exportTools)],
+		['Skills', 'skills-export', "Couldn't export the skills.", () => vi.mocked(skillsApi.exportSkills)]
+	] as const)('%s', async (name, actionId, words, exportAll) => {
+		const c = cases.find((x) => x.name === name) as Case;
+		const error = vi.spyOn(toast, 'error');
+		c.seed(c.items);
+		exportAll().mockRejectedValueOnce('Database is locked');
+		renderAt(c);
+		await screen.findByText(c.item);
+		const action = useWorkspaceStore.getState().actions.find((a) => a.id === actionId);
+		await act(async () => void (await action?.onClick?.()));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith(words, {
 				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
 			})
 		);
