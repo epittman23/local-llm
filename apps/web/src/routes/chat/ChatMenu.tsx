@@ -27,7 +27,18 @@ import { ShareChatDialog } from './sidebar/ChatDialogs';
  * for a saved chat: Controls, Share, Download (JSON or text), Archive, Delete.
  * The PDF download is not ported (as in the sidebar's menu).
  */
-export function ChatMenu({ chatId, title, onControls }: { chatId: string; title: string; onControls: () => void }) {
+export function ChatMenu({
+	chatId,
+	title,
+	onControls,
+	size = 'icon-sm'
+}: {
+	chatId: string;
+	title: string;
+	onControls: () => void;
+	/** The trigger's size: the phone bar's buttons are `icon`. */
+	size?: 'icon' | 'icon-sm';
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -57,7 +68,7 @@ export function ChatMenu({ chatId, title, onControls }: { chatId: string; title:
 			<DropdownMenu>
 				<Tip content="More">
 					<DropdownMenuTrigger asChild>
-						<Button type="button" aria-label="Chat menu" variant="ghost" size="icon-sm">
+						<Button type="button" aria-label="Chat menu" variant="ghost" size={size}>
 							<MoreHorizontal className="size-4" />
 						</Button>
 					</DropdownMenuTrigger>

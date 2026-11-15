@@ -9,7 +9,8 @@ import { LoadFailed } from '@/components/common/LoadFailed';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
-import { SidePanel } from '@/components/layout/SidePanel';
+import { ShellBarPortal } from '@/components/layout/ShellBarSlot';
+import { SidePanel, useMdUp } from '@/components/layout/SidePanel';
 import { Button } from '@/components/ui/button';
 import { canUseFeature } from '@/lib/access/features';
 import { updateChatById } from '@/lib/apis/chats';
@@ -414,6 +415,56 @@ export function ChatPage() {
 			retrying={folder.isFetching}
 		/>
 	) : null;
+	const isMd = useMdUp();
+	const iconSize = isMd ? 'icon-sm' : 'icon';
+	const modelSelector = (
+		<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
+	);
+	const headerActions = (
+		<>
+			{!id && temporaryAllowed && (
+				<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
+					<Button
+						type="button"
+						aria-label="Temporary Chat"
+						aria-pressed={temporary}
+						disabled={temporaryEnforced}
+						onClick={() => setTemporary((t) => !t)}
+						variant={temporary ? 'secondary' : 'ghost'}
+						size={iconSize}
+					>
+						<EyeOff className="size-4" />
+					</Button>
+				</Tip>
+			)}
+			<Tip content="Controls">
+				<Button
+					type="button"
+					aria-label="Controls"
+					aria-pressed={controlsOpen && preview === null}
+					onClick={() => {
+						setPreview(null);
+						setControlsOpen(!controlsOpen);
+					}}
+					variant={controlsOpen && preview === null ? 'secondary' : 'ghost'}
+					size={iconSize}
+				>
+					<SlidersHorizontal className="size-4" />
+				</Button>
+			</Tip>
+			{id && (
+				<ChatMenu
+					chatId={id}
+					title={session.title}
+					size={iconSize}
+					onControls={() => {
+						setPreview(null);
+						setControlsOpen(true);
+					}}
+				/>
+			)}
+		</>
+	);
 	if (gone) return <div className="flex h-full min-h-0 w-full flex-col justify-center overflow-y-auto">{gone}</div>;
 
 	return (
@@ -440,57 +491,17 @@ export function ChatPage() {
 						<div className="bg-background/85 absolute inset-0" />
 					</div>
 				)}
-				{/* On a phone, toasts and the connection banner start below this row (FBK-2). */}
-				<header data-page-top className="flex items-start gap-2 px-4 py-2">
-					<ModelSelector
-						models={models}
-						selected={selectedModels}
-						onChange={changeModels}
-						disabled={session.generating}
-					/>
-					<div className="ml-auto flex items-center gap-2 pt-1">
-						{!id && temporaryAllowed && (
-							<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
-								<Button
-									type="button"
-									aria-label="Temporary Chat"
-									aria-pressed={temporary}
-									disabled={temporaryEnforced}
-									onClick={() => setTemporary((t) => !t)}
-									variant={temporary ? 'secondary' : 'ghost'}
-									size="icon-sm"
-								>
-									<EyeOff className="size-4" />
-								</Button>
-							</Tip>
-						)}
-						<Tip content="Controls">
-							<Button
-								type="button"
-								aria-label="Controls"
-								aria-pressed={controlsOpen && preview === null}
-								onClick={() => {
-									setPreview(null);
-									setControlsOpen(!controlsOpen);
-								}}
-								variant={controlsOpen && preview === null ? 'secondary' : 'ghost'}
-								size="icon-sm"
-							>
-								<SlidersHorizontal className="size-4" />
-							</Button>
-						</Tip>
-						{id && (
-							<ChatMenu
-								chatId={id}
-								title={session.title}
-								onControls={() => {
-									setPreview(null);
-									setControlsOpen(true);
-								}}
-							/>
-						)}
-					</div>
-				</header>
+				{isMd ? (
+					// On a phone, toasts and the connection banner start below this row (FBK-2).
+					<header data-page-top className="flex items-start gap-2 px-4 py-2">
+						{modelSelector}
+						<div className="ml-auto flex items-center gap-2 pt-1">{headerActions}</div>
+					</header>
+				) : (
+					// A phone has one header row, the app bar (#1091): these go in its slot,
+					// and the model picker goes in the composer's toolbar.
+					<ShellBarPortal>{headerActions}</ShellBarPortal>
+				)}
 
 				{session.loading ? (
 					<div className="flex flex-1 items-center justify-center">
@@ -544,6 +555,7 @@ export function ChatPage() {
 					onAtModel={setAtModel}
 					toolbar={
 						<>
+							{!isMd && modelSelector}
 							<AttachMenu
 								onFiles={attachments.addFiles}
 								onWeb={(urls) => void attachments.addWeb(urls)}

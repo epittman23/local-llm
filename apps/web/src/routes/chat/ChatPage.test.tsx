@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ShellBarSlotContext } from '@/components/layout/ShellBarSlot';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getChatById } from '@/lib/apis/chats';
 import { getFolderById } from '@/lib/apis/folders';
@@ -108,6 +109,37 @@ function showAt(path: string) {
 		</QueryClientProvider>
 	);
 }
+
+describe('ChatPage on a phone (#1091)', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('has no header row of its own: Controls goes in the app bar, the model picker in the composer', () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		const slot = document.createElement('div');
+		document.body.append(slot);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<ShellBarSlotContext.Provider value={slot}>
+						<MemoryRouter>
+							<ChatPage />
+						</MemoryRouter>
+					</ShellBarSlotContext.Provider>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		expect(document.querySelector('header[data-page-top]')).toBeNull();
+		expect(slot).toContainElement(screen.getByRole('button', { name: 'Controls' }));
+		expect(slot).toContainElement(screen.getByRole('button', { name: 'Temporary Chat' }));
+		const picker = document.getElementById('model-selector-model-button');
+		expect(picker).not.toBeNull();
+		expect(slot.contains(picker)).toBe(false);
+		slot.remove();
+	});
+});
 
 describe('ChatPage: a link to something that is not there (NAV-3, #953)', () => {
 	it('says a missing chat no longer exists, in place, and offers the ways onward', async () => {

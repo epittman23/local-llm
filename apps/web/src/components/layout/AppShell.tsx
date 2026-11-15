@@ -23,6 +23,7 @@ import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { routePaths } from '@/routes/routePaths';
 import { BootSplash } from './BootSplash';
+import { ShellBarSlotContext } from './ShellBarSlot';
 import { SidebarContent, SidebarRail } from './Sidebar';
 import { useTopBand } from './topBand';
 
@@ -41,6 +42,9 @@ const SHORT_PHONE_MENU =
 	'max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:left-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:border';
 /** What else the bar holds (the mark, the page's name, New chat) leaves with it. */
 const SHORT_PHONE_HIDDEN = '[@media(max-height:520px)]:hidden';
+/** A page's own bar buttons (the slot) float at the top right instead, like the menu button at the left. */
+const SHORT_PHONE_SLOT =
+	'max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:right-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:rounded-lg max-md:[@media(max-height:520px)]:border';
 
 /**
  * The persistent shell every React route renders inside (see AppRouter.tsx):
@@ -71,6 +75,8 @@ export function AppShell() {
 	// A state, not a ref: the bar mounts only once the shell replaces the splash.
 	const [bar, setBar] = useState<HTMLElement | null>(null);
 	useTopBand(bar);
+	// Where a page puts its own buttons in the phone bar (ShellBarPortal).
+	const [slot, setSlot] = useState<HTMLElement | null>(null);
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
 	useShortcuts();
@@ -160,9 +166,18 @@ export function AppShell() {
 					</Sheet>
 					{/* The page's name, so the bar says where you are; the app's name is the mark's (WRD-3). */}
 					<AppMark size={24} label={appName} className={cn(foldsBar && SHORT_PHONE_HIDDEN)} />
-					<span className={cn('text-body font-title min-w-0 flex-1 truncate', foldsBar && SHORT_PHONE_HIDDEN)}>
+					<span
+						className={cn('text-body font-title min-w-0 flex-1 truncate', foldsBar && SHORT_PHONE_HIDDEN)}
+						title={page ?? appName}
+					>
 						{page ?? appName}
 					</span>
+					{/* The page's own buttons (the chat's Controls and menu, #1091). */}
+					<div
+						ref={setSlot}
+						data-testid="shell-bar-slot"
+						className={cn('flex shrink-0 items-center empty:hidden', foldsBar && SHORT_PHONE_SLOT)}
+					/>
 					<Tooltip>
 						<TooltipTrigger asChild>
 							<Button
@@ -183,7 +198,9 @@ export function AppShell() {
 
 				<main id={CONTENT_ID} tabIndex={-1} className="min-h-0 flex-1 overflow-auto">
 					{heading === 'sr' && <h1 className="sr-only">{page}</h1>}
-					<Outlet />
+					<ShellBarSlotContext.Provider value={slot}>
+						<Outlet />
+					</ShellBarSlotContext.Provider>
 				</main>
 				<SettingsModal />
 				<SearchChatsDialog open={searchOpen} onOpenChange={setSearchOpen} />
