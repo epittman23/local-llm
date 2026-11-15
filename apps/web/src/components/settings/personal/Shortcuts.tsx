@@ -17,7 +17,7 @@ import {
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KEYBINDINGS_KEY, SUPPORTED_SHORTCUTS, useKeybindings } from '@/lib/useShortcuts';
 import { cn } from '@/lib/utils';
-import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '../controls';
+import { SavedNote, SettingRow, SettingSwitch, SettingsForm, SettingsSection, useSavedFlash } from '../controls';
 
 /** A fixed shortcut's keys as the Svelte list shows them ('mod' is Ctrl, or ⌘ on a Mac). */
 const fixedChord = (keys: string[]) =>
@@ -68,19 +68,28 @@ export default function Shortcuts() {
 			return acc;
 		}, {});
 
+	const { isSaved, flash } = useSavedFlash();
 	const conflictOf = (id: Shortcut, chord: string) =>
 		(Object.entries(bindings) as [Shortcut, string][]).find(([other, c]) => other !== id && c === chord)?.[0] ?? null;
 
 	return (
-		<SettingsForm title="Keyboard" footer={false}>
+		<SettingsForm title="Keyboard" footer={false} savesAtOnce>
 			<SettingsSection first>
 				<SettingRow label="Keyboard Shortcuts" description="Use keyboard shortcuts across the app.">
 					{(id) => (
-						<SettingSwitch
-							labelledBy={id}
-							checked={enabled}
-							onChange={(v) => void update({ keyboardShortcuts: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
-						/>
+						<span className="flex items-center gap-3">
+							{isSaved('keyboardShortcuts') && <SavedNote />}
+							<SettingSwitch
+								labelledBy={id}
+								checked={enabled}
+								onChange={(v) =>
+									void update({ keyboardShortcuts: v }).then(
+										() => flash(['keyboardShortcuts']),
+										(e) => toast.error(`${e?.message ?? e}`)
+									)
+								}
+							/>
+						</span>
 					)}
 				</SettingRow>
 			</SettingsSection>

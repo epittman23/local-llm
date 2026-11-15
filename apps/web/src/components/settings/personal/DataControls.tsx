@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Link2Off, Trash2 } from 'lucide-react';
+import { Copy, Link2Off, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -19,8 +19,10 @@ import {
 import { deleteFileById, getFiles } from '@/lib/apis/files';
 import { importPayload, parseChatExport } from '@/lib/chat/importChats';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
-import { SettingRow, SettingsForm, SettingsSection } from '../controls';
+import { appHref } from '@/routes/routePaths';
+import { ChatTime, SettingRow, SettingsForm, SettingsSection } from '../controls';
 
 type Row = {
 	id: string;
@@ -31,7 +33,13 @@ type Row = {
 	share_id?: string;
 };
 
-/** Ports layout/SharedChatsModal.svelte: chats the user has shared, each of which can be unshared. */
+/** GET /chats/shared answers 60 rows a page (routers/chats.py); a shorter page is the last. */
+const SHARED_PAGE_SIZE = 60;
+
+/**
+ * Ports layout/SharedChatsModal.svelte: chats the user has shared, each with
+ * its link (opened or copied) and a Stop sharing button (#1006).
+ */
 function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const list = useInfiniteQuery({
@@ -42,31 +50,62 @@ function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 			const res = await getSharedChatList(token, pageParam).catch(() => null);
 			return (Array.isArray(res) ? res : []) as Row[];
 		},
-		getNextPageParam: (last, pages) => (last.length ? pages.length + 1 : undefined)
+		getNextPageParam: (last, pages) => (last.length >= SHARED_PAGE_SIZE ? pages.length + 1 : undefined)
 	});
 	const rows = (list.data?.pages ?? []).flat();
+	const link = (c: Row) => appHref(`/s/${c.share_id ?? c.id}`);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent className="sm:max-w-xl">
 				<DialogHeader>
-					<DialogTitle>Shared Chats</DialogTitle>
-					<DialogDescription className="sr-only">Chats you have shared by link</DialogDescription>
+					<DialogTitle>Shared chats</DialogTitle>
+					<DialogDescription>Chats anyone with the link can open. Stop sharing to turn a link off.</DialogDescription>
 				</DialogHeader>
-				<ul className="max-h-96 overflow-y-auto text-sm" aria-label="Shared chats">
+				<ul className="max-h-96 overflow-y-auto" aria-label="Shared chats">
 					{rows.map((c) => (
-						<li key={c.id} className="flex items-center gap-2 border-b py-1.5 last:border-0">
-							<span className="min-w-0 flex-1 truncate">{c.title}</span>
+						<li key={c.id} className="flex flex-wrap items-center gap-2 border-b py-2 last:border-0">
+							<div className="min-w-0 flex-1">
+								<a
+									href={link(c)}
+									target="_blank"
+									rel="noreferrer"
+									className="block truncate hover:underline"
+									title={c.title}
+								>
+									{c.title}
+								</a>
+								<span className="text-foreground-muted text-dense">
+									<ChatTime seconds={c.updated_at} />
+								</span>
+							</div>
 							<Button
 								variant="ghost"
-								size="icon-xs"
+								size="sm"
 								type="button"
-								aria-label={`Unshare ${c.title}`}
+								aria-label={`Copy link to ${c.title}`}
 								onClick={async () => {
-									await deleteSharedChatById(token, c.id).catch((e) => toast.error(`${e}`));
+									if (await copyToClipboard(`${window.location.origin}${link(c)}`)) toast.success('Link copied');
+									else toast.error('The link could not be copied.');
+								}}
+							>
+								<Copy aria-hidden />
+								Copy link
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								type="button"
+								aria-label={`Stop sharing ${c.title}`}
+								onClick={async () => {
+									await deleteSharedChatById(token, c.id).then(
+										() => toast.success('Stopped sharing'),
+										(e) => toast.error(`${e}`)
+									);
 									void list.refetch();
 								}}
 							>
-								<Link2Off className="size-3.5" />
+								<Link2Off aria-hidden />
+								Stop sharing
 							</Button>
 						</li>
 					))}
@@ -74,7 +113,9 @@ function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 						<InfiniteLoader onVisible={() => !list.isFetchingNextPage && void list.fetchNextPage()} />
 					)}
 				</ul>
-				{!list.isLoading && !rows.length && <p className="text-muted-foreground text-sm">You have no shared chats.</p>}
+				{!list.isLoading && !rows.length && (
+					<p className="text-foreground-muted">No shared chats. Share a chat from its menu to get a link.</p>
+				)}
 			</DialogContent>
 		</Dialog>
 	);
@@ -95,7 +136,7 @@ function FilesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Files</DialogTitle>
+					<DialogTitle>Uploaded files</DialogTitle>
 					<DialogDescription className="sr-only">Files you have uploaded</DialogDescription>
 				</DialogHeader>
 				<ul className="max-h-96 overflow-y-auto text-sm" aria-label="Files">
@@ -154,7 +195,7 @@ export default function DataControls() {
 	};
 
 	return (
-		<SettingsForm title="Data Controls" footer={false}>
+		<SettingsForm title="Data controls" footer={false}>
 			<input
 				ref={input}
 				type="file"
@@ -164,15 +205,14 @@ export default function DataControls() {
 				onChange={(e) => void importFile(e.target.files?.[0]).then(() => (e.target.value = ''))}
 			/>
 			<SettingsSection title="Chats" first>
-				<SettingRow label="Import Chats" description="Import chat history from a JSON export file.">
-					<Button type="button" size="sm" variant="outline" onClick={() => input.current?.click()}>
-						Import
+				<SettingRow label="Import" description="Add chats from a JSON export (this app's, or ChatGPT's).">
+					<Button type="button" variant="outline" onClick={() => input.current?.click()}>
+						Import chats
 					</Button>
 				</SettingRow>
-				<SettingRow label="Export Chats" description="Download your chat history as a JSON export.">
+				<SettingRow label="Export" description="Download every chat as one JSON file.">
 					<Button
 						type="button"
-						size="sm"
 						variant="outline"
 						onClick={async () =>
 							saveAs(
@@ -181,54 +221,49 @@ export default function DataControls() {
 							)
 						}
 					>
-						Export
+						Export chats
 					</Button>
 				</SettingRow>
-				<SettingRow label="Shared Chats" description="Review and manage chats you have shared.">
-					<Button type="button" size="sm" variant="outline" onClick={() => setShared(true)}>
-						Manage
+				<SettingRow label="Shared chats" description="See the links you have shared, copy one, or stop sharing.">
+					<Button type="button" variant="outline" onClick={() => setShared(true)}>
+						Manage shared chats
 					</Button>
 				</SettingRow>
-				<SettingRow label="Archive All Chats" description="Move every chat into the archive after confirmation.">
-					<Button type="button" size="sm" variant="outline" onClick={() => setConfirm('archive')}>
-						Archive All
+				<SettingRow label="Archive everything" description="Move every chat out of the sidebar into the archive.">
+					<Button type="button" variant="outline" onClick={() => setConfirm('archive')}>
+						Archive all chats
 					</Button>
 				</SettingRow>
-				<SettingRow label="Delete All Chats" description="Permanently delete every chat after confirmation.">
-					<Button
-						type="button"
-						size="sm"
-						variant="outline"
-						className="text-destructive"
-						onClick={() => setConfirm('delete')}
-					>
-						Delete All
+				<SettingRow label="Delete everything" description="Delete every chat and its messages for good.">
+					<Button type="button" variant="destructive" onClick={() => setConfirm('delete')}>
+						Delete all chats
 					</Button>
 				</SettingRow>
 			</SettingsSection>
 			<SettingsSection title="Files">
-				<SettingRow label="Manage Files" description="Open the file manager for uploaded files.">
-					<Button type="button" size="sm" variant="outline" onClick={() => setFilesOpen(true)}>
-						Manage
+				<SettingRow label="Uploaded files" description="See and delete the files you have uploaded.">
+					<Button type="button" variant="outline" onClick={() => setFilesOpen(true)}>
+						Manage files
 					</Button>
 				</SettingRow>
 			</SettingsSection>
 			<ConfirmDialog
 				open={confirm !== null}
 				onOpenChange={(o) => !o && setConfirm(null)}
-				title={confirm === 'archive' ? 'Archive All Chats' : 'Delete All Chats'}
-				confirmLabel={confirm === 'archive' ? 'Archive All' : 'Delete All'}
+				title={confirm === 'archive' ? 'Archive all chats?' : 'Delete all chats?'}
+				confirmLabel={confirm === 'archive' ? 'Archive all chats' : 'Delete all chats'}
 				onConfirm={async () => {
 					navigate('/');
-					await (confirm === 'archive' ? archiveAllChats(token) : deleteAllChats(token)).catch((e) =>
-						toast.error(`${e}`)
+					await (confirm === 'archive' ? archiveAllChats(token) : deleteAllChats(token)).then(
+						() => toast.success(confirm === 'archive' ? 'All chats archived' : 'All chats deleted'),
+						(e) => toast.error(`${e}`)
 					);
 					void refresh();
 				}}
 			>
 				{confirm === 'archive'
-					? 'Are you sure you want to archive all chats? This action cannot be undone.'
-					: 'Are you sure you want to delete all chats? This action cannot be undone.'}
+					? 'Every chat leaves the sidebar. You can unarchive them from Archived chats.'
+					: 'Every chat and its messages are deleted. This cannot be undone.'}
 			</ConfirmDialog>
 			<SharedChatsDialog open={shared} onOpenChange={setShared} />
 			<FilesDialog open={filesOpen} onOpenChange={setFilesOpen} />

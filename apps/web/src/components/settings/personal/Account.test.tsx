@@ -55,20 +55,34 @@ describe('Account tab after its loads (#259)', () => {
 		vi.clearAllMocks();
 	});
 
-	it('saves what it loaded', async () => {
+	it('saves what it loaded, with the change, once something changed (#951)', async () => {
 		render(<Account />);
 		await screen.findByDisplayValue('my bio');
+		expect(saveButton()).toBeDisabled();
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ann B' } });
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
 		expect(saveButton()).toBeEnabled();
 		fireEvent.click(saveButton());
 		await waitFor(() => expect(users.updateUserVariables).toHaveBeenCalledWith('jwt', { team: 'a' }));
 		expect(auths.updateUserProfile).toHaveBeenCalledWith('jwt', {
-			name: 'Ann',
+			name: 'Ann B',
 			profile_image_url: 'data:image/png;base64,AAAA',
 			bio: 'my bio',
 			gender: 'female',
 			date_of_birth: '1990-01-02'
 		});
 		expect(toastError).not.toHaveBeenCalled();
+		await waitFor(() => expect(screen.getByText('All changes saved')).toBeInTheDocument());
+	});
+
+	it('Discard changes puts back what was loaded', async () => {
+		render(<Account />);
+		await screen.findByDisplayValue('my bio');
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Someone else' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Name')).toHaveValue('Ann');
+		expect(saveButton()).toBeDisabled();
 	});
 
 	it.each([
@@ -136,10 +150,10 @@ describe('Account tab: the password fields have a form of their own (#260)', () 
 
 	const fill = async () => {
 		render(<Account />);
-		const current = await screen.findByLabelText('Current Password');
+		const current = await screen.findByLabelText('Current password');
 		fireEvent.change(current, { target: { value: 'old-pass' } });
-		fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'new-pass' } });
-		fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'new-pass' } });
+		fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'new-pass' } });
+		fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'new-pass' } });
 		return current as HTMLInputElement;
 	};
 
@@ -150,7 +164,7 @@ describe('Account tab: the password fields have a form of their own (#260)', () 
 		const form = document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement;
 		expect(form).toHaveAttribute('aria-label', 'Change Password');
 		expect(saveButton().closest('form')?.contains(form)).toBe(false);
-		for (const field of ['New Password', 'Confirm Password'])
+		for (const field of ['New password', 'Confirm password'])
 			expect(screen.getByLabelText(field)).toHaveAttribute('form', form.id);
 		expect(screen.getByRole('button', { name: 'Update password' })).toHaveAttribute('form', form.id);
 		fireEvent.submit(form);
@@ -172,12 +186,12 @@ describe('Account tab: the password fields have a form of their own (#260)', () 
 		answer(false);
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled());
 		// Refused: the fields are cleared, so the button stays off until they are filled again.
-		expect(screen.getByLabelText('Current Password')).toHaveValue('');
+		expect(screen.getByLabelText('Current password')).toHaveValue('');
 	});
 
 	it('does nothing while a password is missing', async () => {
 		render(<Account />);
-		const current = await screen.findByLabelText('Current Password');
+		const current = await screen.findByLabelText('Current password');
 		fireEvent.submit(document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement);
 		await Promise.resolve();
 		expect(auths.updateUserPassword).not.toHaveBeenCalled();
@@ -187,6 +201,7 @@ describe('Account tab: the password fields have a form of their own (#260)', () 
 		vi.mocked(auths.updateUserProfile).mockImplementation(async (_t, body) => ({ id: 'u1', ...body }));
 		vi.mocked(users.updateUserVariables).mockImplementation(async (_t, variables) => ({ variables }));
 		await fill();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ann B' } });
 		fireEvent.click(saveButton());
 		await waitFor(() => expect(auths.updateUserProfile).toHaveBeenCalled());
 		expect(auths.updateUserPassword).not.toHaveBeenCalled();

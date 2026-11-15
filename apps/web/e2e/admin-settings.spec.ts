@@ -36,7 +36,7 @@ async function mockConfigApi(
 const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
 
 test.describe('settings modal host', () => {
-	test('?settings=admin:<tab> opens the modal on that tab and cleans the URL', async ({ page }) => {
+	test('?settings=admin:<tab> opens the modal on that tab and keeps it in the address (NAV-1)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', {
 			'/configs/code_execution': { ENABLE_CODE_EXECUTION: false, ENABLE_CODE_INTERPRETER: false }
@@ -45,16 +45,36 @@ test.describe('settings modal host', () => {
 		await expect(modal(page)).toBeVisible();
 		await expect(modal(page).getByRole('tab', { name: 'Code Execution', selected: true })).toBeVisible();
 		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
+		await expect(page).toHaveURL(/\?settings=admin(%3A|:)code-execution$/);
+		await expect(page).toHaveTitle('Settings · local-llm');
+		await modal(page).getByRole('button', { name: 'Close' }).click();
+		await expect(modal(page)).toHaveCount(0);
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
-	test('/admin/settings/<tab> redirects into the modal; Back closes it', async ({ page }) => {
+	test('/admin/settings/<tab> redirects into the modal; its close button closes it', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/utils', {});
 		await page.goto('/admin/settings/db');
 		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
-		await modal(page).getByRole('button', { name: 'Back' }).click();
+		await expect(modal(page).getByRole('button', { name: 'Back' })).toHaveCount(0);
+		await modal(page).getByRole('button', { name: 'Close' }).click();
 		await expect(modal(page)).toHaveCount(0);
+	});
+
+	test('opened from the app it adds a history entry: Back closes it (NAV-1)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockConfigApi(page, '/configs', { '/configs/subagents': {} });
+		await page.goto('/');
+		await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+		await page.keyboard.press('ControlOrMeta+.');
+		await expect(modal(page)).toBeVisible();
+		await expect(page).toHaveURL(/\?settings=general$/);
+		await modal(page).getByRole('tab', { name: 'Interface', exact: true }).click();
+		await expect(page).toHaveURL(/\?settings=interface$/);
+		await page.goBack();
+		await expect(modal(page)).toHaveCount(0);
+		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
 	test('the Settings tab in the admin layout opens the modal', async ({ page }) => {
@@ -93,16 +113,22 @@ test.describe('settings modal host', () => {
 		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
 	});
 
-	test('search filters by title and keyword, and moves the selection to the first match', async ({ page }) => {
+	test('search finds tabs and settings, opens the chosen one, and says when nothing matches (#1001)', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/code_execution': {} });
 		await page.goto('/?settings=admin:db');
 		const search = modal(page).getByLabel('Search');
 		await search.fill('sandbox');
-		await expect(modal(page).getByRole('tab')).toHaveCount(1);
+		await expect(modal(page).getByRole('option')).toHaveText(['Code Execution']);
+		// The open tab stays while searching.
+		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
+		await search.press('Enter');
 		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText('Code Execution');
 		await search.fill('zzzz');
-		await expect(modal(page).getByText('No matches')).toBeVisible();
+		await expect(modal(page).getByText('No settings match ‘zzzz’.')).toBeVisible();
+		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
 		await search.fill('');
 		await expect(modal(page).getByRole('tab').first()).toBeVisible();
 	});

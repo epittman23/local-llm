@@ -1,25 +1,48 @@
-import { ChevronDown } from 'lucide-react';
-import { type ComponentProps, type ReactNode, useId } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { SaveBar } from '@/components/ui/save-bar';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
+import { dayjs } from '@/lib/utils/dates';
 
-// The compact form vocabulary of the admin Settings tabs. In the Svelte app each
-// tab repeats these class strings and (in the older tabs) hand-rolls the layout;
-// admin/Settings/AdminSetting{Section,Row,Field}.svelte are the shared parts and
-// are ported here, with the input classes that every tab copies.
+// The form vocabulary of every Settings tab, personal and admin. In the Svelte
+// app each tab repeats these class strings and (in the older tabs) hand-rolls
+// the layout; admin/Settings/AdminSetting{Section,Row,Field}.svelte are the
+// shared parts and are ported here. #999 brought them to the standard: one
+// 40 rem column (LAY-6), labels at text-body/550 beside their control,
+// descriptions at text-dense, section headings at text-title (TYP-2, TYP-3).
 
+/** The standard field look (FRM-1, LAY-2) for a raw input that cannot be the shared `Input`. */
 export const settingInputClass =
-	'h-7 w-full rounded-lg border bg-muted/40 px-2 text-xs transition-colors placeholder:text-foreground-muted focus:border-ring disabled:opacity-50';
+	'h-9 w-full min-w-0 rounded-lg border border-border-control bg-surface-1 px-3 text-body transition-colors placeholder:text-foreground-muted focus:border-focus disabled:text-foreground-disabled';
 export const settingTextareaClass =
-	'w-full rounded-lg border bg-muted/40 px-2 py-1.5 text-xs transition-colors placeholder:text-foreground-muted focus:border-ring';
+	'w-full rounded-lg border border-border-control bg-surface-1 px-3 py-2 text-body transition-colors placeholder:text-foreground-muted focus:border-focus';
+
+/** `Speech playback speed` -> `speech-playback-speed`: the `data-setting` a search result scrolls to (#1001). */
+export const settingSlug = (label: string) =>
+	label
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
 
 /**
- * A settings tab: heading, scrolling body, and (unless `footer` is false) a
- * Save button pinned below it. Submitting the form saves; `saving` disables the
- * button and shows a spinner (the Svelte tabs each do this differently -- some
- * do not guard double submits at all); `disabled` turns saving off without one.
+ * A settings tab: heading, scrolling body, and a footer, in one of FRM-3's two
+ * ways of saving.
+ *
+ * - On request, with `dirty` (and `onDiscard`): the shared SaveBar, and the
+ *   modal asks "Discard changes?" before the tab is left while dirty (#951).
+ * - At once, with `savesAtOnce`: no footer, and a line under the heading says
+ *   so; each control confirms its own save (`SavedNote`).
+ * - Neither (the admin tabs, until they adopt `dirty`): a Save button.
+ *
+ * Submitting the form saves; `saving` disables the button and shows a spinner
+ * (the Svelte tabs each do this differently -- some do not guard double
+ * submits at all); `disabled` turns saving off without one.
  */
 export function SettingsForm({
 	title,
@@ -28,6 +51,9 @@ export function SettingsForm({
 	loading = false,
 	disabled = false,
 	footer = true,
+	dirty,
+	onDiscard,
+	savesAtOnce = false,
 	after,
 	children
 }: {
@@ -37,13 +63,26 @@ export function SettingsForm({
 	loading?: boolean;
 	disabled?: boolean;
 	footer?: boolean;
+	/** Changes not yet saved: shows the SaveBar and guards leaving the tab. */
+	dirty?: boolean;
+	onDiscard?: () => void;
+	/** Every control saves as it changes. */
+	savesAtOnce?: boolean;
 	/** Rendered after the form, outside it: another form whose fields sit in this one and name it with `form=`. */
 	after?: ReactNode;
 	children: ReactNode;
 }) {
+	const guarded = dirty !== undefined;
+	useEffect(() => {
+		if (!guarded) return;
+		useSettingsModalStore.getState().setDirty(Boolean(dirty));
+	}, [guarded, dirty]);
+	useEffect(() => {
+		if (guarded) return () => useSettingsModalStore.getState().setDirty(false);
+	}, [guarded]);
 	const form = (
 		<form
-			className="flex h-full flex-col justify-between text-sm"
+			className="flex h-full flex-col text-body"
 			onSubmit={(e) => {
 				e.preventDefault();
 				// A dialog rendered inside a tab (a portal, but still in React's tree) with
@@ -53,21 +92,33 @@ export function SettingsForm({
 				if (!saving && !disabled) onSubmit?.();
 			}}
 		>
-			<h2 className="mb-4 text-sm font-medium">{title}</h2>
-			<div className="min-h-0 flex-1 overflow-y-auto pr-1.5">
+			<div className="mb-6 pe-10">
+				<h2 className="text-heading font-title tracking-tight">{title}</h2>
+				{savesAtOnce && <p className="text-foreground-muted mt-1 text-dense">Changes are saved as you make them.</p>}
+			</div>
+			<div data-settings-body className="min-h-0 flex-1 overflow-y-auto pe-2">
 				{loading ? (
 					<div className="flex h-full items-center justify-center">
 						<Spinner className="size-6" />
 					</div>
 				) : (
-					children
+					<div className="max-w-160 pb-6">{children}</div>
 				)}
 			</div>
-			{footer && !loading && (
-				<div className="flex justify-end pt-3 text-sm font-normal">
-					<Button type="submit" disabled={saving || disabled}>
-						Save
+			{guarded && !loading && (
+				<SaveBar
+					className="max-w-160"
+					dirty={Boolean(dirty)}
+					saving={saving}
+					disabled={disabled}
+					onDiscard={() => onDiscard?.()}
+				/>
+			)}
+			{footer && !guarded && !savesAtOnce && !loading && (
+				<div className="flex max-w-160 justify-end border-t pt-3">
+					<Button type="submit" disabled={saving || disabled} aria-busy={saving || undefined}>
 						{saving && <Spinner className="size-3.5" />}
+						{saving ? 'Saving…' : 'Save'}
 					</Button>
 				</div>
 			)}
@@ -82,7 +133,33 @@ export function SettingsForm({
 	);
 }
 
-/** Ports AdminSettingSection.svelte: an optional heading over a column of settings. */
+/** FRM-3 "at once": the line beside a control that confirms it saved. */
+export function SavedNote() {
+	return (
+		<span role="status" className="text-success inline-flex items-center gap-1 text-dense">
+			<Check aria-hidden className="size-3.5" />
+			Saved
+		</span>
+	);
+}
+
+/** Which settings just saved, for their `SavedNote`: each shows for `ms` after `flash(keys)`. */
+export function useSavedFlash(ms = 2000) {
+	const [saved, setSaved] = useState<ReadonlySet<string>>(new Set());
+	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	useEffect(() => () => clearTimeout(timer.current), []);
+	const flash = useCallback(
+		(keys: Iterable<string>) => {
+			setSaved(new Set(keys));
+			clearTimeout(timer.current);
+			timer.current = setTimeout(() => setSaved(new Set()), ms);
+		},
+		[ms]
+	);
+	return { isSaved: (key: string) => saved.has(key), flash };
+}
+
+/** Ports AdminSettingSection.svelte: an optional heading over a column of settings, below a divider. */
 export function SettingsSection({
 	title,
 	first = false,
@@ -95,17 +172,23 @@ export function SettingsSection({
 	children: ReactNode;
 }) {
 	return (
-		<section aria-label={title} className={cn(first ? '' : 'mt-5', className)}>
-			{title && <h3 className="text-muted-foreground mb-2 text-xs">{title}</h3>}
-			<div className="flex flex-col gap-2.5">{children}</div>
+		<section
+			aria-label={title}
+			data-setting={title ? settingSlug(title) : undefined}
+			className={cn(first ? '' : 'mt-8 border-t pt-6', className)}
+		>
+			{title && <h3 className="text-title font-title mb-4 tracking-tight">{title}</h3>}
+			<div className="flex flex-col gap-4">{children}</div>
 		</section>
 	);
 }
 
 /**
- * Ports AdminSettingRow.svelte: label (and a description underneath) on the
- * left, the control on the right. `children` may be a function of the label's
- * id so the control can be `aria-labelledby` it.
+ * Ports AdminSettingRow.svelte: the label (and its description under it)
+ * beside the control, which wraps under the label when the column is narrow.
+ * `children` may be a function of the label's id so the control can be
+ * `aria-labelledby` it. A string label also names the row for the settings
+ * search (`data-setting`, #1001).
  */
 export function SettingRow({
 	label,
@@ -122,15 +205,21 @@ export function SettingRow({
 }) {
 	const labelId = useId();
 	return (
-		<>
-			<div className={cn('flex items-center justify-between gap-4', className)}>
-				<div id={labelId} className={cn('text-muted-foreground min-w-0 text-xs', labelClassName)}>
+		<div
+			data-setting={typeof label === 'string' ? settingSlug(label) : undefined}
+			className={cn(
+				'-mx-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-lg px-2 py-1 transition-colors data-flash:bg-surface-3',
+				className
+			)}
+		>
+			<div className="min-w-0 flex-1 basis-48">
+				<div id={labelId} className={cn('text-foreground-strong font-strong', labelClassName)}>
 					{label}
 				</div>
-				<div className="min-w-0">{typeof children === 'function' ? children(labelId) : children}</div>
+				{description && <p className="text-foreground-muted mt-0.5 text-dense">{description}</p>}
 			</div>
-			{description && <p className="text-foreground-muted -mt-1 text-caption">{description}</p>}
-		</>
+			<div className="max-w-full min-w-0 shrink-0">{typeof children === 'function' ? children(labelId) : children}</div>
+		</div>
 	);
 }
 
@@ -149,14 +238,17 @@ export function SettingField({
 	children: ReactNode;
 }) {
 	return (
-		<div className={className}>
+		<div
+			data-setting={label ? settingSlug(label) : undefined}
+			className={cn('-mx-2 rounded-lg px-2 py-1 transition-colors data-flash:bg-surface-3', className)}
+		>
 			{label && (
-				<label className="text-muted-foreground text-xs" htmlFor={htmlFor}>
+				<label className="text-foreground-strong font-strong" htmlFor={htmlFor}>
 					{label}
 				</label>
 			)}
-			<div className={label ? 'mt-1' : ''}>{children}</div>
-			{description && <p className="text-foreground-muted mt-0.5 text-caption">{description}</p>}
+			<div className={label ? 'mt-1.5' : ''}>{children}</div>
+			{description && <p className="text-foreground-muted mt-1 text-dense">{description}</p>}
 		</div>
 	);
 }
@@ -183,7 +275,12 @@ export function SettingSwitch({
 	);
 }
 
-/** Ports common/SettingsSelect.svelte: a compact native select with a chevron. */
+/**
+ * Ports common/SettingsSelect.svelte: a native select with a chevron. It stays
+ * native because callers pass `<option>` children (some with an empty value,
+ * which the shared Select cannot hold); standard.css gives it the field's edge,
+ * fill and radius (FRM-4).
+ */
 export function SettingSelect({
 	value,
 	onChange,
@@ -200,24 +297,24 @@ export function SettingSelect({
 				{...rest}
 				value={String(value ?? '')}
 				onChange={(e) => onChange(e.target.value)}
-				className="bg-muted/40 focus:border-ring h-7 w-full max-w-full appearance-none truncate rounded-lg border ps-2.5 pe-8 text-left text-xs transition-colors [field-sizing:content] disabled:opacity-50"
+				className="h-9 w-full max-w-full appearance-none truncate ps-3 pe-9 text-left text-body [field-sizing:content] disabled:text-foreground-disabled"
 			>
 				{children}
 			</select>
 			<ChevronDown
-				className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2"
-				strokeWidth={2}
+				aria-hidden
+				className="text-foreground-muted pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2"
 			/>
 		</div>
 	);
 }
 
-/** A text/number/url input in the compact style. */
-export function SettingInput({ className, ...rest }: ComponentProps<'input'>) {
-	return <input className={cn(settingInputClass, className)} {...rest} />;
+/** A text/number/url input: the shared `Input`. */
+export function SettingInput(props: ComponentProps<'input'>) {
+	return <Input {...props} />;
 }
 
-/** `<input type="number">` that keeps '' as '' (an empty box means "unset"), otherwise a number. */
+/** A number field that keeps '' as '' (an empty box means "unset"), otherwise a number. */
 export function SettingNumber({
 	value,
 	onChange,
@@ -227,16 +324,28 @@ export function SettingNumber({
 	onChange: (value: number | '') => void;
 }) {
 	return (
-		<input
+		<Input
 			{...rest}
 			type="number"
-			className={settingInputClass}
 			value={value ?? ''}
 			onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
 		/>
 	);
 }
 
-export function SettingTextarea({ className, ...rest }: ComponentProps<'textarea'>) {
-	return <textarea className={cn(settingTextareaClass, className)} {...rest} />;
+export function SettingTextarea(props: ComponentProps<'textarea'>) {
+	return <Textarea {...props} />;
+}
+
+/** DAT-5: relative while recent (under a week), else the absolute record time; the exact time on hover. */
+export function ChatTime({ seconds }: { seconds?: number }) {
+	if (!seconds) return <span>–</span>;
+	const date = dayjs(seconds * 1000);
+	const exact = date.format('YYYY-MM-DD HH:mm');
+	const recent = dayjs().diff(date, 'day') < 7;
+	return (
+		<time dateTime={date.toISOString()} title={exact}>
+			{recent ? date.fromNow() : exact}
+		</time>
+	);
 }

@@ -62,3 +62,34 @@ describe('personal settings tabs say so when a save is refused (#262)', () => {
 		});
 	}
 });
+
+describe('instant switches say Saved beside them (#951, FRM-3)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'jwt', user: { id: 'u1', name: 'Ann', role: 'user' } } as never);
+		useConfigStore.setState({ config: { name: 'x', version: '1', features: { enable_memories: true } } } as never);
+		vi.mocked(users.getUserSettings).mockResolvedValue({ ui: {} });
+		vi.mocked(users.updateUserSettings).mockImplementation(async (_t, body) => body);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	const cases: [string, ReactElement, string][] = [
+		['Personalization', <Personalization key="p" />, 'Memory'],
+		['Notifications', <Notifications key="n" />, 'Notification Sound'],
+		['Shortcuts', <Shortcuts key="s" />, 'Keyboard Shortcuts']
+	];
+	for (const [name, tab, label] of cases) {
+		it(`${name}: labels the tab as saving at once, and confirms the switch`, async () => {
+			renderTab(tab);
+			expect(screen.getByText('Changes are saved as you make them.')).toBeInTheDocument();
+			await waitFor(() => expect(screen.getByRole('switch', { name: label })).toBeEnabled());
+			await waitFor(() => expect(vi.mocked(users.getUserSettings)).toHaveBeenCalled());
+			await new Promise((r) => setTimeout(r, 0));
+			fireEvent.click(screen.getByRole('switch', { name: label }));
+			expect(await screen.findByText('Saved')).toBeInTheDocument();
+			expect(toastError).not.toHaveBeenCalled();
+		});
+	}
+});

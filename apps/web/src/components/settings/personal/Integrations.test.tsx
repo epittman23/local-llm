@@ -36,4 +36,13 @@ describe('personal tool servers (#263)', () => {
 			'42'
 		]);
 	});
+
+	it('keeps its warning apart from the first section (#1090)', () => {
+		render(
+			<TooltipProvider>
+				<Integrations />
+			</TooltipProvider>
+		);
+		expect(screen.getByRole('note')).toHaveClass('mb-6');
+	});
 });

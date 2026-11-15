@@ -25,7 +25,7 @@ import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { dayjs } from '@/lib/utils/dates';
-import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '../controls';
+import { SavedNote, SettingRow, SettingSwitch, SettingsForm, SettingsSection, useSavedFlash } from '../controls';
 
 type Memory = { id: string; content: string; type?: string; path?: string; updated_at?: number };
 
@@ -126,6 +126,7 @@ export default function Personalization() {
 			return (Array.isArray(res) ? res : []) as Memory[];
 		}
 	});
+	const { isSaved, flash } = useSavedFlash();
 	const [query, setQuery] = useState('');
 	const [dialog, setDialog] = useState<Memory | 'new' | null>(null);
 	const [deleting, setDeleting] = useState<Memory | null>(null);
@@ -141,19 +142,27 @@ export default function Personalization() {
 	);
 
 	return (
-		<SettingsForm title="Personalization" footer={false}>
-			<SettingsSection title="Memory" first>
+		<SettingsForm title="Personalization" footer={false} savesAtOnce>
+			<SettingsSection first>
 				<SettingRow label="Memory" description="Let the model remember things you share across chats.">
 					{(id) => (
-						<SettingSwitch
-							labelledBy={id}
-							checked={enabled}
-							onChange={(v) => void update({ memory: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
-						/>
+						<span className="flex items-center gap-3">
+							{isSaved('memory') && <SavedNote />}
+							<SettingSwitch
+								labelledBy={id}
+								checked={enabled}
+								onChange={(v) =>
+									void update({ memory: v }).then(
+										() => flash(['memory']),
+										(e) => toast.error(`${e?.message ?? e}`)
+									)
+								}
+							/>
+						</span>
 					)}
 				</SettingRow>
 			</SettingsSection>
-			<SettingsSection title="Saved Memories">
+			<SettingsSection title="Saved memories">
 				<div className="flex items-center gap-2">
 					<div className="relative flex-1">
 						<Search className="text-muted-foreground absolute top-2 left-2 size-3.5" />

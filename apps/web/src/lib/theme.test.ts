@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyTheme, DEFAULT_THEME, getTheme, installSystemThemeListener, themeClasses } from './theme';
+import { applyTheme, DEFAULT_THEME, getTheme, installSystemThemeListener, THEMES, themeClasses } from './theme';
 
 describe('themeClasses', () => {
 	it('maps each theme to its classes, following the OS for system', () => {
@@ -113,5 +113,17 @@ describe('installSystemThemeListener', () => {
 		expect(os.listeners.size).toBe(1);
 		remove();
 		expect(os.listeners.size).toBe(0);
+	});
+});
+
+describe('THEMES (#1089, WRD-6)', () => {
+	it('names the four themes in words, Black stored as oled-dark', () => {
+		expect(THEMES.map((t) => [t.id, t.label])).toEqual([
+			['system', 'System'],
+			['dark', 'Dark'],
+			['oled-dark', 'Black'],
+			['light', 'Light']
+		]);
+		for (const t of THEMES) expect(t.label).toMatch(/^[A-Za-z]+$/);
 	});
 });

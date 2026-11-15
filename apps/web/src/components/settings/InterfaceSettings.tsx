@@ -1,8 +1,9 @@
 import { Minus, Plus } from 'lucide-react';
 import { Fragment, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { SettingRow, SettingSwitch, SettingsSection, settingInputClass } from '@/components/settings/controls';
+import { SavedNote, SettingRow, SettingSwitch, SettingsSection } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { updateUserInfo } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,8 @@ export function InterfaceSettings({
 	personal = {},
 	isAdmin = false,
 	canTemporaryChat = false,
-	autocompleteEnabled = false
+	autocompleteEnabled = false,
+	isSaved
 }: {
 	values: InterfaceValues;
 	onChange: (patch: InterfaceValues) => void;
@@ -59,6 +61,8 @@ export function InterfaceSettings({
 	isAdmin?: boolean;
 	canTemporaryChat?: boolean;
 	autocompleteEnabled?: boolean;
+	/** Personal mode saves at once: true for a setting (its top-level key) that just saved, to say so beside it. */
+	isSaved?: (key: string) => boolean;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const fileInput = useRef<HTMLInputElement>(null);
@@ -70,6 +74,7 @@ export function InterfaceSettings({
 	const inherited = (key: string) => isInherited(mode, defaults, personal, key);
 	const ctx: SettingsContext = { isAdmin, canTemporaryChat, autocompleteEnabled, values };
 	const set = (key: string, value: unknown) => onChange(settingPatch(values, key, value));
+	const saved = (key: string) => (isSaved?.(key.split('.')[0]) ? <SavedNote /> : null);
 
 	const toggle = async (def: SwitchDef, on: boolean) => {
 		if (personalMode && on && def.special === 'userLocation') {
@@ -133,7 +138,8 @@ export function InterfaceSettings({
 		return (
 			<SettingRow key={def.key} label={def.label} description={def.description}>
 				{(id) => (
-					<div className="flex items-center gap-1.5">
+					<div className="flex items-center gap-3">
+						{saved(def.key)}
 						{manage && (
 							<Button
 								variant="ghost"
@@ -164,16 +170,19 @@ export function InterfaceSettings({
 		return (
 			<SettingRow key={def.key} label={def.label} description={def.description}>
 				{(id) => (
-					<Button
-						variant="ghost"
-						size="xs"
-						type="button"
-						aria-labelledby={id}
-						aria-description={option.label}
-						onClick={() => set(def.key, next)}
-					>
-						{option.label}
-					</Button>
+					<span className="flex items-center gap-3">
+						{saved(def.key)}
+						<Button
+							variant="ghost"
+							size="xs"
+							type="button"
+							aria-labelledby={id}
+							aria-description={option.label}
+							onClick={() => set(def.key, next)}
+						>
+							{option.label}
+						</Button>
+					</span>
 				)}
 			</SettingRow>
 		);
@@ -184,24 +193,27 @@ export function InterfaceSettings({
 			return (
 				<div key={id}>
 					<SettingRow label="UI Scale" description="Set a local zoom level for the app interface.">
-						<Button
-							variant="ghost"
-							size="xs"
-							type="button"
-							aria-label={`UI Scale: ${scaleIsDefault ? 'Default' : `${textScale}x`}`}
-							onClick={() => {
-								if (scaleIsDefault) {
-									if (textScale === null) set('textScale', defaultScale);
-									setScaleOpen(true);
-								} else {
-									setScaleOpen(false);
-									applyScale(defaultScale);
-									set('textScale', null);
-								}
-							}}
-						>
-							{scaleIsDefault ? 'Default' : `${textScale}x`}
-						</Button>
+						<span className="flex items-center gap-3">
+							{saved('textScale')}
+							<Button
+								variant="ghost"
+								size="xs"
+								type="button"
+								aria-label={`UI Scale: ${scaleIsDefault ? 'Default' : `${textScale}x`}`}
+								onClick={() => {
+									if (scaleIsDefault) {
+										if (textScale === null) set('textScale', defaultScale);
+										setScaleOpen(true);
+									} else {
+										setScaleOpen(false);
+										applyScale(defaultScale);
+										set('textScale', null);
+									}
+								}}
+							>
+								{scaleIsDefault ? 'Default' : `${textScale}x`}
+							</Button>
+						</span>
 					</SettingRow>
 					{!scaleIsDefault && textScale !== null && (
 						<div className="flex items-center gap-2 px-1 pt-1.5">
@@ -245,31 +257,34 @@ export function InterfaceSettings({
 			return (
 				<div key={id}>
 					<SettingRow label="Font Family" description="Use a local font family for the app interface.">
-						<Button
-							variant="ghost"
-							size="xs"
-							type="button"
-							aria-label={`Font Family: ${fontIsDefault ? 'Default' : 'Custom'}`}
-							onClick={() => {
-								if (fontIsDefault) {
-									const start = fontFamily ?? defaultFont;
-									setFontInput(start ?? '');
-									setFontOpen(true);
-									applyFont(start);
-								} else {
-									setFontOpen(false);
-									setFontInput(null);
-									applyFont(null);
-									set('fontFamily', null);
-								}
-							}}
-						>
-							{fontIsDefault ? 'Default' : 'Custom'}
-						</Button>
+						<span className="flex items-center gap-3">
+							{saved('fontFamily')}
+							<Button
+								variant="ghost"
+								size="xs"
+								type="button"
+								aria-label={`Font Family: ${fontIsDefault ? 'Default' : 'Custom'}`}
+								onClick={() => {
+									if (fontIsDefault) {
+										const start = fontFamily ?? defaultFont;
+										setFontInput(start ?? '');
+										setFontOpen(true);
+										applyFont(start);
+									} else {
+										setFontOpen(false);
+										setFontInput(null);
+										applyFont(null);
+										set('fontFamily', null);
+									}
+								}}
+							>
+								{fontIsDefault ? 'Default' : 'Custom'}
+							</Button>
+						</span>
 					</SettingRow>
 					{!fontIsDefault && (
-						<input
-							className={cn(settingInputClass, 'mt-1.5')}
+						<Input
+							className="mt-1.5"
 							type="text"
 							aria-label="Font Family name"
 							placeholder="Aptos"

@@ -38,15 +38,55 @@ test.describe('personal settings', () => {
 		await expect(tabs.first()).toHaveText('General');
 		await expect(modal(page).getByRole('tab', { name: 'Database' })).toBeVisible();
 		await expect(modal(page).getByRole('heading', { name: 'About', level: 2 })).toBeVisible();
-		await expect(modal(page).getByText('Open WebUI Inc.')).toBeVisible();
+		await expect(modal(page).getByText(/Open WebUI Inc\. \[Created by Timothy Jaeryang Baek\]/)).toBeVisible();
 	});
 
-	test('search filters personal and admin tabs together', async ({ page }) => {
+	test('search finds personal and admin tabs together, and settings by their words (#1001)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUserSettings(page);
 		await page.goto('/?settings=general');
 		await modal(page).getByPlaceholder('Search').fill('archived');
-		await expect(modal(page).getByRole('tab')).toHaveText(['Archived Chats']);
+		await expect(modal(page).getByRole('option')).toHaveText(['Archived chats']);
+		await modal(page).getByPlaceholder('Search').fill('widescreen');
+		await modal(page).getByRole('option', { name: 'Interface › Widescreen Mode' }).click();
+		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText('Interface');
+		await expect(modal(page).getByRole('switch', { name: 'Widescreen Mode' })).toBeInViewport();
+	});
+
+	test('a tab with unsaved changes asks before it is left (#951)', async ({ page }) => {
+		await mockWorkspaceBackend(page, { role: 'user' });
+		const posts = await mockUserSettings(page, { system: 'be brief' });
+		await page.goto('/?settings=general');
+		const m = modal(page);
+		await m.getByRole('textbox', { name: 'System prompt' }).fill('be thorough');
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		await m.getByRole('tab', { name: 'Interface', exact: true }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await expect(ask.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(ask).toHaveCount(0);
+		await expect(m.getByRole('textbox', { name: 'System prompt' })).toHaveValue('be thorough');
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect.poll(() => posts.length).toBe(1);
+		expect(posts[0].ui.system).toBe('be thorough');
+		await expect(m.getByText('All changes saved')).toBeVisible();
+		await m.getByRole('tab', { name: 'Interface', exact: true }).click();
+		await expect(m.getByRole('heading', { name: 'Interface', level: 2 })).toBeVisible();
+	});
+
+	test('Escape in a confirmation inside Settings closes only the confirmation (#950)', async ({ page }) => {
+		await mockWorkspaceBackend(page, { role: 'user' });
+		await mockUserSettings(page);
+		await page.goto('/?settings=data_controls');
+		await modal(page).getByRole('button', { name: 'Archive all chats' }).click();
+		// Focus inside it (on Cancel, ACT-3) means it is the top layer: Escape is now its to handle.
+		await expect(
+			page.getByRole('alertdialog', { name: 'Archive all chats?' }).getByRole('button', { name: 'Cancel' })
+		).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
+		await expect(modal(page)).toBeVisible();
+		await expect(modal(page).getByRole('button', { name: 'Archive all chats' })).toBeFocused();
 	});
 
 	test('Interface saves a switch into the user settings', async ({ page }) => {
@@ -140,7 +180,8 @@ test.describe('personal settings', () => {
 		expect(passwords).toEqual([{ password: 'old-pass', new_password: 'new-pass' }]);
 		expect(profiles).toHaveLength(0);
 
-		// And Enter in a profile field still saves the tab, not the password.
+		// And Enter in a profile field still saves the tab (once it has a change), not the password.
+		await m.getByLabel('Name').fill('Test User B');
 		await m.getByLabel('Name').press('Enter');
 		await expect.poll(() => profiles.length).toBe(1);
 		expect(passwords).toHaveLength(1);

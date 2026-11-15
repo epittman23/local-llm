@@ -34,7 +34,10 @@ export default function Integrations() {
 
 	return (
 		<SettingsForm title="Integrations" footer={false} loading={!settings}>
-			<p role="note" className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+			<p
+				role="note"
+				className="border-warning/30 bg-warning/10 text-warning mb-6 rounded-lg border px-3 py-2 text-dense"
+			>
 				Not yet available in chat: servers added here are saved, but chats do not use personal tool or terminal servers
 				in this version. Admin-configured tool servers are unaffected.
 			</p>
