@@ -154,3 +154,15 @@ test('on a short phone the bar folds and the chat’s buttons float at the top r
 	await page.keyboard.press('Escape');
 	await expect(controls).toBeFocused();
 });
+
+test('on a short phone a page without messages starts below the floating buttons (A11Y-5)', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 500 });
+	await mockChat(page, { folders: [{ id: 'f1', name: 'Statistics', data: {} }] });
+	await page.goto('/folders/f1');
+	const heading = page.getByRole('heading', { level: 1, name: 'Statistics' });
+	await expect(heading).toBeVisible();
+	const slot = await page.getByTestId('shell-bar-slot').boundingBox();
+	const menu = await page.getByRole('button', { name: 'Open navigation menu' }).boundingBox();
+	const top = (await heading.boundingBox())?.y ?? 0;
+	expect(slot && menu && top >= Math.max(slot.y + slot.height, menu.y + menu.height)).toBe(true);
+});

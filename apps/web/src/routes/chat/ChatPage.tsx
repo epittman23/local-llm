@@ -60,6 +60,9 @@ import { type ChatModel, useModels } from './useModels';
 import { useOnChatSwitch } from './useOnChatSwitch';
 import { useParamsAutosave } from './useParamsAutosave';
 
+/** Below md on a short screen the app bar's buttons float over the top of the page (AppShell, A11Y-5). */
+const SHORT_PHONE_TOP = 'max-md:[@media(max-height:520px)]:pt-12';
+
 type Folder = { id: string; name: string; data?: { model_ids?: string[]; system_prompt?: string } | null };
 
 /**
@@ -542,29 +545,38 @@ export function ChatPage() {
 					<div className="flex flex-1 items-center justify-center">
 						<Spinner className="size-5" />
 					</div>
-				) : empty && folderId ? (
-					// The folder's own page (#998): its name, instructions and chats, above the message box.
-					folder.data ? (
-						<FolderHome folder={folder.data} />
-					) : (
-						<div aria-hidden className="mx-auto w-full max-w-3xl flex-1 px-6 py-8" data-testid="folder-home-loading">
-							<div className="bg-surface-3 h-7 w-48 animate-pulse rounded-lg" />
-						</div>
-					)
 				) : empty ? (
-					<>
-						{!id && <ChatBanners />}
-						<ChatPlaceholder
-							model={firstModel}
-							temporary={temporary && !id}
-							onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
-						/>
-					</>
+					// On a short phone the bar's buttons float over the top: the page's first row starts below them (A11Y-5).
+					<div className={`flex min-h-0 flex-1 flex-col ${SHORT_PHONE_TOP}`}>
+						{folderId ? (
+							// The folder's own page (#998): its name, instructions and chats, above the message box.
+							folder.data ? (
+								<FolderHome folder={folder.data} />
+							) : (
+								<div
+									aria-hidden
+									className="mx-auto w-full max-w-3xl flex-1 px-6 py-8"
+									data-testid="folder-home-loading"
+								>
+									<div className="bg-surface-3 h-7 w-48 animate-pulse rounded-lg" />
+								</div>
+							)
+						) : (
+							<>
+								{!id && <ChatBanners />}
+								<ChatPlaceholder
+									model={firstModel}
+									temporary={temporary && !id}
+									onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
+								/>
+							</>
+						)}
+					</div>
 				) : (
 					<div
 						ref={scroller}
-						// On a short phone the bar's buttons float over the top: the first message starts below them (A11Y-5).
-						className="min-h-0 flex-1 overflow-y-auto max-md:[@media(max-height:520px)]:pt-12"
+						// The first message starts below the short phone's floating buttons, and scrolls under them.
+						className={`min-h-0 flex-1 overflow-y-auto ${SHORT_PHONE_TOP}`}
 						data-testid="chat-messages"
 						onScroll={(e) => {
 							const el = e.currentTarget;
