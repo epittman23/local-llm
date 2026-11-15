@@ -83,8 +83,9 @@ test.describe('workspace tools', () => {
 		await page.getByLabel('Search Tools').fill('Tool 2');
 		await expect(page.getByText('Tool 1', { exact: true })).toHaveCount(0);
 		await expect(page.getByText('Tool 2', { exact: true })).toBeVisible();
-		// The tab count follows the filtered list.
-		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('1');
+		// The tab counts every tool; the list says how many of them match (#955, DAT-2).
+		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('3');
+		await expect(page.getByRole('status').filter({ hasText: 'of 3 tools' })).toHaveText('1 of 3 tools');
 	});
 
 	test('the Support dialog only links http(s) funding URLs', async ({ page }) => {
