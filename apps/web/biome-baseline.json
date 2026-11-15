@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 744,
+	"total": 733,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -385,11 +385,6 @@
 		"apps/web/src/routes/admin/evaluations/leaderboard.test.ts": {
 			"lint/style/noNonNullAssertion": 1
 		},
-		"apps/web/src/routes/admin/functions/FunctionsPage.tsx": {
-			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/a11y/useKeyWithClickEvents": 1,
-			"lint/a11y/useSemanticElements": 1
-		},
 		"apps/web/src/routes/admin/functions/functionTypes.ts": {
 			"lint/complexity/useOptionalChain": 1
 		},
@@ -704,7 +699,6 @@
 			"lint/a11y/useSemanticElements": 4
 		},
 		"apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx": {
-			"lint/a11y/useSemanticElements": 1,
 			"lint/correctness/useExhaustiveDependencies": 1,
 			"lint/suspicious/noExplicitAny": 1
 		},
@@ -728,9 +722,6 @@
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/routes/workspace/models/ModelsPage.tsx": {
-			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/a11y/useKeyWithClickEvents": 1,
-			"lint/a11y/useSemanticElements": 1,
 			"lint/correctness/useExhaustiveDependencies": 2,
 			"lint/suspicious/noExplicitAny": 2,
 			"lint/suspicious/noImplicitAnyLet": 1
@@ -752,13 +743,7 @@
 			"lint/correctness/useExhaustiveDependencies": 1
 		},
 		"apps/web/src/routes/workspace/skills/SkillsPage.tsx": {
-			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/a11y/useKeyWithClickEvents": 1,
-			"lint/a11y/useSemanticElements": 1,
 			"lint/suspicious/noImplicitAnyLet": 1
-		},
-		"apps/web/src/routes/workspace/tools/ToolsPage.tsx": {
-			"lint/a11y/useSemanticElements": 1
 		},
 		"apps/web/src/routes/workspace/tools/toolTypes.ts": {
 			"lint/complexity/useOptionalChain": 1
