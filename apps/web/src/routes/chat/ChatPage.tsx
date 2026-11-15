@@ -41,6 +41,7 @@ import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu } from './ChatMenu';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
+import { ChatTitle, RenameChatDialog } from './ChatTitle';
 import { CitationDialog } from './CitationDialog';
 import { FolderHome } from './FolderHome';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
@@ -193,6 +194,15 @@ export function ChatPage() {
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
 
+	// A rename made on this page shows at once in the header, the tab and the
+	// phone bar; the session keeps the title it loaded until the chat reloads.
+	const [renamed, setRenamed] = useState<{ id: string; title: string } | null>(null);
+	const title = (id && renamed?.id === id ? renamed.title : null) ?? session.title;
+	// Which chat's title is being edited, so opening another chat ends it.
+	const [renamingId, setRenamingId] = useState<string | null>(null);
+	const renaming = Boolean(id) && renamingId === id;
+	const setRenaming = (on: boolean) => setRenamingId(on ? id : null);
+
 	// A chat or folder that is not there says so in the tab as on the page (NAV-3).
 	const chatGone = session.missing?.kind === 'not-found';
 	const folderGone = folder.isError && isNotFound(folder.error);
@@ -202,10 +212,10 @@ export function ChatPage() {
 			: folderGone
 				? 'Folder not found'
 				: // A folder's page is named after the folder (#998) until a chat started there has a title.
-					folderId && folder.data && !session.title
+					folderId && folder.data && !title
 					? folder.data.name
 					: prefs.titleInTab
-						? session.title || 'New chat'
+						? title || 'New chat'
 						: null
 	);
 	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
@@ -452,17 +462,7 @@ export function ChatPage() {
 					<SlidersHorizontal className="size-4" />
 				</Button>
 			</Tip>
-			{id && (
-				<ChatMenu
-					chatId={id}
-					title={session.title}
-					size={iconSize}
-					onControls={() => {
-						setPreview(null);
-						setControlsOpen(true);
-					}}
-				/>
-			)}
+			{id && <ChatMenu chatId={id} title={title} size={iconSize} onRename={() => setRenaming(true)} />}
 		</>
 	);
 	if (gone) return <div className="flex h-full min-h-0 w-full flex-col justify-center overflow-y-auto">{gone}</div>;
@@ -495,12 +495,32 @@ export function ChatPage() {
 					// On a phone, toasts and the connection banner start below this row (FBK-2).
 					<header data-page-top className="flex items-start gap-2 px-4 py-2">
 						{modelSelector}
-						<div className="ml-auto flex items-center gap-2 pt-1">{headerActions}</div>
+						<div className="flex min-w-0 flex-1 items-center gap-2 pt-1">
+							{id && (
+								<ChatTitle
+									chatId={id}
+									title={title}
+									editing={renaming}
+									onEditingChange={setRenaming}
+									onRenamed={(t) => setRenamed({ id, title: t })}
+								/>
+							)}
+							<div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div>
+						</div>
 					</header>
 				) : (
 					// A phone has one header row, the app bar (#1091): these go in its slot,
 					// and the model picker goes in the composer's toolbar.
 					<ShellBarPortal>{headerActions}</ShellBarPortal>
+				)}
+				{id && !isMd && (
+					<RenameChatDialog
+						chatId={id}
+						title={title}
+						open={renaming}
+						onOpenChange={setRenaming}
+						onRenamed={(t) => setRenamed({ id, title: t })}
+					/>
 				)}
 
 				{session.loading ? (

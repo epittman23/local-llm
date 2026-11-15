@@ -63,17 +63,47 @@ test('a controls edit is saved to the chat it was made in when another chat open
 test('the header menu downloads, and deletes after confirming', async ({ page }) => {
 	const chat = await mockChat(page, { chats: convo() });
 	await page.goto('/c/c1');
-	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Download' }).click();
-	const download = page.waitForEvent('download');
-	await page.getByRole('menuitem', { name: 'Plain text (.txt)' }).click();
-	expect((await download).suggestedFilename()).toBe('chat-Arithmetic.txt');
+	for (const [item, file] of [
+		['Markdown (.md)', 'chat-Arithmetic.md'],
+		['Plain text (.txt)', 'chat-Arithmetic.txt'],
+		['JSON (.json)', 'chat-Arithmetic.json']
+	]) {
+		await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Download' }).click();
+		const download = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: item }).click();
+		expect((await download).suggestedFilename()).toBe(file);
+	}
 
 	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
 	await page.locator('#delete-chat-button').click();
-	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	await page.getByRole('button', { name: 'Delete chat', exact: true }).click();
 	await expect.poll(() => chat.seen.actions).toContain('delete:c1');
 	await expect(page).toHaveURL(/localhost:5174\/$/);
+});
+
+test('the header shows the chat title and renames it in place, by keyboard (#928)', async ({ page }) => {
+	const chat = await mockChat(page, { chats: convo() });
+	await page.goto('/c/c1');
+	const title = page.getByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+	await expect(title).toBeVisible();
+	await title.focus();
+	await page.keyboard.press('Enter');
+	const field = page.getByRole('textbox', { name: 'Chat title' });
+	await expect(field).toBeFocused();
+	await field.fill('Sums');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.updates.at(-1)?.chat?.title).toBe('Sums');
+	await expect(page.getByRole('button', { name: 'Chat title: Sums. Rename' })).toBeFocused();
+	await expect(page).toHaveTitle(/^Sums/);
+
+	// From the menu too, with Escape giving up the edit.
+	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Rename' }).click();
+	await expect(field).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(field).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Chat title: Sums. Rename' })).toBeFocused();
 });
 
 test('an html code block previews in a sandboxed frame', async ({ page }) => {
