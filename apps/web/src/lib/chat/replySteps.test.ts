@@ -257,6 +257,16 @@ describe('currentStep', () => {
 		expect(currentStep([a, ...waiting]).title).toBe('w');
 		expect(currentStep([a]).title).toBe('a');
 	});
+	it('names a finished chain by its last action, not the thought that closes it', () => {
+		const done = steps([call('a', 'bash', { command: 'make' }), result('a', 'ok'), reasoning('r', 'Built.')]);
+		expect(currentStep(done).title).toBe('make');
+		const thinking = steps(
+			[call('a', 'bash', { command: 'make' }), result('a', 'ok'), reasoning('r', 'Hm', { status: 'in_progress' })],
+			false
+		);
+		expect(currentStep(thinking).title).toBe('Thinking');
+		expect(currentStep(steps([reasoning('r1', 'a'), reasoning('r2', 'b', { duration: 2 })])).meta).toBe('2 s');
+	});
 });
 
 describe('replyActivity', () => {

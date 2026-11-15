@@ -339,11 +339,17 @@ export function replySegments(output: OutputItem[] = [], replyDone = true): Repl
 	return segments;
 }
 
-/** The step a chain of steps is at: the running one, else one waiting on the person, else the last. */
+/**
+ * The step a chain of steps is at: the running one, else one waiting on the
+ * person, else the last thing it did. A finished chain nearly always ends in
+ * the thought before the next text, so its last action (a command, a file)
+ * names it better than "Thought".
+ */
 export function currentStep(steps: Step[]): Step {
 	return (
 		steps.find((s) => s.status === 'running') ??
 		steps.find((s) => s.status === 'waiting' || s.status === 'queued') ??
+		steps.findLast((s) => s.kind !== 'reasoning') ??
 		steps[steps.length - 1]
 	);
 }
