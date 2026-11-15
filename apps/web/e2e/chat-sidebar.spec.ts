@@ -96,10 +96,10 @@ test('share copies a link to the public page, and move puts a chat in a folder',
 	await item(page, 'Trip planning').hover();
 	await page.getByRole('button', { name: 'Chat menu: Trip planning' }).click();
 	await page.getByRole('menuitem', { name: 'Share' }).click();
-	await page.getByRole('button', { name: 'Copy Link' }).click();
+	await page.getByRole('button', { name: 'Copy link' }).click();
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/share-c1$/);
 	// A new link opens to no one else yet, so the dialog stays to say who may (#334).
-	const dialog = page.getByRole('dialog', { name: 'Share Chat' });
+	const dialog = page.getByRole('dialog', { name: 'Share chat' });
 	await expect(dialog.getByLabel('Visibility')).toHaveValue('private');
 	await page.keyboard.press('Escape');
 	await expect(dialog).toHaveCount(0);
@@ -127,28 +127,31 @@ test('search finds chats with Ctrl+K and opens one', async ({ page }) => {
 	const chat = await open(page);
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 	await page.keyboard.press('Control+k');
-	await page.getByRole('textbox', { name: 'Search chats' }).fill('recipe');
-	await page
-		.getByRole('listbox', { name: 'Search results' })
-		.getByRole('option', { name: /Recipe ideas/ })
-		.click();
-	await expect(page).toHaveURL(/\/c\/c2$/);
+	const results = page.getByRole('listbox', { name: 'Search results' });
+	// Before anything is typed the list offers recent chats (#952).
+	await expect(results.getByRole('group', { name: 'Recent chats' })).toBeVisible();
+	await page.getByRole('combobox', { name: 'Search chats' }).fill('recipe');
+	// The recent chats give way to the results, the first highlighted: Enter opens it (NAV-5).
+	await expect(results.getByRole('group', { name: 'Recent chats' })).toHaveCount(0);
+	await expect(results.getByRole('option', { name: /Recipe ideas/ })).toHaveAttribute('aria-selected', 'true');
 	expect(chat.seen.searches).toContain('recipe');
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/c\/c2$/);
 });
 
 test('folders: create, edit with a system prompt, and delete', async ({ page }) => {
 	const chat = await open(page);
 	await page.getByRole('button', { name: 'New Folder' }).click();
-	await page.getByLabel('Folder Name').fill('Travel');
-	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByLabel('Name', { exact: true }).fill('Travel');
+	await page.getByRole('button', { name: 'Create folder' }).click();
 	await expect(page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' })).toBeVisible();
 	expect(chat.seen.folderCalls).toContain('POST /');
 
 	await page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Work' }).hover();
 	await page.getByRole('button', { name: 'Folder menu: Work' }).click();
 	await page.getByRole('menuitem', { name: 'Edit' }).click();
-	await page.getByLabel('System Prompt').fill('Be formal');
-	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByLabel('Instructions for chats in this folder (optional)').fill('Be formal');
+	await page.getByRole('button', { name: 'Save folder' }).click();
 	await expect.poll(() => chat.seen.folderCalls).toContain('POST /f1/update');
 
 	await page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' }).hover();

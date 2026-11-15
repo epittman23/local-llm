@@ -196,7 +196,8 @@ export async function mockChat(
 			byId.set(id, next);
 			return json(route, next);
 		}
-		return cur ? json(route, cur) : json(route, { detail: 'Not found' }, 404);
+		// As the server answers a chat that is not there, or not this user's (routers/chats.py).
+		return cur ? json(route, cur) : json(route, { detail: "We could not find what you're looking for :/" }, 401);
 	});
 	await page.route(/\/api\/v1\/evaluations\/feedback/, async (route) => {
 		const body = route.request().postDataJSON();

@@ -194,10 +194,12 @@ test('a server confirmation is answered through the socket', async ({ page }) =>
 	expect(await answer).toBe(true);
 });
 
-test('a missing chat sends you home', async ({ page }) => {
+test('a missing chat says so in place and keeps its address (#953)', async ({ page }) => {
 	await mockChat(page);
 	await page.goto('/c/nope');
-	await expect(page).toHaveURL(/localhost:5174\/$/);
+	await expect(page.getByRole('heading', { name: 'This chat no longer exists.' })).toBeVisible();
+	await expect(page).toHaveURL(/\/c\/nope$/);
+	await expect(page).toHaveTitle('Chat not found · local-llm');
 });
 
 test('a temporary chat sends the whole conversation and asks for no title', async ({ page }) => {
