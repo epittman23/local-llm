@@ -1,13 +1,15 @@
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, EyeIcon, PencilLineIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { EditorError, type EditorProblem, saveProblem } from '@/components/common/EditorError';
+import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
@@ -18,6 +20,14 @@ import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import type { SkillDraft } from './skillTypes';
+
+const count = new Intl.NumberFormat('en-US');
+/** The instructions' size, and roughly what they cost the model at about four characters a token (CNT-1, WRD-5). */
+export function size(text: string): string {
+	const tokens = Math.ceil(text.length / 4);
+	const chars = `${count.format(text.length)} ${text.length === 1 ? 'character' : 'characters'}`;
+	return `${chars}, about ${count.format(tokens)} ${tokens === 1 ? 'token' : 'tokens'}.`;
+}
 
 /**
  * Ports workspace/Skills/SkillEditor.svelte (create, clone and edit in one
@@ -65,6 +75,9 @@ export function SkillEditor({
 	);
 	const [showAccess, setShowAccess] = useState(false);
 	const [loading, setLoading] = useState(false);
+	// Write or Preview the instructions (#1094); the help line under them is tied to the field.
+	const [view, setView] = useState<'write' | 'preview'>('write');
+	const instructionsHelp = useId();
 	const [problem, setProblem] = useState<EditorProblem | null>(null);
 	const problemId = useId();
 	// What Discard goes back to and "saved" compares with: the stored skill, or
@@ -153,6 +166,11 @@ export function SkillEditor({
 				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
 				onSubmit={(e) => {
 					e.preventDefault();
+					// Required instructions are checked by the field, which only Write shows.
+					if (view === 'preview' && !content.trim()) {
+						setView('write');
+						return;
+					}
 					submit();
 				}}
 			>
@@ -230,30 +248,55 @@ export function SkillEditor({
 					)}
 				</div>
 
-				{disabled ? (
-					<span className="px-1 pb-1.5 text-sm leading-none font-medium">Skill instructions</span>
-				) : (
-					<Label htmlFor="skill-instructions" className="px-1 pb-1.5">
-						Skill instructions
-					</Label>
-				)}
+				<div className="flex shrink-0 flex-wrap items-end justify-between gap-2 px-1 pb-1.5">
+					{disabled ? (
+						<span className="text-sm leading-none font-medium">Skill instructions</span>
+					) : (
+						<Label htmlFor="skill-instructions">Skill instructions</Label>
+					)}
+					{!disabled && (
+						<SegmentedControl
+							aria-label="Show the instructions as"
+							value={view}
+							onValueChange={setView}
+							options={[
+								{ value: 'write', label: 'Write', icon: PencilLineIcon },
+								{ value: 'preview', label: 'Preview', icon: EyeIcon }
+							]}
+						/>
+					)}
+				</div>
 				{/* On a phone the form scrolls, so the editor keeps a usable height. */}
 				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1 max-sm:min-h-72">
 					{disabled ? (
 						<div className="h-full overflow-y-auto px-3 py-2">
-							<pre className="font-mono text-caption leading-relaxed whitespace-pre-wrap">{content}</pre>
+							<pre className="font-sans text-reading whitespace-pre-wrap">{content}</pre>
 						</div>
-					) : (
+					) : view === 'write' ? (
 						<textarea
 							id="skill-instructions"
-							className="h-full w-full resize-none bg-transparent px-3 py-2 font-mono text-caption leading-relaxed placeholder:text-foreground-muted"
+							className="h-full w-full resize-none bg-transparent px-3 py-2 text-reading placeholder:text-foreground-muted"
 							value={content}
 							onChange={(e) => onContentChange(e.target.value)}
-							placeholder="e.g. Read the diff first, then list risks before style notes. Markdown is fine."
+							placeholder="e.g. Read the diff first, then list risks before style notes."
+							aria-describedby={instructionsHelp}
 							required
 						/>
+					) : (
+						<div className="h-full overflow-y-auto px-3 py-2" data-testid="skill-preview">
+							{content.trim() ? (
+								<SafeMarkdown text={content} className="rich-text text-reading" />
+							) : (
+								<p className="text-foreground-muted">Nothing to preview yet. Write the instructions first.</p>
+							)}
+						</div>
 					)}
 				</div>
+				{!disabled && (
+					<p id={instructionsHelp} className="text-foreground-muted text-dense shrink-0 px-1 pt-1.5">
+						Shown to the model when this skill is on. Markdown. {size(content)}
+					</p>
+				)}
 
 				{problem && <EditorError id={problemId} problem={problem} />}
 				{!disabled && (

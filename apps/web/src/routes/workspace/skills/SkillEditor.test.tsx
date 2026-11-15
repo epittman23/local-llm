@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { SkillEditor } from './SkillEditor';
+import { SkillEditor, size } from './SkillEditor';
 import type { SkillDraft } from './skillTypes';
 
 // The install's account count, for useSingleUser (S4-D1): two unless a test says one.
@@ -292,5 +292,47 @@ describe('SkillEditor with one account (#1013, S4-D1) and its description (#958)
 		expect(await screen.findByRole('button', { name: 'Access' })).toBeInTheDocument();
 		expect(screen.getByLabelText('Skill description').tagName).toBe('TEXTAREA');
 		expect(screen.getByLabelText('Skill description')).toHaveAttribute('rows', '2');
+	});
+});
+
+describe('SkillEditor instructions (#1094)', () => {
+	it('says what the instructions are for, and their size in characters and tokens', () => {
+		renderEditor({ skill: null, onSubmit: vi.fn() });
+		const field = screen.getByLabelText('Skill instructions');
+		expect(field).not.toHaveClass('font-mono');
+		expect(field).toHaveClass('text-reading');
+		fireEvent.change(field, { target: { value: 'x'.repeat(1001) } });
+		const help = screen.getByText(/Shown to the model when this skill is on\. Markdown\./);
+		expect(help).toHaveTextContent('1,001 characters, about 251 tokens.');
+		expect(field).toHaveAttribute('aria-describedby', help.id);
+	});
+
+	it('previews the instructions as rendered Markdown, and goes back to writing', () => {
+		renderEditor({ skill: null, onSubmit: vi.fn() });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), {
+			target: { value: '# Steps\n\n- **Read** the diff' }
+		});
+		fireEvent.click(screen.getByRole('radio', { name: 'Preview' }));
+		const preview = screen.getByTestId('skill-preview');
+		expect(preview.querySelector('li')).toHaveTextContent('Read the diff');
+		expect(preview.querySelector('strong')).toHaveTextContent('Read');
+		expect(preview.querySelector('.rich-text')).toHaveClass('text-reading');
+		fireEvent.click(screen.getByRole('radio', { name: 'Write' }));
+		expect(screen.getByLabelText('Skill instructions')).toHaveValue('# Steps\n\n- **Read** the diff');
+	});
+
+	it('says there is nothing to preview yet, and sends an empty draft back to Write on save', () => {
+		const onSubmit = vi.fn();
+		renderEditor({ skill: null, onSubmit });
+		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'New' } });
+		fireEvent.click(screen.getByRole('radio', { name: 'Preview' }));
+		expect(screen.getByText('Nothing to preview yet. Write the instructions first.')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
+		expect(screen.getByLabelText('Skill instructions')).toBeInTheDocument();
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it('counts one character in the singular', () => {
+		expect(size('a')).toBe('1 character, about 1 token.');
 	});
 });
