@@ -10,7 +10,6 @@ import {
 	Type
 } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import {
@@ -161,12 +160,7 @@ export function EditDetailsDialog({
 								if (e.target.value.trim()) setError(null);
 							}}
 						/>
-						{error && (
-							<p id="kb-name-error" className="text-danger text-dense flex items-center gap-1.5">
-								<CircleAlert aria-hidden className="size-3.5 shrink-0" />
-								{error}
-							</p>
-						)}
+						{error && <FieldError id="kb-name-error">{error}</FieldError>}
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="kb-description">Description (optional)</Label>
@@ -191,7 +185,17 @@ export function EditDetailsDialog({
 	);
 }
 
-/** Ports KnowledgeBase/NewDirectoryModal.svelte. */
+/** A field's error under it, tied to it by `aria-describedby` (FRM-2). */
+function FieldError({ id, children }: { id: string; children: string }) {
+	return (
+		<p id={id} className="text-danger text-dense flex items-center gap-1.5">
+			<CircleAlert aria-hidden className="size-3.5 shrink-0" />
+			{children}
+		</p>
+	);
+}
+
+/** Ports KnowledgeBase/NewDirectoryModal.svelte: a 32 rem form titled after its menu item (OVL-1, ACT-2). */
 export function NewDirectoryDialog({
 	open,
 	onOpenChange,
@@ -202,24 +206,29 @@ export function NewDirectoryDialog({
 	onSubmit: (name: string) => void;
 }) {
 	const [name, setName] = useState('');
+	const [error, setError] = useState<string | null>(null);
 	return (
 		<Dialog
 			open={open}
 			onOpenChange={(next) => {
-				if (!next) setName('');
+				if (!next) {
+					setName('');
+					setError(null);
+				}
 				onOpenChange(next);
 			}}
 		>
-			<DialogContent className="sm:max-w-sm">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle className="text-base font-normal">New Directory</DialogTitle>
+					<DialogTitle>New folder</DialogTitle>
 					<DialogDescription className="sr-only">Create a folder in this knowledge base.</DialogDescription>
 				</DialogHeader>
 				<form
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
 						if (!name.trim()) {
-							toast.error('Name is required');
+							setError('Give the folder a name.');
 							return;
 						}
 						onSubmit(name.trim());
@@ -227,22 +236,26 @@ export function NewDirectoryDialog({
 						onOpenChange(false);
 					}}
 				>
-					<div className="text-muted-foreground mb-1 text-xs">Name</div>
-					<input
-						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
-						aria-label="Name"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						placeholder="Directory name"
-					/>
-					<div className="flex justify-end gap-2 pt-3">
-						<Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-folder-name">Name</Label>
+						<Input
+							id="kb-folder-name"
+							value={name}
+							aria-invalid={error ? true : undefined}
+							aria-describedby={error ? 'kb-folder-name-error' : undefined}
+							onChange={(e) => {
+								setName(e.target.value);
+								if (e.target.value.trim()) setError(null);
+							}}
+						/>
+						{error && <FieldError id="kb-folder-name-error">{error}</FieldError>}
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
 							Cancel
 						</Button>
-						<Button type="submit" size="sm">
-							Create
-						</Button>
-					</div>
+						<Button type="submit">Create folder</Button>
+					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>
@@ -250,9 +263,10 @@ export function NewDirectoryDialog({
 }
 
 /**
- * Ports KnowledgeBase/AddTextContentModal.svelte: a title and a body that become
- * a `.txt` file. (Not ported: the Svelte modal's microphone button, which
- * dictates into the body through the chat input's recorder -- Phase 10.)
+ * Ports KnowledgeBase/AddTextContentModal.svelte: a title and a text that become
+ * a `.txt` file, in a 48 rem form (OVL-1). (Not ported: the Svelte modal's
+ * microphone button, which dictates into the body through the chat input's
+ * recorder -- Phase 10.)
  */
 export function AddTextDialog({
 	open,
@@ -265,47 +279,62 @@ export function AddTextDialog({
 }) {
 	const [name, setName] = useState('Untitled');
 	const [content, setContent] = useState('');
+	const [errors, setErrors] = useState<{ name?: string; content?: string }>({});
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-2xl">
+			<DialogContent className="sm:max-w-3xl">
 				<DialogHeader>
-					<DialogTitle className="text-sm">Add text content</DialogTitle>
-					<DialogDescription className="sr-only">Saved as a text file in this knowledge base.</DialogDescription>
+					<DialogTitle>Add text</DialogTitle>
+					<DialogDescription>Saved as a text file in this knowledge base.</DialogDescription>
 				</DialogHeader>
 				<form
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
-						if (name.trim() === '' || content.trim() === '') {
-							toast.error('Please fill in all fields.');
-							setName(name.trim());
-							setContent(content.trim());
+						const next = {
+							name: name.trim() ? undefined : 'Give the text a title.',
+							content: content.trim() ? undefined : 'Write or paste the text to add.'
+						};
+						if (next.name || next.content) {
+							setErrors(next);
 							return;
 						}
-						onSubmit(name, content);
+						onSubmit(name.trim(), content);
 						setName('Untitled');
 						setContent('');
+						setErrors({});
 						onOpenChange(false);
 					}}
 				>
-					<input
-						className="w-full bg-transparent text-sm"
-						aria-label="Title"
-						placeholder="Title"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-					/>
-					<textarea
-						className="placeholder:text-foreground-muted mt-2 h-64 w-full resize-none bg-transparent text-sm"
-						aria-label="Content"
-						placeholder="Write something..."
-						value={content}
-						onChange={(e) => setContent(e.target.value)}
-					/>
-					<div className="flex justify-end pt-2">
-						<Button type="submit" size="sm">
-							Save
-						</Button>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-text-title">Title</Label>
+						<Input
+							id="kb-text-title"
+							value={name}
+							aria-invalid={errors.name ? true : undefined}
+							aria-describedby={errors.name ? 'kb-text-title-error' : undefined}
+							onChange={(e) => setName(e.target.value)}
+						/>
+						{errors.name && <FieldError id="kb-text-title-error">{errors.name}</FieldError>}
 					</div>
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="kb-text-content">Text</Label>
+						<Textarea
+							id="kb-text-content"
+							className="max-h-[50vh] min-h-48"
+							value={content}
+							aria-invalid={errors.content ? true : undefined}
+							aria-describedby={errors.content ? 'kb-text-content-error' : undefined}
+							onChange={(e) => setContent(e.target.value)}
+						/>
+						{errors.content && <FieldError id="kb-text-content-error">{errors.content}</FieldError>}
+					</div>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button type="submit">Add text</Button>
+					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>

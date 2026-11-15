@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, Copy, MoreHorizontal, Pencil, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Copy, ExternalLink, MoreHorizontal, Pencil, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { Gone, isNotFound } from '@/components/common/Gone';
 import { ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
+import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,9 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { PageHeader } from '@/components/ui/page-header';
+import { SaveBar } from '@/components/ui/save-bar';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
 import { getFileById, renameFileById, updateFileDataContentById } from '@/lib/apis/files';
 import {
@@ -376,7 +379,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	}, []);
 
 	// --- file / directory operations -----------------------------------------
-	const report = async <T,>(work: Promise<T>, success: string): Promise<boolean> => {
+	const report = async <T,>(work: Promise<T>, success: string, failure: string): Promise<boolean> => {
 		try {
 			const res = await work;
 			if (res) {
@@ -385,7 +388,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				return true;
 			}
 		} catch (e) {
-			toast.error(`${e}`);
+			failed(failure, e);
 		}
 		return false;
 	};
@@ -396,9 +399,14 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setSelectedFileId(null);
 	};
 	const move = (payload: { kind: 'file' | 'dir'; id: string }, target: string | null) => {
-		if (payload.kind === 'file') report(moveFileInKnowledge(token, id, payload.id, target), 'File moved.');
+		if (payload.kind === 'file')
+			report(moveFileInKnowledge(token, id, payload.id, target), 'File moved', "Couldn't move the file.");
 		else if (payload.id !== target)
-			report(updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }), 'Directory moved.');
+			report(
+				updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }),
+				'Folder moved',
+				"Couldn't move the folder."
+			);
 	};
 	// Removing deletes the file's extracted text and embeddings at once, so it confirms first (ACT-3, #906).
 	const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
@@ -417,6 +425,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	// --- the file preview sheet ----------------------------------------------
 	const selectedFile = listed?.items.find((f) => f.id === selectedFileId) ?? null;
 	const [content, setContent] = useState('');
+	const [original, setOriginal] = useState('');
+	// The sheet opens on the rendered text; editing is a deliberate switch (CNT-1, #1096).
+	const [editingText, setEditingText] = useState(false);
 	const [loadingContent, setLoadingContent] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [previewName, setPreviewName] = useState('');
@@ -429,8 +440,10 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		}
 		setPreviewName(file.meta?.name ?? '');
 		const inline = (file as { data?: { content?: string } }).data?.content;
+		setEditingText(false);
 		if (inline !== undefined) {
 			setContent(inline);
+			setOriginal(inline);
 			setLoadingContent(false);
 			return;
 		}
@@ -438,8 +451,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setContent('');
 		setLoadingContent(true);
 		getFileById(token, selectedFileId)
-			.then((full) => !cancelled && setContent(full?.data?.content ?? ''))
-			.catch(() => !cancelled && toast.error('Failed to load file content.'))
+			.then((full) => {
+				if (cancelled) return;
+				setContent(full?.data?.content ?? '');
+				setOriginal(full?.data?.content ?? '');
+			})
+			.catch((e) => !cancelled && failed("Couldn't load the file's text. Close it and open it again.", e))
 			.finally(() => !cancelled && setLoadingContent(false));
 		return () => {
 			cancelled = true;
@@ -453,7 +470,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setSaving(true);
 		try {
 			const res = await updateFileDataContentById(token, selectedFileId, content).catch((e) => {
-				toast.error(`${e}`);
+				failed("Couldn't save the text. Try again.", e);
 				return null;
 			});
 			if (res) {
@@ -611,7 +628,13 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				Every file and folder is removed from it, with their extracted text and embeddings. This can't be undone.
 			</ConfirmDialog>
 
-			<AttachWebpageDialog open={showWeb} onOpenChange={setShowWeb} onSubmit={uploadWeb} />
+			<AttachWebpageDialog
+				open={showWeb}
+				onOpenChange={setShowWeb}
+				onSubmit={uploadWeb}
+				title="Add a web page"
+				submitLabel="Add web page"
+			/>
 			<AddTextDialog
 				open={showText}
 				onOpenChange={setShowText}
@@ -620,7 +643,13 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			<NewDirectoryDialog
 				open={showNewDir}
 				onOpenChange={setShowNewDir}
-				onSubmit={(name) => report(createKnowledgeDirectory(token, id, name, directoryId), 'Directory created.')}
+				onSubmit={(name) =>
+					report(
+						createKnowledgeDirectory(token, id, name, directoryId),
+						`Created the folder "${name}"`,
+						`Couldn't create the folder "${name}".`
+					)
+				}
 			/>
 			<input
 				ref={fileInput}
@@ -767,10 +796,16 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 												name: listed.items.find((f) => f.id === fileId)?.meta?.name ?? 'this file'
 											})
 										}
-										onRenameFile={(fileId, name) => report(renameFileById(token, fileId, name), 'File renamed.')}
+										onRenameFile={(fileId, name) =>
+											report(renameFileById(token, fileId, name), `Renamed to "${name}"`, "Couldn't rename the file.")
+										}
 										onOpenDirectory={navigateToDirectory}
 										onRenameDirectory={(dirId, name) =>
-											report(updateKnowledgeDirectory(token, id, dirId, { name }), 'Directory renamed.')
+											report(
+												updateKnowledgeDirectory(token, id, dirId, { name }),
+												`Renamed to "${name}"`,
+												"Couldn't rename the folder."
+											)
 										}
 										onDeleteDirectory={(dirId) => {
 											setDeleteContents(false);
@@ -804,42 +839,63 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 
 			<Sheet open={selectedFileId !== null} onOpenChange={(open) => !open && setSelectedFileId(null)}>
 				<SheetContent side="right" className="w-full sm:max-w-xl">
-					<SheetTitle className="sr-only">File content</SheetTitle>
-					<SheetDescription className="sr-only">The text extracted from this file.</SheetDescription>
-					<div className="flex h-full max-h-full flex-col">
-						<div className="flex shrink-0 items-center p-2 pr-10">
-							<div className="line-clamp-1 flex-1 text-sm">
-								<a
-									href="#"
-									className="line-clamp-1 hover:underline"
-									onClick={(e) => {
-										e.preventDefault();
-										if (selectedFile?.id)
-											window.open(
-												`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`,
-												'_blank'
-											);
-									}}
-								>
-									{previewName}
-								</a>
+					<div className="flex h-full max-h-full flex-col gap-3 p-4">
+						<div className="flex shrink-0 items-start gap-2 pe-8">
+							<div className="min-w-0 flex-1">
+								<SheetTitle className="text-title font-title truncate">{previewName}</SheetTitle>
+								<SheetDescription>The text extracted from this file, which chats search.</SheetDescription>
 							</div>
-							{writeAccess && (
-								<Button variant="ghost" size="sm" disabled={saving || loadingContent} onClick={saveContent}>
-									Save
-									{saving && <Spinner className="size-3.5" />}
+						</div>
+						<div className="flex shrink-0 flex-wrap items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									if (selectedFile?.id)
+										window.open(`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`, '_blank');
+								}}
+							>
+								<ExternalLink aria-hidden />
+								Open original
+							</Button>
+							{writeAccess && !editingText && (
+								<Button variant="outline" size="sm" disabled={loadingContent} onClick={() => setEditingText(true)}>
+									<Pencil aria-hidden />
+									Edit text
 								</Button>
 							)}
 						</div>
-						<textarea
-							key={selectedFileId}
-							className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs"
-							value={content}
-							onChange={(e) => setContent(e.target.value)}
-							disabled={!writeAccess || loadingContent}
-							aria-label="File content"
-							placeholder="Add content here"
-						/>
+						{loadingContent ? (
+							<div className="flex flex-1 items-center justify-center">
+								<Spinner />
+							</div>
+						) : editingText ? (
+							<>
+								<Textarea
+									key={selectedFileId}
+									className="min-h-0 flex-1 resize-none [field-sizing:fixed]"
+									value={content}
+									onChange={(e) => setContent(e.target.value)}
+									aria-label="File text"
+								/>
+								<SaveBar
+									dirty={content !== original}
+									saving={saving}
+									saveLabel="Save text"
+									onSave={saveContent}
+									onDiscard={() => {
+										setContent(original);
+										setEditingText(false);
+									}}
+								/>
+							</>
+						) : content.trim() ? (
+							<div className="min-h-0 flex-1 overflow-y-auto">
+								<SafeMarkdown text={content} className="rich-text" />
+							</div>
+						) : (
+							<p className="text-foreground-muted">No text was extracted from this file.</p>
+						)}
 					</div>
 				</SheetContent>
 			</Sheet>
