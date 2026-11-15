@@ -229,8 +229,12 @@ export function SettingsModal() {
 					retries.current += 1;
 					setTimeout(() => {
 						const still = document.activeElement;
+						const before = retries.current;
 						if (still && still === focused && still.isConnected)
 							still.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+						// The press reached its layer (or focus moved on) without coming back
+						// here: the count is per press, so the next one starts again.
+						if (retries.current === before) retries.current = 0;
 					}, 0);
 				}}
 				onOpenAutoFocus={(event) => {
