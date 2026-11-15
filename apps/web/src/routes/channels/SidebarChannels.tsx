@@ -56,7 +56,8 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 
 	return (
 		<div className="mt-3">
-			<div className="text-muted-foreground flex items-center px-2 text-xs font-medium">
+			{/* The same row as the chat list's Folders header: no inset of its own beyond the list's (LAY-1). */}
+			<div className="flex items-center">
 				<Button
 					type="button"
 					variant="ghost"
@@ -74,6 +75,7 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 						variant="ghost"
 						size="icon-xs"
 						aria-label="Create Channel"
+						className="mr-1"
 						onClick={() => setCreating(true)}
 					>
 						<Plus className="size-3.5" />

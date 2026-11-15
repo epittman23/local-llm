@@ -74,6 +74,18 @@ afterEach(() => {
 	toast.error.mockClear();
 });
 
+describe('the Channels header', () => {
+	it('lines up with the Folders header of the chat list, with no inset of its own', () => {
+		list.current = [];
+		show();
+		const toggle = screen.getByRole('button', { name: 'Channels' });
+		expect(toggle).toHaveAttribute('aria-expanded');
+		expect(toggle.parentElement).toHaveClass('flex', 'items-center');
+		expect(toggle.parentElement).not.toHaveClass('px-2');
+		expect(screen.getByRole('button', { name: 'Create Channel' })).toHaveClass('mr-1');
+	});
+});
+
 describe('public group channels in the sidebar', () => {
 	it('marks a public group the viewer has not joined, and links to it to join', () => {
 		list.current = [
