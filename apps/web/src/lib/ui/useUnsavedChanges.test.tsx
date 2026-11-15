@@ -122,6 +122,18 @@ describe('useUnsavedChanges', () => {
 		expect(router.state.location.search).toBe('');
 	});
 
+	it('still asks on the next way out after Discard changes kept the page mounted (another item)', async () => {
+		const router = setup();
+		type('x');
+		fireEvent.click(screen.getByRole('link', { name: 'Other item' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(router.state.location.search).toBe('?id=2'));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		fireEvent.click(screen.getByRole('link', { name: 'Back' }));
+		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+		expect(router.state.location.pathname).toBe('/editor');
+	});
+
 	it('lets a successful save’s navigation through with allowNext', async () => {
 		const router = setup();
 		type('x');
