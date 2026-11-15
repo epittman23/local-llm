@@ -308,7 +308,7 @@ function EditorForm({
 
 	const focusField = (field: EditorField) => {
 		const target = { name: nameField, id: idField, base: baseField, knowledge: knowledgeField }[field].current;
-		target?.scrollIntoView?.({ block: 'center' });
+		target?.scrollIntoView?.({ block: 'nearest' });
 		target?.focus();
 	};
 
