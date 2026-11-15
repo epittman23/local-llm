@@ -55,6 +55,9 @@ describe('UiStandardPage (/ui)', () => {
 
 	it('changes the theme class from its theme switch', () => {
 		renderPage();
+		// The app's themes by their names, less System: the page shows each one on purpose.
+		const choices = within(screen.getByRole('group', { name: 'Theme' })).getAllByRole('button');
+		expect(choices.map((b) => b.textContent)).toEqual(['Dark', 'Black', 'Light']);
 		fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
 		expect(document.documentElement.classList.contains('dark')).toBe(true);
 		expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('true');

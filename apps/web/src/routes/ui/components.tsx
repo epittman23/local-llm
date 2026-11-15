@@ -3,18 +3,26 @@ import {
 	CircleCheckIcon,
 	CopyIcon,
 	EllipsisIcon,
+	GlobeIcon,
 	Loader2Icon,
+	LockIcon,
+	MessageSquareIcon,
 	PencilIcon,
 	PlusIcon,
 	RotateCwIcon,
+	SearchIcon,
 	SearchXIcon,
+	SquarePenIcon,
 	Trash2Icon,
 	TriangleAlertIcon
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Katex } from '@/components/chat/markdown/Katex';
+import { Gone } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
+import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from '@/components/settings/SettingsNav';
+import type { SettingsTab } from '@/components/settings/settingsTabs';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -26,10 +34,12 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { AppMark } from '@/components/ui/app-mark';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
 	Dialog,
 	DialogClose,
@@ -51,6 +61,8 @@ import { ImageButton } from '@/components/ui/image-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
+import { SaveBar } from '@/components/ui/save-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -58,6 +70,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ServerUnreachableError } from '@/lib/apis/errors';
+import { THEMES, type ThemeId } from '@/lib/theme';
 import { highlight } from './CodeSurface';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 
@@ -206,6 +219,9 @@ export function FormsSection() {
 	// FRM-2: a field is judged once the person has left it or tried to save.
 	const [contextChecked, setContextChecked] = useState(false);
 	const [autoTitle, setAutoTitle] = useState(true);
+	// FRM-4: the theme here is only the demo's own value; the page's theme is the switch at the top.
+	const [theme, setTheme] = useState<ThemeId>('dark');
+	const [shareWith, setShareWith] = useState('');
 	const contextField = useRef<HTMLInputElement>(null);
 	const dirty = name !== saved.name || context !== saved.context;
 	const contextValid = /^\d+$/.test(context) && Number(context) >= 512 && Number(context) <= 32768;
@@ -223,11 +239,11 @@ export function FormsSection() {
 			id="forms"
 			title="Forms"
 			lead="Every field has a visible edge, a label that stays put, and its help or its error directly underneath. A form either saves when you press Save and tells you while changes are pending, or applies each change at once and says so. Never both without saying."
-			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'COL-6']}
+			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'COL-6', 'ACT-5']}
 		>
 			<Example
 				title="A form that saves on request"
-				note="Change a value: the bar at the bottom reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it. The checkbox's box is 16 px, but it answers a click across 40 by 32 px, and 44 by 44 on touch."
+				note="Change a value: the save bar at the bottom (the shared SaveBar) reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it. The checkbox's box is 16 px, but it answers a click across 40 by 32 px, and 44 by 44 on touch."
 			>
 				<Panel className="max-w-[40rem]">
 					<form
@@ -289,28 +305,15 @@ export function FormsSection() {
 								Map the weights file into memory
 							</Label>
 						</div>
-						<div className="border-border -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t px-4 py-3">
-							<p className="text-dense text-foreground-muted" role="status">
-								{dirty ? 'Unsaved changes' : 'All changes saved'}
-							</p>
-							<div className="flex gap-2">
-								<Button
-									type="button"
-									variant="ghost"
-									disabled={!dirty}
-									onClick={() => {
-										setName(saved.name);
-										setContext(saved.context);
-										setContextChecked(false);
-									}}
-								>
-									Discard changes
-								</Button>
-								<Button type="submit" disabled={!dirty}>
-									Save profile
-								</Button>
-							</div>
-						</div>
+						<SaveBar
+							dirty={dirty}
+							saveLabel="Save profile"
+							onDiscard={() => {
+								setName(saved.name);
+								setContext(saved.context);
+								setContextChecked(false);
+							}}
+						/>
 					</form>
 				</Panel>
 			</Example>
@@ -340,6 +343,50 @@ export function FormsSection() {
 							</select>
 						)}
 					</Field>
+				</Panel>
+			</Example>
+			<Example
+				title="Two to five choices that apply at once"
+				note="A segmented control: words with line icons, one radio group. Tab reaches the chosen segment, the arrow keys move and choose, and on a phone the segments share one row. It can also hold a required choice with nothing chosen yet, confirmed by a separate button, and a segment that cannot be chosen says why underneath."
+			>
+				<Panel className="flex max-w-[40rem] flex-col gap-6">
+					<div className="flex flex-col gap-2">
+						<Label id="ui-demo-theme-label" className="text-body font-strong">
+							Theme
+						</Label>
+						<SegmentedControl
+							aria-labelledby="ui-demo-theme-label"
+							value={theme}
+							onValueChange={setTheme}
+							options={THEMES.map((t) => ({ value: t.id, label: t.label, icon: t.icon }))}
+						/>
+						<p className="text-foreground-muted text-dense" role="status">
+							{THEMES.find((t) => t.id === theme)?.label}. Applied.
+						</p>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Label id="ui-demo-share-label" className="text-body font-strong">
+							Who can open the link
+						</Label>
+						<SegmentedControl
+							aria-labelledby="ui-demo-share-label"
+							aria-describedby="ui-demo-share-help"
+							value={shareWith}
+							onValueChange={setShareWith}
+							options={[
+								{ value: 'anyone', label: 'Anyone with the link', icon: GlobeIcon, disabled: true },
+								{ value: 'me', label: 'Only me (signed in)', icon: LockIcon }
+							]}
+						/>
+						<p id="ui-demo-share-help" className="text-foreground-muted text-dense">
+							Your sharing permissions do not allow links that anyone can open.
+						</p>
+						<div>
+							<Button disabled={!shareWith} onClick={() => toast.success('Link created and copied')}>
+								Create and copy link
+							</Button>
+						</div>
+					</div>
 				</Panel>
 			</Example>
 			<Example
@@ -466,14 +513,45 @@ export function DataSection() {
 	);
 }
 
+/** A few of Settings' tabs, for the vertical tab list's demo. */
+const DEMO_SETTINGS_TABS: SettingsTab[] = [
+	{ id: 'general', title: 'General', group: 'Basics', keywords: [] },
+	{ id: 'interface', title: 'Interface', group: 'Basics', keywords: [] },
+	{ id: 'data_controls', title: 'Data controls', group: 'Data', keywords: [] },
+	{ id: 'admin:general', title: 'Server: General', group: 'System', keywords: [] },
+	{ id: 'admin:connections', title: 'Server: Connections', group: 'System', keywords: [] }
+];
+
+/** Invented chats for the search demo. */
+const DEMO_CHATS = [
+	{ group: 'Today', titles: ['Variance of a sample mean', 'Plot residuals for demo-a'] },
+	{ group: 'Previous 7 days', titles: ['Bootstrap confidence interval', 'Refactor the CSV reader'] }
+];
+
 export function NavigationSection() {
+	const [settingsTab, setSettingsTab] = useState('general');
+	const settingsTitle = DEMO_SETTINGS_TABS.find((t) => t.id === settingsTab)?.title ?? '';
 	return (
 		<Section
 			id="navigation"
 			title="Pages and navigation"
-			lead="Every page opens the same way: its name, one sentence about what it is for, and its main action on the right. Sibling views are tabs, and the open tab is unmistakable."
-			rules={['LAY-5', 'NAV-2']}
+			lead="Every page opens the same way: its name, one sentence about what it is for, and its main action on the right. Sibling views are tabs, and the open tab is unmistakable. A list you choose from moves with the arrow keys."
+			rules={['LAY-5', 'NAV-2', 'NAV-5', 'WRD-3']}
 		>
+			<Example
+				title="The mark"
+				note="local-llm's mark at its three sizes: 20, 24 and 32 px. Beside the name it is decorative; standing in for the name, it is named."
+			>
+				<div className="flex flex-wrap items-center gap-6">
+					<AppMark size={20} />
+					<AppMark size={24} />
+					<AppMark size={32} />
+					<span className="flex items-center gap-2">
+						<AppMark size={24} />
+						<span className="text-body font-title">local-llm</span>
+					</span>
+				</div>
+			</Example>
 			<Example title="Page header and tabs">
 				<Panel>
 					<PageHeader
@@ -503,6 +581,45 @@ export function NavigationSection() {
 							Every upload and deletion.
 						</TabsContent>
 					</Tabs>
+				</Panel>
+			</Example>
+			<Example
+				title="A vertical tab list"
+				note="Settings' tab list: one tab list in two halves, with group captions that a screen reader skips. Up, Down, Home and End move between tabs; Enter opens one. A name that repeats carries its half, so this General is read as Server: General."
+			>
+				<Panel className="grid max-w-[40rem] gap-4 sm:grid-cols-[14rem_1fr]">
+					<SettingsNav tabs={DEMO_SETTINGS_TABS} selected={settingsTab} onSelect={setSettingsTab} className="px-0" />
+					<div
+						id={SETTINGS_PANEL_ID}
+						role="tabpanel"
+						aria-labelledby={settingsTabId(settingsTab)}
+						className="text-foreground-muted"
+					>
+						The {settingsTitle} tab's settings.
+					</div>
+				</Panel>
+			</Example>
+			<Example
+				title="A list you choose from by keyboard"
+				note="Search: the field keeps focus while the arrow keys move the highlight, Enter opens the highlighted chat, and the first item is highlighted whenever the list fills."
+			>
+				<Panel className="max-w-[32rem]">
+					<Command label="Search chats" className="gap-2">
+						<CommandInput placeholder="Search chats" />
+						<CommandList>
+							<CommandEmpty>No chats match. Check the spelling, or search archived chats.</CommandEmpty>
+							{DEMO_CHATS.map(({ group, titles }) => (
+								<CommandGroup key={group} heading={group}>
+									{titles.map((title) => (
+										<CommandItem key={title} value={title} onSelect={() => toast.success(`Opened “${title}”`)}>
+											<MessageSquareIcon aria-hidden className="text-foreground-muted" />
+											<span className="truncate">{title}</span>
+										</CommandItem>
+									))}
+								</CommandGroup>
+							))}
+						</CommandList>
+					</Command>
 				</Panel>
 			</Example>
 		</Section>
@@ -638,7 +755,7 @@ export function StatesSection() {
 			id="states"
 			title="Loading, empty and failed"
 			lead="Anything that shows data is designed four times: loading, empty, failed and full. An empty screen says what belongs there and offers the first step. A failure is never shown as an empty list or a zero."
-			rules={['STA-1', 'STA-2', 'STA-3', 'STA-4']}
+			rules={['STA-1', 'STA-2', 'STA-3', 'STA-4', 'NAV-3']}
 		>
 			<Example title="One list, four states">
 				<fieldset className="mb-3 flex flex-wrap gap-2">
@@ -699,6 +816,30 @@ export function StatesSection() {
 						</div>
 					)}
 					{state === 'error' && <LoadFailed what="prompts" error={new ServerUnreachableError()} onRetry={() => {}} />}
+				</Panel>
+			</Example>
+			<Example
+				title="Something that no longer exists"
+				note="A link to a deleted chat says so in place, keeps its address, and offers ways onward. It is for a definite answer that nothing is there; a failure to load offers to try again instead."
+			>
+				<Panel className="max-w-[40rem]">
+					<Gone
+						level={4}
+						title="This chat no longer exists."
+						description="It may have been deleted or archived, or the link may be mistyped."
+						actions={
+							<>
+								<Button onClick={() => toast.success('New chat')}>
+									<SquarePenIcon aria-hidden />
+									New chat
+								</Button>
+								<Button variant="outline" onClick={() => toast.success('Search chats')}>
+									<SearchIcon aria-hidden />
+									Search chats
+								</Button>
+							</>
+						}
+					/>
 				</Panel>
 			</Example>
 		</Section>
