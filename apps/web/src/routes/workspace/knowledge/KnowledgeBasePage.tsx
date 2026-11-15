@@ -818,14 +818,25 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 									/>
 								</div>
 							) : (
-								<div className="text-foreground-muted my-6 text-center">
+								<div className="text-foreground-muted my-6 flex flex-col items-center gap-3 text-center">
 									{debouncedQuery ? (
-										<p>Nothing matches "{debouncedQuery}".</p>
+										<>
+											<p>Nothing matches "{debouncedQuery}".</p>
+											<Button
+												variant="outline"
+												onClick={() => {
+													setQuery('');
+													setPage(1);
+												}}
+											>
+												Clear search
+											</Button>
+										</>
 									) : (
-										<p>
-											No files yet.
-											{writeAccess ? ' Add files, a web page or text from the Add content menu.' : ''}
-										</p>
+										<>
+											<p>No files yet. Files added here are searched when a chat uses this knowledge base.</p>
+											{writeAccess && <Button onClick={() => fileInput.current?.click()}>Upload files</Button>}
+										</>
 									)}
 								</div>
 							)}

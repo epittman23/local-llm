@@ -667,8 +667,16 @@ describe('KnowledgeBasePage header menu (#1017)', () => {
 		}));
 		renderPage();
 		expect(await screen.findByText(/No files yet\./)).toBeInTheDocument();
+		const input = document.getElementById('files-input') as HTMLInputElement;
+		const pick = vi.spyOn(input, 'click');
+		fireEvent.click(screen.getByRole('button', { name: 'Upload files' }));
+		expect(pick).toHaveBeenCalled();
 		fireEvent.change(screen.getByLabelText('Search files'), { target: { value: 'zzz' } });
 		expect(await screen.findByText('Nothing matches "zzz".')).toBeInTheDocument();
+		// The empty state's own button, besides the field's clear icon.
+		fireEvent.click(screen.getAllByRole('button', { name: 'Clear search' }).at(-1) as HTMLElement);
+		expect(screen.getByLabelText('Search files')).toHaveValue('');
+		expect(await screen.findByText(/No files yet\./)).toBeInTheDocument();
 	});
 });
 
