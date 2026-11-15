@@ -61,8 +61,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     function editors ask 'Discard changes?' before Back,
     a workspace tab, the browser's Back or Forward, or a change of `?id=`
     would lose changes, and the browser asks before a reload or tab close
-    (not in the desktop app): `lib/ui/useUnsavedChanges.ts`. Settings'
-    identical question now has a danger button too.
+    (not in the desktop app): `lib/ui/useUnsavedChanges.ts`. The model
+    editor Admin > Models opens in place asks before its Back too
+    (`confirmLeave`). Settings' identical question now has a danger button
+    too.
   - **Behaviour changes without a decision.** A knowledge base's name and
     description no longer save themselves a second after typing; they save
     from an "Edit name and description" dialog. A knowledge file opens on

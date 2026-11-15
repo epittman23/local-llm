@@ -382,7 +382,12 @@ changes, and has the browser ask before a reload or tab close (not in the
 desktop app). `dirty` compares values against a baseline; it never counts
 change events. Render its `dialog`. Call `allowNext()` only after a save has
 resolved, immediately before navigating away; set before the save, a failed
-save would let the next leave through unasked.
+save would let the next leave through unasked. A way out that is not a
+navigation (Admin > Models swaps the model editor out for its list in place)
+goes through `confirmLeave(action)`: it runs `action` at once while nothing is
+unsaved and asks the same question first otherwise; an `action` that
+navigates is let through, so it never asks twice. An editor's own Back always
+calls it.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A native control is allowed only where the shared one cannot do

@@ -8,7 +8,9 @@ function Editor({ message }: { message?: string }) {
 	const [saved, setSaved] = useState('');
 	const [value, setValue] = useState('');
 	const navigate = useNavigate();
-	const { dialog, allowNext } = useUnsavedChanges(value !== saved, { message });
+	const [closed, setClosed] = useState(false);
+	const { dialog, allowNext, confirmLeave } = useUnsavedChanges(value !== saved, { message });
+	if (closed) return <p>The list, in place</p>;
 	return (
 		<div>
 			<label>
@@ -29,6 +31,12 @@ function Editor({ message }: { message?: string }) {
 			</button>
 			<button type="button" onClick={() => setSaved(value)}>
 				Save
+			</button>
+			<button type="button" onClick={() => confirmLeave(() => setClosed(true))}>
+				Close in place
+			</button>
+			<button type="button" onClick={() => confirmLeave(() => navigate('/list'))}>
+				Back by navigate
 			</button>
 			{dialog}
 		</div>
@@ -152,6 +160,37 @@ describe('useUnsavedChanges', () => {
 		expect(unload()).toBe(true);
 		fireEvent.click(screen.getByRole('link', { name: 'Back' }));
 		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+	});
+
+	it('confirmLeave runs a leave that is not a navigation at once while nothing has changed', () => {
+		setup();
+		fireEvent.click(screen.getByRole('button', { name: 'Close in place' }));
+		expect(screen.getByText('The list, in place')).toBeTruthy();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('confirmLeave asks first while dirty: Keep editing stays, Discard changes leaves', async () => {
+		setup('Your changes to “Tutor” are not saved.');
+		type('x');
+		fireEvent.click(screen.getByRole('button', { name: 'Close in place' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask.textContent).toContain('Your changes to “Tutor” are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect((screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value).toBe('x');
+		fireEvent.click(screen.getByRole('button', { name: 'Close in place' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('The list, in place')).toBeTruthy();
+	});
+
+	it('confirmLeave asks once for a leave that navigates', async () => {
+		const router = setup();
+		type('x');
+		fireEvent.click(screen.getByRole('button', { name: 'Back by navigate' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('The list')).toBeTruthy();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		expect(router.state.location.pathname).toBe('/list');
 	});
 
 	it('has the browser ask before a reload only while there are unsaved changes', () => {

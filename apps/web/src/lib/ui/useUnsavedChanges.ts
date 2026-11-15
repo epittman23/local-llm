@@ -1,4 +1,4 @@
-import { createElement, type ReactElement, useCallback, useEffect, useRef } from 'react';
+import { createElement, type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
 import { type BlockerFunction, useBlocker } from 'react-router';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
@@ -15,11 +15,16 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * after a successful save, while the page may still count as dirty, so that one
  * navigation goes through. `dirty` should compare values with a baseline, not
  * count change events, so a seeded or formatted value never counts.
+ *
+ * A leave that is not a navigation (a page that swaps an editor out for its
+ * list in place) goes through `confirmLeave(action)`: it runs `action` at once
+ * while nothing is unsaved, and otherwise asks the same question first. An
+ * `action` that navigates is let through once, so it never asks twice.
  */
 export function useUnsavedChanges(
 	dirty: boolean,
 	{ message = DEFAULT_MESSAGE }: { message?: string } = {}
-): { dialog: ReactElement; allowNext: () => void } {
+): { dialog: ReactElement; allowNext: () => void; confirmLeave: (action: () => void) => void } {
 	// Refs, so the blocker always sees this render's answer: the router reads its
 	// function from an effect, which would otherwise lag a save's navigate.
 	const dirtyNow = useRef(dirty);
@@ -48,11 +53,19 @@ export function useUnsavedChanges(
 		allowed.current = true;
 	}, []);
 
+	// The leave confirmLeave is holding while the dialog asks (in an object: a function in state is an updater).
+	const [pending, setPending] = useState<{ action: () => void } | null>(null);
+	const confirmLeave = useCallback((action: () => void) => {
+		if (dirtyNow.current) setPending({ action });
+		else action();
+	}, []);
+
 	const dialog = createElement(
 		ConfirmDialog,
 		{
-			open: blocker.state === 'blocked',
+			open: blocker.state === 'blocked' || pending !== null,
 			onOpenChange: (open: boolean) => {
+				if (!open) setPending(null);
 				// The dialog closes after Discard changes too; resetting then would cancel a browser Back
 				// still on its way (the router replays it once its history move settles).
 				if (!open && blocker.state === 'blocked' && !confirmed.current) blocker.reset();
@@ -63,6 +76,12 @@ export function useUnsavedChanges(
 			cancelLabel: 'Keep editing',
 			destructive: true,
 			onConfirm: () => {
+				if (pending) {
+					setPending(null);
+					allowed.current = true;
+					pending.action();
+					return;
+				}
 				if (blocker.state !== 'blocked') return;
 				confirmed.current = true;
 				blocker.proceed();
@@ -70,5 +89,5 @@ export function useUnsavedChanges(
 		},
 		message
 	);
-	return { dialog, allowNext };
+	return { dialog, allowNext, confirmLeave };
 }

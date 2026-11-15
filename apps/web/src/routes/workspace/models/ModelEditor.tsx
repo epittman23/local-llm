@@ -360,7 +360,7 @@ function EditorForm({
 			/>
 
 			<div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-3">
-				<Button variant="ghost" size="sm" className="-ms-2" type="button" onClick={onBack}>
+				<Button variant="ghost" size="sm" className="-ms-2" type="button" onClick={() => guard.confirmLeave(onBack)}>
 					<ChevronLeft aria-hidden />
 					Back
 				</Button>

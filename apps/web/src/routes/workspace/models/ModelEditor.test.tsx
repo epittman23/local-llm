@@ -250,6 +250,29 @@ describe('ModelEditor unsaved changes (#905, FRM-3)', () => {
 		expect(status()).toHaveTextContent('All changes saved');
 	});
 
+	it('asks once before a Back that navigates, then leaves on Discard changes', async () => {
+		const { router } = renderEditor();
+		fireEvent.change(await screen.findByLabelText('Model name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/list'));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('guards a Back that swaps the editor out in place (Admin > Models), and leaves at once when clean', async () => {
+		const onBack = vi.fn();
+		renderEditor({ onBack });
+		const name = await screen.findByLabelText('Model name');
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		expect(onBack).toHaveBeenCalledTimes(1);
+		fireEvent.change(name, { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(onBack).toHaveBeenCalledTimes(1);
+		fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+		expect(onBack).toHaveBeenCalledTimes(2);
+	});
+
 	it('leaves after a save without asking, and the save carries the change', async () => {
 		const { router, onSubmit } = renderEditor();
 		fireEvent.change(await screen.findByLabelText('Model name'), { target: { value: 'Renamed' } });
