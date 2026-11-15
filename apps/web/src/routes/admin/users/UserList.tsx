@@ -77,6 +77,12 @@ export function UserList() {
 	}, [total, setCount]);
 
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+	// Adding, importing or deleting a user changes how many accounts there are: the
+	// workspace's owners, View and Access (useSingleUser) and sharing read that count.
+	const accountsChanged = () => {
+		refetch();
+		queryClient.invalidateQueries({ queryKey: ['account-count'] });
+	};
 
 	const deleteUser = async (id: string) => {
 		const res = await deleteUserById(token, id).catch((error) => {
@@ -85,7 +91,7 @@ export function UserList() {
 		});
 		// Deleting the last row of a later page would leave that page empty.
 		if (users?.length === 1 && page > 1) setPage(page - 1);
-		if (res) refetch();
+		if (res) accountsChanged();
 	};
 
 	const setSortKey = (key: string) => {
@@ -114,7 +120,7 @@ export function UserList() {
 			>
 				This will permanently delete <span className="font-normal">{selected?.name}</span> and their data.
 			</ConfirmDialog>
-			<AddUserModal open={showAdd} onOpenChange={setShowAdd} onSaved={refetch} />
+			<AddUserModal open={showAdd} onOpenChange={setShowAdd} onSaved={accountsChanged} />
 			<EditUserModal open={showEdit} onOpenChange={setShowEdit} selectedUser={selected} onSaved={refetch} />
 			{selected && <UserChatsModal open={showChats} onOpenChange={setShowChats} user={selected} />}
 			{selected && (

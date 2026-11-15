@@ -66,6 +66,7 @@ export function sectionOfPath(pathname: string): WorkspaceSection | null {
  * GET /users/search's `total`, cached under the same key as the share
  * dialog's (S2-D2). Until it is known, and if it cannot be read, the install
  * counts as one account, so the multi-user chrome never flashes in and out.
+ * Admin > Users recounts after adding, importing or deleting a user.
  */
 export function useSingleUser(): boolean {
 	const token = useAuthStore((s) => s.token) ?? '';
