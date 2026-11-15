@@ -269,14 +269,15 @@ export function ModelSelector({
 						if (!o) setAdding(false);
 					}}
 				>
-					<Tip content={tip}>
+					{/* The chip's name may be cut short: the tooltip and the open list give it whole (TYP-7). */}
+					<Tip content={`${label}. ${tip}`}>
 						<PopoverTrigger asChild>
 							<Button
 								type="button"
 								variant="ghost"
 								size="sm"
 								disabled={disabled}
-								className="min-w-0 shrink"
+								className="max-w-40 min-w-0 shrink"
 								aria-label={`Model: ${label}`}
 								aria-invalid={selected.includes('') || undefined}
 							>
