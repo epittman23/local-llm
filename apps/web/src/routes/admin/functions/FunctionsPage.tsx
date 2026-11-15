@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
@@ -22,6 +22,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import {
 	createNewFunction,
@@ -366,58 +367,51 @@ export function FunctionsPage() {
 
 						<div className="grid gap-y-0.5">
 							{items.map((fn) => (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={fn.id}
-									role="button"
-									tabIndex={0}
-									className="group hover:bg-muted/50 flex min-h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left"
-									onClick={(e) => {
-										if (isControlClick(e.target)) return;
-										openFunction(fn);
-									}}
-									onKeyDown={(e) => {
-										if (e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openFunction(fn);
-										}
-									}}
+									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
 								>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
-												{fn.type}
-											</div>
-											<Tip content={fn.id} side="top">
-												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
-											</Tip>
-											{fn.meta?.manifest?.version && (
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
-													v{fn.meta.manifest.version}
+									<RowButton
+										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+										onClick={() => openFunction(fn)}
+									>
+										<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+											<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+												<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
+													{fn.type}
 												</div>
+												<Tip content={fn.id} side="top">
+													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
+												</Tip>
+												{fn.meta?.manifest?.version && (
+													<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+														v{fn.meta.manifest.version}
+													</div>
+												)}
+												<Tip content={dayjs(fn.updated_at * 1000).format('LLLL')}>
+													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+														{dayjs(fn.updated_at * 1000).fromNow()}
+													</div>
+												</Tip>
+											</div>
+											{fn.meta?.description && (
+												<Tip content={fn.meta.description} side="top">
+													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
+														{fn.meta.description}
+													</div>
+												</Tip>
 											)}
-											<Tip content={dayjs(fn.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(fn.updated_at * 1000).fromNow()}
+										</div>
+
+										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
+											<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
 												</div>
 											</Tip>
 										</div>
-										{fn.meta?.description && (
-											<Tip content={fn.meta.description} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-													{fn.meta.description}
-												</div>
-											</Tip>
-										)}
-									</div>
-
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
 										{shiftKey ? (
@@ -526,7 +520,7 @@ export function FunctionsPage() {
 														</DropdownMenuItem>
 													</DropdownMenuContent>
 												</DropdownMenu>
-												<div className="flex h-6 items-center" onClick={(e) => e.stopPropagation()}>
+												<div className="flex h-6 items-center">
 													<Tip content={fn.is_active ? 'Enabled' : 'Disabled'}>
 														<Switch
 															size="sm"
