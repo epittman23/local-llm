@@ -73,3 +73,28 @@ describe('FunctionEditPage (#905)', () => {
 		expect(await screen.findByText('All changes saved')).toBeInTheDocument();
 	});
 });
+
+describe('FunctionEditPage when the function cannot be loaded (#1095, NAV-3, STA-4)', () => {
+	it('says in place that a function no longer exists', async () => {
+		vi.mocked(getFunctionById).mockRejectedValueOnce("We could not find what you're looking for :/");
+		open('/admin/functions/edit?id=gone', '/admin/functions/edit', <FunctionEditPage />);
+		expect(await screen.findByRole('heading', { name: 'This function no longer exists.' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Functions' })).toHaveAttribute('href', '/admin/functions');
+	});
+
+	it('offers to try again when the function failed to load', async () => {
+		vi.mocked(getFunctionById)
+			.mockRejectedValueOnce('Internal error')
+			.mockResolvedValueOnce({ id: 'f', name: 'F', meta: { description: 'd' }, content: 'x' } as never);
+		open('/admin/functions/edit?id=f', '/admin/functions/edit', <FunctionEditPage />);
+		fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+		await waitFor(() => expect(getFunctionById).toHaveBeenCalledTimes(2));
+		expect(await screen.findByLabelText('Function name')).toHaveValue('F');
+	});
+
+	it('offers to try again on an empty answer, as the tool page does', async () => {
+		vi.mocked(getFunctionById).mockResolvedValueOnce(null as never);
+		open('/admin/functions/edit?id=f', '/admin/functions/edit', <FunctionEditPage />);
+		expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+	});
+});

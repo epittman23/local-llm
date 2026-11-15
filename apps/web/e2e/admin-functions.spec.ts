@@ -212,10 +212,16 @@ test.describe('admin functions', () => {
 			.toMatchObject({ id: 'fn_1', name: 'Function One' });
 	});
 
-	test('an unknown id on the edit page goes back to the list', async ({ page }) => {
+	test('an unknown id on the edit page says so in place, with a way back to the list', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockFunctionsApi(page, [fn(1)]);
+		// The server's own words for a missing item (ERROR_MESSAGES.NOT_FOUND).
+		await page.route('**/api/v1/functions/id/missing', (route) =>
+			route.fulfill({ status: 401, json: { detail: "We could not find what you're looking for :/" } })
+		);
 		await page.goto('/admin/functions/edit?id=missing');
+		await expect(page.getByRole('heading', { name: 'This function no longer exists.' })).toBeVisible();
+		await page.getByRole('link', { name: 'Functions', exact: true }).last().click();
 		await expect(page).toHaveURL(/\/admin\/functions$/);
 	});
 

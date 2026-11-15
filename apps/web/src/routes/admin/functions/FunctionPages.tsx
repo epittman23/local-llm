@@ -1,9 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { type CodeSource, readCodeSource } from '@/components/common/codeSource';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
+import { Button } from '@/components/ui/button';
 import { createNewFunction, getFunctionById, updateFunctionById } from '@/lib/apis/functions';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { refusedForVersion } from '@/lib/utils/pluginVersion';
@@ -62,7 +65,7 @@ export function FunctionCreatePage() {
 	);
 }
 
-/** Ports (app)/admin/functions/edit/+page.svelte: the function is named by `?id=`; an unknown one bounces to the list. */
+/** Ports (app)/admin/functions/edit/+page.svelte: the function is named by `?id=`; an unknown one is said in place. */
 export function FunctionEditPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const navigate = useNavigate();
@@ -70,6 +73,9 @@ export function FunctionEditPage() {
 	const [params] = useSearchParams();
 	const id = params.get('id');
 	const [fn, setFn] = useState<FunctionDraft | null>(null);
+	// A missing one is said in place (NAV-3); a failed load offers to try again (STA-4).
+	const [failure, setFailure] = useState<{ error: unknown } | null>(null);
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		if (!id) {
@@ -78,23 +84,25 @@ export function FunctionEditPage() {
 		}
 		let cancelled = false;
 		setFn(null);
-		getFunctionById(token, id)
-			.catch((error) => {
-				toast.error(`${error}`);
-				return null;
-			})
-			.then((res) => {
+		setFailure(null);
+		void attempt;
+		getFunctionById(token, id).then(
+			(res) => {
 				if (cancelled) return;
 				if (!res) {
-					navigate(routePaths.adminFunctions);
+					setFailure({ error: undefined });
 					return;
 				}
 				setFn({ id: res.id, name: res.name, meta: res.meta ?? { description: '' }, content: res.content ?? '' });
-			});
+			},
+			(error) => {
+				if (!cancelled) setFailure({ error });
+			}
+		);
 		return () => {
 			cancelled = true;
 		};
-	}, [id, token, navigate]);
+	}, [id, token, navigate, attempt]);
 
 	const onSave = async (data: FunctionDraft) => {
 		if (!fn || refusedForVersion(data.content)) return false;
@@ -104,6 +112,22 @@ export function FunctionEditPage() {
 		return true;
 	};
 
+	if (failure) {
+		return isNotFound(failure.error) ? (
+			<Gone
+				level={2}
+				title="This function no longer exists."
+				description="It may have been deleted, or the link may be mistyped."
+				actions={
+					<Button asChild>
+						<Link to={routePaths.adminFunctions}>Functions</Link>
+					</Button>
+				}
+			/>
+		) : (
+			<LoadFailed what="this function" error={failure.error} onRetry={() => setAttempt((n) => n + 1)} />
+		);
+	}
 	if (!fn) {
 		return (
 			<div className="flex h-full items-center justify-center pb-16">
