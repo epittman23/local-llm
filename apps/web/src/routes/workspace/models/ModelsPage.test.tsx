@@ -183,6 +183,21 @@ describe('ModelsPage delete (ACT-3, #1012)', () => {
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Delete model' }));
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted “Statistics tutor”'));
 	});
+
+	it('says a failed delete in plain words, with the server’s own as the detail (FBK-4)', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });
+		vi.mocked(deleteModelById).mockRejectedValueOnce({ detail: 'Database is locked' });
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model Menu' }), { button: 0, pointerType: 'mouse' });
+		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete model' }));
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Statistics tutor”", {
+				description: 'Database is locked'
+			})
+		);
+	});
 });
 
 describe('ModelsPage row content (#1097, #908)', () => {

@@ -4,7 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { deleteKnowledgeById, searchKnowledgeBases } from '@/lib/apis/knowledge';
+import { createNewKnowledge, deleteKnowledgeById, searchKnowledgeBases } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgePage } from './KnowledgePage';
 
@@ -12,7 +12,8 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/lib/apis/knowledge', async (original) => ({
 	...(await original<object>()),
 	searchKnowledgeBases: vi.fn(),
-	deleteKnowledgeById: vi.fn()
+	deleteKnowledgeById: vi.fn(),
+	createNewKnowledge: vi.fn()
 }));
 
 const base = (id: string, name: string, o: Record<string, unknown> = {}) => ({
@@ -118,6 +119,12 @@ describe('KnowledgePage create and delete (#1011, #1012, STA-3)', () => {
 		expect(toast.error).not.toHaveBeenCalled();
 		fireEvent.change(name, { target: { value: 'Textbooks' } });
 		expect(name).not.toHaveAttribute('aria-invalid');
+
+		vi.mocked(createNewKnowledge).mockResolvedValueOnce({ id: 'kb9' });
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Create knowledge base' }));
+		await waitFor(() => expect(createNewKnowledge).toHaveBeenCalledWith(expect.anything(), 'Textbooks', '', []));
+		expect(toast.success).toHaveBeenCalledWith('Knowledge base created');
+		expect(await screen.findByText('Opened')).toBeVisible();
 	});
 
 	it('confirms a delete by name, saying how many files and their embeddings go', async () => {
