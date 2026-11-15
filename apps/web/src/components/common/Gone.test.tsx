@@ -28,6 +28,11 @@ describe('Gone (NAV-3)', () => {
 		expect(screen.queryByRole('button')).toBeNull();
 	});
 
+	it('takes a deeper heading level inside a page’s own section', () => {
+		render(<Gone title="This note no longer exists." level={4} />);
+		expect(screen.getByRole('heading', { level: 4, name: 'This note no longer exists.' })).toBeInTheDocument();
+	});
+
 	it('tells the server’s not-found answer from any other failure', () => {
 		expect(isNotFound(NOT_FOUND_DETAIL)).toBe(true);
 		expect(isNotFound('Database is locked')).toBe(false);

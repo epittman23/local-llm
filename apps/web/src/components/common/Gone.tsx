@@ -17,7 +17,8 @@ export const isNotFound = (error: unknown) => error === NOT_FOUND_DETAIL;
  * gone as the heading, one sentence on why it might be, and ways onward. A
  * failure to load (offline, a server error) is `LoadFailed` instead, which
  * offers to try again; this panel is for a definite answer that nothing is
- * there. `level` is 2 where the page already has its h1 (A11Y-3).
+ * there. `level` is 2 where the page already has its h1, or deeper inside a
+ * page's own sections such as the /ui demo (A11Y-3).
  */
 export function Gone({
 	title,
@@ -30,9 +31,9 @@ export function Gone({
 	description?: ReactNode;
 	/** Ways onward: `Button`s, the most likely first. */
 	actions?: ReactNode;
-	level?: 1 | 2;
+	level?: 1 | 2 | 3 | 4;
 }) {
-	const Heading = level === 1 ? 'h1' : 'h2';
+	const Heading = `h${level}` as const;
 	return (
 		<section
 			data-slot="gone"
