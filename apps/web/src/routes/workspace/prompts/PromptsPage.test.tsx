@@ -130,7 +130,7 @@ describe('PromptsPage rows and delete', () => {
 		const dialog = await screen.findByRole('dialog');
 		fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summarise' } });
 		fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'summarise' } });
-		fireEvent.change(within(dialog).getByLabelText('Prompt Content'), { target: { value: 'Summarise this.' } });
+		fireEvent.change(within(dialog).getByLabelText('Prompt content'), { target: { value: 'Summarise this.' } });
 		fireEvent.submit(within(dialog).getByLabelText('Name').closest('form') as HTMLFormElement);
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Prompt created'));
 		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -138,16 +138,22 @@ describe('PromptsPage rows and delete', () => {
 
 	it('throws a failed create to the dialog, which says it and stays open (#1095)', async () => {
 		vi.mocked(getPromptItems).mockResolvedValue({ items: [], total: 0 });
-		vi.mocked(createNewPrompt).mockRejectedValueOnce('Command already in use');
+		vi.mocked(createNewPrompt).mockRejectedValueOnce(
+			'Uh-oh! This command is already registered. Please choose another command string.'
+		);
 		renderPage();
 		fireEvent.click(await screen.findByRole('button', { name: 'New prompt' }));
 		const dialog = await screen.findByRole('dialog');
 		fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summarise' } });
 		fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'summarise' } });
-		fireEvent.change(within(dialog).getByLabelText('Prompt Content'), { target: { value: 'Summarise this.' } });
+		fireEvent.change(within(dialog).getByLabelText('Prompt content'), { target: { value: 'Summarise this.' } });
 		fireEvent.submit(within(dialog).getByLabelText('Name').closest('form') as HTMLFormElement);
-		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Command already in use'));
+		expect(
+			await within(dialog).findByText('/summarise is already used by another prompt. Choose another command.')
+		).toBeVisible();
+		expect(within(dialog).getByLabelText('Command')).toHaveAttribute('aria-invalid', 'true');
 		expect(toast.success).not.toHaveBeenCalled();
+		expect(toast.error).not.toHaveBeenCalled();
 		expect(screen.getByRole('dialog')).toBeVisible();
 	});
 });
