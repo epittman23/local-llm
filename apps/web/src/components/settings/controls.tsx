@@ -227,12 +227,18 @@ export function SettingRow({
 export function SettingField({
 	label,
 	description,
+	descriptionId,
+	optional,
 	htmlFor,
 	className,
 	children
 }: {
 	label?: string;
-	description?: string;
+	/** Marks the field optional after its label (FRM-6). */
+	optional?: boolean;
+	description?: ReactNode;
+	/** The help line's id, for the field's `aria-describedby` (FRM-2). */
+	descriptionId?: string;
 	htmlFor?: string;
 	className?: string;
 	children: ReactNode;
@@ -245,10 +251,15 @@ export function SettingField({
 			{label && (
 				<label className="text-foreground-strong font-strong" htmlFor={htmlFor}>
 					{label}
+					{optional && <span className="text-foreground-muted font-normal"> (optional)</span>}
 				</label>
 			)}
 			<div className={label ? 'mt-1.5' : ''}>{children}</div>
-			{description && <p className="text-foreground-muted mt-1 text-dense">{description}</p>}
+			{description && (
+				<p id={descriptionId} className="text-foreground-muted mt-1 text-dense">
+					{description}
+				</p>
+			)}
 		</div>
 	);
 }

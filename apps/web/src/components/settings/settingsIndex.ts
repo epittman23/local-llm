@@ -52,7 +52,9 @@ const handListed: IndexedSetting[] = [
 	{ tab: 'data_controls', label: 'Uploaded files', description: 'Manage files' },
 	{ tab: 'account', label: 'Profile', description: 'Profile picture, avatar' },
 	{ tab: 'account', label: 'Name', description: 'Your name, username' },
-	{ tab: 'account', label: 'Bio' },
+	{ tab: 'account', label: 'Bio', description: 'About you, prompt variable' },
+	{ tab: 'account', label: 'Gender', description: 'Prompt variable' },
+	{ tab: 'account', label: 'Birth date', description: 'Age, birthday, prompt variable' },
 	{ tab: 'account', label: 'User Variables', description: 'Variables for prompts' },
 	{ tab: 'account', label: 'Change Password', description: 'Password' },
 	{ tab: 'account', label: 'API Key', description: 'Secret key' }

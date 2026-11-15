@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, Link2, Link2Off, SquarePen } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { CircleAlert, Copy, Globe, Link2, Link2Off, Lock, RefreshCw, SquarePen } from 'lucide-react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
@@ -20,8 +20,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
-import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
+import {
+	type AccessGrant,
+	DROPPED_GRANTS_WARNING,
+	grantsDropped,
+	hasAnyoneReadGrant,
+	setVisibility
+} from '@/lib/access/accessGrants';
 import {
 	deleteSharedChatById,
 	getChatAccessGrants,
@@ -30,6 +37,7 @@ import {
 	shareChatById,
 	updateChatAccessGrants
 } from '@/lib/apis/chats';
+import { searchUsers } from '@/lib/apis/users';
 import type { ChatListItem, Folder } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { copyToClipboard } from '@/lib/utils';
@@ -44,31 +52,62 @@ type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 /** The public link to a shared chat (the app's own /s/<id> page). */
 export const shareUrl = (shareId: string) => `${window.location.origin}${appHref(`/s/${shareId}`)}`;
 
+type Audience = 'anyone' | 'me';
+
+/** What each answer to "Who can open the link" means, shown under the choice. */
+const AUDIENCE_HELP: Record<Audience | '', string> = {
+	'': 'Anyone with the link: no sign-in needed. Only me: it opens only while you are signed in, such as on your other devices.',
+	anyone: 'Anyone you send the link to can read this chat without signing in.',
+	me: 'The link opens only while you are signed in, such as on your other devices.'
+};
+
 /**
- * Ports chat/ShareChatModal.svelte: Copy link shares the chat as it is now
- * (again, if it was shared before, which updates the snapshot), and Stop
- * sharing deletes the link, as a button rather than a phrase in a sentence
- * (#1006). Who can open a new link is still the owner's open question (the
- * link starts private, as before). Not ported: sharing to the original
- * project's community site.
+ * Ports chat/ShareChatModal.svelte, asking first (#1006, S2-D2): before a link
+ * exists the dialog asks who can open it, "Anyone with the link" or "Only me
+ * (signed in)", with nothing preselected and nothing created until one is
+ * chosen. Then it shows the link in a read-only field with Copy link, Update
+ * snapshot (shares the chat again as it is now) and Stop sharing.
+ *
+ * The answer is stored as the share's access grants (#334) through the
+ * existing routes: "anyone" is the `anyone:*` read grant (`getVisibility`'s
+ * "open"), "only me" is no grant, since the shared-chat route always serves a
+ * share to its owner. The users-and-groups list is shown only when more than
+ * one account exists (WRD-4), counted by GET /users/search's `total`. Not
+ * ported: sharing to the original project's community site.
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	const canShareOpen = Boolean(user?.permissions?.sharing?.open_chats) || isAdmin;
 	const chat = useQuery({
 		queryKey: ['chat-share', chatId],
 		enabled: open,
 		queryFn: async () => (await getChatById(token, chatId)) as { share_id?: string | null }
 	});
-	const [busy, setBusy] = useState(false);
-	const shared = Boolean(chat.data?.share_id);
+	const shareId = chat.data?.share_id ?? null;
+	const shared = Boolean(shareId);
+	// Several accounts make users and groups worth granting; one account never does.
+	const accounts = useQuery({
+		queryKey: ['account-count'],
+		enabled: open && shared,
+		queryFn: async () => ((await searchUsers(token)) as { total?: number } | null)?.total ?? 1
+	});
+	const severalAccounts = (accounts.data ?? 1) > 1;
 
-	// Who can open the link (#334). A share starts private: the shared-chat route
-	// serves it only to its owner and the users and groups granted read here, as
-	// ShareChatModal.svelte's AccessControl panel set them.
+	// The answer before a link exists: nothing until the owner picks one.
+	const [choice, setChoice] = useState<Audience | ''>('');
+	const [busy, setBusy] = useState<'create' | 'update' | null>(null);
+	useEffect(() => {
+		if (open) setChoice('');
+	}, [open]);
+	const copyButton = useRef<HTMLButtonElement>(null);
+	const focusCopy = useRef(false);
+	const ids = useId();
+
+	// Who can open the link as stored (#334). A new share starts with no grant: only its owner.
 	const [grants, setGrants] = useState<AccessGrant[] | null>(null);
-	// What the server last said it stored: the panel goes back to it when a save fails.
+	// What the server last said it stored: the choice goes back to it when a save fails.
 	const saved = useRef<AccessGrant[]>([]);
 	useEffect(() => {
 		if (!open || !shared) return;
@@ -84,6 +123,14 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 			current = false;
 		};
 	}, [open, shared, token, chatId]);
+
+	// After a link is created its Copy link button takes the focus the Create button had.
+	useEffect(() => {
+		if (shared && focusCopy.current) {
+			focusCopy.current = false;
+			copyButton.current?.focus();
+		}
+	}, [shared]);
 
 	// Shown at once. Each save waits for the one before it, so the server applies
 	// them in order: it replaces the grants wholesale, and two in flight together
@@ -119,19 +166,55 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		return saveChain.current;
 	};
 
-	const copy = async () => {
-		setBusy(true);
+	const create = async () => {
+		if (!choice) return;
+		setBusy('create');
 		const res = (await shareChatById(token, chatId).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		})) as { share_id?: string } | null;
-		setBusy(false);
-		if (!res?.share_id) return;
-		await copyToClipboard(shareUrl(res.share_id));
+		if (!res?.share_id) {
+			setBusy(null);
+			return;
+		}
+		// The link exists and opens to its owner alone; "anyone" is granted next, and
+		// the link is copied only once the server says it stored that grant.
+		let stored: AccessGrant[] = [];
+		if (choice === 'anyone') {
+			const ok = await updateChatAccessGrants(token, chatId, setVisibility([], 'open')).then(
+				() => true,
+				() => false
+			);
+			const readBack = ok ? await getChatAccessGrants(token, chatId).catch(() => null) : null;
+			stored = Array.isArray(readBack) ? (readBack as AccessGrant[]) : [];
+		}
+		accessSaves.current += 1;
+		saved.current = stored;
+		setGrants(stored);
+		focusCopy.current = true;
+		if (choice === 'anyone' && !hasAnyoneReadGrant(stored)) {
+			toast.error('The link was created, but only you can open it: opening it to anyone was not saved.');
+		} else {
+			await copyToClipboard(shareUrl(res.share_id));
+			toast.success('Link copied');
+		}
+		// Busy until the dialog knows the link exists, or Create could be pressed again (ACT-5).
+		await chat.refetch();
+		setBusy(null);
+	};
+	const copyLink = async () => {
+		if (!shareId) return;
+		await copyToClipboard(shareUrl(shareId));
 		toast.success('Link copied');
-		// A new link opens to no one but its owner, so the dialog stays to say who else may.
-		if (shared) onOpenChange(false);
-		void chat.refetch();
+	};
+	const updateSnapshot = async () => {
+		setBusy('update');
+		const res = (await shareChatById(token, chatId).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		})) as { share_id?: string } | null;
+		setBusy(null);
+		if (res?.share_id) toast.success('Snapshot updated: the link shows the chat as it is now');
 	};
 	const unshare = async () => {
 		const deleted = await deleteSharedChatById(token, chatId).then(
@@ -143,40 +226,120 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 			accessSaves.current += 1;
 			saved.current = [];
 			setGrants(null);
+			setChoice('');
 		}
 		void chat.refetch();
 	};
 
+	// Before a link exists the owner's pick; after, what is stored.
+	const audience: Audience | '' = shared
+		? grants === null
+			? ''
+			: hasAnyoneReadGrant(grants)
+				? 'anyone'
+				: 'me'
+		: choice;
+	const pick = (next: Audience) => {
+		if (!shared) setChoice(next);
+		else if (grants !== null) void saveAccess(setVisibility(grants, next === 'anyone' ? 'open' : 'private'));
+	};
+	const anyoneBlocked = !canShareOpen && audience !== 'anyone';
+	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ' Your sharing permissions do not allow links that anyone can open.' : ''}`;
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			{/* OVL-1: 32 rem, a short form; the two answers then fit side by side. */}
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Share chat</DialogTitle>
 					<DialogDescription>
 						{shared
-							? 'This chat has a link. Copying it again updates the link with the chat as it is now. Choose below who can open it.'
-							: 'Messages you send after creating your link won’t be shared. Once the link exists, you choose who can open it.'}
+							? 'The link shows the chat as it was when it was last shared. Update the snapshot to add what was said since.'
+							: 'The link will show the chat as it is now. Messages you send later are not in it until you update the snapshot.'}
 					</DialogDescription>
 				</DialogHeader>
-				{shared && grants !== null && (
-					<AccessControl
-						accessGrants={grants}
-						onChange={(next) => void saveAccess(next)}
-						accessRoles={['read']}
-						sharePublic={Boolean(user?.permissions?.sharing?.public_chats) || isAdmin}
-						shareOpen={Boolean(user?.permissions?.sharing?.open_chats) || isAdmin}
-						shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-					/>
-				)}
-				<DialogFooter>
-					{shared && (
-						<Button variant="outline" className="text-danger sm:mr-auto" onClick={unshare}>
-							<Link2Off aria-hidden /> Stop sharing
-						</Button>
+				<div className="flex min-w-0 flex-col gap-4">
+					<div>
+						<p id={`${ids}-who`} className="text-foreground-strong font-strong mb-1.5">
+							Who can open the link
+						</p>
+						<SegmentedControl<Audience | ''>
+							aria-labelledby={`${ids}-who`}
+							aria-describedby={`${ids}-who-help`}
+							value={audience}
+							onValueChange={(v) => v && pick(v)}
+							// On a phone the icons go, so each answer stays on one line.
+							className="w-full max-sm:[&_svg]:hidden sm:grid sm:grid-cols-2"
+							options={[
+								{ value: 'anyone', label: 'Anyone with the link', icon: Globe, disabled: anyoneBlocked },
+								{ value: 'me', label: 'Only me (signed in)', icon: Lock }
+							]}
+						/>
+						<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
+							{help}
+						</p>
+					</div>
+					{shareId && (
+						<div className="min-w-0">
+							<Label htmlFor={`${ids}-url`}>Link</Label>
+							<div className="mt-1.5 flex min-w-0 gap-2">
+								<Input
+									id={`${ids}-url`}
+									readOnly
+									value={shareUrl(shareId)}
+									onFocus={(e) => e.currentTarget.select()}
+									className="min-w-0 flex-1"
+								/>
+								<Button ref={copyButton} variant="outline" onClick={copyLink}>
+									<Copy aria-hidden /> Copy link
+								</Button>
+							</div>
+						</div>
 					)}
-					<Button onClick={copy} disabled={busy || chat.isLoading}>
-						<Link2 aria-hidden /> {shared ? 'Update and copy link' : 'Copy link'}
-					</Button>
+					{shared && severalAccounts && grants !== null && (
+						<AccessControl
+							accessGrants={grants}
+							onChange={(next) => void saveAccess(next)}
+							accessRoles={['read']}
+							showVisibility={false}
+							shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
+						/>
+					)}
+				</div>
+				<DialogFooter>
+					{shared ? (
+						<>
+							<Button variant="outline" className="text-danger sm:mr-auto" onClick={unshare}>
+								<Link2Off aria-hidden /> Stop sharing
+							</Button>
+							<Button
+								variant="outline"
+								onClick={updateSnapshot}
+								disabled={busy !== null}
+								aria-busy={busy === 'update' || undefined}
+							>
+								{busy === 'update' ? <Spinner className="size-3.5" /> : <RefreshCw aria-hidden />}
+								{busy === 'update' ? 'Updating…' : 'Update snapshot'}
+							</Button>
+						</>
+					) : (
+						<>
+							{!choice && (
+								<p id={`${ids}-why`} className="text-foreground-muted self-center text-dense sm:mr-auto">
+									Choose who can open the link first.
+								</p>
+							)}
+							<Button
+								onClick={create}
+								disabled={!choice || busy !== null || chat.isLoading}
+								aria-describedby={choice ? undefined : `${ids}-why`}
+								aria-busy={busy === 'create' || undefined}
+							>
+								{busy === 'create' ? <Spinner className="size-3.5" /> : <Link2 aria-hidden />}
+								{busy === 'create' ? 'Creating…' : 'Create and copy link'}
+							</Button>
+						</>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

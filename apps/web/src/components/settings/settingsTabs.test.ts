@@ -63,6 +63,15 @@ describe('availableTabs', () => {
 		expect(personalSettingsRestricted(user('user', { settings: { interface: true } }))).toBe(false);
 		expect(personalSettingsRestricted(user('user'))).toBe(false);
 	});
+	it('hides Integrations (personal tool and terminal servers) from everyone until chats use them (#1090)', () => {
+		const allowed = user('user', { features: { direct_tool_servers: true } });
+		expect(availableTabs(allowed, cfg(), all).map((t) => t.id)).not.toContain('tools');
+		const admin = availableTabs(user('admin'), cfg(), all).map((t) => t.id);
+		expect(admin).not.toContain('tools');
+		// Admin > Integrations, where tool servers do work, stays.
+		expect(admin).toContain('admin:integrations');
+		expect(resolveTab('tools', null, availableTabs(user('admin'), cfg(), all))).toBe('general');
+	});
 	it('lists only tabs that have a component', () => {
 		expect(availableTabs(user('admin'), cfg(), new Set(['admin:db'])).map((t) => t.id)).toEqual(['admin:db']);
 	});

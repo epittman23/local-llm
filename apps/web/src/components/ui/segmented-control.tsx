@@ -3,14 +3,19 @@ import type { CSSProperties } from 'react';
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 
-export type SegmentedOption<T extends string> = { value: T; label: string; icon?: LucideIcon };
+/** `disabled`: shown but not choosable; say why next to the control (ACT-5). */
+export type SegmentedOption<T extends string> = { value: T; label: string; icon?: LucideIcon; disabled?: boolean };
 
 /**
  * FRM-4: two to five mutually exclusive choices shown side by side, each a
  * word with an optional line icon (never an emoji, WRD-6). A radio group
  * (Radix): Tab reaches the chosen segment, the arrow keys move and choose,
  * and the choice applies at once, so it belongs where a switch would (FRM-5).
- * Name it with `aria-label` or `aria-labelledby`.
+ * Name it with `aria-label` or `aria-labelledby`. The one other use is a
+ * required choice with nothing preselected, confirmed by a separate action
+ * (the Share dialog's "who can open the link", then Create): a `value`
+ * matching no option leaves every segment unchosen. A disabled segment gives
+ * its reason in the help line under the control (ACT-5).
  */
 export function SegmentedControl<T extends string>({
 	value,
@@ -42,14 +47,16 @@ export function SegmentedControl<T extends string>({
 			)}
 			{...aria}
 		>
-			{options.map(({ value: v, label, icon: Icon }) => (
+			{options.map(({ value: v, label, icon: Icon, disabled }) => (
 				<RadioGroupPrimitive.Item
 					key={v}
 					value={v}
+					disabled={disabled}
 					data-slot="segmented-control-item"
 					className={cn(
 						'text-foreground-muted font-strong inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-3 text-body transition-colors hover:text-foreground-strong pointer-coarse:h-11 max-sm:px-1',
 						'data-[state=checked]:bg-surface-3 data-[state=checked]:text-foreground-strong',
+						'data-disabled:pointer-events-none data-disabled:opacity-50',
 						'[&_svg]:size-4 [&_svg]:shrink-0'
 					)}
 				>
