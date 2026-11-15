@@ -9,6 +9,7 @@ import { LoadFailed } from '@/components/common/LoadFailed';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { SidePanel } from '@/components/layout/SidePanel';
 import { Button } from '@/components/ui/button';
 import { canUseFeature } from '@/lib/access/features';
 import { updateChatById } from '@/lib/apis/chats';
@@ -32,7 +33,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
-import { ArtifactPanel } from './ArtifactPanel';
+import { ArtifactDownload, ArtifactPanel } from './ArtifactPanel';
 import { ChatBanners } from './ChatBanners';
 import { ChatControls } from './ChatControls';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -319,6 +320,10 @@ export function ChatPage() {
 	const saveParams = useParamsAutosave(id, token);
 	const [preview, setPreview] = useState<string | null>(null);
 	useEffect(() => setPreview(null), [id]);
+	// Controls opened by its shortcut takes the side panel from a preview.
+	useEffect(() => {
+		if (controlsOpen) setPreview(null);
+	}, [controlsOpen]);
 
 	const actions = useMessageActions(session);
 	const [citation, setCitation] = useState<Citation | null>(null);
@@ -463,12 +468,12 @@ export function ChatPage() {
 							<Button
 								type="button"
 								aria-label="Controls"
-								aria-pressed={controlsOpen}
+								aria-pressed={controlsOpen && preview === null}
 								onClick={() => {
 									setPreview(null);
 									setControlsOpen(!controlsOpen);
 								}}
-								variant={controlsOpen ? 'secondary' : 'ghost'}
+								variant={controlsOpen && preview === null ? 'secondary' : 'ghost'}
 								size="icon-sm"
 							>
 								<SlidersHorizontal className="size-4" />
@@ -588,10 +593,19 @@ export function ChatPage() {
 				<ServerDialogs dialog={session.dialog} onClose={session.closeDialog} />
 				<CitationDialog source={citation} onClose={() => setCitation(null)} />
 			</div>
-			{preview !== null ? (
-				<ArtifactPanel code={preview} onClose={() => setPreview(null)} />
-			) : (
-				controlsOpen && (
+			{/* One side panel (CNV-2): the preview while one is open, else Controls. */}
+			<SidePanel
+				key={preview !== null ? 'preview' : 'controls'}
+				open={preview !== null || controlsOpen}
+				onClose={() => (preview !== null ? setPreview(null) : setControlsOpen(false))}
+				{...(preview !== null
+					? { title: 'Preview', storageKey: 'sidePanel.preview', defaultWidth: 448, minWidth: 320 }
+					: { title: 'Controls', storageKey: 'sidePanel.controls', defaultWidth: 320, minWidth: 288 })}
+				actions={preview !== null && <ArtifactDownload code={preview} />}
+			>
+				{preview !== null ? (
+					<ArtifactPanel code={preview} />
+				) : (
 					<ChatControls
 						params={session.params}
 						onParams={(p) => {
@@ -599,11 +613,10 @@ export function ChatPage() {
 							saveParams(p);
 						}}
 						files={session.chatFiles}
-						onClose={() => setControlsOpen(false)}
 						admin={admin}
 					/>
-				)
-			)}
+				)}
+			</SidePanel>
 		</div>
 	);
 }

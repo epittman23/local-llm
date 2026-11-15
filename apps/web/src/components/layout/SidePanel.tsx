@@ -120,12 +120,14 @@ export function SidePanel({
 }) {
 	const isMd = useMdUp();
 	const anchor = useRef<HTMLSpanElement>(null);
-	// Without ResizeObserver (a test's DOM) there is no measuring, and room for a column.
+	// Unmeasured (no ResizeObserver, or a row with no box: hidden, or a test's
+	// DOM, which lays nothing out) counts as room for a column, so a hidden page
+	// never puts a sheet over the one shown.
 	const [space, setSpace] = useState(Number.POSITIVE_INFINITY);
 	useLayoutEffect(() => {
 		const row = anchor.current?.parentElement;
 		if (!row || typeof ResizeObserver === 'undefined') return;
-		const measure = () => setSpace(row.clientWidth);
+		const measure = () => setSpace(row.clientWidth || Number.POSITIVE_INFINITY);
 		measure();
 		const observer = new ResizeObserver(measure);
 		observer.observe(row);

@@ -41,6 +41,7 @@ function show() {
 }
 
 beforeEach(() => {
+	useUIStore.setState({ controlsOpen: false });
 	useAuthStore.setState({
 		status: 'authenticated',
 		token: 't',
@@ -75,6 +76,17 @@ describe('ChatPage header', () => {
 		expect(controls.getAttribute('aria-pressed')).toBe('false');
 		fireEvent.click(controls);
 		expect(controls.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	it('shows Controls in the side panel, which closes back to the chat (canvas C2)', () => {
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Controls' }));
+		const panel = screen.getByRole('complementary', { name: 'Controls' });
+		expect(panel).toContainElement(screen.getByTestId('controls-panel'));
+		expect(screen.getByRole('heading', { level: 2, name: 'Controls' })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Close controls' }));
+		expect(screen.queryByRole('complementary', { name: 'Controls' })).toBeNull();
+		expect(useUIStore.getState().controlsOpen).toBe(false);
 	});
 });
 

@@ -267,6 +267,13 @@ describe('SidePanel as a sheet', () => {
 		expect(screen.queryByRole('dialog')).toBeNull();
 	});
 
+	it('counts a row with no box (hidden, or not laid out) as room for a column, never a sheet over the page', () => {
+		rowWidth = 0;
+		render(<Harness initiallyOpen />);
+		expect(screen.queryByRole('dialog')).toBeNull();
+		expect(screen.getByRole('complementary', { name: 'Controls' })).toBeInTheDocument();
+	});
+
 	it('becomes a column when the room grows', () => {
 		rowWidth = 512;
 		render(<Harness initiallyOpen />);
