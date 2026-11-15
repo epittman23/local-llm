@@ -30,6 +30,12 @@ describe('canUseFeature', () => {
 		expect(canUseFeature('channels', user('user'), config({ enable_channels: true }))).toBe(true);
 		expect(canUseFeature('channels', user('user', { channels: false }), config({ enable_channels: true }))).toBe(false);
 	});
+	it('folders are off only when the server says false, and allowed unless denied, as the server checks', () => {
+		expect(canUseFeature('folders', user('user'), config({}))).toBe(true);
+		expect(canUseFeature('folders', user('admin'), config({ enable_folders: false }))).toBe(false);
+		expect(canUseFeature('folders', user('user', { folders: false }), config({ enable_folders: true }))).toBe(false);
+		expect(canUseFeature('folders', user('admin', { folders: false }), config({ enable_folders: true }))).toBe(true);
+	});
 	it('the playground is for admins only', () => {
 		expect(canUseFeature('playground', user('user'), config({}))).toBe(false);
 		expect(canUseFeature('playground', user('admin'), config({}))).toBe(true);

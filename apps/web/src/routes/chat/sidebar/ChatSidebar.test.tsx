@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getChatList, getChatListByFolderId, getPinnedChatList } from '@/lib/apis/chats';
 import { createNewFolder, deleteFolderById, getFolders, updateFolderById } from '@/lib/apis/folders';
+import type { SessionUser } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { ChatSidebar } from './ChatSidebar';
+import { CHAT_PAGE_SIZE } from './useChatList';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const menuOf = async (name: string) =>
@@ -37,8 +40,9 @@ vi.mock('@/lib/apis/folders', () => ({
 	updateFolderById: vi.fn(),
 	updateFolderIsExpandedById: vi.fn(async () => undefined)
 }));
+const auth = vi.hoisted(() => ({ user: { id: 'u1' } as Partial<SessionUser> }));
 vi.mock('@/lib/stores/authStore', () => ({
-	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'u1' } })
+	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: auth.user })
 }));
 
 function show() {
@@ -54,6 +58,9 @@ function show() {
 }
 
 beforeEach(() => {
+	auth.user = { id: 'u1', role: 'user' };
+	useConfigStore.setState({ config: { name: 'local-llm', version: '1', features: { enable_folders: true } } });
+	vi.mocked(getFolders).mockClear();
 	vi.mocked(getPinnedChatList).mockResolvedValue([]);
 	vi.mocked(getFolders).mockResolvedValue([]);
 	vi.mocked(getChatList).mockImplementation(async (_t, page) =>
@@ -112,6 +119,85 @@ describe('ChatSidebar empty and failed', () => {
 		expect(await screen.findByText("Couldn't load this folder's chats.")).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 		expect(await screen.findByRole('link', { name: /Work chat 0/ })).toBeInTheDocument();
+	});
+});
+
+describe('ChatSidebar when part of it fails or folders are off', () => {
+	it('keeps the chats when the folders are refused, saying so under Folders (403)', async () => {
+		vi.mocked(getFolders).mockRejectedValue('You do not have permission to access this resource.');
+		show();
+		expect(await screen.findByText("Couldn't load folders.")).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /Fresh chat/ })).toBeInTheDocument();
+		expect(screen.queryByText("Couldn't load chats")).toBeNull();
+	});
+
+	it('keeps the chats when the pinned chats fail, saying so under Pinned', async () => {
+		let fail = true;
+		vi.mocked(getPinnedChatList).mockImplementation(async () => {
+			if (fail) throw 'nope';
+			return [{ id: 'p1', title: 'Pinned one' }] as never;
+		});
+		show();
+		expect(await screen.findByText("Couldn't load pinned chats.")).toBeInTheDocument();
+		expect(await screen.findByRole('link', { name: /Fresh chat/ })).toBeInTheDocument();
+		fail = false;
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('link', { name: /Pinned one/ })).toBeInTheDocument();
+	});
+
+	it('hides Folders and asks for none while the server has folders off', async () => {
+		useConfigStore.setState({ config: { name: 'local-llm', version: '1', features: { enable_folders: false } } });
+		show();
+		expect(await screen.findByRole('link', { name: /Fresh chat/ })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Folders' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'New folder' })).toBeNull();
+		expect(getFolders).not.toHaveBeenCalled();
+	});
+
+	it('hides Folders from an account denied them, but not from an admin', async () => {
+		auth.user = { id: 'u1', role: 'user', permissions: { features: { folders: false } } as never };
+		show();
+		expect(await screen.findByRole('link', { name: /Fresh chat/ })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Folders' })).toBeNull();
+		expect(getFolders).not.toHaveBeenCalled();
+		cleanup();
+		auth.user = { id: 'u1', role: 'admin', permissions: { features: { folders: false } } as never };
+		show();
+		expect(await screen.findByRole('button', { name: 'Folders' })).toBeInTheDocument();
+		await waitFor(() => expect(getFolders).toHaveBeenCalled());
+	});
+
+	it('keeps the loaded chats when a further page fails, and tries that page again below them', async () => {
+		vi.stubGlobal(
+			'IntersectionObserver',
+			class {
+				constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+				observe() {
+					this.cb([{ isIntersecting: true }]);
+				}
+				disconnect() {}
+			}
+		);
+		const full = Array.from({ length: CHAT_PAGE_SIZE }, (_, i) => ({
+			id: `c${i}`,
+			title: `Chat ${i}`,
+			updated_at: 50
+		}));
+		vi.mocked(getChatList).mockImplementation(async (_t, page) => {
+			if (page === 1) return full as never;
+			throw 'Database is locked';
+		});
+		show();
+		expect(await screen.findByText("Couldn't load more chats.")).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /Chat 0/ })).toBeInTheDocument();
+		expect(screen.queryByText("Couldn't load chats")).toBeNull();
+		vi.mocked(getChatList).mockImplementation(async (_t, page) =>
+			page === 1 ? (full as never) : ([{ id: 'late', title: 'Late chat', updated_at: 50 }] as never)
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByRole('link', { name: /Late chat/ })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /Chat 59/ })).toBeInTheDocument();
+		vi.unstubAllGlobals();
 	});
 });
 

@@ -54,12 +54,16 @@ export function useFolderChats(folderId: string, enabled: boolean) {
 	});
 }
 
-/** The folders, under ['folders'] (the key Automations already reads). */
-export function useFolders() {
+/**
+ * The folders, under ['folders'] (the key Automations already reads). Asked
+ * for only when `enabled` (folders on, and this account may use them), since
+ * the server answers 403 otherwise.
+ */
+export function useFolders(enabled: boolean) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	return useQuery({
 		queryKey: ['folders'],
-		enabled: Boolean(token),
+		enabled: enabled && Boolean(token),
 		queryFn: async () => ((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token))
 	});
 }
