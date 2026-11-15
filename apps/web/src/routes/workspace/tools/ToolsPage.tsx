@@ -31,6 +31,7 @@ import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { CodeExecutionWarning } from './ToolkitEditor';
 import { filterAndSortTools, parseToolImport, type ToolListItem } from './toolTypes';
 
@@ -55,7 +56,10 @@ export function ToolsPage() {
 	const shiftKey = useShiftKey();
 
 	const [query, setQuery] = useState('');
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 	const [deleting, setDeleting] = useState<ToolListItem | null>(null);
@@ -250,13 +254,15 @@ export function ToolsPage() {
 			/>
 
 			<ListSearchBar value={query} placeholder="Search Tools" onChange={setQuery}>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+						}}
+					/>
+				)}
 			</ListSearchBar>
 
 			{failed ? (
@@ -276,7 +282,7 @@ export function ToolsPage() {
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -321,13 +327,19 @@ export function ToolsPage() {
 										)}
 									</div>
 
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={tool.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+									{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+									{!singleUser && (
+										<div
+											aria-hidden
+											className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+										>
+											<Tip content={tool.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}
+												</div>
+											</Tip>
+										</div>
+									)}
 								</>
 							);
 							return (

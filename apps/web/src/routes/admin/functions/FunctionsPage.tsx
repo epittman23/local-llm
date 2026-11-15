@@ -41,6 +41,7 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { FunctionCodeWarning } from './FunctionEditor';
 import {
 	FUNCTION_TYPES,
@@ -77,7 +78,10 @@ export function FunctionsPage() {
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [selectedType, setSelectedType] = useState('');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -327,13 +331,15 @@ export function FunctionsPage() {
 
 			<div className="space-y-1">
 				<ListSearchBar value={query} placeholder="Search Functions" onChange={setQuery}>
-					<ViewSelector
-						value={viewOption}
-						onChange={(value) => {
-							localStorage.workspaceViewOption = value;
-							setViewOption(value);
-						}}
-					/>
+					{!singleUser && (
+						<ViewSelector
+							value={viewOption}
+							onChange={(value) => {
+								localStorage.workspaceViewOption = value;
+								setViewOption(value);
+							}}
+						/>
+					)}
 					<TagSelector
 						value={selectedType}
 						onChange={setSelectedType}
@@ -356,7 +362,7 @@ export function FunctionsPage() {
 								className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 								onClick={() => changeSort('name')}
 							/>
-							<div className="hidden w-44 shrink-0 md:block" />
+							{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 							<SortHeaderButton
 								label="Updated at"
 								active={sortKey === 'updated_at'}
@@ -405,13 +411,19 @@ export function FunctionsPage() {
 											)}
 										</div>
 
-										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-											<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
-												<div className="truncate">
-													{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
-												</div>
-											</Tip>
-										</div>
+										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+										{!singleUser && (
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+											>
+												<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
+													<div className="truncate">
+														{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
+													</div>
+												</Tip>
+											</div>
+										)}
 									</RowButton>
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">

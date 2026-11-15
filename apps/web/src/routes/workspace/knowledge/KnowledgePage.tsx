@@ -33,6 +33,7 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { knowledgeMetaPreview } from './knowledgeFiles';
 
 type KnowledgeListItem = {
@@ -67,7 +68,10 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 
 	const [query, setQuery] = useState('');
 	const [debouncedQuery, setDebouncedQuery] = useState('');
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [sourceOption, setSourceOption] = useState(() => localStorage.workspaceKnowledgeSourceOption || '');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -202,13 +206,15 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			/>
 
 			<ListSearchBar value={query} placeholder="Search Knowledge" onChange={setQuery}>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+						}}
+					/>
+				)}
 				<TagSelector
 					value={sourceOption}
 					placeholder="All sources"
@@ -259,7 +265,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -307,13 +313,19 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 												</Tip>
 											)}
 										</div>
-										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-											<Tip content={item.user?.email ?? 'Deleted User'} side="top">
-												<div className="truncate">
-													{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
-												</div>
-											</Tip>
-										</div>
+										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+										{!singleUser && (
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+											>
+												<Tip content={item.user?.email ?? 'Deleted User'} side="top">
+													<div className="truncate">
+														{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
+													</div>
+												</Tip>
+											</div>
+										)}
 									</RowButton>
 									{(item.write_access || isAdmin) && (
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
