@@ -292,8 +292,10 @@ test.describe('workspace model editor', () => {
 		await page.getByRole('button', { name: 'Show' }).first().click();
 		await page.getByRole('button', { name: 'Temperature: Default' }).click();
 		await page.getByLabel('Temperature', { exact: true }).fill('1.2');
-		await page.getByRole('button', { name: 'Stop Sequence: Default' }).click();
-		await page.getByRole('textbox', { name: 'Stop Sequence' }).fill('END, STOP');
+		// Stop sequence is under the closed "More parameters" group (#996).
+		await page.getByRole('button', { name: 'More parameters' }).click();
+		await page.getByRole('button', { name: 'Stop sequence: Default' }).click();
+		await page.getByRole('textbox', { name: 'Stop sequence' }).fill('END, STOP');
 		await page.getByRole('button', { name: 'Save & Update' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/model/update')?.body?.params)
