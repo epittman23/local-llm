@@ -2,28 +2,36 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
-import { getModels } from '@/lib/apis';
+import { Button } from '@/components/ui/button';
 import { createNewModel, getModelById, updateModelById } from '@/lib/apis/models';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
 import { ModelEditor } from './ModelEditor';
-import { DEFAULT_PROFILE_IMAGE, type ModelInfo } from './modelEditorLogic';
+
+type EditorModel = NonNullable<Parameters<typeof ModelEditor>[0]['model']>;
+
+import type { ModelInfo } from './modelEditorLogic';
 import { type IncomingModel, sanitizeIncomingModel } from './modelImport';
+
+/** The API helpers answer a failure with null; the editor needs it thrown, to show it above the save bar. */
+const orThrow = async <T,>(request: Promise<T | null>): Promise<T> => {
+	const res = await request;
+	if (!res) throw new Error('The server did not save it.');
+	return res;
+};
 
 /**
  * Ports (app)/workspace/models/create/+page.svelte. The form can start from a
- * clone (left in `sessionStorage.model`, read once). Saving refuses an id that
- * already exists.
+ * clone (left in `sessionStorage.model`, read once). The editor refuses an id
+ * that already exists, under the ID field.
  */
 export function ModelCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const existing = useQuery({
-		queryKey: ['models-all'],
-		queryFn: async () => ((await getModels(token)) ?? []) as Array<{ id: string }>
-	});
 
 	const [stash] = useState(() => {
 		const raw = sessionStorage.model;
@@ -38,86 +46,79 @@ export function ModelCreatePage() {
 	const model: IncomingModel | null = stash;
 
 	const onSubmit = async (info: ModelInfo) => {
-		if ((existing.data ?? []).some((m) => m.id === info.id)) {
-			toast.error(`Error: A model with the ID '${info.id}' already exists. Please select a different ID to proceed.`);
-			return;
-		}
-		if (info.id === '') {
-			toast.error('Error: Model ID cannot be empty. Please enter a valid ID to proceed.');
-			return;
-		}
 		const suggestions = info.meta.suggestion_prompts as Array<{ content: string }> | null;
-		const res = await createNewModel(token, {
-			...info,
-			meta: {
-				...info.meta,
-				profile_image_url: info.meta.profile_image_url ?? DEFAULT_PROFILE_IMAGE,
-				suggestion_prompts: suggestions ? suggestions.filter((p) => p.content !== '') : null
-			},
-			params: { ...info.params }
-		}).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-		if (res) {
-			await queryClient.invalidateQueries({ queryKey: ['models-all'] });
-			toast.success('Model created successfully!');
-			navigate(routePaths.workspaceModels);
-		}
+		await orThrow(
+			createNewModel(token, {
+				...info,
+				meta: {
+					...info.meta,
+					suggestion_prompts: suggestions ? suggestions.filter((p) => p.content !== '') : null
+				},
+				params: { ...info.params }
+			})
+		);
+		await queryClient.invalidateQueries({ queryKey: ['models-all'] });
+		toast.success(`Created “${info.name}”`);
 	};
 
 	return <ModelEditor model={model} onSubmit={onSubmit} onBack={() => navigate(routePaths.workspaceModels)} />;
 }
 
-/** Ports (app)/workspace/models/edit/+page.svelte: the model is named by `?id=`; read-only or missing ones bounce back to the list. */
+/**
+ * Ports (app)/workspace/models/edit/+page.svelte: the model is named by `?id=`.
+ * A missing one is said in place (NAV-3), a failed load offers to try again
+ * (STA-4), and one this user may only read goes back to the list.
+ */
 export function ModelEditPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const [params] = useSearchParams();
 	const id = params.get('id');
-	const [model, setModel] = useState<(Record<string, any> & { id: string; name: string }) | null>(null);
 
 	useEffect(() => {
-		if (!id) {
-			navigate(routePaths.workspaceModels, { replace: true });
-			return;
-		}
-		let cancelled = false;
-		setModel(null);
-		getModelById(token, id)
-			.catch(() => null)
-			.then((res) => {
-				if (cancelled) return;
-				if (!res) {
-					navigate(routePaths.workspaceModels);
-					return;
-				}
-				if (!res.write_access) {
-					toast.error('You do not have permission to edit this model');
-					navigate(routePaths.workspaceModels);
-					return;
-				}
-				setModel(res);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [id, token, navigate]);
+		if (!id) navigate(routePaths.workspaceModels, { replace: true });
+	}, [id, navigate]);
 
-	const onSubmit = async (info: ModelInfo) => {
-		const res = await updateModelById(token, info.id, info).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-		if (res) {
-			await queryClient.invalidateQueries({ queryKey: ['models-all'] });
-			toast.success('Model updated successfully');
+	const loaded = useQuery({
+		queryKey: ['model-edit', id],
+		enabled: Boolean(id),
+		gcTime: 0,
+		retry: false,
+		queryFn: async () => {
+			const res = await getModelById(token, id as string);
+			if (!res) throw new Error('The server returned no model.');
+			return res as EditorModel & { write_access?: boolean };
+		}
+	});
+	const model = loaded.data;
+
+	useEffect(() => {
+		if (model && !model.write_access) {
+			toast.error(`You can't edit “${model.name}”: it is shared with you to use, not to change.`);
 			navigate(routePaths.workspaceModels);
 		}
+	}, [model, navigate]);
+
+	const onSubmit = async (info: ModelInfo) => {
+		await orThrow(updateModelById(token, info.id, info));
+		await queryClient.invalidateQueries({ queryKey: ['models-all'] });
+		toast.success(`Saved “${info.name}”`);
 	};
 
-	if (!model) {
+	if (loaded.isError) {
+		return isNotFound(loaded.error) ? (
+			<Gone
+				level={2}
+				title="This model doesn't exist."
+				description="It may have been deleted, or the link is wrong."
+				actions={<Button onClick={() => navigate(routePaths.workspaceModels)}>Go to Models</Button>}
+			/>
+		) : (
+			<LoadFailed what="the model" error={loaded.error} onRetry={() => loaded.refetch()} retrying={loaded.isFetching} />
+		);
+	}
+	if (!model?.write_access) {
 		return (
 			<div className="flex h-full items-center justify-center">
 				<Spinner />

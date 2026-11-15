@@ -1,5 +1,5 @@
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { DEFAULT_CAPABILITIES, WEBUI_BASE_URL } from '@/lib/constants';
+import { DEFAULT_CAPABILITIES } from '@/lib/constants';
 import { extractInputVariables } from '@/lib/utils/variables';
 
 // The model editor's data flow, lifted out of ModelEditor.svelte: how a saved
@@ -10,9 +10,27 @@ import { extractInputVariables } from '@/lib/utils/variables';
 // knowledge references are migrated, when a base model id is kept -- can be
 // tested without rendering the form.
 
-// The stored value that means "no picture of its own" (no such file exists any more):
-// the server answers 404 for it and the avatar draws the initials (decision D1, 2026-11-14).
-export const DEFAULT_PROFILE_IMAGE = `${WEBUI_BASE_URL}/static/favicon.png`;
+/**
+ * What a new model starts with (S4-D2, 2026-11-15): what this install's
+ * text and coding models use. Memory, web search and the code interpreter
+ * are on; vision, image generation and the terminal are off. The admin's
+ * model defaults still apply on top. `DEFAULT_CAPABILITIES` stays as it is:
+ * Admin > Models reads it, and it fills keys an existing model never stored.
+ */
+export const NEW_MODEL_CAPABILITIES: Record<string, boolean> = {
+	file_context: true,
+	vision: false,
+	file_upload: true,
+	web_search: true,
+	image_generation: false,
+	code_interpreter: true,
+	terminal: false,
+	citations: true,
+	status_updates: true,
+	usage: true,
+	memory: true,
+	builtin_tools: true
+};
 
 type Json = Record<string, any>;
 
@@ -31,7 +49,6 @@ export type ModelInfo = {
 export type EditorState = {
 	id: string;
 	name: string;
-	enableDescription: boolean;
 	info: ModelInfo;
 	system: string;
 	params: Json;
@@ -67,7 +84,8 @@ const blankInfo = (): ModelInfo => ({
 	id: '',
 	base_model_id: null,
 	name: '',
-	meta: { profile_image_url: DEFAULT_PROFILE_IMAGE, description: '', suggestion_prompts: null, tags: [] },
+	// No picture of its own: the avatar draws the initials (S4-D2).
+	meta: { profile_image_url: null, description: '', suggestion_prompts: null, tags: [] },
 	params: { system: '' }
 });
 
@@ -112,7 +130,6 @@ export function initialEditorState(
 	const state: EditorState = {
 		id: '',
 		name: '',
-		enableDescription: true,
 		info: blankInfo(),
 		system: '',
 		params: { system: '' },
@@ -122,7 +139,7 @@ export function initialEditorState(
 		filterIds: [],
 		defaultFilterIds: [],
 		actionIds: [],
-		capabilities: { ...DEFAULT_CAPABILITIES, ...(defaults.capabilities ?? {}) },
+		capabilities: { ...(model ? DEFAULT_CAPABILITIES : NEW_MODEL_CAPABILITIES), ...(defaults.capabilities ?? {}) },
 		defaultFeatureIds: defaults.defaultFeatureIds ?? [],
 		builtinTools: defaults.builtinTools ?? {},
 		terminalId: '',
@@ -135,7 +152,6 @@ export function initialEditorState(
 	const copy = JSON.parse(JSON.stringify(model)) as Json;
 	state.name = model.name;
 	state.id = model.id;
-	state.enableDescription = model.meta?.description !== null;
 
 	if (copy.base_model_id) {
 		const base = baseModels
@@ -165,7 +181,34 @@ export function initialEditorState(
 	return state;
 }
 
-export type BuildResult = { ok: true; info: ModelInfo } | { ok: false; error: string };
+/** The fields the editor checks, in the order they appear on the page. */
+export type EditorField = 'name' | 'id' | 'base' | 'knowledge';
+export type EditorErrors = Partial<Record<EditorField, string>>;
+
+export type BuildResult = { ok: true; info: ModelInfo } | { ok: false; field: EditorField; error: string };
+
+/**
+ * FRM-2: what is wrong with the form, field by field, in words that say how
+ * to put it right. `takenIds` are the ids a new model may not reuse.
+ */
+export function validateEditor(
+	state: EditorState,
+	{ preset, takenIds = [] }: { preset: boolean; takenIds?: string[] }
+): EditorErrors {
+	const errors: EditorErrors = {};
+	if (state.name.trim() === '') errors.name = 'Enter a name for this model.';
+	if (state.id === '') errors.id = 'Enter an ID: it names the model in the API.';
+	else if (takenIds.includes(state.id))
+		errors.id = `Another model already uses the ID “${state.id}”. Choose a different ID.`;
+	if (preset && !state.info.base_model_id) errors.base = 'Choose the model this one is built on.';
+	if (state.knowledge.some((item) => item.status === 'uploading'))
+		errors.knowledge = 'Wait for the files to finish uploading, then save.';
+	return errors;
+}
+
+/** The first field with an error, in page order. */
+export const firstError = (errors: EditorErrors): EditorField | undefined =>
+	(['name', 'id', 'base', 'knowledge'] as const).find((field) => errors[field]);
 
 /** Sets `meta[key]` when there is something to store, deletes it when there is not. */
 const setOrDelete = (meta: Json, key: string, present: boolean, value: unknown) => {
@@ -175,17 +218,17 @@ const setOrDelete = (meta: Json, key: string, present: boolean, value: unknown) 
 
 /**
  * Validates the form and assembles the object the API saves. Nothing is
- * mutated: the returned `info` is built on a copy. Mirrors ModelEditor.svelte's
- * submitHandler, including its order of checks (id, name, base model when this
- * is a preset, uploads finished) and its rule that every optional meta key is
- * *removed* -- not left empty -- when unset.
+ * mutated: the returned `info` is built on a copy. Every optional meta key is
+ * *removed* -- not left empty -- when unset, as ModelEditor.svelte's
+ * submitHandler did.
  */
-export function buildModelInfo(state: EditorState, { preset }: { preset: boolean }): BuildResult {
-	if (state.id === '') return { ok: false, error: 'Model ID is required.' };
-	if (state.name === '') return { ok: false, error: 'Model Name is required.' };
-	if (preset && !state.info.base_model_id) return { ok: false, error: 'Base Model is required.' };
-	if (state.knowledge.some((item) => item.status === 'uploading'))
-		return { ok: false, error: 'Please wait until all files are uploaded.' };
+export function buildModelInfo(
+	state: EditorState,
+	{ preset, takenIds }: { preset: boolean; takenIds?: string[] }
+): BuildResult {
+	const errors = validateEditor(state, { preset, takenIds });
+	const field = firstError(errors);
+	if (field) return { ok: false, field, error: errors[field] as string };
 
 	const info: ModelInfo = JSON.parse(JSON.stringify({ ...state.info, id: state.id, name: state.name }));
 	info.meta = info.meta ?? {};
@@ -193,8 +236,9 @@ export function buildModelInfo(state: EditorState, { preset }: { preset: boolean
 	info.access_grants = state.accessGrants;
 	info.meta.capabilities = state.capabilities;
 
-	const description = state.enableDescription ? (info.meta.description ?? '') : null;
-	info.meta.description = description === null || description.trim() === '' ? null : description;
+	// An empty description is stored as null, as before: the model then has no description of its own.
+	const description = info.meta.description ?? '';
+	info.meta.description = description.trim() === '' ? null : description;
 
 	setOrDelete(info.meta, 'knowledge', state.knowledge.length > 0, state.knowledge.map(toKnowledgeReference));
 	setOrDelete(info.meta, 'toolIds', state.toolIds.length > 0, state.toolIds);
@@ -311,4 +355,24 @@ export function getBaseModelItems(
 				(isAdmin || !(m?.info?.meta?.hidden ?? false) || m.id === selectedBaseId)
 		)
 		.map((m) => ({ value: m.id, label: m.name, model: m }));
+}
+
+// --- unsaved changes --------------------------------------------------------------
+
+/**
+ * Whether two form states hold the same values (FRM-3's "Unsaved changes"):
+ * a deep comparison where key order does not matter and a key set to
+ * `undefined` counts as absent, so switching something off and on again reads
+ * as unchanged.
+ */
+export function sameValue(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+	if (Array.isArray(a) !== Array.isArray(b)) return false;
+	if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((item, i) => sameValue(item, b[i]));
+	const ao = a as Json;
+	const bo = b as Json;
+	const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+	for (const key of keys) if (!sameValue(ao[key], bo[key])) return false;
+	return true;
 }

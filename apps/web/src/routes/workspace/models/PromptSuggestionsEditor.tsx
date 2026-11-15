@@ -2,6 +2,8 @@ import saveAs from 'file-saver';
 import { Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export type PromptSuggestion = { content: string; title: [string, string] };
 
@@ -59,12 +61,10 @@ export function PromptSuggestionsEditor({
 	const suggestions = value.map(shapeSuggestion);
 	const update = (i: number, patch: Partial<PromptSuggestion>) =>
 		onChange(suggestions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
-	const field = 'w-full bg-transparent text-dense leading-5 placeholder:text-foreground-muted';
 
 	return (
 		<div className="space-y-2">
-			<div className="mb-1 flex h-6 w-full items-center justify-between">
-				<div className="text-muted-foreground min-w-0 flex-1 self-center text-xs">Default Prompt Suggestions</div>
+			<div className="flex w-full items-center justify-end">
 				<div className="flex shrink-0 items-center justify-end gap-1.5">
 					<input
 						id="prompt-suggestions-import-input"
@@ -79,7 +79,7 @@ export function PromptSuggestionsEditor({
 								try {
 									onChange([...suggestions, ...parseSuggestionsImport(String(event.target?.result))]);
 								} catch {
-									toast.error('Invalid JSON file');
+									toast.error("That file isn't a suggestions export: it isn't a JSON list.");
 								}
 							};
 							reader.readAsText(file);
@@ -111,9 +111,8 @@ export function PromptSuggestionsEditor({
 					)}
 					<Button
 						type="button"
-						variant="ghost"
-						size="icon-xs"
-						aria-label="Add prompt suggestion"
+						variant="outline"
+						size="sm"
 						onClick={() => {
 							// One blank row at a time: don't stack empties.
 							if (suggestions.length === 0 || suggestions[suggestions.length - 1].content !== '') {
@@ -121,56 +120,54 @@ export function PromptSuggestionsEditor({
 							}
 						}}
 					>
-						<Plus />
+						<Plus aria-hidden />
+						Add suggestion
 					</Button>
 				</div>
 			</div>
 
 			{suggestions.length > 0 ? (
-				<div className="flex flex-col gap-2">
+				<div className="flex flex-col gap-3">
 					{suggestions.map((s, i) => (
 						<div key={i} className="flex items-start gap-2">
-							<div className="min-w-0 flex-1">
-								<div className="flex gap-2">
-									<input
-										className={field}
+							<div className="flex min-w-0 flex-1 flex-col gap-2">
+								<div className="flex gap-2 max-sm:flex-col">
+									<Input
 										placeholder="Title"
 										aria-label="Title"
 										value={s.title[0]}
 										onChange={(e) => update(i, { title: [e.target.value, s.title[1]] })}
 									/>
-									<input
-										className={`${field} text-muted-foreground`}
+									<Input
 										placeholder="Subtitle"
 										aria-label="Subtitle"
 										value={s.title[1]}
 										onChange={(e) => update(i, { title: [s.title[0], e.target.value] })}
 									/>
 								</div>
-								<textarea
-									className={`${field} min-h-5 resize-none`}
-									placeholder="Content"
+								<Textarea
+									placeholder="The prompt sent when it is chosen"
 									aria-label="Content"
-									rows={1}
+									rows={2}
 									value={s.content}
 									onChange={(e) => update(i, { content: e.target.value })}
 								/>
 							</div>
 							<Button
 								variant="ghost"
-								size="icon-xs"
+								size="icon-sm"
 								className="shrink-0"
 								type="button"
-								aria-label="Remove prompt suggestion"
+								aria-label={`Remove suggestion ${i + 1}`}
 								onClick={() => onChange(suggestions.filter((_, idx) => idx !== i))}
 							>
-								<X className="size-3.5" />
+								<X aria-hidden />
 							</Button>
 						</div>
 					))}
 				</div>
 			) : (
-				<div className="text-muted-foreground text-center text-xs">No suggestion prompts</div>
+				<p className="text-foreground-muted text-dense">No suggestions yet. Add one, or import a file.</p>
 			)}
 		</div>
 	);

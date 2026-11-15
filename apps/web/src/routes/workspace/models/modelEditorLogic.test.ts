@@ -7,7 +7,10 @@ import {
 	initialEditorState,
 	migrateKnowledge,
 	modelIdFromName,
-	toKnowledgeReference
+	NEW_MODEL_CAPABILITIES,
+	sameValue,
+	toKnowledgeReference,
+	validateEditor
 } from './modelEditorLogic';
 
 const fresh = (over: Partial<EditorState> = {}): EditorState => ({
@@ -29,20 +32,44 @@ describe('modelIdFromName', () => {
 });
 
 describe('buildModelInfo: validation', () => {
-	it('checks id, name, base model (for presets) and pending uploads, in that order', () => {
-		expect(buildModelInfo(fresh({ id: '' }), { preset: true })).toEqual({ ok: false, error: 'Model ID is required.' });
-		expect(buildModelInfo(fresh({ name: '' }), { preset: true })).toEqual({
+	it('names the first wrong field in page order (name, id, base model for presets, pending uploads), with how to fix it', () => {
+		expect(buildModelInfo(fresh({ name: '', id: '' }), { preset: true })).toEqual({
 			ok: false,
-			error: 'Model Name is required.'
+			field: 'name',
+			error: 'Enter a name for this model.'
 		});
-		expect(buildModelInfo(fresh(), { preset: true })).toEqual({ ok: false, error: 'Base Model is required.' });
+		expect(buildModelInfo(fresh({ id: '' }), { preset: true })).toEqual({
+			ok: false,
+			field: 'id',
+			error: 'Enter an ID: it names the model in the API.'
+		});
+		expect(buildModelInfo(fresh(), { preset: true })).toEqual({
+			ok: false,
+			field: 'base',
+			error: 'Choose the model this one is built on.'
+		});
 		expect(buildModelInfo(fresh(), { preset: false }).ok).toBe(true); // a non-preset needs no base
 		expect(
 			buildModelInfo(withBase(fresh({ knowledge: [{ id: 'k', status: 'uploading' }] })), { preset: true })
 		).toEqual({
 			ok: false,
-			error: 'Please wait until all files are uploaded.'
+			field: 'knowledge',
+			error: 'Wait for the files to finish uploading, then save.'
 		});
+	});
+
+	it('refuses an id another model already uses, and a name of only spaces', () => {
+		expect(buildModelInfo(withBase(fresh()), { preset: true, takenIds: ['m1'] })).toEqual({
+			ok: false,
+			field: 'id',
+			error: 'Another model already uses the ID “m1”. Choose a different ID.'
+		});
+		expect(validateEditor(fresh({ name: '  ', id: '' }), { preset: true })).toEqual({
+			name: 'Enter a name for this model.',
+			id: 'Enter an ID: it names the model in the API.',
+			base: 'Choose the model this one is built on.'
+		});
+		expect(validateEditor(withBase(fresh()), { preset: true })).toEqual({});
 	});
 });
 
@@ -114,8 +141,7 @@ describe('buildModelInfo: what is stored', () => {
 		expect(info.meta.knowledge).toEqual([{ id: 'k1', name: 'KB', type: 'collection' }]);
 	});
 
-	it('description: off or blank -> null; otherwise kept', () => {
-		expect(build(fresh({ enableDescription: false })).meta.description).toBeNull();
+	it('description: blank -> null; otherwise kept', () => {
 		const state = withBase(fresh());
 		state.info = { ...state.info, meta: { ...state.info.meta, description: '   ' } };
 		expect(build(state).meta.description).toBeNull();
@@ -198,15 +224,23 @@ describe('initialEditorState', () => {
 		expect(model.meta.tags).toHaveLength(1);
 	});
 
-	it('a null description means "default description" (toggle off)', () => {
+	it('a new model starts with what this install uses, under the admin defaults; an existing one keeps the old base (S4-D2)', () => {
+		const blank = initialEditorState(null, {}, { edit: false, baseModels: [] });
+		expect(blank.capabilities).toEqual(NEW_MODEL_CAPABILITIES);
+		expect(blank.capabilities).toMatchObject({
+			memory: true,
+			web_search: true,
+			code_interpreter: true,
+			vision: false,
+			image_generation: false,
+			terminal: false
+		});
+		expect(blank.info.meta.profile_image_url).toBeNull();
 		expect(
-			initialEditorState({ id: 'm', name: 'M', meta: { description: null } }, {}, { edit: true, baseModels: [] })
-				.enableDescription
-		).toBe(false);
-		expect(
-			initialEditorState({ id: 'm', name: 'M', meta: { description: 'x' } }, {}, { edit: true, baseModels: [] })
-				.enableDescription
+			initialEditorState(null, { capabilities: { vision: true } }, { edit: false, baseModels: [] }).capabilities.vision
 		).toBe(true);
+		const old = initialEditorState({ id: 'm', name: 'M', meta: {} }, {}, { edit: true, baseModels: [] });
+		expect(old.capabilities.vision).toBe(true);
 	});
 });
 
@@ -279,5 +313,18 @@ describe('getBaseModelItems', () => {
 		expect(
 			getBaseModelItems(models, { edit: false, selectedBaseId: 'h', isAdmin: false }).map((i) => i.value)
 		).toContain('h');
+	});
+});
+
+describe('sameValue', () => {
+	it('compares deeply, ignoring key order and keys set to undefined', () => {
+		expect(sameValue({ a: 1, b: { c: [1, 2] } }, { b: { c: [1, 2] }, a: 1 })).toBe(true);
+		expect(sameValue({ a: 1, b: undefined }, { a: 1 })).toBe(true);
+		expect(sameValue({ a: 1 }, { a: 2 })).toBe(false);
+		expect(sameValue([1, 2], [2, 1])).toBe(false);
+		expect(sameValue([1], [1, 2])).toBe(false);
+		expect(sameValue([], {})).toBe(false);
+		expect(sameValue(null, {})).toBe(false);
+		expect(sameValue('a', 'a')).toBe(true);
 	});
 });
