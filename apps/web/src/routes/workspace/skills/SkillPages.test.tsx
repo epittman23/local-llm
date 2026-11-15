@@ -1,9 +1,14 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getSkillById, updateSkillById } from '@/lib/apis/skills';
 import { SkillEditPage } from './SkillPages';
+
+// The install's account count, for useSingleUser (S4-D1): two unless a test says one.
+const accounts = vi.hoisted(() => ({ total: 2 }));
+vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: accounts.total })) }));
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -30,13 +35,15 @@ vi.mock('@/lib/apis/skills', () => ({
 describe('SkillEditPage', () => {
 	it('saves an edited skill without its is_active and tags, which the server keeps (#227, #527)', async () => {
 		render(
-			<TooltipProvider>
-				<RouterProvider
-					router={createMemoryRouter([{ path: '/workspace/skills/edit', element: <SkillEditPage /> }], {
-						initialEntries: ['/workspace/skills/edit?id=review']
-					})}
-				/>
-			</TooltipProvider>
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<RouterProvider
+						router={createMemoryRouter([{ path: '/workspace/skills/edit', element: <SkillEditPage /> }], {
+							initialEntries: ['/workspace/skills/edit?id=review']
+						})}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
 		);
 
 		const instructions = await screen.findByLabelText('Skill instructions');

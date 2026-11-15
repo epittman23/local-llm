@@ -27,7 +27,7 @@ function show() {
 	render(
 		<Routed>
 			<TooltipProvider>
-				<FunctionEditor fn={null} onSave={vi.fn(async () => {})} />
+				<FunctionEditor fn={null} onSave={vi.fn(async () => false)} />
 			</TooltipProvider>
 		</Routed>
 	);
@@ -92,7 +92,7 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 					<FunctionEditor
 						fn={{ id: 'fn_1', name: 'Function 1', meta: { description: 'd' }, content: 'x' }}
 						edit
-						onSave={vi.fn(async () => {})}
+						onSave={vi.fn(async () => false)}
 					/>
 				</TooltipProvider>
 			</Routed>

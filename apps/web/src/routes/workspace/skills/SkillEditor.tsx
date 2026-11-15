@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
+import { Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -15,6 +16,7 @@ import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { slugify } from '@/lib/utils';
 import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import type { SkillDraft } from './skillTypes';
 
 /**
@@ -48,6 +50,8 @@ export function SkillEditor({
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	// Access says nothing while this install has one account (S4-D1, WRD-4).
+	const singleUser = useSingleUser();
 	const navigate = useNavigate();
 
 	const [name, setName] = useState(skill?.name ?? '');
@@ -203,9 +207,11 @@ export function SkillEditor({
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
 							<Label htmlFor="skill-description">Skill description</Label>
-							<Input
+							<Textarea
 								id="skill-description"
-								type="text"
+								rows={2}
+								// Two lines, growing with the text to six, then scrolling (FRM-1).
+								className="max-h-40 resize-none"
 								placeholder="e.g. Step-by-step instructions for code reviews"
 								value={description}
 								disabled={disabled}
@@ -213,13 +219,15 @@ export function SkillEditor({
 							/>
 						</div>
 					</div>
-					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
-						{!disabled ? (
-							<AccessButton onClick={() => setShowAccess(true)} />
-						) : (
-							<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">Read Only</span>
-						)}
-					</div>
+					{(disabled || !singleUser) && (
+						<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
+							{disabled ? (
+								<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">Read Only</span>
+							) : (
+								<AccessButton onClick={() => setShowAccess(true)} />
+							)}
+						</div>
+					)}
 				</div>
 
 				{disabled ? (

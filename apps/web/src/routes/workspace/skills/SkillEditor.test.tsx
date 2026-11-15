@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,10 @@ import { updateSkillAccessGrants } from '@/lib/apis/skills';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { SkillEditor } from './SkillEditor';
 import type { SkillDraft } from './skillTypes';
+
+// The install's account count, for useSingleUser (S4-D1): two unless a test says one.
+const accounts = vi.hoisted(() => ({ total: 2 }));
+vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: accounts.total })) }));
 
 vi.mock('@/lib/apis/skills', () => ({ updateSkillAccessGrants: vi.fn() }));
 
@@ -40,9 +45,11 @@ afterEach(() => vi.clearAllMocks());
 
 const renderEditor = (props: Parameters<typeof SkillEditor>[0]) =>
 	render(
-		<TooltipProvider>
-			<RouterProvider router={createMemoryRouter([{ path: '*', element: <SkillEditor {...props} /> }])} />
-		</TooltipProvider>
+		<QueryClientProvider client={new QueryClient()}>
+			<TooltipProvider>
+				<RouterProvider router={createMemoryRouter([{ path: '*', element: <SkillEditor {...props} /> }])} />
+			</TooltipProvider>
+		</QueryClientProvider>
 	);
 
 describe('SkillEditor', () => {
@@ -213,9 +220,11 @@ describe('SkillEditor saves on request (#905, #1011, FRM-3)', () => {
 			{ initialEntries: ['/workspace/skills', '/workspace/skills/edit'], initialIndex: 1 }
 		);
 		render(
-			<TooltipProvider>
-				<RouterProvider router={router} />
-			</TooltipProvider>
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<RouterProvider router={router} />
+				</TooltipProvider>
+			</QueryClientProvider>
 		);
 		return router;
 	};
@@ -261,5 +270,27 @@ describe('SkillEditor saves on request (#905, #1011, FRM-3)', () => {
 			'This ID is already used by another skill. Choose another.'
 		);
 		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+	});
+});
+
+describe('SkillEditor with one account (#1013, S4-D1) and its description (#958)', () => {
+	afterEach(() => {
+		accounts.total = 2;
+	});
+	it('hides Access while the install has one account, and keeps Read Only', async () => {
+		accounts.total = 1;
+		const skill: SkillDraft = { id: 's', name: 'S', description: 'd', content: 'c', access_grants: [] };
+		renderEditor({ skill, edit: true, onSubmit: vi.fn() });
+		await screen.findByLabelText('Skill name');
+		await waitFor(() => expect(screen.queryByRole('button', { name: 'Access' })).toBeNull());
+		cleanup();
+		renderEditor({ skill, edit: true, disabled: true, onSubmit: vi.fn() });
+		expect(screen.getByText('Read Only')).toBeInTheDocument();
+	});
+	it('shows Access with a second account; the description is a growing two-line field', async () => {
+		renderEditor({ skill: null, onSubmit: vi.fn() });
+		expect(await screen.findByRole('button', { name: 'Access' })).toBeInTheDocument();
+		expect(screen.getByLabelText('Skill description').tagName).toBe('TEXTAREA');
+		expect(screen.getByLabelText('Skill description')).toHaveAttribute('rows', '2');
 	});
 });

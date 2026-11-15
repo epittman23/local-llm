@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
+import { Textarea } from '@/components/ui/textarea';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -19,6 +20,7 @@ import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { toolBoilerplate } from './toolBoilerplate';
 import type { ToolDraft } from './toolTypes';
 
@@ -61,6 +63,8 @@ export function ToolkitEditor({
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	// Access says nothing while this install has one account (S4-D1, WRD-4).
+	const singleUser = useSingleUser();
 	const navigate = useNavigate();
 	const form = useRef<HTMLFormElement>(null);
 	const editor = useRef<CodeEditorHandle>(null);
@@ -240,9 +244,11 @@ export function ToolkitEditor({
 						</div>
 						<div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
 							<Label htmlFor="tool-description">Tool description</Label>
-							<Input
+							<Textarea
 								id="tool-description"
-								type="text"
+								rows={2}
+								// Two lines, growing with the text to six, then scrolling (FRM-1).
+								className="max-h-40 resize-none"
 								placeholder="e.g. Tools for performing various operations"
 								value={meta.description}
 								required
@@ -250,9 +256,11 @@ export function ToolkitEditor({
 							/>
 						</div>
 					</div>
-					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
-						<AccessButton onClick={() => setShowAccess(true)} />
-					</div>
+					{!singleUser && (
+						<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto pr-0.5">
+							<AccessButton onClick={() => setShowAccess(true)} />
+						</div>
+					)}
 				</div>
 
 				<span className="px-1 pb-1.5 text-sm leading-none font-medium">Tool code</span>

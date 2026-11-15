@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
@@ -14,6 +15,10 @@ import type { ToolDraft } from './toolTypes';
 const Routed = ({ children }: { children: ReactNode }) => (
 	<RouterProvider router={createMemoryRouter([{ path: '*', element: children }])} />
 );
+
+// The install's account count, for useSingleUser (S4-D1): two unless a test says one.
+const accounts = vi.hoisted(() => ({ total: 2 }));
+vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: accounts.total })) }));
 
 vi.mock('@/lib/apis/tools', () => ({ updateToolAccessGrants: vi.fn() }));
 // The code editor, reduced to its handle and the props it was last given.
@@ -60,11 +65,13 @@ const send = (grants: AccessGrant[]) => {
 };
 const renderEditor = (props: Parameters<typeof ToolkitEditor>[0]) =>
 	render(
-		<TooltipProvider>
-			<Routed>
-				<ToolkitEditor {...props} />
-			</Routed>
-		</TooltipProvider>
+		<QueryClientProvider client={new QueryClient()}>
+			<TooltipProvider>
+				<Routed>
+					<ToolkitEditor {...props} />
+				</Routed>
+			</TooltipProvider>
+		</QueryClientProvider>
 	);
 
 beforeEach(() => {
@@ -232,5 +239,31 @@ describe('ToolkitEditor acknowledgement (#1098, S4-D4)', () => {
 			'The code comes from https://example.com/calc.py, and tools run their code on this server: create it only if you trust that source.'
 		);
 		expect(onSave).not.toHaveBeenCalled();
+	});
+});
+
+describe('ToolkitEditor with one account (#1013, S4-D1)', () => {
+	afterEach(() => {
+		accounts.total = 2;
+	});
+	it('hides Access while the install has one account', async () => {
+		accounts.total = 1;
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		await screen.findByLabelText('Tool name');
+		expect(screen.queryByRole('button', { name: 'Access' })).toBeNull();
+	});
+	it('shows Access once there is a second account', async () => {
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		expect(await screen.findByRole('button', { name: 'Access' })).toBeInTheDocument();
+	});
+});
+
+describe('ToolkitEditor description (#958)', () => {
+	it('is a two-line field that grows with its text', () => {
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		const description = screen.getByLabelText('Tool description');
+		expect(description.tagName).toBe('TEXTAREA');
+		expect(description).toHaveAttribute('rows', '2');
+		expect(description).toHaveClass('max-h-40');
 	});
 });
