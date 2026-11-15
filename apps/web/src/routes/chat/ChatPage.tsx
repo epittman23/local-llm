@@ -3,6 +3,7 @@ import { Archive, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { overriddenCount } from '@/components/common/advancedParamDefs';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Gone, isNotFound } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -25,6 +26,7 @@ import {
 	warnModelsWithoutVision
 } from '@/lib/chat/attachments';
 import { codeRunner } from '@/lib/chat/codeRun';
+import { draftKeyFor } from '@/lib/chat/drafts';
 import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
@@ -49,6 +51,7 @@ import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { JumpToLatest } from './JumpToLatest';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
+import { openModelPicker } from './modelPickerStore';
 import { ServerDialogs } from './ServerDialogs';
 import { TemporaryNotice, TemporaryToggle, useLeaveWarning } from './TemporaryNotice';
 import { useAttachments } from './useAttachments';
@@ -155,7 +158,7 @@ export function ChatPage() {
 	// opened (`?load-url=`, `?q=`), so it runs first.
 	useOnChatSwitch(id, session.adoptedChatId, () => {
 		attachments.clear();
-		input.current?.setText('');
+		input.current?.restoreDraft();
 	});
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
@@ -257,6 +260,12 @@ export function ChatPage() {
 
 	/** Sends a prompt now (true if it went, or was queued). */
 	const send = (text: string, files: ChatFile[] = []) => {
+		// An empty model slot (old saved data): open its picker, which says what to do (FRM-2).
+		const emptySlot = atModel ? -1 : selectedModels.indexOf('');
+		if (emptySlot >= 0) {
+			openModelPicker(emptySlot);
+			return false;
+		}
 		scrollOnce.current = true;
 		warnModelsWithoutVision(
 			atModel ? [atModel.id] : selectedModels,
@@ -359,6 +368,7 @@ export function ChatPage() {
 		onBranch,
 		citationsFor: (modelId) => models.find((m) => m.id === modelId)?.info?.meta?.capabilities?.citations !== false,
 		onRegenerate: (m) => void session.regenerate(m),
+		onTryAnotherModel: () => openModelPicker(),
 		onFollowUp: (text) => applyPrompt(text, prefs.insertFollowUp),
 		onToolCallResolved: () => void session.reload(),
 		onPreview: (code) => {
@@ -448,6 +458,7 @@ export function ChatPage() {
 	const modelSelector = (
 		<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
 	);
+	const changedParams = overriddenCount(session.params);
 	const headerActions = (
 		<>
 			{temporaryLive
@@ -461,10 +472,13 @@ export function ChatPage() {
 							size={iconSize}
 						/>
 					)}
-			<Tip content="Controls">
+			<Tip content={changedParams ? `Controls: ${changedParams} changed` : 'Controls'}>
 				<Button
 					type="button"
 					aria-label="Controls"
+					// The dot says this chat's parameters differ from the defaults (#996).
+					aria-description={changedParams ? `${changedParams} changed` : undefined}
+					className="relative"
 					aria-pressed={controlsOpen && preview === null}
 					onClick={() => {
 						setPreview(null);
@@ -474,6 +488,13 @@ export function ChatPage() {
 					size={iconSize}
 				>
 					<SlidersHorizontal className="size-4" />
+					{changedParams > 0 && (
+						<span
+							aria-hidden
+							data-testid="controls-changed"
+							className="bg-brand absolute top-1 right-1 size-1.5 rounded-full"
+						/>
+					)}
 				</Button>
 			</Tip>
 			{id && <ChatMenu chatId={id} title={title} size={iconSize} onRename={() => setRenaming(true)} />}
@@ -611,6 +632,7 @@ export function ChatPage() {
 				)}
 				<ChatInput
 					ref={input}
+					draftKey={draftKeyFor(id, folderId)}
 					generating={session.generating}
 					queued={session.queue}
 					onRemoveQueued={session.removeQueued}
@@ -625,7 +647,17 @@ export function ChatPage() {
 					onAtModel={setAtModel}
 					toolbar={
 						<>
-							{!isMd && modelSelector}
+							{!isMd && (
+								<div className="flex min-w-0">
+									<ModelSelector
+										compact
+										models={models}
+										selected={selectedModels}
+										onChange={changeModels}
+										disabled={session.generating}
+									/>
+								</div>
+							)}
 							<AttachMenu
 								onFiles={attachments.addFiles}
 								onWeb={(urls) => void attachments.addWeb(urls)}
@@ -696,6 +728,7 @@ export function ChatPage() {
 						}}
 						files={session.chatFiles}
 						admin={admin}
+						defaults={(settings as { params?: Record<string, unknown> } | null)?.params}
 					/>
 				)}
 			</SidePanel>

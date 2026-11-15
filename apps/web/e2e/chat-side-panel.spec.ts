@@ -126,9 +126,10 @@ test('at 390 px the chat has one header row, the app bar, holding its title, Con
 	await expect(bar.getByRole('button', { name: 'Chat menu', exact: true })).toBeVisible();
 	await expect(page.locator('header[data-page-top]')).toHaveCount(0);
 	// The model picker moved to the composer.
-	await expect(page.locator('#model-selector-model-button')).toBeVisible();
+	const compact = page.getByRole('button', { name: /^Model:/ });
+	await expect(compact).toBeVisible();
 	const message = await page.getByRole('textbox', { name: 'Message' }).boundingBox();
-	const picker = await page.locator('#model-selector-model-button').boundingBox();
+	const picker = await compact.boundingBox();
 	expect(picker && message && picker.y > message.y).toBe(true);
 	// Nothing in the bar is pushed off the screen.
 	const box = await bar.boundingBox();

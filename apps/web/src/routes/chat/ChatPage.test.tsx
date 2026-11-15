@@ -93,6 +93,7 @@ describe('ChatPage header', () => {
 		show();
 		const controls = screen.getByRole('button', { name: 'Controls' });
 		expect(controls.getAttribute('aria-pressed')).toBe('false');
+		expect(controls.querySelector('[data-testid="controls-changed"]')).toBeNull();
 		fireEvent.click(controls);
 		expect(controls.getAttribute('aria-pressed')).toBe('true');
 	});
@@ -162,6 +163,18 @@ describe('ChatPage: a saved chat', () => {
 		expect(screen.getByRole('textbox', { name: 'Chat title' })).toBeInTheDocument();
 	});
 
+	it('marks Controls with a dot while the chat has parameters of its own (#996)', async () => {
+		vi.mocked(getChatById).mockResolvedValueOnce({
+			...SAVED,
+			chat: { ...SAVED.chat, params: { temperature: 0.2 } }
+		} as never);
+		showAt('/c/c1');
+		await screen.findByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+		const controls = screen.getByRole('button', { name: 'Controls' });
+		expect(controls.querySelector('[data-testid="controls-changed"]')).not.toBeNull();
+		expect(controls.getAttribute('aria-description')).toBe('1 changed');
+	});
+
 	it('offers Jump to latest when scrolled up, which goes back to the end (#929)', async () => {
 		vi.mocked(getChatById).mockResolvedValueOnce(SAVED as never);
 		showAt('/c/c1');
@@ -201,9 +214,10 @@ describe('ChatPage on a phone (#1091)', () => {
 		expect(document.querySelector('header[data-page-top]')).toBeNull();
 		expect(slot).toContainElement(screen.getByRole('button', { name: 'Controls' }));
 		expect(slot).toContainElement(screen.getByRole('button', { name: 'Temporary chat' }));
-		const picker = document.getElementById('model-selector-model-button');
-		expect(picker).not.toBeNull();
+		// The compact picker, in the composer's toolbar.
+		const picker = screen.getByRole('button', { name: /^Model:/ });
 		expect(slot.contains(picker)).toBe(false);
+		expect(document.getElementById('model-selector-model-button')).toBeNull();
 		slot.remove();
 	});
 });

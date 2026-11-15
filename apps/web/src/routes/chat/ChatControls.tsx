@@ -18,12 +18,15 @@ export function ChatControls({
 	params,
 	onParams,
 	files,
-	admin
+	admin,
+	defaults
 }: {
 	params: Params;
 	onParams: (p: Params) => void;
 	files: ChatFile[];
 	admin: boolean;
+	/** The user's own defaults (Settings > General), which a row shows while it is not overridden. */
+	defaults?: Params;
 }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 text-sm">
@@ -55,7 +58,12 @@ export function ChatControls({
 			</section>
 			<section>
 				<h3 className="mb-1 text-xs font-medium">Model parameters</h3>
-				<AdvancedParams params={params} onChange={(p) => onParams({ ...p, system: params.system })} admin={admin} />
+				<AdvancedParams
+					params={params}
+					onChange={(p) => onParams({ ...p, system: params.system })}
+					admin={admin}
+					defaults={defaults}
+				/>
 			</section>
 		</div>
 	);
