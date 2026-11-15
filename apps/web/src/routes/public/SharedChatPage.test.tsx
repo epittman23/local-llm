@@ -131,6 +131,11 @@ describe('SharedChatPage: a link that no longer works (NAV-3, #953)', () => {
 		);
 		renderPage();
 		expect(await screen.findByRole('heading', { name: 'This shared chat is not open to you.' })).toBeInTheDocument();
+		// WRD-4: one owner, so no talk of "certain accounts".
+		expect(
+			screen.getByText('Sign in with the account that shared it, or ask for a link anyone can open.')
+		).toBeInTheDocument();
+		expect(screen.queryByText(/certain accounts/)).toBeNull();
 	});
 
 	it('offers to try again when the share failed to load (STA-4)', async () => {

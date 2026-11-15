@@ -106,7 +106,7 @@ export function SharedChatPage() {
 						description={
 							notFound
 								? 'Whoever shared it may have stopped sharing it, or the link may be mistyped.'
-								: 'It is shared only with certain accounts. Ask whoever sent the link to share it with you.'
+								: 'Sign in with the account that shared it, or ask for a link anyone can open.'
 						}
 						actions={
 							<Button asChild>
