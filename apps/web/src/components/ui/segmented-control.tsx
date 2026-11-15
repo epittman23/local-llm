@@ -11,8 +11,11 @@ export type SegmentedOption<T extends string> = { value: T; label: string; icon?
  * word with an optional line icon (never an emoji, WRD-6). A radio group
  * (Radix): Tab reaches the chosen segment, the arrow keys move and choose,
  * and the choice applies at once, so it belongs where a switch would (FRM-5).
- * Name it with `aria-label` or `aria-labelledby`. A `value` matching no
- * option leaves every segment unchosen, for a choice nothing is preselected for.
+ * Name it with `aria-label` or `aria-labelledby`. The one other use is a
+ * required choice with nothing preselected, confirmed by a separate action
+ * (the Share dialog's "who can open the link", then Create): a `value`
+ * matching no option leaves every segment unchosen. A disabled segment gives
+ * its reason in the help line under the control (ACT-5).
  */
 export function SegmentedControl<T extends string>({
 	value,

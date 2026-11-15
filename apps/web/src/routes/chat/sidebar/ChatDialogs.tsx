@@ -191,7 +191,6 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		accessSaves.current += 1;
 		saved.current = stored;
 		setGrants(stored);
-		setBusy(null);
 		focusCopy.current = true;
 		if (choice === 'anyone' && !hasAnyoneReadGrant(stored)) {
 			toast.error('The link was created, but only you can open it: opening it to anyone was not saved.');
@@ -199,7 +198,9 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 			await copyToClipboard(shareUrl(res.share_id));
 			toast.success('Link copied');
 		}
-		void chat.refetch();
+		// Busy until the dialog knows the link exists, or Create could be pressed again (ACT-5).
+		await chat.refetch();
+		setBusy(null);
 	};
 	const copyLink = async () => {
 		if (!shareId) return;

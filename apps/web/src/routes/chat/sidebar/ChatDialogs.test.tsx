@@ -118,6 +118,31 @@ describe('ShareChatDialog: asks who can open the link first (#1006, S2-D2)', () 
 		expect(onOpenChange).not.toHaveBeenCalledWith(false);
 	});
 
+	it('cannot be pressed twice while the link is being created, until the dialog knows it exists', async () => {
+		let known: (v: unknown) => void = () => {};
+		vi.mocked(getChatById)
+			.mockResolvedValueOnce({ share_id: null } as never)
+			.mockReturnValueOnce(new Promise((resolve) => (known = resolve)) as never)
+			.mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(shareChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
+		open();
+
+		fireEvent.click(await screen.findByRole('radio', { name: 'Only me (signed in)' }));
+		await waitFor(() => expect(create()).toBeEnabled());
+		fireEvent.click(create());
+		await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Link copied'));
+		// Copied, but the chat is not re-read yet: still busy.
+		const busy = screen.getByRole('button', { name: /Creating…/ });
+		expect(busy).toBeDisabled();
+		expect(busy).toHaveAttribute('aria-busy', 'true');
+		fireEvent.click(busy);
+		known({ share_id: 's1' });
+
+		expect(await screen.findByRole('textbox', { name: 'Link' })).toBeInTheDocument();
+		expect(shareChatById).toHaveBeenCalledTimes(1);
+	});
+
 	it('"Only me (signed in)" creates the link with no grant and copies it', async () => {
 		sharedAfterCreate();
 		vi.mocked(shareChatById).mockResolvedValue({ share_id: 's1' } as never);
