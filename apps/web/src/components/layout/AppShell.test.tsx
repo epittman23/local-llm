@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { AppShell } from './AppShell';
+import { ShellBarPortal } from './ShellBarSlot';
 
 const auth = vi.hoisted(() => ({ status: 'authenticated' as 'authenticated' | 'pending' | 'anonymous' }));
 vi.mock('@/lib/auth/useAuthGate', () => ({ useAuthGate: () => auth.status }));
@@ -39,7 +40,14 @@ function renderAt(path: string) {
 				children: [
 					{
 						path: '/c/:id',
-						element: <button type="button">Send</button>,
+						element: (
+							<>
+								<button type="button">Send</button>
+								<ShellBarPortal>
+									<button type="button">Controls</button>
+								</ShellBarPortal>
+							</>
+						),
 						handle: { title: 'Chat', heading: 'sr', foldsBar: true }
 					},
 					{ path: '/notes', element: <h1>Notes</h1>, handle: { title: 'Notes', heading: 'page' } }
@@ -130,6 +138,27 @@ describe('AppShell', () => {
 		const newChat = within(bar).getByRole('link', { name: 'New chat' });
 		expect(newChat.getAttribute('href')).toBe('/');
 		expect(bar.lastElementChild).toBe(newChat);
+	});
+
+	it("puts a page's own buttons in the phone bar after its name, before New chat (#1091)", () => {
+		renderAt('/c/1');
+		const bar = within(screen.getByRole('banner'));
+		const slot = screen.getByTestId('shell-bar-slot');
+		expect(slot).toContainElement(bar.getByRole('button', { name: 'Controls' }));
+		expect(slot.previousElementSibling?.textContent).toBe('Chat');
+		expect(slot.nextElementSibling).toBe(bar.getByRole('link', { name: 'New chat' }));
+		// On a short screen they float at the top right, as the menu button floats at the left (A11Y-5).
+		expect(slot.className).toContain('max-md:[@media(max-height:520px)]:fixed');
+		expect(slot.className).toContain('max-md:[@media(max-height:520px)]:right-2');
+	});
+
+	it('keeps the slot in place, and empty, on a page that puts nothing there', () => {
+		renderAt('/notes');
+		const slot = screen.getByTestId('shell-bar-slot');
+		expect(slot.childElementCount).toBe(0);
+		expect(slot.className).toContain('empty:hidden');
+		expect(slot.className).not.toContain('520px');
+		expect(within(screen.getByRole('banner')).getByText('Notes').getAttribute('title')).toBe('Notes');
 	});
 
 	it('opens the drawer wide enough for the names of the destinations on touch, 320 px or 85% of a phone, not the sheet default', () => {

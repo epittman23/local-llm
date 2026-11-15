@@ -13,7 +13,7 @@ test('the controls panel sets the chat system prompt; it is sent and saved', asy
 	await page.goto('/c/c1');
 	await page.getByRole('button', { name: 'Controls' }).click();
 	const panel = page.getByRole('complementary', { name: 'Controls' });
-	await panel.getByLabel('System Prompt').fill('Answer in French.');
+	await panel.getByLabel('System prompt').fill('Answer in French.');
 	// Saved with the chat after a short pause.
 	await expect.poll(() => chat.seen.updates.at(-1)?.chat?.params?.system).toBe('Answer in French.');
 
@@ -25,6 +25,7 @@ test('the controls panel sets the chat system prompt; it is sent and saved', asy
 
 	await panel.getByRole('button', { name: 'Close controls' }).click();
 	await expect(panel).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Controls' })).toBeFocused();
 });
 
 test('a controls edit is saved to its chat even when the page is left at once (#525)', async ({ page }) => {
@@ -35,7 +36,7 @@ test('a controls edit is saved to its chat even when the page is left at once (#
 	await expect(workspace).toBeVisible();
 	await page.getByRole('button', { name: 'Controls' }).click();
 	const panel = page.getByRole('complementary', { name: 'Controls' });
-	await panel.getByLabel('System Prompt').fill('Answer in French.');
+	await panel.getByLabel('System prompt').fill('Answer in French.');
 	// Well within the autosave's pause: the chat page unmounts before it ends.
 	await workspace.click();
 	await expect(page).toHaveURL(/\/workspace/);
@@ -51,7 +52,7 @@ test('a controls edit is saved to the chat it was made in when another chat open
 	const other = page.getByRole('link', { name: 'Other' });
 	await expect(other).toBeVisible();
 	await page.getByRole('button', { name: 'Controls' }).click();
-	await page.getByRole('complementary', { name: 'Controls' }).getByLabel('System Prompt').fill('Answer in French.');
+	await page.getByRole('complementary', { name: 'Controls' }).getByLabel('System prompt').fill('Answer in French.');
 	await other.click();
 	await expect(page).toHaveURL(/\/c\/c2$/);
 
@@ -62,28 +63,62 @@ test('a controls edit is saved to the chat it was made in when another chat open
 test('the header menu downloads, and deletes after confirming', async ({ page }) => {
 	const chat = await mockChat(page, { chats: convo() });
 	await page.goto('/c/c1');
-	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Download' }).click();
-	const download = page.waitForEvent('download');
-	await page.getByRole('menuitem', { name: 'Plain text (.txt)' }).click();
-	expect((await download).suggestedFilename()).toBe('chat-Arithmetic.txt');
+	for (const [item, file] of [
+		['Markdown (.md)', 'chat-Arithmetic.md'],
+		['Plain text (.txt)', 'chat-Arithmetic.txt'],
+		['JSON (.json)', 'chat-Arithmetic.json']
+	]) {
+		await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Download' }).click();
+		const download = page.waitForEvent('download');
+		await page.getByRole('menuitem', { name: item }).click();
+		expect((await download).suggestedFilename()).toBe(file);
+	}
 
 	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
 	await page.locator('#delete-chat-button').click();
-	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	await page.getByRole('button', { name: 'Delete chat', exact: true }).click();
 	await expect.poll(() => chat.seen.actions).toContain('delete:c1');
 	await expect(page).toHaveURL(/localhost:5174\/$/);
+});
+
+test('the header shows the chat title and renames it in place, by keyboard (#928)', async ({ page }) => {
+	const chat = await mockChat(page, { chats: convo() });
+	await page.goto('/c/c1');
+	const title = page.getByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+	await expect(title).toBeVisible();
+	await title.focus();
+	await page.keyboard.press('Enter');
+	const field = page.getByRole('textbox', { name: 'Chat title' });
+	await expect(field).toBeFocused();
+	await field.fill('Sums');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.updates.at(-1)?.chat?.title).toBe('Sums');
+	await expect(page.getByRole('button', { name: 'Chat title: Sums. Rename' })).toBeFocused();
+	await expect(page).toHaveTitle(/^Sums/);
+
+	// From the menu too, with Escape giving up the edit.
+	await page.getByRole('button', { name: 'Chat menu', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Rename' }).click();
+	await expect(field).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(field).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Chat title: Sums. Rename' })).toBeFocused();
 });
 
 test('an html code block previews in a sandboxed frame', async ({ page }) => {
 	await mockChat(page, { chats: convo('Here:\n\n```html\n<h1 id="x">Hello artifact</h1>\n```') });
 	await page.goto('/c/c1');
 	await page.getByTestId('code-block').getByRole('button', { name: 'Preview' }).click();
-	const panel = page.getByRole('complementary', { name: 'Artifacts' });
+	// The side panel holds the preview (canvas C2), titled Preview, with its Download beside Close.
+	const panel = page.getByRole('complementary', { name: 'Preview' });
+	await expect(panel.getByRole('heading', { name: 'Preview' })).toBeFocused();
+	await expect(panel.getByRole('button', { name: 'Download preview' })).toBeVisible();
 	const frame = panel.locator('iframe');
 	await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
 	await expect(frame).not.toHaveAttribute('sandbox', /allow-same-origin/);
 	await expect(page.frameLocator('iframe[title="Artifact preview"]').locator('#x')).toHaveText('Hello artifact');
-	await panel.getByRole('button', { name: 'Close artifacts' }).click();
+	await panel.getByRole('button', { name: 'Close preview' }).click();
 	await expect(panel).toHaveCount(0);
+	await expect(page.getByTestId('code-block').getByRole('button', { name: 'Preview' })).toBeFocused();
 });
