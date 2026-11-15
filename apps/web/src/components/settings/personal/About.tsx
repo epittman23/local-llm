@@ -34,7 +34,7 @@ export default function About() {
 	const connections = useQuery({
 		queryKey: ['about-openai-connections'],
 		enabled: isAdmin,
-		queryFn: async () => {
+		queryFn: async (): Promise<string[]> => {
 			const config = await getOpenAIConfig(token).catch(() => null);
 			return config?.ENABLE_OPENAI_API === false ? [] : (config?.OPENAI_API_BASE_URLS ?? []);
 		}
