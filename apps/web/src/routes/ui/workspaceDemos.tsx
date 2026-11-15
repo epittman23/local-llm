@@ -131,6 +131,14 @@ export function CodeEditorFieldDemo() {
 	const editor = useRef<CodeEditorHandle>(null);
 	const help = useId();
 	const [problem, setProblem] = useState<EditorProblem | null>(null);
+	// FBK-3: the check answers even when the server cannot run it (signed out, or not an admin).
+	const [note, setNote] = useState('');
+	const check = async () => {
+		setNote('');
+		const outcome = await editor.current?.formatPython();
+		if (outcome === 'unformatted') setNote("The code wasn't checked: the server's Black checks it, for an admin.");
+		if (outcome === 'formatted') setNote('The code is valid Python.');
+	};
 	return (
 		<div className="flex max-w-[40rem] flex-col">
 			<span className="px-1 pb-1.5 text-sm leading-none font-medium">Tool code</span>
@@ -161,10 +169,13 @@ export function CodeEditorFieldDemo() {
 					Tab indents. Press Esc, then Tab, to leave the editor.
 				</p>
 			)}
-			<div className="pt-3">
-				<Button variant="outline" size="sm" onClick={() => void editor.current?.formatPython()}>
+			<div className="flex flex-wrap items-center gap-3 pt-3">
+				<Button variant="outline" size="sm" onClick={() => void check()}>
 					Check the code
 				</Button>
+				<p role="status" className="text-foreground-muted text-dense">
+					{note}
+				</p>
 			</div>
 		</div>
 	);

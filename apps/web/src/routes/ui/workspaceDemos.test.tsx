@@ -5,7 +5,9 @@ import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeE
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CodeEditorFieldDemo, FailedRowDemo, RowStateDemo } from './workspaceDemos';
 
-// CodeMirror is replaced by a field that reports Black's parse error when asked to format.
+// CodeMirror is replaced by a field that reports Black's parse error when asked to format,
+// or, as for a viewer who is not an admin, cannot format at all.
+const format = vi.hoisted(() => ({ outcome: 'invalid' as 'invalid' | 'unformatted' | 'formatted' }));
 vi.mock('@/components/common/CodeEditor', () => ({
 	default: ({
 		ariaLabel,
@@ -20,8 +22,9 @@ vi.mock('@/components/common/CodeEditor', () => ({
 	}) => {
 		useImperativeHandle(ref, () => ({
 			formatPython: async () => {
-				onParseError?.({ line: 3, column: 22, detail: 'Cannot parse: 3:22: EOF in multi-line statement' });
-				return 'invalid';
+				if (format.outcome === 'invalid')
+					onParseError?.({ line: 3, column: 22, detail: 'Cannot parse: 3:22: EOF in multi-line statement' });
+				return format.outcome;
 			},
 			focus: () => {},
 			replace: () => {}
@@ -67,5 +70,18 @@ describe('/ui workspace demos', () => {
 		expect(await screen.findByRole('alert')).toHaveTextContent("Line 3, column 22: this line isn't valid Python.");
 		expect(help()).toHaveAttribute('role', 'alert');
 		expect(screen.getByText('Cannot parse: 3:22: EOF in multi-line statement')).toBeInTheDocument();
+	});
+
+	it.each([
+		['unformatted', "The code wasn't checked: the server's Black checks it, for an admin."],
+		['formatted', 'The code is valid Python.']
+	] as const)('answers Check the code when the outcome is %s (FBK-3)', async (outcome, words) => {
+		format.outcome = outcome;
+		render(<CodeEditorFieldDemo />);
+		await screen.findByRole('textbox', { name: 'Tool code' });
+		fireEvent.click(screen.getByRole('button', { name: 'Check the code' }));
+		expect(await screen.findByText(words)).toBeInTheDocument();
+		expect(screen.queryByRole('alert')).toBeNull();
+		format.outcome = 'invalid';
 	});
 });
