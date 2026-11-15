@@ -1,15 +1,21 @@
 // The theme picker's apply step (Settings/General.svelte's applyTheme), for
-// this app's class-based tokens: `dark` for dark and OLED dark, plus `oled`
-// (pure black surfaces, see styles/global.css) for OLED; "system" follows the
-// OS. The choice lives in localStorage.theme, which Base.astro reads before
-// first paint.
+// this app's class-based tokens: `dark` for dark and black, plus `oled`
+// (pure black surfaces, see styles/standard.css) for black; "system" follows
+// the OS. The choice lives in localStorage.theme, which Base.astro reads
+// before first paint.
 
+/**
+ * The four themes, named in words (WRD-6, #1089): "Black" is the standard's
+ * own name for pure black surfaces, stored as `oled-dark` as it always was.
+ */
 export const THEMES = [
-	{ id: 'system', label: '⚙️ System' },
-	{ id: 'dark', label: '🌑 Dark' },
-	{ id: 'oled-dark', label: '🌃 OLED Dark' },
-	{ id: 'light', label: '☀️ Light' }
+	{ id: 'system', label: 'System' },
+	{ id: 'dark', label: 'Dark' },
+	{ id: 'oled-dark', label: 'Black' },
+	{ id: 'light', label: 'Light' }
 ] as const;
+
+export type ThemeId = (typeof THEMES)[number]['id'];
 
 /**
  * The theme of a browser that has never chosen one. Dark, by the owner's

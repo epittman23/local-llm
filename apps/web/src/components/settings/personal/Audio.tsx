@@ -1,18 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getVoices } from '@/lib/apis/audio';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import {
+	SavedNote,
 	SettingField,
 	SettingInput,
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	useSavedFlash
 } from '../controls';
 
 type Voice = { id?: string; name: string; localService?: boolean };
@@ -52,29 +54,48 @@ export default function Audio() {
 		queryFn: async () => ((await getVoices(token).catch(() => null))?.voices ?? []) as Voice[]
 	});
 	const s = (settings ?? {}) as Record<string, any>;
+	/** The form's values as saved (what Discard changes goes back to). */
+	const savedForm = useCallback(() => {
+		const a = (
+			(settings ?? {}) as {
+				audio?: {
+					stt?: { engine?: string; language?: string };
+					tts?: { playbackRate?: number; voice?: string; defaultVoice?: string; nonLocalVoices?: boolean };
+				};
+			}
+		).audio;
+		return {
+			stt: { engine: a?.stt?.engine ?? '', language: a?.stt?.language ?? '' },
+			rate: a?.tts?.playbackRate ?? 1,
+			voice: a?.tts?.defaultVoice === tts?.voice ? (a?.tts?.voice ?? tts?.voice ?? '') : (tts?.voice ?? ''),
+			nonLocal: a?.tts?.nonLocalVoices ?? false
+		};
+	}, [settings, tts?.voice]);
 	const [stt, setStt] = useState({ engine: '', language: '' });
 	const [rate, setRate] = useState(1);
 	const [voice, setVoice] = useState('');
 	const [nonLocal, setNonLocal] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const { isSaved, flash } = useSavedFlash();
 
-	useEffect(() => {
+	const reset = useCallback(() => {
 		if (!settings) return;
-		setStt({ engine: s.audio?.stt?.engine ?? '', language: s.audio?.stt?.language ?? '' });
-		setRate(s.audio?.tts?.playbackRate ?? 1);
-		setVoice(
-			s.audio?.tts?.defaultVoice === tts?.voice ? (s.audio?.tts?.voice ?? tts?.voice ?? '') : (tts?.voice ?? '')
-		);
-		setNonLocal(s.audio?.tts?.nonLocalVoices ?? false);
-		// When the settings load.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [settings]);
+		const saved = savedForm();
+		setStt(saved.stt);
+		setRate(saved.rate);
+		setVoice(saved.voice);
+		setNonLocal(saved.nonLocal);
+	}, [settings, savedForm]);
+	useEffect(reset, [reset]);
+	const dirty = Boolean(settings) && JSON.stringify({ stt, rate, voice, nonLocal }) !== JSON.stringify(savedForm());
 
 	return (
 		<SettingsForm
 			title="Audio"
 			loading={!settings}
 			saving={saving}
+			dirty={dirty}
+			onDiscard={reset}
 			onSubmit={async () => {
 				setSaving(true);
 				await update({
@@ -90,7 +111,7 @@ export default function Audio() {
 						}
 					}
 				}).then(
-					() => toast.success('Settings saved successfully!'),
+					() => toast.success('Settings saved'),
 					(e) => toast.error(`${e}`)
 				);
 				setSaving(false);
@@ -110,13 +131,24 @@ export default function Audio() {
 				</SettingField>
 			</SettingsSection>
 			<SettingsSection title="Read aloud">
-				<SettingRow label="Auto-Playback Response" description="Play assistant responses aloud automatically.">
+				<SettingRow
+					label="Auto-Playback Response"
+					description="Play assistant responses aloud automatically. Saved as soon as you switch it."
+				>
 					{(id) => (
-						<SettingSwitch
-							labelledBy={id}
-							checked={Boolean(s.responseAutoPlayback)}
-							onChange={(v) => void update({ responseAutoPlayback: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
-						/>
+						<span className="flex items-center gap-3">
+							{isSaved('responseAutoPlayback') && <SavedNote />}
+							<SettingSwitch
+								labelledBy={id}
+								checked={Boolean(s.responseAutoPlayback)}
+								onChange={(v) =>
+									void update({ responseAutoPlayback: v }).then(
+										() => flash(['responseAutoPlayback']),
+										(e) => toast.error(`${e?.message ?? e}`)
+									)
+								}
+							/>
+						</span>
 					)}
 				</SettingRow>
 				<SettingRow label="Speech Playback Speed" description="Adjust how quickly spoken responses are played.">

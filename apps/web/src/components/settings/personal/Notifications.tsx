@@ -26,7 +26,7 @@ import {
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '../controls';
+import { SavedNote, SettingRow, SettingSwitch, SettingsForm, SettingsSection, useSavedFlash } from '../controls';
 
 const DEFAULT_EVENTS = [
 	{ event: 'chat.finished', label: 'Chat finished', description: 'A chat run finished successfully.' },
@@ -66,6 +66,7 @@ export default function Notifications() {
 	const s = (settings ?? {}) as { notificationEnabled?: boolean; notificationSound?: boolean };
 	const eventList = events.data?.length ? events.data : DEFAULT_EVENTS;
 
+	const { isSaved, flash } = useSavedFlash();
 	const toggleBrowser = async (on: boolean) => {
 		if (on) {
 			const permission = 'Notification' in window ? await Notification.requestPermission() : 'denied';
@@ -76,7 +77,10 @@ export default function Notifications() {
 				return;
 			}
 		}
-		await update({ notificationEnabled: on }).catch((e) => toast.error(`${e?.message ?? e}`));
+		await update({ notificationEnabled: on }).then(
+			() => flash(['notificationEnabled']),
+			(e) => toast.error(`${e?.message ?? e}`)
+		);
 	};
 
 	const act = async (fn: () => Promise<unknown>, done?: string) => {
@@ -90,24 +94,35 @@ export default function Notifications() {
 	};
 
 	return (
-		<SettingsForm title="Notifications" footer={false}>
+		<SettingsForm title="Notifications" footer={false} savesAtOnce>
 			<SettingsSection first>
 				<SettingRow label="Browser Notifications" description="Allow browser notifications for completed responses.">
 					{(id) => (
-						<SettingSwitch
-							labelledBy={id}
-							checked={Boolean(s.notificationEnabled)}
-							onChange={(v) => void toggleBrowser(v)}
-						/>
+						<span className="flex items-center gap-3">
+							{isSaved('notificationEnabled') && <SavedNote />}
+							<SettingSwitch
+								labelledBy={id}
+								checked={Boolean(s.notificationEnabled)}
+								onChange={(v) => void toggleBrowser(v)}
+							/>
+						</span>
 					)}
 				</SettingRow>
-				<SettingRow label="Notification Sound">
+				<SettingRow label="Notification Sound" description="Play a sound when a response completes.">
 					{(id) => (
-						<SettingSwitch
-							labelledBy={id}
-							checked={s.notificationSound ?? true}
-							onChange={(v) => void update({ notificationSound: v }).catch((e) => toast.error(`${e?.message ?? e}`))}
-						/>
+						<span className="flex items-center gap-3">
+							{isSaved('notificationSound') && <SavedNote />}
+							<SettingSwitch
+								labelledBy={id}
+								checked={s.notificationSound ?? true}
+								onChange={(v) =>
+									void update({ notificationSound: v }).then(
+										() => flash(['notificationSound']),
+										(e) => toast.error(`${e?.message ?? e}`)
+									)
+								}
+							/>
+						</span>
 					)}
 				</SettingRow>
 			</SettingsSection>
