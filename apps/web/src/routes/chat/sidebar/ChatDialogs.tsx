@@ -396,10 +396,13 @@ function ChatOption({ chat, archived, onOpen }: { chat: ChatListItem; archived?:
 /**
  * Ports layout/SearchModal.svelte's search (NAV-5): a command list the arrow
  * keys move through and Enter opens, with the first result highlighted.
- * Before anything is typed it offers the most recent chats. Results are
+ * Before anything is typed it offers the most recent chats outside folders
+ * (the server's main list, which leaves out pinned chats and chats in
+ * folders), saying so while they load or when they fail. Results are
  * grouped by time, each with the matching text and its date; archived chats
  * that match come last, marked, from a second search with the server's own
- * `archived:true` filter. The server also understands `tag:`, `folder:` and
+ * `archived:true` filter; when that half fails it says so below the rest.
+ * The server also understands `tag:`, `folder:` and
  * `pinned:`, which the footer says.
  */
 export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
@@ -433,6 +436,7 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	const typing = query.trim() !== q;
 	const found = results.data ?? [];
 	const foundArchived = archivedText ? (archived.data ?? []) : [];
+	const archivedFailed = Boolean(archivedText) && archived.isError;
 	const groups = groupByTime(found);
 
 	// cmdk highlights the first item only when its own filter runs; results that
@@ -446,14 +450,33 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	if (!q) {
 		body = (
 			<>
-				{recentChats.length > 0 && (
+				{recent.isLoading ? (
+					<CommandLoading label="Loading recent chats">
+						<div aria-hidden className="flex flex-col gap-2 px-2 py-2">
+							{[0, 1, 2].map((i) => (
+								<div key={i} className="bg-surface-3 h-8 animate-pulse rounded-lg" />
+							))}
+						</div>
+					</CommandLoading>
+				) : recent.isError && !recent.data ? (
+					<LoadFailed
+						what="recent chats"
+						error={recent.error}
+						onRetry={() => void recent.refetch()}
+						retrying={recent.isFetching}
+					/>
+				) : recentChats.length > 0 ? (
 					<CommandGroup heading="Recent chats">
 						{recentChats.map((c) => (
 							<ChatOption key={c.id} chat={c} onOpen={() => go(`/c/${c.id}`)} />
 						))}
 					</CommandGroup>
+				) : (
+					<p className="text-dense text-foreground-muted px-2 py-1.5">
+						Recent chats outside folders appear here. Type to search all your chats.
+					</p>
 				)}
-				<CommandGroup heading={recentChats.length ? undefined : 'No chats yet'}>
+				<CommandGroup>
 					<CommandItem value={NEW_CHAT} onSelect={() => go('/')}>
 						<SquarePen aria-hidden /> New chat
 					</CommandItem>
@@ -479,7 +502,7 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 				</div>
 			</CommandLoading>
 		);
-	} else if (!found.length && !foundArchived.length) {
+	} else if (!found.length && !foundArchived.length && !archivedFailed) {
 		body = (
 			<div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
 				<p className="text-foreground-muted">No chats match “{q}”.</p>
@@ -504,6 +527,14 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 							<ChatOption key={c.id} chat={c} archived onOpen={() => go(`/c/${c.id}`)} />
 						))}
 					</CommandGroup>
+				)}
+				{archivedFailed && (
+					<div role="alert" className="text-dense text-foreground-muted flex items-center gap-2 px-2 py-1.5">
+						Couldn't search archived chats.
+						<Button variant="ghost" size="xs" onClick={() => void archived.refetch()} disabled={archived.isFetching}>
+							{archived.isFetching ? 'Trying again…' : 'Try again'}
+						</Button>
+					</div>
 				)}
 			</>
 		);

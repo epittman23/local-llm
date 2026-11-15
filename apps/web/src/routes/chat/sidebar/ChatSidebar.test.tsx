@@ -98,6 +98,24 @@ describe('ChatSidebar empty and failed', () => {
 		expect(screen.getByText('Group chats and give them shared instructions.')).toBeInTheDocument();
 	});
 
+	it('does not say chats will appear above folders, which hold chats the list leaves out (STA-3)', async () => {
+		vi.mocked(getChatList).mockResolvedValue([] as never);
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		show();
+		expect(await screen.findByText('Chats outside folders appear here.')).toBeInTheDocument();
+		expect(screen.queryByText('Your chats will appear here.')).toBeNull();
+	});
+
+	it('says nothing about an empty list while the folders are still loading', async () => {
+		vi.mocked(getChatList).mockResolvedValue([] as never);
+		vi.mocked(getFolders).mockImplementation(() => new Promise(() => {}));
+		show();
+		expect(await screen.findByRole('button', { name: 'Folders' })).toBeInTheDocument();
+		await waitFor(() => expect(getChatList).toHaveBeenCalled());
+		await new Promise((r) => setTimeout(r, 20));
+		expect(screen.queryByText(/appear here/)).toBeNull();
+	});
+
 	it('shows a failed load in place with Try again, not an empty list (STA-4)', async () => {
 		vi.mocked(getChatList)
 			.mockRejectedValueOnce('Database is locked')

@@ -104,7 +104,17 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 				<LoadFailed what="chats" error={pages.error} retrying={pages.isFetching} onRetry={() => void pages.refetch()} />
 			</section>
 		);
-	const empty = !pages.isLoading && !pinned.isError && list.length === 0 && (pinned.data?.length ?? 0) === 0;
+	// The main list leaves out pinned chats and chats in folders, so it is empty
+	// only when those are known to be empty too; with folders it says which it holds.
+	const empty =
+		!pages.isLoading &&
+		!pinned.isLoading &&
+		!pinned.isError &&
+		!(foldersOn && folders.isLoading) &&
+		list.length === 0 &&
+		(pinned.data?.length ?? 0) === 0;
+	const emptyText =
+		allFolders.length > 0 || folders.isError ? 'Chats outside folders appear here.' : 'Your chats will appear here.';
 	const nextFailed = pages.isFetchNextPageError;
 
 	return (
@@ -179,7 +189,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void }) {
 			)}
 
 			<section aria-label="Chat list">
-				{empty && <p className="text-foreground-muted text-dense px-2 py-1">Your chats will appear here.</p>}
+				{empty && <p className="text-foreground-muted text-dense px-2 py-1">{emptyText}</p>}
 				{pages.isLoading && (
 					<div className="flex justify-center py-3">
 						<Spinner className="size-4" />
