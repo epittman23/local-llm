@@ -310,7 +310,7 @@ export function SettingsModal() {
 					{personalSettingsRestricted(user) && (
 						<p className="text-foreground-muted border-t px-4 py-2 text-dense">
 							Your administrator has turned off access to your personal settings (General, Interface, Notifications,
-							Keyboard, Integrations, Personalization and Audio), so they are hidden.
+							Keyboard, Personalization and Audio), so they are hidden.
 						</p>
 					)}
 				</nav>

@@ -1,8 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { SettingRow, SettingsForm } from './controls';
 import { SettingsModal } from './SettingsModal';
@@ -15,12 +18,13 @@ const loaders = vi.hoisted(() => ({
 	interface: vi.fn(),
 	notifications: vi.fn(),
 	data_controls: vi.fn(),
+	tools: vi.fn(),
 	'admin:general': vi.fn()
 }));
 
 vi.mock('./adminTabComponents', () => ({
 	tabLoaders: loaders,
-	implementedTabIds: new Set(['general', 'interface', 'notifications', 'data_controls', 'admin:general'])
+	implementedTabIds: new Set(['general', 'interface', 'notifications', 'data_controls', 'tools', 'admin:general'])
 }));
 
 const tab = (text: string) => ({ default: () => <p>{text}</p> });
@@ -60,6 +64,7 @@ beforeEach(() => {
 	loaders.notifications.mockResolvedValue(tab('Notifications tab body'));
 	loaders.data_controls.mockResolvedValue({ default: NestedDialogTab });
 	loaders['admin:general'].mockResolvedValue(tab('Server general body'));
+	loaders.tools.mockResolvedValue(tab('Integrations tab body'));
 	useAuthStore.setState({ user: { id: 'u', name: 'U', email: 'u@x', role: 'admin' } as never });
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -276,5 +281,38 @@ describe('search (#1001)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 		expect(search).toHaveValue('');
 		expect(screen.getByRole('tablist')).toBeInTheDocument();
+	});
+});
+
+/** The modal with its address, as AppShell mounts them. */
+function AddressedModal() {
+	useSettingsUrl();
+	return <SettingsModal />;
+}
+
+describe('the hidden Integrations tab (#1090, S2-D5)', () => {
+	const mount = (path: string) => {
+		useAuthStore.setState({ status: 'authenticated' } as never);
+		useConfigStore.setState({ config: { name: 'x', version: '1', features: {} } } as never);
+		const router = createMemoryRouter([{ path: '/', element: <AddressedModal /> }], { initialEntries: [path] });
+		render(<RouterProvider router={router} />);
+		return () => new URLSearchParams(router.state.location.search).get('settings');
+	};
+
+	it('is not in the tab list, nor found by search, though its component exists', async () => {
+		render(<SettingsModal />);
+		openOn('general');
+		const list = await screen.findByRole('tablist', { name: 'Settings' });
+		expect(within(list).queryByRole('tab', { name: 'Integrations' })).toBeNull();
+		fireEvent.change(screen.getByRole('combobox', { name: 'Search settings' }), { target: { value: 'tool servers' } });
+		expect(screen.queryByRole('option', { name: 'Integrations' })).toBeNull();
+		expect(loaders.tools).not.toHaveBeenCalled();
+	});
+
+	it.each(['tools', 'integrations'])('a ?settings=%s link opens General and says so in the address', async (id) => {
+		const settingsParam = mount(`/?settings=${id}`);
+		expect(await screen.findByRole('tab', { name: 'General', selected: true })).toBeInTheDocument();
+		await waitFor(() => expect(settingsParam()).toBe('general'));
+		expect(loaders.tools).not.toHaveBeenCalled();
 	});
 });

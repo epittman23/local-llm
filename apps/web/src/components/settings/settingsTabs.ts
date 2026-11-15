@@ -146,7 +146,10 @@ function personalTabVisible(id: string, user: SessionUser, config: BackendConfig
 		case 'connections':
 			return Boolean(features.enable_direct_connections);
 		case 'tools':
-			return admin || Boolean(perms.features?.direct_tool_servers);
+			// Hidden until chats use personal tool and terminal servers (#1090, S2-D5):
+			// servers already saved are kept, and Admin > Integrations, where tool
+			// servers do work, is unchanged. A `?settings=tools` link opens the first tab.
+			return false;
 		case 'personalization':
 			return Boolean(features.enable_memories) && (admin || (perms.features?.memories ?? true));
 		default:
