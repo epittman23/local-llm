@@ -116,7 +116,7 @@ test.describe('workspace tools', () => {
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 
-	test('valves: loads a spec, edits a custom value and a default toggle, and saves arrays as arrays', async ({
+	test('valves: the settings show at once, save arrays as arrays, and leave untouched ones at their default', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -134,17 +134,17 @@ test.describe('workspace tools', () => {
 		await page.goto('/workspace/tools');
 		await page.getByRole('button', { name: 'Valves', exact: true }).click();
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByText('API Key')).toBeVisible();
-		await expect(dialog.getByText('*required')).toBeVisible();
+		await expect(dialog.locator('label', { hasText: 'API key' })).toHaveText('API key (required)');
 		// Descriptions are rendered markdown.
 		await expect(dialog.locator('strong', { hasText: 'separated' })).toBeVisible();
 		// Arrays are shown as comma-separated text.
 		await expect(dialog.getByLabel('Tags', { exact: true })).toHaveValue('a,b');
 
-		await dialog.getByRole('button', { name: 'API Key: None' }).click();
-		await dialog.getByPlaceholder('').first().fill('secret');
+		// Masked, and shown at once: no Default/Custom switch first (#1016).
+		await expect(dialog.locator('#valve-api_key')).toHaveAttribute('type', 'password');
+		await dialog.locator('#valve-api_key').fill('secret');
 		await dialog.getByLabel('Tags', { exact: true }).fill('x, y ,,z');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Save settings' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/tool_1/valves/update')?.body)
 			.toMatchObject({
