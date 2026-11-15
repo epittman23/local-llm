@@ -95,7 +95,10 @@ describe('SidebarContent layout', () => {
 		});
 		show();
 		const group = within(screen.getByRole('list', { name: 'Destinations' }));
-		for (const name of ['Workspace', 'Benchmarks', 'Admin']) expect(group.getByRole('link', { name })).toBeTruthy();
+		for (const name of ['Home', 'Workspace', 'Benchmarks', 'Admin'])
+			expect(group.getByRole('link', { name })).toBeTruthy();
+		// Eight columns, one per destination; two on touch.
+		expect(screen.getByRole('list', { name: 'Destinations' }).className).toContain('grid-cols-8');
 		// The name is hidden with a pointer, where the tooltip shows it, and shown on touch (OVL-4).
 		expect(group.getByText('Workspace').className).toContain('pointer-fine:sr-only');
 		expect(screen.getByRole('list', { name: 'Destinations' }).className).toContain('pointer-coarse:grid-cols-2');
@@ -115,6 +118,7 @@ describe('SidebarContent layout', () => {
 		show({ onNavigate });
 		const group = within(screen.getByRole('list', { name: 'Destinations' }));
 		expect(group.getAllByRole('link').map((a) => a.textContent)).toEqual([
+			'Home',
 			'Workspace',
 			'Notes',
 			'Automations',
@@ -126,6 +130,15 @@ describe('SidebarContent layout', () => {
 		fireEvent.click(group.getByRole('link', { name: 'Calendar' }));
 		expect(onNavigate).toHaveBeenCalled();
 		useConfigStore.setState({ config: null });
+	});
+
+	it('leads with Home, the start page, marked when it is open (#1093)', () => {
+		show({}, '/home');
+		const group = within(screen.getByRole('list', { name: 'Destinations' }));
+		const home = group.getAllByRole('link')[0];
+		expect(home).toHaveAccessibleName('Home');
+		expect(home.getAttribute('href')).toBe('/home');
+		expect(home).toHaveAttribute('aria-current', 'page');
 	});
 
 	it('marks the destination that is open', () => {
@@ -213,6 +226,7 @@ describe('SidebarRail', () => {
 		rail();
 		const nav = screen.getByRole('navigation', { name: 'Main' });
 		const named = [...nav.querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label'));
+		// Home is a destination of the open sidebar, not of the rail.
 		expect(named).toEqual(['Open sidebar', 'New chat', 'Search', 'Ada']);
 		expect(screen.getByRole('link', { name: 'New chat' }).getAttribute('href')).toBe('/');
 		fireEvent.click(screen.getByRole('button', { name: 'Search' }));

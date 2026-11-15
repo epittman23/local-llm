@@ -4,6 +4,7 @@ import {
 	ChartBar,
 	Clock,
 	FlaskConical,
+	House,
 	LayoutGrid,
 	LogOut,
 	type LucideIcon,
@@ -242,6 +243,7 @@ export function SidebarContent({
 	const appName = useWebUIName();
 
 	const destinations: { to: string; icon: LucideIcon; label: string }[] = [
+		{ to: routePaths.homePage, icon: House, label: 'Home' },
 		{ to: routePaths.workspace, icon: LayoutGrid, label: 'Workspace' },
 		...(canUseFeature('notes', user, config) ? [{ to: routePaths.notes, icon: NotebookText, label: 'Notes' }] : []),
 		...(canUseFeature('automations', user, config)
@@ -301,7 +303,7 @@ export function SidebarContent({
 
 			<Separator />
 
-			<ul aria-label="Destinations" className="grid grid-cols-7 gap-1 px-2 pt-2 pointer-coarse:grid-cols-2">
+			<ul aria-label="Destinations" className="grid grid-cols-8 gap-1 px-2 pt-2 pointer-coarse:grid-cols-2">
 				{destinations.map((d) => (
 					<li key={d.to} className="flex min-w-0 flex-col">
 						<Destination {...d} onNavigate={onNavigate} />
