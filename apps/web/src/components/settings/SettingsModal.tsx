@@ -388,6 +388,7 @@ export function SettingsModal() {
 					title="Discard changes?"
 					confirmLabel="Discard changes"
 					cancelLabel="Keep editing"
+					destructive
 					onConfirm={confirmLeave}
 				>
 					This tab has changes that are not saved. They are lost if you leave it.
