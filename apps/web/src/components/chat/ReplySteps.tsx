@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
 import { fence, replySegments, type Step, type StepKind, type StepResult } from '@/lib/chat/replySteps';
 import type { OutputItem } from '@/lib/chat/structuredOutput';
+import { removeAllDetails } from '@/lib/markdown/content';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -86,7 +87,7 @@ export function ReplySteps({
 				segment.type === 'text' ? (
 					plain ? (
 						<div key={segment.id} className="text-reading whitespace-pre-wrap" dir="auto">
-							{formatText(segment.text)}
+							{removeAllDetails(formatText(segment.text))}
 						</div>
 					) : (
 						<Markdown
@@ -145,7 +146,9 @@ function StepIndicator({ step }: { step: Step }) {
 function StatusWord({ step }: { step: Step }) {
 	switch (step.status) {
 		case 'running':
-			return <span className="sr-only">Running</span>;
+			return <span className="text-foreground-muted shrink-0 text-caption">Running</span>;
+		case 'queued':
+			return <span className="text-foreground-muted shrink-0 text-caption">Queued</span>;
 		case 'failed':
 			return (
 				<span className="text-danger flex shrink-0 items-center gap-1 text-caption">
@@ -188,15 +191,16 @@ function StepRow({
 	const { settings } = useUserSettings();
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [open, setOpen] = useState(Boolean((settings as Record<string, unknown> | undefined)?.expandDetails));
-	const [resolving, setResolving] = useState(false);
 	const hasDetail = Boolean(step.reasoning || step.input || step.result.type !== 'none' || step.images.length);
-	// ask_user is answered in its own dialog; other waiting calls are approved here.
-	const approvable =
-		step.status === 'waiting' && step.kind !== 'question' && resolvable && chatId && messageId && step.callId;
+	// The one call a paused round waits on is approved here. A question is answered
+	// in its own dialog, from the stored reply (#1127).
+	const approvable = step.approvable && resolvable && chatId && messageId && step.callId;
+	const object = step.kind === 'command' ? 'command' : 'tool call';
+	const [resolving, setResolving] = useState<'allow' | 'deny' | null>(null);
 
 	const resolve = async (approved: boolean) => {
 		if (!approvable || resolving) return;
-		setResolving(true);
+		setResolving(approved ? 'allow' : 'deny');
 		try {
 			await resolveChatMessageToolCall(
 				token,
@@ -207,42 +211,52 @@ function StepRow({
 			);
 			onToolCallResolved?.();
 		} catch (e) {
-			toast.error(String(e));
+			toast.error(`The ${object} could not be ${approved ? 'allowed' : 'denied'}: ${String(e)}`);
 		}
-		setResolving(false);
+		setResolving(null);
 	};
+
+	const summary = (
+		<>
+			<StepIndicator step={step} />
+			<span className={cn('min-w-0 flex-1 truncate', step.kind === 'command' && 'font-mono text-dense')}>
+				{step.title}
+			</span>
+			{step.meta && <span className="shrink-0 text-caption tabular-nums">{step.meta}</span>}
+			<StatusWord step={step} />
+		</>
+	);
 
 	return (
 		<li className="flex flex-col" data-testid="reply-step" data-status={step.status}>
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				className="text-foreground-muted w-full justify-start gap-2 px-1.5 text-left font-normal"
-				aria-expanded={hasDetail ? open : undefined}
-				disabled={!hasDetail}
-				onClick={() => setOpen((o) => !o)}
-			>
-				<StepIndicator step={step} />
-				<span className={cn('min-w-0 flex-1 truncate', step.kind === 'command' && 'font-mono text-dense')}>
-					{step.title}
-				</span>
-				{step.meta && <span className="shrink-0 text-caption tabular-nums">{step.meta}</span>}
-				<StatusWord step={step} />
-				{hasDetail && (open ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />)}
-			</Button>
+			{hasDetail ? (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="text-foreground-muted w-full justify-start gap-2 px-1.5 text-left font-normal"
+					aria-expanded={open}
+					onClick={() => setOpen((o) => !o)}
+				>
+					{summary}
+					{open ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
+				</Button>
+			) : (
+				// Nothing to open: a line of text, not a disabled control (which would dim it).
+				<div className="text-foreground-muted flex h-7 w-full items-center gap-2 px-1.5 text-dense">{summary}</div>
+			)}
 			{approvable && (
-				<div className="my-1 ml-7 flex gap-2">
-					<Button size="sm" disabled={resolving} onClick={() => void resolve(true)}>
-						Allow
+				<div className="my-1 ml-6 flex gap-2" aria-busy={resolving !== null}>
+					<Button size="sm" disabled={resolving !== null} onClick={() => void resolve(true)}>
+						{resolving === 'allow' ? 'Allowing…' : `Allow ${object}`}
 					</Button>
-					<Button size="sm" variant="outline" disabled={resolving} onClick={() => void resolve(false)}>
-						Deny
+					<Button size="sm" variant="outline" disabled={resolving !== null} onClick={() => void resolve(false)}>
+						{resolving === 'deny' ? 'Denying…' : `Deny ${object}`}
 					</Button>
 				</div>
 			)}
 			{open && hasDetail && (
-				<div className="mt-1 mb-2 ml-7 flex min-w-0 flex-col gap-2 text-body">
+				<div className="mt-1 mb-2 ml-6 flex min-w-0 flex-col gap-2 text-body">
 					{step.reasoning && (
 						<Markdown id={`step-${step.id}-reasoning`} content={step.reasoning} className="text-foreground-muted" />
 					)}

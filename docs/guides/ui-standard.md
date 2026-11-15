@@ -564,13 +564,16 @@ model writes, each step it took (a thought, a command, a file written, a
 search, a question) is one line on a divider rule that says what it did: the
 command, "Wrote /path", "Thought" with how long. A fact follows the title
 ("11 s", "exit 1"), and the step's state is a word where it is not plainly
-done (COL-3): Failed, Waiting for approval, Waiting for your answer, No
-answer, Denied. The line opens to the reasoning, what the step was given and
-what came back (output and errors apart, a file in its language, images in a
-frame, CNT-4). Only the running step moves: a 20 px thinking orb
-(`thinking-orbs`) in place of its icon, which counts as the reply's spinner
-(MOT-1) and is a still frame under reduced motion (MOT-2). The orb draws its
-own monochrome ink for the theme, not a token.
+done (COL-3): Running, Queued, Failed, Waiting for approval, Waiting for
+your answer, No answer, No result, Denied. A line with nothing more to show
+is text, not a disabled control. Otherwise it opens to the reasoning, what
+the step was given and what came back (output and errors apart, a file in
+its language, inline images in a frame, CNT-4). Only the running step
+moves: a 20 px thinking orb (`thinking-orbs`) in place of its icon, a still
+frame under reduced motion (MOT-2). *Awaiting the owner's decision:* the
+orb is an exception to MOT-1 (it would count as the reply's spinner) and to
+COL-1 (it draws its own monochrome ink for the theme, not a token); until
+that is settled, neither exception is part of the standard.
 
 ## Canvas
 

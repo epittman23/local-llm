@@ -120,6 +120,37 @@ describe('replySegments', () => {
 		expect(steps([call('t', 'bash', { command: 'rm x' }, { status: 'pending' })])[0].status).toBe('waiting');
 	});
 
+	it('asks only about the call a paused round waits on, and lets an approved one run', () => {
+		// pause_for_tool_approval: the first unresolved call is pending, the rest queued.
+		const round = steps([
+			text('m', 'Two commands.'),
+			call('a', 'bash', { command: 'rm a' }, { status: 'pending' }),
+			call('b', 'bash', { command: 'rm b' }, { status: 'queued' })
+		]);
+		expect(round.map((s) => [s.status, s.approvable])).toEqual([
+			['waiting', true],
+			['queued', false]
+		]);
+		const approved = steps([call('a', 'bash', { command: 'rm a' }, { status: 'queued', approved: true })], false);
+		expect(approved[0]).toMatchObject({ status: 'running', approvable: false });
+		const question = steps([call('q', 'ask_user', { questions: [] }, { status: 'pending' })]);
+		expect(question[0]).toMatchObject({ status: 'waiting', approvable: false });
+	});
+
+	it("shows the code interpreter's output and errors apart", () => {
+		const [code] = steps([
+			{
+				type: 'open_webui:code_interpreter',
+				id: 'ci',
+				status: 'completed',
+				code: 'print(1)',
+				output: { stdout: '1\n', stderr: 'warn\n', result: '' }
+			} as OutputItem
+		]);
+		expect(code).toMatchObject({ title: 'Ran code', input: '```python\nprint(1)\n```' });
+		expect(code.result).toMatchObject({ type: 'command', stdout: '1\n', stderr: 'warn\n' });
+	});
+
 	it('shows a denied call and a failed one', () => {
 		const [denied, failed] = steps([
 			call('d', 'bash', { command: 'rm x' }, { status: 'rejected' }),
@@ -139,7 +170,8 @@ describe('replySegments', () => {
 				call_id: 'v',
 				output: [
 					{ type: 'input_text', text: 'view: Image file read successfully.' },
-					{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' }
+					{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' },
+					{ type: 'input_image', image_url: 'https://tracker.example/pixel.png' }
 				]
 			}
 		]);

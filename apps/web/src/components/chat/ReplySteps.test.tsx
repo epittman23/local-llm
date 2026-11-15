@@ -109,7 +109,8 @@ describe('ReplySteps', () => {
 			/>
 		);
 		expect(screen.getByText('Waiting for approval')).toBeTruthy();
-		fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+		expect(screen.getByRole('button', { name: 'Allow command' })).toBeTruthy();
+		fireEvent.click(screen.getByRole('button', { name: 'Deny command' }));
 		await waitFor(() => expect(onResolved).toHaveBeenCalledOnce());
 		expect(resolveChatMessageToolCall).toHaveBeenCalledWith('t', 'chat-1', 'a1', 'c3', 'reject');
 	});
@@ -127,7 +128,17 @@ describe('ReplySteps', () => {
 		];
 		render(<ReplySteps id="a1" output={ask} done chatId="chat-1" messageId="a1" resolvable />);
 		expect(screen.getByText('Waiting for your answer')).toBeTruthy();
-		expect(screen.queryByRole('button', { name: 'Allow' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /^Allow/ })).toBeNull();
+	});
+
+	it('shows a step with nothing to open as text, not as a disabled button', () => {
+		const search: OutputItem[] = [
+			{ type: 'web_search_call', id: 'w', status: 'completed', action: { type: 'search', query: 'polymers' } }
+		];
+		render(<ReplySteps id="a1" output={search} done />);
+		const row = screen.getByTestId('reply-step');
+		expect(row.textContent).toContain('Searched the web for "polymers"');
+		expect(within(row).queryByRole('button')).toBeNull();
 	});
 
 	it('strips citations from texts when asked, and shows plain text with Markdown off', () => {

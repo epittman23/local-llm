@@ -596,7 +596,7 @@
 		},
 		"apps/web/src/routes/chat/ChatMessages.tsx": {
 			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/a11y/useAriaPropsSupportedByRole": 4,
+			"lint/a11y/useAriaPropsSupportedByRole": 3,
 			"lint/a11y/useKeyWithClickEvents": 1,
 			"lint/suspicious/noArrayIndexKey": 3
 		},

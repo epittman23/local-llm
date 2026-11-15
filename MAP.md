@@ -461,6 +461,10 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
   `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
   (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
+  `src/components/chat/ReplySteps.tsx` shows a reply that has structured
+  output as it happened: its texts and, between them, each step (thoughts,
+  tool calls with their input and result), built by
+  `src/lib/chat/replySteps.ts`.
   `src/routes/chat/PendingWorkspacesDialog.tsx`, mounted by `AppShell`,
   asks the user to keep or remove a sandbox workspace that expired or
   stands in the way of the per-user cap.

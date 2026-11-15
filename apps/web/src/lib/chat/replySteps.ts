@@ -7,7 +7,7 @@ import { getMessageText, getReasoningText, getToolResultText, type OutputItem } 
  * that says what it did, so the run can be followed without opening anything.
  */
 
-export type StepStatus = 'running' | 'done' | 'failed' | 'waiting' | 'denied' | 'unanswered';
+export type StepStatus = 'running' | 'done' | 'failed' | 'waiting' | 'queued' | 'denied' | 'unanswered';
 export type StepKind = 'reasoning' | 'command' | 'file' | 'search' | 'question' | 'code' | 'tool';
 
 /** What a tool call returned, parsed from the JSON the sandbox tools answer with. */
@@ -34,6 +34,8 @@ export type Step = {
 	images: string[];
 	/** The call id, for a tool call that can be approved or denied. */
 	callId?: string;
+	/** The server is waiting on this call's approval: the one call a paused round asks about. */
+	approvable: boolean;
 };
 
 export type ReplySegment = { type: 'text'; id: string; text: string } | { type: 'steps'; id: string; steps: Step[] };
@@ -187,14 +189,20 @@ function toolStep(item: OutputItem, result: OutputItem | undefined, replyDone: b
 	const { kind, title, input } = describeCall(name, args);
 	const parsed = parseResult(getToolResultText(result));
 	const images = (result?.output ?? [])
-		.filter((p) => p?.type === 'input_image' && typeof p.image_url === 'string')
+		// Only inline images: a URL elsewhere (an imported chat) would be fetched from a third party.
+		.filter(
+			(p) => p?.type === 'input_image' && typeof p.image_url === 'string' && p.image_url.startsWith('data:image/')
+		)
 		.map((p) => p.image_url as string);
 	const callStatus = String(item.status ?? '');
 	let status: StepStatus;
+	// A paused round (pause_for_tool_approval) marks its first unresolved call `pending`
+	// and the rest `queued`; an approved call stays `queued` until the resumed reply runs it.
 	if (callStatus === 'rejected' || result?.status === 'rejected') status = 'denied';
 	else if (result) status = parsed.type === 'error' || callStatus === 'failed' ? 'failed' : 'done';
 	// A call still marked pending in a reply that went on past it was never answered.
-	else if (['pending', 'queued', 'requires_approval'].includes(callStatus)) status = movedOn ? 'unanswered' : 'waiting';
+	else if (callStatus === 'pending' || callStatus === 'requires_approval') status = movedOn ? 'unanswered' : 'waiting';
+	else if (callStatus === 'queued') status = item.approved === true ? 'running' : movedOn ? 'unanswered' : 'queued';
 	else if (callStatus === 'failed' || callStatus === 'incomplete') status = 'failed';
 	else status = replyDone ? 'unanswered' : 'running';
 	// An answered question: the answer is the result, as the person gave it.
@@ -220,7 +228,8 @@ function toolStep(item: OutputItem, result: OutputItem | undefined, replyDone: b
 		input,
 		result: parsed,
 		images,
-		callId: item.call_id ?? item.id
+		callId: item.call_id ?? item.id,
+		approvable: status === 'waiting' && name !== 'ask_user'
 	};
 }
 
@@ -238,12 +247,15 @@ function otherStep(item: OutputItem, isLast: boolean, replyDone: boolean): Step 
 			status,
 			reasoning: getReasoningText(item),
 			result: { type: 'none' },
-			images: []
+			images: [],
+			approvable: false
 		};
 	}
 	if (item.type === 'open_webui:code_interpreter') {
 		const code = str(item.code);
 		const output = item.output as unknown;
+		const run =
+			output && typeof output === 'object' && !Array.isArray(output) ? (output as Record<string, unknown>) : null;
 		return {
 			id: item.id ?? '',
 			kind: 'code',
@@ -251,13 +263,24 @@ function otherStep(item: OutputItem, isLast: boolean, replyDone: boolean): Step 
 			title: status === 'running' ? 'Running code' : 'Ran code',
 			status,
 			input: code ? fence(code, str(item.lang) || 'python') : undefined,
+			// The sandbox answers {stdout, stderr, result}: shown like a command's output.
 			result:
-				typeof output === 'string' && output
-					? { type: 'text', text: output, language: 'text' }
-					: output && typeof output === 'object'
-						? { type: 'text', text: JSON.stringify(output, null, 2), language: 'json' }
-						: { type: 'none' },
-			images: []
+				run && ('stdout' in run || 'stderr' in run)
+					? {
+							type: 'command',
+							exitCode: null,
+							stdout: [str(run.stdout), str(run.result)].filter(Boolean).join('\n'),
+							stderr: str(run.stderr),
+							timedOut: false,
+							truncated: false
+						}
+					: typeof output === 'string' && output
+						? { type: 'text', text: output, language: 'text' }
+						: run
+							? { type: 'text', text: JSON.stringify(run, null, 2), language: 'json' }
+							: { type: 'none' },
+			images: [],
+			approvable: false
 		};
 	}
 	const action = (item.action ?? {}) as Record<string, unknown>;
@@ -277,7 +300,8 @@ function otherStep(item: OutputItem, isLast: boolean, replyDone: boolean): Step 
 		title: queries ? `${label} for "${clip(queries, 80)}"` : label,
 		status,
 		result: { type: 'none' },
-		images: []
+		images: [],
+		approvable: false
 	};
 }
 
@@ -292,12 +316,16 @@ export function replySegments(output: OutputItem[] = [], replyDone = true): Repl
 		if (run.length) segments.push({ type: 'steps', id: `steps-${segments.length}`, steps: run });
 		run = [];
 	};
-	const lastStepOrText = output.findLastIndex((item) => item && item.type !== 'function_call_output');
+	// A reply has gone on past a call when the model wrote or thought again after it;
+	// a sibling call of the same round does not count.
+	const lastTextOrThought = output.findLastIndex(
+		(item) => item?.type === 'reasoning' || (item?.type === 'message' && getMessageText(item).trim() !== '')
+	);
 	output.forEach((item, index) => {
 		if (!item || item.type === 'function_call_output') return;
 		const isLast = index === output.length - 1;
 		if (item.type === 'function_call') {
-			run.push(toolStep(item, results[item.call_id ?? item.id ?? ''], replyDone, index < lastStepOrText));
+			run.push(toolStep(item, results[item.call_id ?? item.id ?? ''], replyDone, index < lastTextOrThought));
 		} else if (STEP_TYPES.has(item.type ?? '')) {
 			run.push(otherStep(item, isLast, replyDone));
 		} else {
