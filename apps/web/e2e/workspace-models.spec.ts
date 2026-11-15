@@ -90,14 +90,14 @@ test.describe('workspace models list', () => {
 			model(3, { meta: { hidden: true } })
 		]);
 		await page.goto('/workspace/models');
-		await expect(page.getByRole('link', { name: 'Model 1' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toBeVisible();
 		await expect(page.getByText('Preset 1')).toBeVisible();
 		await expect(page.getByText('llama3').first()).toBeVisible(); // description falls back to the base model
 		await expect(page.getByText('Read Only')).toHaveCount(1);
 		await expect(page.locator('#model-item-model-3')).toHaveClass(/opacity-50/);
 
 		await page.getByLabel('Search Models').fill('Model 2');
-		await expect(page.getByRole('link', { name: 'Model 1' })).toHaveCount(0);
+		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toHaveCount(0);
 		expect(calls.some((c) => c.path === '/list' && c.search.includes('query=Model+2'))).toBe(true);
 	});
 

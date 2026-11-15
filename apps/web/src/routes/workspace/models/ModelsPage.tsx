@@ -13,6 +13,7 @@ import {
 	Pencil,
 	Pin,
 	PinOff,
+	SquarePen,
 	Trash2
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -20,7 +21,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -35,6 +36,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { deleteModelById, getModelById, getModelItems, getModelTags, toggleModelById } from '@/lib/apis/models';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -377,22 +379,8 @@ export function ModelsPage() {
 							const hidden = Boolean(model.meta?.hidden);
 							const description = (model.meta?.description ?? '').trim() || model.base_model_id || 'No description';
 							const pinned = pinnedModels.includes(model.id);
-							return (
-								<div
-									key={model.id}
-									id={`model-item-${model.id}`}
-									role="button"
-									tabIndex={model.write_access ? 0 : -1}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left ${model.write_access ? 'hover:bg-muted/50 cursor-pointer' : ''} ${hidden ? 'opacity-50' : ''}`}
-									onClick={(e) => !isControlClick(e.target) && openModel(model)}
-									onKeyDown={(e) => {
-										if (e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openModel(model);
-										}
-									}}
-								>
+							const rowContent = (
+								<>
 									<div className={`mr-1 shrink-0 self-center ${isActive ? '' : 'opacity-50'}`}>
 										<ProfileAvatar
 											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
@@ -402,14 +390,14 @@ export function ModelsPage() {
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={model.name} side="top">
-												<Link
-													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
-													className="min-w-0 truncate text-dense leading-5 hover:underline"
+												<div
+													className={`min-w-0 truncate text-dense leading-5 ${model.write_access ? 'group-hover:underline' : ''}`}
 												>
 													{model.name}
-												</Link>
+												</div>
 											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+											{/* Below sm the name needs the room the row's three controls leave. */}
+											<div className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block">
 												{model.id}
 											</div>
 											<Tip content={dayjs(model.updated_at * 1000).format('LLLL')}>
@@ -430,8 +418,37 @@ export function ModelsPage() {
 											</div>
 										</Tip>
 									</div>
+								</>
+							);
+							return (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
+								<div
+									key={model.id}
+									id={`model-item-${model.id}`}
+									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${model.write_access ? 'hover:bg-muted/50' : ''} ${hidden ? 'opacity-50' : ''}`}
+								>
+									{model.write_access ? (
+										<RowButton
+											className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+											onClick={() => openModel(model)}
+										>
+											{rowContent}
+										</RowButton>
+									) : (
+										<div className="flex min-w-0 flex-1 items-center gap-2 self-stretch">{rowContent}</div>
+									)}
 
-									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
+									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
+										<Tip content="New chat with this model">
+											<Button variant="ghost" size="icon-sm" asChild>
+												<Link
+													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
+													aria-label={`New chat with ${model.name}`}
+												>
+													<SquarePen className="size-4" />
+												</Link>
+											</Button>
+										</Tip>
 										{shiftKey && model.write_access ? (
 											<>
 												<Tip content={hidden ? 'Show' : 'Hide'}>
@@ -525,7 +542,7 @@ export function ModelsPage() {
 												</DropdownMenu>
 												{model.write_access && (
 													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center" onClick={(e) => e.stopPropagation()}>
+														<span className="flex h-6 items-center">
 															<Switch
 																aria-label={isActive ? 'Enabled' : 'Disabled'}
 																checked={isActive}
