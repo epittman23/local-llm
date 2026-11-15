@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 
@@ -33,8 +34,10 @@ export function SegmentedControl<T extends string>({
 			onValueChange={(v) => onValueChange(v as T)}
 			orientation="horizontal"
 			loop
+			// On a phone the segments share the width equally, on one row.
+			style={{ '--segments': options.length } as CSSProperties}
 			className={cn(
-				'border-border-control bg-surface-1 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg border p-0.5',
+				'border-border-control bg-surface-1 inline-flex max-w-full gap-0.5 rounded-lg border p-0.5 max-sm:grid max-sm:w-full max-sm:grid-cols-[repeat(var(--segments),minmax(0,1fr))]',
 				className
 			)}
 			{...aria}
@@ -45,7 +48,7 @@ export function SegmentedControl<T extends string>({
 					value={v}
 					data-slot="segmented-control-item"
 					className={cn(
-						'text-foreground-muted font-strong inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-body transition-colors hover:text-foreground-strong pointer-coarse:h-11',
+						'text-foreground-muted font-strong inline-flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-md px-3 text-body transition-colors hover:text-foreground-strong pointer-coarse:h-11 max-sm:px-1',
 						'data-[state=checked]:bg-surface-3 data-[state=checked]:text-foreground-strong',
 						'[&_svg]:size-4 [&_svg]:shrink-0'
 					)}

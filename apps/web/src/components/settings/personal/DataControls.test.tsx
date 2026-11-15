@@ -66,3 +66,27 @@ describe('Shared chats manager (#1006)', () => {
 		expect(await screen.findByText(/No shared chats\. Share a chat from its menu/)).toBeInTheDocument();
 	});
 });
+
+describe('Data controls (#999, ACT-2, ACT-3)', () => {
+	it('names each action, and archives everything only after asking', async () => {
+		api.archiveAllChats.mockResolvedValue(true);
+		mount();
+		expect(screen.getByRole('button', { name: 'Delete all chats' })).toHaveAttribute('data-variant', 'destructive');
+		fireEvent.click(screen.getByRole('button', { name: 'Archive all chats' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Archive all chats?' });
+		expect(ask).toHaveTextContent('You can unarchive them from Archived chats.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Archive all chats' }));
+		await waitFor(() => expect(api.archiveAllChats).toHaveBeenCalled());
+		expect(toast.success).toHaveBeenCalledWith('All chats archived');
+	});
+
+	it('says plainly that deleting everything cannot be undone', async () => {
+		api.deleteAllChats.mockRejectedValue(new Error('refused'));
+		mount();
+		fireEvent.click(screen.getByRole('button', { name: 'Delete all chats' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Delete all chats?' });
+		expect(ask).toHaveTextContent('This cannot be undone.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Delete all chats' }));
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error: refused'));
+	});
+});
