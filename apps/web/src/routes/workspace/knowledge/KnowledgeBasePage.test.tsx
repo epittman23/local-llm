@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -103,12 +103,16 @@ const renderPage = (client = new QueryClient({ defaultOptions: { queries: { retr
 	render(
 		<QueryClientProvider client={client}>
 			<TooltipProvider>
-				<MemoryRouter initialEntries={['/workspace/knowledge/kb1']}>
-					<Routes>
-						<Route path="/workspace/knowledge" element={null} />
-						<Route path="/workspace/knowledge/:id" element={<KnowledgeBasePage />} />
-					</Routes>
-				</MemoryRouter>
+				{/* A data router: the file sheet guards edited text with useBlocker. */}
+				<RouterProvider
+					router={createMemoryRouter(
+						[
+							{ path: '/workspace/knowledge', element: null },
+							{ path: '/workspace/knowledge/:id', element: <KnowledgeBasePage /> }
+						],
+						{ initialEntries: ['/workspace/knowledge/kb1'] }
+					)}
+				/>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -701,6 +705,28 @@ describe('KnowledgeBasePage file sheet (#1096)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 		expect(screen.queryByLabelText('File text')).toBeNull();
 		expect(screen.getByText('text')).toBeInTheDocument();
+	});
+
+	it('asks before Esc closes edited text, keeps it on Keep editing, and closes clean text at once (#905, FRM-3)', async () => {
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Open file1.txt' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit text' }));
+		const box = await screen.findByLabelText('File text');
+		fireEvent.change(box, { target: { value: 'changed' } });
+		fireEvent.keyDown(box, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent("Your changes to this file's text are not saved.");
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(screen.getByLabelText('File text')).toHaveValue('changed');
+		fireEvent.keyDown(screen.getByLabelText('File text'), { key: 'Escape' });
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(screen.queryByRole('heading', { name: 'file1.txt' })).toBeNull());
+		fireEvent.click(screen.getByRole('button', { name: 'Open file1.txt' }));
+		expect(await screen.findByText('text')).toBeInTheDocument();
+		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('heading', { name: 'file1.txt' })).toBeNull());
+		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 
 	it('says when a file has no extracted text', async () => {

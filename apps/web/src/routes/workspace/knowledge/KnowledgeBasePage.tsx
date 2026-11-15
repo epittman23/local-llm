@@ -47,6 +47,7 @@ import {
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useCopy } from '@/lib/ui/useCopy';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { blobToFile } from '@/lib/utils/files';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
@@ -432,6 +433,16 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [loadingContent, setLoadingContent] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [previewName, setPreviewName] = useState('');
+	// FRM-3: edited text is a draft. Closing the sheet (Esc, ×, the scrim) or leaving the page asks first.
+	const textGuard = useUnsavedChanges(editingText && content !== original, {
+		message: "Your changes to this file's text are not saved. They are lost if you close it."
+	});
+	const closeFile = () =>
+		textGuard.confirmLeave(() => {
+			setContent(original);
+			setEditingText(false);
+			setSelectedFileId(null);
+		});
 	useEffect(() => {
 		if (!selectedFileId) return;
 		const file = listed?.items.find((f) => f.id === selectedFileId);
@@ -849,7 +860,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				)}
 			</div>
 
-			<Sheet open={selectedFileId !== null} onOpenChange={(open) => !open && setSelectedFileId(null)}>
+			{textGuard.dialog}
+			<Sheet open={selectedFileId !== null} onOpenChange={(open) => !open && closeFile()}>
 				<SheetContent side="right" className="w-full sm:max-w-xl">
 					<div className="flex h-full max-h-full flex-col gap-3 p-4">
 						<div className="flex shrink-0 items-start gap-2 pe-8">
