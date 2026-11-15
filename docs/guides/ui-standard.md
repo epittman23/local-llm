@@ -228,7 +228,9 @@ has one height.
 **LAY-3. A target is at least 24 by 24 px with a pointer and 44 by 44 px on
 touch**, including the space that belongs to it. `Checkbox` and `Switch` reach
 44 by 44 on touch through their `::after` hit area; `CheckboxMark` is a
-checkbox's picture for a row that is itself `role="checkbox"`.
+checkbox's picture for a row that is itself `role="checkbox"`. A `Textarea`'s
+least height is its `rows`, in lines, on every pointer and never under 44 px
+on touch; set `rows`, not a `min-h-*` class, to make one taller.
 
 **LAY-4. Every page works at 390 px wide.** The page itself never scrolls
 sideways. A side panel is `components/layout/SidePanel.tsx`: a resizable

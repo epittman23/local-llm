@@ -528,7 +528,7 @@ function EditorForm({
 								</FieldLabel>
 								<Textarea
 									id={fieldId('system')}
-									className="min-h-48 resize-y"
+									className="resize-y"
 									rows={8}
 									placeholder="e.g. You are a careful statistics tutor. Show each step."
 									aria-describedby={systemNote}
