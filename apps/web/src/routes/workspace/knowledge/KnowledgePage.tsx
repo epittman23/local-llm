@@ -208,7 +208,8 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 				/>
 				<TagSelector
 					value={sourceOption}
-					placeholder="All Sources"
+					placeholder="All sources"
+					name="Source"
 					tags={['local', 'external']}
 					labels={{ local: 'Local', external: 'Connected' }}
 					onChange={(value) => {

@@ -339,7 +339,8 @@ export function FunctionsPage() {
 						onChange={setSelectedType}
 						tags={FUNCTION_TYPES.map((t) => t.value)}
 						labels={Object.fromEntries(FUNCTION_TYPES.map((t) => [t.value, t.label]))}
-						placeholder="Type"
+						placeholder="All types"
+						name="Type"
 					/>
 				</ListSearchBar>
 
