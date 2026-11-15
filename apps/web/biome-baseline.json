@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 733,
+	"total": 724,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -138,9 +138,6 @@
 			"lint/correctness/useExhaustiveDependencies": 4,
 			"lint/suspicious/noArrayIndexKey": 1
 		},
-		"apps/web/src/components/settings/SettingsModal.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 1
-		},
 		"apps/web/src/components/settings/boundFields.tsx": {
 			"lint/suspicious/noExplicitAny": 1
 		},
@@ -160,7 +157,6 @@
 			"lint/suspicious/noArrayIndexKey": 1
 		},
 		"apps/web/src/components/settings/personal/Audio.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 7,
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/components/settings/personal/Connections.tsx": {
@@ -177,7 +173,6 @@
 		},
 		"apps/web/src/components/settings/personal/Shortcuts.tsx": {
 			"lint/style/noNonNullAssertion": 5,
-			"lint/style/useImportType": 1,
 			"lint/suspicious/noAssignInExpressions": 1
 		},
 		"apps/web/src/components/settings/personal/personalSettings.ts": {
