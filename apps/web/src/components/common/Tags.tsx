@@ -92,6 +92,8 @@ export function Tags({
 								aria-expanded={open && suggestions.length > 0}
 								autoComplete="off"
 								onFocus={() => setOpen(true)}
+								// Leaving the field closes the suggestions, so Tab moves on through the page.
+								onBlur={() => setOpen(false)}
 								onChange={(e) => {
 									setValue(e.target.value);
 									setOpen(true);
