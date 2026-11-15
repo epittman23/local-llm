@@ -3,7 +3,7 @@ import { type Ref, useImperativeHandle } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CodeEditorFieldDemo, FailedRowDemo, RowStateDemo } from './workspaceDemos';
+import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
 // CodeMirror is replaced by a field that reports Black's parse error when asked to format,
 // or, as for a viewer who is not an admin, cannot format at all.
@@ -44,6 +44,22 @@ describe('/ui workspace demos', () => {
 		fireEvent.click(screen.getByRole('switch', { name: 'Enable Statistics tutor' }));
 		const tutor = screen.getByText('Statistics tutor').closest('li') as HTMLElement;
 		expect(within(tutor).getByText('Off')).toBeInTheDocument();
+	});
+
+	it('says how many of the whole a search shows, and offers Clear search when nothing matches (DAT-2, STA-3)', () => {
+		render(<ListMatchCountDemo />);
+		expect(screen.getByRole('status')).toHaveTextContent('2 of 6 prompts');
+		expect(within(screen.getByRole('list', { name: 'Prompts' })).getAllByRole('listitem')).toHaveLength(2);
+		const search = screen.getByRole('textbox', { name: 'Search prompts' });
+		fireEvent.change(search, { target: { value: 'kurtosis' } });
+		expect(screen.getByRole('status')).toHaveTextContent('0 of 6 prompts');
+		expect(screen.getByText('Nothing matches “kurtosis”')).toBeInTheDocument();
+		// The search box's own clear button, then the empty state's: both say Clear search.
+		const [inBox, inEmptyState] = screen.getAllByRole('button', { name: 'Clear search' });
+		expect(inBox).toBeInTheDocument();
+		fireEvent.click(inEmptyState);
+		expect(screen.queryByRole('status')).toBeNull();
+		expect(within(screen.getByRole('list', { name: 'Prompts' })).getAllByRole('listitem')).toHaveLength(6);
 	});
 
 	it('keeps a failed row in place with its reason, Details, Retry and Dismiss (STA-4)', () => {

@@ -120,7 +120,9 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Loading' }));
 		expect(screen.getByText('Loading prompts')).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'No results' }));
-		expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy();
+		expect(
+			within(document.getElementById('states') as HTMLElement).getByRole('button', { name: 'Clear search' })
+		).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
 		const failed = within(document.getElementById('states') as HTMLElement).getByRole('alert');
 		expect(failed.textContent).toContain("Couldn't load prompts");
@@ -128,10 +130,13 @@ describe('UiStandardPage (/ui)', () => {
 		expect(within(failed).getByRole('button', { name: 'Try again' })).toBeTruthy();
 	});
 
-	it('raises a failure toast that names what was not saved (FBK-2)', async () => {
+	it("raises a failure toast that names what was not saved, with the server's words behind Details (FBK-2, FBK-4)", async () => {
 		renderPage();
 		fireEvent.click(screen.getByRole('button', { name: 'Show a save failure' }));
-		expect(await screen.findByText('Prompt could not be saved')).toBeTruthy();
+		const message = await screen.findByText('Couldn’t save “Weekly summary”. Try again.');
+		const toast = message.closest('li') as HTMLElement;
+		expect(within(toast).getByText('Details').closest('details')).not.toHaveAttribute('open');
+		expect(within(toast).getByText('database is locked')).toBeTruthy();
 	});
 
 	it('gives every icon-only button a name, and toggles line wrapping in code', () => {

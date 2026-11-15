@@ -2,6 +2,7 @@ import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { EditorError, type EditorProblem, parseProblem } from '@/components/common/EditorError';
+import { ListEmptyState, ListMatchCount, ListSearchBar } from '@/components/common/ListChrome';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,8 +11,9 @@ import { Switch } from '@/components/ui/switch';
 import { KnowledgeFileList } from '@/routes/workspace/knowledge/KnowledgeFileList';
 import type { UploadingItem } from '@/routes/workspace/knowledge/useKnowledgeUploads';
 
-// The workspace's patterns on /ui: a list row's state, a row that failed, and
-// the code editor as a field. Every name is invented.
+// The workspace's patterns on /ui: a list row's state, a narrowed list's
+// count, a row that failed, and the code editor as a field. Every name is
+// invented.
 
 const CodeEditor = lazy(() => import('@/components/common/CodeEditor'));
 
@@ -60,6 +62,42 @@ export function RowStateDemo() {
 				</li>
 			))}
 		</ul>
+	);
+}
+
+const PROMPTS = [
+	'Explain a p-value',
+	'Check a regression',
+	'Summarise a paper',
+	'Explain a confidence interval',
+	'Review a pull request',
+	'Write unit tests'
+];
+
+/**
+ * DAT-2, STA-3: while a search narrows a list, the list says how many of the
+ * whole it shows ('2 of 6 prompts'); the tab keeps the whole count.
+ */
+export function ListMatchCountDemo() {
+	const [query, setQuery] = useState('explain');
+	const shown = PROMPTS.filter((name) => name.toLowerCase().includes(query.trim().toLowerCase()));
+	const narrowed = query.trim() !== '';
+	return (
+		<div className="flex max-w-[40rem] flex-col gap-2">
+			<ListSearchBar value={query} onChange={setQuery} placeholder="Search prompts" />
+			{narrowed && <ListMatchCount shown={shown.length} total={PROMPTS.length} noun="prompts" />}
+			{shown.length > 0 ? (
+				<ul aria-label="Prompts" className="flex flex-col">
+					{shown.map((name) => (
+						<li key={name} className="px-1.5 py-1.5">
+							{name}
+						</li>
+					))}
+				</ul>
+			) : (
+				<ListEmptyState title="No prompts yet" query={query} onClear={() => setQuery('')} />
+			)}
+		</div>
 	);
 }
 

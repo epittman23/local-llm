@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
+import { toastFailure } from '@/components/common/failureToast';
 import { Gone } from '@/components/common/Gone';
 import { ListEmptyState } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -79,7 +80,7 @@ import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { ModelRow } from '@/routes/chat/ModelSelector';
 import type { ChatModel } from '@/routes/chat/useModels';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
-import { CodeEditorFieldDemo, FailedRowDemo, RowStateDemo } from './workspaceDemos';
+import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
 // The second half of /ui: the shared components (components/ui) under the
 // standard, and the patterns built from them. Every name and figure is
@@ -520,6 +521,12 @@ export function DataSection() {
 					<RowStateDemo />
 				</Panel>
 			</Example>
+			<Example
+				title="A narrowed list's count"
+				note="While a search narrows a list, the list says how many of the whole it shows ('2 of 6 prompts', the shared ListMatchCount); the tab keeps the whole count. Nothing matching says so and offers Clear search."
+			>
+				<ListMatchCountDemo />
+			</Example>
 		</Section>
 	);
 }
@@ -678,7 +685,7 @@ export function FeedbackSection() {
 		>
 			<Example
 				title="Toasts"
-				note="Success leaves on its own after four seconds. A failure stays, says what went wrong, and offers the next step."
+				note="Success leaves on its own after four seconds. A failure stays, says what went wrong, and offers the next step. A failed request's toast is the shared toastFailure: the sentence says what failed, and the server's own words wait behind a closed Details."
 			>
 				<div className="flex flex-wrap gap-3">
 					<Button variant="outline" onClick={() => toast.success('Copied to the clipboard')}>
@@ -697,7 +704,10 @@ export function FeedbackSection() {
 					>
 						Show a failure
 					</Button>
-					<Button variant="outline" onClick={() => toast.error('Prompt could not be saved')}>
+					<Button
+						variant="outline"
+						onClick={() => toastFailure('Couldn’t save “Weekly summary”. Try again.', { detail: 'database is locked' })}
+					>
 						Show a save failure
 					</Button>
 				</div>
