@@ -369,13 +369,16 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/components/layout/`** — `RootLayout` (every route's tab title from
   its `handle`, the system-theme listener), `AppShell` (skip link, collapsible
   sidebar, mobile Sheet, the boot splash, and the auth gate for everything
-  beneath it), `Sidebar` (the Main nav), `SectionTabs` (the tab strip of
+  beneath it), `Sidebar` (the Main nav; it also exports `UserMenu`, the
+  account menu with the theme, and `SidebarRail`, the 48 px rail a closed
+  sidebar becomes), `SectionTabs` (the tab strip of
   Benchmarks, Workspace, Admin and Playground), `BootSplash` and
   `ConnectionBanner` (the lost-connection pill, FBK-1).
 - **`src/components/common/`** — app-level components shared across
   surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`, `Tip`
   (tooltip wrapper), `ConfirmDialog`, `LoadFailed` (a list that could not load,
-  STA-4), `FilterSelects` (the workspace
+  STA-4), `Gone` (something that no longer exists, said in place, NAV-3),
+  `FilterSelects` (the workspace
   View/Tag selectors), `ListChrome` (search bar, sortable header, empty
   state shared by every workspace list), `PagePagination`, `Tags`, and the access-control
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
@@ -385,9 +388,12 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   and `AdvancedParams` (table-driven request parameters,
   `advancedParamDefs.ts`).
 - **`src/components/settings/`** — the Settings modal: `SettingsModal`
-  (tab list, search, URL param via `lib/settings/useSettingsUrl.ts`),
-  `settingsTabs.ts` (every tab id), `adminTabComponents.ts` (lazy tab
-  bodies), `controls.tsx` (the compact form vocabulary every tab uses), and
+  (the two-pane dialog, setting search, the unsaved-changes guard, and the
+  URL param via `lib/settings/useSettingsUrl.ts`), `SettingsNav.tsx` (the
+  vertical tab list), `settingsIndex.ts` (the setting labels search
+  matches), `settingsTabs.ts` (every tab id), `adminTabComponents.ts` (lazy
+  tab bodies), `controls.tsx` (the compact form vocabulary every tab uses:
+  `SettingsForm`, with a `SaveBar` or saving at once, and `SavedNote`), and
   the pieces the personal tabs (`settings/personal/`) reuse: `AddConnectionModal`,
   `AddToolServerModal`, `AddTerminalServerModal` and `InterfaceSettings`
   (table-driven, `interfaceSettingDefs.ts`), each with its rules in a
@@ -396,14 +402,17 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`),
   plus hand-written ones the interface standard defines: `row-button.tsx`
-  (ACT-7), `image-button.tsx` (ACT-8) and `page-header.tsx` (LAY-5).
-- **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
+  (ACT-7), `image-button.tsx` (ACT-8), `page-header.tsx` (LAY-5),
+  `app-mark.tsx` (the product's mark, WRD-3), `save-bar.tsx` (FRM-3),
+  `segmented-control.tsx` (FRM-4) and `command.tsx` (a list chosen from by
+  keyboard, on cmdk, NAV-5).
+- **`src/routes/`** — react-router. `AppRouter.tsx` has two kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
-  `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
+  `workspace/`, `admin/`, the Phase 9 surfaces and, last, `NotFound`, the
+  catch-all 404, which never navigates on its own); and the public ones
   (`public/`: `/auth`, `/error` (`ErrorPage`, which polls until the server
-  answers), `/watch`, `/s/:id`), which are top-level
-  siblings because they must render without a session; and
-  `NotFound`, the catch-all 404, which never navigates on its own. `benchmarks/`
+  answers), `/watch`, `/s/:id`), which are top-level siblings because they
+  must render without a session. `benchmarks/`
   holds all eight Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
@@ -438,10 +447,12 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   create/edit), `SidebarChannels`, `useMessageFeed` (one feed for a channel
   or a thread: paging, live events, optimistic actions), `useChannels` (the
   `['channels']` list and the app-wide unread listener mounted in
-  `AppShell`), and the pure rules in `channelModel.ts`. `home/` is small:
-  `/home` was an unlinked stub in the Svelte app. `chat/` is Phase 10's
+  `AppShell`), and the pure rules in `channelModel.ts`. `home/` is the
+  start page at `/home` (`HomePage`): quick actions, pinned and recent chats
+  read through the sidebar's chat queries (`chat/sidebar/useChatList`), and
+  today's events through the Calendar page's day-view query. `chat/` is Phase 10's
   surface: one layout route for `/`, `/c/<id>` and `/folders/<id>`
-  (`ChatPage`), `useChatSession` (load, send, stream over the socket, stop,
+  (`ChatPage`; a folder's page above the message box is `FolderHome`), `useChatSession` (load, send, stream over the socket, stop,
   regenerate, save), `ChatMessages`/`MessageActions`, `ChatInput` with
   `InputMenus` and `useAttachments`, `ModelSelector`, `ChatControls`,
   `ArtifactPanel` (a sandboxed preview), `ChatMenu`, and `sidebar/` (the
@@ -466,7 +477,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   prompt and tool access dialogs, which shows the grants the server stored), and **`settings/`** (`userSettings.ts`: the user's saved
   UI settings through TanStack Query, for model pinning; `useConfigDraft`
   and `useAdminSaved`, the load-edit-save pattern of the admin tabs;
-  `useSettingsUrl`, the `?settings=` param).
+  `useSettingsUrl`, the `?settings=` param; `useThemeChoice`, the theme
+  applied at once and saved with the account).
 - **`src/lib/emoji/`** — emoji data and shortcode lookup behind
   `components/common/EmojiPicker`.
 - **`src/styles/global.css`** — the Tailwind v4 entry and the shadcn Nova
