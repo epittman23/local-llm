@@ -54,7 +54,8 @@ export function AccessControl({
 	shareOpen = false,
 	shareUsers = true,
 	allowGroups = true,
-	defaultPermission = 'read'
+	defaultPermission = 'read',
+	showVisibility = true
 }: {
 	accessGrants: AccessGrant[] | null | undefined;
 	onChange: (grants: AccessGrant[]) => void;
@@ -65,6 +66,8 @@ export function AccessControl({
 	shareUsers?: boolean;
 	allowGroups?: boolean;
 	defaultPermission?: Permission;
+	/** False when the caller asks who can open the item itself (the Share dialog): only the access list is shown. */
+	showVisibility?: boolean;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const grants = useMemo(() => normalizeInputToGrants(rawGrants ?? []), [rawGrants]);
@@ -199,45 +202,47 @@ export function AccessControl({
 				onAdd={(picked) => onChange(addAccess(grants, picked, defaultPermission))}
 			/>
 
-			<div className="py-1.5">
-				<div className="flex items-center gap-2">
-					<div className="bg-muted rounded-full p-2">
-						{visibility === 'private' ? <Lock className="size-5" /> : <Globe className="size-5" />}
-					</div>
-					<div>
-						<Tip content={visibilityBlocked ? 'You do not have permission to make this public' : ''}>
-							<select
-								aria-label="Visibility"
-								className={`${nativeSelectClass} block w-fit max-w-full pr-8`}
-								value={visibility}
-								onChange={(e) => onChange(setVisibility(grants, e.target.value as Visibility))}
-							>
-								<option value="private">Private</option>
-								{((share && sharePublic) || hasPublicReadGrant(grants)) && <option value="public">Public</option>}
-								{((share && shareOpen) || hasAnyoneReadGrant(grants)) && <option value="open">Open</option>}
-							</select>
-						</Tip>
-						<div className="text-muted-foreground text-xs">
-							{visibility === 'private'
-								? 'Only select users and groups with permission can access'
-								: visibility === 'public'
-									? 'Accessible to all users'
-									: 'Anyone with the link can view'}
+			{showVisibility && (
+				<div className="py-1.5">
+					<div className="flex items-center gap-2">
+						<div className="bg-muted rounded-full p-2">
+							{visibility === 'private' ? <Lock className="size-5" /> : <Globe className="size-5" />}
+						</div>
+						<div>
+							<Tip content={visibilityBlocked ? 'You do not have permission to make this public' : ''}>
+								<select
+									aria-label="Visibility"
+									className={`${nativeSelectClass} block w-fit max-w-full pr-8`}
+									value={visibility}
+									onChange={(e) => onChange(setVisibility(grants, e.target.value as Visibility))}
+								>
+									<option value="private">Private</option>
+									{((share && sharePublic) || hasPublicReadGrant(grants)) && <option value="public">Public</option>}
+									{((share && shareOpen) || hasAnyoneReadGrant(grants)) && <option value="open">Open</option>}
+								</select>
+							</Tip>
+							<div className="text-muted-foreground text-xs">
+								{visibility === 'private'
+									? 'Only select users and groups with permission can access'
+									: visibility === 'public'
+										? 'Accessible to all users'
+										: 'Anyone with the link can view'}
+							</div>
 						</div>
 					</div>
-				</div>
 
-				{hasPublicReadGrant(grants) && !hasAnyoneReadGrant(grants) && canWrite && (
-					<div className="mt-1.5 ml-0.5 flex w-full items-center justify-between">
-						<span className="text-xs">Allow public write access</span>
-						<Switch
-							aria-label="Allow public write access"
-							checked={hasPublicWriteGrant(grants)}
-							onCheckedChange={() => onChange(togglePublicWrite(grants))}
-						/>
-					</div>
-				)}
-			</div>
+					{hasPublicReadGrant(grants) && !hasAnyoneReadGrant(grants) && canWrite && (
+						<div className="mt-1.5 ml-0.5 flex w-full items-center justify-between">
+							<span className="text-xs">Allow public write access</span>
+							<Switch
+								aria-label="Allow public write access"
+								checked={hasPublicWriteGrant(grants)}
+								onCheckedChange={() => onChange(togglePublicWrite(grants))}
+							/>
+						</div>
+					)}
+				</div>
+			)}
 
 			{share && (
 				<>

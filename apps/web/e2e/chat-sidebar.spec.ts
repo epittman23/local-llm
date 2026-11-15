@@ -25,9 +25,9 @@ const folders = [
 	{ id: 'f2', name: 'Sub', parent_id: 'f1' }
 ];
 
-async function open(page: Page) {
+async function open(page: Page, user: { role?: 'admin' | 'user' } = {}) {
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
-	const chat = await mockChat(page, { chats: chats(), folders });
+	const chat = await mockChat(page, { chats: chats(), folders, user });
 	await page.goto('/');
 	return chat;
 }
@@ -90,17 +90,27 @@ test('rename in place, pin, clone and delete from the menu', async ({ page }) =>
 	await expect(item(page, 'Clone of Trip planning')).toHaveCount(0);
 });
 
-test('share copies a link to the public page, and move puts a chat in a folder', async ({ page }) => {
-	const chat = await open(page);
+test('share asks who can open the link, then copies it, and move puts a chat in a folder', async ({ page }) => {
+	// An admin may make a link anyone can open, whatever the sharing permissions say.
+	const chat = await open(page, { role: 'admin' });
+	await page.route('**/api/v1/users/search*', (route) => route.fulfill({ json: { users: [], total: 1 } }));
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	await item(page, 'Trip planning').hover();
 	await page.getByRole('button', { name: 'Chat menu: Trip planning' }).click();
 	await page.getByRole('menuitem', { name: 'Share' }).click();
-	await page.getByRole('button', { name: 'Copy link' }).click();
-	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/share-c1$/);
-	// A new link opens to no one else yet, so the dialog stays to say who may (#334).
+	// Nothing is chosen or created until the owner answers (#1006, S2-D2).
 	const dialog = page.getByRole('dialog', { name: 'Share chat' });
-	await expect(dialog.getByLabel('Visibility')).toHaveValue('private');
+	const create = dialog.getByRole('button', { name: 'Create and copy link' });
+	await expect(create).toBeDisabled();
+	expect(chat.seen.actions).not.toContain('share:c1');
+	await dialog.getByRole('radio', { name: 'Anyone with the link' }).click();
+	await create.click();
+	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/share-c1$/);
+	expect(chat.seen.actions).toContain('access:c1');
+	await expect(dialog.getByRole('textbox', { name: 'Link' })).toHaveValue(/\/s\/share-c1$/);
+	await expect(dialog.getByRole('radio', { name: 'Anyone with the link' })).toHaveAttribute('aria-checked', 'true');
+	// Users and groups stay hidden while one account exists (WRD-4).
+	await expect(dialog.getByText('Access List')).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(dialog).toHaveCount(0);
 

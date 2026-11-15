@@ -30,6 +30,16 @@ describe('AccessControl', () => {
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
 	});
 
+	it('leaves out its visibility picker when the caller asks who can open the item itself', async () => {
+		render(
+			<TooltipProvider>
+				<AccessControl accessGrants={[]} onChange={vi.fn()} showVisibility={false} />
+			</TooltipProvider>
+		);
+		expect(await screen.findByRole('button', { name: 'Add Access' })).toBeInTheDocument();
+		expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();
+	});
+
 	it('removes a group grant from its remove button', async () => {
 		const onChange = vi.fn();
 		render(
