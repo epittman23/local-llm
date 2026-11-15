@@ -39,7 +39,11 @@ export function FolderHome({ folder }: { folder: Folder }) {
 	const sharedFolders = useQuery({
 		queryKey: ['folders', 'shared'],
 		enabled: Boolean(token) && !mine,
-		queryFn: async () => ((await getSharedFolders(token)) ?? []) as { id: string; permission?: string }[]
+		// Anything but a list (an unexpected answer) counts as no shared folders.
+		queryFn: async () => {
+			const shared: unknown = await getSharedFolders(token);
+			return (Array.isArray(shared) ? shared : []) as { id: string; permission?: string }[];
+		}
 	});
 	const canEdit = mine || Boolean(sharedFolders.data?.some((f) => f.id === folder.id && f.permission === 'write'));
 

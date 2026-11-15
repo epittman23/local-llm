@@ -163,6 +163,16 @@ describe('FolderHome: who may edit the folder', () => {
 		expect(screen.queryByRole('button', { name: 'Edit folder' })).toBeNull();
 	});
 
+	it('treats an answer that is not a list as no shared folders, without failing', async () => {
+		asUser();
+		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
+		vi.mocked(getSharedFolders).mockResolvedValue({} as never);
+		show(theirs);
+		await waitFor(() => expect(getSharedFolders).toHaveBeenCalledWith('t'));
+		await screen.findByText(/No chats in this folder yet/);
+		expect(screen.queryByRole('button', { name: 'Edit folder' })).toBeNull();
+	});
+
 	it('offers Edit folder to someone it is shared with for writing', async () => {
 		asUser();
 		vi.mocked(getChatListByFolderId).mockResolvedValue([] as never);
