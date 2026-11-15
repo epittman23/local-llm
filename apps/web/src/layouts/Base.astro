@@ -41,7 +41,7 @@ const { title = 'local-llm' } = Astro.props;
 	</head>
 	<body>
 		<!--
-			The boot splash (STA-2, WRD-3): the product's name on the page colour,
+			The boot splash (STA-2, WRD-3): the product's mark and name on the page colour,
 			drawn before any script runs, so a slow start never shows a blank or
 			bare "Loading…" page. The spinner waits 400 ms. AppRouter removes it once
 			React has drawn; while the session is still loading, AppShell's BootSplash
@@ -51,7 +51,21 @@ const { title = 'local-llm' } = Astro.props;
 			id="boot-splash"
 			class="bg-page text-foreground fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-4 text-center"
 		>
-			<p class="text-title font-title">local-llm</p>
+			<!-- components/ui/app-mark.tsx's AppMark at 32 px, drawn before any script; keep the two the same. -->
+			<div class="flex items-center gap-2">
+				<svg class="size-8 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true">
+					<rect width="32" height="32" rx="7" class="fill-surface-1"></rect>
+					<path
+						transform="translate(4 4)"
+						d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"
+						fill="none"
+						stroke-width="2.25"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						class="stroke-brand"></path>
+				</svg>
+				<p class="text-title font-title">local-llm</p>
+			</div>
 			<div class="boot-splash-spinner flex size-5 items-center justify-center" aria-hidden="true">
 				<svg
 					class="size-5 animate-spin"

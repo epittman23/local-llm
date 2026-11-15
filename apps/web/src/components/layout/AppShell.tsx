@@ -1,7 +1,8 @@
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, SquarePen } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router';
+import { Link, Outlet } from 'react-router';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { AppMark } from '@/components/ui/app-mark';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -19,6 +20,7 @@ import { useCalendarAlerts } from '@/routes/calendar/useCalendarAlerts';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
 import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
+import { routePaths } from '@/routes/routePaths';
 import { BootSplash } from './BootSplash';
 import { SidebarContent } from './Sidebar';
 import { useTopBand } from './topBand';
@@ -36,7 +38,8 @@ const SHORT_PHONE_INSET = 'max-md:[@media(max-height:520px)]:[--shell-menu-inset
 const SHORT_PHONE_BAR = 'max-md:[@media(max-height:520px)]:contents';
 const SHORT_PHONE_MENU =
 	'max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:left-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:border';
-const SHORT_PHONE_NAME = '[@media(max-height:520px)]:hidden';
+/** What else the bar holds (the mark, the page's name, New chat) leaves with it. */
+const SHORT_PHONE_HIDDEN = '[@media(max-height:520px)]:hidden';
 
 /**
  * The persistent shell every React route renders inside (see AppRouter.tsx):
@@ -63,6 +66,7 @@ export function AppShell() {
 	const searchOpen = useUIStore((state) => state.searchOpen);
 	const appName = useWebUIName();
 	const { page, heading, foldsBar } = useRouteTitle();
+	const closeDrawer = () => setMobileOpen(false);
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 	// A state, not a ref: the bar mounts only once the shell replaces the splash.
 	const [bar, setBar] = useState<HTMLElement | null>(null);
@@ -89,7 +93,7 @@ export function AppShell() {
 	if (authStatus !== 'authenticated') return <BootSplash />;
 
 	return (
-		<div className="flex h-svh w-full">
+		<div className="flex h-svh w-full overflow-hidden">
 			{/* A11Y-3: the first stop for Tab, so the keyboard can pass the navigation. */}
 			<a
 				href={`#${CONTENT_ID}`}
@@ -103,7 +107,7 @@ export function AppShell() {
 			</a>
 			<aside
 				aria-label="Sidebar"
-				className={cn('hidden shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}
+				className={cn('hidden h-svh shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}
 			>
 				{/* Not just visually collapsed (w-0 + overflow-hidden): unmounted
 				    entirely when closed. A flex child's default min-width is its
@@ -135,12 +139,33 @@ export function AppShell() {
 								<PanelLeft className="h-5 w-5" />
 							</Button>
 						</SheetTrigger>
-						<SheetContent side="left" className="w-64 p-0">
+						{/* 256 px, as the desktop sidebar: the variant's own width is `data-[side=left]:w-3/4`. */}
+						<SheetContent side="left" className="gap-0 p-0 data-[side=left]:w-64">
 							<SheetTitle className="sr-only">Navigation</SheetTitle>
-							<SidebarContent onNavigate={() => setMobileOpen(false)} />
+							<SidebarContent onNavigate={closeDrawer} />
 						</SheetContent>
 					</Sheet>
-					<span className={cn('text-body font-title', foldsBar && SHORT_PHONE_NAME)}>{appName}</span>
+					{/* The page's name, so the bar says where you are; the app's name is the mark's (WRD-3). */}
+					<AppMark size={24} label={appName} className={cn(foldsBar && SHORT_PHONE_HIDDEN)} />
+					<span className={cn('text-body font-title min-w-0 flex-1 truncate', foldsBar && SHORT_PHONE_HIDDEN)}>
+						{page ?? appName}
+					</span>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								asChild
+								variant="ghost"
+								size="icon"
+								aria-label="New chat"
+								className={cn(foldsBar && SHORT_PHONE_HIDDEN)}
+							>
+								<Link to={routePaths.home}>
+									<SquarePen aria-hidden className="h-5 w-5" />
+								</Link>
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom">New chat</TooltipContent>
+					</Tooltip>
 				</header>
 
 				{!sidebarOpen && (
