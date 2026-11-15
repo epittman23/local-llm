@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import * as functionsApi from '@/lib/apis/functions';
@@ -253,6 +254,28 @@ describe.each(cases)('$name list', (c) => {
 		fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 		await waitFor(() => expect(screen.getByRole('heading', { name: c.empty })).toBeVisible());
 		expect(localStorage.workspaceViewOption).toBe('');
+	});
+});
+
+describe('a row that could not be loaded for Clone says so, with the server words behind Details (FBK-4)', () => {
+	it.each([
+		['Tools', () => vi.mocked(toolsApi.getToolById)],
+		['Skills', () => vi.mocked(skillsApi.getSkillById)],
+		['Functions', () => vi.mocked(functionsApi.getFunctionById)]
+	] as const)('%s', async (name, getById) => {
+		const c = cases.find((x) => x.name === name) as Case;
+		const error = vi.spyOn(toast, 'error');
+		c.seed(c.items);
+		getById().mockRejectedValueOnce('Database is locked');
+		renderAt(c);
+		await screen.findByText(c.item);
+		fireEvent.pointerDown(screen.getByRole('button', { name: c.menu }), { button: 0, pointerType: 'mouse' });
+		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Clone' }));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith(`Couldn't load “${c.item}”.`, {
+				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
+			})
+		);
 	});
 });
 

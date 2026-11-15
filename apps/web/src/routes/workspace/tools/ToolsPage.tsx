@@ -135,7 +135,7 @@ export function ToolsPage() {
 
 	const fetchFull = (tool: ToolListItem) =>
 		getToolById(token, tool.id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't load “${tool.name}”.`, error);
 			return null;
 		});
 

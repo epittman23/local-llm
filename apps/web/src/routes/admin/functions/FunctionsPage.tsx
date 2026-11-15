@@ -172,7 +172,7 @@ export function FunctionsPage() {
 
 	const fetchFull = (fn: FunctionListItem) =>
 		getFunctionById(token, fn.id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't load “${fn.name}”.`, error);
 			return null;
 		});
 

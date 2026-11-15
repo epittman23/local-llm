@@ -154,7 +154,7 @@ export function SkillsPage() {
 
 	const fetchFull = (skill: SkillListItem) =>
 		getSkillById(token, skill.id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't load “${skill.name}”.`, error);
 			return null;
 		});
 
