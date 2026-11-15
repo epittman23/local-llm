@@ -839,6 +839,7 @@ function EditorForm({
 					</div>
 				)}
 				<SaveBar
+					creating={!edit}
 					// An unsaved clone can be created as it is.
 					dirty={dirty || (!edit && model !== null)}
 					saving={saving}

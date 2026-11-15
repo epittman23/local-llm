@@ -205,7 +205,7 @@ describe('ToolkitEditor saves on request (#905, #1011, FRM-3)', () => {
 	it('a new tool starts saved: the boilerplate is not a change', () => {
 		renderEditor({ tool: null, onSave: vi.fn() });
 		expect(screen.getByRole('button', { name: 'Create tool' })).toBeDisabled();
-		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+		expect(screen.getByText('Nothing to save yet')).toBeInTheDocument();
 	});
 
 	it('takes the stored code as saved after an edit, and stays on the page', async () => {

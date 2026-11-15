@@ -371,7 +371,8 @@ guard that asks before navigation loses changes. *At once:* each control
 applies when changed and a line beside it confirms it. A view never mixes the
 two without labelling the instant ones. Implemented by
 `components/ui/save-bar.tsx` (`SaveBar`): the status line, Discard changes and
-Save. In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
+Save. On a create page (`creating`) nothing exists until Save, so before the
+first change the line reads "Nothing to save yet", never "All changes saved". In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
 asks 'Discard changes?' before a tab switch, close, Escape or Back loses
 them; an at-once tab passes `savesAtOnce` and confirms each control with
 `SavedNote`.

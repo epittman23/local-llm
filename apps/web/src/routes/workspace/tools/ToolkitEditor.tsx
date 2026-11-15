@@ -302,6 +302,7 @@ export function ToolkitEditor({
 					Tools run their code on this server. Only add tools from sources you trust.
 				</p>
 				<SaveBar
+					creating={!edit}
 					className="mt-2 shrink-0 pb-2"
 					dirty={dirty}
 					saving={loading}

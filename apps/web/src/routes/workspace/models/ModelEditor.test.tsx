@@ -209,12 +209,12 @@ describe('ModelEditor: a new model starts with what this install uses (S4-D2)', 
 
 describe('ModelEditor unsaved changes (#905, FRM-3)', () => {
 	it.each([
-		['a new model', { model: null, edit: false }],
-		['an edited model with parameters and suggestions', {}]
-	])('reads "All changes saved" when %s opens', async (_, opts) => {
+		['a new model', { model: null, edit: false }, 'Nothing to save yet'],
+		['an edited model with parameters and suggestions', {}, 'All changes saved']
+	])('reads as unchanged when %s opens', async (_, opts, words) => {
 		renderEditor(opts);
 		await screen.findByRole('heading', { level: 2 });
-		expect(status()).toHaveTextContent('All changes saved');
+		expect(status()).toHaveTextContent(words);
 	});
 
 	it('lets an unchanged clone be created as it is, and leaving it does not ask', async () => {

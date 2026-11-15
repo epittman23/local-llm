@@ -301,6 +301,7 @@ export function SkillEditor({
 				{problem && <EditorError id={problemId} problem={problem} />}
 				{!disabled && (
 					<SaveBar
+						creating={!edit}
 						className="mt-2 shrink-0 pb-2"
 						dirty={dirty}
 						saving={loading}

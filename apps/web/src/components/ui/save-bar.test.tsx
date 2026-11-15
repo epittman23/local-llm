@@ -12,6 +12,14 @@ describe('SaveBar (FRM-3)', () => {
 		expect(screen.getByRole('button', { name: 'Discard changes' })).toBeDisabled();
 	});
 
+	it('says there is nothing to save yet on an untouched create page, then what is unsaved', () => {
+		const { rerender } = render(<SaveBar dirty={false} creating onDiscard={() => {}} saveLabel="Create tool" />);
+		expect(screen.getByRole('status')).toHaveTextContent('Nothing to save yet');
+		expect(screen.getByRole('button', { name: 'Create tool' })).toBeDisabled();
+		rerender(<SaveBar dirty creating onDiscard={() => {}} saveLabel="Create tool" />);
+		expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+	});
+
 	it('says what is unsaved, discards, and saves through onSave outside a form', () => {
 		const onDiscard = vi.fn();
 		const onSave = vi.fn();
