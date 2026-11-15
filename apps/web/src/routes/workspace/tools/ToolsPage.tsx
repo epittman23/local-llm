@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
@@ -22,6 +22,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { createNewTool, deleteToolById, exportTools, getToolById, getToolList, loadToolByUrl } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
@@ -285,30 +286,16 @@ export function ToolsPage() {
 					<div className="grid gap-y-0.5">
 						{items.map((tool) => {
 							const version = tool.meta?.manifest?.version;
-							return (
-								<div
-									key={tool.id}
-									role="button"
-									tabIndex={tool.write_access ? 0 : -1}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left ${
-										tool.write_access ? 'hover:bg-muted/50 cursor-pointer' : 'cursor-not-allowed opacity-60'
-									}`}
-									onClick={(e) => {
-										if (!tool.write_access || isControlClick(e.target)) return;
-										openTool(tool);
-									}}
-									onKeyDown={(e) => {
-										if (!tool.write_access || e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openTool(tool);
-										}
-									}}
-								>
+							const rowContent = (
+								<>
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={tool.id} side="top">
-												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{tool.name}</div>
+												<div
+													className={`min-w-0 truncate text-dense leading-5 ${tool.write_access ? 'group-hover:underline' : ''}`}
+												>
+													{tool.name}
+												</div>
 											</Tip>
 											{version && (
 												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
@@ -338,6 +325,24 @@ export function ToolsPage() {
 											</div>
 										</Tip>
 									</div>
+								</>
+							);
+							return (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
+								<div
+									key={tool.id}
+									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${tool.write_access ? 'hover:bg-muted/50' : 'opacity-60'}`}
+								>
+									{tool.write_access ? (
+										<RowButton
+											className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+											onClick={() => openTool(tool)}
+										>
+											{rowContent}
+										</RowButton>
+									) : (
+										<div className="flex min-w-0 flex-1 items-center gap-2 self-stretch">{rowContent}</div>
+									)}
 
 									{tool.write_access && (
 										<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">

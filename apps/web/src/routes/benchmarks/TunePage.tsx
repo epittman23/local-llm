@@ -292,9 +292,9 @@ export function TunePage() {
 			>
 				<div className="flex flex-wrap gap-3">
 					<div className="flex flex-col gap-1">
-						<Label>Profile</Label>
+						<Label htmlFor="tune-profile">Profile</Label>
 						<Select value={profile} onValueChange={setProfile}>
-							<SelectTrigger className="w-40">
+							<SelectTrigger id="tune-profile" className="w-40">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -309,9 +309,9 @@ export function TunePage() {
 					</div>
 
 					<div className="flex flex-col gap-1">
-						<Label>Tier</Label>
+						<Label htmlFor="tune-tier">Tier</Label>
 						<Select value={tier} onValueChange={setTier}>
-							<SelectTrigger className="w-32">
+							<SelectTrigger id="tune-tier" className="w-32">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -325,9 +325,9 @@ export function TunePage() {
 					</div>
 
 					<div className="flex flex-col gap-1">
-						<Label>Benchmark</Label>
+						<Label htmlFor="tune-benchmark">Benchmark</Label>
 						<Select value={benchmark} onValueChange={setBenchmark}>
-							<SelectTrigger className="w-40">
+							<SelectTrigger id="tune-benchmark" className="w-40">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -342,9 +342,9 @@ export function TunePage() {
 					</div>
 
 					<div className="flex flex-col gap-1">
-						<Label>System</Label>
+						<Label htmlFor="tune-system">System</Label>
 						<Select value={system} onValueChange={setSystem}>
-							<SelectTrigger className="w-40">
+							<SelectTrigger id="tune-system" className="w-40">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -359,9 +359,9 @@ export function TunePage() {
 					</div>
 
 					<div className="flex flex-col gap-1">
-						<Label>Grid</Label>
+						<Label htmlFor="tune-grid">Grid</Label>
 						<Select value={grid} onValueChange={setGrid}>
-							<SelectTrigger className="w-40">
+							<SelectTrigger id="tune-grid" className="w-40">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -378,9 +378,9 @@ export function TunePage() {
 
 				<div className="flex flex-wrap items-end gap-3">
 					<div className="flex flex-col gap-1">
-						<Label>Budget</Label>
+						<Label htmlFor="tune-budget">Budget</Label>
 						<Select value={budget} onValueChange={setBudget}>
-							<SelectTrigger className="w-36">
+							<SelectTrigger id="tune-budget" className="w-36">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -527,14 +527,14 @@ export function TunePage() {
 				</Button>
 
 				<div className="flex min-w-64 grow flex-col gap-1">
-					<Label>Recent sweeps</Label>
+					<Label htmlFor="tune-recent-sweeps">Recent sweeps</Label>
 					<Select
 						value=""
 						onValueChange={(val) => {
 							if (val) selectSweep(val);
 						}}
 					>
-						<SelectTrigger className="w-full">
+						<SelectTrigger id="tune-recent-sweeps" className="w-full">
 							<SelectValue placeholder={recentSweepsQuery.isLoading ? 'Loading…' : 'Select a sweep'} />
 						</SelectTrigger>
 						<SelectContent>

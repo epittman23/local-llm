@@ -14,7 +14,11 @@ export function PageHeader({
 	as?: 'h1' | 'h2' | 'h3' | 'h4';
 }) {
 	return (
-		<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+		// A page's own header: on a phone, toasts and the connection banner start below it (FBK-2).
+		<div
+			data-page-top={Heading === 'h1' ? '' : undefined}
+			className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3"
+		>
 			<div className="min-w-0">
 				<Heading className="text-heading font-title tracking-tight">{title}</Heading>
 				<p className="text-foreground-muted mt-1 max-w-[72ch]">{description}</p>

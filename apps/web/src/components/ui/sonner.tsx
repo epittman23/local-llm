@@ -2,7 +2,6 @@ import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { type ExternalToast, Toaster as Sonner, type ToasterProps, toast } from 'sonner';
 import { sessionEndReason } from '@/lib/auth/session';
-import { useConnectionStore } from '@/lib/socket/connectionStore';
 
 // The shadcn template reads `next-themes`, which needs its own
 // ThemeProvider and has no idea about this app's theme mechanism (a `dark`/
@@ -30,8 +29,15 @@ const readWide = () => window.matchMedia(WIDE_QUERY).matches;
 const EDGE_OFFSET = 24;
 /** The gap kept between a toast and the message box under it. */
 const KEEP_CLEAR_GAP = 8;
-/** On a phone, toasts start below the connection banner while it shows. */
-const BELOW_BANNER_OFFSET = 56;
+/**
+ * Below 768 px toasts sit at the top, 8 px under the app bar and the page's
+ * header, and under the connection banner while it shows (FBK-2): AppShell
+ * (components/layout/topBand.ts) and ConnectionBanner keep these two
+ * variables current, and each is 0 when its layer is absent.
+ * Sonner's own phone layout starts at 600 px and reads `mobileOffset`; from
+ * 600 to 767 px it reads `offset`, so both are set.
+ */
+export const PHONE_TOP = 'calc(var(--top-band-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)';
 
 /**
  * The bottom offset that keeps a toast off the message box (FBK-2): the
@@ -131,15 +137,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
 	const theme = useSyncExternalStore(subscribeToThemeClass, readTheme, () => 'light');
 	const wide = useSyncExternalStore(subscribeToWidth, readWide, () => true);
 	const keepClear = useKeepClearOffset(wide);
-	const bannerShown = useConnectionStore((state) => state.lost);
 
 	return (
 		<Sonner
 			theme={theme as ToasterProps['theme']}
 			className="toaster group"
 			position={wide ? 'bottom-right' : 'top-center'}
-			offset={keepClear === null ? undefined : { bottom: keepClear, right: EDGE_OFFSET }}
-			mobileOffset={bannerShown ? { top: BELOW_BANNER_OFFSET } : undefined}
+			offset={!wide ? { top: PHONE_TOP } : keepClear === null ? undefined : { bottom: keepClear, right: EDGE_OFFSET }}
+			mobileOffset={{ top: PHONE_TOP }}
 			closeButton
 			icons={{
 				success: <CircleCheckIcon className="size-4" />,

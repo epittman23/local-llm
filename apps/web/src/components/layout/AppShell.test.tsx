@@ -109,6 +109,28 @@ describe('AppShell', () => {
 		expect(screen.getByText('local-llm').className).not.toContain('520px');
 	});
 
+	it('keeps the top band in --top-band-bottom on a phone, and drops it with the shell (FBK-2)', () => {
+		vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+		const bar = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+			top: 0,
+			bottom: 57,
+			height: 57,
+			left: 0,
+			right: 0,
+			width: 0,
+			x: 0,
+			y: 0,
+			toJSON: () => ({})
+		} as DOMRect);
+		const view = renderAt('/notes');
+		const root = document.documentElement;
+		expect(root.style.getPropertyValue('--top-band-bottom')).toBe('57px');
+		view.unmount();
+		expect(root.style.getPropertyValue('--top-band-bottom')).toBe('');
+		bar.mockRestore();
+		vi.unstubAllGlobals();
+	});
+
 	it('shows the boot splash, not the shell, while the session is loading (STA-2)', () => {
 		auth.status = 'pending';
 		renderAt('/notes');

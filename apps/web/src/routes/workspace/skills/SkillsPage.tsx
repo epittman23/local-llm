@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
-import { isControlClick, ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -20,6 +20,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import {
 	createNewSkill,
@@ -296,52 +297,50 @@ export function SkillsPage() {
 							const updatedAt = (skill.updated_at ?? skill.created_at) * 1000;
 							const isActive = activeOverride[skill.id] ?? skill.is_active;
 							return (
+								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={skill.id}
-									role="button"
-									tabIndex={0}
-									className="group hover:bg-muted/50 flex min-h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-xl px-2 py-1 text-left"
-									onClick={(e) => !isControlClick(e.target) && openSkill(skill)}
-									onKeyDown={(e) => {
-										if (e.currentTarget !== e.target) return;
-										if (e.key === 'Enter' || e.key === ' ') {
-											e.preventDefault();
-											openSkill(skill);
-										}
-									}}
+									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
 								>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<Tip content={skill.id} side="top">
-												<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{skill.name}</div>
-											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
-												/{skill.id}
-											</div>
-											<Tip content={dayjs(updatedAt).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(updatedAt).fromNow()}
+									<RowButton
+										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
+										onClick={() => openSkill(skill)}
+									>
+										<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+											<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+												<Tip content={skill.id} side="top">
+													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">
+														{skill.name}
+													</div>
+												</Tip>
+												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+													/{skill.id}
 												</div>
-											</Tip>
-											{!isActive && <Badge variant="secondary">Inactive</Badge>}
-											{!skill.write_access && <Badge variant="secondary">Read Only</Badge>}
+												<Tip content={dayjs(updatedAt).format('LLLL')}>
+													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+														{dayjs(updatedAt).fromNow()}
+													</div>
+												</Tip>
+												{!isActive && <Badge variant="secondary">Inactive</Badge>}
+												{!skill.write_access && <Badge variant="secondary">Read Only</Badge>}
+											</div>
+											{skill.description && (
+												<Tip content={skill.description} side="top">
+													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
+														{skill.description}
+													</div>
+												</Tip>
+											)}
 										</div>
-										{skill.description && (
-											<Tip content={skill.description} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-													{skill.description}
+
+										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
+											<Tip content={skill.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(skill.user?.name ?? skill.user?.email ?? 'Deleted User')}
 												</div>
 											</Tip>
-										)}
-									</div>
-
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={skill.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(skill.user?.name ?? skill.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+										</div>
+									</RowButton>
 
 									{skill.write_access && (
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
@@ -400,7 +399,7 @@ export function SkillsPage() {
 													</DropdownMenu>
 
 													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center" onClick={(e) => e.stopPropagation()}>
+														<span className="flex h-6 items-center">
 															<Switch
 																aria-label={isActive ? 'Enabled' : 'Disabled'}
 																checked={isActive}

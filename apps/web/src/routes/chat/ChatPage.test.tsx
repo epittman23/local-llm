@@ -47,6 +47,12 @@ describe('ChatPage header', () => {
 		expect(toggle.getAttribute('aria-pressed')).toBe('true');
 	});
 
+	it('marks its model row as the top of the page, which toasts start below on a phone (FBK-2)', () => {
+		show();
+		const row = screen.getByRole('button', { name: 'Controls' }).closest('header');
+		expect(row?.hasAttribute('data-page-top')).toBe(true);
+	});
+
 	it('toggles the Controls panel', () => {
 		show();
 		const controls = screen.getByRole('button', { name: 'Controls' });

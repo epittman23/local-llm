@@ -81,7 +81,3 @@ export function ListEmptyState({ title }: { title: string }) {
 		</div>
 	);
 }
-
-/** A click on a control inside a clickable row belongs to the control, not the row. */
-export const isControlClick = (target: EventTarget | null) =>
-	target instanceof Element && !!target.closest('button, a, input, [role="menu"]');

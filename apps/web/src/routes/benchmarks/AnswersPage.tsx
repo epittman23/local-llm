@@ -102,7 +102,7 @@ export function AnswersPage() {
 								setSelectedItem(null);
 							}}
 						>
-							<SelectTrigger className="w-fit max-w-md">
+							<SelectTrigger aria-label="Run" className="w-fit max-w-md">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
@@ -124,7 +124,7 @@ export function AnswersPage() {
 							setSelectedItem(null);
 						}}
 					>
-						<SelectTrigger className="w-32">
+						<SelectTrigger aria-label="Outcome" className="w-32">
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>

@@ -399,8 +399,9 @@ the table does not sit on `--page`).
 ## Feedback
 
 **FBK-1. A message appears where the thing it is about is.** A lost live
-connection is `components/layout/ConnectionBanner`: a fixed pill at the top
-while the socket is down for more than 2 s, then one 'Reconnected' toast.
+connection is `components/layout/ConnectionBanner`: a fixed pill at the top,
+below the phone's top band (FBK-2), while the socket is down for more than
+2 s, then one 'Reconnected' toast.
 Every reconnect refetches what is on screen.
 
 | Situation | Where |
@@ -417,7 +418,16 @@ after 4 seconds. A failure stays until dismissed, says what failed and why,
 and offers the next step. Several results of one action are one toast
 ("3 files uploaded"), not one each. Implemented once in
 `components/ui/sonner.tsx`: position follows the width live (bottom-right from
-768 px, top-centre below). On a wide screen toasts rise above any
+768 px, top-centre below). Below 768 px toasts start 8 px under the top band
+and under the connection banner while it shows, so they cover neither. The top
+band reaches down to the lowest of the app bar (or its floating menu button
+where the bar folds) and the visible part of the page's own header, marked
+`data-page-top` (the shared `PageHeader` at `h1`, the chat's model row): a
+toast is never over the control just used, and those rows hold the controls a
+page starts with. A header scrolled out of view stops counting.
+`components/layout/topBand.ts` keeps it in `--top-band-bottom` (0 from 768 px,
+where nothing is watched) and ConnectionBanner its height in
+`--connection-banner-space`. On a wide screen toasts rise above any
 `data-composite-field` whose top edge is in the lower half of the viewport,
 with 8 px clear. Every toast has a close button with a 24 px hit area (44 px
 on touch). `toast.error` and `toast.warning` default to no time limit and an

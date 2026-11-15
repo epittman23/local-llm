@@ -21,6 +21,7 @@ import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { BootSplash } from './BootSplash';
 import { SidebarContent } from './Sidebar';
+import { useTopBand } from './topBand';
 
 /** The id of the region the skip link moves to. */
 const CONTENT_ID = 'content';
@@ -63,6 +64,9 @@ export function AppShell() {
 	const appName = useWebUIName();
 	const { page, heading, foldsBar } = useRouteTitle();
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
+	// A state, not a ref: the bar mounts only once the shell replaces the splash.
+	const [bar, setBar] = useState<HTMLElement | null>(null);
+	useTopBand(bar);
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
 	useShortcuts();
@@ -116,7 +120,10 @@ export function AppShell() {
 				    away and only its menu button stays, floating at the top left, on
 				    routes whose handle says foldsBar: their first row leaves room for
 				    it (--shell-menu-inset). Other pages keep the bar. */}
-				<header className={cn('flex items-center gap-2 border-b p-2 md:hidden', foldsBar && SHORT_PHONE_BAR)}>
+				<header
+					ref={setBar}
+					className={cn('flex items-center gap-2 border-b p-2 md:hidden', foldsBar && SHORT_PHONE_BAR)}
+				>
 					<Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
 						<SheetTrigger asChild>
 							<Button
