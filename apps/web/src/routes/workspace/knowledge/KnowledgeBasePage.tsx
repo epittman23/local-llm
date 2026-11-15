@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Copy, MoreHorizontal, Pencil, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -7,17 +7,23 @@ import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AttachWebpageDialog } from '@/components/common/AttachWebpageDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FilterMenu, ViewSelector } from '@/components/common/FilterSelects';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { ListSearchBar } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
+	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { PageHeader } from '@/components/ui/page-header';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
 import { getFileById, renameFileById, updateFileDataContentById } from '@/lib/apis/files';
@@ -36,13 +42,13 @@ import {
 } from '@/lib/apis/knowledge';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { copyToClipboard } from '@/lib/utils';
+import { useCopy } from '@/lib/ui/useCopy';
 import { blobToFile } from '@/lib/utils/files';
-import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { ExternalKnowledgePanel } from './ExternalKnowledgePanel';
-import { AddContentMenu, AddTextDialog, NewDirectoryDialog } from './KnowledgeDialogs';
+import { AddContentMenu, AddTextDialog, EditDetailsDialog, NewDirectoryDialog } from './KnowledgeDialogs';
 import {
 	KnowledgeBreadcrumbs,
 	type KnowledgeDirectory,
@@ -83,7 +89,16 @@ type FilesPage = {
 	hasPending: boolean;
 };
 
-const selectClass = 'bg-transparent text-xs';
+// One menu for the order, over the server's sort key and direction ('' is newest first, its default).
+const SORTS = [
+	{ value: '', label: 'Recently updated' },
+	{ value: 'created_at:', label: 'Recently added' },
+	{ value: 'created_at:asc', label: 'Oldest first' },
+	{ value: 'name:asc', label: 'Name, A to Z' },
+	{ value: 'name:', label: 'Name, Z to A' }
+];
+
+const filesLabel = (n: number) => `${n} ${n === 1 ? 'file' : 'files'}`;
 
 /**
  * Ports workspace/Knowledge/KnowledgeBase.svelte (the 1,745-line detail page):
@@ -116,13 +131,19 @@ export function KnowledgeBasePage() {
 		retry: false
 	});
 
-	useEffect(() => {
-		if (base.isError || (base.isSuccess && !base.data)) {
-			if (base.isError) toast.error(`${base.error}`);
-			navigate(routePaths.workspaceKnowledge);
-		}
-	}, [base.isError, base.isSuccess, base.data, base.error, navigate]);
-
+	// A base that no longer exists says so in place, with the way back (NAV-3).
+	if (base.isSuccess && !base.data) return <KnowledgeGone onBack={() => navigate(routePaths.workspaceKnowledge)} />;
+	if (base.isError) {
+		if (isNotFound(base.error)) return <KnowledgeGone onBack={() => navigate(routePaths.workspaceKnowledge)} />;
+		return (
+			<LoadFailed
+				what="this knowledge base"
+				error={base.error}
+				onRetry={() => base.refetch()}
+				retrying={base.isFetching}
+			/>
+		);
+	}
 	if (!id || !base.data) {
 		return (
 			<div className="flex h-full items-center justify-center">
@@ -160,6 +181,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [viewOption, setViewOption] = useState<string>('');
 	const [sortKey, setSortKey] = useState('');
 	const [direction, setDirection] = useState('');
+	const sortValue = sortKey ? `${sortKey}:${direction}` : '';
 	const [includeContent, setIncludeContent] = useState(false);
 	const [page, setPage] = useState(1);
 	const [directoryId, setDirectoryId] = useState<string | null>(null);
@@ -255,39 +277,24 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const inFlight = new Set(uploading.map((i) => i.serverId).filter(Boolean));
 	const shownFiles = (listed?.items ?? []).filter((f) => !f.id || !inFlight.has(f.id));
 
-	// --- name and description save themselves -------------------------------
-	// Leaving the page saves a pending change at once instead of dropping it,
-	// with keepalive when the page itself goes away (#675).
-	const scheduleSave = useDebouncedCallback(async (next: Knowledge, unloading: boolean) => {
-		if (next.name.trim() === '' || next.description.trim() === '') {
-			toast.error('Please fill in all fields.');
-			return;
-		}
+	// --- name and description: saved from their dialog, never after a pause (FRM-3) ---
+	const singleUser = useSingleUser();
+	const [showDetails, setShowDetails] = useState(false);
+	const saveDetails = async (next: { name: string; description: string }): Promise<boolean> => {
 		// Name and description only: the grants are the access dialog's to save,
 		// and these could be older than one it saved meanwhile (#522).
-		const res = await updateKnowledgeById(
-			token,
-			id,
-			{ name: next.name, description: next.description },
-			unloading
-		).catch((e) => {
-			toast.error(`${e}`);
+		const res = await updateKnowledgeById(token, id, next).catch((e) => {
+			failed("Couldn't save the name and description. Try again.", e);
 			return null;
 		});
-		if (!res) return;
+		if (!res) return false;
+		setKnowledge((k) => ({ ...k, ...next }));
 		// A page opened again from the cache must start from what was saved, and
 		// so must the list of knowledge bases.
-		queryClient.setQueryData<Knowledge | null>(
-			['knowledge-base', id],
-			(old) => old && { ...old, name: next.name, description: next.description }
-		);
+		queryClient.setQueryData<Knowledge | null>(['knowledge-base', id], (old) => old && { ...old, ...next });
 		queryClient.invalidateQueries({ queryKey: ['knowledge'] });
-		toast.success('Knowledge updated successfully');
-	}, 1000);
-	const edit = (patch: Partial<Knowledge>) => {
-		// Merged into the latest state, so an access reply applied meanwhile is kept.
-		setKnowledge((k) => ({ ...k, ...patch }));
-		scheduleSave({ ...knowledge, ...patch });
+		toast.success(`Saved "${next.name}"`);
+		return true;
 	};
 
 	// --- access -------------------------------------------------------------
@@ -464,18 +471,32 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			<div className="flex h-full min-h-full w-full flex-col">
 				<Header
 					knowledge={knowledge}
-					edit={edit}
+					onEditDetails={() => setShowDetails(true)}
+					showAccess={!singleUser}
 					writeAccess={writeAccess}
 					total={null}
 					onBack={() => navigate(routePaths.workspaceKnowledge)}
 					onAccess={() => setShowAccess(true)}
 					id={id}
 				/>
+				{detailsDialog()}
 				<div className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
 					<ExternalKnowledgePanel external={(knowledge.meta?.external ?? {}) as never} />
 				</div>
 				{accessModal()}
 			</div>
+		);
+	}
+
+	function detailsDialog() {
+		return (
+			<EditDetailsDialog
+				open={showDetails}
+				onOpenChange={setShowDetails}
+				name={knowledge.name}
+				description={knowledge.description}
+				onSave={saveDetails}
+			/>
 		);
 	}
 
@@ -499,13 +520,14 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			{dragged && (
 				<div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
 					<div className="text-center">
-						<div className="text-lg font-medium">Add Files</div>
-						<div className="text-muted-foreground text-sm">Drop any files here to upload</div>
+						<div className="text-title font-title">Add files</div>
+						<div className="text-foreground-muted">Drop them anywhere on the page</div>
 					</div>
 				</div>
 			)}
 
 			{accessModal()}
+			{detailsDialog()}
 
 			<ConfirmDialog
 				open={pendingSync !== null}
@@ -619,7 +641,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 
 			<Header
 				knowledge={knowledge}
-				edit={edit}
+				onEditDetails={() => setShowDetails(true)}
+				showAccess={!singleUser}
 				writeAccess={writeAccess}
 				total={listed?.total ?? null}
 				onBack={() => navigate(routePaths.workspaceKnowledge)}
@@ -627,100 +650,80 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				id={id}
 			/>
 
-			<div data-composite-field className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
-				<div className="flex w-full flex-1 items-center space-x-1.5 px-3">
-					<div className="flex flex-1 items-center">
-						<Search className="text-muted-foreground mr-2 ml-1 size-3.5" />
-						<input
-							className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-xs"
-							value={query}
-							onChange={(e) => {
-								setQuery(e.target.value);
+			<div className="mt-4 flex flex-1 flex-col gap-2">
+				<ListSearchBar
+					value={query}
+					onChange={(value) => {
+						setQuery(value);
+						setPage(1);
+					}}
+					placeholder="Search files"
+				>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon-sm" aria-label="Search options">
+								<SlidersHorizontal />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="min-w-44">
+							<DropdownMenuCheckboxItem
+								checked={includeContent}
+								onCheckedChange={(c) => {
+									setIncludeContent(c === true);
+									setPage(1);
+								}}
+							>
+								Search file contents too
+							</DropdownMenuCheckboxItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+					{!singleUser && (
+						<ViewSelector
+							value={viewOption}
+							onChange={(value) => {
+								if (value) localStorage.workspaceViewOption = value;
+								else delete localStorage.workspaceViewOption;
+								setViewOption(value);
 								setPage(1);
 							}}
-							aria-label="Search Collection"
-							placeholder="Search Collection"
-							onFocus={() => setSelectedFileId(null)}
 						/>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon-sm" aria-label="Search options">
-									<SlidersHorizontal />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="min-w-44">
-								<DropdownMenuCheckboxItem
-									checked={includeContent}
-									onCheckedChange={(c) => {
-										setIncludeContent(c === true);
-										setPage(1);
-									}}
-								>
-									File content
-								</DropdownMenuCheckboxItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-						{writeAccess && (
-							<AddContentMenu
-								onUpload={async (kind) => {
-									if (kind === 'directory') {
-										const entries = await collectDirectoryFiles();
-										if (entries?.length) await uploadDirectoryEntries(entries);
-									} else if (kind === 'new_directory') setShowNewDir(true);
-									else if (kind === 'web') setShowWeb(true);
-									else if (kind === 'text') setShowText(true);
-									else fileInput.current?.click();
-								}}
-								onSync={async () => {
-									const entries = await collectDirectoryFiles();
-									if (entries?.length) setPendingSync(entries);
-								}}
-								onReset={() => setShowReset(true)}
-							/>
-						)}
-					</div>
-				</div>
-
-				<div className="flex items-center gap-2 px-2.5">
-					<select
-						className={selectClass}
-						aria-label="View"
-						value={viewOption}
-						onChange={(e) => {
-							const value = e.target.value;
-							if (value) localStorage.workspaceViewOption = value;
-							else delete localStorage.workspaceViewOption;
-							setViewOption(value);
+					)}
+					<FilterMenu
+						value={sortValue}
+						items={SORTS}
+						onChange={(value) => {
+							const [key, dir = ''] = value.split(':');
+							setSortKey(key);
+							setDirection(dir);
 							setPage(1);
 						}}
-					>
-						<option value="">All</option>
-						<option value="created">Created by you</option>
-						<option value="shared">Shared with you</option>
-					</select>
-					<select
-						className={selectClass}
-						aria-label="Sort"
-						value={sortKey}
-						onChange={(e) => setSortKey(e.target.value)}
-					>
-						<option value="">Sort</option>
-						<option value="name">Name</option>
-						<option value="created_at">Created</option>
-						<option value="updated_at">Updated</option>
-					</select>
-					{sortKey && (
-						<select
-							className={selectClass}
-							aria-label="Direction"
-							value={direction}
-							onChange={(e) => setDirection(e.target.value)}
-						>
-							<option value="asc">Asc</option>
-							<option value="">Desc</option>
-						</select>
+						trigger={
+							<Button variant="ghost" size="sm">
+								<span className="sr-only">Sort: </span>
+								<span className="truncate">{SORTS.find((o) => o.value === sortValue)?.label}</span>
+								<ChevronDown />
+							</Button>
+						}
+					/>
+					{writeAccess && (
+						<AddContentMenu
+							onUpload={async (kind) => {
+								if (kind === 'directory') {
+									const entries = await collectDirectoryFiles();
+									if (entries?.length) await uploadDirectoryEntries(entries);
+								} else if (kind === 'new_directory') setShowNewDir(true);
+								else if (kind === 'web') setShowWeb(true);
+								else if (kind === 'text') setShowText(true);
+								else fileInput.current?.click();
+							}}
+							onSync={async () => {
+								const entries = await collectDirectoryFiles();
+								if (entries?.length) setPendingSync(entries);
+							}}
+							onReset={() => setShowReset(true)}
+						/>
 					)}
-				</div>
+				</ListSearchBar>
 
 				{directoryId !== null && (
 					<div className="mb-1 px-4">
@@ -750,7 +753,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					<div className="flex flex-1 flex-row gap-2 px-2">
 						<div className="flex min-h-full w-full flex-col">
 							{listed.items.length > 0 || listed.directories.length > 0 || uploading.length > 0 ? (
-								<div className="flex h-full w-full overflow-y-auto text-xs">
+								<div className="flex h-full w-full overflow-y-auto">
 									<KnowledgeFileList
 										files={shownFiles}
 										uploading={uploading}
@@ -774,13 +777,21 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 											setDeletingDir(dirId);
 										}}
 										onMove={move}
+										showOwner={!singleUser}
 										onRetryUpload={retry}
 										onDismissUpload={dismiss}
 									/>
 								</div>
 							) : (
-								<div className="text-muted-foreground my-3 flex flex-col justify-center text-center text-xs">
-									<div>No content found</div>
+								<div className="text-foreground-muted my-6 text-center">
+									{debouncedQuery ? (
+										<p>Nothing matches "{debouncedQuery}".</p>
+									) : (
+										<p>
+											No files yet.
+											{writeAccess ? ' Add files, a web page or text from the Add content menu.' : ''}
+										</p>
+									)}
 								</div>
 							)}
 							{listed.total > PER_PAGE && (
@@ -836,10 +847,27 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	);
 }
 
-/** The name/description block at the top; both fields save themselves after a pause. */
+/** A knowledge base that no longer exists, said in place (NAV-3, #1095). */
+function KnowledgeGone({ onBack }: { onBack: () => void }) {
+	return (
+		<Gone
+			level={2}
+			title="Knowledge base not found"
+			description="It may have been deleted, or the link is wrong."
+			actions={<Button onClick={onBack}>Back to Knowledge</Button>}
+		/>
+	);
+}
+
+/**
+ * The page's own header (#1017): the name as its heading, the description and
+ * file count under it, Access, and a menu with Edit name and description and
+ * Copy ID. The id is not shown: it is a detail only some need (DAT-4).
+ */
 function Header({
 	knowledge,
-	edit,
+	onEditDetails,
+	showAccess,
 	writeAccess,
 	total,
 	onBack,
@@ -847,73 +875,56 @@ function Header({
 	id
 }: {
 	knowledge: Knowledge;
-	edit: (patch: Partial<Knowledge>) => void;
+	onEditDetails: () => void;
+	showAccess: boolean;
 	writeAccess: boolean;
 	total: number | null;
 	onBack: () => void;
 	onAccess: () => void;
 	id: string;
 }) {
+	const { copied, copy } = useCopy();
+	const description = [knowledge.description, total === null ? '' : filesLabel(total)].filter(Boolean).join(' · ');
 	return (
-		<div className="w-full px-2">
-			<Button variant="ghost" size="sm" className="mb-1 w-fit" type="button" onClick={onBack}>
-				<ChevronLeft className="size-3" strokeWidth={2} />
+		<div className="w-full">
+			<Button variant="ghost" size="sm" className="mb-2 -ms-2 w-fit" type="button" onClick={onBack}>
+				<ChevronLeft aria-hidden />
 				<span>Back</span>
 			</Button>
-			<div className="flex w-full">
-				<div className="flex-1 px-1">
-					<div className="flex w-full items-center justify-between">
-						<div className="flex w-full items-center justify-between">
-							<input
-								type="text"
-								className="w-full flex-1 bg-transparent text-left text-sm"
-								value={knowledge.name}
-								aria-label="Knowledge Name"
-								placeholder="Knowledge Name"
-								disabled={!writeAccess}
-								onChange={(e) => edit({ name: e.target.value })}
-							/>
-							<div className="mr-2.5 shrink-0">
-								{total ? <div className="text-muted-foreground text-xs">{total} files</div> : null}
-							</div>
-						</div>
-						{writeAccess ? (
-							<div className="shrink-0 self-center">
-								<AccessButton onClick={onAccess} />
-							</div>
-						) : (
-							<div className="text-muted-foreground shrink-0 text-xs">Read Only</div>
-						)}
-					</div>
-					<div className="flex w-full items-center">
-						<input
-							type="text"
-							className="text-muted-foreground w-full flex-1 bg-transparent text-left text-xs"
-							value={knowledge.description}
-							aria-label="Knowledge Description"
-							placeholder="Knowledge Description"
-							disabled={!writeAccess}
-							onChange={(e) => edit({ description: e.target.value })}
-						/>
-						<div className="hidden md:block">
-							<Tip content="Click to copy ID">
-								<Button
-									variant="ghost"
-									size="xs"
-									className="shrink-0 font-mono"
-									type="button"
-									onClick={() => {
-										copyToClipboard(id);
-										toast.success('ID copied to clipboard');
+			<PageHeader
+				as="h2"
+				title={knowledge.name}
+				description={description}
+				action={
+					<div className="flex items-center gap-2">
+						{!writeAccess && <Badge variant="secondary">Read only</Badge>}
+						{writeAccess && showAccess && <AccessButton onClick={onAccess} />}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="ghost" size="icon-sm" type="button" aria-label="More actions">
+									<MoreHorizontal />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" className="min-w-48">
+								{writeAccess && (
+									<DropdownMenuItem onSelect={onEditDetails}>
+										<Pencil />
+										Edit name and description
+									</DropdownMenuItem>
+								)}
+								<DropdownMenuItem
+									onSelect={() => {
+										copy(id, 'ID').then((ok) => ok && toast.success('ID copied'));
 									}}
 								>
-									{id}
-								</Button>
-							</Tip>
-						</div>
+									<Copy />
+									{copied ? 'Copied' : 'Copy ID'}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
-				</div>
-			</div>
+				}
+			/>
 		</div>
 	);
 }

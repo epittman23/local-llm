@@ -61,7 +61,7 @@ function RenameInput({
 			ref={ref}
 			value={value}
 			aria-label="Rename"
-			className="w-full border-none bg-transparent text-xs"
+			className="w-full border-none bg-transparent"
 			onChange={(e) => setValue(e.target.value)}
 			onKeyDown={(e) => {
 				if (e.key === 'Enter') onCommit(value);
@@ -162,7 +162,8 @@ export function KnowledgeFileList({
 	onDeleteDirectory,
 	onMove,
 	onRetryUpload,
-	onDismissUpload
+	onDismissUpload,
+	showOwner = true
 }: {
 	files: KnowledgeFile[];
 	uploading: UploadingItem[];
@@ -178,6 +179,8 @@ export function KnowledgeFileList({
 	onMove: (payload: { kind: 'file' | 'dir'; id: string }, targetDirectoryId: string | null) => void;
 	onRetryUpload: (itemId: string) => void;
 	onDismissUpload: (itemId: string) => void;
+	/** Who added each file; off while the install has one account (WRD-4, S4-D1). */
+	showOwner?: boolean;
 }) {
 	const [renamingFile, setRenamingFile] = useState<string | null>(null);
 	const [renamingDir, setRenamingDir] = useState<string | null>(null);
@@ -224,10 +227,10 @@ export function KnowledgeFileList({
 						</Button>
 					</div>
 					<RowButton
-						className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
+						className="relative flex w-auto min-w-0 flex-1 items-center justify-between gap-2 p-2"
 						onClick={() => renamingDir !== dir.id && onOpenDirectory(dir.id)}
 					>
-						<div className="line-clamp-1 text-xs">
+						<div className="min-w-0 truncate">
 							{renamingDir === dir.id ? (
 								<RenameInput
 									initial={dir.name}
@@ -243,7 +246,9 @@ export function KnowledgeFileList({
 						</div>
 						{dir.updated_at && (
 							<Tip content={dayjs(dir.updated_at * 1000).format('LLLL')}>
-								<div className="text-foreground-muted shrink-0 text-xs">{dayjs(dir.updated_at * 1000).fromNow()}</div>
+								<div className="text-foreground-muted text-dense shrink-0">
+									{dayjs(dir.updated_at * 1000).fromNow()}
+								</div>
 							</Tip>
 						)}
 					</RowButton>
@@ -353,12 +358,13 @@ export function KnowledgeFileList({
 								</Button>
 							)}
 						</div>
+						{/* LAY-4: at 390 the name has the row's width, with size and date on a second line. */}
 						<RowButton
-							className="relative flex w-auto flex-1 items-center justify-between gap-1 p-2"
+							className="relative flex w-auto min-w-0 flex-1 flex-col items-stretch gap-0.5 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
 							onClick={() => renamingFile === null && fileId && onSelect(fileId)}
 							onDoubleClick={() => writeAccess && setRenamingFile(fileId ?? null)}
 						>
-							<div className="line-clamp-1 text-xs">
+							<div className="min-w-0 truncate">
 								{renamingFile === fileId ? (
 									<RenameInput
 										initial={name}
@@ -369,25 +375,22 @@ export function KnowledgeFileList({
 										}}
 									/>
 								) : (
-									<>
-										{name}
-										{file.meta?.size ? (
-											<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(file.meta.size)}</span>
-										) : null}
-									</>
+									name
 								)}
 							</div>
-							<div className="flex shrink-0 items-center gap-2">
+							<div className="text-foreground-muted text-dense flex shrink-0 items-center gap-1.5">
+								{file.meta?.size ? <span>{formatFileSize(file.meta.size)}</span> : null}
+								{file.meta?.size && file.updated_at ? <span aria-hidden>·</span> : null}
 								{file.updated_at && (
 									<Tip content={dayjs(file.updated_at * 1000).format('LLLL')}>
-										<div className="text-foreground-muted text-xs">{dayjs(file.updated_at * 1000).fromNow()}</div>
+										<span>{dayjs(file.updated_at * 1000).fromNow()}</span>
 									</Tip>
 								)}
-								{file.user && (
+								{showOwner && file.user && (
 									<Tip content={file.user.email ?? 'Deleted User'} side="top">
-										<div className="text-muted-foreground shrink-0">
-											By {capitalizeFirstLetter(file.user.name ?? file.user.email ?? 'Deleted User')}
-										</div>
+										<span className="truncate">
+											· By {capitalizeFirstLetter(file.user.name ?? file.user.email ?? 'Deleted User')}
+										</span>
 									</Tip>
 								)}
 							</div>
