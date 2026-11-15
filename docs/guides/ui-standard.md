@@ -49,6 +49,10 @@ What that did and did not change:
   with its reason in `apps/web/ui-standard-baseline.json`. Nobody else adds
   one: propose it to the owner with the justification.
 
+Section by section, the review's issues are being fixed against the rules
+below. The workspace (Models, Knowledge, Prompts, Skills, Tools, Admin >
+Functions, and their editors) was brought to the standard on 2026-11-15.
+
 The rules below apply to every new or changed piece of interface.
 
 ## The product this is for
@@ -239,6 +243,11 @@ hover (A11Y-4). Section tabs are `components/layout/SectionTabs.tsx`: a strip
 that does not fit scrolls sideways, fades at an edge only while tabs are
 hidden past it, and scrolls the open tab into view on arrival, on a change of
 tab and when a tab changes size.
+At 390 a list row keeps only its menu and switch beside it: secondary actions
+(New chat, Copy prompt) move into the menu, and the time moves to line 2. An
+editor page (a model, skill, tool or prompt) does not repeat its section's
+header and tabs below `sm`; its own header has Back, and the app bar names
+the page.
 
 **LAY-5. Every page opens the same way:** an `h1` with the page's name, one
 sentence saying what the page is for, and the page's primary action at the
@@ -297,6 +306,8 @@ button is filled in the danger colour; a confirmation names the thing and
 says what is lost ("Delete “Course notes”? Its 3 files are removed ..."); the
 confirming button repeats the action ("Delete collection"), never "OK"; focus
 starts on Cancel. In a menu the destructive item is last, below a separator.
+Discarding typed work is destructive too: 'Discard changes?' confirms with a
+danger button, in the editors and in Settings alike.
 
 **ACT-4. An icon on its own has a name**: an `aria-label`, shown as a tooltip
 on hover and on focus. The icon is `aria-hidden`.
@@ -306,6 +317,9 @@ busy and disabled. A busy button says what it is doing ("Saving…"), shows a
 spinner, sets `aria-busy` and cannot be pressed twice. A disabled control stays
 readable and the reason it is disabled is stated next to it or in its
 tooltip. An action that cannot work is not offered as if it could.
+A choice whose feature is off on this install stays listed and disabled, and
+its help line says where to turn it on ('Image generation is off in Admin
+Settings > Images.').
 
 **ACT-6. Use the shared `Button`.** No `<button>` with its own classes. A new
 kind of button is a new variant of the shared component, added here first.
@@ -346,7 +360,9 @@ left empty by the person: adding a model opens its picker at once, and leaving
 the picker without a choice removes the empty slot. A slot that arrives empty
 (an old saved chat, or no model available) is `aria-invalid`, with the help
 line 'Choose a model or remove this one' under it, and sending opens that
-picker instead of a toast.
+picker instead of a toast. The line under a field is
+`components/ui/field-message.tsx` (`FieldMessage`, with `fieldProps(id,
+{ error, help })` for the field's `aria-describedby` and `aria-invalid`).
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads
@@ -359,6 +375,14 @@ Save. In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
 asks 'Discard changes?' before a tab switch, close, Escape or Back loses
 them; an at-once tab passes `savesAtOnce` and confirms each control with
 `SavedNote`.
+On a page, `lib/ui/useUnsavedChanges(dirty, { message })` is the guard. It
+asks 'Discard changes?' ('Keep editing' / 'Discard changes') before in-app
+navigation, the browser's Back or Forward, or a change of `?id=` would lose
+changes, and has the browser ask before a reload or tab close (not in the
+desktop app). `dirty` compares values against a baseline; it never counts
+change events. Render its `dialog`. Call `allowNext()` only after a save has
+resolved, immediately before navigating away; set before the save, a failed
+save would let the next leave through unasked.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A native control is allowed only where the shared one cannot do
@@ -382,7 +406,9 @@ automatically"), not its current state, and does not change when toggled.
 
 **FRM-6. Mark the optional fields**, not the required ones. Group long forms
 under headings, most used first; put rarely used settings behind
-"Advanced", closed.
+"Advanced", closed. Example: the model editor, with the sections Identity,
+Behaviour, Knowledge and tools, Capabilities, and Advanced (closed), and a
+`SaveBar` footer.
 
 ## Pages and navigation
 
@@ -443,12 +469,17 @@ is left-aligned; figures are right-aligned. A sortable heading is a button.
 the column heading ("Peak VRAM, MiB"), not repeated in every cell; thousands
 separated; a missing value is an en dash, never blank and never `0`.
 Headings are words, not field names ("Peak VRAM, MiB", not `peak_vram_mib`).
+While a search or filter narrows a list, the tab keeps the whole count and
+the list says '3 of 6 <things>' (`ListMatchCount` in
+`components/common/ListChrome`).
 
 **DAT-3. A status in a table is a status badge** (COL-3): the same word and
 colour for the same state on every page. The status badge is the shared
 `Badge` with `variant="success" | "warning" | "danger"` (the status colour on
 `--surface-3`) and an icon marked `data-icon="inline-start"`; a neutral state
-is `variant="secondary"` with no icon.
+is `variant="secondary"` with no icon. A list row's state (Hidden, Off, Read
+only) is a `Badge variant="secondary"` on its first line, never opacity on the
+row or its picture (COL-2).
 
 **DAT-4. An identifier is monospaced, can be copied, and links to the thing it
 identifies** when that thing has a page.
@@ -478,6 +509,8 @@ connection is `components/layout/ConnectionBanner`: a fixed pill at the top,
 below the phone's top band (FBK-2), while the socket is down for more than
 2 s, then one 'Reconnected' toast.
 Every reconnect refetches what is on screen.
+A save error in an editor stays inline above its footer, never a toast over
+Save (`components/common/EditorError.tsx`).
 
 | Situation | Where |
 |---|---|
@@ -512,6 +545,10 @@ id taken from the message, so a repeated failure updates one toast. A caller's
 `duration` or `id` still wins. Once a session has expired, failure toasts are
 held back until the next sign-in; the sign-in page's inline message explains
 them.
+Several results of one action are worded: 'Added "<name>"' for one; '4 files
+added'; '3 added, 1 failed'; '2 files couldn't be added'; 'N already here' for
+skipped duplicates. A failure toast's description points to the rows that
+say why ('The list shows why each one failed, with Retry.').
 
 **FBK-3. Every action answers.** Something visible changes within 100 ms of a
 press (the pressed or busy state), and the result is confirmed: "Copied",
@@ -530,6 +567,10 @@ port, 127.0.0.1:8090: Benchmarks > Serve), and Retry and Try another model. An e
 Edit, Read aloud or rating. Run on a host without the sandbox says "The code
 sandbox isn't set up on this machine", what it needs, and links the guide;
 Run is then disabled for the session with that reason (ACT-5).
+A failure toast is `toastFailure(message, error)` in
+`components/common/failureToast.tsx`: the message says what failed, and the
+server's own words (`errorText`) sit behind a closed 'Details'
+(`ErrorDetails`), never as the toast's visible text.
 
 ## Loading, empty and failed
 
@@ -545,7 +586,12 @@ server… Retry' after 8 s) stands in for the page, never a bare 'Loading…'.
 **STA-3. Empty says what belongs here and offers the first step** ("No prompts
 yet. A prompt is text you reuse. [New prompt]"). "Nothing matches your
 search" is a different message, names the search, and offers to clear it. A
-fresh install never says "Try adjusting your search".
+fresh install never says "Try adjusting your search". Implemented by
+`components/common/ListChrome`'s `ListEmptyState`. With nothing searched or
+filtered it shows 'No <things> yet', one line saying what a thing is, and the
+first step (`action`). With a search it shows 'Nothing matches "<q>"' and
+Clear search; with only filters, 'Nothing matches these filters' and Clear
+filters. Either one clears the search and the filters.
 
 **STA-4. Failed is shown in place, with a way to try again.** A failure is
 never shown as an empty list, a `0` or a spinner that does not end. Use
@@ -553,6 +599,11 @@ never shown as an empty list, a `0` or a spinner that does not end. Use
 shown in place of the list and says 'Couldn't load <what>'. The cause is in
 plain words (offline, no answer, or an error from the server), the server's
 own message sits behind 'Details', and it offers 'Try again'.
+A single row that failed (an upload) stays in place: a danger icon, its name,
+the reason in plain words, the server's text behind Details, and Retry and
+Dismiss; Dismiss alone when retrying cannot help (duplicate content). It is
+kept for the visit, not across a reload. At 390 its buttons wrap under the
+reason. Example: `routes/workspace/knowledge/KnowledgeFileList.tsx`.
 
 ## Overlays
 
@@ -591,6 +642,15 @@ named icons with tooltips (ACT-4). Long lines scroll inside the block, which
 is a figure named "<language> code", a tab stop while it overflows, with the
 edge that hides content shaded (`scroll-edges`, DAT-6).
 Inline code is the monospaced face on `--surface-3`.
+The code editor (`components/common/CodeEditor`) is a field: the control edge
+on `--surface-1`, a visible label that also names its content ("Tool code"),
+and the help line 'Tab indents. Press Esc, then Tab, to leave the editor.'
+tied with `aria-describedby`. Code that isn't valid Python is not saved: its
+line is tinted, its number turns danger, it scrolls into view, and 'Line N,
+column M: this line isn't valid Python.' replaces the help line, with the
+parser's message behind Details. Code from elsewhere (a clone, a link or a
+file) is acknowledged once, in one sentence naming its source
+(`components/common/codeSource.ts`); code written in the editor is not.
 
 **CNT-3. Mathematics inherits the text colour.** Black or white written by
 the model (`\color{black}`) is drawn in the text colour where it would
@@ -700,7 +760,8 @@ belong to the page, so Close is always one Tab away from the frame.
 
 **WRD-2. Name things as the person using them would.** No field names
 (`n_gpu_layers` becomes "Layers on the GPU"), no internal ids in a sentence,
-no jargon inherited from the fork ("valves", "toolkits", "arena"). Model
+no jargon inherited from the fork ("valves", "toolkits", "arena"): a tool's
+or function's valves are its "Settings". Model
 parameters are named in words with the API name beside them in mono, hidden
 from the accessible name: 'Max tokens · `max_tokens`', 'Layers on the GPU ·
 `num_gpu`'.
@@ -736,12 +797,17 @@ shows its caret and no outline, and a button that was clicked shows nothing.
 the outline is drawn only under that mark. No `outline-none`, and no
 translucent ring. A box that draws the edge around a bare text field (the
 chat's message box) is a composite field: it carries `data-composite-field`
-and shows the focus on the box, as a field does. One exception: the canvas's
+and shows the focus on the box, as a field does: the same 2 px `--focus`
+outline, flush. One exception: the canvas's
 editor (CNV-6) shows its caret and no outline. Components transition colour,
 background and border only, never the outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
-label tied to it, or an `aria-label` (ACT-4).
+label tied to it, or an `aria-label` (ACT-4). A list row's accessible name is
+its name, its state badges and its second line; the id, the time and the
+owner are `aria-hidden`. A switch is named for its row ('Enable <name>'), not
+for its state. A filter is named for what it filters, then its value
+('Source: All sources').
 
 **A11Y-3. A page has one `h1`, headings in order, and landmarks:** `header`,
 `nav`, `main`. The shell's first tab stop is a 'Skip to content' link that

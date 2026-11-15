@@ -11,7 +11,6 @@ import {
 	PlusIcon,
 	RotateCwIcon,
 	SearchIcon,
-	SearchXIcon,
 	SquarePenIcon,
 	Trash2Icon,
 	TriangleAlertIcon
@@ -21,6 +20,7 @@ import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { Gone } from '@/components/common/Gone';
+import { ListEmptyState } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from '@/components/settings/SettingsNav';
 import type { SettingsTab } from '@/components/settings/settingsTabs';
@@ -73,11 +73,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ServerUnreachableError } from '@/lib/apis/errors';
 import type { History, Message } from '@/lib/chat/history';
 import { THEMES, type ThemeId } from '@/lib/theme';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { ResponseMessage } from '@/routes/chat/ChatMessages';
 import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { ModelRow } from '@/routes/chat/ModelSelector';
 import type { ChatModel } from '@/routes/chat/useModels';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
+import { CodeEditorFieldDemo, FailedRowDemo, RowStateDemo } from './workspaceDemos';
 
 // The second half of /ui: the shared components (components/ui) under the
 // standard, and the patterns built from them. Every name and figure is
@@ -233,12 +235,7 @@ export function FormsSection() {
 	const contextError =
 		contextChecked && !contextValid ? 'Enter a whole number of tokens between 512 and 32768.' : undefined;
 	// FRM-3: leaving the page with unsaved changes asks first.
-	useEffect(() => {
-		if (!dirty) return;
-		const ask = (event: BeforeUnloadEvent) => event.preventDefault();
-		window.addEventListener('beforeunload', ask);
-		return () => window.removeEventListener('beforeunload', ask);
-	}, [dirty]);
+	const guard = useUnsavedChanges(dirty);
 	return (
 		<Section
 			id="forms"
@@ -248,8 +245,9 @@ export function FormsSection() {
 		>
 			<Example
 				title="A form that saves on request"
-				note="Change a value: the save bar at the bottom (the shared SaveBar) reports unsaved changes and offers to discard them, and reloading asks first. Type 40000 as the context size and leave the field: the error appears in place, in words that say how to fix it. The checkbox's box is 16 px, but it answers a click across 40 by 32 px, and 44 by 44 on touch."
+				note="Change a value: the save bar at the bottom (the shared SaveBar) reports unsaved changes and offers to discard them, and leaving the page (a link, Back, a reload) asks 'Discard changes?' first: the shared useUnsavedChanges guard. Type 40000 as the context size and leave the field: the error replaces the help line in place (the shared FieldMessage), in words that say how to fix it. The checkbox's box is 16 px, but it answers a click across 40 by 32 px, and 44 by 44 on touch."
 			>
+				{guard.dialog}
 				<Panel className="max-w-[40rem]">
 					<form
 						className="flex flex-col gap-4"
@@ -450,7 +448,7 @@ export function DataSection() {
 			id="data"
 			title="Tables and figures"
 			lead="Numbers are right-aligned in tabular figures with one precision per column, the unit lives in the column heading, and a missing value is a dash, not a blank or a zero. Identifiers are monospaced and can be copied."
-			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'TYP-6']}
+			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'TYP-6', 'COL-2', 'A11Y-2']}
 		>
 			<Example
 				title="A results table"
@@ -513,6 +511,14 @@ export function DataSection() {
 					<StatusBadge status="danger">Failed</StatusBadge>
 					<StatusBadge status="neutral">Not run</StatusBadge>
 				</div>
+			</Example>
+			<Example
+				title="A row's state"
+				note="Off, Hidden and Read only are words on the row's first line, never a faded row. The switch is named for its row ('Enable Code reviewer'), not for its state, and its row's second line says what the thing is."
+			>
+				<Panel className="max-w-[40rem]">
+					<RowStateDemo />
+				</Panel>
 			</Example>
 		</Section>
 	);
@@ -785,7 +791,7 @@ export function FeedbackSection() {
 }
 
 export function StatesSection() {
-	const [state, setState] = useState<'loading' | 'empty' | 'filtered' | 'error'>('empty');
+	const [state, setState] = useState<'loading' | 'empty' | 'searched' | 'filtered' | 'error'>('empty');
 	return (
 		<Section
 			id="states"
@@ -800,7 +806,8 @@ export function StatesSection() {
 						[
 							['loading', 'Loading'],
 							['empty', 'Empty'],
-							['filtered', 'No results'],
+							['searched', 'No results'],
+							['filtered', 'Filtered out'],
 							['error', 'Failed']
 						] as const
 					).map(([value, label]) => (
@@ -829,29 +836,30 @@ export function StatesSection() {
 							))}
 						</div>
 					)}
-					{state === 'empty' && (
-						<div className="mx-auto max-w-sm text-center">
-							<p className="text-title font-title">No prompts yet</p>
-							<p className="text-foreground-muted mt-1">
-								A prompt is text you reuse. Save one and type <code>/</code> in a chat to insert it.
-							</p>
-							<Button className="mt-4">
-								<PlusIcon aria-hidden />
-								New prompt
-							</Button>
-						</div>
-					)}
-					{state === 'filtered' && (
-						<div className="mx-auto max-w-sm text-center">
-							<SearchXIcon aria-hidden className="text-foreground-muted mx-auto size-5" />
-							<p className="text-title mt-2 font-title">No prompts match “regresion”</p>
-							<p className="text-foreground-muted mt-1">Check the spelling, or clear the search to see all 12.</p>
-							<Button variant="outline" className="mt-4">
-								Clear search
-							</Button>
-						</div>
+					{state !== 'loading' && state !== 'error' && (
+						<ListEmptyState
+							title="No prompts yet"
+							description="A prompt is text you reuse. Save one and type / in a chat to insert it."
+							action={
+								<Button>
+									<PlusIcon aria-hidden />
+									New prompt
+								</Button>
+							}
+							query={state === 'searched' ? 'regresion' : ''}
+							filtered={state === 'filtered'}
+							onClear={() => setState('empty')}
+						/>
 					)}
 					{state === 'error' && <LoadFailed what="prompts" error={new ServerUnreachableError()} onRetry={() => {}} />}
+				</Panel>
+			</Example>
+			<Example
+				title="A row that failed"
+				note="A failed upload stays in the list where it was: what failed, why in plain words, the server's text behind Details, and Retry and Dismiss. Dismiss alone when trying again cannot help. At 390 px the buttons wrap under the reason."
+			>
+				<Panel className="max-w-[40rem]">
+					<FailedRowDemo />
 				</Panel>
 			</Example>
 			<Example
@@ -983,7 +991,7 @@ export function ContentSection() {
 			id="content"
 			title="Answers: prose, mathematics and code"
 			lead="What a model writes is the reason the app exists, so it gets the reading size, a measured line and one treatment wherever it appears: chat, notes, the playground, reports. Code takes its colours from the same tokens in both themes."
-			rules={['CNT-1', 'CNT-2', 'CNT-3', 'CNT-5', 'TYP-5', 'DAT-6', 'FBK-3', 'FBK-4']}
+			rules={['CNT-1', 'CNT-2', 'CNT-3', 'CNT-5', 'TYP-5', 'DAT-6', 'FBK-1', 'FBK-3', 'FBK-4']}
 		>
 			<Example
 				title="A rendered answer: a wide table, a long equation, a task list and a long code block"
@@ -1016,6 +1024,14 @@ export function ContentSection() {
 					<ReplySteps id="ui-steps" output={SAMPLE_STEPS} done={false} />
 					<ReplyOrb output={SAMPLE_STEPS} />
 				</div>
+			</Example>
+			<Example
+				title="The code editor is a field"
+				note="A label that names the content, the field's edge and fill, and a help line saying how to leave it. Press Check the code: Black cannot parse the last line, so its line is marked, its number turns red, and the help line says where, with Black's words behind Details. The editors do this before saving, so code that isn't valid Python is not sent."
+			>
+				<Panel>
+					<CodeEditorFieldDemo />
+				</Panel>
 			</Example>
 		</Section>
 	);

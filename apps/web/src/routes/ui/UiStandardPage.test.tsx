@@ -2,17 +2,21 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { UiStandardPage } from './UiStandardPage';
 
 // The rendered answer and the replies use the chat's own components, which read settings and models through React Query.
+// The Forms demo's unsaved-changes guard blocks navigation, which needs a data router.
 const renderPage = () =>
 	render(
 		<QueryClientProvider client={new QueryClient()}>
 			<TooltipProvider>
-				<UiStandardPage />
+				<RouterProvider
+					router={createMemoryRouter([{ path: '/ui', element: <UiStandardPage /> }], { initialEntries: ['/ui'] })}
+				/>
 				<Toaster />
 			</TooltipProvider>
 		</QueryClientProvider>
