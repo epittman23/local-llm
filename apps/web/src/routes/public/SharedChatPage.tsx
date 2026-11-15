@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
@@ -8,9 +8,11 @@ import { LoadFailed } from '@/components/common/LoadFailed';
 import { BootSplash } from '@/components/layout/BootSplash';
 import { Button } from '@/components/ui/button';
 import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
+import { APP_NAME } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { convertMessagesToHistory, createMessagesList } from '@/lib/utils/auth-helpers';
+import { dayjs, shownTime } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
 
 /** The server's detail for a share this signed-in user may not read (`ERROR_MESSAGES.ACCESS_PROHIBITED`). */
@@ -64,8 +66,10 @@ export function SharedChatPage() {
 
 	const canClone = !!user && (user.role === 'admin' || (user.permissions as any)?.chat?.import !== false);
 
+	const [cloning, setCloning] = useState(false);
 	const cloneChat = async () => {
 		if (!canClone || !chatQuery.data) return;
+		setCloning(true);
 		try {
 			const res = await cloneSharedChatById(token, chatQuery.data.id);
 			if (res) {
@@ -77,6 +81,7 @@ export function SharedChatPage() {
 			// A refusal (say, a share holding an unfinished response) must show.
 			toast.error(`${err}`);
 		}
+		setCloning(false);
 	};
 
 	// STA-2: the boot splash's look while the share loads, never a bare "Loading…".
@@ -116,36 +121,58 @@ export function SharedChatPage() {
 
 	if (!chatContent) return null;
 
+	// When the snapshot was taken: the share's own date, else the chat's (DAT-5, a record).
+	const capturedSeconds = chatQuery.data?.updated_at ?? (chatContent.timestamp ? chatContent.timestamp / 1000 : null);
+	const captured = capturedSeconds
+		? { ...shownTime(capturedSeconds), label: dayjs.unix(capturedSeconds).format('YYYY-MM-DD') }
+		: null;
+
 	return (
-		<div className="flex h-screen w-full flex-col overflow-y-auto">
-			<div className="mx-auto w-full max-w-3xl px-3 pt-5 pb-24">
-				<h1 className="line-clamp-1 text-heading font-normal">{chatContent.title}</h1>
-				<time className="text-muted-foreground text-sm">
-					{new Date(chatContent.timestamp ?? Date.now()).toLocaleString()}
-				</time>
+		<div className="bg-page flex h-svh w-full flex-col">
+			{/* #1005: what this page is, whose app it is in, and when it was captured (LAY-5, WRD-3). */}
+			<header className="border-border-divider flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2">
+				<Link to={routePaths.home} className="text-body font-title">
+					{APP_NAME}
+				</Link>
+				<p className="text-dense text-foreground-muted min-w-0">
+					Shared conversation
+					{captured && (
+						<>
+							{' · captured '}
+							<time dateTime={captured.iso} title={captured.exact}>
+								{captured.label}
+							</time>
+						</>
+					)}
+				</p>
+				{canClone && (
+					<Button className="ms-auto" onClick={cloneChat} disabled={cloning} aria-busy={cloning || undefined}>
+						{cloning ? 'Copying to your chats…' : 'Continue this chat'}
+					</Button>
+				)}
+			</header>
+			<main className="min-h-0 flex-1 overflow-y-auto">
+				<div className="mx-auto w-full max-w-3xl px-4 py-6">
+					<h1 className="text-heading font-title line-clamp-2 tracking-tight" title={chatContent.title}>
+						{chatContent.title}
+					</h1>
 
-				<div className="mt-6 flex flex-col gap-6">
-					{messages.map((message: any) => (
-						<div key={message.id} className="flex flex-col gap-1">
-							<div className="text-muted-foreground text-xs font-medium">
-								{message.role === 'user' ? 'You' : (message.model ?? 'Assistant')}
-							</div>
-							<Markdown
-								id={`shared-${message.id}`}
-								content={message.content ?? ''}
-								modelName={message.model}
-								className="text-sm"
-							/>
-						</div>
-					))}
+					<div className="mt-6 flex flex-col gap-6">
+						{messages.map((message: any) => (
+							<section
+								key={message.id}
+								aria-label={message.role === 'user' ? 'User' : 'Assistant'}
+								className="flex flex-col gap-1"
+							>
+								<p className="text-caption font-strong text-foreground-muted">
+									{message.role === 'user' ? 'User' : (message.model ?? 'Assistant')}
+								</p>
+								<Markdown id={`shared-${message.id}`} content={message.content ?? ''} modelName={message.model} />
+							</section>
+						))}
+					</div>
 				</div>
-			</div>
-
-			{canClone && (
-				<div className="from-background fixed right-0 bottom-0 left-0 flex justify-center bg-gradient-to-t to-transparent pb-5">
-					<Button onClick={cloneChat}>Clone Chat</Button>
-				</div>
-			)}
+			</main>
 		</div>
 	);
 }

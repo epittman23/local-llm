@@ -261,7 +261,9 @@ test('/watch forwards a video id to the chat home as ?youtube=', async ({ page }
 	await expect(page).toHaveURL(/\/\?youtube=dQw4w9WgXcQ$/);
 });
 
-test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Clone button', async ({ page }) => {
+test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Continue button', async ({
+	page
+}) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/chats/share/abc123', (route) =>
 		route.fulfill({
@@ -297,7 +299,7 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page.getByRole('heading', { name: 'Explaining monads' })).toBeVisible();
 	await expect(page.getByText('What is a monad?')).toBeVisible();
 	await expect(page.locator('strong', { hasText: 'monad' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Clone Chat' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Continue this chat' })).toHaveCount(0);
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
 	await expect(page).toHaveTitle('Explaining monads · local-llm');
 });

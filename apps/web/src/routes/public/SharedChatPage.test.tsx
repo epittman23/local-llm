@@ -54,10 +54,51 @@ describe('SharedChatPage: cloning the share', () => {
 		vi.mocked(cloneSharedChatById).mockRejectedValueOnce(detail);
 		renderPage();
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Clone Chat' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Continue this chat' }));
 
 		await waitFor(() => expect(toastError).toHaveBeenCalledWith(detail));
 		expect(cloneSharedChatById).toHaveBeenCalledWith('t', 'share-1');
+	});
+});
+
+describe('SharedChatPage: its frame (#1005)', () => {
+	it('says what it is in a header: the app, a shared conversation, the date it was captured', async () => {
+		vi.mocked(getChatByShareId).mockResolvedValueOnce({
+			id: 'share-1',
+			user_id: 'someone',
+			updated_at: new Date('2026-11-11T18:43:33').getTime() / 1000,
+			chat: {
+				title: 'shared chat',
+				history: {
+					currentId: 'm2',
+					messages: {
+						m1: { id: 'm1', parentId: null, childrenIds: ['m2'], role: 'user', content: 'question' },
+						m2: { id: 'm2', parentId: 'm1', childrenIds: [], role: 'assistant', model: 'qwen', content: 'answer' }
+					}
+				}
+			}
+		});
+		renderPage();
+		const header = await screen.findByRole('banner');
+		expect(header).toHaveTextContent('local-llm');
+		expect(header).toHaveTextContent('Shared conversation · captured 2026-11-11');
+		expect(screen.getByText('2026-11-11')).toHaveAttribute('title', '2026-11-11 18:43');
+		expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }));
+		// The sharer's turns are the user's, not "You" to every reader.
+		expect(screen.getByRole('region', { name: 'User' })).toHaveTextContent('question');
+		expect(screen.getByRole('region', { name: 'Assistant' })).toHaveTextContent('qwen');
+		expect(screen.queryByText('You')).toBeNull();
+	});
+
+	it('offers Continue this chat only to a signed-in viewer allowed to import, and says it is busy', async () => {
+		let finish: (v: unknown) => void = () => {};
+		vi.mocked(cloneSharedChatById).mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+		renderPage();
+		const button = await screen.findByRole('button', { name: 'Continue this chat' });
+		fireEvent.click(button);
+		expect(await screen.findByRole('button', { name: 'Copying to your chats…' })).toBeDisabled();
+		finish(null);
+		expect(await screen.findByRole('button', { name: 'Continue this chat' })).toBeEnabled();
 	});
 });
 
