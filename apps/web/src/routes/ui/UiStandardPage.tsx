@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Katex } from '@/components/chat/markdown/Katex';
 import { Button } from '@/components/ui/button';
-import { applyTheme, getTheme } from '@/lib/theme';
+import { applyTheme, getTheme, THEMES } from '@/lib/theme';
 import { CanvasSection } from './canvas';
 import {
 	ActionsSection,
@@ -40,11 +40,8 @@ const SECTIONS: SectionMeta[] = [
 	{ id: 'canvas', title: 'Canvas' }
 ];
 
-const THEME_CHOICES = [
-	{ id: 'dark', label: 'Dark' },
-	{ id: 'oled-dark', label: 'Black' },
-	{ id: 'light', label: 'Light' }
-];
+/** The app's themes by their names (lib/theme), less System: the page shows each one on purpose. */
+const THEME_CHOICES = THEMES.filter((t) => t.id !== 'system');
 
 function ThemeSwitch() {
 	const [theme, setTheme] = useState(getTheme);
