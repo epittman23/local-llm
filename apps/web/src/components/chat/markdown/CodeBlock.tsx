@@ -18,8 +18,8 @@ import 'highlight.js/styles/github-dark.min.css';
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CodeRunResult } from '@/lib/apis/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
@@ -245,7 +245,10 @@ function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
 
 /**
  * One action in a block's header: an icon and its name, or, where the block is narrow, the icon alone, named by
- * `aria-label` and a tooltip (ACT-4). `tip` replaces the tooltip (a disabled Run says why, ACT-5).
+ * `aria-label` and a tooltip (ACT-4). `tip` replaces the tooltip (a disabled Run says why, ACT-5). The tooltip is
+ * always there, kept shut while there is nothing to say: `Tip` with no content drops its wrapper, and the button it
+ * remounted when the block turned narrow (a side panel opening beside the chat) lost the focus it was to get back
+ * when that panel closed (NAV-4).
  */
 function HeaderButton({
 	label,
@@ -260,19 +263,23 @@ function HeaderButton({
 	narrow: boolean;
 	tip?: string;
 }) {
+	const content = tip ?? (narrow ? label : undefined);
 	return (
-		<Tip content={tip ?? (narrow ? label : undefined)}>
-			<Button
-				type="button"
-				variant="ghost"
-				size={narrow ? 'icon-xs' : 'xs'}
-				aria-label={name ?? (narrow ? label : undefined)}
-				{...props}
-			>
-				{icon}
-				{!narrow && label}
-			</Button>
-		</Tip>
+		<Tooltip open={content ? undefined : false}>
+			<TooltipTrigger asChild>
+				<Button
+					type="button"
+					variant="ghost"
+					size={narrow ? 'icon-xs' : 'xs'}
+					aria-label={name ?? (narrow ? label : undefined)}
+					{...props}
+				>
+					{icon}
+					{!narrow && label}
+				</Button>
+			</TooltipTrigger>
+			{content && <TooltipContent>{content}</TooltipContent>}
+		</Tooltip>
 	);
 }
 

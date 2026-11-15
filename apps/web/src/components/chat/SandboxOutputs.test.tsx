@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ChatFile } from '@/lib/chat/history';
 import {
 	CSV_MAX_CELL,
@@ -43,7 +44,9 @@ const output = (
 const renderOutputs = (files: unknown) =>
 	render(
 		<QueryClientProvider client={new QueryClient()}>
-			<SandboxOutputs files={files} />
+			<TooltipProvider>
+				<SandboxOutputs files={files} />
+			</TooltipProvider>
 		</QueryClientProvider>
 	);
 

@@ -307,4 +307,26 @@ describe('CodeBlock header (CNT-2)', () => {
 		expect(screen.getByRole('button', { name: 'Run' }).textContent).toBe('');
 		vi.unstubAllGlobals();
 	});
+
+	it('keeps the same, focused button when the block turns narrow, so a panel it opened can return focus (NAV-4)', () => {
+		const callbacks: ResizeObserverCallback[] = [];
+		const Observer = vi.fn(function (this: unknown, callback: ResizeObserverCallback) {
+			callbacks.push(callback);
+			return { observe: vi.fn(), disconnect: vi.fn(), unobserve: vi.fn() };
+		});
+		vi.stubGlobal('ResizeObserver', Observer);
+		block({ lang: 'html', code: '<p>hi</p>', onPreview: vi.fn() });
+		const preview = screen.getByRole('button', { name: 'Preview' });
+		preview.focus();
+		// The side panel opening beside the chat narrows the block.
+		const entry = { contentRect: { width: 320 } } as ResizeObserverEntry;
+		act(() => {
+			for (const report of callbacks) report([entry], {} as ResizeObserver);
+		});
+		expect(preview.textContent).toBe('');
+		expect(preview.isConnected).toBe(true);
+		expect(screen.getByRole('button', { name: 'Preview' })).toBe(preview);
+		expect(document.activeElement).toBe(preview);
+		vi.unstubAllGlobals();
+	});
 });

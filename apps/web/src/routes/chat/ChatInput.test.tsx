@@ -543,11 +543,25 @@ describe('ChatInput: a trigger with nothing to offer (#1083, STA-3)', () => {
 		expect(view.onSubmit).toHaveBeenCalledWith('/zzz', []);
 	});
 
-	it('"#" with no knowledge says so once the search has answered', async () => {
+	it('"#" with no knowledge says so once the search has answered, with a way to add some; Escape closes it', async () => {
 		const view = input();
 		view.box().focus();
 		type(view.box(), '#');
-		expect(await screen.findByText('No knowledge or files yet')).toBeInTheDocument();
+		const row = await screen.findByRole('status');
+		expect(row.textContent).toBe('No knowledge or files yet. Create one in Workspace > Knowledge');
+		expect(screen.getByRole('link', { name: 'Create one in Workspace > Knowledge' }).getAttribute('href')).toBe(
+			'/workspace/knowledge'
+		);
+		fireEvent.keyDown(view.box(), { key: 'Escape' });
+		expect(screen.queryByRole('status')).toBeNull();
+	});
+
+	it('"#" with knowledge that does not match names the search, without the link', async () => {
+		const view = input();
+		view.box().focus();
+		type(view.box(), '#zzz');
+		await waitFor(() => expect(screen.getByRole('status').textContent).toBe('No knowledge or files match “zzz”'));
+		expect(screen.queryByRole('link')).toBeNull();
 	});
 
 	it('"@" lists models as two-line rows, and names a search with no match', () => {
