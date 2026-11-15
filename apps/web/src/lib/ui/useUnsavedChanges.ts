@@ -19,7 +19,8 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * A leave that is not a navigation (a page that swaps an editor out for its
  * list in place) goes through `confirmLeave(action)`: it runs `action` at once
  * while nothing is unsaved, and otherwise asks the same question first. An
- * `action` that navigates is let through once, so it never asks twice.
+ * `action` that navigates is let through, so it never asks twice; one that
+ * only closes something (a dialog with a draft) leaves the guard as it was.
  */
 export function useUnsavedChanges(
 	dirty: boolean,
@@ -78,8 +79,13 @@ export function useUnsavedChanges(
 			onConfirm: () => {
 				if (pending) {
 					setPending(null);
+					// A navigating action is blocked or let through as it starts; one that only closes
+					// something (a dialog) must not leave the next real leave unasked.
 					allowed.current = true;
 					pending.action();
+					setTimeout(() => {
+						allowed.current = false;
+					});
 					return;
 				}
 				if (blocker.state !== 'blocked') return;

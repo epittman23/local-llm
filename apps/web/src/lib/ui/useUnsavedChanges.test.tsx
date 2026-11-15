@@ -35,6 +35,9 @@ function Editor({ message }: { message?: string }) {
 			<button type="button" onClick={() => confirmLeave(() => setClosed(true))}>
 				Close in place
 			</button>
+			<button type="button" onClick={() => confirmLeave(() => setValue(saved))}>
+				Close draft
+			</button>
 			<button type="button" onClick={() => confirmLeave(() => navigate('/list'))}>
 				Back by navigate
 			</button>
@@ -181,6 +184,19 @@ describe('useUnsavedChanges', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Close in place' }));
 		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
 		expect(await screen.findByText('The list, in place')).toBeTruthy();
+	});
+
+	it('still guards the next navigation after confirmLeave discarded a draft without leaving', async () => {
+		const router = setup();
+		type('x');
+		fireEvent.click(screen.getByRole('button', { name: 'Close draft' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await act(() => new Promise((resolve) => setTimeout(resolve)));
+		type('y');
+		fireEvent.click(screen.getByRole('link', { name: 'Back' }));
+		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+		expect(router.state.location.pathname).toBe('/editor');
 	});
 
 	it('confirmLeave asks once for a leave that navigates', async () => {
