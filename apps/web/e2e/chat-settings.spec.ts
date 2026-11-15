@@ -13,7 +13,7 @@ test('Temporary Chat by Default: a new chat starts temporary and is not saved', 
 	await withSettings(page, { temporaryChatByDefault: true });
 	await page.goto('/');
 	await chat.socket.connected;
-	await expect(page.getByRole('button', { name: 'Temporary Chat' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByRole('button', { name: 'Temporary chat' })).toHaveAttribute('aria-pressed', 'true');
 	await page.getByRole('textbox', { name: 'Message' }).fill('Off the record');
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
@@ -110,9 +110,9 @@ test('display settings: no bubbles, Markdown in user messages, widescreen, direc
 	await expect(page).toHaveTitle('Chat · local-llm');
 });
 
-test('Insert Follow-Up Prompt to Input puts a follow-up in the input instead of sending it', async ({ page }) => {
+test('Insert Follow-Up Prompt to Input turned off sends a follow-up at once (S3-D5)', async ({ page }) => {
 	const chat = await mockChat(page, { user: { role: 'admin' } });
-	await withSettings(page, { insertFollowUpPrompt: true });
+	await withSettings(page, { insertFollowUpPrompt: false });
 	await page.goto('/');
 	await chat.socket.connected;
 	await page.getByRole('textbox', { name: 'Message' }).fill('Hi');
@@ -121,8 +121,8 @@ test('Insert Follow-Up Prompt to Input puts a follow-up in the input instead of 
 	await chat.stream('Hello!');
 	chat.event('chat:message:follow_ups', { follow_ups: ['Tell me more'] });
 	await page.getByRole('button', { name: 'Tell me more' }).click();
-	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Tell me more');
-	expect(chat.seen.completions).toHaveLength(1);
+	await expect.poll(() => chat.seen.completions.length).toBe(2);
+	expect(chat.seen.completions[1].user_message.content).toBe('Tell me more');
 });
 
 test('Paste Large Text as File attaches long pasted text as a file', async ({ page }) => {

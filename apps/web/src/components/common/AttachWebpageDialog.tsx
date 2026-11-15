@@ -41,7 +41,7 @@ export function AttachWebpageDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle className="text-sm">Attach Webpage</DialogTitle>
+					<DialogTitle className="text-sm">Attach a web page</DialogTitle>
 					<DialogDescription className="sr-only">Add the contents of web pages.</DialogDescription>
 				</DialogHeader>
 				<form

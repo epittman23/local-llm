@@ -129,6 +129,10 @@ test('status, sources and follow-ups arrive with the reply', async ({ page }) =>
 	await page.keyboard.press('Escape');
 	chat.event('chat:message:follow_ups', { follow_ups: ['Why 42?'] });
 	await page.getByRole('button', { name: 'Why 42?' }).click();
+	// S3-D5: a follow-up fills the message box, focused, instead of sending at once.
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Why 42?');
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeFocused();
+	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(2);
 	expect(chat.seen.completions[1].user_message.content).toBe('Why 42?');
 });
@@ -210,7 +214,7 @@ test('a temporary chat sends the whole conversation and asks for no title', asyn
 	});
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Temporary Chat' }).click();
+	await page.getByRole('button', { name: 'Temporary chat' }).click();
 	await expect(page.getByText(/won't appear in history/)).toBeVisible();
 	await page.getByRole('textbox', { name: 'Message' }).fill('secret');
 	await page.keyboard.press('Enter');

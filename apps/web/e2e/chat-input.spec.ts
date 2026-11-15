@@ -79,6 +79,7 @@ test('attach a web page from the menu, and one typed after #', async ({ page }) 
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Attach' }).click();
 	await page.getByRole('menuitem', { name: 'Attach a web page' }).click();
+	await expect(page.getByRole('dialog', { name: 'Attach a web page' })).toBeVisible();
 	await page.getByLabel('Webpage URLs').fill('https://example.com/a');
 	await page.getByRole('button', { name: 'Add' }).click();
 	await expect(page.getByTestId('input-file')).toContainText('Example page');
