@@ -24,7 +24,7 @@
 		},
 		"native-select": {
 			"src/components/common/AccessControl.tsx": 2,
-			"src/components/common/Valves.tsx": 4,
+			"src/components/common/Valves.tsx": 3,
 			"src/components/settings/AddConnectionModal.tsx": 2,
 			"src/components/settings/AddTerminalServerModal.tsx": 5,
 			"src/components/settings/AddToolServerModal.tsx": 3,
@@ -60,7 +60,7 @@
 			"src/components/common/ListChrome.tsx": 1,
 			"src/components/common/SensitiveInput.tsx": 1,
 			"src/components/common/Tags.tsx": 1,
-			"src/components/common/Valves.tsx": 5,
+			"src/components/common/Valves.tsx": 2,
 			"src/components/settings/AddConnectionModal.tsx": 5,
 			"src/components/settings/AddTerminalServerModal.tsx": 14,
 			"src/components/settings/AddToolServerModal.tsx": 8,

@@ -11,7 +11,7 @@ import { ToolCreatePage, ToolEditPage } from './ToolPages';
 vi.mock('@/lib/apis/tools', () => ({
 	createNewTool: vi.fn(async () => ({})),
 	getToolById: vi.fn(),
-	updateToolById: vi.fn(),
+	updateToolById: vi.fn(async () => ({})),
 	updateToolAccessGrants: vi.fn()
 }));
 vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: 1 })) }));
@@ -84,5 +84,23 @@ describe('ToolCreatePage (S4-D4)', () => {
 		expect(sessionStorage.tool).toBeUndefined();
 		fireEvent.click(screen.getByRole('button', { name: 'Create tool' }));
 		expect(await screen.findByRole('alertdialog', { name: 'Create tool?' })).toHaveTextContent('copied from "Calc"');
+	});
+});
+
+describe('ToolEditPage saves (#905)', () => {
+	it('saves changes, says so, and stays', async () => {
+		vi.mocked(getToolById).mockResolvedValueOnce({
+			id: 't',
+			name: 'T',
+			meta: { description: 'd' },
+			content: 'x',
+			write_access: true
+		} as never);
+		const success = vi.spyOn(toast, 'success');
+		open('/workspace/tools/edit?id=t', <ToolEditPage />);
+		fireEvent.change(await screen.findByLabelText('Tool name'), { target: { value: 'U' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+		expect(success).toHaveBeenCalledWith('Tool saved');
 	});
 });
