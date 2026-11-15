@@ -325,7 +325,8 @@ export function ToolkitEditor({
 				</p>
 				<SaveBar
 					creating={!edit}
-					className="mt-2 shrink-0 pb-2"
+					// On a phone the form scrolls; the bar stays at its foot, so Save is always in view (FRM-3, LAY-4).
+					className="mt-2 shrink-0 pb-2 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:bg-page"
 					dirty={dirty}
 					saving={loading}
 					onDiscard={discard}

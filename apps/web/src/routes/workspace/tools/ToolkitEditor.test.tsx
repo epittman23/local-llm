@@ -284,3 +284,11 @@ describe('ToolkitEditor validation (#1010, FRM-2)', () => {
 		expect(onSave).not.toHaveBeenCalled();
 	});
 });
+
+describe('the save bar on a phone (FRM-3, LAY-4)', () => {
+	it('stays at the foot of the scrolling form, so Save is always in view', () => {
+		renderEditor({ tool: null, onSave: vi.fn() });
+		const bar = screen.getByRole('button', { name: 'Create tool' }).closest('[data-slot="save-bar"]');
+		expect(bar).toHaveClass('max-sm:sticky', 'max-sm:bottom-0', 'max-sm:bg-page');
+	});
+});

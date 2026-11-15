@@ -358,3 +358,11 @@ describe('SkillEditor instructions (#1094)', () => {
 		expect(size('a')).toBe('1 character, about 1 token.');
 	});
 });
+
+describe('the save bar on a phone (FRM-3, LAY-4)', () => {
+	it('stays at the foot of the scrolling form, so Save is always in view', () => {
+		renderEditor({ skill: null, onSubmit: vi.fn() });
+		const bar = screen.getByRole('button', { name: 'Create skill' }).closest('[data-slot="save-bar"]');
+		expect(bar).toHaveClass('max-sm:sticky', 'max-sm:bottom-0', 'max-sm:bg-page');
+	});
+});

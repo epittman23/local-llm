@@ -262,3 +262,12 @@ describe('FunctionEditor validation (#1010, FRM-2)', () => {
 		expect(screen.getByLabelText('Function ID')).not.toHaveAttribute('aria-invalid');
 	});
 });
+
+describe('FunctionEditor save bar on a phone (FRM-3, LAY-4)', () => {
+	afterEach(cleanup);
+	it('stays at the foot of the scrolling form, so Save is always in view', async () => {
+		show();
+		const bar = (await screen.findByRole('button', { name: 'Create function' })).closest('[data-slot="save-bar"]');
+		expect(bar).toHaveClass('max-sm:sticky', 'max-sm:bottom-0', 'max-sm:bg-page');
+	});
+});
