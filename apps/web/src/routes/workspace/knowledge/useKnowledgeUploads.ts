@@ -88,7 +88,12 @@ export function announceUploads(names: string[], outcomes: Outcome[]) {
 		failedCount ? `${failedCount} failed` : '',
 		skipped ? `${skipped} already here` : ''
 	].filter(Boolean);
-	const summary = added === outcomes.length ? `${plural(added, 'file')} added` : parts.join(', ');
+	const summary =
+		added === outcomes.length
+			? `${plural(added, 'file')} added`
+			: failedCount === outcomes.length
+				? `${plural(failedCount, 'file')} couldn't be added`
+				: parts.join(', ');
 	if (failedCount) toast.error(summary, { description: 'The list shows why each one failed, with Retry.' });
 	else toast.success(summary);
 }

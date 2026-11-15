@@ -873,7 +873,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 							<>
 								<Textarea
 									key={selectedFileId}
-									className="min-h-0 flex-1 resize-none [field-sizing:fixed]"
+									className="min-h-0 flex-1 resize-none field-sizing-fixed"
 									value={content}
 									onChange={(e) => setContent(e.target.value)}
 									aria-label="File text"
@@ -891,7 +891,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 							</>
 						) : content.trim() ? (
 							<div className="min-h-0 flex-1 overflow-y-auto">
-								<SafeMarkdown text={content} className="rich-text" />
+								<SafeMarkdown text={content} className="rich-text text-sm" />
 							</div>
 						) : (
 							<p className="text-foreground-muted">No text was extracted from this file.</p>
@@ -952,7 +952,7 @@ function Header({
 				title={knowledge.name}
 				description={description}
 				action={
-					<div className="flex items-center gap-2">
+					<div className="ms-auto flex items-center gap-2">
 						{!writeAccess && <Badge variant="secondary">Read only</Badge>}
 						{writeAccess && showAccess && <AccessButton onClick={onAccess} />}
 						<DropdownMenu>

@@ -321,7 +321,8 @@ export function AddTextDialog({
 						<Label htmlFor="kb-text-content">Text</Label>
 						<Textarea
 							id="kb-text-content"
-							className="max-h-[50vh] min-h-48"
+							rows={10}
+							className="max-h-[50vh] field-sizing-fixed"
 							value={content}
 							aria-invalid={errors.content ? true : undefined}
 							aria-describedby={errors.content ? 'kb-text-content-error' : undefined}

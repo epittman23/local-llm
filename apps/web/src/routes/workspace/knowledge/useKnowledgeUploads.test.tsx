@@ -272,6 +272,13 @@ describe('useKnowledgeUploads single uploads (#907, #1072)', () => {
 		expect(toast.info).toHaveBeenCalledWith('"a.md" is already in this knowledge base, so it was skipped');
 	});
 
+	it('says when every file of an upload failed', async () => {
+		files.uploadFile.mockRejectedValue('offline');
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([file('a.md'), file('b.md')]));
+		expect(toast.error).toHaveBeenCalledWith("2 files couldn't be added", expect.anything());
+	});
+
 	it('dismisses a failed row', async () => {
 		files.uploadFile.mockResolvedValue(null);
 		const { hook } = render();

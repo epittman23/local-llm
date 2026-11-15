@@ -227,7 +227,7 @@ export function KnowledgeFileList({
 						</Button>
 					</div>
 					<RowButton
-						className="relative flex w-auto min-w-0 flex-1 items-center justify-between gap-2 p-2"
+						className="relative flex w-auto min-w-0 flex-1 flex-col items-stretch gap-0.5 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2"
 						onClick={() => renamingDir !== dir.id && onOpenDirectory(dir.id)}
 					>
 						<div className="min-w-0 truncate">
@@ -292,7 +292,7 @@ export function KnowledgeFileList({
 						{failed ? (
 							<>
 								<CircleAlert aria-hidden className="text-danger mt-0.5 size-4 shrink-0" />
-								<div className="min-w-0 flex-1">
+								<div className="min-w-0 flex-1 max-sm:basis-[calc(100%-1.5rem)]">
 									<div className="truncate">{item.name}</div>
 									<div className="text-dense text-foreground-muted">{item.reason}</div>
 									{item.detail && (
@@ -301,7 +301,7 @@ export function KnowledgeFileList({
 										</div>
 									)}
 								</div>
-								<div className="flex shrink-0 items-center gap-1">
+								<div className="flex shrink-0 items-center gap-1 max-sm:ms-5">
 									{!item.duplicate && (
 										<Button variant="outline" size="sm" type="button" onClick={() => onRetryUpload(item.itemId)}>
 											<RotateCw aria-hidden />
