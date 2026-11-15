@@ -41,16 +41,11 @@ export function JumpToLatest({
 	}, [scroller]);
 
 	if (!shown) return null;
-	const fade = 'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200';
+	// A floating layer over the conversation: opaque, so the text under it does not show through.
+	const look = 'bg-surface-2 rounded-full motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200';
 	if (streaming)
 		return (
-			<Button
-				type="button"
-				variant="outline"
-				size="sm"
-				className={cn('rounded-full', fade, className)}
-				onClick={onJump}
-			>
+			<Button type="button" variant="outline" size="sm" className={cn(look, className)} onClick={onJump}>
 				<span aria-hidden className="bg-brand size-2 rounded-full" />
 				New text below
 				<ArrowDown aria-hidden />
@@ -63,7 +58,7 @@ export function JumpToLatest({
 				variant="outline"
 				size="icon"
 				aria-label="Jump to latest"
-				className={cn('rounded-full', fade, className)}
+				className={cn(look, className)}
 				onClick={onJump}
 			>
 				<ArrowDown />

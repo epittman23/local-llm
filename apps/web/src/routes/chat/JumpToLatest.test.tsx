@@ -33,6 +33,8 @@ describe('JumpToLatest', () => {
 		render(<Harness onJump={onJump} />);
 		const button = screen.getByRole('button', { name: 'Jump to latest' });
 		expect(button.className).toContain('rounded-full');
+		// Opaque, floating over the conversation.
+		expect(button.className).toContain('bg-surface-2');
 		expect(button.className).toContain('absolute');
 		// MOT-1, MOT-2: it fades in, except under reduced motion.
 		expect(button.className).toContain('motion-safe:fade-in-0');

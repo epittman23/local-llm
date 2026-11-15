@@ -563,7 +563,8 @@ export function ChatPage() {
 				) : (
 					<div
 						ref={scroller}
-						className="min-h-0 flex-1 overflow-y-auto"
+						// On a short phone the bar's buttons float over the top: the first message starts below them (A11Y-5).
+						className="min-h-0 flex-1 overflow-y-auto max-md:[@media(max-height:520px)]:pt-12"
 						data-testid="chat-messages"
 						onScroll={(e) => {
 							const el = e.currentTarget;

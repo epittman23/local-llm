@@ -187,12 +187,15 @@ function ChatTagsDialog({
 						Tags for <strong>{title || 'this chat'}</strong>. Type a tag and press Enter to add it.
 					</DialogDescription>
 				</DialogHeader>
-				<Tags
-					tags={tags.data ?? []}
-					suggestionTags={all.data ?? []}
-					onAdd={(name) => void change(() => addTagById(token, chatId, name))}
-					onDelete={(name) => void change(() => deleteTagById(token, chatId, name))}
-				/>
+				{/* The tag field draws no edge of its own: this box is the field's (FRM-1). */}
+				<div className="border-border-control min-h-9 rounded-lg border px-3 py-1.5">
+					<Tags
+						tags={tags.data ?? []}
+						suggestionTags={all.data ?? []}
+						onAdd={(name) => void change(() => addTagById(token, chatId, name))}
+						onDelete={(name) => void change(() => deleteTagById(token, chatId, name))}
+					/>
+				</div>
 			</DialogContent>
 		</Dialog>
 	);
