@@ -653,6 +653,24 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 
+	it('Stop marks the reply being written as stopped (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			const { send, answer } = await holdNextPost();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => session.stop());
+			await act(async () => answer.resolve({ task_ids: ['t1'] }));
+
+			const reply = session.history.messages[session.history.currentId ?? ''];
+			expect(reply).toMatchObject({ role: 'assistant', done: true, stopped: true });
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('a send after a stop waits for the stopped request to cancel its tasks first (#516)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {

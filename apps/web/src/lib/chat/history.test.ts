@@ -4,9 +4,12 @@ import {
 	addResponses,
 	addUserMessage,
 	applyChatEvent,
+	canContinue,
+	cutOffReason,
 	editContent,
 	emptyHistory,
 	finishReplies,
+	type History,
 	hasPendingAssistantLeaf,
 	isGenerating,
 	messagesList,
@@ -15,8 +18,8 @@ import {
 	saveReplyAsCopy,
 	showBranch,
 	siblingsOf,
+	stopReplies,
 	toApiMessages,
-	type History,
 	updateMessage
 } from './history';
 import { getOutputText } from './structuredOutput';
@@ -162,6 +165,21 @@ describe('streaming events', () => {
 		const r = applyChatEvent(two, ev(two.currentId!, 'chat:tasks:cancel', {}));
 		expect(two.messages[userId].childrenIds.every((c) => r.history.messages[c].done)).toBe(true);
 		expect(r.effects).toContainEqual({ kind: 'cancelled', current: true });
+	});
+	it('a cancel marks the replies still being written as stopped, and not one that had finished (S3-D4)', () => {
+		const { h, userId } = conversation();
+		const two = addResponses(h, userId, [{ id: 'b' }]).history;
+		const [first, second] = two.messages[userId].childrenIds;
+		const finished = updateMessage(two, first, { done: true, content: 'whole' });
+		const r = applyChatEvent(finished, ev(second, 'chat:tasks:cancel', {})).history;
+		expect(r.messages[first]).toMatchObject({ done: true });
+		expect(r.messages[first].stopped).toBeUndefined();
+		expect(r.messages[second]).toMatchObject({ done: true, stopped: true });
+	});
+	it('a completion that says why it ended keeps its finish_reason (S3-D4)', () => {
+		const { h, replyId } = conversation();
+		const r = applyChatEvent(h, ev(replyId, 'chat:completion', { done: true, finish_reason: 'length' }));
+		expect(r.history.messages[replyId]).toMatchObject({ done: true, finish_reason: 'length' });
 	});
 	it('a cancel for a reply a later send replaced is not the current one (#516)', () => {
 		const { h } = conversation();
@@ -376,5 +394,28 @@ describe('hasPendingAssistantLeaf (#214)', () => {
 		const h = history([reply('a', { done: true }), reply('b')]);
 		expect(hasPendingAssistantLeaf(h, 'a')).toBe(true);
 		expect(hasPendingAssistantLeaf(history([reply('a', { done: true })]), 'a')).toBe(false);
+	});
+});
+
+describe('replies that ended early (S3-D4)', () => {
+	const reply = { id: 'a', parentId: 'u', childrenIds: [], role: 'assistant' as const, content: 'part', done: true };
+	it('says why: the token limit, then a stop, else nothing', () => {
+		expect(cutOffReason({ ...reply, finish_reason: 'length' })).toBe('length');
+		expect(cutOffReason({ ...reply, finish_reason: 'max_output_tokens', stopped: true })).toBe('length');
+		expect(cutOffReason({ ...reply, stopped: true })).toBe('stopped');
+		expect(cutOffReason({ ...reply, finish_reason: 'stop' })).toBeNull();
+		expect(cutOffReason({ ...reply, role: 'user', stopped: true })).toBeNull();
+	});
+	it('a stopped reply can still be continued, as before', () => {
+		expect(canContinue({ ...reply, stopped: true })).toBe(true);
+	});
+	it('stopReplies finishes every reply to the prompt and marks the unfinished ones stopped', () => {
+		const { h, userId, replyId } = conversation();
+		const two = addResponses(h, userId, [{ id: 'b' }]).history;
+		const other = two.messages[userId].childrenIds.find((c) => c !== replyId) ?? '';
+		const r = stopReplies(updateMessage(two, replyId, { done: true }), userId);
+		expect(r.messages[replyId].stopped).toBeUndefined();
+		expect(r.messages[other]).toMatchObject({ done: true, stopped: true });
+		expect(stopReplies(two, 'missing')).toBe(two);
 	});
 });
