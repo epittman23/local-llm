@@ -386,8 +386,8 @@ save would let the next leave through unasked. A way out that is not a
 navigation (Admin > Models swaps the model editor out for its list in place)
 goes through `confirmLeave(action)`: it runs `action` at once while nothing is
 unsaved and asks the same question first otherwise; an `action` that
-navigates is let through, so it never asks twice. An editor's own Back always
-calls it.
+navigates is let through, so it never asks twice. An editor that a page may
+swap out in place (the model editor) calls it from its own Back.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A native control is allowed only where the shared one cannot do

@@ -61,14 +61,20 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     function editors ask 'Discard changes?' before Back,
     a workspace tab, the browser's Back or Forward, or a change of `?id=`
     would lose changes, and the browser asks before a reload or tab close
-    (not in the desktop app): `lib/ui/useUnsavedChanges.ts`. The model
-    editor Admin > Models opens in place asks before its Back too
+    (not in the desktop app): `lib/ui/useUnsavedChanges.ts`. In Admin >
+    Models, where the model editor opens in place, its Back asks too
     (`confirmLeave`). Settings' identical question now has a danger button
     too.
   - **Behaviour changes without a decision.** A knowledge base's name and
     description no longer save themselves a second after typing; they save
     from an "Edit name and description" dialog. A knowledge file opens on
     its rendered text, and editing the extracted text is behind "Edit text".
+    A new custom parameter row stays in the form until it is named, in the
+    model editor, Admin > Models defaults, Admin > Interface and the
+    Playground alike, so none of them stores an unnamed parameter. A tool's
+    or function's setting is shown masked by the words in its name
+    (`api_key`, `github_token`), no longer by letters inside a word
+    (`keywords`, `tokenizer`, `sort_key` now show).
     The Models row's second line is the base model and tags; the model's
     description is no longer shown on the row. Knowledge's description is
     optional. On Tools and Admin > Functions a tool's or function's "Valves"
