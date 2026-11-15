@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Tool = Record<string, any>;
@@ -177,7 +177,7 @@ test.describe('workspace tools', () => {
 			)
 		});
 		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('arbitrary code execution');
+		await expect(dialog).toContainText('tools run their code on this server');
 		expect(calls.some((c) => c.path === '/create')).toBe(false); // nothing before the acknowledgement
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
 		await expect
@@ -185,7 +185,7 @@ test.describe('workspace tools', () => {
 			.toMatchObject({ id: 'imp', access_grants: [] });
 	});
 
-	test('create: boilerplate is seeded, the header fills name/description, and saving needs acknowledgement', async ({
+	test('create: boilerplate is seeded, the header fills name/description, and code written here saves without an acknowledgement', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -203,12 +203,10 @@ test.describe('workspace tools', () => {
 		await expect(page.getByLabel('Tool ID')).toHaveValue('fancy_tool');
 		await expect(page.getByLabel('Tool Description')).toHaveValue('Does fancy things');
 
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('arbitrary code execution');
-		expect(calls.some((c) => c.path === '/create')).toBe(false);
-		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Create tool' }).click();
+		// Code written in the editor is the person's own: no acknowledgement (S4-D4).
 		await expect(page).toHaveURL(/\/workspace\/tools$/);
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 		const body = calls.find((c) => c.path === '/create')?.body;
 		expect(body).toMatchObject({
 			id: 'fancy_tool',
@@ -229,8 +227,7 @@ test.describe('workspace tools', () => {
 		await page.keyboard.insertText('"""\nrequired_open_webui_version: 999.0.0\n"""\nclass Tools:\n    pass\n');
 		await page.getByLabel('Tool Name').fill('Needs new');
 		await page.getByLabel('Tool Description').fill('d');
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Create tool' }).click();
 		await expect(page.getByText(/is lower than required version \(v999\.0\.0\)/)).toBeVisible();
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
@@ -242,7 +239,7 @@ test.describe('workspace tools', () => {
 		await expect(page.getByLabel('Tool Name')).toHaveValue('Tool 1');
 		await expect(page.locator('.cm-content')).toContainText('def f1');
 		await page.getByLabel('Tool Description').fill('Changed');
-		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/tool_1/update')?.body)
 			.toMatchObject({ id: 'tool_1', meta: { description: 'Changed' } });

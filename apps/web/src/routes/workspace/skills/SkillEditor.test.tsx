@@ -60,7 +60,7 @@ describe('SkillEditor', () => {
 		renderEditor({ skill, edit: true, onSubmit });
 
 		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'new' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 		const sent = onSubmit.mock.calls[0]?.[0];
@@ -75,7 +75,7 @@ describe('SkillEditor', () => {
 
 		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'My Skill' } });
 		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'body' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Save & Create' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ id: 'my-skill', is_active: true, meta: { tags: [] } });
@@ -94,7 +94,7 @@ describe('SkillEditor', () => {
 		const onSubmit = vi.fn(async (_: SkillDraft) => {});
 		renderEditor({ skill, clone: true, onSubmit });
 
-		fireEvent.click(screen.getByRole('button', { name: 'Save & Create' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ id: 'review-clone', is_active: true, meta: { tags: [] } });
@@ -154,7 +154,7 @@ describe('SkillEditor access dialog (#676)', () => {
 		await waitFor(() => expect(shown()).toBe('a'));
 		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'New' } });
 		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'body' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Save & Create' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ access_grants: [grant('a')] });
@@ -191,5 +191,75 @@ describe('SkillEditor fields (#1057, #983)', () => {
 		expect(screen.getByText('Skill instructions')).toBeInTheDocument();
 		expect(screen.getByText('Read the diff.')).toBeInTheDocument();
 		expect(screen.queryByLabelText('Skill ID')).toBeNull();
+	});
+});
+
+describe('SkillEditor saves on request (#905, #1011, FRM-3)', () => {
+	const skill: SkillDraft = {
+		id: 'review',
+		name: 'Review',
+		description: 'd',
+		content: 'body',
+		is_active: true,
+		meta: { tags: [] },
+		access_grants: []
+	};
+	const routed = (props: Parameters<typeof SkillEditor>[0]) => {
+		const router = createMemoryRouter(
+			[
+				{ path: '/workspace/skills', element: <p>Skills list</p> },
+				{ path: '/workspace/skills/edit', element: <SkillEditor {...props} /> }
+			],
+			{ initialEntries: ['/workspace/skills', '/workspace/skills/edit'], initialIndex: 1 }
+		);
+		render(
+			<TooltipProvider>
+				<RouterProvider router={router} />
+			</TooltipProvider>
+		);
+		return router;
+	};
+
+	it('says whether the form matches what is stored, and Discard puts it back', () => {
+		renderEditor({ skill, edit: true, onSubmit: vi.fn() });
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'changed' } });
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Skill instructions')).toHaveValue('body');
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+	});
+
+	it('asks before Back loses unsaved changes, and stays when told to', async () => {
+		const router = routed({ skill, edit: true, onSubmit: vi.fn() });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'changed' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		expect(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(router.state.location.pathname).toBe('/workspace/skills/edit');
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('Skills list')).toBeInTheDocument();
+	});
+
+	it('returns to the list once created, without asking', async () => {
+		routed({ skill: null, onSubmit: vi.fn(async () => {}) });
+		fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'New' } });
+		fireEvent.change(screen.getByLabelText('Skill instructions'), { target: { value: 'body' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
+		expect(await screen.findByText('Skills list')).toBeInTheDocument();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('counts a clone as unsaved, and keeps a failed save’s reason above the footer', async () => {
+		renderEditor({ skill, clone: true, onSubmit: vi.fn().mockRejectedValue('Uh-oh! This id is already registered.') });
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Create skill' }));
+		expect(await screen.findByRole('alert')).toHaveTextContent(
+			'This ID is already used by another skill. Choose another.'
+		);
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
 	});
 });

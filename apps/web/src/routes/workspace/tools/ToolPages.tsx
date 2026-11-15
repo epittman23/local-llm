@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { type CodeSource, readCodeSource } from '@/components/common/codeSource';
 import { Spinner } from '@/components/common/Spinner';
 import { createNewTool, getToolById, updateToolById } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -23,32 +24,31 @@ const payload = (t: ToolDraft) => ({
  */
 export function ToolCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const navigate = useNavigate();
-	const [stash] = useState(() => {
+	// Read once: the draft, and where its code came from (S4-D4).
+	const [{ stash, source }] = useState((): { stash: ToolDraft | null; source: CodeSource | null } => {
 		const raw = sessionStorage.tool;
-		if (!raw) return null;
+		if (!raw) return { stash: null, source: null };
 		sessionStorage.removeItem('tool');
 		try {
-			return sanitizeIncomingTool(JSON.parse(raw), { withGrants: true });
+			const parsed: unknown = JSON.parse(raw);
+			return { stash: sanitizeIncomingTool(parsed, { withGrants: true }), source: readCodeSource(parsed) };
 		} catch {
-			return null;
+			return { stash: null, source: null };
 		}
 	});
 	const tool: ToolDraft | null = stash;
 
+	// The editor returns to the list once created; a failure throws, and the editor says why.
 	const onSave = async (data: ToolDraft) => {
-		if (refusedForVersion(data.content)) return;
-		// A failure throws: the editor says why above its footer.
-		const res = await createNewTool(token, payload(data));
-		if (res) {
-			toast.success('Tool created successfully');
-			navigate(routePaths.workspaceTools);
-		}
+		if (refusedForVersion(data.content)) return false;
+		await createNewTool(token, payload(data));
+		toast.success('Tool created');
+		return true;
 	};
 
 	return (
 		<div className="h-full min-w-0 overflow-x-hidden">
-			<ToolkitEditor tool={tool} clone={stash !== null} onSave={onSave} />
+			<ToolkitEditor tool={tool} clone={stash !== null} source={source} onSave={onSave} />
 		</div>
 	);
 }
@@ -98,9 +98,10 @@ export function ToolEditPage() {
 	}, [id, token, navigate]);
 
 	const onSave = async (data: ToolDraft) => {
-		if (!tool || refusedForVersion(data.content)) return;
-		const res = await updateToolById(token, tool.id, payload(data));
-		if (res) toast.success('Tool updated successfully');
+		if (!tool || refusedForVersion(data.content)) return false;
+		await updateToolById(token, tool.id, payload(data));
+		toast.success('Tool saved');
+		return true;
 	};
 
 	if (!tool) {

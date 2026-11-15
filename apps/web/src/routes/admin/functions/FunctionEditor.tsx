@@ -3,11 +3,14 @@ import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { acknowledgement, type CodeSource } from '@/components/common/codeSource';
 import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SaveBar } from '@/components/ui/save-bar';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
@@ -30,17 +33,23 @@ const boilerplateFor = (starter: Starter) => (starter === 'event' ? eventBoilerp
  * `title:` / `description:` in the docstring header fills a blank name /
  * description; saving first asks the user to acknowledge that functions run
  * arbitrary code. Edit: the id is fixed and saving goes straight through.
+ * Saves on request, as the Tools editor does (FRM-3): a SaveBar, and a guard
+ * before leaving with unsaved changes; `onSave` resolves true once stored.
  */
 export function FunctionEditor({
 	fn,
 	edit = false,
 	clone = false,
+	source = null,
 	onSave
 }: {
 	fn: FunctionDraft | null;
 	edit?: boolean;
+	/** Pre-filled from a clone, a link or a file: creating it asks first (S4-D4). */
 	clone?: boolean;
-	onSave: (fn: FunctionDraft) => Promise<void>;
+	/** Where a clone's or import's code came from, named in that question. */
+	source?: CodeSource | null;
+	onSave: (fn: FunctionDraft) => Promise<boolean>;
 }) {
 	const navigate = useNavigate();
 	const form = useRef<HTMLFormElement>(null);
@@ -51,9 +60,23 @@ export function FunctionEditor({
 	const [id, setId] = useState(fn?.id ?? '');
 	const [meta, setMeta] = useState(fn?.meta ?? { description: '' });
 	const [starter, setStarter] = useState<Starter>('filter');
-	// `seed` is what the editor is told to show; `code` is what it currently holds.
-	const [seed, setSeed] = useState(fn?.content ?? '');
+	// `code` is what the editor holds now, for a save right after a format; `codeNow` renders it.
 	const code = useRef(fn?.content || filterBoilerplate);
+	const [codeNow, setCodeNow] = useState(code.current);
+	// What Discard goes back to and "saved" compares with (see ToolkitEditor).
+	const [saved, setSaved] = useState(() => ({
+		name: fn?.name ?? '',
+		id: fn?.id ?? '',
+		description: fn?.meta?.description ?? '',
+		content: code.current
+	}));
+	const dirty =
+		(!edit && fn !== null) ||
+		name !== saved.name ||
+		id !== saved.id ||
+		meta.description !== saved.description ||
+		codeNow !== saved.content;
+	const { dialog: leaveDialog, allowNext } = useUnsavedChanges(dirty);
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
 	// Shown in place of the code's help line: Black's parse error, or why the save failed.
@@ -73,6 +96,7 @@ export function FunctionEditor({
 
 	const onCodeChange = (value: string) => {
 		code.current = value;
+		setCodeNow(value);
 		if (edit) return;
 		const fm = extractFrontmatter(value);
 		if (fm.title && !nameNow.current) {
@@ -86,8 +110,7 @@ export function FunctionEditor({
 	const chooseStarter = (value: string) => {
 		const next: Starter = value === 'event' ? 'event' : 'filter';
 		setStarter(next);
-		code.current = boilerplateFor(next);
-		setSeed(code.current);
+		editor.current?.replace(boilerplateFor(next));
 	};
 
 	const submit = async () => {
@@ -98,35 +121,57 @@ export function FunctionEditor({
 			// onParseError says where. Code that could not be formatted for another
 			// reason (not an admin, no answer) is saved as it is.
 			if ((await editor.current?.formatPython()) === 'invalid') return;
-			await onSave({ id, name, meta, content: code.current }).catch((error) =>
-				setProblem(saveProblem(error, 'function'))
-			);
+			const content = code.current;
+			const stored = await onSave({ id, name, meta, content }).catch((error) => {
+				setProblem(saveProblem(error, 'function'));
+				return false;
+			});
+			if (!stored) return;
+			setSaved({ name, id, description: meta.description, content });
+			if (!edit) {
+				allowNext();
+				navigate(routePaths.adminFunctions);
+			}
 		} finally {
 			setLoading(false);
 		}
 	};
 
+	const discard = () => {
+		setName(saved.name);
+		nameNow.current = saved.name;
+		setId(saved.id);
+		setMeta((m) => ({ ...m, description: saved.description }));
+		if (!edit) setStarter('filter');
+		editor.current?.replace(saved.content);
+		setProblem(null);
+	};
+
 	return (
 		<div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
+			{leaveDialog}
 			<ConfirmDialog
 				open={showConfirm}
 				onOpenChange={setShowConfirm}
-				title="Confirm"
+				title="Create function?"
+				confirmLabel="Create function"
 				onConfirm={() => {
 					setShowConfirm(false);
 					submit();
 				}}
 			>
-				<FunctionCodeWarning />
+				<FunctionCodeWarning source={source} />
 			</ConfirmDialog>
 
 			<form
 				ref={form}
-				className="flex h-full min-h-0 min-w-0 flex-col"
+				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
 				onSubmit={(e) => {
 					e.preventDefault();
-					if (edit) submit();
-					else setShowConfirm(true);
+					// Code from elsewhere is acknowledged before it is created; code written
+					// here is the person's own, and saves without asking (S4-D4).
+					if (!edit && clone) setShowConfirm(true);
+					else submit();
 				}}
 			>
 				<Button
@@ -205,7 +250,8 @@ export function FunctionEditor({
 				</div>
 
 				<span className="px-1 pb-1.5 text-sm leading-none font-medium">Function code</span>
-				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1">
+				{/* On a phone the form scrolls, so the editor keeps a usable height. */}
+				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1 max-sm:min-h-72">
 					<Suspense
 						fallback={
 							<div className="flex h-full items-center justify-center">
@@ -215,7 +261,7 @@ export function FunctionEditor({
 					>
 						<CodeEditor
 							ref={editor}
-							value={seed}
+							value={fn?.content ?? ''}
 							boilerplate={filterBoilerplate}
 							lang="python"
 							className="text-caption"
@@ -224,7 +270,9 @@ export function FunctionEditor({
 							describedBy={codeHelp}
 							onParseError={onParseError}
 							onChange={onCodeChange}
-							onSave={() => form.current?.requestSubmit()}
+							onSave={() => {
+								if (dirty && !loading) form.current?.requestSubmit();
+							}}
 						/>
 					</Suspense>
 				</div>
@@ -236,38 +284,32 @@ export function FunctionEditor({
 					</p>
 				)}
 
-				<div className="text-muted-foreground shrink-0 py-2 text-xs">
-					<div className="flex items-center justify-between gap-3">
-						<div className="min-w-0">
-							<span className="text-foreground font-normal">Warning:</span> Functions can execute arbitrary code.{' '}
-							<span className="font-normal">Only install functions from sources you trust.</span>
-						</div>
-						<Button type="submit" size="sm" disabled={loading}>
-							{edit ? 'Save' : 'Save & Create'}
-							{loading && <Spinner className="size-3" />}
-						</Button>
-					</div>
-				</div>
+				<p className="text-foreground-muted text-dense shrink-0 px-1 pt-1">
+					Functions run their code on this server. Only add functions from sources you trust.
+				</p>
+				<SaveBar
+					className="mt-2 shrink-0 pb-2"
+					dirty={dirty}
+					saving={loading}
+					onDiscard={discard}
+					saveLabel={edit ? 'Save changes' : 'Create function'}
+				/>
 			</form>
 		</div>
 	);
 }
 
-/** The acknowledgement shown before a function is created or imported from a file. */
-export function FunctionCodeWarning() {
-	return (
-		<div className="text-sm">
-			<div className="rounded-lg bg-warning/15 px-4 py-3 text-warning">
-				<div>Please carefully review the following warnings:</div>
-				<ul className="mt-1 list-disc pl-4 text-xs">
-					<li>Functions allow arbitrary code execution.</li>
-					<li>Do not install functions from sources you do not fully trust.</li>
-				</ul>
-			</div>
-			<div className="my-3">
-				I acknowledge that I have read and I understand the implications of my action. I am aware of the risks
-				associated with executing arbitrary code and I have verified the trustworthiness of the source.
-			</div>
-		</div>
-	);
+/**
+ * The acknowledgement asked before code from elsewhere becomes a function: one
+ * sentence naming its source (S4-D4). Also used by the list page's file import,
+ * with `verb="import"`.
+ */
+export function FunctionCodeWarning({
+	source = null,
+	verb = 'create'
+}: {
+	source?: CodeSource | null;
+	verb?: 'create' | 'import';
+}) {
+	return <p>{acknowledgement('function', source, verb)}</p>;
 }

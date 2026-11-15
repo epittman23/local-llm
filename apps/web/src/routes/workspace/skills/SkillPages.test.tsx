@@ -42,7 +42,7 @@ describe('SkillEditPage', () => {
 		const instructions = await screen.findByLabelText('Skill instructions');
 		expect(getSkillById).toHaveBeenCalledWith(expect.anything(), 'review');
 		fireEvent.change(instructions, { target: { value: 'new' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
 		await waitFor(() => expect(updateSkillById).toHaveBeenCalledOnce());
 		const sent = vi.mocked(updateSkillById).mock.calls[0]?.[2];

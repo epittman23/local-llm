@@ -1,5 +1,6 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { FunctionEditor } from './FunctionEditor';
@@ -7,6 +8,11 @@ import { FunctionEditor } from './FunctionEditor';
 // The code editor, reduced to what FunctionEditor gives it: every onChange it
 // was rendered with, oldest first.
 const { onChanges } = vi.hoisted(() => ({ onChanges: [] as ((value: string) => void)[] }));
+// The editors guard unsaved changes with useBlocker, which needs a data router.
+const Routed = ({ children }: { children: ReactNode }) => (
+	<RouterProvider router={createMemoryRouter([{ path: '*', element: children }])} />
+);
+
 vi.mock('@/components/common/CodeEditor', () => ({
 	default: ({ onChange }: { onChange: (value: string) => void }) => {
 		onChanges.push(onChange);
@@ -19,11 +25,11 @@ const code = '"""\ntitle: Example Filter\ndescription: Filters things\n"""\n';
 
 function show() {
 	render(
-		<MemoryRouter>
+		<Routed>
 			<TooltipProvider>
 				<FunctionEditor fn={null} onSave={vi.fn(async () => {})} />
 			</TooltipProvider>
-		</MemoryRouter>
+		</Routed>
 	);
 }
 
@@ -81,7 +87,7 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 
 	it('shows an existing function’s id as text, not as a field', async () => {
 		render(
-			<MemoryRouter>
+			<Routed>
 				<TooltipProvider>
 					<FunctionEditor
 						fn={{ id: 'fn_1', name: 'Function 1', meta: { description: 'd' }, content: 'x' }}
@@ -89,7 +95,7 @@ describe('FunctionEditor fields (#1057, #983)', () => {
 						onSave={vi.fn(async () => {})}
 					/>
 				</TooltipProvider>
-			</MemoryRouter>
+			</Routed>
 		);
 		await screen.findByLabelText('Function name');
 		expect(screen.queryByLabelText('Function ID')).toBeNull();
@@ -110,7 +116,7 @@ describe('FunctionEditor errors stay above the footer (#1015)', () => {
 	afterEach(cleanup);
 	it('shows why a save failed in place of the help line', async () => {
 		render(
-			<MemoryRouter>
+			<Routed>
 				<TooltipProvider>
 					<FunctionEditor
 						fn={{ id: 'f', name: 'F', meta: { description: 'd' }, content: 'x = 1' }}
@@ -118,11 +124,95 @@ describe('FunctionEditor errors stay above the footer (#1015)', () => {
 						onSave={vi.fn().mockRejectedValue('[ERROR: Error updating function]')}
 					/>
 				</TooltipProvider>
-			</MemoryRouter>
+			</Routed>
 		);
 		fireEvent.submit((await screen.findByLabelText('Function name')).closest('form') as HTMLFormElement);
 		expect(await screen.findByRole('alert')).toHaveTextContent(
 			"Couldn't save the function. The server couldn't load its code; check that it runs."
 		);
+	});
+});
+
+describe('FunctionEditor saves on request (#905, #1011, FRM-3)', () => {
+	afterEach(cleanup);
+	it('names its save for what it does, and asks before leaving with unsaved changes', async () => {
+		const router = createMemoryRouter(
+			[
+				{ path: '/admin/functions', element: <p>Functions list</p> },
+				{
+					path: '/admin/functions/edit',
+					element: (
+						<TooltipProvider>
+							<FunctionEditor
+								fn={{ id: 'f', name: 'F', meta: { description: 'd' }, content: 'x = 1' }}
+								edit
+								onSave={vi.fn()}
+							/>
+						</TooltipProvider>
+					)
+				}
+			],
+			{ initialEntries: ['/admin/functions', '/admin/functions/edit'], initialIndex: 1 }
+		);
+		render(<RouterProvider router={router} />);
+		expect(await screen.findByRole('button', { name: 'Save changes' })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'changed' } });
+		expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		expect(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('Functions list')).toBeInTheDocument();
+	});
+
+	it('creates code written here without an acknowledgement, then returns to the list', async () => {
+		const onSave = vi.fn().mockResolvedValue(true);
+		const router = createMemoryRouter(
+			[
+				{ path: '/admin/functions', element: <p>Functions list</p> },
+				{
+					path: '/admin/functions/create',
+					element: (
+						<TooltipProvider>
+							<FunctionEditor fn={null} onSave={onSave} />
+						</TooltipProvider>
+					)
+				}
+			],
+			{ initialEntries: ['/admin/functions/create'] }
+		);
+		render(<RouterProvider router={router} />);
+		fireEvent.change(await screen.findByLabelText('Function name'), { target: { value: 'Mine' } });
+		fireEvent.change(screen.getByLabelText('Function description'), { target: { value: 'Mine' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create function' }));
+		// Code written here is the person's own: no acknowledgement (S4-D4).
+		expect(await screen.findByText('Functions list')).toBeInTheDocument();
+		expect(onSave).toHaveBeenCalledOnce();
+	});
+});
+
+describe('FunctionEditor acknowledgement (#1098, S4-D4)', () => {
+	afterEach(cleanup);
+	it('asks once before creating a clone, naming where its code came from', async () => {
+		const onSave = vi.fn().mockResolvedValue(false);
+		render(
+			<Routed>
+				<TooltipProvider>
+					<FunctionEditor
+						fn={{ id: 'f_clone', name: 'F (Clone)', meta: { description: 'd' }, content: 'x = 1' }}
+						clone
+						source={{ kind: 'clone', from: 'F' }}
+						onSave={onSave}
+					/>
+				</TooltipProvider>
+			</Routed>
+		);
+		fireEvent.click(await screen.findByRole('button', { name: 'Create function' }));
+		const ack = await screen.findByRole('alertdialog', { name: 'Create function?' });
+		expect(ack).toHaveTextContent(
+			'The code is copied from "F", and functions run their code on this server: create it only if you trust that code.'
+		);
+		expect(onSave).not.toHaveBeenCalled();
+		fireEvent.click(within(ack).getByRole('button', { name: 'Create function' }));
+		await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
 	});
 });

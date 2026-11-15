@@ -5,14 +5,17 @@ import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { acknowledgement, type CodeSource } from '@/components/common/codeSource';
 import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SaveBar } from '@/components/ui/save-bar';
 import { useAccessGrants } from '@/lib/access/useAccessGrants';
 import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 import { formatSkillName } from '@/lib/utils/skills';
 import { routePaths } from '@/routes/routePaths';
@@ -33,18 +36,27 @@ const CodeEditor = lazy(() => import('@/components/common/CodeEditor'));
  * - Edit: the id is fixed; saving goes straight through.
  * - Either way the code is formatted (Black, via the backend, admins only) just
  *   before saving; if formatting fails the unformatted code is saved.
- * - Ctrl/Cmd+S in the editor submits the form.
+ * - Ctrl/Cmd+S in the editor submits the form while there is something to save.
+ * - Saves on request (FRM-3): the SaveBar says whether the form matches what
+ *   is stored, and leaving with unsaved changes asks first. A clone or import
+ *   is unsaved from the start: nothing is stored yet. `onSave` resolves true
+ *   once stored (a create then returns to the list), false when it refused
+ *   (and said why), and throws when the server failed.
  */
 export function ToolkitEditor({
 	tool,
 	edit = false,
 	clone = false,
+	source = null,
 	onSave
 }: {
 	tool: ToolDraft | null;
 	edit?: boolean;
+	/** Pre-filled from a clone, a link or a file: creating it asks first (S4-D4). */
 	clone?: boolean;
-	onSave: (tool: ToolDraft) => Promise<void>;
+	/** Where a clone's or import's code came from, named in that question. */
+	source?: CodeSource | null;
+	onSave: (tool: ToolDraft) => Promise<boolean>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
@@ -62,8 +74,26 @@ export function ToolkitEditor({
 		edit && id ? (grants) => updateToolAccessGrants(token, id, grants) : null
 	);
 	// The editor owns the document; this ref tracks its live text so a save reads
-	// the latest even right after an async format.
+	// the latest even right after an async format, and `codeNow` renders it.
 	const code = useRef(tool?.content || toolBoilerplate);
+	const [codeNow, setCodeNow] = useState(code.current);
+	// What Discard goes back to, and what "saved" compares with: the stored tool,
+	// or the empty form with the boilerplate. A clone or import has nothing
+	// stored, so it counts as unsaved until created.
+	const [saved, setSaved] = useState(() => ({
+		name: tool?.name ?? '',
+		id: tool?.id ?? '',
+		description: tool?.meta?.description ?? '',
+		content: code.current
+	}));
+	const unsavedImport = !edit && tool !== null;
+	const dirty =
+		unsavedImport ||
+		name !== saved.name ||
+		id !== saved.id ||
+		meta.description !== saved.description ||
+		codeNow !== saved.content;
+	const { dialog: leaveDialog, allowNext } = useUnsavedChanges(dirty);
 	const [showAccess, setShowAccess] = useState(false);
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
@@ -78,6 +108,7 @@ export function ToolkitEditor({
 
 	const onCodeChange = (value: string) => {
 		code.current = value;
+		setCodeNow(value);
 		if (edit) return;
 		const fm = extractFrontmatter(value);
 		if (fm.title && !name) {
@@ -95,16 +126,35 @@ export function ToolkitEditor({
 			// onParseError says where. Code that could not be formatted for another
 			// reason (not an admin, no answer) is saved as it is.
 			if ((await editor.current?.formatPython()) === 'invalid') return;
-			await onSave({ id, name, meta, content: code.current, access_grants: accessGrants }).catch((error) =>
-				setProblem(saveProblem(error, 'tool'))
-			);
+			const sent = { id, name, meta, content: code.current, access_grants: accessGrants };
+			const stored = await onSave(sent).catch((error) => {
+				setProblem(saveProblem(error, 'tool'));
+				return false;
+			});
+			if (!stored) return;
+			setSaved({ name, id, description: meta.description, content: sent.content });
+			if (!edit) {
+				allowNext();
+				navigate(routePaths.workspaceTools);
+			}
 		} finally {
 			setLoading(false);
 		}
 	};
 
+	const discard = () => {
+		setName(saved.name);
+		setId(saved.id);
+		setMeta((m) => ({ ...m, description: saved.description }));
+		code.current = saved.content;
+		setCodeNow(saved.content);
+		editor.current?.replace(saved.content);
+		setProblem(null);
+	};
+
 	return (
 		<div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
+			{leaveDialog}
 			<AccessControlModal
 				open={showAccess}
 				onOpenChange={setShowAccess}
@@ -119,22 +169,25 @@ export function ToolkitEditor({
 			<ConfirmDialog
 				open={showConfirm}
 				onOpenChange={setShowConfirm}
-				title="Confirm"
+				title="Create tool?"
+				confirmLabel="Create tool"
 				onConfirm={() => {
 					setShowConfirm(false);
 					submit();
 				}}
 			>
-				<CodeExecutionWarning />
+				<CodeExecutionWarning source={source} />
 			</ConfirmDialog>
 
 			<form
 				ref={form}
-				className="flex h-full min-h-0 min-w-0 flex-col"
+				className="flex h-full min-h-0 min-w-0 flex-col max-sm:overflow-y-auto"
 				onSubmit={(e) => {
 					e.preventDefault();
-					if (edit) submit();
-					else setShowConfirm(true);
+					// Code from elsewhere is acknowledged before it is created; code written
+					// here is the person's own, and saves without asking (S4-D4).
+					if (!edit && clone) setShowConfirm(true);
+					else submit();
 				}}
 			>
 				<Button
@@ -203,7 +256,8 @@ export function ToolkitEditor({
 				</div>
 
 				<span className="px-1 pb-1.5 text-sm leading-none font-medium">Tool code</span>
-				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1">
+				{/* On a phone the form scrolls, so the editor keeps a usable height. */}
+				<div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border-control bg-surface-1 max-sm:min-h-72">
 					<Suspense
 						fallback={
 							<div className="flex h-full items-center justify-center">
@@ -222,7 +276,9 @@ export function ToolkitEditor({
 							describedBy={codeHelp}
 							onParseError={onParseError}
 							onChange={onCodeChange}
-							onSave={() => form.current?.requestSubmit()}
+							onSave={() => {
+								if (dirty && !loading) form.current?.requestSubmit();
+							}}
 						/>
 					</Suspense>
 				</div>
@@ -234,38 +290,32 @@ export function ToolkitEditor({
 					</p>
 				)}
 
-				<div className="text-muted-foreground shrink-0 py-2 text-xs">
-					<div className="flex items-center justify-between gap-3">
-						<div className="min-w-0">
-							<span className="text-foreground font-normal">Warning:</span> Tools can execute arbitrary code.{' '}
-							<span className="font-normal">Only install tools from sources you trust.</span>
-						</div>
-						<Button type="submit" size="sm" disabled={loading}>
-							{edit ? 'Save' : 'Save & Create'}
-							{loading && <Spinner className="size-3" />}
-						</Button>
-					</div>
-				</div>
+				<p className="text-foreground-muted text-dense shrink-0 px-1 pt-1">
+					Tools run their code on this server. Only add tools from sources you trust.
+				</p>
+				<SaveBar
+					className="mt-2 shrink-0 pb-2"
+					dirty={dirty}
+					saving={loading}
+					onDiscard={discard}
+					saveLabel={edit ? 'Save changes' : 'Create tool'}
+				/>
 			</form>
 		</div>
 	);
 }
 
-/** The acknowledgement shown before a tool is created or imported from a file. */
-export function CodeExecutionWarning() {
-	return (
-		<div className="text-sm">
-			<div className="rounded-lg bg-warning/15 px-4 py-3 text-warning">
-				<div>Please carefully review the following warnings:</div>
-				<ul className="mt-1 list-disc pl-4 text-xs">
-					<li>Tools have a function calling system that allows arbitrary code execution.</li>
-					<li>Do not install tools from sources you do not fully trust.</li>
-				</ul>
-			</div>
-			<div className="my-3">
-				I acknowledge that I have read and I understand the implications of my action. I am aware of the risks
-				associated with executing arbitrary code and I have verified the trustworthiness of the source.
-			</div>
-		</div>
-	);
+/**
+ * The acknowledgement asked before code from elsewhere becomes a tool: one
+ * sentence naming its source (S4-D4). Also used by the list page's file import,
+ * with `verb="import"`.
+ */
+export function CodeExecutionWarning({
+	source = null,
+	verb = 'create'
+}: {
+	source?: CodeSource | null;
+	verb?: 'create' | 'import';
+}) {
+	return <p>{acknowledgement('tool', source, verb)}</p>;
 }

@@ -114,6 +114,8 @@ export type CodeEditorHandle = {
 	/** Formats the buffer with the backend's Black. */
 	formatPython: () => Promise<FormatOutcome>;
 	focus: () => void;
+	/** Replaces the whole document (Discard changes); reported to `onChange` like an edit. */
+	replace: (text: string) => void;
 };
 
 // The line Black could not parse, marked until the next edit or format.
@@ -244,7 +246,19 @@ export default function CodeEditor({
 	const formatRef = useRef(formatPython);
 	formatRef.current = formatPython;
 
-	useImperativeHandle(ref, () => ({ formatPython: () => formatRef.current(), focus: () => view.current?.focus() }), []);
+	useImperativeHandle(
+		ref,
+		() => ({
+			formatPython: () => formatRef.current(),
+			focus: () => view.current?.focus(),
+			replace: (text: string) => {
+				const v = view.current;
+				if (v && v.state.doc.toString() !== text)
+					v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text } });
+			}
+		}),
+		[]
+	);
 
 	useEffect(() => {
 		if (!container.current) return;

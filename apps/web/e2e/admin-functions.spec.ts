@@ -146,7 +146,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('No functions found')).toBeVisible();
 	});
 
-	test('create: the id follows the name, the warning gates the save, and only four fields are sent', async ({
+	test('create: the id follows the name, code written here saves without an acknowledgement, and only four fields are sent', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -156,11 +156,9 @@ test.describe('admin functions', () => {
 		await page.getByLabel('Function Name').fill('My Cool Filter');
 		await expect(page.getByLabel('Function ID')).toHaveValue('my_cool_filter');
 		await page.getByLabel('Function Description').fill('does things');
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		// Nothing is sent until the warning is acknowledged.
-		await expect(page.getByRole('alertdialog')).toContainText('Functions allow arbitrary code execution.');
-		expect(calls.some((c) => c.path === '/create')).toBe(false);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Create function' }).click();
+		// Code written in the editor is the person's own: no acknowledgement (S4-D4).
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 		await expect
 			.poll(() => calls.find((c) => c.path === '/create')?.body)
 			.toMatchObject({ id: 'my_cool_filter', name: 'My Cool Filter', meta: { description: 'does things' } });
@@ -194,6 +192,11 @@ test.describe('admin functions', () => {
 		await expect(page.getByLabel('Function Name')).toHaveValue('Function 1 (Clone)');
 		await page.getByLabel('Function Name').fill('Renamed');
 		await expect(page.getByLabel('Function ID')).toHaveValue('fn_1_clone');
+		// A clone's code came from elsewhere: creating it asks first (S4-D4).
+		await page.getByRole('button', { name: 'Create function' }).click();
+		await expect(page.getByRole('alertdialog', { name: 'Create function?' })).toContainText(
+			'functions run their code on this server'
+		);
 	});
 
 	test('edit: the id is fixed, and saving updates without asking', async ({ page }) => {
@@ -203,7 +206,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByLabel('Function Name')).toHaveValue('Function 1');
 		await expect(page.getByLabel('Function ID')).toHaveCount(0);
 		await page.getByLabel('Function Name').fill('Function One');
-		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/fn_1/update')?.body)
 			.toMatchObject({ id: 'fn_1', name: 'Function One' });
@@ -243,7 +246,7 @@ test.describe('admin functions', () => {
 			)
 		};
 		await page.locator('#documents-import-input').setInputFiles(file);
-		await expect(page.getByRole('alertdialog')).toContainText('Functions allow arbitrary code execution.');
+		await expect(page.getByRole('alertdialog')).toContainText('functions run their code on this server');
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
 		await expect.poll(() => calls.filter((c) => c.path === '/create').length).toBe(1);
 		const created = calls.find((c) => c.path === '/create')!.body;

@@ -15,7 +15,6 @@ import { type SkillDraft, sanitizeStashedSkill, toSkillDraft } from './skillType
  */
 export function SkillCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const navigate = useNavigate();
 	const [stash] = useState(() => {
 		const raw = sessionStorage.skill;
 		if (!raw) return null;
@@ -27,15 +26,10 @@ export function SkillCreatePage() {
 		}
 	});
 
+	// The editor returns to the list once created; a failure throws, and the editor says why.
 	const onSubmit = async (skill: SkillDraft) => {
-		const res = await createNewSkill(token, skill).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-		if (res) {
-			toast.success('Skill created successfully');
-			navigate(routePaths.workspaceSkills);
-		}
+		await createNewSkill(token, skill);
+		toast.success('Skill created');
 	};
 
 	return <SkillEditor skill={stash} clone={stash !== null} onSubmit={onSubmit} />;
@@ -78,14 +72,8 @@ export function SkillEditPage() {
 
 	const onSubmit = async (draft: SkillDraft) => {
 		if (!skillId) return;
-		const updated = await updateSkillById(token, skillId, draft).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
-		if (updated) {
-			toast.success('Skill updated successfully');
-			setSkill(toSkillDraft(updated));
-		}
+		await updateSkillById(token, skillId, draft);
+		toast.success('Skill saved');
 	};
 
 	if (!skill) {

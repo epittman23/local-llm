@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -8,6 +9,11 @@ import { updateToolAccessGrants } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ToolkitEditor } from './ToolkitEditor';
 import type { ToolDraft } from './toolTypes';
+
+// The editors guard unsaved changes with useBlocker, which needs a data router.
+const Routed = ({ children }: { children: ReactNode }) => (
+	<RouterProvider router={createMemoryRouter([{ path: '*', element: children }])} />
+);
 
 vi.mock('@/lib/apis/tools', () => ({ updateToolAccessGrants: vi.fn() }));
 // The code editor, reduced to its handle and the props it was last given.
@@ -55,9 +61,9 @@ const send = (grants: AccessGrant[]) => {
 const renderEditor = (props: Parameters<typeof ToolkitEditor>[0]) =>
 	render(
 		<TooltipProvider>
-			<MemoryRouter>
+			<Routed>
 				<ToolkitEditor {...props} />
-			</MemoryRouter>
+			</Routed>
 		</TooltipProvider>
 	);
 
@@ -67,7 +73,10 @@ beforeEach(() => {
 		user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' }
 	} as never);
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+	vi.clearAllMocks();
+	codeEditor.outcome = 'unformatted';
+});
 
 describe('ToolkitEditor access dialog (#676)', () => {
 	it('shows the grants the server stored, and warns when it dropped some', async () => {
@@ -165,12 +174,63 @@ describe('ToolkitEditor errors stay above the footer (#1015)', () => {
 		const onSave = vi.fn();
 		renderEditor({ tool, edit: true, onSave });
 		fireEvent.submit(screen.getByLabelText('Tool name').closest('form') as HTMLFormElement);
-		await waitFor(() => expect(screen.getByRole('button', { name: /save/i })).toBeEnabled());
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).not.toHaveAttribute('aria-busy'));
 		act(() => codeEditor.props.onParseError?.({ line: 3, column: 9, detail: 'cannot parse: 3:9' }));
 		expect(screen.getByRole('alert')).toHaveTextContent("Line 3, column 9: this line isn't valid Python.");
 		expect(onSave).not.toHaveBeenCalled();
 		act(() => codeEditor.props.onParseError?.(null));
 		expect(screen.queryByRole('alert')).toBeNull();
-		codeEditor.outcome = 'unformatted';
+	});
+});
+
+describe('ToolkitEditor saves on request (#905, #1011, FRM-3)', () => {
+	it('names its save for what it does, and counts only real changes as unsaved', () => {
+		renderEditor({ tool, edit: true, onSave: vi.fn() });
+		expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Calc 2' } });
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Tool name')).toHaveValue('Calc');
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+	});
+
+	it('a new tool starts saved: the boilerplate is not a change', () => {
+		renderEditor({ tool: null, onSave: vi.fn() });
+		expect(screen.getByRole('button', { name: 'Create tool' })).toBeDisabled();
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+	});
+
+	it('takes the stored code as saved after an edit, and stays on the page', async () => {
+		const onSave = vi.fn().mockResolvedValue(true);
+		renderEditor({ tool, edit: true, onSave });
+		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Calc 2' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+		await waitFor(() => expect(screen.getByText('All changes saved')).toBeInTheDocument());
+		expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ name: 'Calc 2', content: 'code' }));
+		expect(screen.getByLabelText('Tool name')).toBeInTheDocument();
+	});
+});
+
+describe('ToolkitEditor acknowledgement (#1098, S4-D4)', () => {
+	it('creates code written here without asking', async () => {
+		const onSave = vi.fn().mockResolvedValue(false);
+		renderEditor({ tool: null, onSave });
+		fireEvent.change(screen.getByLabelText('Tool name'), { target: { value: 'Mine' } });
+		fireEvent.change(screen.getByLabelText('Tool description'), { target: { value: 'Mine' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create tool' }));
+		await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('asks before creating an import, naming the link it came from', async () => {
+		const onSave = vi.fn().mockResolvedValue(false);
+		renderEditor({ tool, clone: true, source: { kind: 'link', from: 'https://example.com/calc.py' }, onSave });
+		fireEvent.click(screen.getByRole('button', { name: 'Create tool' }));
+		const ack = await screen.findByRole('alertdialog', { name: 'Create tool?' });
+		expect(ack).toHaveTextContent(
+			'The code comes from https://example.com/calc.py, and tools run their code on this server: create it only if you trust that source.'
+		);
+		expect(onSave).not.toHaveBeenCalled();
 	});
 });

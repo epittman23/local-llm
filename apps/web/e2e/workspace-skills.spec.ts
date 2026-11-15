@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Skill = {
@@ -125,7 +125,7 @@ test.describe('workspace skills', () => {
 		await page.getByLabel('Skill Name').fill('Weekly Report');
 		await expect(page.getByLabel('Skill ID')).toHaveValue('weekly-report');
 
-		await page.getByRole('button', { name: 'Save & Create' }).click();
+		await page.getByRole('button', { name: 'Create skill' }).click();
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 		expect(calls.find((c) => c.path === '/create')?.body).toMatchObject({
 			id: 'weekly-report',
@@ -198,7 +198,7 @@ test.describe('workspace skills', () => {
 		await expect(page.getByLabel('Skill Name')).toHaveValue('Skill 1');
 		await expect(page.getByText('skill-1', { exact: true })).toBeVisible(); // id shown as text
 		await page.getByLabel('Skill Instructions').fill('New instructions');
-		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/skill-1/update')?.body)
 			.toMatchObject({
@@ -208,7 +208,7 @@ test.describe('workspace skills', () => {
 
 		await page.goto('/workspace/skills/edit?id=skill-2');
 		await expect(page.getByText('Read Only')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
 		await expect(page.locator('pre')).toHaveText('Instructions 2');
 	});
 

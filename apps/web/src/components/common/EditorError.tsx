@@ -2,7 +2,7 @@ import { CircleAlertIcon } from 'lucide-react';
 import type { CodeParseError } from '@/components/common/CodeEditor';
 import { failureCause } from '@/components/common/LoadFailed';
 
-/** What went wrong in a code editor, in words, with the server's or Black's own words behind Details. */
+/** What went wrong in an editor, in words, with the server's or Black's own words behind Details. */
 export type EditorProblem = { message: string; detail: string | null };
 
 /** Black's parse error, located: "Line 30, column 12: this line isn't valid Python." */
@@ -16,19 +16,19 @@ const SERVER_ERROR = /^\[ERROR: (.*)\]$/s;
 const LOAD_FAILED = /^Error (creating|updating) /;
 
 /**
- * Why saving a tool or function failed (FBK-4), from what its API helper threw.
+ * Why saving a tool, function or skill failed (FBK-4), from what its API helper threw.
  * The server words a failure to load the code as "[ERROR: Error updating
  * tool]", so that becomes what it means; a taken id says so; a server that did
  * not answer says that; anything else keeps the server's message.
  */
-export function saveProblem(error: unknown, what: 'tool' | 'function'): EditorProblem {
+export function saveProblem(error: unknown, what: 'tool' | 'function' | 'skill'): EditorProblem {
 	const text = typeof error === 'string' ? error.trim() : '';
 	if (ID_TAKEN.test(text))
 		return { message: `This ID is already used by another ${what}. Choose another.`, detail: null };
 	const { cause, detail } = failureCause(error);
 	if (!detail) return { message: `Couldn't save the ${what}. ${cause}`, detail: null };
 	const inner = SERVER_ERROR.exec(detail)?.[1]?.trim() ?? detail;
-	if (LOAD_FAILED.test(inner)) {
+	if (what !== 'skill' && LOAD_FAILED.test(inner)) {
 		return {
 			message: `Couldn't save the ${what}. The server couldn't load its code; check that it runs.`,
 			detail: inner
