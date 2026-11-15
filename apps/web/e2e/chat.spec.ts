@@ -307,6 +307,34 @@ test('a request refused because the session expired signs out and says so', asyn
 	await expect(page.getByRole('alert')).toHaveText('Your session expired. Sign in to continue where you left off.');
 });
 
+test('a draft sent into an expired session is back after signing in (#1061)', async ({ page }) => {
+	const chat = await mockChat(page, { user: { features: { auth: true, enable_login_form: true } } });
+	let expired = false;
+	await page.route('**/api/v1/auths/', (route) =>
+		expired
+			? route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' })
+			: route.fallback()
+	);
+	await page.route('**/api/v1/auths/signin', (route) => {
+		expired = false;
+		return json(route, { id: 'u1', email: 'u@example.com', name: 'Test User', role: 'user', token: 'signed-in-token' });
+	});
+	await page.route('**/api/chat/completions', (route) => {
+		expired = true;
+		return route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' });
+	});
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('textbox', { name: 'Message' }).fill('The draft I was writing');
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/auth\?redirect=.*&reason=expired$/);
+	await page.getByLabel('Email').fill('user@example.com');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+	await expect(page).toHaveURL(/\/$/);
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('The draft I was writing');
+});
+
 test('a message sent the moment the box appears waits for the model list, then goes (#373)', async ({ page }) => {
 	const chat = await mockChat(page);
 	let release = () => {};

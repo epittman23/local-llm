@@ -7,6 +7,9 @@
 
 const PREFIX = 'chat-draft:';
 
+/** Whether a session-storage key holds a draft (kept when a session runs out, #1061). */
+export const isDraftKey = (key: string) => key.startsWith(PREFIX);
+
 /** The storage key for a chat's draft: its id, else `new:<folderId>`. */
 export const draftKeyFor = (chatId: string | null | undefined, folderId?: string | null) =>
 	chatId || `new:${folderId ?? ''}`;

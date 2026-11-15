@@ -81,6 +81,20 @@ describe('a session that runs out (#1061)', () => {
 		expect(sessionEndReason()).toBeNull();
 	});
 
+	it('keeps the unsent drafts and forgets the rest of the tab session; a chosen sign-out forgets them too', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
+		await initAuth();
+		sessionStorage.setItem('chat-draft:new:', 'half a question');
+		sessionStorage.setItem('other', 'x');
+
+		clearExpiredSession();
+
+		await vi.waitFor(() => expect(sessionStorage.getItem('other')).toBeNull());
+		expect(sessionStorage.getItem('chat-draft:new:')).toBe('half a question');
+		await signOut();
+		expect(sessionStorage.getItem('chat-draft:new:')).toBeNull();
+	});
+
 	it('records nothing for a sign-out the person chose', async () => {
 		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
 		await initAuth();

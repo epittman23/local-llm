@@ -99,7 +99,8 @@ export const clearExpiredSession = () => {
 	localStorage.removeItem('token');
 	// Clears the OAuth token cookie so /auth doesn't auto-login and redirect-loop.
 	document.cookie = 'token=; Max-Age=0; path=/';
-	userSignOut().catch((error) => {
+	// The unsent drafts stay, so the sign-in page's "continue where you left off" holds (#1061).
+	userSignOut({ keepDrafts: true }).catch((error) => {
 		console.error('Error signing out expired session:', error);
 	});
 };
