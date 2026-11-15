@@ -25,7 +25,9 @@ vi.mock('@/lib/apis/tools', () => ({ getTools: vi.fn(async () => []) }));
 vi.mock('@/lib/apis/chats', async (orig) => ({
 	...(await orig<object>()),
 	getChatById: vi.fn(),
-	getChatListByFolderId: vi.fn(async () => [])
+	getChatListByFolderId: vi.fn(async () => []),
+	getPinnedChatList: vi.fn(async () => []),
+	getTagsById: vi.fn(async () => [])
 }));
 vi.mock('@/lib/apis/folders', async (orig) => ({ ...(await orig<object>()), getFolderById: vi.fn() }));
 
@@ -109,6 +111,55 @@ function showAt(path: string) {
 		</QueryClientProvider>
 	);
 }
+
+const SAVED = {
+	id: 'c1',
+	title: 'Arithmetic',
+	chat: {
+		title: 'Arithmetic',
+		models: ['m1'],
+		history: {
+			currentId: 'a1',
+			messages: {
+				u1: { id: 'u1', parentId: null, childrenIds: ['a1'], role: 'user', content: 'What is 2+2?' },
+				a1: {
+					id: 'a1',
+					parentId: 'u1',
+					childrenIds: [],
+					role: 'assistant',
+					content: 'It is 4',
+					model: 'm1',
+					done: true
+				}
+			}
+		}
+	}
+};
+
+describe('ChatPage: a saved chat', () => {
+	it('shows its title in the header, and a rename there names the tab at once (#928)', async () => {
+		vi.mocked(getChatById).mockResolvedValueOnce(SAVED as never);
+		showAt('/c/c1');
+		const title = await screen.findByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Arithmetic'));
+		fireEvent.click(title);
+		expect(screen.getByRole('textbox', { name: 'Chat title' })).toBeInTheDocument();
+	});
+
+	it('offers Jump to latest when scrolled up, which goes back to the end (#929)', async () => {
+		vi.mocked(getChatById).mockResolvedValueOnce(SAVED as never);
+		showAt('/c/c1');
+		const scroller = await screen.findByTestId('chat-messages');
+		expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+		Object.defineProperty(scroller, 'scrollHeight', { configurable: true, value: 3000 });
+		Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 600 });
+		scroller.scrollTop = 1000;
+		fireEvent.scroll(scroller);
+		fireEvent.click(await screen.findByRole('button', { name: 'Jump to latest' }));
+		expect(scroller.scrollTop).toBe(3000);
+		expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+	});
+});
 
 describe('ChatPage on a phone (#1091)', () => {
 	afterEach(() => vi.unstubAllGlobals());

@@ -45,6 +45,7 @@ import { ChatTitle, RenameChatDialog } from './ChatTitle';
 import { CitationDialog } from './CitationDialog';
 import { FolderHome } from './FolderHome';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
+import { JumpToLatest } from './JumpToLatest';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
@@ -193,6 +194,14 @@ export function ChatPage() {
 	}, [id]);
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
+	// The same, for the render: Jump to latest shows while the reader is away from the end (#929).
+	const [awayFromEnd, setAwayFromEnd] = useState(false);
+	const jumpToLatest = () => {
+		const el = scroller.current;
+		if (el) el.scrollTop = el.scrollHeight;
+		atBottom.current = true;
+		setAwayFromEnd(false);
+	};
 
 	// A rename made on this page shows at once in the header, the tab and the
 	// phone bar; the session keeps the title it loaded until the chat reloads.
@@ -553,9 +562,22 @@ export function ChatPage() {
 						onScroll={(e) => {
 							const el = e.currentTarget;
 							atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+							setAwayFromEnd(!atBottom.current);
 						}}
 					>
 						<ChatMessages history={session.history} h={handlers} chatId={session.chatId} />
+					</div>
+				)}
+				{!session.loading && !empty && (
+					// Centred just above the composer, whatever its height.
+					<div className="relative h-0">
+						<JumpToLatest
+							shown={awayFromEnd}
+							streaming={session.generating}
+							onJump={jumpToLatest}
+							scroller={scroller}
+							className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2"
+						/>
 					</div>
 				)}
 
