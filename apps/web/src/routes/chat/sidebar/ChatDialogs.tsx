@@ -27,6 +27,7 @@ import {
 	DROPPED_GRANTS_WARNING,
 	grantsDropped,
 	hasAnyoneReadGrant,
+	hasPublicReadGrant,
 	setVisibility
 } from '@/lib/access/accessGrants';
 import {
@@ -61,6 +62,9 @@ const AUDIENCE_HELP: Record<Audience | '', string> = {
 	me: 'The link opens only while you are signed in, such as on your other devices.'
 };
 
+/** Why "Anyone with the link" cannot be chosen (ACT-5). */
+const BLOCKED_HELP = 'Your sharing permissions do not allow links that anyone can open.';
+
 /**
  * Ports chat/ShareChatModal.svelte, asking first (#1006, S2-D2): before a link
  * exists the dialog asks who can open it, "Anyone with the link" or "Only me
@@ -71,7 +75,9 @@ const AUDIENCE_HELP: Record<Audience | '', string> = {
  * The answer is stored as the share's access grants (#334) through the
  * existing routes: "anyone" is the `anyone:*` read grant (`getVisibility`'s
  * "open"), "only me" is no grant, since the shared-chat route always serves a
- * share to its owner. The users-and-groups list is shown only when more than
+ * share to its owner. A share made with the old dialog may instead hold the
+ * `user:*` read grant (every signed-in account): that is said as it is, with
+ * neither answer chosen and a way to make it only the owner's. The users-and-groups list is shown only when more than
  * one account exists (WRD-4), counted by GET /users/search's `total`. Not
  * ported: sharing to the original project's community site.
  */
@@ -231,9 +237,11 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		void chat.refetch();
 	};
 
+	// A link every signed-in account may open (`user:*`), from the old dialog: neither answer.
+	const everyAccount = shared && grants !== null && !hasAnyoneReadGrant(grants) && hasPublicReadGrant(grants);
 	// Before a link exists the owner's pick; after, what is stored.
 	const audience: Audience | '' = shared
-		? grants === null
+		? grants === null || everyAccount
 			? ''
 			: hasAnyoneReadGrant(grants)
 				? 'anyone'
@@ -244,7 +252,7 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		else if (grants !== null) void saveAccess(setVisibility(grants, next === 'anyone' ? 'open' : 'private'));
 	};
 	const anyoneBlocked = !canShareOpen && audience !== 'anyone';
-	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ' Your sharing permissions do not allow links that anyone can open.' : ''}`;
+	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ` ${BLOCKED_HELP}` : ''}`;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -275,9 +283,24 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 								{ value: 'me', label: 'Only me (signed in)', icon: Lock }
 							]}
 						/>
-						<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
-							{help}
-						</p>
+						{everyAccount ? (
+							<div className="mt-1 flex flex-wrap items-center gap-x-2">
+								<p id={`${ids}-who-help`} className="text-foreground-muted text-dense">
+									All signed-in accounts can open this link.{anyoneBlocked && ` ${BLOCKED_HELP}`}
+								</p>
+								<Button
+									variant="link"
+									className="px-0"
+									onClick={() => grants && void saveAccess(setVisibility(grants, 'private'))}
+								>
+									Make it only me
+								</Button>
+							</div>
+						) : (
+							<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
+								{help}
+							</p>
+						)}
 					</div>
 					{shareId && (
 						<div className="min-w-0">
