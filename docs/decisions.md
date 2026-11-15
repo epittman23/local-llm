@@ -7,7 +7,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-11-15**: **The chat: the owner's decisions for the UX review's
+- **2026-11-15** (later): **The chat: the owner's decisions for the UX review's
   section 3 (#1116), and canvas Phase 1, the side panel.**
   - **The Arena model is off (#990, S3-D1 A).** `ENABLE_EVALUATION_ARENA_MODELS`
     defaults to false, and revision `c17c2aeb2577` deletes a stored
