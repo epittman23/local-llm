@@ -1,6 +1,6 @@
 # Canvas: a document viewer and text editor beside the chat
 
-> **Status: Phase 1 built (2026-11-15, #<PR>): `SidePanel` holds Controls
+> **Status: Phase 1 built (2026-11-15, #1129): `SidePanel` holds Controls
 > and the preview; Phases 2-3 planned.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
