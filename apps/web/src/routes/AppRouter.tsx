@@ -70,10 +70,10 @@ const router = createBrowserRouter(
 			element: <RootLayout />,
 			children: [
 				{
-					// Only the real React routes live under AppShell and its route gate.
-					// NotFound (the catch-all below) is outside it: a 404 needs no
-					// session. Phase 6's four
-					// public pages are top-level siblings for the same reason.
+					// Only the real React routes live under AppShell and its route gate,
+					// and the catch-all, so a mistyped address keeps the sidebar (#1069;
+					// the gate sends an anonymous visitor to sign in first). Phase 6's
+					// four public pages are top-level siblings: they need no session.
 					element: <AppShell />,
 					children: [
 						{
@@ -190,7 +190,8 @@ const router = createBrowserRouter(
 								{ path: routePaths.benchmarksTune, element: <TunePage />, handle: layout('Tune') },
 								{ path: routePaths.benchmarksPrescreen, element: <PrescreenPage />, handle: layout('Pre-screen') }
 							]
-						}
+						},
+						{ path: '*', element: <NotFound />, handle: page('Page not found') }
 					]
 				},
 				// Phase 6 (docs/history/migration-plan.md): the four public/static pages. None
@@ -201,8 +202,7 @@ const router = createBrowserRouter(
 				{ path: routePaths.error, element: <ErrorPage />, handle: page("Can't reach the server") },
 				{ path: routePaths.watch, element: <WatchPage />, handle: page('Opening a video') },
 				{ path: routePaths.share, element: <SharedChatPage />, handle: page('Shared chat') },
-				{ path: routePaths.uiStandard, element: <UiStandardPage />, handle: page('Interface standard') },
-				{ path: '*', element: <NotFound />, handle: page('Page not found') }
+				{ path: routePaths.uiStandard, element: <UiStandardPage />, handle: page('Interface standard') }
 			]
 		}
 	],

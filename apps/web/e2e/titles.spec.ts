@@ -59,6 +59,20 @@ test('a section page names the tab, not the section', async ({ page }) => {
 	await expect(page).toHaveTitle('Page not found · local-llm');
 });
 
+test('a 404 sits inside the app shell, centred, with one h1 and a way on (#1069)', async ({ page }) => {
+	await page.goto('/no-such-page');
+	const heading = page.getByRole('heading', { level: 1, name: 'Page not found' });
+	await expect(heading).toBeVisible();
+	await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+	// Inside AppShell: its skip link and main are there, and the URL is kept.
+	await expect(page.getByRole('main').getByRole('button', { name: 'Search chats' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Skip to content' })).toBeAttached();
+	await expect(page).toHaveURL(/\/no-such-page$/);
+	const box = await heading.boundingBox();
+	const viewport = page.viewportSize();
+	expect(box && viewport && box.y > viewport.height / 4).toBe(true);
+});
+
 test('the first Tab press shows the skip link, and Enter moves focus to the page (A11Y-3)', async ({ page }) => {
 	await page.goto(routePaths.notes);
 	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();

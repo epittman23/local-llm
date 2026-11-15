@@ -1,22 +1,42 @@
+import { House, Search } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
+import { Gone } from '@/components/common/Gone';
+import { Button } from '@/components/ui/button';
+import { useUIStore } from '@/lib/stores/uiStore';
 
 /**
  * AppRouter's catch-all ("*") route: the path is not one of this app's routes.
- * It never navigates on its own. Until Phase 11 this was `LegacyFallback`,
- * which bounced unported paths to the SvelteKit app; on the dev server that
- * bounce landed back here and looped, and the Svelte app is gone now anyway.
+ * It sits inside AppShell, so a mistyped address keeps the sidebar (the route
+ * gate sends an anonymous visitor to sign in first), and says so in the
+ * middle of the page with ways onward (NAV-3, #1069). It never navigates on
+ * its own: the old LegacyFallback bounced unported paths to the SvelteKit
+ * app and looped on the dev server.
  */
 export function NotFound() {
 	const location = useLocation();
+	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
 	return (
-		<main className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-			<h1 className="text-heading font-title">Page not found</h1>
-			<p className="text-muted-foreground max-w-sm text-sm">
-				Nothing lives at <code>{location.pathname}</code>.
-			</p>
-			<Link className="text-sm underline" to="/">
-				Go home
-			</Link>
-		</main>
+		<div className="flex h-full min-h-0 flex-col justify-center">
+			<Gone
+				title="Page not found"
+				description={
+					<>
+						Nothing lives at <code className="font-code break-all">{location.pathname}</code>.
+					</>
+				}
+				actions={
+					<>
+						<Button asChild>
+							<Link to="/">
+								<House aria-hidden /> Go home
+							</Link>
+						</Button>
+						<Button variant="outline" onClick={() => setSearchOpen(true)}>
+							<Search aria-hidden /> Search chats
+						</Button>
+					</>
+				}
+			/>
+		</div>
 	);
 }
