@@ -145,7 +145,11 @@ describe('SidebarContent layout', () => {
 		show({}, '/workspace/models');
 		const link = within(screen.getByRole('list', { name: 'Destinations' })).getByRole('link', { name: 'Workspace' });
 		expect(link).toHaveAttribute('aria-current', 'page');
-		expect(link.className).toContain('bg-accent');
+		expect(link.className).toContain('aria-[current=page]:bg-accent');
+		// Real classes: the tooltip's trigger joins class names as strings, so a
+		// function className would arrive as its own source text.
+		expect(link.className).not.toContain('=>');
+		expect(link.className.split(' ')).toContain('h-8');
 	});
 
 	it('closes the sidebar from its header when asked to offer that, remembering it', () => {

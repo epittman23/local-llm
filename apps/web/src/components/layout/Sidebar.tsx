@@ -47,7 +47,6 @@ import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { isThemeId, THEMES } from '@/lib/theme';
-import { cn } from '@/lib/utils';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
@@ -205,12 +204,10 @@ function Destination({
 			<NavLink
 				to={to}
 				onClick={onNavigate}
-				className={({ isActive }) =>
-					cn(
-						'text-body flex h-8 min-w-0 items-center justify-center gap-2 rounded-lg transition-colors pointer-coarse:min-h-11 pointer-coarse:justify-start pointer-coarse:px-2',
-						isActive ? 'bg-accent text-accent-foreground' : 'text-foreground-strong hover:bg-surface-3'
-					)
-				}
+				// A string, not NavLink's function form: the tooltip's trigger (a Slot)
+				// joins class names as strings and would print the function. NavLink
+				// marks the open destination with aria-current="page".
+				className="text-body text-foreground-strong hover:bg-surface-3 aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground flex h-8 min-w-0 items-center justify-center gap-2 rounded-lg transition-colors pointer-coarse:min-h-11 pointer-coarse:justify-start pointer-coarse:px-2"
 			>
 				<Icon aria-hidden className="size-4 shrink-0" />
 				<span className="truncate pointer-fine:sr-only">{label}</span>
