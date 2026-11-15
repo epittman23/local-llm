@@ -62,6 +62,7 @@ function show(message: Message, over: Partial<Session> = {}, ctx: ExtraActionsCo
 		continueReply: vi.fn(async () => undefined),
 		regenerate: vi.fn(async () => undefined),
 		rate: vi.fn(async () => undefined),
+		unrate: vi.fn(async () => undefined),
 		runAction: vi.fn(async () => undefined),
 		...over
 	};
@@ -186,11 +187,22 @@ describe('rating a reply (S3-D2)', () => {
 		expect(screen.getByRole('button', { name: 'Good response' }).getAttribute('aria-pressed')).toBe('false');
 	});
 
-	it('does not save the given rating again', () => {
+	it('removes the given rating when its thumb is pressed again, closing its note (S3-D2b)', async () => {
 		const session = show(reply({ annotation: { rating: 1 } }));
 		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-pressed')).toBe('false');
+		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+		expect(await screen.findByTestId('rate-note')).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Rated good' }));
 		expect(session.rate).not.toHaveBeenCalled();
+		expect(session.unrate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+		expect(screen.queryByTestId('rate-note')).toBeNull();
+	});
+
+	it('switches the rating with the other thumb', async () => {
+		const session = show(reply({ annotation: { rating: 1 } }));
+		fireEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+		await waitFor(() => expect(session.rate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), -1));
+		expect(session.unrate).not.toHaveBeenCalled();
 	});
 
 	it('shows no thumbs while rating is off', () => {

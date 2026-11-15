@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { isNotFound } from '@/components/common/Gone';
 import { chatAction, generateTags, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
-import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
+import { createNewFeedback, deleteFeedbackById, updateFeedbackById } from '@/lib/apis/evaluations';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import { getAndUpdateUserLocation } from '@/lib/apis/users';
@@ -889,7 +889,9 @@ export function useChatSession({
 					() => null
 				)) as string[] | null;
 				const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
-				if (tags?.length && fid) {
+				// The rating was removed while the model was asked (S3-D2b): its row is gone, so are its tags.
+				const removed = chatIdRef.current === id && historyRef.current.messages[message.id]?.feedbackId !== fid;
+				if (tags?.length && fid && !removed) {
 					if (chatIdRef.current === id) {
 						const tagged = updateMessage(historyRef.current, message.id, (m) => ({
 							annotation: { ...(m.annotation ?? {}), tags }
@@ -904,11 +906,66 @@ export function useChatSession({
 		[token, save, setHistory]
 	);
 
+	/**
+	 * Removes a reply's rating (S3-D2b): deletes its feedback entry, then the
+	 * rating, note and tags it carried. An entry already gone (deleted from
+	 * Admin > Evaluations) counts as removed; any other failure leaves the
+	 * rating as it is and says why.
+	 */
+	const unrate = useCallback(
+		async (message: Message) => {
+			const id = chatIdRef.current;
+			if (!id || isTemporaryChatId(id)) return;
+			const feedbackId = message.feedbackId as string | undefined;
+			if (feedbackId) {
+				const deleted = await deleteFeedbackById(token, feedbackId).then(
+					() => true,
+					(e) => {
+						if (isNotFound(e)) return true;
+						toast.error(`${e}`);
+						return false;
+					}
+				);
+				if (!deleted) return;
+			}
+			const unrated = (m: Message): Partial<Message> => {
+				const rest = Object.fromEntries(
+					Object.entries(m.annotation ?? {}).filter(
+						([k]) => !['rating', 'comment', 'reason', 'details', 'tags'].includes(k)
+					)
+				);
+				return { annotation: Object.keys(rest).length ? rest : undefined, feedbackId: undefined };
+			};
+			// Another chat opened meanwhile: change this chat's stored copy, not the chat now open (#215).
+			if (chatIdRef.current !== id) {
+				const chatRecord = await getChatById(token, id).catch((e) => {
+					toast.error(`${e}`);
+					return null;
+				});
+				const stored = chatRecord?.chat?.history as History | undefined;
+				if (stored?.messages?.[message.id]) {
+					const h = updateMessage(stored, message.id, unrated);
+					await updateChatById(token, id, {
+						...chatRecord?.chat,
+						history: h,
+						messages: messagesList(h, h.currentId)
+					}).catch((e) => toast.error(`${e}`));
+				}
+				return;
+			}
+			const next = updateMessage(historyRef.current, message.id, unrated);
+			setHistory(next);
+			await save(next);
+		},
+		[token, save, setHistory]
+	);
+
 	return {
 		continueReply,
 		editMessage,
 		removeMessage,
 		rate,
+		unrate,
 		runAction,
 		chatId: chatIdRef.current,
 		/** The id the server gave a chat started on this page (its URL change is not a new chat). */

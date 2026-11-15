@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as apis from '@/lib/apis';
 import * as chatsApi from '@/lib/apis/chats';
+import * as evaluationsApi from '@/lib/apis/evaluations';
 import * as usersApi from '@/lib/apis/users';
 import { updateMessage } from '@/lib/chat/history';
 import { getOutputText } from '@/lib/chat/structuredOutput';
@@ -79,7 +80,8 @@ vi.mock('@/lib/apis', async (orig) => ({
 vi.mock('@/lib/apis/evaluations', async (orig) => ({
 	...(await orig<object>()),
 	createNewFeedback: vi.fn(() => new Promise((resolve) => (pending.feedback = resolve))),
-	updateFeedbackById: vi.fn(async () => ({}))
+	updateFeedbackById: vi.fn(async () => ({})),
+	deleteFeedbackById: vi.fn(async () => true)
 }));
 
 vi.mock('@/lib/apis/openai', async (orig) => ({
@@ -598,6 +600,121 @@ describe('useChatSession loadChat', () => {
 		};
 		expect(body.history.messages['A-m']).toMatchObject({ feedbackId: 'fb2', annotation: { rating: 1 } });
 		expect(session.history.messages['B-m'].annotation).toBeUndefined();
+	});
+
+	/** Chat A open with its message rated good (feedback fb1, tagged). */
+	async function rateA() {
+		const router = await openChatA();
+		delete pending.feedback;
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockClear();
+		return router;
+	}
+
+	it.each([
+		['deleted', async () => true],
+		['already gone', async () => Promise.reject("We could not find what you're looking for :/")]
+	])(
+		'removing a rating whose entry is %s clears it, its note and tags, and saves the chat (S3-D2b)',
+		async (_c, del) => {
+			await rateA();
+			vi.mocked(evaluationsApi.deleteFeedbackById).mockImplementationOnce(del as never);
+			await act(() => session.unrate(session.history.messages['A-m']));
+			expect(evaluationsApi.deleteFeedbackById).toHaveBeenCalledWith(expect.anything(), 'fb1');
+			const m = session.history.messages['A-m'];
+			expect(m.annotation).toBeUndefined();
+			expect(m.feedbackId).toBeUndefined();
+			expect(savedTo()).toEqual(['A']);
+			const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+				history: { messages: Record<string, Record<string, unknown>> };
+			};
+			expect(JSON.parse(JSON.stringify(body.history.messages['A-m']))).not.toHaveProperty('feedbackId');
+		}
+	);
+
+	it('a rating whose entry could not be deleted is kept (S3-D2b)', async () => {
+		await rateA();
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockRejectedValueOnce('Server error');
+		await act(() => session.unrate(session.history.messages['A-m']));
+		expect(session.history.messages['A-m']).toMatchObject({ feedbackId: 'fb1', annotation: { rating: 1 } });
+		expect(savedTo()).toEqual([]);
+	});
+
+	it('a rating removed while another chat opened is removed from its own chat (S3-D2b, #215)', async () => {
+		const router = await rateA();
+		let release: (v: unknown) => void = () => undefined;
+		vi.mocked(evaluationsApi.deleteFeedbackById).mockImplementationOnce(
+			() => new Promise((r) => (release = r)) as never
+		);
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.unrate({ ...session.history.messages['A-m'], feedbackId: 'fb1' });
+		});
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		vi.mocked(chatsApi.getChatById).mockResolvedValueOnce({
+			id: 'A',
+			chat: {
+				history: {
+					currentId: 'A-m',
+					messages: {
+						'A-m': {
+							id: 'A-m',
+							parentId: null,
+							childrenIds: [],
+							role: 'user',
+							content: 'hi',
+							feedbackId: 'fb1',
+							annotation: { rating: 1, comment: 'ok' }
+						}
+					}
+				}
+			}
+		} as never);
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		await act(async () => {
+			release(true);
+			await run;
+		});
+		expect(savedTo()).toEqual(['A']);
+		const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+			history: { messages: Record<string, Record<string, unknown>> };
+		};
+		expect(body.history.messages['A-m'].annotation).toBeUndefined();
+		expect(body.history.messages['A-m'].feedbackId).toBeUndefined();
+	});
+
+	it('tags that arrive after the rating was removed are not put back (S3-D2b)', async () => {
+		await openChatA();
+		delete pending.feedback;
+		let releaseTags: (v: unknown) => void = () => undefined;
+		vi.mocked(apis.generateTags).mockImplementationOnce(() => new Promise((r) => (releaseTags = r)) as never);
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => pending.feedback({ id: 'fb1' }));
+		await waitFor(() => expect(session.history.messages['A-m'].feedbackId).toBe('fb1'));
+		await act(() => session.unrate(session.history.messages['A-m']));
+		vi.mocked(evaluationsApi.updateFeedbackById).mockClear();
+		await act(async () => {
+			releaseTags(['late']);
+			await run;
+		});
+		expect(session.history.messages['A-m'].annotation).toBeUndefined();
+		expect(evaluationsApi.updateFeedbackById).not.toHaveBeenCalled();
 	});
 
 	/** The next completion POST, held until the test answers it. */

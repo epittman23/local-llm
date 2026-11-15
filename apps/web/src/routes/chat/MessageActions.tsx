@@ -48,6 +48,7 @@ type Session = {
 	continueReply: (m: Message) => Promise<void>;
 	regenerate: (m: Message, suggestion?: string) => Promise<void>;
 	rate: (m: Message, rating: number | null, details?: FeedbackDetails | null) => Promise<void>;
+	unrate: (m: Message) => Promise<void>;
 	runAction: (actionId: string, m: Message) => Promise<void>;
 };
 
@@ -307,7 +308,8 @@ export function useMessageActions(
 			);
 
 		const rates = !errorOnly && saved && ratingOn !== false && canChat(user, 'rate_response');
-		// S3-D2: a thumb saves at once and says so; pressing the given one again leaves it as it is.
+		// S3-D2: a thumb saves at once and says so; the other thumb switches the rating, and
+		// pressing the given one again removes it, with its note (S3-D2b).
 		const thumb = (value: 1 | -1) => {
 			const given = rating === value;
 			const name = value === 1 ? (given ? 'Rated good' : 'Good response') : given ? 'Rated bad' : 'Bad response';
@@ -320,7 +322,11 @@ export function useMessageActions(
 						variant="ghost"
 						size="icon-sm"
 						className={cn(given && 'text-foreground bg-muted')}
-						onClick={() => !given && void session.rate(m, value)}
+						onClick={() => {
+							if (!given) return void session.rate(m, value);
+							if (noteId === m.id) setNoteId(null);
+							void session.unrate(m);
+						}}
 					>
 						{value === 1 ? <ThumbsUp className="size-3.5" /> : <ThumbsDown className="size-3.5" />}
 					</Button>
