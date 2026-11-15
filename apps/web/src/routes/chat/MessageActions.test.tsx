@@ -236,8 +236,8 @@ describe('rating a reply (S3-D2)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
 		expect(await screen.findByTestId('rate-note')).toBeTruthy();
 		for (const name of ['Rated good', 'Bad response', 'Save note']) {
-			const button = screen.getByRole('button', { name }) as HTMLButtonElement;
-			expect(button.disabled).toBe(true);
+			const button = screen.getByRole('button', { name });
+			expect(button.getAttribute('aria-disabled')).toBe('true');
 			fireEvent.click(button);
 		}
 		expect(session.rate).not.toHaveBeenCalled();
@@ -251,13 +251,29 @@ describe('rating a reply (S3-D2)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Good response' }));
 		expect(rate).toHaveBeenCalledTimes(1);
 		rerender(<BusyHarness message={message} ratingIds={new Set(['a'])} rate={rate} />);
-		const saving = screen.getByRole('button', { name: 'Saving rating…' }) as HTMLButtonElement;
+		const saving = screen.getByRole('button', { name: 'Saving rating…' });
 		expect(saving.getAttribute('aria-busy')).toBe('true');
-		expect(saving.disabled).toBe(true);
-		expect((screen.getByRole('button', { name: 'Bad response' }) as HTMLButtonElement).disabled).toBe(true);
+		expect(saving.getAttribute('aria-disabled')).toBe('true');
+		// Still focusable: the keyboard focus stays on the thumb pressed.
+		saving.focus();
+		expect(document.activeElement).toBe(saving);
+		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-disabled')).toBe('true');
 		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-busy')).toBeNull();
 		rerender(<BusyHarness message={message} ratingIds={new Set()} rate={rate} />);
-		expect((screen.getByRole('button', { name: 'Good response' }) as HTMLButtonElement).disabled).toBe(false);
+		expect(screen.getByRole('button', { name: 'Good response' }).getAttribute('aria-disabled')).toBeNull();
+	});
+
+	it('shows no thumb busy while a note is saved after a thumb press', () => {
+		const rate = vi.fn(async () => undefined);
+		const { rerender } = render(<BusyHarness message={reply()} ratingIds={new Set()} rate={rate} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Good response' }));
+		const rated = reply({ annotation: { rating: 1 } });
+		rerender(<BusyHarness message={rated} ratingIds={new Set()} rate={rate} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save note' }));
+		rerender(<BusyHarness message={rated} ratingIds={new Set(['a'])} rate={rate} />);
+		expect(screen.queryByRole('button', { name: /Removing rating|Saving rating/ })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Rated good' }).getAttribute('aria-disabled')).toBe('true');
 	});
 
 	it('switches the rating with the other thumb', async () => {

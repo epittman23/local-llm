@@ -152,7 +152,13 @@ function RateNote({
 				}}
 			/>
 			<div className="flex justify-end">
-				<Button size="sm" variant="outline" disabled={busy} onClick={() => onSave(comment)}>
+				<Button
+					size="sm"
+					variant="outline"
+					aria-disabled={busy || undefined}
+					className={cn(busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed')}
+					onClick={() => !busy && onSave(comment)}
+				>
 					Save note
 				</Button>
 			</div>
@@ -335,17 +341,22 @@ export function useMessageActions(
 						? 'Rated bad'
 						: 'Bad response';
 			return (
-				<Tip content={name}>
+				<Tip content={busy && !spinning ? `${name}: waits for the rating to save` : name}>
 					<Button
 						type="button"
 						aria-label={name}
 						aria-pressed={given}
 						aria-busy={spinning || undefined}
-						disabled={busy}
+						// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
+						aria-disabled={busy || undefined}
 						variant="ghost"
 						size="icon-sm"
-						className={cn(given && 'text-foreground bg-muted')}
+						className={cn(
+							given && 'text-foreground bg-muted',
+							busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed'
+						)}
 						onClick={() => {
+							if (busy) return;
 							setPressedThumb({ id: m.id, value });
 							if (!given) return void session.rate(m, value);
 							if (noteId === m.id) setNoteId(null);
@@ -473,6 +484,8 @@ export function useMessageActions(
 					onClose={() => setNoteId(null)}
 					onSave={async (comment) => {
 						setNoteId(null);
+						// A note is not a thumb press: no thumb shows the note's save as its own.
+						setPressedThumb(null);
 						await session.rate(m, null, { comment });
 					}}
 				/>
