@@ -325,35 +325,35 @@ function toolArguments(raw: unknown): Record<string, unknown> {
 }
 
 /**
- * The ask_user question the shown branch is waiting on, if any: a reply that
- * paused on a `pending` ask_user call with no result yet (Chat.svelte's
- * findPendingAskUser). With native function calling the server only stores
- * the call and stops; nothing is sent over the socket, so the page has to ask
- * from the stored reply.
+ * The ask_user question the shown reply is waiting on, if any: the branch's
+ * last message, paused on a `pending` ask_user call with no result yet
+ * (Chat.svelte's findPendingAskUser). With native function calling the server
+ * sends no `request:user_input` event; the question exists only in the reply's
+ * output, so the page asks from there. A reply the conversation went on from
+ * is not asked about: answering it would resume a reply in the middle of the
+ * thread.
  */
 export function pendingAskUser(history: History): PendingAskUser | null {
-	for (const m of messagesList(history, history.currentId).reverse()) {
-		if (m.role !== 'assistant' || !Array.isArray(m.output)) continue;
-		const items = m.output as Record<string, unknown>[];
-		const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
-		const call = items.find(
-			(i) =>
-				i.type === 'function_call' &&
-				i.name === 'ask_user' &&
-				i.status === 'pending' &&
-				Boolean(i.call_id ?? i.id) &&
-				!answered.has(i.call_id ?? i.id)
-		);
-		if (!call) continue;
-		const args = toolArguments(call.arguments);
-		return {
-			messageId: m.id,
-			callId: String(call.call_id ?? call.id),
-			questions: Array.isArray(args.questions) ? args.questions : [],
-			allowOther: args.allow_other !== false
-		};
-	}
-	return null;
+	const m = history.currentId ? history.messages[history.currentId] : null;
+	if (m?.role !== 'assistant' || (m.childrenIds?.length ?? 0) > 0 || !Array.isArray(m.output)) return null;
+	const items = m.output as Record<string, unknown>[];
+	const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
+	const call = items.find(
+		(i) =>
+			i.type === 'function_call' &&
+			i.name === 'ask_user' &&
+			i.status === 'pending' &&
+			Boolean(i.call_id ?? i.id) &&
+			!answered.has(i.call_id ?? i.id)
+	);
+	if (!call) return null;
+	const args = toolArguments(call.arguments);
+	return {
+		messageId: m.id,
+		callId: String(call.call_id ?? call.id),
+		questions: Array.isArray(args.questions) ? args.questions : [],
+		allowOther: args.allow_other !== false
+	};
 }
 
 /**
@@ -721,4 +721,11 @@ export function deleteMessage(history: History, id: string): History {
 }
 
 /** A reply stopped part-way can be continued. */
-export const canContinue = (m: Message) => m.role === 'assistant' && m.done !== false && !m.error && Boolean(m.content);
+/**
+ * Whether Continue Response is offered for a reply. Not for one paused on a
+ * tool approval or an ask_user question: a load marks it done when no task is
+ * running, and continuing it would run the model again past the unanswered
+ * call.
+ */
+export const canContinue = (m: Message) =>
+	m.role === 'assistant' && m.done !== false && !m.error && Boolean(m.content) && !pausedForUser(m);

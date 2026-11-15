@@ -4,6 +4,7 @@ import {
 	addResponses,
 	addUserMessage,
 	applyChatEvent,
+	canContinue,
 	editContent,
 	emptyHistory,
 	finishReplies,
@@ -425,7 +426,30 @@ describe('pendingAskUser', () => {
 	it('looks only at the branch shown', () => {
 		expect(pendingAskUser(history([ask()], 'b'))).toBeNull();
 	});
+	it('ignores a paused reply the conversation went on from', () => {
+		const h = history([ask()]);
+		h.messages.a.childrenIds = ['u2'];
+		h.messages.u2 = { id: 'u2', parentId: 'a', childrenIds: [], role: 'user', content: 'next' } as never;
+		h.currentId = 'u2';
+		expect(pendingAskUser(h)).toBeNull();
+	});
 	it('gives no questions for arguments it cannot read, so the dialog still appears to be skipped', () => {
 		expect(pendingAskUser(history([ask({ arguments: '{not json' })]))).toMatchObject({ questions: [] });
+	});
+});
+
+describe('canContinue', () => {
+	const reply = (output?: unknown[]) =>
+		({ id: 'a', role: 'assistant', content: 'Before I start, a question.', done: true, output }) as never;
+	it('offers Continue for a finished reply', () => {
+		expect(canContinue(reply())).toBe(true);
+	});
+	it('does not offer it for a reply paused on a question or an approval, even once a load marked it done', () => {
+		const call = (name: string) => ({ type: 'function_call', call_id: 'c1', name, status: 'pending' });
+		expect(canContinue(reply([call('ask_user')]))).toBe(false);
+		expect(canContinue(reply([call('bash')]))).toBe(false);
+		expect(canContinue(reply([call('ask_user'), { type: 'function_call_output', call_id: 'c1', output: [] }]))).toBe(
+			true
+		);
 	});
 });

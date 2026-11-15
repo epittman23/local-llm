@@ -1,6 +1,7 @@
-// A reply that paused on an ask_user call under native function calling is
-// only stored; nothing comes over the socket. The page asks from the stored
-// reply and answers through the resolve endpoint, which resumes the reply.
+// A reply that paused on an ask_user call under native function calling gets
+// no `request:user_input` event; the question exists only in the reply's
+// output. The page asks from there and answers through the resolve endpoint,
+// which resumes the reply.
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { History } from '@/lib/chat/history';
@@ -43,7 +44,12 @@ const paused = (output?: unknown[]): History =>
 
 function setup(history: History, chatId: string | null = 'chat-1') {
 	const onResolved = vi.fn();
-	const props = { history, chatId, token: 't', onResolved };
+	const props: { history: History; chatId: string | null; token: string; onResolved: () => void } = {
+		history,
+		chatId,
+		token: 't',
+		onResolved
+	};
 	const hook = renderHook(() => useSavedAskUser(props));
 	return { props, onResolved, ...hook };
 }
@@ -100,5 +106,26 @@ describe('useSavedAskUser', () => {
 		props.onResolved = vi.fn();
 		rerender();
 		expect(result.current.dialog).toBe(first);
+	});
+
+	it('asks a question with a call id already answered in another chat (provider ids repeat)', async () => {
+		const { result, props, rerender, onResolved } = setup(paused());
+		act(() => result.current.dialog?.reply({ status: 'cancelled', answers: {} }));
+		await waitFor(() => expect(onResolved).toHaveBeenCalledOnce());
+		expect(result.current.dialog).toBeNull();
+		props.chatId = 'chat-2';
+		props.history = paused();
+		rerender();
+		expect(result.current.dialog).not.toBeNull();
+	});
+
+	it("answers in the chat the question came from while another chat's history is loading", () => {
+		const { result, props, rerender } = setup(paused());
+		const first = result.current.dialog;
+		props.chatId = 'chat-2';
+		rerender();
+		expect(result.current.dialog).toBe(first);
+		act(() => result.current.dialog?.reply({ status: 'cancelled', answers: {} }));
+		expect(resolveChatMessageToolCall).toHaveBeenCalledWith('t', 'chat-1', 'a', 'call_1', 'reject');
 	});
 });

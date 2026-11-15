@@ -23,8 +23,15 @@ export function useSavedAskUser({
 	token: string;
 	onResolved: () => void;
 }): { dialog: ServerDialog | null; close: () => void } {
+	// The chat this history was loaded for. Opening another chat changes the id
+	// before its history arrives; until then the question shown is still the
+	// previous chat's, and it must be answered there.
+	const owner = useRef({ history, chatId });
+	if (owner.current.history !== history) owner.current = { history, chatId };
+	const historyChatId = owner.current.chatId;
+
 	const pending = useMemo(() => pendingAskUser(history), [history]);
-	// The call last answered or skipped here, hidden until the reload shows its result.
+	// The question last answered or skipped here, hidden until the reload shows its result.
 	const [handled, setHandled] = useState<string | null>(null);
 	// Read when the user replies, so a new token or callback does not make a new
 	// dialog: ServerDialogs keys the dialog by identity, and a new one would
@@ -34,23 +41,25 @@ export function useSavedAskUser({
 
 	const messageId = pending?.messageId;
 	const callId = pending?.callId;
+	// Call ids come from the provider and may repeat, so the chat and reply are part of the key.
+	const key = pending && historyChatId ? `${historyChatId}:${messageId}:${callId}` : null;
 	// By value: every history update parses the arguments into new arrays.
 	const args = pending ? JSON.stringify({ questions: pending.questions, allow_other: pending.allowOther }) : '';
-	const saved = Boolean(chatId) && !isTemporaryChatId(chatId ?? '');
 
 	const dialog = useMemo<ServerDialog | null>(() => {
-		if (!messageId || !callId || !args || !saved || !chatId || callId === handled) return null;
+		const id = historyChatId;
+		if (!key || !id || isTemporaryChatId(id) || !messageId || !callId || key === handled) return null;
 		return {
 			type: 'ask_user',
 			data: JSON.parse(args),
 			reply: (value) => {
-				setHandled(callId);
+				setHandled(key);
 				const { token: t, onResolved: done } = latest.current;
 				const v = (value ?? {}) as { status?: string; answers?: unknown };
 				const resolved =
 					v.status === 'answered'
-						? resolveChatMessageToolCall(t, chatId, messageId, callId, 'answer', { answers: v.answers ?? {} })
-						: resolveChatMessageToolCall(t, chatId, messageId, callId, 'reject');
+						? resolveChatMessageToolCall(t, id, messageId, callId, 'answer', { answers: v.answers ?? {} })
+						: resolveChatMessageToolCall(t, id, messageId, callId, 'reject');
 				resolved.then(done).catch((e) => {
 					toast.error(String(e));
 					setHandled(null);
@@ -58,7 +67,7 @@ export function useSavedAskUser({
 				});
 			}
 		};
-	}, [messageId, callId, args, saved, chatId, handled]);
+	}, [key, historyChatId, messageId, callId, args, handled]);
 
-	return { dialog, close: () => callId && setHandled(callId) };
+	return { dialog, close: () => key && setHandled(key) };
 }
