@@ -670,7 +670,6 @@ export function deleteMessage(history: History, id: string): History {
 	return { messages, currentId: next };
 }
 
-/** A reply stopped part-way can be continued. */
 /**
  * The replies to `parentId` marked done, and those still being written also
  * marked `stopped` (S3-D4): what Stop, or the server's cancel, leaves behind.
@@ -689,4 +688,5 @@ export function cutOffReason(m: Message): 'length' | 'stopped' | null {
 	return m.stopped ? 'stopped' : null;
 }
 
+/** A reply stopped part-way can be continued. */
 export const canContinue = (m: Message) => m.role === 'assistant' && m.done !== false && !m.error && Boolean(m.content);
