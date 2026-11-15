@@ -1,20 +1,30 @@
 import {
+	Archive,
 	Calendar,
 	ChartBar,
+	Circle,
 	Clock,
 	FlaskConical,
 	LayoutGrid,
 	LogOut,
+	type LucideIcon,
+	Monitor,
+	Moon,
 	NotebookText,
 	PanelLeft,
 	Search,
 	Settings,
 	ShieldCheck,
-	SquarePen
+	SquarePen,
+	Sun,
+	SunMoon
 } from 'lucide-react';
+import { useState } from 'react';
 import { Link, NavLink } from 'react-router';
+import { Tip } from '@/components/common/Tip';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
 import { availableTabs } from '@/components/settings/settingsTabs';
+import { AppMark } from '@/components/ui/app-mark';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,11 +32,15 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { canUseFeature } from '@/lib/access/features';
 import { signOut } from '@/lib/auth/session';
@@ -34,21 +48,63 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { applyTheme, getTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
 
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-	cn(
-		'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-		isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
+/** The theme choices in the user menu: lib/theme.ts's ids, named as the standard names the themes (WRD-6: icons, not emoji). */
+const THEME_CHOICES: { id: string; label: string; icon: LucideIcon }[] = [
+	{ id: 'system', label: 'System', icon: Monitor },
+	{ id: 'dark', label: 'Dark', icon: Moon },
+	{ id: 'oled-dark', label: 'Black', icon: Circle },
+	{ id: 'light', label: 'Light', icon: Sun }
+];
+
+/**
+ * A destination at the foot of the sidebar (#931). With a pointer it is an
+ * icon whose name is its tooltip (ACT-4); on touch, where there are no
+ * tooltips (OVL-4), the name shows beside the icon in a two-column grid.
+ */
+function Destination({
+	to,
+	icon: Icon,
+	label,
+	onNavigate
+}: {
+	to: string;
+	icon: LucideIcon;
+	label: string;
+	onNavigate?: () => void;
+}) {
+	return (
+		<Tip content={label} side="top">
+			<NavLink
+				to={to}
+				onClick={onNavigate}
+				className={({ isActive }) =>
+					cn(
+						'text-body flex h-8 min-w-0 items-center justify-center gap-2 rounded-lg transition-colors pointer-coarse:min-h-11 pointer-coarse:justify-start pointer-coarse:px-2',
+						isActive ? 'bg-accent text-accent-foreground' : 'text-foreground-strong hover:bg-surface-3'
+					)
+				}
+			>
+				<Icon aria-hidden className="size-4 shrink-0" />
+				<span className="truncate pointer-fine:sr-only">{label}</span>
+			</NavLink>
+		</Tip>
 	);
+}
 
 /**
  * The nav content shared by the desktop persistent aside and the mobile
  * Sheet (see AppShell.tsx) -- one component, two containers, so the two
  * can't silently drift apart the way a hand-duplicated copy would.
+ *
+ * Exactly as tall as its container (LAY-7): the header, New chat and Search
+ * at the top and the destinations and user row at the foot stay put; only
+ * the chat list between them scrolls, and never sideways (#903, #904).
  */
 export function SidebarContent({
 	onNavigate,
@@ -62,19 +118,41 @@ export function SidebarContent({
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const openSettings = useSettingsModalStore((state) => state.openSettings);
 	const isAdmin = user?.role === 'admin';
-	const hasSettings = availableTabs(user, config, implementedTabIds).length > 0;
+	const tabs = availableTabs(user, config, implementedTabIds);
+	const hasSettings = tabs.length > 0;
+	const hasArchived = tabs.some((t) => t.id === 'archived_chats');
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 	const appName = useWebUIName();
+	const [theme, setTheme] = useState(getTheme);
+
+	const destinations: { to: string; icon: LucideIcon; label: string }[] = [
+		{ to: routePaths.workspace, icon: LayoutGrid, label: 'Workspace' },
+		...(canUseFeature('notes', user, config) ? [{ to: routePaths.notes, icon: NotebookText, label: 'Notes' }] : []),
+		...(canUseFeature('automations', user, config)
+			? [{ to: routePaths.automations, icon: Clock, label: 'Automations' }]
+			: []),
+		...(canUseFeature('calendar', user, config)
+			? [{ to: routePaths.calendar, icon: Calendar, label: 'Calendar' }]
+			: []),
+		...(canUseFeature('playground', user, config)
+			? [{ to: routePaths.playground, icon: FlaskConical, label: 'Playground' }]
+			: []),
+		...(benchmarksEnabled ? [{ to: routePaths.benchmarks, icon: ChartBar, label: 'Benchmarks' }] : []),
+		...(isAdmin ? [{ to: routePaths.admin, icon: ShieldCheck, label: 'Admin' }] : [])
+	];
 
 	return (
-		<nav aria-label="Main" className="flex h-full w-full flex-col">
-			<div className="flex items-center justify-between px-3 py-3">
-				<span className="text-body font-title">{appName}</span>
+		<nav aria-label="Main" className="flex h-full min-h-0 w-full flex-col">
+			<div className="flex items-center gap-2 px-3 py-3">
+				<AppMark size={24} />
+				<span className="text-body font-title min-w-0 flex-1 truncate">{appName}</span>
 				{showCollapseToggle && (
-					<Button variant="ghost" size="icon" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
-						<PanelLeft className="h-4 w-4" />
-					</Button>
+					<Tip content="Close sidebar" side="right">
+						<Button variant="ghost" size="icon" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
+							<PanelLeft aria-hidden className="h-4 w-4" />
+						</Button>
+					</Tip>
 				)}
 			</div>
 
@@ -82,70 +160,37 @@ export function SidebarContent({
 				<Link
 					to={routePaths.home}
 					onClick={onNavigate}
-					className="hover:bg-accent/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+					className="text-body font-strong text-foreground-strong hover:bg-surface-3 flex h-9 items-center gap-2 rounded-lg px-3 transition-colors pointer-coarse:min-h-11"
 				>
-					<SquarePen className="h-4 w-4" />
-					New Chat
+					<SquarePen aria-hidden className="h-4 w-4" />
+					New chat
 				</Link>
 				<Button type="button" onClick={() => setSearchOpen(true)} variant="ghost" className="w-full justify-start">
-					<Search className="h-4 w-4" />
+					<Search aria-hidden className="h-4 w-4" />
 					Search
 				</Button>
 			</div>
 
-			<Separator className="my-2" />
+			<Separator className="mt-2" />
 
-			<ScrollArea className="flex-1 px-2">
-				<div className="flex flex-col gap-1">
-					<NavLink to={routePaths.workspace} onClick={onNavigate} className={navLinkClass}>
-						<LayoutGrid className="h-4 w-4" />
-						Workspace
-					</NavLink>
-					{canUseFeature('notes', user, config) && (
-						<NavLink to={routePaths.notes} onClick={onNavigate} className={navLinkClass}>
-							<NotebookText className="h-4 w-4" />
-							Notes
-						</NavLink>
-					)}
-					{canUseFeature('automations', user, config) && (
-						<NavLink to={routePaths.automations} onClick={onNavigate} className={navLinkClass}>
-							<Clock className="h-4 w-4" />
-							Automations
-						</NavLink>
-					)}
-					{canUseFeature('calendar', user, config) && (
-						<NavLink to={routePaths.calendar} onClick={onNavigate} className={navLinkClass}>
-							<Calendar className="h-4 w-4" />
-							Calendar
-						</NavLink>
-					)}
-					{canUseFeature('playground', user, config) && (
-						<NavLink to={routePaths.playground} onClick={onNavigate} className={navLinkClass}>
-							<FlaskConical className="h-4 w-4" />
-							Playground
-						</NavLink>
-					)}
-					{benchmarksEnabled && (
-						<NavLink to={routePaths.benchmarks} onClick={onNavigate} className={navLinkClass}>
-							<ChartBar className="h-4 w-4" />
-							Benchmarks
-						</NavLink>
-					)}
-					{isAdmin && (
-						<NavLink to={routePaths.admin} onClick={onNavigate} className={navLinkClass}>
-							<ShieldCheck className="h-4 w-4" />
-							Admin
-						</NavLink>
-					)}
-				</div>
+			<div data-slot="sidebar-list" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-2">
 				<SidebarChannels onNavigate={onNavigate} />
 				<ChatSidebar onNavigate={onNavigate} />
-			</ScrollArea>
+			</div>
 
 			<Separator />
 
+			<ul aria-label="Destinations" className="grid grid-cols-7 gap-1 px-2 pt-2 pointer-coarse:grid-cols-2">
+				{destinations.map((d) => (
+					<li key={d.to} className="flex min-w-0 flex-col">
+						<Destination {...d} onNavigate={onNavigate} />
+					</li>
+				))}
+			</ul>
+
 			<div className="p-2">
-				<DropdownMenu>
+				{/* Re-read the theme on open: Settings may have changed it since. */}
+				<DropdownMenu onOpenChange={(open) => open && setTheme(getTheme())}>
 					<DropdownMenuTrigger asChild>
 						<RowButton className="flex items-center justify-start gap-2 px-2 py-1.5">
 							<ProfileAvatar src={user?.profile_image_url} name={user?.name} size="sm" />
@@ -161,6 +206,35 @@ export function SidebarContent({
 								Settings
 							</DropdownMenuItem>
 						)}
+						{hasArchived && (
+							<DropdownMenuItem onSelect={() => openSettings('archived_chats')}>
+								<Archive className="h-4 w-4" />
+								Archived chats
+							</DropdownMenuItem>
+						)}
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								<SunMoon className="size-4" />
+								Theme
+							</DropdownMenuSubTrigger>
+							<DropdownMenuSubContent>
+								<DropdownMenuRadioGroup
+									value={theme}
+									onValueChange={(id) => {
+										applyTheme(id);
+										setTheme(id);
+									}}
+								>
+									{THEME_CHOICES.map(({ id, label, icon: Icon }) => (
+										<DropdownMenuRadioItem key={id} value={id}>
+											<Icon className="size-4" />
+											{label}
+										</DropdownMenuRadioItem>
+									))}
+								</DropdownMenuRadioGroup>
+							</DropdownMenuSubContent>
+						</DropdownMenuSub>
+						<DropdownMenuSeparator />
 						<DropdownMenuItem onSelect={() => void signOut()}>
 							<LogOut className="h-4 w-4" />
 							Sign out

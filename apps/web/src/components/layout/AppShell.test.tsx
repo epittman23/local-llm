@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -98,15 +98,46 @@ describe('AppShell', () => {
 		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
 		expect(menu.className).toContain('max-md:[@media(max-height:520px)]:fixed');
 		expect(screen.getByRole('main').parentElement?.className).toContain('[--shell-menu-inset:2.25rem]');
-		expect(screen.getByText('local-llm').className).toContain('[@media(max-height:520px)]:hidden');
+		const bar = within(screen.getByRole('banner'));
+		expect(bar.getByRole('img', { name: 'local-llm' }).getAttribute('class')).toContain(
+			'[@media(max-height:520px)]:hidden'
+		);
+		expect(bar.getByText('Chat').className).toContain('[@media(max-height:520px)]:hidden');
+		expect(bar.getByRole('link', { name: 'New chat' }).className).toContain('[@media(max-height:520px)]:hidden');
 	});
 
-	it('keeps the phone bar, with the product name, on pages that do not make room', () => {
+	it('keeps the phone bar, with the mark and the page name, on pages that do not make room', () => {
 		renderAt('/notes');
 		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
 		expect(menu.className).not.toContain('520px');
 		expect(screen.getByRole('main').parentElement?.className).not.toContain('--shell-menu-inset');
-		expect(screen.getByText('local-llm').className).not.toContain('520px');
+		const bar = within(screen.getByRole('banner'));
+		expect(bar.getByRole('img', { name: 'local-llm' }).getAttribute('class')).not.toContain('520px');
+		expect(bar.getByText('Notes').className).not.toContain('520px');
+	});
+
+	it('puts New chat at the end of the phone bar, after the menu button the top band measures (#1091)', () => {
+		renderAt('/notes');
+		const bar = screen.getByRole('banner');
+		expect(bar.querySelector('button')).toBe(screen.getByRole('button', { name: 'Open navigation menu' }));
+		const newChat = within(bar).getByRole('link', { name: 'New chat' });
+		expect(newChat.getAttribute('href')).toBe('/');
+		expect(bar.lastElementChild).toBe(newChat);
+	});
+
+	it('opens the drawer at the sidebar width, 256 px, not the sheet default', () => {
+		renderAt('/notes');
+		fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
+		const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+		expect(drawer.className).toContain('data-[side=left]:w-64');
+		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
+	});
+
+	it('keeps the shell exactly viewport-tall, so only the sidebar list scrolls (#903, LAY-7)', () => {
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('h-svh');
+		expect(aside.parentElement?.className).toContain('overflow-hidden');
 	});
 
 	it('keeps the top band in --top-band-bottom on a phone, and drops it with the shell (FBK-2)', () => {
