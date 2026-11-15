@@ -222,8 +222,10 @@ export function announceContentSaved(
 ): void {
 	const stale = res?.failed_knowledge ?? [];
 	if (stale.length)
-		notify.warning(`File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`);
-	else notify.success('File content updated successfully.');
+		notify.warning(
+			`Text saved, but ${stale.join(', ')} still ${stale.length === 1 ? 'answers' : 'answer'} from the old text. Save again to retry.`
+		);
+	else notify.success('Text saved');
 }
 
 type DroppedItem = { webkitGetAsEntry?: () => { isDirectory?: boolean } | null; getAsFile: () => File | null };

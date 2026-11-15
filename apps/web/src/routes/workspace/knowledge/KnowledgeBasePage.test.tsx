@@ -437,7 +437,7 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 
 		send([grant('a')]);
 
-		await waitFor(() => expect(success).toHaveBeenCalledWith('Saved'));
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Access saved'));
 		expect(shown()).toBe('a');
 	});
 
@@ -474,7 +474,11 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 
 		send([grant('a')]);
 
-		await waitFor(() => expect(error).toHaveBeenCalledWith('Not allowed'));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith("Couldn't save who has access. The previous access is back.", {
+				description: expect.objectContaining({ props: { detail: 'Not allowed' } })
+			})
+		);
 		expect(shown()).toBe('');
 	});
 
@@ -490,7 +494,11 @@ describe('KnowledgeBasePage access dialog (#522)', () => {
 		await waitFor(() => expect(shown()).toBe('b'));
 
 		failFirst('offline');
-		await waitFor(() => expect(error).toHaveBeenCalledWith('offline'));
+		await waitFor(() =>
+			expect(error).toHaveBeenCalledWith("Couldn't save who has access. The previous access is back.", {
+				description: expect.objectContaining({ props: { detail: 'offline' } })
+			})
+		);
 
 		expect(shown()).toBe('b');
 	});
@@ -728,5 +736,17 @@ describe('KnowledgeBasePage add-content dialogs (#1096)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
 		await waitFor(() => expect(createKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'Papers', null));
 		await waitFor(() => expect(success).toHaveBeenCalledWith('Created the folder "Papers"'));
+	});
+});
+
+describe('knowledgeToasts', () => {
+	it('reads the server words from a detail, a message, a string or anything else', async () => {
+		const { errorText } = await import('./knowledgeToasts');
+		expect(errorText({ detail: 'd' })).toBe('d');
+		expect(errorText(new Error('m'))).toBe('m');
+		expect(errorText(' s ')).toBe('s');
+		expect(errorText(42)).toBe('42');
+		expect(errorText('')).toBeNull();
+		expect(errorText(undefined)).toBeNull();
 	});
 });

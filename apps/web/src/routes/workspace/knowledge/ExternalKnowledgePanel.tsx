@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { testExternalKnowledgeRetrieval } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { failed } from './knowledgeToasts';
 
 type External = { provider?: string; connection_id?: string; source?: { name?: string }; [k: string]: unknown };
 type TestResult = { documents?: string[]; metadatas?: Array<Record<string, any>>; distances?: number[] };
@@ -25,7 +25,7 @@ export function ExternalKnowledgePanel({ external }: { external: External }) {
 			source: external.source,
 			count: 5
 		}).catch((e) => {
-			toast.error(`${e}`);
+			failed("The connected source didn't answer the test query.", e);
 			return null;
 		});
 		if (res) setResult(res);

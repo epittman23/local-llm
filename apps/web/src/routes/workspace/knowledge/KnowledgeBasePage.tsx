@@ -314,7 +314,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			token,
 			id,
 			grants
-		).catch((e) => void toast.error(`${e}`));
+		).catch((e) => void failed("Couldn't save who has access. The previous access is back.", e));
 		const latest = accessSaves.current === seq;
 		if (!res) {
 			if (latest) setKnowledge((k) => ({ ...k, access_grants: previous }));
@@ -323,7 +323,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		const stored = res.access_grants;
 		if (latest && Array.isArray(stored)) setKnowledge((k) => ({ ...k, access_grants: stored as AccessGrant[] }));
 		if (grantsDropped(grants, stored)) toast.warning(DROPPED_GRANTS_WARNING);
-		else toast.success('Saved');
+		else toast.success('Access saved');
 		onChanged();
 	};
 
@@ -354,12 +354,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			setDragged(false);
 			if (!e.dataTransfer?.types?.includes('Files')) return;
 			if (!uploadRefs.current.writeAccess) {
-				toast.error('You do not have permission to upload files to this knowledge base.');
+				toast.error('You can read this knowledge base but not add to it. Ask its owner for write access.');
 				return;
 			}
 			const items = Array.from(e.dataTransfer.items ?? []);
 			if (items.length === 0) {
-				toast.error('File not found.');
+				toast.error('No file was chosen.');
 				return;
 			}
 			const dropped = await gatherDroppedFiles(items, collectDroppedEntryFiles, handleDirectoryError);
@@ -660,7 +660,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				onChange={async (e) => {
 					const chosen = Array.from(e.target.files ?? []);
 					if (chosen.length === 0) {
-						toast.error('File not found.');
+						toast.error('No file was chosen.');
 						return;
 					}
 					await uploadFiles(chosen);
