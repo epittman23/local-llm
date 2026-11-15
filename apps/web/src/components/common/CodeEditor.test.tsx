@@ -1,7 +1,11 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import type { ReactElement } from 'react';
+import { EditorView } from 'codemirror';
+import { createRef, type ReactElement } from 'react';
+import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import CodeEditor from './CodeEditor';
+import { formatPythonCode } from '@/lib/apis/utils';
+import { useAuthStore } from '@/lib/stores/authStore';
+import CodeEditor, { type CodeEditorHandle, parseBlackError } from './CodeEditor';
 
 vi.mock('@/lib/apis/utils', () => ({ formatPythonCode: vi.fn() }));
 
@@ -96,5 +100,62 @@ describe('CodeEditor as a field (#987, #910)', () => {
 		expect(onSave).not.toHaveBeenCalled();
 		fireEvent.keyDown(content, { key: 's', code: 'KeyS', keyCode: 83, ctrlKey: true });
 		expect(onSave).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('CodeEditor parse errors (#1015)', () => {
+	const black = 'cannot parse: 2:7\n    x = (\n       ^\nParseError: bad input';
+
+	it('reads Black’s line and column, and nothing else as a parse error', () => {
+		expect(parseBlackError(black)).toEqual({ line: 2, column: 7, detail: black });
+		expect(parseBlackError('Cannot parse for target version Python 3.13: 4:1: x')).toMatchObject({
+			line: 4,
+			column: 1
+		});
+		expect(parseBlackError('Network error')).toBeNull();
+		expect(parseBlackError(undefined)).toBeNull();
+	});
+
+	it('returns a parse error instead of toasting it, marks the line, and clears it on the next edit', async () => {
+		useAuthStore.setState({ token: 't', user: { role: 'admin' } } as never);
+		vi.mocked(formatPythonCode).mockRejectedValue(black);
+		const error = vi.spyOn(toast, 'error');
+		const onParseError = vi.fn();
+		const ref = createRef<CodeEditorHandle>();
+		const { container } = render(<CodeEditor ref={ref} value={'a = 1\nx = (\n'} onParseError={onParseError} />);
+		const content = await waitFor(() => container.querySelector('.cm-content') as HTMLElement);
+
+		let outcome: string | undefined;
+		await act(async () => {
+			outcome = await ref.current?.formatPython();
+		});
+		expect(outcome).toBe('invalid');
+		expect(onParseError).toHaveBeenLastCalledWith({ line: 2, column: 7, detail: black });
+		expect(error).not.toHaveBeenCalled();
+		expect(container.querySelectorAll('.cm-parse-error')).toHaveLength(1);
+		expect(container.querySelector('.cm-parse-error')).toHaveTextContent('x = (');
+		expect(container.querySelector('.cm-parse-error-gutter')).toHaveTextContent('2');
+		expect(content).toHaveAttribute('aria-invalid', 'true');
+
+		const view = EditorView.findFromDOM(content);
+		act(() => view?.dispatch({ changes: { from: 0, insert: '#' } }));
+		expect(container.querySelector('.cm-parse-error')).toBeNull();
+		expect(content).not.toHaveAttribute('aria-invalid');
+		expect(onParseError).toHaveBeenLastCalledWith(null);
+	});
+
+	it('formats valid code, and saves code it could not format as it is', async () => {
+		useAuthStore.setState({ token: 't', user: { role: 'admin' } } as never);
+		vi.mocked(formatPythonCode).mockResolvedValue({ code: 'x = 1\n' });
+		const onChange = vi.fn();
+		const ref = createRef<CodeEditorHandle>();
+		const { container } = render(<CodeEditor ref={ref} value="x=1" onChange={onChange} />);
+		await waitFor(() => expect(container.querySelector('.cm-content')).not.toBeNull());
+		await act(async () => expect(await ref.current?.formatPython()).toBe('formatted'));
+		expect(onChange).toHaveBeenLastCalledWith('x = 1\n');
+
+		vi.mocked(formatPythonCode).mockRejectedValue('Server unreachable');
+		await act(async () => expect(await ref.current?.formatPython()).toBe('unformatted'));
+		useAuthStore.setState({ token: 't', user: { role: 'user' } } as never);
 	});
 });

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,21 @@ import { ToolkitEditor } from './ToolkitEditor';
 import type { ToolDraft } from './toolTypes';
 
 vi.mock('@/lib/apis/tools', () => ({ updateToolAccessGrants: vi.fn() }));
-vi.mock('@/components/common/CodeEditor', () => ({ default: () => null }));
+// The code editor, reduced to its handle and the props it was last given.
+const codeEditor = vi.hoisted(() => ({
+	outcome: 'unformatted' as string,
+	props: {} as { onParseError?: (error: unknown) => void }
+}));
+vi.mock('@/components/common/CodeEditor', async () => {
+	const { useImperativeHandle } = await import('react');
+	return {
+		default: (props: { ref?: React.Ref<unknown>; onParseError?: (error: unknown) => void }) => {
+			codeEditor.props = props;
+			useImperativeHandle(props.ref, () => ({ formatPython: async () => codeEditor.outcome, focus: () => {} }));
+			return null;
+		}
+	};
+});
 
 // The access dialog, reduced to what the editor gives it and what it sends back.
 const accessDialog = vi.hoisted(() => ({ send: [] as AccessGrant[] }));
@@ -131,5 +145,32 @@ describe('ToolkitEditor code field (#910, #987)', () => {
 		renderEditor({ tool, edit: true, onSave: vi.fn() });
 		expect(screen.getByText('Tool code')).toBeInTheDocument();
 		expect(screen.getByText('Tab indents. Press Esc, then Tab, to leave the editor.')).toHaveAttribute('id');
+	});
+});
+
+describe('ToolkitEditor errors stay above the footer (#1015)', () => {
+	it('shows why a save failed in place of the help line, not as a toast', async () => {
+		const error = vi.spyOn(toast, 'error');
+		const onSave = vi.fn().mockRejectedValue('[ERROR: Error updating tool]');
+		renderEditor({ tool, edit: true, onSave });
+		fireEvent.submit(screen.getByLabelText('Tool name').closest('form') as HTMLFormElement);
+		const alert = await screen.findByRole('alert');
+		expect(alert).toHaveTextContent("Couldn't save the tool. The server couldn't load its code; check that it runs.");
+		expect(screen.queryByText('Tab indents. Press Esc, then Tab, to leave the editor.')).toBeNull();
+		expect(error).not.toHaveBeenCalled();
+	});
+
+	it('does not send code that is not valid Python, and says where it stopped', async () => {
+		codeEditor.outcome = 'invalid';
+		const onSave = vi.fn();
+		renderEditor({ tool, edit: true, onSave });
+		fireEvent.submit(screen.getByLabelText('Tool name').closest('form') as HTMLFormElement);
+		await waitFor(() => expect(screen.getByRole('button', { name: /save/i })).toBeEnabled());
+		act(() => codeEditor.props.onParseError?.({ line: 3, column: 9, detail: 'cannot parse: 3:9' }));
+		expect(screen.getByRole('alert')).toHaveTextContent("Line 3, column 9: this line isn't valid Python.");
+		expect(onSave).not.toHaveBeenCalled();
+		act(() => codeEditor.props.onParseError?.(null));
+		expect(screen.queryByRole('alert')).toBeNull();
+		codeEditor.outcome = 'unformatted';
 	});
 });

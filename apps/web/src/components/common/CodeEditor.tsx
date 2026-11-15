@@ -2,8 +2,8 @@ import { acceptCompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
-import { Compartment, EditorState, Prec } from '@codemirror/state';
-import { keymap, placeholder } from '@codemirror/view';
+import { Compartment, EditorState, Prec, RangeSet, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, GutterMarker, gutterLineClass, keymap, placeholder } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 import { basicSetup, EditorView } from 'codemirror';
 import { type Ref, useEffect, useImperativeHandle, useRef } from 'react';
@@ -36,6 +36,13 @@ const tokenTheme = EditorView.theme({
 	'.cm-activeLine': { backgroundColor: 'color-mix(in oklch, var(--surface-3), transparent 50%)' },
 	'.cm-activeLineGutter': { backgroundColor: 'var(--surface-3)', color: 'var(--foreground-strong)' },
 	'.cm-placeholder': { color: 'var(--foreground-muted)' },
+	// A line Black could not parse (#1015): tinted, with its number in the danger colour.
+	'.cm-parse-error': { backgroundColor: 'color-mix(in oklch, var(--danger), transparent 82%)' },
+	'.cm-gutterElement.cm-parse-error-gutter': {
+		backgroundColor: 'color-mix(in oklch, var(--danger), transparent 70%)',
+		color: 'var(--danger)',
+		fontWeight: '650'
+	},
 	'&.cm-focused .cm-matchingBracket': {
 		backgroundColor: 'var(--surface-3)',
 		outline: '1px solid var(--border-control)'
@@ -85,11 +92,62 @@ const tokenHighlight = HighlightStyle.define([
 	{ tag: t.link, textDecoration: 'underline' }
 ]);
 
+/** Where Black stopped parsing, and its own words. */
+export type CodeParseError = { line: number; column: number; detail: string };
+
+/** Black's "cannot parse: 30:12: ..." (or "Cannot parse for target version ...: 30:12"), else null. */
+export function parseBlackError(error: unknown): CodeParseError | null {
+	const detail = typeof error === 'string' ? error : '';
+	const at = /cannot parse[^:]*: (\d+):(\d+)/i.exec(detail);
+	return at ? { line: Number(at[1]), column: Number(at[2]), detail } : null;
+}
+
+/**
+ * What formatting did: `invalid` means the code is not valid Python (the
+ * caller does not save it, and hears where through `onParseError`);
+ * `unformatted` means it could not be formatted for another reason (not an
+ * admin, the server did not answer), so the caller saves it as it is.
+ */
+export type FormatOutcome = 'formatted' | 'unformatted' | 'invalid';
+
 export type CodeEditorHandle = {
-	/** Formats the buffer with the backend's Black. Resolves false if it could not. */
-	formatPython: () => Promise<boolean>;
+	/** Formats the buffer with the backend's Black. */
+	formatPython: () => Promise<FormatOutcome>;
 	focus: () => void;
 };
+
+// The line Black could not parse, marked until the next edit or format.
+const setParseErrorLine = StateEffect.define<number | null>();
+const parseErrorLine = StateField.define<number | null>({
+	create: () => null,
+	update(line, tr) {
+		for (const effect of tr.effects) if (effect.is(setParseErrorLine)) return effect.value;
+		return tr.docChanged ? null : line;
+	}
+});
+class ParseErrorGutter extends GutterMarker {
+	elementClass = 'cm-parse-error-gutter';
+}
+const parseErrorGutter = new ParseErrorGutter();
+const lineStart = (state: EditorState) => {
+	const line = state.field(parseErrorLine);
+	return line !== null && line >= 1 && line <= state.doc.lines ? state.doc.line(line).from : null;
+};
+const parseErrorMarks = [
+	parseErrorLine,
+	EditorView.decorations.compute([parseErrorLine], (state) => {
+		const from = lineStart(state);
+		return from === null ? Decoration.none : Decoration.set([Decoration.line({ class: 'cm-parse-error' }).range(from)]);
+	}),
+	gutterLineClass.compute([parseErrorLine], (state) => {
+		const from = lineStart(state);
+		return from === null ? RangeSet.empty : RangeSet.of([parseErrorGutter.range(from)]);
+	}),
+	EditorView.contentAttributes.compute(
+		[parseErrorLine],
+		(state): Record<string, string> => (state.field(parseErrorLine) === null ? {} : { 'aria-invalid': 'true' })
+	)
+];
 
 /**
  * Ports common/CodeEditor.svelte: a CodeMirror 6 editor with basicSetup, the
@@ -108,7 +166,10 @@ export type CodeEditorHandle = {
  * `value` are applied as a minimal diff so the cursor and undo history survive.
  * `onChange` reports every edit.
  *
- * Formatting: admins format through the backend (`/utils/code/format`). The
+ * Formatting: admins format through the backend (`/utils/code/format`). Code
+ * Black cannot parse is reported to `onParseError` (where, and Black's words)
+ * and its line is marked in the gutter until the next edit, never toasted:
+ * the caller shows it in place (FRM-2, FBK-1). The
  * Svelte version formats for everyone else with `black` in a browser worker;
  * this app has no such worker, so here a non-admin's format request returns
  * false and callers save the code unformatted -- what the original does
@@ -127,6 +188,7 @@ export default function CodeEditor({
 	describedBy,
 	onChange,
 	onSave,
+	onParseError,
 	ref
 }: {
 	value?: string;
@@ -141,6 +203,8 @@ export default function CodeEditor({
 	describedBy?: string;
 	onChange?: (value: string) => void;
 	onSave?: () => void;
+	/** Where the code stopped parsing on the last format, or null once it parses or is edited. */
+	onParseError?: (error: CodeParseError | null) => void;
 	ref?: Ref<CodeEditorHandle>;
 }) {
 	const container = useRef<HTMLDivElement>(null);
@@ -148,25 +212,34 @@ export default function CodeEditor({
 	const language = useRef(new Compartment());
 	const theme = useRef(new Compartment());
 	// Latest callbacks, read from inside listeners created once at mount.
-	const cb = useRef({ onChange, onSave });
-	cb.current = { onChange, onSave };
+	const cb = useRef({ onChange, onSave, onParseError });
+	cb.current = { onChange, onSave, onParseError };
 	// Read once at mount, like `value`: the field's name, help and placeholder.
 	const field = useRef({ placeholderText, ariaLabel, describedBy });
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const token = useAuthStore((s) => s.token) ?? '';
 
-	const formatPython = async () => {
+	const formatPython = async (): Promise<FormatOutcome> => {
 		const v = view.current;
-		if (!v) return false;
-		if (!isAdmin) return false;
-		const res = await formatPythonCode(token, v.state.doc.toString()).catch((error) => {
-			toast.error(`${error}`);
+		if (!v || !isAdmin) return 'unformatted';
+		const code = v.state.doc.toString();
+		let parseError: CodeParseError | null = null;
+		const res = await formatPythonCode(token, code).catch((error) => {
+			parseError = parseBlackError(error);
 			return null;
 		});
-		if (!res?.code) return false;
-		v.dispatch({ changes: [{ from: 0, to: v.state.doc.length, insert: res.code }] });
-		toast.success('Code formatted successfully');
-		return true;
+		if (view.current !== v) return 'unformatted';
+		const line = parseError ? (parseError as CodeParseError).line : null;
+		const at = line !== null && line >= 1 && line <= v.state.doc.lines ? v.state.doc.line(line).from : null;
+		// The marked line is brought into view, so the error and its line are on screen together.
+		v.dispatch({
+			effects: [setParseErrorLine.of(line), ...(at === null ? [] : [EditorView.scrollIntoView(at, { y: 'center' })])]
+		});
+		cb.current.onParseError?.(parseError);
+		if (parseError) return 'invalid';
+		if (!res?.code) return 'unformatted';
+		if (res.code !== code) v.dispatch({ changes: [{ from: 0, to: v.state.doc.length, insert: res.code }] });
+		return 'formatted';
 	};
 	const formatRef = useRef(formatPython);
 	formatRef.current = formatPython;
@@ -197,7 +270,9 @@ export default function CodeEditor({
 								key: 'Mod-Shift-f',
 								preventDefault: true,
 								run: () => {
-									formatRef.current();
+									formatRef.current().then((outcome) => {
+										if (outcome === 'formatted') toast.success('Code formatted');
+									});
 									return true;
 								}
 							}
@@ -212,8 +287,12 @@ export default function CodeEditor({
 						...(field.current.ariaLabel ? { 'aria-label': field.current.ariaLabel } : {}),
 						...(field.current.describedBy ? { 'aria-describedby': field.current.describedBy } : {})
 					}),
+					parseErrorMarks,
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) cb.current.onChange?.(update.state.doc.toString());
+						// An edit clears the mark; the caller's message goes with it.
+						if (update.startState.field(parseErrorLine) !== null && update.state.field(parseErrorLine) === null)
+							cb.current.onParseError?.(null);
 					}),
 					tokenTheme,
 					syntaxHighlighting(tokenHighlight),

@@ -3,8 +3,9 @@ import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
-import type { CodeEditorHandle } from '@/components/common/CodeEditor';
+import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +67,9 @@ export function ToolkitEditor({
 	const [showAccess, setShowAccess] = useState(false);
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
+	// Shown in place of the code's help line: Black's parse error, or why the save failed.
+	const [problem, setProblem] = useState<EditorProblem | null>(null);
+	const onParseError = (error: CodeParseError | null) => setProblem(error ? parseProblem(error) : null);
 
 	const onNameChange = (value: string) => {
 		setName(value);
@@ -86,9 +90,14 @@ export function ToolkitEditor({
 	const submit = async () => {
 		setLoading(true);
 		try {
-			const formatted = await editor.current?.formatPython();
-			if (!formatted) console.warn('Code formatting failed or was skipped, saving unformatted code');
-			await onSave({ id, name, meta, content: code.current, access_grants: accessGrants });
+			setProblem(null);
+			// Code that isn't valid Python is not sent: the editor marks the line and
+			// onParseError says where. Code that could not be formatted for another
+			// reason (not an admin, no answer) is saved as it is.
+			if ((await editor.current?.formatPython()) === 'invalid') return;
+			await onSave({ id, name, meta, content: code.current, access_grants: accessGrants }).catch((error) =>
+				setProblem(saveProblem(error, 'tool'))
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -211,14 +220,19 @@ export function ToolkitEditor({
 							placeholder=""
 							ariaLabel="Tool code"
 							describedBy={codeHelp}
+							onParseError={onParseError}
 							onChange={onCodeChange}
 							onSave={() => form.current?.requestSubmit()}
 						/>
 					</Suspense>
 				</div>
-				<p id={codeHelp} className="text-foreground-muted text-dense px-1 pt-1.5">
-					Tab indents. Press Esc, then Tab, to leave the editor.
-				</p>
+				{problem ? (
+					<EditorError id={codeHelp} problem={problem} />
+				) : (
+					<p id={codeHelp} className="text-foreground-muted text-dense px-1 pt-1.5">
+						Tab indents. Press Esc, then Tab, to leave the editor.
+					</p>
+				)}
 
 				<div className="text-muted-foreground shrink-0 py-2 text-xs">
 					<div className="flex items-center justify-between gap-3">

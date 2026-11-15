@@ -1,8 +1,9 @@
 import { ChevronLeft } from 'lucide-react';
 import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import type { CodeEditorHandle } from '@/components/common/CodeEditor';
+import type { CodeEditorHandle, CodeParseError } from '@/components/common/CodeEditor';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { EditorError, type EditorProblem, parseProblem, saveProblem } from '@/components/common/EditorError';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,9 @@ export function FunctionEditor({
 	const code = useRef(fn?.content || filterBoilerplate);
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
+	// Shown in place of the code's help line: Black's parse error, or why the save failed.
+	const [problem, setProblem] = useState<EditorProblem | null>(null);
+	const onParseError = (error: CodeParseError | null) => setProblem(error ? parseProblem(error) : null);
 
 	// The name as of now, for onCodeChange: the code editor can report its
 	// seeded boilerplate through a callback from a render before the user typed a
@@ -89,9 +93,14 @@ export function FunctionEditor({
 	const submit = async () => {
 		setLoading(true);
 		try {
-			const formatted = await editor.current?.formatPython();
-			if (!formatted) console.warn('Code formatting failed or was skipped, saving unformatted code');
-			await onSave({ id, name, meta, content: code.current });
+			setProblem(null);
+			// Code that isn't valid Python is not sent: the editor marks the line and
+			// onParseError says where. Code that could not be formatted for another
+			// reason (not an admin, no answer) is saved as it is.
+			if ((await editor.current?.formatPython()) === 'invalid') return;
+			await onSave({ id, name, meta, content: code.current }).catch((error) =>
+				setProblem(saveProblem(error, 'function'))
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -213,14 +222,19 @@ export function FunctionEditor({
 							placeholder=""
 							ariaLabel="Function code"
 							describedBy={codeHelp}
+							onParseError={onParseError}
 							onChange={onCodeChange}
 							onSave={() => form.current?.requestSubmit()}
 						/>
 					</Suspense>
 				</div>
-				<p id={codeHelp} className="text-foreground-muted text-dense px-1 pt-1.5">
-					Tab indents. Press Esc, then Tab, to leave the editor.
-				</p>
+				{problem ? (
+					<EditorError id={codeHelp} problem={problem} />
+				) : (
+					<p id={codeHelp} className="text-foreground-muted text-dense px-1 pt-1.5">
+						Tab indents. Press Esc, then Tab, to leave the editor.
+					</p>
+				)}
 
 				<div className="text-muted-foreground shrink-0 py-2 text-xs">
 					<div className="flex items-center justify-between gap-3">

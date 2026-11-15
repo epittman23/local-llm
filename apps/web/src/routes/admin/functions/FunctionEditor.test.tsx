@@ -105,3 +105,24 @@ describe('FunctionEditor code field (#910, #987)', () => {
 		expect(screen.getByText('Tab indents. Press Esc, then Tab, to leave the editor.')).toHaveAttribute('id');
 	});
 });
+
+describe('FunctionEditor errors stay above the footer (#1015)', () => {
+	afterEach(cleanup);
+	it('shows why a save failed in place of the help line', async () => {
+		render(
+			<MemoryRouter>
+				<TooltipProvider>
+					<FunctionEditor
+						fn={{ id: 'f', name: 'F', meta: { description: 'd' }, content: 'x = 1' }}
+						edit
+						onSave={vi.fn().mockRejectedValue('[ERROR: Error updating function]')}
+					/>
+				</TooltipProvider>
+			</MemoryRouter>
+		);
+		fireEvent.submit((await screen.findByLabelText('Function name')).closest('form') as HTMLFormElement);
+		expect(await screen.findByRole('alert')).toHaveTextContent(
+			"Couldn't save the function. The server couldn't load its code; check that it runs."
+		);
+	});
+});

@@ -38,10 +38,8 @@ export function ToolCreatePage() {
 
 	const onSave = async (data: ToolDraft) => {
 		if (refusedForVersion(data.content)) return;
-		const res = await createNewTool(token, payload(data)).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		// A failure throws: the editor says why above its footer.
+		const res = await createNewTool(token, payload(data));
 		if (res) {
 			toast.success('Tool created successfully');
 			navigate(routePaths.workspaceTools);
@@ -101,10 +99,7 @@ export function ToolEditPage() {
 
 	const onSave = async (data: ToolDraft) => {
 		if (!tool || refusedForVersion(data.content)) return;
-		const res = await updateToolById(token, tool.id, payload(data)).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		const res = await updateToolById(token, tool.id, payload(data));
 		if (res) toast.success('Tool updated successfully');
 	};
 

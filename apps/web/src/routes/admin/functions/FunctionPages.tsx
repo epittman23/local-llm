@@ -46,10 +46,8 @@ export function FunctionCreatePage() {
 
 	const onSave = async (data: FunctionDraft) => {
 		if (refusedForVersion(data.content)) return;
-		const res = await createNewFunction(token, payload(data)).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		// A failure throws: the editor says why above its footer.
+		const res = await createNewFunction(token, payload(data));
 		if (res) {
 			toast.success('Function created successfully');
 			await refresh();
@@ -100,10 +98,7 @@ export function FunctionEditPage() {
 
 	const onSave = async (data: FunctionDraft) => {
 		if (!fn || refusedForVersion(data.content)) return;
-		const res = await updateFunctionById(token, fn.id, payload(data)).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		const res = await updateFunctionById(token, fn.id, payload(data));
 		if (res) {
 			toast.success('Function updated successfully');
 			await refresh();
