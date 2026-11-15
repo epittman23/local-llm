@@ -8,6 +8,11 @@ describe('TagSelector', () => {
 		expect(screen.getByRole('button', { name: 'Source: All sources' })).toBeVisible();
 	});
 
+	it('reads "Tag: All tags" with nothing chosen, never "Tag: Tag"', () => {
+		render(<TagSelector value="" tags={['stats']} onChange={vi.fn()} />);
+		expect(screen.getByRole('button', { name: 'Tag: All tags' })).toBeVisible();
+	});
+
 	it('defaults its name to Tag and capitalises a chosen tag, with a clear button', () => {
 		render(<TagSelector value="stats" tags={['stats']} onChange={vi.fn()} />);
 		expect(screen.getByRole('button', { name: 'Tag: stats' })).toBeVisible();

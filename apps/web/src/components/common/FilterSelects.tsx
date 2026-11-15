@@ -78,7 +78,7 @@ export function TagSelector({
 	value,
 	tags,
 	onChange,
-	placeholder = 'Tag',
+	placeholder = 'All tags',
 	name = 'Tag',
 	labels = {}
 }: {
