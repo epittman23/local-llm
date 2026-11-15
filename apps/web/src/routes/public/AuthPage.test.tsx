@@ -52,6 +52,28 @@ describe('AuthPage', () => {
 		expect(screen.queryByRole('alert')).toBeNull();
 	});
 
+	it('shows the mark above the heading, hidden from assistive technology (WRD-3, #1004)', async () => {
+		useConfigStore.setState({ config: config as never });
+		useAuthStore.setState({ status: 'anonymous' });
+		renderAt('/auth');
+
+		const heading = await screen.findByRole('heading', { level: 1 });
+		const mark = document.querySelector('[data-slot="app-mark"]');
+		expect(mark).toHaveAttribute('aria-hidden', 'true');
+		expect(mark).toHaveClass('size-8');
+		expect(mark?.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+
+	it('shows the mark above the welcome on the first-run screen too', async () => {
+		useConfigStore.setState({ config: { ...config, onboarding: true } as never });
+		useAuthStore.setState({ status: 'anonymous' });
+		renderAt('/auth');
+
+		const heading = await screen.findByRole('heading', { level: 1, name: 'Welcome to local-llm' });
+		const mark = document.querySelector('[data-slot="app-mark"]');
+		expect(mark?.compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+
 	it('says in place that the session expired (#1061)', async () => {
 		useConfigStore.setState({ config: config as never });
 		useAuthStore.setState({ status: 'anonymous' });

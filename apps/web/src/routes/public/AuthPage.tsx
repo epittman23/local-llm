@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Tip } from '@/components/common/Tip';
 import { BootSplash } from '@/components/layout/BootSplash';
+import { AppMark } from '@/components/ui/app-mark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -228,6 +229,7 @@ export function AuthPage() {
 		return (
 			<main className="flex h-screen w-full items-center justify-center px-10 text-center">
 				<div className="flex max-w-md flex-col items-center gap-4">
+					<AppMark size={32} />
 					<h1 className="text-heading font-title tracking-tight">Welcome to {WEBUI_NAME}</h1>
 					<p className="text-foreground-muted">Get started by creating the first admin account for this instance.</p>
 					<Button
@@ -257,6 +259,8 @@ export function AuthPage() {
 			<div aria-hidden className="flex-1" />
 			<div className="mx-auto w-full max-w-sm">
 				<form className="flex flex-col justify-center" onSubmit={submitHandler}>
+					{/* WRD-3: the product's mark above its name (#1004, #1065). */}
+					<AppMark size={32} className="mx-auto mb-3" />
 					<h1 className="text-heading font-title mb-6 text-center tracking-tight">
 						{config?.onboarding
 							? `Get started with ${WEBUI_NAME}`

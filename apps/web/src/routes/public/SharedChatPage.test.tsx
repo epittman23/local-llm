@@ -81,6 +81,9 @@ describe('SharedChatPage: its frame (#1005)', () => {
 		renderPage();
 		const header = await screen.findByRole('banner');
 		expect(header).toHaveTextContent('local-llm');
+		// The mark and the name are one link home; the mark itself is decorative (WRD-3).
+		const home = screen.getByRole('link', { name: 'local-llm' });
+		expect(home.querySelector('[data-slot="app-mark"]')).toHaveAttribute('aria-hidden', 'true');
 		expect(header).toHaveTextContent('Shared conversation · captured 2026-11-11');
 		expect(screen.getByText('2026-11-11')).toHaveAttribute('title', '2026-11-11 18:43');
 		expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }));

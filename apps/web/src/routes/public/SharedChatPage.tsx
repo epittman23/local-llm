@@ -6,6 +6,7 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import { Gone, isNotFound } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { BootSplash } from '@/components/layout/BootSplash';
+import { AppMark } from '@/components/ui/app-mark';
 import { Button } from '@/components/ui/button';
 import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { APP_NAME } from '@/lib/constants';
@@ -137,7 +138,8 @@ export function SharedChatPage() {
 		<div className="bg-page flex h-svh w-full flex-col">
 			{/* #1005: what this page is, whose app it is in, and when it was captured (LAY-5, WRD-3). */}
 			<header className="border-border-divider flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2">
-				<Link to={routePaths.home} className="text-body font-title">
+				<Link to={routePaths.home} className="text-body font-title inline-flex items-center gap-2">
+					<AppMark size={24} />
 					{APP_NAME}
 				</Link>
 				<p className="text-dense text-foreground-muted min-w-0">
