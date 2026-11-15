@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getModels } from '@/lib/apis';
+import { getFunctions } from '@/lib/apis/functions';
+import { getTerminalServers } from '@/lib/apis/terminal';
 import { searchUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -148,6 +150,15 @@ describe('ModelEditor layout (#1009)', () => {
 		renderEditor({ model: { ...existing, meta: { profile_image_url: 'data:image/png;base64,AAAA' } } });
 		fireEvent.click(await screen.findByRole('button', { name: 'Remove picture' }));
 		expect(screen.queryByRole('button', { name: 'Remove picture' })).toBeNull();
+		expect(status()).toHaveTextContent('Unsaved changes');
+	});
+
+	it('takes a GIF as the picture, as it is, and offers to remove it', async () => {
+		renderEditor();
+		await screen.findByRole('button', { name: 'Upload a picture' });
+		const input = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+		fireEvent.change(input, { target: { files: [new File(['GIF89a'], 'a.gif', { type: 'image/gif' })] } });
+		expect(await screen.findByRole('button', { name: 'Remove picture' })).toBeInTheDocument();
 		expect(status()).toHaveTextContent('Unsaved changes');
 	});
 
@@ -315,5 +326,75 @@ describe('ModelEditor validation (#1010, FRM-2)', () => {
 		fireEvent.change(await screen.findByLabelText('Model name'), { target: { value: 'Renamed' } });
 		await act(async () => save('Save changes'));
 		expect(screen.getByRole('alert')).toHaveTextContent('Wait for the files to finish uploading, then save.');
+	});
+});
+
+describe('ModelEditor attachments and capabilities', () => {
+	it('says where to make tools and skills when there are none (#956)', async () => {
+		renderEditor();
+		expect(await screen.findByRole('link', { name: 'Create one in Tools' })).toHaveAttribute(
+			'href',
+			'/workspace/tools'
+		);
+		expect(screen.getByRole('link', { name: 'Create one in Skills' })).toHaveAttribute('href', '/workspace/skills');
+	});
+
+	it('offers filters, filters on by default and actions when there are some, and saves what is picked', async () => {
+		vi.mocked(getFunctions).mockResolvedValue([
+			{ id: 'f1', name: 'Redact', type: 'filter', meta: { toggle: true } },
+			{ id: 'a1', name: 'Explain', type: 'action' }
+		] as never);
+		const { onSubmit } = renderEditor({ model: { ...existing, meta: { ...existing.meta, filterIds: ['f1'] } } });
+		fireEvent.click(await screen.findByRole('button', { name: 'Choose filters on by default' }));
+		fireEvent.click(await screen.findByRole('option', { name: 'Redact' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Choose actions' }));
+		fireEvent.click(await screen.findByRole('option', { name: 'Explain' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Choose filters' }));
+		fireEvent.click(await screen.findByRole('option', { name: /Redact/ }));
+		save('Save changes');
+		await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+		expect(vi.mocked(onSubmit).mock.calls[0][0].meta).toMatchObject({ defaultFilterIds: ['f1'], actionIds: ['a1'] });
+		expect(vi.mocked(onSubmit).mock.calls[0][0].meta).not.toHaveProperty('filterIds');
+	});
+
+	it('chooses a terminal server once the terminal capability is on', async () => {
+		vi.mocked(getTerminalServers).mockResolvedValue([{ id: 't1', name: 'Lab box' }] as never);
+		const { onSubmit } = renderEditor({
+			model: { ...existing, meta: { capabilities: { terminal: true }, terminalId: 't1' } }
+		});
+		expect(await screen.findByRole('combobox', { name: 'Terminal server' })).toHaveTextContent('Lab box');
+		fireEvent.change(screen.getByLabelText(/Description/), { target: { value: 'x' } });
+		save('Save changes');
+		await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+		expect(vi.mocked(onSubmit).mock.calls[0][0].meta.terminalId).toBe('t1');
+	});
+
+	it('turns a builtin tool off and a default feature on, and stores a voice', async () => {
+		const { onSubmit } = renderEditor();
+		fireEvent.click(await screen.findByRole('button', { name: 'Builtin tools, voice and parameters' }));
+		const notes = within(screen.getByRole('group', { name: 'Builtin tools' })).getByRole('checkbox', { name: 'Notes' });
+		expect(notes).toBeChecked();
+		fireEvent.click(notes);
+		fireEvent.change(screen.getByLabelText(/Voice for reading aloud/), { target: { value: 'nova' } });
+		const defaults = screen.getByRole('group', { name: 'On by default in a new chat' });
+		fireEvent.click(within(defaults).getAllByRole('checkbox')[0]);
+		save('Save changes');
+		await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+		const meta = vi.mocked(onSubmit).mock.calls[0][0].meta;
+		expect(meta.builtinTools).toEqual({ notes: false });
+		expect(meta.tts).toEqual({ voice: 'nova' });
+		expect(meta.defaultFeatureIds).toHaveLength(1);
+	});
+
+	it('says builtin tools are off when the capability is, and lists the variables a prompt asks for', async () => {
+		renderEditor({ model: { ...existing, meta: { capabilities: { builtin_tools: false } } } });
+		fireEvent.click(await screen.findByRole('button', { name: 'Builtin tools, voice and parameters' }));
+		expect(screen.getByText(/Builtin tools are off for this model/)).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText(/System prompt/), {
+			target: { value: 'Hi {{chat.variables.Topic | text}} from {{user.variables.city}}' }
+		});
+		expect(screen.getByText('Detected variables')).toBeInTheDocument();
+		expect(screen.getByText('Topic must be lowercase snake case')).toBeInTheDocument();
+		expect(screen.getByText('city')).toBeInTheDocument();
 	});
 });

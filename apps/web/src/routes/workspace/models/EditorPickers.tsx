@@ -238,7 +238,7 @@ export function BaseModelSelect({
 					aria-invalid={invalid || undefined}
 					aria-describedby={describedBy}
 				>
-					<span id={valueId} className={cn('truncate', !current && !value && 'text-foreground-muted')}>
+					<span id={valueId} className={cn('truncate', !current && !value && 'text-foreground-muted font-normal')}>
 						{current?.label ?? value ?? placeholder}
 					</span>
 					<ChevronDown aria-hidden className="size-3.5 shrink-0" />

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadFile } from '@/lib/apis/files';
@@ -18,6 +19,16 @@ import { uploadCountLimit, useAttachments } from './useAttachments';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/lib/apis/files', () => ({ uploadFile: vi.fn(() => new Promise(() => {})) }));
+// The knowledge picker looks up what there is to attach as it opens.
+vi.mock('@/lib/apis/knowledge', async (original) => ({
+	...(await original<typeof import('@/lib/apis/knowledge')>()),
+	searchKnowledgeBases: vi.fn(async () => ({ items: [] })),
+	searchKnowledgeFiles: vi.fn(async () => ({ items: [] }))
+}));
+vi.mock('@/lib/apis/notes', async (original) => ({
+	...(await original<typeof import('@/lib/apis/notes')>()),
+	searchNotes: vi.fn(async () => ({ items: [] }))
+}));
 vi.mock('@/lib/apis/users', () => ({
 	getUserSettings: vi.fn(async () => ({ ui: {} })),
 	updateUserSettings: vi.fn(),
@@ -109,7 +120,12 @@ describe('channel composer and the upload size limit', () => {
 describe("model editor's knowledge picker and the upload size limit", () => {
 	const attach = () => {
 		const onChange = vi.fn();
-		const { container } = render(<KnowledgePicker items={[]} onChange={onChange} />, { wrapper });
+		const { container } = render(
+			<MemoryRouter>
+				<KnowledgePicker items={[]} onChange={onChange} />
+			</MemoryRouter>,
+			{ wrapper }
+		);
 		const input = container.querySelector('input[type="file"]') as HTMLInputElement;
 		fireEvent.change(input, { target: { files: [twoMegabytes()] } });
 		return onChange;
@@ -126,7 +142,7 @@ describe("model editor's knowledge picker and the upload size limit", () => {
 		limit(1);
 		const onChange = attach();
 		expect(onChange).not.toHaveBeenCalled();
-		expect(toast.error).toHaveBeenCalledWith('File size should not exceed 1 MB.');
+		expect(toast.error).toHaveBeenCalledWith("“big.txt” is larger than the 1 MB limit, so it wasn't added.");
 	});
 });
 
