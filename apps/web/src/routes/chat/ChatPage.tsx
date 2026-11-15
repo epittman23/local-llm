@@ -366,7 +366,8 @@ export function ChatPage() {
 						<div className="bg-background/85 absolute inset-0" />
 					</div>
 				)}
-				<header className="flex items-start gap-2 px-4 py-2">
+				{/* On a phone, toasts and the connection banner start below this row (FBK-2). */}
+				<header data-page-top className="flex items-start gap-2 px-4 py-2">
 					<ModelSelector
 						models={models}
 						selected={selectedModels}

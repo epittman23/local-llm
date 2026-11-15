@@ -21,6 +21,7 @@ import { PendingWorkspacesDialog } from '@/routes/chat/PendingWorkspacesDialog';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { BootSplash } from './BootSplash';
 import { SidebarContent } from './Sidebar';
+import { useTopBand } from './topBand';
 
 /** The id of the region the skip link moves to. */
 const CONTENT_ID = 'content';
@@ -36,36 +37,6 @@ const SHORT_PHONE_BAR = 'max-md:[@media(max-height:520px)]:contents';
 const SHORT_PHONE_MENU =
 	'max-md:[@media(max-height:520px)]:bg-surface-2 max-md:[@media(max-height:520px)]:border-border-divider max-md:[@media(max-height:520px)]:fixed max-md:[@media(max-height:520px)]:top-2 max-md:[@media(max-height:520px)]:left-2 max-md:[@media(max-height:520px)]:z-40 max-md:[@media(max-height:520px)]:border';
 const SHORT_PHONE_NAME = '[@media(max-height:520px)]:hidden';
-
-/**
- * Keeps `--shell-bar-bottom` on <html> at how far down the phone's app bar
- * reaches: its bottom edge, or on a short screen where it has folded, the
- * bottom of its floating menu button. 0 from md up, where the bar is hidden.
- * The fixed layers outside the shell (the connection banner, toasts) start
- * below it, so they cover neither the menu button nor the name (FBK-2).
- */
-function useShellBarBottom(element: HTMLElement | null) {
-	useEffect(() => {
-		if (!element) return;
-		const root = document.documentElement;
-		const measure = () => {
-			const menu = element.querySelector('button')?.getBoundingClientRect().bottom ?? 0;
-			const bottom = Math.max(element.getBoundingClientRect().bottom, menu);
-			root.style.setProperty('--shell-bar-bottom', `${Math.ceil(bottom)}px`);
-		};
-		measure();
-		// The bar changes size when the screen does (it folds and unfolds by
-		// media query) and when its own content does.
-		const resize = new ResizeObserver(measure);
-		resize.observe(element);
-		window.addEventListener('resize', measure);
-		return () => {
-			resize.disconnect();
-			window.removeEventListener('resize', measure);
-			root.style.removeProperty('--shell-bar-bottom');
-		};
-	}, [element]);
-}
 
 /**
  * The persistent shell every React route renders inside (see AppRouter.tsx):
@@ -95,7 +66,7 @@ export function AppShell() {
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 	// A state, not a ref: the bar mounts only once the shell replaces the splash.
 	const [bar, setBar] = useState<HTMLElement | null>(null);
-	useShellBarBottom(bar);
+	useTopBand(bar);
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
 	useShortcuts();

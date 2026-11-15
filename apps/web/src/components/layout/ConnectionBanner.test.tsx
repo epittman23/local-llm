@@ -27,7 +27,7 @@ describe('ConnectionBanner', () => {
 	it('sits below the phone bar and keeps its height in --connection-banner-space while it shows (FBK-2)', () => {
 		const { container } = render(<ConnectionBanner />);
 		expect((container.firstElementChild as HTMLElement).className).toContain(
-			'top-[calc(var(--shell-bar-bottom,0px)+0.5rem)]'
+			'top-[calc(var(--top-band-bottom,0px)+0.5rem)]'
 		);
 		const root = document.documentElement;
 		expect(root.style.getPropertyValue('--connection-banner-space')).toBe('');

@@ -7,7 +7,7 @@ import { useConnectionStore } from '@/lib/socket/connectionStore';
  * that lasts, not a toast that expires while it is still true. It shows for
  * as long as SocketProvider reports the connection lost and leaves when it
  * is back. Fixed at the top of the viewport over the page, below the phone's
- * app bar (`--shell-bar-bottom`, from AppShell), so the app's own full-height
+ * app bar and the page's header (`--top-band-bottom`, from AppShell), so the app's own full-height
  * layout is not pushed down and the bar's menu button stays reachable; the
  * polite live region is always in the document so a screen reader announces
  * the message when it appears. While it shows, `--connection-banner-space`
@@ -35,7 +35,7 @@ export function ConnectionBanner() {
 	return (
 		<div
 			aria-live="polite"
-			className="pointer-events-none fixed inset-x-0 top-[calc(var(--shell-bar-bottom,0px)+0.5rem)] z-40 flex justify-center px-4"
+			className="pointer-events-none fixed inset-x-0 top-[calc(var(--top-band-bottom,0px)+0.5rem)] z-40 flex justify-center px-4"
 		>
 			{lost && (
 				<p

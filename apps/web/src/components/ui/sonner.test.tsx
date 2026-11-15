@@ -122,7 +122,7 @@ describe('Toaster', () => {
 		// From 600 to 767 px Sonner reads its wide offset, so that starts there too; the message box is not lifted for.
 		expect(toaster()?.getAttribute('style')).toContain(`--offset-top: ${PHONE_TOP}`);
 		expect(toaster()?.getAttribute('style')).toContain('--offset-bottom: 24px');
-		expect(PHONE_TOP).toBe('calc(var(--shell-bar-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)');
+		expect(PHONE_TOP).toBe('calc(var(--top-band-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)');
 	});
 });
 

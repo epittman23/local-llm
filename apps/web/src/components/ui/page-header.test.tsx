@@ -17,11 +17,15 @@ describe('PageHeader (LAY-5)', () => {
 		expect(heading.className).toContain('text-heading');
 		expect(screen.getByText(/your chats draw on/)).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
+		// On a phone, toasts and the connection banner start below a page's header (FBK-2).
+		expect(heading.closest('[data-page-top]')).not.toBeNull();
 	});
 
 	it('takes a lower heading level where it sits inside another page', () => {
 		render(<PageHeader as="h4" title="Knowledge" description="Collections of files." />);
 		expect(screen.getByRole('heading', { level: 4, name: 'Knowledge' })).toBeInTheDocument();
 		expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+		// Nested inside another page (/ui), it is not that page's top.
+		expect(document.querySelector('[data-page-top]')).toBeNull();
 	});
 });

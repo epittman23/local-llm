@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -109,29 +109,26 @@ describe('AppShell', () => {
 		expect(screen.getByText('local-llm').className).not.toContain('520px');
 	});
 
-	it('keeps how far down the phone bar reaches in --shell-bar-bottom, for the banner and toasts (FBK-2)', () => {
+	it('keeps the top band in --top-band-bottom on a phone, and drops it with the shell (FBK-2)', () => {
+		vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
+		const bar = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+			top: 0,
+			bottom: 57,
+			height: 57,
+			left: 0,
+			right: 0,
+			width: 0,
+			x: 0,
+			y: 0,
+			toJSON: () => ({})
+		} as DOMRect);
 		const view = renderAt('/notes');
 		const root = document.documentElement;
-		const bar = screen.getByRole('banner');
-		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
-		bar.getBoundingClientRect = () =>
-			({ top: 0, bottom: 57, height: 57, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-		menu.getBoundingClientRect = () =>
-			({ top: 0, bottom: 48, height: 48, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-		act(() => void window.dispatchEvent(new Event('resize')));
-		expect(root.style.getPropertyValue('--shell-bar-bottom')).toBe('57px');
-
-		// Folded on a short screen: the bar has no box, and its menu button floats.
-		bar.getBoundingClientRect = () =>
-			({ top: 0, bottom: 0, height: 0, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-		menu.getBoundingClientRect = () =>
-			({ top: 0, bottom: 44, height: 44, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-		act(() => void window.dispatchEvent(new Event('resize')));
-		expect(root.style.getPropertyValue('--shell-bar-bottom')).toBe('44px');
-
-		// Gone with the shell, so /auth and /error put the layers back at the top.
+		expect(root.style.getPropertyValue('--top-band-bottom')).toBe('57px');
 		view.unmount();
-		expect(root.style.getPropertyValue('--shell-bar-bottom')).toBe('');
+		expect(root.style.getPropertyValue('--top-band-bottom')).toBe('');
+		bar.mockRestore();
+		vi.unstubAllGlobals();
 	});
 
 	it('shows the boot splash, not the shell, while the session is loading (STA-2)', () => {

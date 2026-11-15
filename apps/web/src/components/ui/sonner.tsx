@@ -30,13 +30,14 @@ const EDGE_OFFSET = 24;
 /** The gap kept between a toast and the message box under it. */
 const KEEP_CLEAR_GAP = 8;
 /**
- * Below 768 px toasts sit at the top, 8 px under the app bar and under the
- * connection banner while it shows (FBK-2): AppShell and ConnectionBanner
- * keep these two variables current, and each is 0 when its layer is absent.
+ * Below 768 px toasts sit at the top, 8 px under the app bar and the page's
+ * header, and under the connection banner while it shows (FBK-2): AppShell
+ * (components/layout/topBand.ts) and ConnectionBanner keep these two
+ * variables current, and each is 0 when its layer is absent.
  * Sonner's own phone layout starts at 600 px and reads `mobileOffset`; from
  * 600 to 767 px it reads `offset`, so both are set.
  */
-export const PHONE_TOP = 'calc(var(--shell-bar-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)';
+export const PHONE_TOP = 'calc(var(--top-band-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)';
 
 /**
  * The bottom offset that keeps a toast off the message box (FBK-2): the
