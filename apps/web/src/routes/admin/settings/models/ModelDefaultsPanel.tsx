@@ -60,10 +60,10 @@ export function ModelDefaultsPanel({
 				>
 					Model Defaults
 				</Button>
+				{/* A word, not an icon: the small button's own width, not the 28 px icon square that clipped it. */}
 				<Button
 					variant="ghost"
-					size="icon-sm"
-					className="shrink-0"
+					size="sm"
 					type="button"
 					aria-expanded={expanded}
 					aria-label="Configure model defaults"
