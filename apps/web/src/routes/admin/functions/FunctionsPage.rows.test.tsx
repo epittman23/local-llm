@@ -42,6 +42,8 @@ describe('FunctionsPage rows', () => {
 
 		const rows = document.querySelectorAll('[data-slot="row-button"]');
 		expect(rows).toHaveLength(1);
+		// Named by its function first; the type badge drawn before it is read after it (A11Y-2).
+		expect(rows[0]).toHaveAccessibleName(expect.stringMatching(/^Rate limit filter\s*,\s*filter/));
 		expect(rows[0].querySelector('button, a, input, [role="switch"], [tabindex]')).toBeNull();
 		expect(document.querySelector('div[role="button"]')).toBeNull();
 		const container = rows[0].parentElement as HTMLElement;

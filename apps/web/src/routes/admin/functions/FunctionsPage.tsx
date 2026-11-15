@@ -252,8 +252,9 @@ export function FunctionsPage() {
 	}
 
 	const isAdmin = user?.role === 'admin';
+	// LAY-4: the 16 px gutter the workspace lists have.
 	return (
-		<div className="w-full px-2.5">
+		<div className="w-full px-4">
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
@@ -399,12 +400,14 @@ export function FunctionsPage() {
 									>
 										<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 											<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-												<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
-													{fn.type}
-												</div>
 												<Tip content={fn.id} side="top">
 													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
 												</Tip>
+												{/* Drawn first, read after the name, so the row is named by its function (A11Y-2). */}
+												<div className="bg-muted text-muted-foreground order-first shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
+													<span className="sr-only">, </span>
+													{fn.type}
+												</div>
 												{fn.meta?.manifest?.version && (
 													<div
 														aria-hidden

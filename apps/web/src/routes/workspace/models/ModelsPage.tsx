@@ -462,12 +462,14 @@ export function ModelsPage() {
 													variant="secondary"
 													className="hidden max-w-32 min-w-0 truncate sm:inline-flex"
 												>
+													{/* The row's accessible name reads the tags as words, not run together (A11Y-2). */}
+													<span className="sr-only">, </span>
 													<span className="truncate">{tag}</span>
 												</Badge>
 											))}
 											{tags.length > 3 && (
 												<Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
-													+{tags.length - 3}
+													<span className="sr-only">, </span>+{tags.length - 3}
 												</Badge>
 											)}
 											<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">

@@ -41,7 +41,7 @@ export function PromptHistoryMenu({
 				The versions saved after it are kept, linked to the version before it.
 			</ConfirmDialog>
 			<DropdownMenu>
-				<Tip content="More">
+				<Tip content="Version options">
 					<DropdownMenuTrigger asChild>
 						<Button variant="ghost" size="icon-sm" aria-label="Version options">
 							<MoreHorizontal />

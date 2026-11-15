@@ -160,6 +160,19 @@ describe('ModelsPage with one account or several (WRD-4, S4-D1)', () => {
 	});
 });
 
+describe('ModelsPage row name (A11Y-2)', () => {
+	it('reads the tags as separate words in the row name', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({
+			items: [{ ...model('tutor', 'Statistics tutor', true), meta: { tags: [{ name: 'stats' }, { name: 'math' }] } }],
+			total: 1
+		});
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		// jsdom pads each badge with spaces; a browser does not, which is why the commas are there.
+		expect(screen.getByRole('button', { name: /qwen\/qwen3\.6-27b\s*,\s*stats\s*,\s*math/ })).toBeInTheDocument();
+	});
+});
+
 describe('ModelsPage row menu words (WRD-1)', () => {
 	it('names its items in sentence case', async () => {
 		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });

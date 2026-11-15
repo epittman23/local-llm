@@ -244,13 +244,14 @@ export function KnowledgeFileList({
 								dir.name
 							)}
 						</div>
-						{dir.updated_at && (
+						{/* A folder that was never dated (0) shows no time, rather than a bare 0. */}
+						{dir.updated_at ? (
 							<Tip content={dayjs(dir.updated_at * 1000).format('LLLL')}>
 								<div className="text-foreground-muted text-dense shrink-0">
 									{dayjs(dir.updated_at * 1000).fromNow()}
 								</div>
 							</Tip>
-						)}
+						) : null}
 					</RowButton>
 					{writeAccess && (
 						<div className="flex items-center">

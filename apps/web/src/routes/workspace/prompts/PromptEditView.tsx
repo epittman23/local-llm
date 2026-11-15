@@ -308,9 +308,10 @@ export function PromptEditView({
 		}
 	};
 
-	const historySection = (
+	// The column labels itself; the sheet's title already says History.
+	const historySection = (labelled: boolean) => (
 		<div className="flex h-full flex-col">
-			<div className="mb-2 shrink-0 text-xs text-muted-foreground">History</div>
+			{labelled && <div className="mb-2 shrink-0 text-xs text-muted-foreground">History</div>}
 			{history.length > 0 ? (
 				<div className="flex-1 overflow-y-auto" onScroll={onHistoryScroll}>
 					{history.map((entry) => {
@@ -444,7 +445,7 @@ export function PromptEditView({
 						<SheetTitle>History</SheetTitle>
 						<SheetDescription>Pick a version to see its content.</SheetDescription>
 					</SheetHeader>
-					<div className="min-h-0 flex-1 overflow-y-auto">{historySection}</div>
+					<div className="min-h-0 flex-1 overflow-y-auto">{historySection(false)}</div>
 				</SheetContent>
 			</Sheet>
 
@@ -560,7 +561,7 @@ export function PromptEditView({
 
 			<div className="flex flex-1 flex-col gap-3 overflow-hidden pb-4 md:flex-row">
 				<div className="hidden w-64 shrink-0 overflow-hidden md:flex md:flex-col">
-					<div className="flex-1 overflow-y-auto">{historySection}</div>
+					<div className="flex-1 overflow-y-auto">{historySection(true)}</div>
 				</div>
 
 				<div className="flex min-h-0 flex-1 flex-col overflow-hidden">

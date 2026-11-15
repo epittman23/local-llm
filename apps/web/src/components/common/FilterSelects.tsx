@@ -59,8 +59,7 @@ export function ViewSelector({ value, onChange }: { value: string; onChange: (va
 			onChange={onChange}
 			trigger={
 				<Button variant="ghost" size="sm">
-					<span className="sr-only">View: </span>
-					<span className="truncate">{label}</span>
+					<span className="truncate">View: {label}</span>
 					<ChevronDown />
 				</Button>
 			}

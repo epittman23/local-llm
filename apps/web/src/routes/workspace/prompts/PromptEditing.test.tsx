@@ -221,6 +221,8 @@ describe('PromptEditView (#911, #957, #1095)', () => {
 		view();
 		fireEvent.click(screen.getByRole('button', { name: 'History' }));
 		const sheet = await screen.findByRole('dialog', { name: 'History' });
+		// Its title says History once; the list inside does not repeat it.
+		expect(within(sheet).getAllByText('History')).toHaveLength(1);
 		fireEvent.click(await within(sheet).findByText('First'));
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'History' })).toBeNull());
 		expect(screen.getByText('One')).toBeInTheDocument();
