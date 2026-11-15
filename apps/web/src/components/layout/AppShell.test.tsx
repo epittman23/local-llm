@@ -133,6 +133,14 @@ describe('AppShell', () => {
 		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
 	});
 
+	it('collapses the sidebar to nothing when it is closed, leaving Open sidebar', () => {
+		useUIStore.setState({ sidebarOpen: false } as never);
+		renderAt('/notes');
+		expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-0');
+		fireEvent.click(screen.getByRole('button', { name: 'Open sidebar' }));
+		expect(useUIStore.getState().sidebarOpen).toBe(true);
+	});
+
 	it('keeps the shell exactly viewport-tall, so only the sidebar list scrolls (#903, LAY-7)', () => {
 		renderAt('/notes');
 		const aside = screen.getByRole('complementary', { name: 'Sidebar' });

@@ -21,10 +21,10 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function show(props: { showCollapseToggle?: boolean; onNavigate?: () => void } = {}) {
+function show(props: { showCollapseToggle?: boolean; onNavigate?: () => void } = {}, path = '/') {
 	return render(
 		<TooltipProvider>
-			<MemoryRouter>
+			<MemoryRouter initialEntries={[path]}>
 				<SidebarContent {...props} />
 			</MemoryRouter>
 		</TooltipProvider>
@@ -94,6 +94,39 @@ describe('SidebarContent layout', () => {
 		expect(group.getByText('Workspace').className).toContain('pointer-fine:sr-only');
 		expect(screen.getByRole('list', { name: 'Destinations' }).className).toContain('pointer-coarse:grid-cols-2');
 		useConfigStore.setState({ config: null });
+	});
+
+	it('offers every feature the server turns on, and closes the drawer when one is chosen', () => {
+		useAuthStore.setState({ user: { id: 'u1', name: 'Ada', role: 'admin' } } as never);
+		useConfigStore.setState({
+			config: {
+				name: 'local-llm',
+				version: '0',
+				features: { enable_notes: true, enable_calendar: true, enable_automations: true }
+			} as never
+		});
+		const onNavigate = vi.fn();
+		show({ onNavigate });
+		const group = within(screen.getByRole('list', { name: 'Destinations' }));
+		expect(group.getAllByRole('link').map((a) => a.textContent)).toEqual([
+			'Workspace',
+			'Notes',
+			'Automations',
+			'Calendar',
+			'Playground',
+			'Benchmarks',
+			'Admin'
+		]);
+		fireEvent.click(group.getByRole('link', { name: 'Calendar' }));
+		expect(onNavigate).toHaveBeenCalled();
+		useConfigStore.setState({ config: null });
+	});
+
+	it('marks the destination that is open', () => {
+		show({}, '/workspace/models');
+		const link = within(screen.getByRole('list', { name: 'Destinations' })).getByRole('link', { name: 'Workspace' });
+		expect(link).toHaveAttribute('aria-current', 'page');
+		expect(link.className).toContain('bg-accent');
 	});
 
 	it('closes the sidebar from its header when asked to offer that', () => {

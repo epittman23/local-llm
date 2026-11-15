@@ -1,13 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getChatList, getChatListByFolderId, getPinnedChatList } from '@/lib/apis/chats';
-import { getFolders } from '@/lib/apis/folders';
+import { createNewFolder, deleteFolderById, getFolders, updateFolderById } from '@/lib/apis/folders';
 import { ChatSidebar } from './ChatSidebar';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+const menuOf = async (name: string) =>
+	fireEvent.pointerDown(await screen.findByRole('button', { name }), {
+		button: 0,
+		ctrlKey: false,
+		pointerType: 'mouse'
+	});
 vi.mock('@/lib/apis/chats', () => ({
 	getChatList: vi.fn(),
 	getPinnedChatList: vi.fn(),
@@ -158,5 +165,43 @@ describe('ChatSidebar folders', () => {
 		await waitFor(() => expect(getChatListByFolderId).toHaveBeenCalledWith('t', 'f1', 2));
 		expect(await screen.findByRole('link', { name: /Work chat 10/ })).toBeInTheDocument();
 		await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull());
+	});
+});
+
+describe('ChatSidebar folder actions', () => {
+	beforeEach(() => vi.mocked(toast.success).mockClear());
+
+	it('creates a folder and says "Folder created" (ACT-2)', async () => {
+		vi.mocked(createNewFolder).mockResolvedValue({ id: 'f9' } as never);
+		show();
+		fireEvent.click(await screen.findByRole('button', { name: 'New folder' }));
+		fireEvent.change(await screen.findByLabelText('Folder Name'), { target: { value: 'Travel' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() =>
+			expect(createNewFolder).toHaveBeenCalledWith('t', { name: 'Travel', data: undefined, parent_id: null })
+		);
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Folder created'));
+	});
+
+	it('edits a folder from its menu and says "Folder updated"', async () => {
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		vi.mocked(updateFolderById).mockResolvedValue({ id: 'f1' } as never);
+		show();
+		await menuOf('Folder menu: Work');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit folder' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(updateFolderById).toHaveBeenCalled());
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Folder updated'));
+	});
+
+	it('deletes a folder from its menu and says "Folder deleted"', async () => {
+		vi.mocked(getFolders).mockResolvedValue([{ id: 'f1', name: 'Work', parent_id: null }] as never);
+		vi.mocked(deleteFolderById).mockResolvedValue(true as never);
+		show();
+		await menuOf('Folder menu: Work');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete folder' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+		await waitFor(() => expect(deleteFolderById).toHaveBeenCalledWith('t', 'f1', false));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Folder deleted'));
 	});
 });
