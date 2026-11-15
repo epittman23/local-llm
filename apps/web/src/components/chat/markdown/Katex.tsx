@@ -21,9 +21,19 @@ const themedColours = (html: string) =>
 /**
  * Ports KatexRenderer.svelte: KaTeX's own HTML (it escapes its input), with errors shown in place rather than thrown.
  * A display equation wider than the column scrolls inside its own box, whose frame shades the edge hiding the rest
- * (`scroll-edges` in standard.css); while it overflows it is a named tab stop the arrow keys scroll (CNT-3, A11Y-2).
+ * (`scroll-edges` in standard.css); while it overflows it is a tab stop the arrow keys scroll (CNT-3, A11Y-2). On its
+ * own line it is a figure named Equation; inside a sentence (`inParagraph`) a figure cannot sit in the <p>, so it is
+ * an unnamed span, read as its math.
  */
-export function Katex({ content, displayMode }: { content: string; displayMode: boolean }) {
+export function Katex({
+	content,
+	displayMode,
+	inParagraph = false
+}: {
+	content: string;
+	displayMode: boolean;
+	inParagraph?: boolean;
+}) {
 	const [ref, edges] = useScrollEdges<HTMLSpanElement>();
 	const html = useMemo(() => {
 		try {
@@ -35,15 +45,15 @@ export function Katex({ content, displayMode }: { content: string; displayMode: 
 		}
 	}, [content, displayMode]);
 	if (html === null) return <code>{content}</code>;
-	// A display equation is a figure, named, and a tab stop while it scrolls (A11Y-2); inline math is a span.
-	const Tag = displayMode ? 'figure' : 'span';
+	const figure = displayMode && !inParagraph;
+	const Tag = figure ? 'figure' : 'span';
 	const math = (
 		<Tag
 			ref={displayMode ? ref : undefined}
-			aria-label={displayMode ? 'Equation' : undefined}
+			aria-label={figure ? 'Equation' : undefined}
 			tabIndex={edges.start || edges.end ? 0 : undefined}
 			data-testid={displayMode ? 'display-equation' : undefined}
-			className={displayMode ? 'scroll-region overflow-x-auto py-1' : undefined}
+			className={displayMode ? 'scroll-region block overflow-x-auto py-1' : undefined}
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

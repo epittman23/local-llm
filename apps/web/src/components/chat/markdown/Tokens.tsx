@@ -240,7 +240,7 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 					case 'br':
 						return <br key={i} />;
 					case 'inlineKatex':
-						return t.text ? <Katex key={i} content={t.text} displayMode={t.displayMode ?? false} /> : null;
+						return t.text ? <Katex key={i} content={t.text} displayMode={t.displayMode ?? false} inParagraph /> : null;
 					case 'mention':
 						return (
 							<span key={i} className="text-brand bg-brand/10 rounded px-0.5" data-type="mention">

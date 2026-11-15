@@ -139,4 +139,16 @@ describe('Markdown', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
 		expect(saveAs).toHaveBeenCalledWith(expect.any(Blob), 'table-m1-0.csv');
 	});
+
+	it('puts display math inside a sentence in a span, which a paragraph may hold, and on its own line in a figure', () => {
+		const error = vi.spyOn(console, 'error');
+		renderMd('where $$x^2$$ is it\n\n$$\\sum x$$\n');
+		expect(error).not.toHaveBeenCalled();
+		const [inline, block] = screen.getAllByTestId('display-equation');
+		expect(inline.tagName).toBe('SPAN');
+		expect(inline.closest('p')).toBeTruthy();
+		expect(inline.getAttribute('aria-label')).toBeNull();
+		expect(block).toBe(screen.getByRole('figure', { name: 'Equation' }));
+		error.mockRestore();
+	});
 });
