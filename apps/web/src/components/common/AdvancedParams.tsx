@@ -342,7 +342,7 @@ export function AdvancedParams({
 						variant="ghost"
 						className="self-start"
 						type="button"
-						onClick={() => setCustom({ ...customParams, custom_param_name: 'custom_param_value' })}
+						onClick={() => setCustom({ ...customParams, '': '' })}
 					>
 						<Plus aria-hidden /> Add custom parameter
 					</Button>

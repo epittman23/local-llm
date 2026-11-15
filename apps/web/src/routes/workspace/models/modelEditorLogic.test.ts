@@ -328,3 +328,14 @@ describe('sameValue', () => {
 		expect(sameValue('a', 'a')).toBe(true);
 	});
 });
+
+describe('buildModelInfo: custom parameters', () => {
+	it('drops a custom parameter row left without a name, and the whole set when none is named', () => {
+		const state = withBase(fresh({ params: { system: '', custom_params: { '': '', top_k_extra: '3' } } }));
+		const r = buildModelInfo(state, { preset: true });
+		expect(r.ok && r.info.params.custom_params).toEqual({ top_k_extra: '3' });
+		const blank = withBase(fresh({ params: { system: '', custom_params: { '': '' } } }));
+		const b = buildModelInfo(blank, { preset: true });
+		expect(b.ok && 'custom_params' in b.info.params).toBe(false);
+	});
+});

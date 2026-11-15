@@ -262,6 +262,11 @@ export function buildModelInfo(
 	info.params.stop = stop
 		? (typeof stop === 'string' ? stop.split(',') : (stop as string[])).filter((s) => s.trim())
 		: null;
+	// A custom parameter row left without a name is not a parameter (it starts blank, S4-D2).
+	if (info.params.custom_params && typeof info.params.custom_params === 'object') {
+		const named = Object.entries(info.params.custom_params as Json).filter(([name]) => name.trim() !== '');
+		info.params.custom_params = named.length > 0 ? Object.fromEntries(named) : null;
+	}
 	for (const key of Object.keys(info.params)) {
 		if (info.params[key] === '' || info.params[key] === null) delete info.params[key];
 	}

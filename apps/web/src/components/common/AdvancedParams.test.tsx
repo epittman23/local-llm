@@ -128,6 +128,6 @@ describe('AdvancedParams: custom parameters', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Remove a' }));
 		expect(onChange).toHaveBeenLastCalledWith({ custom_params: {} });
 		fireEvent.click(screen.getByRole('button', { name: /Add custom parameter/ }));
-		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '1', custom_param_name: 'custom_param_value' } });
+		expect(onChange).toHaveBeenLastCalledWith({ custom_params: { a: '1', '': '' } });
 	});
 });
