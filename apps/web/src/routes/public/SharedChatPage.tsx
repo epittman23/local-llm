@@ -90,10 +90,12 @@ export function SharedChatPage() {
 	if (chatQuery.isError && authStatus !== 'anonymous') {
 		// NAV-3: a revoked or mistyped link says so, on a page of its own rather
 		// than a bounce to a new chat. Any other failure can be tried again.
-		const notFound = isNotFound(chatQuery.error);
+		// The API helpers throw the server's detail string, whatever the query's Error type says.
+		const detail: unknown = chatQuery.error;
+		const notFound = isNotFound(detail);
 		return (
 			<main className="bg-page flex min-h-svh w-full flex-col justify-center">
-				{notFound || chatQuery.error === ACCESS_PROHIBITED_DETAIL ? (
+				{notFound || detail === ACCESS_PROHIBITED_DETAIL ? (
 					<Gone
 						title={notFound ? 'This shared link is no longer available.' : 'This shared chat is not open to you.'}
 						description={
