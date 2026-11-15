@@ -194,6 +194,81 @@ test('a server confirmation is answered through the socket', async ({ page }) =>
 	expect(await answer).toBe(true);
 });
 
+test("a reply's steps show inline between its texts, and a new step appears as it runs", async ({ page }) => {
+	const output = [
+		{
+			type: 'reasoning',
+			id: 'r1',
+			status: 'completed',
+			duration: 2,
+			content: [{ type: 'output_text', text: 'Plan.' }]
+		},
+		{ type: 'message', id: 'm1', role: 'assistant', content: [{ type: 'output_text', text: 'Let me check.' }] },
+		{
+			type: 'function_call',
+			id: 'c1',
+			call_id: 'c1',
+			name: 'bash',
+			arguments: JSON.stringify({ command: 'ls /workspace' }),
+			status: 'completed'
+		},
+		{
+			type: 'function_call_output',
+			call_id: 'c1',
+			output: [{ type: 'input_text', text: JSON.stringify({ returncode: 0, stdout: 'notes.txt\n', stderr: '' }) }]
+		},
+		{ type: 'message', id: 'm2', role: 'assistant', content: [{ type: 'output_text', text: 'One file.' }] }
+	];
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c1', 'Steps chat', [
+				{ id: 'u1', role: 'user', content: 'What is there?' },
+				{ id: 'a1', role: 'assistant', content: 'Let me check.\nOne file.', model: 'qwen', done: true, output }
+			])
+		]
+	});
+	await page.goto('/c/c1');
+	await chat.socket.connected;
+	const reply = page.getByTestId('response-message');
+	await expect(reply.getByTestId('reply-step')).toHaveText([/Thought\s*2 s/, /ls \/workspace/]);
+	await reply.getByRole('button', { name: /ls \/workspace/ }).click();
+	await expect(reply).toContainText('Exit code 0');
+	await expect(reply).toContainText('notes.txt');
+
+	// The next turn: the reply's output arrives over the socket while it runs.
+	await page.getByRole('textbox', { name: 'Message' }).fill('And now?');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	const running = [
+		output[1],
+		{
+			type: 'function_call',
+			id: 'c2',
+			call_id: 'c2',
+			name: 'bash',
+			arguments: '{"command":"wc -l notes.txt"}',
+			status: 'in_progress'
+		}
+	];
+	chat.event('chat:completion', { output: running });
+	const live = page.getByTestId('response-message').last();
+	await expect(live.getByTestId('reply-step')).toHaveAttribute('data-status', 'running');
+	await expect(live.getByTestId('reply-step')).toContainText('wc -l notes.txt');
+	chat.event('chat:completion', {
+		output: [
+			...running.slice(0, 1),
+			{ ...running[1], status: 'completed' },
+			{
+				type: 'function_call_output',
+				call_id: 'c2',
+				output: [{ type: 'input_text', text: JSON.stringify({ returncode: 0, stdout: '3 notes.txt\n', stderr: '' }) }]
+			}
+		],
+		done: true
+	});
+	await expect(live.getByTestId('reply-step')).toHaveAttribute('data-status', 'done');
+});
+
 test('a missing chat says so in place and keeps its address (#953)', async ({ page }) => {
 	await mockChat(page);
 	await page.goto('/c/nope');

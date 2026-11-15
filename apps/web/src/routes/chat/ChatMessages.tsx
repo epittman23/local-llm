@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, Copy, FileText, RotateCcw } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
+import { ReplySteps } from '@/components/chat/ReplySteps';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
@@ -276,6 +277,28 @@ export function ResponseMessage({
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:150ms]" />
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:300ms]" />
 						</div>
+					) : message.output?.length ? (
+						// The reply as it happened: its texts and every step between them.
+						<ReplySteps
+							id={message.id}
+							output={message.output}
+							done={message.done !== false}
+							plain={!prefs.markdownInAssistantMessages}
+							formatText={citationsEnabled ? undefined : stripCitations}
+							modelName={message.modelName}
+							chatId={chatId ?? undefined}
+							messageId={message.id}
+							resolvable={Boolean(chatId) && message.role === 'assistant' && userId !== undefined}
+							sourceIds={sourceIds}
+							onSourceClick={(id) => h.onSourceClick?.(message, id)}
+							onToolCallResolved={h.onToolCallResolved}
+							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
+							onRun={
+								message.role === 'assistant' && h.onRun && chatId
+									? (code) => (h.onRun as CodeRunner)(code, chatId)
+									: undefined
+							}
+						/>
 					) : !prefs.markdownInAssistantMessages ? (
 						<div className="text-reading whitespace-pre-wrap" dir="auto">
 							{removeAllDetails(citationsEnabled ? message.content : stripCitations(message.content))}
