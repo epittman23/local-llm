@@ -306,24 +306,34 @@ export function ToolsPage() {
 												</div>
 											</Tip>
 											{version && (
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+												<div
+													aria-hidden
+													className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+												>
 													v{version}
 												</div>
 											)}
 											<Tip content={dayjs(tool.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+												<div
+													aria-hidden
+													className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+												>
 													{dayjs(tool.updated_at * 1000).fromNow()}
 												</div>
 											</Tip>
-											{!tool.write_access && <Badge variant="secondary">Read Only</Badge>}
+											{!tool.write_access && <Badge variant="secondary">Read only</Badge>}
 										</div>
-										{tool.meta?.description && (
-											<Tip content={tool.meta.description} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-													{tool.meta.description}
-												</div>
-											</Tip>
-										)}
+										{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+										<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+											{tool.meta?.description && (
+												<Tip content={tool.meta?.description} side="top">
+													<span className="text-foreground-muted min-w-0 truncate">{tool.meta?.description}</span>
+												</Tip>
+											)}
+											<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+												{dayjs(tool.updated_at * 1000).fromNow()}
+											</span>
+										</div>
 									</div>
 
 									{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
@@ -345,7 +355,7 @@ export function ToolsPage() {
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={tool.id}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${tool.write_access ? 'hover:bg-muted/50' : 'opacity-60'}`}
+									className={`group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1 ${tool.write_access ? 'hover:bg-muted/50' : ''}`}
 								>
 									{tool.write_access ? (
 										<RowButton
@@ -377,12 +387,13 @@ export function ToolsPage() {
 														</Button>
 													</Tip>
 												)}
-												<Tip content="Valves">
+												{/* ACT-4, WRD-2: the gear opens this tool's settings (its valves). */}
+												<Tip content="Settings">
 													<Button
 														variant="ghost"
 														size="icon-sm"
 														type="button"
-														aria-label="Valves"
+														aria-label={`Settings for ${tool.name}`}
 														onClick={(e) => {
 															e.stopPropagation();
 															setValvesFor(tool);

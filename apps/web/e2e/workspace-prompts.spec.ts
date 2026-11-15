@@ -158,10 +158,10 @@ test.describe('workspace prompts', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockPromptsApi(page, [makePrompt(1)]);
 		await page.goto('/workspace/prompts');
-		const toggle = page.getByRole('switch', { name: 'Enabled' });
+		const toggle = page.getByRole('switch', { name: 'Enable Prompt 1' });
 		await expect(toggle).toBeChecked();
 		await toggle.click();
-		await expect(page.getByRole('switch', { name: 'Disabled' })).not.toBeChecked();
+		await expect(toggle).not.toBeChecked();
 		await expect.poll(() => calls.some((c) => c.path === '/id/p1/toggle')).toBe(true);
 	});
 

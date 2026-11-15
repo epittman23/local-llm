@@ -42,6 +42,9 @@ import {
 
 const PER_PAGE = 30;
 
+/** A command as typed in chat: one leading slash, whether or not the stored command carries one. */
+const slashCommand = (command?: string) => `/${(command ?? '').replace(/^\//, '')}`;
+
 /**
  * Ports workspace/Prompts.svelte: the searchable, filterable, sortable,
  * paginated list of prompts, with per-row copy / enable-toggle / menu, and the
@@ -269,7 +272,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 					setDeleting(null);
 				}}
 			>
-				<code>/{deleting?.command}</code> stops working. It can't be undone.
+				<code>{slashCommand(deleting?.command)}</code> stops working. It can't be undone.
 			</ConfirmDialog>
 
 			<PromptCreateDialog open={showCreate} draft={createDraft} onSubmit={createPrompt} onClose={closeCreate} />
@@ -348,7 +351,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={prompt.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -361,23 +364,30 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 														{prompt.name}
 													</div>
 												</Tip>
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
-													/{prompt.command}
-												</div>
 												<Tip content={dayjs(updatedAt).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(updatedAt).fromNow()}
 													</div>
 												</Tip>
-												{!prompt.write_access && <Badge variant="secondary">Read Only</Badge>}
+												{!prompt.write_access && <Badge variant="secondary">Read only</Badge>}
 											</div>
-											{prompt.content && (
-												<Tip content={prompt.content} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-														{prompt.content}
-													</div>
-												</Tip>
-											)}
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												<span className="text-muted-foreground max-w-[50%] min-w-0 shrink-0 truncate font-mono">
+													{slashCommand(prompt.command)}
+												</span>
+												{prompt.content && (
+													<Tip content={prompt.content} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{prompt.content}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(updatedAt).fromNow()}
+												</span>
+											</div>
 										</div>
 
 										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
@@ -397,11 +407,13 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 
 									<div className="ml-2 flex shrink-0 flex-row items-center self-center">
 										<>
+											{/* LAY-4: below sm the row keeps the menu and switch; Copy moves into the menu. */}
 											<Tip content="Copy Prompt">
 												<Button
 													variant="ghost"
 													size="icon-sm"
 													type="button"
+													className="hidden sm:inline-flex"
 													aria-label="Copy Prompt"
 													onClick={(e) => {
 														e.stopPropagation();
@@ -432,6 +444,10 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 														</DropdownMenuTrigger>
 													</Tip>
 													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem className="sm:hidden" onSelect={() => copyHandler(prompt)}>
+															<Clipboard />
+															Copy prompt
+														</DropdownMenuItem>
 														<DropdownMenuItem onSelect={() => openPrompt(prompt)}>
 															<Pencil />
 															Edit
@@ -461,15 +477,13 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 													</DropdownMenuContent>
 												</DropdownMenu>
 
-												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-													<span className="flex h-6 items-center">
-														<Switch
-															aria-label={isActive ? 'Enabled' : 'Disabled'}
-															checked={isActive}
-															onCheckedChange={(next) => toggleActive(prompt, next)}
-														/>
-													</span>
-												</Tip>
+												<span className="flex h-6 items-center">
+													<Switch
+														aria-label={`Enable ${prompt.name}`}
+														checked={isActive}
+														onCheckedChange={(next) => toggleActive(prompt, next)}
+													/>
+												</span>
 											</div>
 										</>
 									</div>

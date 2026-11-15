@@ -66,7 +66,7 @@ describe('ModelsPage rows', () => {
 		expect(controls.map((c) => c.getAttribute('aria-label')).slice(1)).toEqual([
 			'New chat with Statistics tutor',
 			'Model Menu',
-			'Enabled'
+			'Enable Statistics tutor'
 		]);
 
 		fireEvent.click(row);
@@ -80,7 +80,7 @@ describe('ModelsPage rows', () => {
 		await screen.findByText('Shared reviewer');
 
 		expect(document.querySelector('[data-slot="row-button"]')).toBeNull();
-		expect(screen.getByText('Read Only')).toBeInTheDocument();
+		expect(screen.getByText('Read only')).toBeInTheDocument();
 		const link = screen.getByRole('link', { name: 'New chat with Shared reviewer' });
 		expect(link.getAttribute('href')).toBe('/?model=shared');
 		expect(screen.queryByRole('switch')).toBeNull();
@@ -177,5 +177,48 @@ describe('ModelsPage delete (ACT-3, #1012)', () => {
 		expect(within(dialog).getByRole('heading')).toHaveTextContent('Delete “Statistics tutor”?');
 		expect(dialog).toHaveTextContent('Chats that used it keep their messages.');
 		expect(within(dialog).getByRole('button', { name: 'Delete model' })).toHaveAttribute('data-variant', 'destructive');
+	});
+});
+
+describe('ModelsPage row content (#1097, #908)', () => {
+	it('shows the base model, up to three tags, and state badges instead of dimming the row', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({
+			items: [
+				{
+					...model('tutor', 'Statistics tutor', true),
+					is_active: false,
+					meta: { hidden: true, tags: [{ name: 'stats' }, { name: 'math' }, { name: 'r' }, { name: 'teaching' }] }
+				}
+			],
+			total: 1
+		});
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		const row = document.getElementById('model-item-tutor') as HTMLElement;
+		expect(row.className).not.toMatch(/opacity/);
+		const dimmed = [...row.querySelectorAll('*')].filter((el) =>
+			(el.getAttribute('class') ?? '').split(/\s+/).some((c) => /^opacity-\d+$/.test(c))
+		);
+		expect(dimmed).toEqual([]);
+		expect(within(row).getByText('Hidden')).toBeInTheDocument();
+		expect(within(row).getByText('Off')).toBeInTheDocument();
+		expect(within(row).getByText('qwen/qwen3.6-27b')).toHaveClass('font-mono');
+		expect(within(row).getByText('stats')).toBeInTheDocument();
+		expect(within(row).queryByText('teaching')).toBeNull();
+		expect(within(row).getByText('+1')).toBeInTheDocument();
+		expect(within(row).getByRole('switch', { name: 'Enable Statistics tutor' })).not.toBeChecked();
+	});
+
+	it('names the row by its name, state and second line, not its id or time (A11Y-2)', async () => {
+		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });
+		renderPage();
+		await screen.findByText('Statistics tutor');
+		const button = document.querySelector('[data-slot="row-button"]') as HTMLElement;
+		const hidden = [...button.querySelectorAll('[aria-hidden]')].map((el) => el.textContent ?? '');
+		expect(hidden).toEqual(expect.arrayContaining(['tutor', expect.stringMatching(/ago$/)]));
+		// New chat is in the menu too, for phones, where the row keeps only the menu and the switch.
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model Menu' }), { button: 0, pointerType: 'mouse' });
+		const menu = await screen.findByRole('menu');
+		expect(within(menu).getByRole('menuitem', { name: 'New chat' })).toHaveAttribute('href', '/?model=tutor');
 	});
 });

@@ -405,18 +405,23 @@ export function ModelsPage() {
 						{models.map((model) => {
 							const isActive = activeOverride[model.id] ?? Boolean(model.is_active);
 							const hidden = Boolean(model.meta?.hidden);
-							const description = (model.meta?.description ?? '').trim() || model.base_model_id || 'No description';
+							const tags: string[] = (model.meta?.tags ?? [])
+								.map((t: { name?: string } | string) => (typeof t === 'string' ? t : t?.name))
+								.filter(Boolean);
+							const description = (model.meta?.description ?? '').trim();
 							const pinned = pinnedModels.includes(model.id);
+							const updated = dayjs(model.updated_at * 1000);
 							const rowContent = (
 								<>
-									<div className={`mr-1 shrink-0 self-center ${isActive ? '' : 'opacity-50'}`}>
+									<div className="mr-1 shrink-0 self-center">
 										<ProfileAvatar
 											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
 											name={model.name ?? model.id}
 										/>
 									</div>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+									{/* LAY-4: line 1 is the name and its state; line 2 what it is. Below sm the time moves to line 2. */}
+									<div className="flex min-w-0 flex-1 flex-col">
+										<div className="flex min-w-0 items-center gap-2">
 											<Tip content={model.name} side="top">
 												<div
 													className={`min-w-0 truncate text-dense leading-5 ${model.write_access ? 'group-hover:underline' : ''}`}
@@ -424,20 +429,50 @@ export function ModelsPage() {
 													{model.name}
 												</div>
 											</Tip>
-											{/* Below sm the name needs the room the row's three controls leave. */}
-											<div className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block">
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+											>
 												{model.id}
 											</div>
-											<Tip content={dayjs(model.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(model.updated_at * 1000).fromNow()}
+											<Tip content={updated.format('LLLL')}>
+												<div
+													aria-hidden
+													className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+												>
+													{updated.fromNow()}
 												</div>
 											</Tip>
-											{!model.write_access && <Badge variant="secondary">Read Only</Badge>}
+											{/* DAT-3, COL-2: a row's state is a neutral badge, never a dimmed row. */}
+											{hidden && <Badge variant="secondary">Hidden</Badge>}
+											{!isActive && <Badge variant="secondary">Off</Badge>}
+											{!model.write_access && <Badge variant="secondary">Read only</Badge>}
 										</div>
-										<Tip content={description} side="top">
-											<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{description}</div>
-										</Tip>
+										<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+											{model.base_model_id ? (
+												<span className="text-foreground-muted min-w-0 truncate font-mono">{model.base_model_id}</span>
+											) : (
+												description && <span className="text-foreground-muted min-w-0 truncate">{description}</span>
+											)}
+											{/* Below sm the base model and the time fill line 2; the tags stay one filter away. */}
+											{tags.slice(0, 3).map((tag) => (
+												<Badge
+													key={tag}
+													variant="secondary"
+													className="hidden max-w-32 min-w-0 truncate sm:inline-flex"
+												>
+													<span className="truncate">{tag}</span>
+												</Badge>
+											))}
+											{tags.length > 3 && (
+												<Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
+													+{tags.length - 3}
+												</Badge>
+											)}
+											<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+												{updated.fromNow()}
+											</span>
+										</div>
 									</div>
 									{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
 									{!singleUser && (
@@ -459,7 +494,7 @@ export function ModelsPage() {
 								<div
 									key={model.id}
 									id={`model-item-${model.id}`}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${model.write_access ? 'hover:bg-muted/50' : ''} ${hidden ? 'opacity-50' : ''}`}
+									className={`group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1 ${model.write_access ? 'hover:bg-muted/50' : ''}`}
 								>
 									{model.write_access ? (
 										<RowButton
@@ -473,8 +508,9 @@ export function ModelsPage() {
 									)}
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
+										{/* LAY-4: below sm the row keeps the menu and switch; New chat moves into the menu. */}
 										<Tip content="New chat with this model">
-											<Button variant="ghost" size="icon-sm" asChild>
+											<Button variant="ghost" size="icon-sm" className="hidden sm:inline-flex" asChild>
 												<Link
 													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
 													aria-label={`New chat with ${model.name}`}
@@ -499,6 +535,12 @@ export function ModelsPage() {
 													</DropdownMenuTrigger>
 												</Tip>
 												<DropdownMenuContent align="end" className="min-w-44">
+													<DropdownMenuItem className="sm:hidden" asChild>
+														<Link to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}>
+															<SquarePen />
+															New chat
+														</Link>
+													</DropdownMenuItem>
 													{model.write_access && (
 														<DropdownMenuItem onSelect={() => openModel(model)}>
 															<Pencil />
@@ -543,15 +585,13 @@ export function ModelsPage() {
 												</DropdownMenuContent>
 											</DropdownMenu>
 											{model.write_access && (
-												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-													<span className="flex h-6 items-center">
-														<Switch
-															aria-label={isActive ? 'Enabled' : 'Disabled'}
-															checked={isActive}
-															onCheckedChange={(next) => toggleActive(model, next)}
-														/>
-													</span>
-												</Tip>
+												<span className="flex h-6 items-center">
+													<Switch
+														aria-label={`Enable ${model.name}`}
+														checked={isActive}
+														onCheckedChange={(next) => toggleActive(model, next)}
+													/>
+												</span>
 											)}
 										</div>
 									</div>

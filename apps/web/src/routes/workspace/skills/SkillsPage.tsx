@@ -309,7 +309,7 @@ export function SkillsPage() {
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={skill.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -322,24 +322,34 @@ export function SkillsPage() {
 														{skill.name}
 													</div>
 												</Tip>
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+												<div
+													aria-hidden
+													className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+												>
 													/{skill.id}
 												</div>
 												<Tip content={dayjs(updatedAt).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(updatedAt).fromNow()}
 													</div>
 												</Tip>
-												{!isActive && <Badge variant="secondary">Inactive</Badge>}
-												{!skill.write_access && <Badge variant="secondary">Read Only</Badge>}
+												{!isActive && <Badge variant="secondary">Off</Badge>}
+												{!skill.write_access && <Badge variant="secondary">Read only</Badge>}
 											</div>
-											{skill.description && (
-												<Tip content={skill.description} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-														{skill.description}
-													</div>
-												</Tip>
-											)}
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												{skill.description && (
+													<Tip content={skill.description} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{skill.description}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(updatedAt).fromNow()}
+												</span>
+											</div>
 										</div>
 
 										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
@@ -397,15 +407,13 @@ export function SkillsPage() {
 													</DropdownMenuContent>
 												</DropdownMenu>
 
-												<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-													<span className="flex h-6 items-center">
-														<Switch
-															aria-label={isActive ? 'Enabled' : 'Disabled'}
-															checked={isActive}
-															onCheckedChange={(next) => toggleActive(skill, next)}
-														/>
-													</span>
-												</Tip>
+												<span className="flex h-6 items-center">
+													<Switch
+														aria-label={`Enable ${skill.name}`}
+														checked={isActive}
+														onCheckedChange={(next) => toggleActive(skill, next)}
+													/>
+												</span>
 											</div>
 										</div>
 									)}

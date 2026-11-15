@@ -132,7 +132,10 @@ test.describe('workspace tools', () => {
 			valves: { api_key: null, tags: ['a', 'b'], verbose: null }
 		});
 		await page.goto('/workspace/tools');
-		await page.getByRole('button', { name: 'Valves', exact: true }).click();
+		await page
+			.getByRole('button', { name: /^Settings for Tool / })
+			.first()
+			.click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('API Key')).toBeVisible();
 		await expect(dialog.getByText('*required')).toBeVisible();

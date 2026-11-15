@@ -376,7 +376,7 @@ export function FunctionsPage() {
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={fn.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -391,23 +391,33 @@ export function FunctionsPage() {
 													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
 												</Tip>
 												{fn.meta?.manifest?.version && (
-													<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+													>
 														v{fn.meta.manifest.version}
 													</div>
 												)}
 												<Tip content={dayjs(fn.updated_at * 1000).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(fn.updated_at * 1000).fromNow()}
 													</div>
 												</Tip>
 											</div>
-											{fn.meta?.description && (
-												<Tip content={fn.meta.description} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-														{fn.meta.description}
-													</div>
-												</Tip>
-											)}
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												{fn.meta?.description && (
+													<Tip content={fn.meta?.description} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{fn.meta?.description}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(fn.updated_at * 1000).fromNow()}
+												</span>
+											</div>
 										</div>
 
 										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
@@ -518,14 +528,12 @@ export function FunctionsPage() {
 												</DropdownMenuContent>
 											</DropdownMenu>
 											<div className="flex h-6 items-center">
-												<Tip content={fn.is_active ? 'Enabled' : 'Disabled'}>
-													<Switch
-														size="sm"
-														aria-label={`Enable ${fn.name}`}
-														checked={Boolean(fn.is_active)}
-														onCheckedChange={() => toggleActive(fn)}
-													/>
-												</Tip>
+												<Switch
+													size="sm"
+													aria-label={`Enable ${fn.name}`}
+													checked={Boolean(fn.is_active)}
+													onCheckedChange={() => toggleActive(fn)}
+												/>
 											</div>
 										</>
 									</div>

@@ -87,8 +87,8 @@ test.describe('workspace skills', () => {
 		await page.goto('/workspace/skills');
 		await expect(page.getByText('Skill 1', { exact: true })).toBeVisible();
 		await expect(page.getByText('Does thing 2')).toBeVisible();
-		await expect(page.getByText('Inactive')).toHaveCount(1);
-		await expect(page.getByText('Read Only')).toHaveCount(1);
+		await expect(page.getByText('Off', { exact: true })).toHaveCount(1);
+		await expect(page.getByText('Read only', { exact: true })).toHaveCount(1);
 		// A read-only skill has no row controls.
 		await expect(page.getByRole('button', { name: 'Skill Menu', exact: true })).toHaveCount(2);
 
@@ -101,7 +101,7 @@ test.describe('workspace skills', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockSkillsApi(page, [skill(1), skill(2)]);
 		await page.goto('/workspace/skills');
-		await page.getByRole('switch', { name: 'Enabled' }).first().click();
+		await page.getByRole('switch', { name: 'Enable Skill 1' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/toggle'))).toBe(true);
 
 		await page.getByRole('button', { name: 'Skill Menu', exact: true }).first().click();
