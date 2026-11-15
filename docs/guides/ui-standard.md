@@ -10,7 +10,8 @@ eight, and so that two pages doing the same job look and behave the same.
   sections lists the rules it shows; rules about whole pages, words and
   behaviour over time (for example NAV-1 and most WRD rules) are not
   shown there and are checked on the page being changed. Its Canvas section
-  shows a design that is planned, not built (see "Canvas").
+  shows a design whose first phase, the side panel, is built and the rest
+  planned (see "Canvas").
 - **Tokens:** `apps/web/src/styles/standard.css`.
 - **Automated checks:** `apps/web/src/styles/standard.contrast.test.ts`
   fails when a token breaks a colour promise, in dark, black or light, and
@@ -226,8 +227,13 @@ touch**, including the space that belongs to it. `Checkbox` and `Switch` reach
 checkbox's picture for a row that is itself `role="checkbox"`.
 
 **LAY-4. Every page works at 390 px wide.** The page itself never scrolls
-sideways. A side panel becomes a sheet over the page below `md`; it never
-squeezes the content beside it. A bar of tabs that does not fit scrolls, shows
+sideways. A side panel is `components/layout/SidePanel.tsx`: a resizable
+column where the space holds it and 24 rem of content, otherwise a
+full-screen sheet over the page (always below `md`); it never squeezes the
+content beside it (CNV-2). On a phone a page's own header buttons go in the
+app bar (`ShellBarPortal`, `components/layout/ShellBarSlot.tsx`), so the
+phone has one header row; on a short screen they float at the top right,
+like the menu button at the left (A11Y-5). A bar of tabs that does not fit scrolls, shows
 that it scrolls, and keeps the open tab in view. Nothing is reachable only by
 hover (A11Y-4). Section tabs are `components/layout/SectionTabs.tsx`: a strip
 that does not fit scrolls sideways, fades at an edge only while tabs are
@@ -335,7 +341,10 @@ colour with an icon, tied to the field with `aria-describedby`, and the field
 is `aria-invalid`. An error says what is wrong and how to put it right
 ("Enter a whole number of tokens between 512 and 32768"). A field's error is
 never only a toast. Validate when the person leaves the field or submits, not
-on every keystroke before they have finished.
+on every keystroke before they have finished. A required choice left empty
+(a model slot with no model) is `aria-invalid`, with the help line 'Choose a
+model or remove this one' under it; sending opens that picker instead of a
+toast.
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads
@@ -404,7 +413,11 @@ returns to what opened it. The shared `DialogContent`, `AlertDialogContent`
 and `SheetContent` return focus to the element that had it when they opened
 (or to a menu's trigger, when a menu item opened them), so a dialog opened
 from state needs no `DialogTrigger`. Settings ignores an Escape while focus is
-in a layer above it.
+in a layer above it. A side panel shown as a column is not a layer: Escape
+closes it only while focus is inside it and nothing inside it took the key
+first, so the page's own Escape and the layers above it are left alone.
+Opening it moves focus to its heading; closing it returns focus to what
+opened it (a menu's trigger, when a menu item did).
 
 **NAV-5. Everything can be done from the keyboard.** A list of choices
 (search results, a model picker, a command palette) moves with the arrow keys
@@ -413,6 +426,11 @@ keyboard-heavy view and is listed in the shortcuts dialog. Lists you choose
 from by keyboard are `components/ui/command.tsx` (cmdk): the field keeps
 focus, the arrow keys move a highlight, Enter chooses, and the first item is
 highlighted whenever the list fills, also when its items come from the server.
+The model picker is `routes/chat/ModelSelector.tsx` on `Command`: rows are
+left aligned, the model's name over a muted second line (its description, or
+a workspace entry's base model in mono), and the current one is checked.
+Ctrl+Shift+M (Open model selector) opens the picker on screen;
+`openModelPicker()` opens it from code.
 
 ## Tables and figures
 
@@ -443,7 +461,13 @@ rows become stacked label and value pairs. The page does not scroll sideways
 that hides columns. Give it `aria-label`: the scrolling container becomes a
 named region and, while it overflows, a tab stop the arrow keys scroll.
 `stickyFirstColumn` keeps the first column in view (set `--table-surface` if
-the table does not sit on `--page`).
+the table does not sit on `--page`). Tables in rendered answers use it too,
+with Copy table (tab-separated, so it pastes as cells) and Download CSV in an
+always-visible toolbar above the table, never over a heading (A11Y-4). A
+scroll region outside `Table` (a code listing, an equation) uses
+`useScrollEdges` with the `scroll-edges` frame and `scroll-region` scroller
+in standard.css: the same shaded edges, a thin scrollbar where the platform
+allows, focus drawn inside.
 
 ## Feedback
 
@@ -489,12 +513,21 @@ them.
 
 **FBK-3. Every action answers.** Something visible changes within 100 ms of a
 press (the pressed or busy state), and the result is confirmed: "Copied",
-"Saved", the new row appears. An action that fails says so.
+"Saved", the new row appears. An action that fails says so. A copy control
+uses `useCopy` (`lib/ui/useCopy.ts`): it says "Copied" for 1.5 s, and a copy
+the browser refuses says so in a toast.
 
 **FBK-4. An error says what happened, why if that is known, and what to do.**
 It is written for the person using the app: no exception text, no status code
 alone, no internal identifier as the message. The technical detail may be
-offered behind "Details". It does not apologise and does not blame.
+offered behind "Details". It does not apologise and does not blame. A failed
+reply is `routes/chat/ErrorReply.tsx`: the heading 'The model didn't answer',
+the provider's own words, a next step for the causes it recognises (a refused
+key: Admin Settings > Connections; llama-server not serving: Benchmarks >
+Serve), and Retry and Try another model. An error-only reply offers no Copy,
+Edit, Read aloud or rating. Run on a host without the sandbox says "The code
+sandbox isn't set up on this machine", what it needs, and links the guide;
+Run is then disabled for the session with that reason (ACT-5).
 
 ## Loading, empty and failed
 
@@ -531,6 +564,8 @@ over `--scrim`. Focus is trapped inside a dialog and returns on close (NAV-4).
 
 **OVL-3. A menu holds actions on one thing:** at most about seven, grouped,
 each a verb, with the destructive one last (ACT-3). Its labels do not wrap.
+A reply's More actions menu: Edit, Read aloud, Continue, the model's own
+actions, a separator, then Delete.
 
 **OVL-4. A tooltip names an icon or shows text that was truncated.** It never
 holds information that is not available some other way, because it does not
@@ -546,11 +581,21 @@ within TYP-5.
 **CNT-2. Code blocks have one theme, built from the tokens, in both app
 themes.** Code is highlighted by highlight.js and coloured by the `.hljs-*`
 rules in `standard.css`; no highlight.js stylesheet supplies colours. The block sits on `--surface-1` with an edge; its header names the
-language and offers Copy and Wrap lines. Long lines scroll inside the block.
+language and offers Wrap lines (one setting for every block, remembered),
+Download (named by the language) and Copy; Collapse appears only for a block
+over 25 lines, and a collapsed block shows 25 lines and ends in "Show all N
+lines". Where the block is narrower than 28 rem the header's actions are
+named icons with tooltips (ACT-4). Long lines scroll inside the block, which
+is a figure named "<language> code", a tab stop while it overflows, with the
+edge that hides content shaded (`scroll-edges`, DAT-6).
 Inline code is the monospaced face on `--surface-3`.
 
-**CNT-3. Mathematics inherits the text colour.** A display equation wider than
-the column scrolls inside its own box and shows that it does.
+**CNT-3. Mathematics inherits the text colour.** Black or white written by
+the model (`\color{black}`) is drawn in the text colour where it would
+vanish (`--math-black` in dark and black, `--math-white` in light). A display
+equation wider than the column scrolls inside its own box, shades the edge
+that hides the rest (`scroll-edges`, DAT-6), and is a tab stop while it
+overflows; on its own line it is a figure named "Equation".
 
 **CNT-4. Output the app did not write** (an HTML preview, a sandbox's file, a
 generated figure) sits in a frame that belongs to the theme (COL-6). The
@@ -563,7 +608,9 @@ themed surround) and never fills a panel edge to edge.
 
 The panel beside a chat that shows a document: a file the model produced, a
 page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
-decided; the feature is not built.** Its plan is
+decided. Phase 1, the side-panel shell (`components/layout/SidePanel.tsx`),
+is built and holds Controls and the code-block preview; the canvas itself
+(Phases 2 and 3) is not built.** Its plan is
 [docs/plans/canvas.md](../plans/canvas.md).
 
 **CNV-1. What a model provides is a card in the reply and a document in the
@@ -576,7 +623,16 @@ image keeps a thumbnail on its card.
 it.** It never squeezes the chat (LAY-4). As a column it starts at half the
 space beside the sidebar, is resized with a separator that also works from
 the keyboard, never leaves the chat narrower than 24 rem, and remembers its
-width.
+width. Phase 1, built: the panel is `components/layout/SidePanel.tsx`. It is
+a column when the space beside the sidebar holds the panel's minimum width
+plus 24 rem of chat; otherwise, and always below `md`, it is the shared
+`Sheet`, full screen (768 px with the sidebar open gives a sheet; with the
+rail, or at 1024 px, a column). Each occupant has its own default and
+minimum width, remembered per occupant: Controls 20 rem (minimum 18 rem),
+the preview 28 rem (minimum 20 rem). The separator takes a pointer drag,
+ArrowLeft and ArrowRight (16 px, 64 px with Shift), Home for the widest and
+End for the narrowest, and states its width. Starting at half the space is
+the Phase 2 canvas's default.
 
 **CNV-3. One header, the same for every kind**, left to right: the Preview /
 Source switch when the kind has both; the document's name and kind; then the
@@ -621,7 +677,10 @@ belong to the page, so Close is always one Tab away from the frame.
 
 **WRD-2. Name things as the person using them would.** No field names
 (`n_gpu_layers` becomes "Layers on the GPU"), no internal ids in a sentence,
-no jargon inherited from the fork ("valves", "toolkits", "arena").
+no jargon inherited from the fork ("valves", "toolkits", "arena"). Model
+parameters are named in words with the API name beside them in mono, hidden
+from the accessible name: 'Max tokens · `max_tokens`', 'Layers on the GPU ·
+`num_gpu`'.
 
 **WRD-3. The product is "local-llm"**, written that way everywhere: the tab
 title, the sidebar, the sign-in page, the desktop app. Nothing in the
@@ -672,7 +731,10 @@ folder) gets a visually hidden h1 with its name (`handle.heading: 'sr'`).
 appears on focus and is reachable by touch: on touch devices a row's actions
 are always shown or are in a menu. On touch, a row's menu button is always
 shown. Elsewhere it is transparent, not removed, until the row is hovered or
-focused, so focus can return to it when its menu closes (NAV-4).
+focused, so focus can return to it when its menu closes (NAV-4). A message's
+actions are always shown: muted (`--foreground-muted`) at rest and
+`--foreground-strong` while the message is hovered or holds focus, never
+`opacity-0` until hover.
 
 **A11Y-5. The page works at 200% zoom and reflows at 320 CSS px** without
 losing content or the main action. On a phone screen under 520 px tall, routes

@@ -1,17 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { UiStandardPage } from './UiStandardPage';
 
+// The rendered answer and the replies use the chat's own components, which read settings and models through React Query.
 const renderPage = () =>
 	render(
-		<TooltipProvider>
-			<UiStandardPage />
-			<Toaster />
-		</TooltipProvider>
+		<QueryClientProvider client={new QueryClient()}>
+			<TooltipProvider>
+				<UiStandardPage />
+				<Toaster />
+			</TooltipProvider>
+		</QueryClientProvider>
 	);
 
 describe('UiStandardPage (/ui)', () => {
@@ -114,7 +118,7 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'No results' }));
 		expect(screen.getByRole('button', { name: 'Clear search' })).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
-		const failed = screen.getByRole('alert');
+		const failed = within(document.getElementById('states') as HTMLElement).getByRole('alert');
 		expect(failed.textContent).toContain("Couldn't load prompts");
 		expect(within(failed).getByText('The server did not answer. It may be restarting or stopped.')).toBeTruthy();
 		expect(within(failed).getByRole('button', { name: 'Try again' })).toBeTruthy();
@@ -136,12 +140,58 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Show a confirmation' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a failure' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Show a save failure' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
-		const wrap = screen.getByRole('button', { name: 'Wrap lines' });
+		const answer = within(document.getElementById('content') as HTMLElement);
+		expect(within(answer.getByTestId('code-block')).getByRole('button', { name: 'Copy' })).toBeTruthy();
+		const wrap = answer.getByRole('button', { name: 'Wrap lines' });
 		fireEvent.click(wrap);
 		expect(wrap.getAttribute('aria-pressed')).toBe('true');
 		fireEvent.click(screen.getByRole('switch', { name: 'Name new chats automatically' }));
 		expect(screen.getByText('Off. Applied.')).toBeTruthy();
+	});
+
+	it("renders the answer sample with the chat's own renderer: a named table, an equation, task marks and a long code block", () => {
+		renderPage();
+		const answer = within(document.getElementById('content') as HTMLElement);
+		expect(answer.getByRole('columnheader', { name: 'Test RMSE' })).toBeTruthy();
+		expect(answer.getByRole('button', { name: 'Copy table' })).toBeTruthy();
+		expect(answer.getByRole('figure', { name: 'Equation' })).toBeTruthy();
+		expect(document.querySelectorAll('#content [data-slot="checkbox-mark"]')).toHaveLength(3);
+		const block = within(answer.getByTestId('code-block'));
+		expect(block.getByRole('figure', { name: 'python code' })).toBeTruthy();
+		fireEvent.click(block.getByRole('button', { name: 'Collapse' }));
+		expect(block.getByRole('button', { name: /Show all \d+ lines/ })).toBeTruthy();
+	});
+
+	it('shows a failed reply with its next steps, and the stopped and token-limit marks', () => {
+		renderPage();
+		const answer = within(document.getElementById('content') as HTMLElement);
+		const failed = answer.getByRole('alert');
+		expect(failed.textContent).toContain("The model didn't answer");
+		expect(failed.textContent).toContain('Check the API key in Admin Settings > Connections.');
+		fireEvent.click(within(failed).getByRole('button', { name: 'Try another model' }));
+		const cuts = answer.getAllByTestId('cut-off');
+		expect(cuts.map((c) => c.textContent)).toEqual([
+			expect.stringContaining('Stopped'),
+			expect.stringContaining('Reached the token limit')
+		]);
+		for (const cut of cuts) {
+			expect(within(cut).getByRole('button', { name: 'Continue' })).toBeTruthy();
+			expect(within(cut).getByRole('button', { name: 'Regenerate' })).toBeTruthy();
+		}
+	});
+
+	it('demonstrates the side panel: a resizable column that Escape closes from inside', () => {
+		renderPage();
+		const panel = screen.getByRole('complementary', { name: 'Side panel' });
+		const separator = within(panel).getByRole('separator', { name: 'Resize side panel' });
+		expect(separator.getAttribute('aria-valuenow')).toBe('288');
+		fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+		expect(separator.getAttribute('aria-valuenow')).toBe('304');
+		expect(localStorage.getItem('ui.sidePanel')).toBe('304');
+		fireEvent.keyDown(separator, { key: 'Escape' });
+		expect(screen.queryByRole('complementary', { name: 'Side panel' })).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Open the side panel' }));
+		expect(screen.getByRole('complementary', { name: 'Side panel' })).toBeTruthy();
 	});
 
 	it('opens a document from its card in the canvas, in the view its kind has', () => {
