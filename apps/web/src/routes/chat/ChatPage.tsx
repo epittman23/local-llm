@@ -203,7 +203,7 @@ export function ChatPage() {
 					folderId && folder.data && !session.title
 					? folder.data.name
 					: prefs.titleInTab
-						? session.title || 'New Chat'
+						? session.title || 'New chat'
 						: null
 	);
 	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
