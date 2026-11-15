@@ -193,8 +193,9 @@ describe('ModelsPage delete (ACT-3, #1012)', () => {
 		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }));
 		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete model' }));
 		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Statistics tutor”", {
-				description: 'Database is locked'
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Statistics tutor”.", {
+				// FBK-4: the server's words sit behind Details.
+				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
 			})
 		);
 	});

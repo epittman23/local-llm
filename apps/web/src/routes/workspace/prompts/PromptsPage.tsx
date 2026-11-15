@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
@@ -186,7 +187,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		onSuccess: (res, prompt) => {
 			if (res) toast.success(`Deleted “${prompt.name}”`);
 		},
-		onError: (error) => toast.error(`${error}`),
+		onError: (error, prompt) => toastFailure(`Couldn't delete “${prompt.name}”.`, error),
 		onSettled: () => {
 			setPage(1);
 			refetchList();
@@ -230,7 +231,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				if (saved.length === 0) toast.error('No valid prompts found in that file.');
 				for (const prompt of saved) {
 					await createNewPrompt(token, prompt).catch((error) => {
-						toast.error(typeof error === 'string' ? error : JSON.stringify(error));
+						toastFailure(`Couldn't import “${prompt.name}”.`, error);
 						return null;
 					});
 				}

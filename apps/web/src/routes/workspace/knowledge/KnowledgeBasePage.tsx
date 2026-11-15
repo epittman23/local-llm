@@ -8,6 +8,7 @@ import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AttachWebpageDialog } from '@/components/common/AttachWebpageDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { FilterMenu, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { Gone, isNotFound } from '@/components/common/Gone';
 import { ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -65,7 +66,6 @@ import {
 	type DirectoryFileEntry,
 	gatherDroppedFiles
 } from './knowledgeFiles';
-import { failed } from './knowledgeToasts';
 import {
 	collectDirectoryFiles,
 	collectDroppedEntryFiles,
@@ -287,7 +287,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		// Name and description only: the grants are the access dialog's to save,
 		// and these could be older than one it saved meanwhile (#522).
 		const res = await updateKnowledgeById(token, id, next).catch((e) => {
-			failed("Couldn't save the name and description. Try again.", e);
+			toastFailure("Couldn't save the name and description. Try again.", e);
 			return null;
 		});
 		if (!res) return false;
@@ -314,7 +314,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			token,
 			id,
 			grants
-		).catch((e) => void failed("Couldn't save who has access. The previous access is back.", e));
+		).catch((e) => void toastFailure("Couldn't save who has access. The previous access is back.", e));
 		const latest = accessSaves.current === seq;
 		if (!res) {
 			if (latest) setKnowledge((k) => ({ ...k, access_grants: previous }));
@@ -389,7 +389,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				return true;
 			}
 		} catch (e) {
-			failed(failure, e);
+			toastFailure(failure, e);
 		}
 		return false;
 	};
@@ -419,7 +419,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				reload();
 			}
 		} catch (e) {
-			failed(`Couldn't remove "${name}".`, e);
+			toastFailure(`Couldn't remove "${name}".`, e);
 		}
 	};
 
@@ -457,7 +457,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				setContent(full?.data?.content ?? '');
 				setOriginal(full?.data?.content ?? '');
 			})
-			.catch((e) => !cancelled && failed("Couldn't load the file's text. Close it and open it again.", e))
+			.catch((e) => !cancelled && toastFailure("Couldn't load the file's text. Close it and open it again.", e))
 			.finally(() => !cancelled && setLoadingContent(false));
 		return () => {
 			cancelled = true;
@@ -471,7 +471,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setSaving(true);
 		try {
 			const res = await updateFileDataContentById(token, selectedFileId, content).catch((e) => {
-				failed("Couldn't save the text. Try again.", e);
+				toastFailure("Couldn't save the text. Try again.", e);
 				return null;
 			});
 			if (res) {
@@ -591,7 +591,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 							refresh();
 						}
 					} catch (e) {
-						failed(`Couldn't delete the folder "${deletingDirName}".`, e);
+						toastFailure(`Couldn't delete the folder "${deletingDirName}".`, e);
 					}
 				}}
 			>
@@ -622,7 +622,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 						toast.success(`Reset "${knowledge.name}"`);
 						reload();
 					} catch (e) {
-						failed(`Couldn't reset "${knowledge.name}".`, e);
+						toastFailure(`Couldn't reset "${knowledge.name}".`, e);
 					}
 				}}
 			>

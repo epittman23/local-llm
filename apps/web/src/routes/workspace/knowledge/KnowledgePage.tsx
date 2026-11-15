@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
@@ -13,8 +14,6 @@ import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -22,6 +21,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
 import type { AccessGrant } from '@/lib/access/accessGrants';
@@ -35,7 +36,6 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
-import { errorText } from '@/lib/chat/history';
 import { dayjs } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
@@ -144,8 +144,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 		mutationFn: (item: KnowledgeListItem) => deleteKnowledgeById(token, item.id),
 		// FBK-2, FBK-4: the result names the knowledge base; the server's own words are the detail.
 		onSuccess: (res, item) => res && toast.success(`Deleted “${item.name}”`),
-		onError: (error, item) =>
-			toast.error(`Couldn't delete “${item.name}”`, { description: errorText(error) || undefined }),
+		onError: (error, item) => toastFailure(`Couldn't delete “${item.name}”.`, error),
 		onSettled: refetch
 	});
 
@@ -163,7 +162,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			URL.revokeObjectURL(url);
 			toast.success(`Exported “${item.name}”`);
 		} catch (error) {
-			toast.error(`Couldn't export “${item.name}”`, { description: errorText(error) || undefined });
+			toastFailure(`Couldn't export “${item.name}”.`, error);
 		}
 	};
 
@@ -438,7 +437,7 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 		}
 		setLoading(true);
 		const res = await createNewKnowledge(token, name.trim(), description.trim(), accessGrants).catch((error) => {
-			toast.error("Couldn't create the knowledge base", { description: errorText(error) || undefined });
+			toastFailure("Couldn't create the knowledge base.", error);
 			return null;
 		});
 		if (res) {

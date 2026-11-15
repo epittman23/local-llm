@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
 import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -139,7 +140,7 @@ export function FunctionsPage() {
 			toast.success('Function deleted successfully');
 			queryClient.setQueryData<FunctionListItem[]>(LIST_KEY, (prev) => prev?.filter((f) => f.id !== fn.id));
 		},
-		onError: (error) => toast.error(`${error}`),
+		onError: (error, fn) => toastFailure(`Couldn't delete “${fn.name}”.`, error),
 		onSettled: refresh
 	});
 
@@ -199,7 +200,7 @@ export function FunctionsPage() {
 
 	const exportAll = async () => {
 		const all = await exportFunctions(token).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't export the functions.", error);
 			return null;
 		});
 		if (all)

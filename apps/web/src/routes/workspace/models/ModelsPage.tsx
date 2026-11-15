@@ -21,6 +21,7 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
@@ -45,7 +46,6 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
-import { errorText } from '@/lib/chat/history';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
@@ -171,7 +171,7 @@ export function ModelsPage() {
 
 	const deleteModel = async (m: ModelRow) => {
 		const res = await deleteModelById(token, m.id).catch((error) => {
-			toast.error(`Couldn't delete “${m.name}”`, { description: errorText(error) || undefined });
+			toastFailure(`Couldn't delete “${m.name}”.`, error);
 			return null;
 		});
 		if (res) {
@@ -252,7 +252,7 @@ export function ModelsPage() {
 			for (const model of incoming) {
 				// Update a model that already exists, create it otherwise.
 				await saveImportedModel(token, model).catch((error) => {
-					toast.error(`${error}`);
+					toastFailure(`Couldn't import “${model.name ?? model.id}”.`, error);
 					return null;
 				});
 			}

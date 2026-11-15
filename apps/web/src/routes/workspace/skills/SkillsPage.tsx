@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
@@ -116,7 +117,7 @@ export function SkillsPage() {
 				label: 'Export JSON',
 				onClick: async () => {
 					const all = await exportSkills(token).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure("Couldn't export the skills.", error);
 						return null;
 					});
 					if (all)
@@ -134,7 +135,7 @@ export function SkillsPage() {
 	const deleteMutation = useMutation({
 		mutationFn: (skill: SkillListItem) => deleteSkillById(token, skill.id),
 		onSuccess: (res) => res && toast.success('Skill deleted successfully'),
-		onError: (error) => toast.error(`${error}`),
+		onError: (error, skill) => toastFailure(`Couldn't delete “${skill.name}”.`, error),
 		onSettled: () => {
 			setPage(1);
 			refetchList();
@@ -194,7 +195,7 @@ export function SkillsPage() {
 				}
 				for (const skill of items) {
 					await createNewSkill(token, skill).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure(`Couldn't import “${skill.name}”.`, error);
 					});
 				}
 				toast.success('Skill imported successfully');

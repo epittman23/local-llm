@@ -1,14 +1,4 @@
-import {
-	ArrowUpCircle,
-	CircleAlert,
-	FolderOpen,
-	FolderPlus,
-	Globe,
-	Plus,
-	RefreshCw,
-	RotateCcw,
-	Type
-} from 'lucide-react';
+import { ArrowUpCircle, FolderOpen, FolderPlus, Globe, Plus, RefreshCw, RotateCcw, Type } from 'lucide-react';
 import { useState } from 'react';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
@@ -27,6 +17,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -153,14 +144,13 @@ export function EditDetailsDialog({
 						<Input
 							id="kb-name"
 							value={draftName}
-							aria-invalid={error ? true : undefined}
-							aria-describedby={error ? 'kb-name-error' : undefined}
+							{...fieldProps('kb-name-error', { error })}
 							onChange={(e) => {
 								setDraftName(e.target.value);
 								if (e.target.value.trim()) setError(null);
 							}}
 						/>
-						{error && <FieldError id="kb-name-error">{error}</FieldError>}
+						<FieldMessage id="kb-name-error" error={error} />
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="kb-description">Description (optional)</Label>
@@ -182,16 +172,6 @@ export function EditDetailsDialog({
 				</form>
 			</DialogContent>
 		</Dialog>
-	);
-}
-
-/** A field's error under it, tied to it by `aria-describedby` (FRM-2). */
-function FieldError({ id, children }: { id: string; children: string }) {
-	return (
-		<p id={id} className="text-danger text-dense flex items-center gap-1.5">
-			<CircleAlert aria-hidden className="size-3.5 shrink-0" />
-			{children}
-		</p>
 	);
 }
 
@@ -241,14 +221,13 @@ export function NewDirectoryDialog({
 						<Input
 							id="kb-folder-name"
 							value={name}
-							aria-invalid={error ? true : undefined}
-							aria-describedby={error ? 'kb-folder-name-error' : undefined}
+							{...fieldProps('kb-folder-name-error', { error })}
 							onChange={(e) => {
 								setName(e.target.value);
 								if (e.target.value.trim()) setError(null);
 							}}
 						/>
-						{error && <FieldError id="kb-folder-name-error">{error}</FieldError>}
+						<FieldMessage id="kb-folder-name-error" error={error} />
 					</div>
 					<DialogFooter>
 						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
@@ -311,11 +290,10 @@ export function AddTextDialog({
 						<Input
 							id="kb-text-title"
 							value={name}
-							aria-invalid={errors.name ? true : undefined}
-							aria-describedby={errors.name ? 'kb-text-title-error' : undefined}
+							{...fieldProps('kb-text-title-error', { error: errors.name })}
 							onChange={(e) => setName(e.target.value)}
 						/>
-						{errors.name && <FieldError id="kb-text-title-error">{errors.name}</FieldError>}
+						<FieldMessage id="kb-text-title-error" error={errors.name} />
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="kb-text-content">Text</Label>
@@ -324,11 +302,10 @@ export function AddTextDialog({
 							rows={10}
 							className="max-h-[50vh] field-sizing-fixed"
 							value={content}
-							aria-invalid={errors.content ? true : undefined}
-							aria-describedby={errors.content ? 'kb-text-content-error' : undefined}
+							{...fieldProps('kb-text-content-error', { error: errors.content })}
 							onChange={(e) => setContent(e.target.value)}
 						/>
-						{errors.content && <FieldError id="kb-text-content-error">{errors.content}</FieldError>}
+						<FieldMessage id="kb-text-content-error" error={errors.content} />
 					</div>
 					<DialogFooter>
 						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

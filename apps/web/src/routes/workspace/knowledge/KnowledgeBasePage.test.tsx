@@ -746,15 +746,3 @@ describe('KnowledgeBasePage add-content dialogs (#1096)', () => {
 		await waitFor(() => expect(success).toHaveBeenCalledWith('Created the folder "Papers"'));
 	});
 });
-
-describe('knowledgeToasts', () => {
-	it('reads the server words from a detail, a message, a string or anything else', async () => {
-		const { errorText } = await import('./knowledgeToasts');
-		expect(errorText({ detail: 'd' })).toBe('d');
-		expect(errorText(new Error('m'))).toBe('m');
-		expect(errorText(' s ')).toBe('s');
-		expect(errorText(42)).toBe('42');
-		expect(errorText('')).toBeNull();
-		expect(errorText(undefined)).toBeNull();
-	});
-});

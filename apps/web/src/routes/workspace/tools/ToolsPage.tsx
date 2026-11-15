@@ -6,6 +6,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
 import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -108,7 +109,7 @@ export function ToolsPage() {
 				label: 'Export JSON',
 				onClick: async () => {
 					const all = await exportTools(token).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure("Couldn't export the tools.", error);
 						return null;
 					});
 					if (all)
@@ -128,7 +129,7 @@ export function ToolsPage() {
 	const deleteMutation = useMutation({
 		mutationFn: (tool: ToolListItem) => deleteToolById(token, tool.id),
 		onSuccess: (res) => res && toast.success('Tool deleted successfully'),
-		onError: (error) => toast.error(`${error}`),
+		onError: (error, tool) => toastFailure(`Couldn't delete “${tool.name}”.`, error),
 		onSettled: refetch
 	});
 
@@ -171,7 +172,7 @@ export function ToolsPage() {
 				}
 				for (const tool of tools) {
 					await createNewTool(token, tool).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure(`Couldn't import “${tool.name}”.`, error);
 						return null;
 					});
 				}

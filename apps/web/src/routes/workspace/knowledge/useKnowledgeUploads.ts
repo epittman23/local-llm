@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { errorText, toastFailure as notifyFailure } from '@/components/common/failureToast';
 import { uploadFile } from '@/lib/apis/files';
 import {
 	addFileToKnowledgeById,
@@ -25,7 +26,6 @@ import {
 	syncUploads,
 	type UploadOutcome
 } from './knowledgeFiles';
-import { errorText, failed as notifyFailure } from './knowledgeToasts';
 
 /**
  * A single upload shown above the file list. It keeps its `File` (or URL) so a

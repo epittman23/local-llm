@@ -21,11 +21,10 @@ export function ErrorDetails({ detail }: { detail: string }) {
 }
 
 /**
- * A failure toast for the knowledge base page: a sentence saying what failed
- * and what to do (FBK-4), with the server's own words behind "Details" rather
- * than as the message.
+ * A failure toast: a sentence saying what failed and what to do (FBK-4), with
+ * the server's own words behind "Details" rather than as the message.
  */
-export function failed(message: string, error?: unknown) {
+export function toastFailure(message: string, error?: unknown) {
 	const detail = errorText(error);
 	toast.error(message, detail ? { description: <ErrorDetails detail={detail} /> } : undefined);
 }

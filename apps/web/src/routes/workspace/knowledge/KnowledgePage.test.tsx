@@ -141,8 +141,9 @@ describe('KnowledgePage create and delete (#1011, #1012, STA-3)', () => {
 		fireEvent.click(within(confirm).getByRole('button', { name: 'Delete knowledge base' }));
 		// FBK-4: plain words naming it, the server's own words as the detail.
 		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Textbooks”", {
-				description: 'Database is locked'
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Textbooks”.", {
+				// FBK-4: the server's words sit behind Details.
+				description: expect.objectContaining({ props: { detail: 'Database is locked' } })
 			})
 		);
 	});

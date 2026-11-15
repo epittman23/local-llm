@@ -10,6 +10,7 @@ import {
 	Trash2
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { ErrorDetails } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,6 @@ import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { formatFileSize } from '@/lib/utils/files';
 import { type Breadcrumb, KB_DIR_MOVE, KB_FILE_MOVE, readMovePayload } from './knowledgeFiles';
-import { ErrorDetails } from './knowledgeToasts';
 import type { UploadingItem } from './useKnowledgeUploads';
 
 export type KnowledgeFile = {
