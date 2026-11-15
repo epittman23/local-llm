@@ -66,7 +66,6 @@ export function ToolsPage() {
 	const [showImportUrl, setShowImportUrl] = useState(false);
 	const [pendingImport, setPendingImport] = useState<File | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
-	const importedFrom = useRef('');
 
 	const isAdmin = user?.role === 'admin';
 	const can = (key: string) => isAdmin || Boolean(user?.permissions?.workspace?.[key]);
@@ -201,13 +200,10 @@ export function ToolsPage() {
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
-				loadUrl={(url) => {
-					importedFrom.current = url;
-					return loadToolByUrl(token, url);
-				}}
+				loadUrl={(url) => loadToolByUrl(token, url)}
 				successMessage="Tool imported successfully"
-				onImport={(tool) => {
-					sessionStorage.tool = JSON.stringify({ ...tool, source: { kind: 'link', from: importedFrom.current } });
+				onImport={(tool, url) => {
+					sessionStorage.tool = JSON.stringify({ ...tool, source: { kind: 'link', from: url } });
 					navigate(routePaths.workspaceToolsCreate);
 				}}
 			/>
@@ -233,21 +229,22 @@ export function ToolsPage() {
 					}
 				}}
 				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
-				title={`Create tools from “${pendingImport?.name ?? ''}”?`}
-				confirmLabel="Create tools"
+				title="Import tools?"
+				confirmLabel="Import tools"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);
 					if (importInput.current) importInput.current.value = '';
 				}}
 			>
-				<CodeExecutionWarning />
+				{pendingImport && <CodeExecutionWarning verb="import" source={{ kind: 'file', from: pendingImport.name }} />}
 			</ConfirmDialog>
 			<ValvesModal
 				open={valvesFor !== null}
 				onOpenChange={(o) => !o && setValvesFor(null)}
 				type="tool"
 				id={valvesFor?.id ?? null}
+				name={valvesFor?.name}
 			/>
 			<ManifestModal
 				open={manifestFor !== null}

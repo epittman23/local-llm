@@ -26,7 +26,8 @@ export function ImportUrlModal({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	loadUrl: (url: string) => Promise<Imported | null>;
-	onImport: (item: Imported) => void;
+	/** Gets the item and the URL it came from, which the create page names (S4-D4). */
+	onImport: (item: Imported, url: string) => void;
 	successMessage: string;
 }) {
 	const [url, setUrl] = useState('');
@@ -47,12 +48,15 @@ export function ImportUrlModal({
 		toast.success(successMessage);
 		const fm = extractFrontmatter(res.content ?? '');
 		const name = fm.title || res.name;
-		onImport({
-			...res,
-			id: res.id || nameToId(res.name),
-			name,
-			meta: { ...(res.meta ?? {}), description: fm.description ?? name }
-		});
+		onImport(
+			{
+				...res,
+				id: res.id || nameToId(res.name),
+				name,
+				meta: { ...(res.meta ?? {}), description: fm.description ?? name }
+			},
+			url
+		);
 		onOpenChange(false);
 	};
 

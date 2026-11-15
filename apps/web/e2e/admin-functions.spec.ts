@@ -246,8 +246,8 @@ test.describe('admin functions', () => {
 			)
 		};
 		await page.locator('#documents-import-input').setInputFiles(file);
-		await expect(page.getByRole('alertdialog')).toContainText('Functions allow arbitrary code execution.');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Create functions' }).click();
+		await expect(page.getByRole('alertdialog')).toContainText('The code comes from the file fns.json');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Import functions' }).click();
 		await expect.poll(() => calls.filter((c) => c.path === '/create').length).toBe(1);
 		const created = calls.find((c) => c.path === '/create')!.body;
 		expect(created).toEqual({ id: 'imp', name: 'Imported', content: 'class Filter: pass', meta: { description: 'x' } });
@@ -273,7 +273,7 @@ test.describe('admin functions', () => {
 			)
 		};
 		await page.locator('#documents-import-input').setInputFiles(file);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Create functions' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Import functions' }).click();
 		await expect(page.getByText('No functions were imported')).toBeVisible();
 		expect(await page.getByText('Functions imported successfully').count()).toBe(0);
 	});

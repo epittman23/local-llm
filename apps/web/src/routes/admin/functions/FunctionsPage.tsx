@@ -58,7 +58,7 @@ const LIST_KEY = ['functions', 'list'];
  * filters and sorting all happen here; the header count is the *filtered* length.
  *
  * Each row: a type badge, name, version, description, author, and on the right
- * the Support / Valves / More icons and the enable switch. Delete is in the
+ * the Support / Settings / More icons and the enable switch. Delete is in the
  * menu and always confirms (ACT-3, S4-D5). Filters and Actions get a "Global" switch in the
  * menu. Toggles are optimistic and revert on failure -- the original's enable
  * switch does not, and leaves the switch lying when the request fails.
@@ -90,7 +90,6 @@ export function FunctionsPage() {
 	const [showImportUrl, setShowImportUrl] = useState(false);
 	const [pendingImport, setPendingImport] = useState<File | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
-	const importedFrom = useRef('');
 
 	const list = useQuery({
 		queryKey: LIST_KEY,
@@ -251,13 +250,10 @@ export function FunctionsPage() {
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
-				loadUrl={(url) => {
-					importedFrom.current = url;
-					return loadFunctionByUrl(token, url);
-				}}
+				loadUrl={(url) => loadFunctionByUrl(token, url)}
 				successMessage="Function imported successfully"
-				onImport={(fn) => {
-					sessionStorage.function = JSON.stringify({ ...fn, source: { kind: 'link', from: importedFrom.current } });
+				onImport={(fn, url) => {
+					sessionStorage.function = JSON.stringify({ ...fn, source: { kind: 'link', from: url } });
 					navigate(routePaths.adminFunctionsCreate);
 				}}
 			/>
@@ -283,15 +279,15 @@ export function FunctionsPage() {
 					}
 				}}
 				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
-				title={`Create functions from “${pendingImport?.name ?? ''}”?`}
-				confirmLabel="Create functions"
+				title="Import functions?"
+				confirmLabel="Import functions"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);
 					clearImportInput();
 				}}
 			>
-				<FunctionCodeWarning />
+				{pendingImport && <FunctionCodeWarning verb="import" source={{ kind: 'file', from: pendingImport.name }} />}
 			</ConfirmDialog>
 			<ManifestModal open={showManifest} onOpenChange={setShowManifest} manifest={selected?.meta?.manifest ?? {}} />
 			<ValvesModal
@@ -299,6 +295,7 @@ export function FunctionsPage() {
 				onOpenChange={setShowValves}
 				type="function"
 				id={selected?.id ?? null}
+				name={selected?.name}
 				onSaved={() => queryClient.invalidateQueries({ queryKey: ['models'] })}
 			/>
 
@@ -466,12 +463,13 @@ export function FunctionsPage() {
 													</Button>
 												</Tip>
 											)}
-											<Tip content="Valves">
+											{/* ACT-4, WRD-2: the gear opens this function's settings (its valves). */}
+											<Tip content="Settings">
 												<Button
 													variant="ghost"
 													size="icon-sm"
 													type="button"
-													aria-label="Valves"
+													aria-label={`Settings for ${fn.name}`}
 													onClick={(e) => {
 														e.stopPropagation();
 														setSelected(fn);

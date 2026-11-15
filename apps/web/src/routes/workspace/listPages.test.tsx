@@ -213,7 +213,7 @@ describe.each(cases)('$name list', (c) => {
 		const gear = screen.queryByRole('button', { name: `Settings for ${c.item}` });
 		if (gear) {
 			fireEvent.click(gear);
-			fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape' });
+			fireEvent.keyDown(await screen.findByRole('dialog', { name: `Settings for ${c.item}` }), { key: 'Escape' });
 			await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 		}
 		const open = async () => {

@@ -181,9 +181,9 @@ test.describe('workspace tools', () => {
 			)
 		});
 		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('tools run their code on this server');
+		await expect(dialog).toContainText('The code comes from the file tools.json');
 		expect(calls.some((c) => c.path === '/create')).toBe(false); // nothing before the acknowledgement
-		await dialog.getByRole('button', { name: 'Create tools' }).click();
+		await dialog.getByRole('button', { name: 'Import tools' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/create')?.body)
 			.toMatchObject({ id: 'imp', access_grants: [] });

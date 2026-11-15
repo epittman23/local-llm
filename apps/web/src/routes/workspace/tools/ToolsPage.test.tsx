@@ -133,7 +133,8 @@ describe('ToolsPage counts and empty states', () => {
 		const input = document.getElementById('documents-import-input') as HTMLInputElement;
 		fireEvent.change(input, { target: { files: [new File(['[]'], 'tools.json', { type: 'application/json' })] } });
 		const dialog = await screen.findByRole('alertdialog');
-		expect(within(dialog).getByRole('heading')).toHaveTextContent('Create tools from “tools.json”?');
-		expect(within(dialog).getByRole('button', { name: 'Create tools' })).toBeVisible();
+		expect(within(dialog).getByRole('heading')).toHaveTextContent('Import tools?');
+		expect(dialog).toHaveTextContent('The code comes from the file tools.json');
+		expect(within(dialog).getByRole('button', { name: 'Import tools' })).toBeVisible();
 	});
 });
