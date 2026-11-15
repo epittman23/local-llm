@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellBarSlotContext } from '@/components/layout/ShellBarSlot';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -25,6 +25,7 @@ vi.mock('@/lib/apis/tools', () => ({ getTools: vi.fn(async () => []) }));
 vi.mock('@/lib/apis/chats', async (orig) => ({
 	...(await orig<object>()),
 	getChatById: vi.fn(),
+	updateChatById: vi.fn(async () => ({})),
 	getChatListByFolderId: vi.fn(async () => []),
 	getPinnedChatList: vi.fn(async () => []),
 	getTagsById: vi.fn(async () => [])
@@ -110,6 +111,21 @@ describe('ChatPage header', () => {
 	});
 });
 
+/** Buttons that open chat c1 or c2, as the sidebar does. */
+function Go() {
+	const navigate = useNavigate();
+	return (
+		<>
+			<button type="button" onClick={() => navigate('/c/c1')}>
+				to c1
+			</button>
+			<button type="button" onClick={() => navigate('/c/c2')}>
+				to c2
+			</button>
+		</>
+	);
+}
+
 const NOT_FOUND = "We could not find what you're looking for :/";
 const Where = () => <div data-testid="where">{useLocation().pathname}</div>;
 
@@ -161,6 +177,43 @@ describe('ChatPage: a saved chat', () => {
 		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Arithmetic'));
 		fireEvent.click(title);
 		expect(screen.getByRole('textbox', { name: 'Chat title' })).toBeInTheDocument();
+	});
+
+	it('drops a header rename on a chat switch, so a later sidebar rename shows (#928)', async () => {
+		vi.mocked(getChatById).mockImplementation(async (_t, chatId) => {
+			if (chatId === 'c2')
+				return { ...SAVED, id: 'c2', title: 'Other', chat: { ...SAVED.chat, title: 'Other' } } as never;
+			return SAVED as never;
+		});
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<MemoryRouter initialEntries={['/c/c1']}>
+						<Go />
+						<Routes>
+							<Route path="/c/:id" element={<ChatPage />} />
+						</Routes>
+					</MemoryRouter>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		fireEvent.click(await screen.findByRole('button', { name: 'Chat title: Arithmetic. Rename' }));
+		const field = screen.getByRole('textbox', { name: 'Chat title' });
+		fireEvent.change(field, { target: { value: 'Renamed here' } });
+		fireEvent.keyDown(field, { key: 'Enter' });
+		await screen.findByRole('button', { name: 'Chat title: Renamed here. Rename' });
+
+		// Renamed again from the sidebar while another chat was open.
+		fireEvent.click(screen.getByRole('button', { name: 'to c2' }));
+		await screen.findByRole('button', { name: 'Chat title: Other. Rename' });
+		vi.mocked(getChatById).mockResolvedValue({
+			...SAVED,
+			title: 'Renamed in the sidebar',
+			chat: { ...SAVED.chat, title: 'Renamed in the sidebar' }
+		} as never);
+		fireEvent.click(screen.getByRole('button', { name: 'to c1' }));
+		expect(await screen.findByRole('button', { name: 'Chat title: Renamed in the sidebar. Rename' })).toBeTruthy();
+		vi.mocked(getChatById).mockReset();
 	});
 
 	it('marks Controls with a dot while the chat has parameters of its own (#996)', async () => {
