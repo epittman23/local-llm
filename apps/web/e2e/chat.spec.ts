@@ -137,8 +137,8 @@ test('two models answer side by side', async ({ page }) => {
 	const chat = await mockChat(page);
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Add Model' }).click();
-	await page.getByRole('button', { name: 'Model: Select a model' }).click();
+	// Add model opens the new model's list at once (#944).
+	await page.getByRole('button', { name: 'Add model' }).click();
 	await page.getByRole('option', { name: 'Llama' }).click();
 	await page.getByRole('textbox', { name: 'Message' }).fill('Compare');
 	await page.keyboard.press('Enter');
@@ -446,4 +446,29 @@ test("a send waiting for the model list goes with the model's default tools, eve
 	releaseTools();
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', tool_ids: ['calc'] });
+});
+
+test('the model picker chooses by keyboard, and Make default saves the selection (#943, #944)', async ({ page }) => {
+	const chat = await mockChat(page);
+	const saved: unknown[] = [];
+	await page.route('**/api/v1/users/user/settings/update', (route) => {
+		saved.push(route.request().postDataJSON());
+		return json(route, route.request().postDataJSON());
+	});
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('button', { name: 'Model: Qwen' }).click();
+	await page.keyboard.type('lla');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	// Enter chose and closed the list; focus is back on the picker (NAV-4).
+	await expect(page.getByRole('button', { name: 'Model: Llama' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await page.getByRole('textbox', { name: 'Message' }).focus();
+	await page.keyboard.press('Control+Shift+M');
+	await expect(page.getByRole('combobox', { name: 'Search models' })).toBeFocused();
+	await page.getByRole('option', { name: /Make default/ }).click();
+	await expect.poll(() => saved.length).toBe(1);
+	expect(saved[0]).toMatchObject({ ui: { models: ['llama'] } });
+	await expect(page.getByText('Default model saved')).toBeVisible();
 });
