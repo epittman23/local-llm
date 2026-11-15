@@ -1,25 +1,55 @@
-import { ChevronLeft, ChevronRight, Copy, FileText, RotateCcw } from 'lucide-react';
+import {
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	CircleStop,
+	Copy,
+	CornerDownRight,
+	FileText,
+	PlayCircle,
+	RotateCcw
+} from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RowButton } from '@/components/ui/row-button';
 import type { CodeRunner } from '@/lib/chat/codeRun';
-import { type History, type Message, messagesList, replyColumns, showBranch, siblingsOf } from '@/lib/chat/history';
+import {
+	canContinue,
+	cutOffReason,
+	type History,
+	type Message,
+	messagesList,
+	replyColumns,
+	showBranch,
+	siblingsOf
+} from '@/lib/chat/history';
 import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
 import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { removeAllDetails } from '@/lib/markdown/content';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn, copyToClipboard } from '@/lib/utils';
-import { formatSecondsTimestamp } from '@/lib/utils/dates';
+import { useCopy } from '@/lib/ui/useCopy';
+import { cn } from '@/lib/utils';
+import { shownTime } from '@/lib/utils/dates';
+import { ErrorReply } from './ErrorReply';
 import { modelImage } from './ModelSelector';
 import { StatusLine } from './StatusLine';
 import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
+
+/** What a message's extra actions are told about it (see MessageActions.tsx). */
+export type ExtraActionsContext = {
+	isLast: boolean;
+	/** The reply is only an error: rating, reading aloud and editing are left out. */
+	errorOnly?: boolean;
+	/** The reply was stopped or cut off: its labelled Continue and Regenerate sit under it instead. */
+	cutOff?: boolean;
+};
 
 export type MessageHandlers = {
 	onBranch: (history: History) => void;
@@ -27,8 +57,8 @@ export type MessageHandlers = {
 	onFollowUp: (text: string) => void;
 	onSourceClick?: (m: Message, id: string | number) => void;
 	onToolCallResolved?: () => void;
-	/** Extra per-message actions (edit, rate, delete, ...), see MessageActions.tsx. */
-	extraActions?: (m: Message, ctx: { isLast: boolean }) => ReactNode;
+	/** Extra per-message actions (rating, generation info, and a "More actions" menu), see MessageActions.tsx. */
+	extraActions?: (m: Message, ctx: ExtraActionsContext) => ReactNode;
 	/** Shown under a message's actions (the rating form). */
 	below?: (m: Message) => ReactNode;
 	/** Whether a model cites its sources (its `citations` capability); `[n]` markers are removed when not. */
@@ -41,19 +71,30 @@ export type MessageHandlers = {
 	onPreview?: (code: string) => void;
 	/** A python code block's Run button in a reply (lib/chat/codeRun.ts); none when the server has no runner. */
 	onRun?: CodeRunner;
+	/** Regenerates a reply from a labelled button (a failed reply's Retry, a stopped reply's Regenerate); not offered without it. */
+	onRetry?: (m: Message) => void;
+	/** Continues a stopped or cut-off reply from its labelled button; not offered without it. */
+	onContinue?: (m: Message) => void;
+	/** A failed reply's "Try another model": opens the model picker. Not offered without it. */
+	onTryAnotherModel?: () => void;
 };
 
-/** "‹ 2/3 ›" between regenerations or edits of a message. */
+/**
+ * "‹ 2/3 ›" between regenerations or edits of a message. `ids` narrows it to
+ * one model's own versions in a side-by-side turn (#945).
+ */
 function SiblingNav({
 	history,
 	message,
-	onBranch
+	onBranch,
+	ids
 }: {
 	history: History;
 	message: Message;
 	onBranch: (h: History) => void;
+	ids?: string[];
 }) {
-	const siblings = siblingsOf(history, message);
+	const siblings = ids ?? siblingsOf(history, message);
 	if (siblings.length < 2) return null;
 	const i = siblings.indexOf(message.id);
 	const go = (j: number) => onBranch(showBranch(history, siblings[Math.max(0, Math.min(siblings.length - 1, j))]));
@@ -86,18 +127,21 @@ function SiblingNav({
 	);
 }
 
+/** Copy for a message: the icon turns to a check and the name says "Copied" for 1.5 s; a refused copy says so (#942, FBK-3). */
 function CopyButton({ text, className }: { text: string; className?: string }) {
+	const { copied, copy } = useCopy();
+	const name = copied ? 'Copied' : 'Copy';
 	return (
-		<Tip content="Copy">
+		<Tip content={name}>
 			<Button
 				type="button"
-				aria-label="Copy"
+				aria-label={name}
 				variant="ghost"
 				size="icon-sm"
 				className={className}
-				onClick={() => void copyToClipboard(text)}
+				onClick={() => void copy(text, 'message')}
 			>
-				<Copy className="size-3.5" />
+				{copied ? <Check className="size-3.5" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
 			</Button>
 		</Tip>
 	);
@@ -129,6 +173,11 @@ function Attachments({ files }: { files: NonNullable<Message['files']> }) {
 	);
 }
 
+// A11Y-4 (#902): a message's actions are always there, muted at rest and
+// strong while the message is hovered or holds focus; never hidden until hover.
+const ACTION_ROW =
+	'text-foreground-muted group-focus-within:text-foreground-strong group-hover:text-foreground-strong flex flex-wrap items-center gap-0.5 transition-colors duration-(--motion-fast) pointer-coarse:gap-0';
+
 /**
  * Ports chat/Messages/UserMessage.svelte: the prompt as a bubble (or, with
  * "Chat Bubble UI" off, beside the user's picture and name, like a reply),
@@ -154,7 +203,7 @@ function UserMessage({
 		<div className="whitespace-pre-wrap">{message.content}</div>
 	);
 	const actions = !edit && (
-		<div className="flex items-center gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
+		<div className={ACTION_ROW}>
 			<SiblingNav history={history} message={message} onBranch={h.onBranch} />
 			{h.extraActions?.(message, { isLast: false })}
 			<CopyButton text={message.content} />
@@ -238,7 +287,9 @@ export function ResponseMessage({
 	chatId,
 	compact = false,
 	citationsEnabled = true,
-	prefs = chatPrefs(null)
+	prefs = chatPrefs(null),
+	versions,
+	aside
 }: {
 	history: History;
 	message: Message;
@@ -248,6 +299,10 @@ export function ResponseMessage({
 	compact?: boolean;
 	citationsEnabled?: boolean;
 	prefs?: ChatPrefs;
+	/** The ids its pager moves between, when not every sibling (a side-by-side column's own versions). */
+	versions?: string[];
+	/** Shown at the end of the name line (a side-by-side column's "Selected" or "Continue with this answer"). */
+	aside?: ReactNode;
 }) {
 	const userId = useAuthStore((s) => s.user?.id);
 	// `modelName` is set only on replies streamed in this session; a loaded
@@ -257,17 +312,29 @@ export function ResponseMessage({
 	const sourceIds = sourceIdsOf(message.sources, citationsEnabled);
 	const edit = h.editing?.(message);
 	const empty = !message.content && !message.error && !message.output?.length;
+	// A reply that is nothing but an error: no text to copy, rate or read aloud (#992).
+	const errorOnly = Boolean(message.error) && !message.content?.trim();
+	// #1081 (S3-D4): a reply that was stopped, or reached the token limit, says so where it ends.
+	const cut = message.done !== false && !errorOnly && !edit ? cutOffReason(message) : null;
+	// DAT-5 (#1067): the time is always shown, relative, with the exact time in its title; it never reserves hidden space.
+	const time = message.timestamp ? shownTime(message.timestamp) : null;
 	return (
 		<div className="group flex w-full gap-3" data-testid="response-message" id={`message-${message.id}`}>
-			{!compact && <ProfileAvatar src={modelImage(message.model ?? '')} name={modelName} className="mt-1 size-7" />}
+			{!compact && (
+				<ProfileAvatar src={modelImage(message.model ?? '')} name={modelName} className="mt-1 size-7 max-sm:hidden" />
+			)}
 			<div className="min-w-0 flex-1">
-				<div className="flex items-baseline gap-2">
-					<span className="text-sm font-medium">{modelName}</span>
-					{message.timestamp ? (
-						<span className="text-muted-foreground invisible text-xs group-hover:visible">
-							{formatSecondsTimestamp(message.timestamp)}
-						</span>
-					) : null}
+				{/* Wraps rather than squeezing: the time, then a column's Selected or Continue, go to the next line. */}
+				<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="text-body font-strong max-w-full min-w-0 truncate" title={modelName}>
+						{modelName}
+					</span>
+					{time && (
+						<time className="text-caption text-foreground-muted shrink-0" dateTime={time.iso} title={time.exact}>
+							{time.label}
+						</time>
+					)}
+					{aside && <div className="ms-auto shrink-0">{aside}</div>}
 				</div>
 				<StatusLine message={message} />
 				{edit ??
@@ -321,27 +388,45 @@ export function ResponseMessage({
 				{!edit && message.done === false && !message.error && <ReplyOrb output={message.output} />}
 				{!edit && <SandboxOutputs files={message.files} />}
 				{message.error ? (
-					<div
-						className="border-destructive/40 bg-destructive/5 text-destructive my-2 rounded-xl border px-3 py-2 text-sm whitespace-pre-wrap"
-						role="alert"
-					>
-						{typeof message.error.content === 'string'
-							? message.error.content
-							: 'Uh-oh! There was an issue with the response.'}
-					</div>
+					<ErrorReply
+						message={message}
+						onRetry={h.onRetry && (() => h.onRetry?.(message))}
+						onTryAnotherModel={h.onTryAnotherModel}
+					/>
 				) : null}
+				{cut && (
+					<div className="mt-2 flex flex-wrap items-center gap-2" data-testid="cut-off">
+						<span className="text-dense text-foreground-muted flex items-center gap-1.5">
+							<CircleStop className="size-3.5" aria-hidden />
+							{cut === 'length' ? 'Reached the token limit' : 'Stopped'}
+						</span>
+						{isLast && h.onContinue && canContinue(message) && (
+							<Button type="button" variant="outline" size="xs" onClick={() => h.onContinue?.(message)}>
+								<PlayCircle aria-hidden />
+								Continue
+							</Button>
+						)}
+						{h.onRetry && (
+							<Button
+								type="button"
+								variant="outline"
+								size="xs"
+								className="regenerate-response-button"
+								onClick={() => h.onRetry?.(message)}
+							>
+								<RotateCcw aria-hidden />
+								Regenerate
+							</Button>
+						)}
+					</div>
+				)}
 				<Sources message={message} onOpen={(n) => h.onSourceClick?.(message, n)} />
 				{message.done !== false && !edit && (
-					<div
-						className={cn(
-							'flex flex-wrap items-center gap-0.5',
-							!isLast && 'opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100'
-						)}
-					>
-						<SiblingNav history={history} message={message} onBranch={h.onBranch} />
-						<CopyButton text={removeAllDetails(message.content)} className="copy-response-button" />
-						{h.extraActions?.(message, { isLast })}
-						{h.regenerate ? (
+					<div className={ACTION_ROW}>
+						<SiblingNav history={history} message={message} onBranch={h.onBranch} ids={versions} />
+						{!errorOnly && <CopyButton text={removeAllDetails(message.content)} className="copy-response-button" />}
+						{/* A failed reply's Retry, or a stopped reply's labelled Regenerate, stands in for this one. */}
+						{errorOnly || (cut && h.onRetry) ? null : h.regenerate ? (
 							h.regenerate(message)
 						) : (
 							<Tip content="Regenerate">
@@ -357,21 +442,32 @@ export function ResponseMessage({
 								</Button>
 							</Tip>
 						)}
+						{h.extraActions?.(message, { isLast, errorOnly, cutOff: Boolean(cut) })}
 					</div>
 				)}
 				{h.below?.(message)}
 				{(isLast || prefs.keepFollowUps) && message.done && message.followUps?.length ? (
-					<div className="mt-2 flex flex-col items-start gap-1" aria-label="Follow-ups">
-						<span className="text-muted-foreground text-xs">Follow up</span>
-						{message.followUps.map((f, i) => (
-							<RowButton
-								key={i}
-								className="flex w-auto items-center justify-start px-3 py-2"
-								onClick={() => h.onFollowUp(f)}
-							>
-								{f}
-							</RowButton>
-						))}
+					<div className="mt-3 flex flex-col items-start gap-2">
+						<span className="text-caption text-foreground-muted" id={`follow-ups-${message.id}`}>
+							Suggested follow-ups
+						</span>
+						<ul className="flex flex-wrap gap-2" aria-labelledby={`follow-ups-${message.id}`}>
+							{message.followUps.map((f, i) => (
+								<li key={i} className="max-w-full">
+									{/* ACT-7/COL-7 (#1087): a follow-up is a button, so it looks like one; a long one wraps. */}
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										className="h-auto min-h-7 max-w-full shrink py-1 text-start whitespace-normal"
+										onClick={() => h.onFollowUp(f)}
+									>
+										<CornerDownRight aria-hidden />
+										{f}
+									</Button>
+								</li>
+							))}
+						</ul>
 					</div>
 				) : null}
 			</div>
@@ -379,7 +475,13 @@ export function ResponseMessage({
 	);
 }
 
-/** Ports MultiResponseMessages.svelte: one column per model, each with its own versions; clicking a column continues from it. */
+/**
+ * Ports MultiResponseMessages.svelte: one column per model, each with its own
+ * versions and its own actions (#945, #991). The turn is wider than the reading
+ * column, the columns stack when there is no room for them side by side, and
+ * the column the chat continues from says "Selected"; each other one offers
+ * "Continue with this answer".
+ */
 function MultiResponse({
 	history,
 	parentId,
@@ -398,33 +500,53 @@ function MultiResponse({
 	const columns = replyColumns(history, parentId);
 	const currentPath = new Set(messagesList(history, history.currentId).map((m) => m.id));
 	return (
-		<div className="flex w-full snap-x gap-3 overflow-x-auto pb-1" data-testid="multi-response">
-			{columns.map((col) => {
-				const id = col.messageIds[col.selected];
-				const m = history.messages[id];
-				const active = currentPath.has(id);
-				return (
-					<div
-						key={col.modelIdx}
-						className={cn(
-							'min-w-80 flex-1 snap-center rounded-2xl border p-3 transition',
-							active ? 'border-foreground/30' : 'cursor-pointer opacity-80 hover:opacity-100'
-						)}
-						onClick={() => !active && h.onBranch(showBranch(history, id))}
-					>
-						<ResponseMessage
-							history={history}
-							message={m}
-							h={h}
-							chatId={chatId}
-							isLast={isLast && active}
-							compact
-							citationsEnabled={h.citationsFor?.(m.model) ?? true}
-							prefs={prefs}
-						/>
-					</div>
-				);
-			})}
+		<div className="@container w-full" data-testid="multi-response">
+			<div className="flex flex-col gap-3 @2xl:flex-row">
+				{columns.map((col) => {
+					const id = col.messageIds[col.selected];
+					const m = history.messages[id];
+					const active = currentPath.has(id);
+					return (
+						<div
+							key={col.modelIdx}
+							className={cn(
+								'rounded-panel min-w-0 flex-1 border p-3',
+								active ? 'border-border-control' : 'border-border-divider'
+							)}
+							data-active={active || undefined}
+						>
+							<ResponseMessage
+								history={history}
+								message={m}
+								h={h}
+								chatId={chatId}
+								isLast={isLast && active}
+								compact
+								citationsEnabled={h.citationsFor?.(m.model) ?? true}
+								prefs={prefs}
+								versions={col.messageIds}
+								aside={
+									active ? (
+										<Badge variant="secondary">
+											<Check data-icon="inline-start" aria-hidden />
+											Selected
+										</Badge>
+									) : (
+										<Button
+											type="button"
+											variant="outline"
+											size="xs"
+											onClick={() => h.onBranch(showBranch(history, id))}
+										>
+											Continue with this answer
+										</Button>
+									)
+								}
+							/>
+						</div>
+					);
+				})}
+			</div>
 		</div>
 	);
 }
@@ -434,42 +556,47 @@ export function ChatMessages({ history, h, chatId }: { history: History; h: Mess
 	const prefs = useChatPrefs();
 	const path = messagesList(history, history.currentId);
 	const rendered = new Set<string>();
+	// Each turn sets its own width, so a side-by-side turn can be wider than the reading column (#991).
+	const turn = cn('mx-auto w-full', prefs.widescreen ? 'max-w-none' : 'max-w-3xl');
 	return (
-		<div
-			className={cn('mx-auto flex w-full flex-col gap-6 px-4 py-6', prefs.widescreen ? 'max-w-none' : 'max-w-3xl')}
-			dir={prefs.direction}
-			data-testid="chat-column"
-		>
+		<div className="flex w-full flex-col gap-6 px-4 py-6" dir={prefs.direction} data-testid="chat-column">
 			{path.map((m, i) => {
 				const isLast = i === path.length - 1;
-				if (m.role === 'user') return <UserMessage key={m.id} history={history} message={m} h={h} prefs={prefs} />;
+				if (m.role === 'user')
+					return (
+						<div key={m.id} className={turn}>
+							<UserMessage history={history} message={m} h={h} prefs={prefs} />
+						</div>
+					);
 				const parent = m.parentId ? history.messages[m.parentId] : null;
 				if (parent && (parent.models?.length ?? 0) > 1) {
 					if (rendered.has(parent.id)) return null;
 					rendered.add(parent.id);
 					return (
-						<MultiResponse
-							key={`multi-${parent.id}`}
-							history={history}
-							parentId={parent.id}
-							h={h}
-							chatId={chatId}
-							isLast={isLast}
-							prefs={prefs}
-						/>
+						<div key={`multi-${parent.id}`} className={cn('mx-auto w-full', !prefs.widescreen && 'max-w-6xl')}>
+							<MultiResponse
+								history={history}
+								parentId={parent.id}
+								h={h}
+								chatId={chatId}
+								isLast={isLast}
+								prefs={prefs}
+							/>
+						</div>
 					);
 				}
 				return (
-					<ResponseMessage
-						key={m.id}
-						history={history}
-						message={m}
-						h={h}
-						chatId={chatId}
-						isLast={isLast}
-						citationsEnabled={h.citationsFor?.(m.model) ?? true}
-						prefs={prefs}
-					/>
+					<div key={m.id} className={turn}>
+						<ResponseMessage
+							history={history}
+							message={m}
+							h={h}
+							chatId={chatId}
+							isLast={isLast}
+							citationsEnabled={h.citationsFor?.(m.model) ?? true}
+							prefs={prefs}
+						/>
+					</div>
 				);
 			})}
 		</div>

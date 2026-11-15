@@ -87,13 +87,15 @@ describe('a tool call in a response', () => {
 describe('CodeBlock Preview', () => {
 	it('offers Preview for html and svg blocks, handing the code to the callback', () => {
 		const onPreview = vi.fn();
-		render(<CodeBlock id="b1" lang="html" code="<p>hi</p>" complete onPreview={onPreview} />);
+		render(<CodeBlock id="b1" lang="html" code="<p>hi</p>" complete onPreview={onPreview} />, {
+			wrapper: TooltipProvider
+		});
 		fireEvent.click(screen.getByRole('button', { name: /Preview/ }));
 		expect(onPreview).toHaveBeenCalledWith('<p>hi</p>');
 	});
 
 	it('does not offer Preview for other languages', () => {
-		render(<CodeBlock id="b1" lang="python" code="1" complete onPreview={vi.fn()} />);
+		render(<CodeBlock id="b1" lang="python" code="1" complete onPreview={vi.fn()} />, { wrapper: TooltipProvider });
 		expect(screen.queryByRole('button', { name: /Preview/ })).toBeNull();
 	});
 });

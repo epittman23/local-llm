@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 698,
+	"total": 691,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -149,8 +149,7 @@
 			"lint/suspicious/noExplicitAny": 2
 		},
 		"apps/web/src/components/settings/interfaceSettingDefs.ts": {
-			"lint/suspicious/noExplicitAny": 2,
-			"lint/suspicious/noPrototypeBuiltins": 1
+			"lint/suspicious/noExplicitAny": 2
 		},
 		"apps/web/src/components/settings/personal/Account.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 2,
@@ -262,7 +261,7 @@
 		},
 		"apps/web/src/lib/chat/chatList.ts": {
 			"lint/complexity/noCommaOperator": 1,
-			"lint/suspicious/noExplicitAny": 3,
+			"lint/suspicious/noExplicitAny": 2,
 			"lint/suspicious/useIterableCallbackReturn": 1
 		},
 		"apps/web/src/lib/chat/feedback.test.ts": {
@@ -595,9 +594,7 @@
 			"lint/suspicious/noExplicitAny": 3
 		},
 		"apps/web/src/routes/chat/ChatMessages.tsx": {
-			"lint/a11y/noStaticElementInteractions": 1,
 			"lint/a11y/useAriaPropsSupportedByRole": 3,
-			"lint/a11y/useKeyWithClickEvents": 1,
 			"lint/suspicious/noArrayIndexKey": 3
 		},
 		"apps/web/src/routes/chat/ChatPage.tsx": {
@@ -616,7 +613,6 @@
 			"lint/suspicious/noExplicitAny": 4
 		},
 		"apps/web/src/routes/chat/MessageActions.tsx": {
-			"lint/a11y/useSemanticElements": 1,
 			"lint/correctness/useExhaustiveDependencies": 5
 		},
 		"apps/web/src/routes/chat/ModelSelector.tsx": {
@@ -632,9 +628,6 @@
 		},
 		"apps/web/src/routes/chat/sidebar/ChatItem.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1
-		},
-		"apps/web/src/routes/chat/sidebar/ChatSidebar.tsx": {
-			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/chat/useAttachments.ts": {
 			"lint/correctness/useExhaustiveDependencies": 4,

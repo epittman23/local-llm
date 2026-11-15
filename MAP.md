@@ -372,8 +372,12 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   beneath it), `Sidebar` (the Main nav; it also exports `UserMenu`, the
   account menu with the theme, and `SidebarRail`, the 48 px rail a closed
   sidebar becomes), `SectionTabs` (the tab strip of
-  Benchmarks, Workspace, Admin and Playground), `BootSplash` and
-  `ConnectionBanner` (the lost-connection pill, FBK-1).
+  Benchmarks, Workspace, Admin and Playground), `BootSplash`,
+  `ConnectionBanner` (the lost-connection pill, FBK-1), `SidePanel` (the
+  right-hand panel beside a page: a resizable column, or a full-screen sheet
+  when there is no room; it holds the chat's Controls and preview, CNV-2) and
+  `ShellBarSlot` (`ShellBarPortal`: a page's own header buttons in the phone's
+  app bar).
 - **`src/components/common/`** — app-level components shared across
   surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`, `Tip`
   (tooltip wrapper), `ConfirmDialog`, `LoadFailed` (a list that could not load,
@@ -454,11 +458,20 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   surface: one layout route for `/`, `/c/<id>` and `/folders/<id>`
   (`ChatPage`; a folder's page above the message box is `FolderHome`), `useChatSession` (load, send, stream over the socket, stop,
   regenerate, save), `ChatMessages`/`MessageActions`, `ChatInput` with
-  `InputMenus` and `useAttachments`, `ModelSelector`, `ChatControls`,
-  `ArtifactPanel` (a sandboxed preview), `ChatMenu`, and `sidebar/` (the
-  chat list, folders, search). Its pure rules are in `src/lib/chat/`
-  (history tree, request body, sources, attachments, import) and its
-  Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
+  `InputMenus` and `useAttachments`, `ModelSelector` (with
+  `modelPickerStore.ts`, whose `openModelPicker()` opens the picker from
+  code), `ChatControls`, `ArtifactPanel` (a sandboxed preview), `ChatMenu`,
+  `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,
+  `DropOverlay` (the drop target for files), `TemporaryNotice` (the
+  temporary-chat switch and chip), `ErrorReply` (a failed reply, FBK-4),
+  `GenerationInfo` (a reply's tokens and speed), and `sidebar/` (the chat
+  list, folders, search; `usePinChat` pins a chat for the sidebar and the
+  header alike). Its pure rules are in `src/lib/chat/` (history tree,
+  request body, sources, attachments, import, and `drafts.ts`, the message
+  box's unsent text per chat in `sessionStorage`) and its
+  Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`
+  (`useScrollEdges.ts` shades the hidden edge of a code listing or an
+  equation that scrolls).
   `src/components/chat/SandboxOutputs.tsx` shows a reply's sandbox outputs
   (images, the sandboxed HTML frame, PDF previews, text, CSV, downloads).
   `src/components/chat/ReplySteps.tsx` shows a reply that has structured
@@ -493,11 +506,13 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   the contrast ratios the standard promises, and `standard.ratchet.test.ts`
   holds the count of bypasses to **`ui-standard-baseline.json`** (in
   `apps/web/`), which only shrinks. **`src/lib/ui/contrast.ts`** is
-  the WCAG arithmetic both use; `src/lib/ui/pageTitle.ts` is the route
+  the WCAG arithmetic both use; `src/lib/ui/useCopy.ts` is every copy
+  control's "Copied" and refusal toast (FBK-3); `src/lib/ui/pageTitle.ts` is the route
   `handle` and title format (LAY-5), `focusSource.ts` marks keyboard focus
   (A11Y-1) and `returnFocus.ts` returns focus to what opened a layer (NAV-4). **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of the
-  planned canvas (`docs/plans/canvas.md`), not the feature, and
+  planned canvas (`docs/plans/canvas.md`), not the feature, beside a demo of
+  the real `SidePanel`, and
   `CodeSurface.tsx` is the one highlighted surface it reads and edits code on.
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s

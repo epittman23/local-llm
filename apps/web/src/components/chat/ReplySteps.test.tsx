@@ -1,7 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderUi, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import type { OutputItem } from '@/lib/chat/structuredOutput';
 import { ReplyOrb, ReplySteps } from './ReplySteps';
+
+// A code block's buttons carry tooltips, which the app provides once at its root.
+const render = (ui: ReactElement) => renderUi(ui, { wrapper: TooltipProvider });
 
 const resolveChatMessageToolCall = vi.fn();
 vi.mock('@/lib/apis/chats', () => ({

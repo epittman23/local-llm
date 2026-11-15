@@ -17,6 +17,7 @@ import { type ReactNode, useRef, useState } from 'react';
 import { AttachWebpageDialog } from '@/components/common/AttachWebpageDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -94,7 +95,7 @@ function AttachPicker({
 			}));
 		}
 	});
-	const title = kind === 'knowledge' ? 'Attach Knowledge' : kind === 'notes' ? 'Attach Notes' : 'Reference Chats';
+	const title = kind === 'knowledge' ? 'Attach knowledge' : kind === 'notes' ? 'Attach notes' : 'Reference chats';
 	return (
 		<Dialog open={Boolean(kind)} onOpenChange={(o) => !o && onClose()}>
 			<DialogContent className="max-w-md p-3">
@@ -178,31 +179,31 @@ export function AttachMenu({
 				}}
 			/>
 			<DropdownMenu>
-				<Tip content="More">
+				<Tip content="Attach">
 					<DropdownMenuTrigger asChild>
-						<Button type="button" aria-label="More" variant="ghost" size="icon-sm">
-							<Plus className="size-4" />
+						<Button type="button" aria-label="Attach" variant="ghost" size="icon-sm">
+							<Plus aria-hidden className="size-4" />
 						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="start" side="top" className="w-56">
 					<DropdownMenuItem disabled={!canUpload} onSelect={() => input.current?.click()}>
-						<Upload /> Upload Files
+						<Upload /> Upload files
 					</DropdownMenuItem>
 					<DropdownMenuItem disabled={!canWeb} onSelect={() => setWeb(true)}>
-						<Link /> Attach Webpage
+						<Link /> Attach a web page
 					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={() => setPicker('knowledge')}>
-						<BookOpen /> Attach Knowledge
+						<BookOpen /> Attach knowledge
 					</DropdownMenuItem>
 					{notesEnabled && (
 						<DropdownMenuItem onSelect={() => setPicker('notes')}>
-							<NotebookText /> Attach Notes
+							<NotebookText /> Attach notes
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuItem onSelect={() => setPicker('chats')}>
-						<MessageSquare /> Reference Chats
+						<MessageSquare /> Reference chats
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -216,10 +217,11 @@ export type Toggles = { webSearch: boolean; imageGeneration: boolean; codeInterp
 type Tool = { id: string; name: string; meta?: { description?: string } };
 
 /**
- * Ports MessageInput/IntegrationsMenu.svelte: the tools to offer the model
- * and the Web Search, Image and Code Interpreter switches (each shown only
- * when the server, the user's permissions and every selected model allow it).
- * Switched-on features also show as chips beside the menu, to switch off.
+ * Ports MessageInput/IntegrationsMenu.svelte as the Tools menu: the tools to
+ * offer the model and the Web search, Image and Code interpreter switches
+ * (each shown only when the server, the user's permissions and every
+ * selected model allow it). Its button counts what is on (#1083), and
+ * switched-on features also show as chips beside it, to switch off.
  */
 export function IntegrationsMenu({
 	tools,
@@ -248,30 +250,35 @@ export function IntegrationsMenu({
 		</label>
 	);
 	const active: [keyof Toggles, string, ReactNode][] = [
-		['webSearch', 'Web Search', <Globe key="w" className="size-3.5" />],
+		['webSearch', 'Web search', <Globe key="w" className="size-3.5" />],
 		['imageGeneration', 'Image', <ImageIcon key="i" className="size-3.5" />],
-		['codeInterpreter', 'Code Interpreter', <Code2 key="c" className="size-3.5" />]
+		['codeInterpreter', 'Code interpreter', <Code2 key="c" className="size-3.5" />]
 	];
+	const on = toolIds.length + active.filter(([k]) => toggles[k] && buttons[k]).length;
 	return (
 		<>
 			<DropdownMenu>
-				<Tip content="Integrations">
+				<Tip content="Tools">
 					<DropdownMenuTrigger asChild>
 						<Button
 							type="button"
-							aria-label="Integrations"
+							aria-label={on > 0 ? `Tools (${on} on)` : 'Tools'}
 							variant="ghost"
-							size={toolIds.length > 0 ? 'sm' : 'icon-sm'}
+							size={on > 0 ? 'sm' : 'icon-sm'}
 						>
-							<Settings2 className="size-4" />
-							{toolIds.length > 0 && <span className="text-xs">{toolIds.length}</span>}
+							<Settings2 aria-hidden className="size-4" />
+							{on > 0 && (
+								<Badge variant="secondary" data-numeric>
+									{on}
+								</Badge>
+							)}
 						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
 				<DropdownMenuContent align="start" side="top" className="w-64" onKeyDown={(e) => e.stopPropagation()}>
-					{buttons.webSearch && feature('webSearch', 'Web Search', <Globe className="size-4" />)}
+					{buttons.webSearch && feature('webSearch', 'Web search', <Globe className="size-4" />)}
 					{buttons.imageGeneration && feature('imageGeneration', 'Image', <ImageIcon className="size-4" />)}
-					{buttons.codeInterpreter && feature('codeInterpreter', 'Code Interpreter', <Code2 className="size-4" />)}
+					{buttons.codeInterpreter && feature('codeInterpreter', 'Code interpreter', <Code2 className="size-4" />)}
 					{tools.length > 0 && (
 						<>
 							{anyFeature && <DropdownMenuSeparator />}

@@ -16,9 +16,10 @@ import {
 	TableIcon,
 	XIcon
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
+import { panelMode, SidePanel } from '@/components/layout/SidePanel';
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -268,12 +269,12 @@ export function CanvasSection() {
 		<Section
 			id="canvas"
 			title="Canvas"
-			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. This is a design that is planned and not yet built; the documents below are invented."
-			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNT-4']}
+			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The side panel it opens in is built and holds the chat's Controls and its code preview; the canvas itself is a design that is planned and not yet built, and the documents below are invented."
+			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNT-4', 'LAY-4', 'NAV-4']}
 		>
 			<Example
 				title="A reply with four documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. Not shown in this box: the resize handle and remembered width of CNV-2, and the real breakpoints, which are wider than a demo inside a page can use."
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
 			>
 				<div
 					ref={frame}
@@ -518,6 +519,52 @@ export function CanvasSection() {
 					</AlertDialogContent>
 				</AlertDialog>
 			</Example>
+			<Example
+				title="The side panel"
+				note="The real component that holds Controls and the code preview beside a chat. Drag the separator, or focus it and use the arrow keys (Shift for bigger steps), Home and End; the width is remembered. Escape from inside closes it and focus returns to the button that opened it. Where this box cannot hold the panel and 24 rem beside it, the panel is a full-screen sheet instead."
+			>
+				<SidePanelDemo />
+			</Example>
 		</Section>
+	);
+}
+
+/**
+ * CNV-2, LAY-4, NAV-4: the shared `SidePanel` in a box of its own. It starts
+ * open only where it would be a column, so a phone's /ui does not open on a
+ * full-screen sheet.
+ */
+function SidePanelDemo() {
+	const row = useRef<HTMLDivElement>(null);
+	const [open, setOpen] = useState(false);
+	useLayoutEffect(() => {
+		const space = row.current?.clientWidth || Number.POSITIVE_INFINITY;
+		const wide = window.matchMedia?.('(min-width: 768px)').matches ?? true;
+		if (panelMode(space, 240, wide) === 'column') setOpen(true);
+	}, []);
+	return (
+		<div ref={row} className="border-border bg-background flex h-[24rem] overflow-hidden rounded-panel border">
+			<div className="flex min-w-0 flex-1 flex-col items-start gap-3 overflow-y-auto p-4">
+				<p className="text-reading max-w-[60ch]">
+					The chat stays at least 24 rem wide beside the panel, and the panel never goes under its minimum.
+				</p>
+				<Button variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>
+					{open ? 'Close the side panel' : 'Open the side panel'}
+				</Button>
+			</div>
+			<SidePanel
+				open={open}
+				onClose={() => setOpen(false)}
+				title="Side panel"
+				storageKey="ui.sidePanel"
+				defaultWidth={288}
+				minWidth={240}
+			>
+				<div className="text-foreground-muted flex flex-col gap-2 overflow-y-auto p-4">
+					<p>An occupant's own content: Controls, or the preview of a code block.</p>
+					<p>Each occupant keeps its own width.</p>
+				</div>
+			</SidePanel>
+		</div>
 	);
 }

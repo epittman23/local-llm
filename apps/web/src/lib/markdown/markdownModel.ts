@@ -1,6 +1,6 @@
-import { csvCell } from '@/lib/utils/csv';
+import { csvCell, neutralizeFormula } from '@/lib/utils/csv';
 import { unescapeHtml } from './content';
-import { type MdToken, lexChat } from './lexer';
+import { lexChat, type MdToken } from './lexer';
 
 // The rendering rules behind components/chat/markdown (ported from
 // chat/Messages/Markdown/*.svelte), kept apart from React so they can be
@@ -72,6 +72,25 @@ export function tableToCsv(token: MdToken): string {
 		row.map((cell) => csvCell(unescapeHtml((cell.tokens ?? []).map((t: MdToken) => t.text).join(''))))
 	);
 	return [header, ...rows].map((r) => r.join(',')).join('\n');
+}
+
+/**
+ * A Markdown table as tab-separated text, which a spreadsheet pastes as cells:
+ * a tab or line break inside a cell becomes a space, and formula cells are
+ * neutralised as the CSV's are.
+ */
+export function tableToTsv(token: MdToken): string {
+	const cell = (text: string) =>
+		neutralizeFormula(
+			unescapeHtml(text)
+				.replace(/[\t\r\n]+/g, ' ')
+				.trim()
+		);
+	const header = token.header.map((h: MdToken) => cell(h.text));
+	const rows = token.rows.map((row: MdToken[]) =>
+		row.map((c) => cell((c.tokens ?? []).map((t: MdToken) => t.text).join('')))
+	);
+	return [header, ...rows].map((r) => r.join('\t')).join('\n');
 }
 
 export type HtmlKind =

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Katex } from '@/components/chat/markdown/Katex';
+import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
 import { Gone } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -71,8 +71,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ServerUnreachableError } from '@/lib/apis/errors';
+import type { History, Message } from '@/lib/chat/history';
 import { THEMES, type ThemeId } from '@/lib/theme';
-import { highlight } from './CodeSurface';
+import { ResponseMessage } from '@/routes/chat/ChatMessages';
+import { ErrorReply } from '@/routes/chat/ErrorReply';
+import { ModelRow } from '@/routes/chat/ModelSelector';
+import type { ChatModel } from '@/routes/chat/useModels';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 
 // The second half of /ui: the shared components (components/ui) under the
@@ -531,6 +535,7 @@ const DEMO_CHATS = [
 
 export function NavigationSection() {
 	const [settingsTab, setSettingsTab] = useState('general');
+	const [picked, setPicked] = useState('demo-coder');
 	const settingsTitle = DEMO_SETTINGS_TABS.find((t) => t.id === settingsTab)?.title ?? '';
 	return (
 		<Section
@@ -623,9 +628,39 @@ export function NavigationSection() {
 					</Command>
 				</Panel>
 			</Example>
+			<Example
+				title="The model picker's rows"
+				note="Each row is left aligned: the model's name over a muted second line, its description or, for a workspace entry, the model it wraps in mono. The current one is checked. Ctrl+Shift+M opens the picker in a chat."
+			>
+				<Panel className="max-w-[32rem]">
+					<Command label="Choose a model" className="gap-2">
+						<CommandInput placeholder="Search models" />
+						<CommandList>
+							<CommandEmpty>No model matches.</CommandEmpty>
+							{DEMO_MODELS.map((m) => (
+								<CommandItem key={m.id} value={m.id} keywords={[m.name]} onSelect={() => setPicked(m.id)}>
+									<ModelRow model={m} current={m.id === picked} />
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</Panel>
+			</Example>
 		</Section>
 	);
 }
+
+const DEMO_MODELS: ChatModel[] = [
+	{
+		id: 'demo-coder',
+		name: 'Coder',
+		info: {
+			meta: { description: 'Writes, reviews and debugs code.' },
+			base_model_id: 'qwen/qwen-2.5-coder-32b-instruct'
+		}
+	},
+	{ id: 'demo-math', name: 'Math and statistics', info: { base_model_id: 'qwen/qwen3.6-27b' } }
+];
 
 export function FeedbackSection() {
 	return (
@@ -847,48 +882,130 @@ export function StatesSection() {
 	);
 }
 
-const SAMPLE_CODE = `def summarize(x: np.ndarray) -> dict[str, float]:
-    """Mean, unbiased variance and standard error of x."""
-    n = len(x)
-    return {"mean": x.mean(), "var": x.var(ddof=1), "se": x.std(ddof=1) / np.sqrt(n)}`;
+const FENCE = '```';
+
+/** An invented answer with everything that used to overflow (#946, #1082, #1086, #940). */
+const ANSWER_SAMPLE = String.raw`Ridge regression shrinks the coefficients towards zero, which trades a little bias for a lot less variance. Ten-fold cross-validation on the invented data set:
+
+| Model | λ | Train RMSE | Test RMSE | R² | Coefficients | Non-zero | Fit time, ms | Notes |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| Least squares | 0 | 1.92 | 2.41 | 0.71 | 12 | 12 | 3 | Follows the noise |
+| Ridge | 0.1 | 1.95 | 2.30 | 0.74 | 12 | 12 | 4 | |
+| Ridge | 1 | 2.01 | 2.18 | 0.77 | 12 | 12 | 4 | Lowest test error |
+| Ridge | 10 | 2.24 | 2.29 | 0.74 | 12 | 12 | 4 | Over-shrunk |
+| Lasso | 0.05 | 2.03 | 2.21 | 0.76 | 12 | 7 | 9 | Drops five features |
+
+$$\hat{\beta}_{\text{ridge}} = \operatorname*{arg\,min}_{\beta} \left\{ \sum_{i=1}^{n} \left( y_i - \beta_0 - \sum_{j=1}^{p} x_{ij} \beta_j \right)^2 + \lambda \sum_{j=1}^{p} \beta_j^2 \right\} = \left( X^\top X + \lambda I_p \right)^{-1} X^\top y$$
+
+- [x] Standardise the features first
+- [x] Choose λ by cross-validation
+- [ ] Plot the residuals against the fitted values
+
+${FENCE}python
+import numpy as np
+
+
+def standardise(x: np.ndarray) -> np.ndarray:
+    """Centre each column and scale it to unit variance."""
+    return (x - x.mean(axis=0)) / x.std(axis=0, ddof=1)
+
+
+def ridge(x: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
+    """The ridge coefficients for one penalty, intercept first."""
+    n, p = x.shape
+    design = np.column_stack([np.ones(n), x])
+    penalty = lam * np.eye(p + 1)
+    penalty[0, 0] = 0.0  # the intercept is not shrunk
+    return np.linalg.solve(design.T @ design + penalty, design.T @ y)
+
+
+def rmse(x: np.ndarray, y: np.ndarray, beta: np.ndarray) -> float:
+    fitted = beta[0] + x @ beta[1:]
+    return float(np.sqrt(np.mean((y - fitted) ** 2)))
+
+
+def cross_validate(x: np.ndarray, y: np.ndarray, lams: list[float], k: int = 10) -> dict[float, float]:
+    """Mean test RMSE over k folds for each penalty."""
+    rng = np.random.default_rng(7)
+    folds = np.array_split(rng.permutation(len(y)), k)
+    scores: dict[float, float] = {}
+    for lam in lams:
+        errors = []
+        for fold in folds:
+            train = np.setdiff1d(np.arange(len(y)), fold)
+            beta = ridge(x[train], y[train], lam)
+            errors.append(rmse(x[fold], y[fold], beta))
+        scores[lam] = float(np.mean(errors))
+    return scores
+
+
+x = standardise(np.loadtxt("features.csv", delimiter=",", skiprows=1))
+y = np.loadtxt("target.csv", delimiter=",", skiprows=1)
+print(cross_validate(x, y, [0.0, 0.1, 1.0, 10.0]))
+${FENCE}`;
+
+const reply = (id: string, content: string, extra: Partial<Message> = {}): Message => ({
+	id,
+	parentId: null,
+	childrenIds: [],
+	role: 'assistant',
+	content,
+	done: true,
+	modelName: 'Coder',
+	...extra
+});
+const STOPPED_REPLY = reply('ui-stopped', 'The standard error falls with the square root of the sample size, so', {
+	stopped: true
+});
+const LENGTH_REPLY = reply(
+	'ui-length',
+	'Step one: centre each column. Step two: scale it to unit variance. Step three:',
+	{
+		finish_reason: 'length'
+	}
+);
+const FAILED_REPLY = reply('ui-failed', '', {
+	error: { content: 'Error code: 401 - {"error": {"message": "No auth credentials found"}}' }
+});
+const historyOf = (m: Message): History => ({ currentId: m.id, messages: { [m.id]: m } });
+const said = (what: string) => () => toast.success(what);
+const DEMO_HANDLERS = {
+	onBranch: () => {},
+	onRegenerate: said('Regenerating'),
+	onFollowUp: () => {},
+	onRetry: said('Regenerating'),
+	onContinue: said('Continuing')
+};
 
 export function ContentSection() {
-	const [wrap, setWrap] = useState(false);
 	return (
 		<Section
 			id="content"
 			title="Answers: prose, mathematics and code"
 			lead="What a model writes is the reason the app exists, so it gets the reading size, a measured line and one treatment wherever it appears: chat, notes, the playground, reports. Code takes its colours from the same tokens in both themes."
-			rules={['CNT-1', 'CNT-2', 'CNT-3', 'CNT-5', 'TYP-5']}
+			rules={['CNT-1', 'CNT-2', 'CNT-3', 'CNT-5', 'TYP-5', 'DAT-6', 'FBK-3', 'FBK-4']}
 		>
-			<Example title="A rendered answer">
-				<div className="text-reading flex max-w-[72ch] flex-col gap-4">
-					<p>
-						For observations <Katex content="x_1, \dots, x_n" displayMode={false} /> the unbiased estimator of the
-						variance divides by <Katex content="n-1" displayMode={false} />:
-					</p>
-					<div className="border-border overflow-x-auto rounded-panel border px-4 py-2">
-						<Katex content="s^2 = \frac{1}{n-1}\sum_{i=1}^{n}(x_i - \bar{x})^2" displayMode />
-					</div>
-					<figure className="border-border bg-surface-1 overflow-hidden rounded-panel border">
-						<figcaption className="border-border text-dense text-foreground-muted flex items-center justify-between border-b px-3 py-1.5">
-							<span>Python</span>
-							<span className="flex gap-1">
-								<Button variant="ghost" size="sm" aria-pressed={wrap} onClick={() => setWrap(!wrap)}>
-									Wrap lines
-								</Button>
-								<Button variant="ghost" size="sm" onClick={() => toast.success('Code copied')}>
-									<CopyIcon aria-hidden />
-									Copy code
-								</Button>
-							</span>
-						</figcaption>
-						<pre
-							className={`text-dense p-3 leading-relaxed ${wrap ? 'break-words whitespace-pre-wrap' : 'overflow-x-auto'}`}
-						>
-							<code>{highlight(SAMPLE_CODE, 'python')}</code>
-						</pre>
-					</figure>
+			<Example
+				title="A rendered answer: a wide table, a long equation, a task list and a long code block"
+				note="The chat's own renderer. The table and the equation scroll inside their frames and shade the edge that hides the rest; a code block over 25 lines can be collapsed, and Wrap lines is one setting for every block."
+			>
+				<div className="max-w-[72ch]">
+					<Markdown id="ui-answer" content={ANSWER_SAMPLE} />
+				</div>
+			</Example>
+			<Example
+				title="A reply that failed, and replies that were cut off"
+				note="A failure says what happened in the provider's own words, what to do for a cause it recognises, and offers Retry and Try another model. A reply that was stopped, or that reached the token limit, says so where it ends, with labelled Continue and Regenerate."
+			>
+				<div className="flex max-w-[72ch] flex-col gap-6">
+					<ErrorReply
+						message={FAILED_REPLY}
+						onRetry={said('Retrying')}
+						onTryAnotherModel={said('Opened the model picker')}
+					/>
+					{[STOPPED_REPLY, LENGTH_REPLY].map((m) => (
+						<ResponseMessage key={m.id} history={historyOf(m)} message={m} h={DEMO_HANDLERS} isLast chatId={null} />
+					))}
 				</div>
 			</Example>
 			<Example

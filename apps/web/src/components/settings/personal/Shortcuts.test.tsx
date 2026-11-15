@@ -34,7 +34,7 @@ const renderTab = () => {
 };
 
 const rebind = () => {
-	const button = screen.getByRole('button', { name: 'Change shortcut for New Chat' });
+	const button = screen.getByRole('button', { name: 'Change shortcut for New chat' });
 	fireEvent.click(button);
 	fireEvent.keyDown(button, { key: 'j', ctrlKey: true });
 	return button;

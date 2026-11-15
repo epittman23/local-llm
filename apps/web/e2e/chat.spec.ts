@@ -129,6 +129,10 @@ test('status, sources and follow-ups arrive with the reply', async ({ page }) =>
 	await page.keyboard.press('Escape');
 	chat.event('chat:message:follow_ups', { follow_ups: ['Why 42?'] });
 	await page.getByRole('button', { name: 'Why 42?' }).click();
+	// S3-D5: a follow-up fills the message box, focused, instead of sending at once.
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('Why 42?');
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeFocused();
+	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(2);
 	expect(chat.seen.completions[1].user_message.content).toBe('Why 42?');
 });
@@ -137,8 +141,8 @@ test('two models answer side by side', async ({ page }) => {
 	const chat = await mockChat(page);
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Add Model' }).click();
-	await page.getByRole('button', { name: 'Model: Select a model' }).click();
+	// Add model opens the new model's list at once (#944).
+	await page.getByRole('button', { name: 'Add model' }).click();
 	await page.getByRole('option', { name: 'Llama' }).click();
 	await page.getByRole('textbox', { name: 'Message' }).fill('Compare');
 	await page.keyboard.press('Enter');
@@ -288,7 +292,7 @@ test('a temporary chat sends the whole conversation and asks for no title', asyn
 	});
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Temporary Chat' }).click();
+	await page.getByRole('button', { name: 'Temporary chat' }).click();
 	await expect(page.getByText(/won't appear in history/)).toBeVisible();
 	await page.getByRole('textbox', { name: 'Message' }).fill('secret');
 	await page.keyboard.press('Enter');
@@ -383,6 +387,34 @@ test('a request refused because the session expired signs out and says so', asyn
 	await page.keyboard.press('Enter');
 	await expect(page).toHaveURL(/\/auth\?redirect=.*&reason=expired$/);
 	await expect(page.getByRole('alert')).toHaveText('Your session expired. Sign in to continue where you left off.');
+});
+
+test('a draft sent into an expired session is back after signing in (#1061)', async ({ page }) => {
+	const chat = await mockChat(page, { user: { features: { auth: true, enable_login_form: true } } });
+	let expired = false;
+	await page.route('**/api/v1/auths/', (route) =>
+		expired
+			? route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' })
+			: route.fallback()
+	);
+	await page.route('**/api/v1/auths/signin', (route) => {
+		expired = false;
+		return json(route, { id: 'u1', email: 'u@example.com', name: 'Test User', role: 'user', token: 'signed-in-token' });
+	});
+	await page.route('**/api/chat/completions', (route) => {
+		expired = true;
+		return route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' });
+	});
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('textbox', { name: 'Message' }).fill('The draft I was writing');
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/auth\?redirect=.*&reason=expired$/);
+	await page.getByLabel('Email').fill('user@example.com');
+	await page.getByLabel('Password', { exact: true }).fill('hunter2');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+	await expect(page).toHaveURL(/\/$/);
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveValue('The draft I was writing');
 });
 
 test('a message sent the moment the box appears waits for the model list, then goes (#373)', async ({ page }) => {
@@ -524,4 +556,29 @@ test("a send waiting for the model list goes with the model's default tools, eve
 	releaseTools();
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', tool_ids: ['calc'] });
+});
+
+test('the model picker chooses by keyboard, and Make default saves the selection (#943, #944)', async ({ page }) => {
+	const chat = await mockChat(page);
+	const saved: unknown[] = [];
+	await page.route('**/api/v1/users/user/settings/update', (route) => {
+		saved.push(route.request().postDataJSON());
+		return json(route, route.request().postDataJSON());
+	});
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('button', { name: 'Model: Qwen' }).click();
+	await page.keyboard.type('lla');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	// Enter chose and closed the list; focus is back on the picker (NAV-4).
+	await expect(page.getByRole('button', { name: 'Model: Llama' })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await page.getByRole('textbox', { name: 'Message' }).focus();
+	await page.keyboard.press('Control+Shift+M');
+	await expect(page.getByRole('combobox', { name: 'Search models' })).toBeFocused();
+	await page.getByRole('option', { name: /Make default/ }).click();
+	await expect.poll(() => saved.length).toBe(1);
+	expect(saved[0]).toMatchObject({ ui: { models: ['llama'] } });
+	await expect(page.getByText('Default model saved')).toBeVisible();
 });
