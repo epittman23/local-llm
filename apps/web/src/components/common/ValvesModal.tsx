@@ -1,7 +1,9 @@
+import { CircleAlertIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { failureCause } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
-import { type ValveValues, type ValvesSpec, Valves } from '@/components/common/Valves';
+import { Valves, type ValvesSpec, type ValveValues } from '@/components/common/Valves';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import * as functionsApi from '@/lib/apis/functions';
@@ -24,6 +26,12 @@ const api = (type: Kind, userValves: boolean) => {
  * valves and their spec, edits them with <Valves>, and saves. Array valves are
  * edited as comma-separated text (multiselect ones excepted) and split back into
  * arrays on save. `userValves` switches to the per-user valves endpoints.
+ *
+ * Called "Settings" in the interface (WRD-2: "valves" is the plugin API's
+ * word). OVL-1: 32 rem wide, with a fixed header and footer around a body
+ * that scrolls, so the dialog never jumps as fields change (#1016). A plugin
+ * with no settings says so, with Save off (ACT-5). Load and save failures are
+ * said in the dialog (FBK-1, #1095).
  */
 export function ValvesModal({
 	open,
@@ -31,6 +39,7 @@ export function ValvesModal({
 	type = 'tool',
 	id,
 	userValves = false,
+	name,
 	onSaved
 }: {
 	open: boolean;
@@ -38,6 +47,8 @@ export function ValvesModal({
 	type?: Kind;
 	id: string | null;
 	userValves?: boolean;
+	/** The plugin's name, for the title: "Settings for Unit converter". */
+	name?: string;
 	onSaved?: () => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -45,13 +56,17 @@ export function ValvesModal({
 	const [valves, setValves] = useState<ValveValues>({});
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [problem, setProblem] = useState<string | null>(null);
+	const [attempt, setAttempt] = useState(0);
 
 	useEffect(() => {
 		if (!open || !id) return;
 		let cancelled = false;
 		setLoading(true);
+		setProblem(null);
 		setSpec(null);
 		setValves({});
+		void attempt;
 		(async () => {
 			try {
 				const a = api(type, userValves);
@@ -66,21 +81,22 @@ export function ValvesModal({
 				setValves(next);
 				setSpec(loadedSpec as ValvesSpec);
 				setLoading(false);
-			} catch {
+			} catch (error) {
 				if (cancelled) return;
-				toast.error('Error fetching valves');
-				onOpenChange(false);
+				setProblem(`Couldn't load the settings. ${failureCause(error).cause}`);
+				setLoading(false);
 			}
 		})();
 		return () => {
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open, id, type, userValves, token]);
+	}, [open, id, type, userValves, token, attempt]);
 
 	const save = async () => {
 		if (!spec || !id) return;
 		setSaving(true);
+		setProblem(null);
 		const out: ValveValues = { ...valves };
 		for (const [name, prop] of Object.entries(spec.properties ?? {})) {
 			if (prop?.type !== 'array') continue;
@@ -96,41 +112,66 @@ export function ValvesModal({
 		try {
 			const res = await api(type, userValves).update(token, id, out);
 			if (res) {
-				toast.success('Valves updated successfully');
+				toast.success(name ? `Settings for ${name} saved` : 'Settings saved');
 				onSaved?.();
 			}
 		} catch (error) {
-			toast.error(`${error}`);
+			const { cause, detail } = failureCause(error);
+			setProblem(`Couldn't save the settings. ${detail ?? cause}`);
 		}
 		setSaving(false);
 	};
 
+	const empty = !loading && !problem && Object.keys(spec?.properties ?? {}).length === 0;
+	const failedToLoad = problem !== null && spec === null;
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle className="text-sm">Valves</DialogTitle>
-					<DialogDescription className="sr-only">Settings this plugin exposes.</DialogDescription>
+			<DialogContent className="flex max-h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 p-0 sm:max-w-lg">
+				<DialogHeader className="shrink-0 border-b px-5 pt-5 pb-3">
+					<DialogTitle>{name ? `Settings for ${name}` : 'Settings'}</DialogTitle>
+					<DialogDescription>
+						{userValves ? 'Your own settings for this ' : 'Settings this '}
+						{type} takes. Leave a field empty to use its default.
+					</DialogDescription>
 				</DialogHeader>
 				<form
-					className="flex max-h-[70vh] flex-col overflow-y-auto"
+					className="flex min-h-0 flex-1 flex-col"
 					onSubmit={(e) => {
 						e.preventDefault();
 						save();
 					}}
 				>
-					{loading ? (
-						<div className="flex justify-center py-6">
-							<Spinner />
-						</div>
-					) : (
-						<Valves spec={spec} valves={valves} onChange={setValves} />
-					)}
-					<div className="flex justify-end pt-2.5">
-						<Button type="submit" size="sm" disabled={saving || loading}>
-							Save
-							{saving && <Spinner className="size-3.5" />}
+					<div className="min-h-48 flex-1 overflow-y-auto px-5 py-4">
+						{loading ? (
+							<div className="flex justify-center py-6">
+								<Spinner />
+							</div>
+						) : empty ? (
+							<p className="text-foreground-muted py-6 text-center">This {type} has no settings.</p>
+						) : (
+							<Valves spec={spec} valves={valves} onChange={setValves} />
+						)}
+						{problem && (
+							<div role="alert" className="text-danger text-dense mt-3 flex items-start gap-1.5">
+								<CircleAlertIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+								<span>{problem}</span>
+							</div>
+						)}
+					</div>
+					<div className="flex shrink-0 flex-wrap justify-end gap-2 border-t px-5 py-3">
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+							Cancel
 						</Button>
+						{failedToLoad ? (
+							<Button type="button" variant="outline" onClick={() => setAttempt((n) => n + 1)}>
+								Try again
+							</Button>
+						) : (
+							<Button type="submit" disabled={saving || loading || empty} aria-busy={saving || undefined}>
+								{saving && <Spinner className="size-3.5" />}
+								{saving ? 'Saving…' : 'Save settings'}
+							</Button>
+						)}
 					</div>
 				</form>
 			</DialogContent>

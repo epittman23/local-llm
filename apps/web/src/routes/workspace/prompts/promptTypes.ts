@@ -124,3 +124,15 @@ export function parsePromptImport(text: string): Array<{ command: string; name: 
 		return [{ command, name: asString(p.name, NAME_MAX) || command, content: asString(p.content, CONTENT_MAX) }];
 	});
 }
+
+/** FRM-2: what a command that fails `isValidCommand` is told, under the field. */
+export const INVALID_COMMAND = 'Use only letters, numbers, hyphens and underscores.';
+
+const COMMAND_TAKEN = /^Uh-oh! This command is already registered/;
+
+/** The server's COMMAND_TAKEN, in words for the Command field (#1095), or null for any other failure. */
+export function commandProblem(error: unknown, command: string): string | null {
+	return typeof error === 'string' && COMMAND_TAKEN.test(error)
+		? `/${command} is already used by another prompt. Choose another command.`
+		: null;
+}

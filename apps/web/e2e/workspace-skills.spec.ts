@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Skill = {
@@ -125,7 +125,7 @@ test.describe('workspace skills', () => {
 		await page.getByLabel('Skill Name').fill('Weekly Report');
 		await expect(page.getByLabel('Skill ID')).toHaveValue('weekly-report');
 
-		await page.getByRole('button', { name: 'Save & Create' }).click();
+		await page.getByRole('button', { name: 'Create skill' }).click();
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 		expect(calls.find((c) => c.path === '/create')?.body).toMatchObject({
 			id: 'weekly-report',
@@ -198,7 +198,7 @@ test.describe('workspace skills', () => {
 		await expect(page.getByLabel('Skill Name')).toHaveValue('Skill 1');
 		await expect(page.getByText('skill-1', { exact: true })).toBeVisible(); // id shown as text
 		await page.getByLabel('Skill Instructions').fill('New instructions');
-		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/skill-1/update')?.body)
 			.toMatchObject({
@@ -208,16 +208,22 @@ test.describe('workspace skills', () => {
 
 		await page.goto('/workspace/skills/edit?id=skill-2');
 		await expect(page.getByText('Read Only')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
 		await expect(page.locator('pre')).toHaveText('Instructions 2');
 	});
 
-	test('edit without an id, or with an unknown one, returns to the list', async ({ page }) => {
+	test('edit without an id returns to the list; an unknown one says it no longer exists', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockSkillsApi(page, []);
+		// The server's own words for a missing item (ERROR_MESSAGES.NOT_FOUND).
+		await page.route('**/api/v1/skills/id/missing', (route) =>
+			route.fulfill({ status: 401, json: { detail: "We could not find what you're looking for :/" } })
+		);
 		await page.goto('/workspace/skills/edit');
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 		await page.goto('/workspace/skills/edit?id=missing');
+		await expect(page.getByRole('heading', { name: 'This skill no longer exists.' })).toBeVisible();
+		await page.getByRole('link', { name: 'Skills', exact: true }).last().click();
 		await expect(page).toHaveURL(/\/workspace\/skills$/);
 	});
 });
