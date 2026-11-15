@@ -1,10 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUp, BookOpen, FileText, Globe, Image as ImageIcon, Loader2, Square, X } from 'lucide-react';
-import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+	forwardRef,
+	type ReactNode,
+	useEffect,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore
+} from 'react';
 import { flushSync } from 'react-dom';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
 import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge';
 import { getPrompts } from '@/lib/apis/prompts';
 import {
@@ -15,6 +27,7 @@ import {
 	replaceCommand,
 	replaceInputVariables
 } from '@/lib/chat/attachments';
+import { loadDraft, saveDraft } from '@/lib/chat/drafts';
 import type { ChatFile } from '@/lib/chat/history';
 import { PASTED_TEXT_LIMIT } from '@/lib/chat/prefs';
 import { promptVariables } from '@/lib/chat/request';
@@ -24,11 +37,30 @@ import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { extractInputVariables } from '@/lib/utils/variables';
 import { InputVariablesDialog } from './InputVariablesDialog';
-import { modelImage } from './ModelSelector';
+import { ModelRow, modelImage } from './ModelSelector';
 import type { ChatModel } from './useModels';
 
-/** `submit` sends what the box holds now, as Enter would. */
-export type ChatInputHandle = { focus: () => void; setText: (text: string) => void; submit: () => void };
+/** `submit` sends what the box holds now, as Enter would; `restoreDraft` puts back the draft kept for `draftKey`. */
+export type ChatInputHandle = {
+	focus: () => void;
+	setText: (text: string) => void;
+	submit: () => void;
+	restoreDraft: () => void;
+};
+
+/** The placeholder is an example, not the label (FRM-1); a phone gets the short one, so it is never clipped. */
+const PLACEHOLDER = 'Message. Type / for prompts, # for files, @ for a model';
+const PLACEHOLDER_SHORT = 'Message. / prompts, # files, @ model';
+const NARROW = '(max-width: 479px)';
+const subscribeNarrow = (onChange: () => void) => {
+	const mq = window.matchMedia?.(NARROW);
+	mq?.addEventListener('change', onChange);
+	return () => mq?.removeEventListener('change', onChange);
+};
+const isNarrow = () => window.matchMedia?.(NARROW).matches ?? false;
+
+/** A touch screen (a coarse pointer): Enter there is a new line, and only the Send button sends (#947). */
+const isTouch = () => window.matchMedia?.('(pointer: coarse)').matches ?? false;
 
 type Prompt = { command: string; content: string; title?: string; name?: string };
 type Suggestion =
@@ -75,6 +107,8 @@ function FileChip({ file, onRemove }: { file: ChatFile; onRemove: () => void }) 
  * The chat's message box (chat/MessageInput.svelte, in its plain-text mode
  * -- the one the Svelte app uses when "Rich Text Input" is off). Enter sends
  * and Shift+Enter is a new line; with "Ctrl+Enter to send" on, those swap.
+ * On a touch screen Enter is always a new line and the Send button sends
+ * (#947), as the Svelte app did.
  * Typing `/` at the start offers the user's prompts (their `{{variables}}`
  * filled from the user's details, or asked for), `#` knowledge and web pages,
  * `@` a model to answer just this message. While a reply is being written
@@ -107,6 +141,14 @@ export const ChatInput = forwardRef<
 		/** A send waits for the page to choose its models (useHeldSend): the box says so, and `onCancelWaiting` calls it off. */
 		waiting?: boolean;
 		onCancelWaiting?: () => void;
+		/**
+		 * Where the unsent text is kept (lib/chat/drafts: the chat id, or
+		 * `new:<folder id>`). It is saved on every change and read back on
+		 * mount and by `restoreDraft`. A sent message's draft is kept until the
+		 * server has answered (the reply ends while still signed in), so text
+		 * sent into an expired session is back after signing in (#1061).
+		 */
+		draftKey?: string;
 	}
 >(function ChatInput(
 	{
@@ -115,7 +157,7 @@ export const ChatInput = forwardRef<
 		generating,
 		queued,
 		onRemoveQueued,
-		placeholder = 'Send a Message',
+		placeholder,
 		toolbar,
 		files = [],
 		onRemoveFile,
@@ -129,13 +171,27 @@ export const ChatInput = forwardRef<
 		onPasteText,
 		disabled = false,
 		waiting = false,
-		onCancelWaiting
+		onCancelWaiting,
+		draftKey
 	},
 	ref
 ) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const [text, setText] = useState('');
+	const [text, setText] = useState(() => (draftKey ? loadDraft(draftKey) : ''));
+	const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
+	/** The draft of a message sent and not yet answered: cleared once the reply ends while signed in. */
+	const sent = useRef<string | null>(null);
+	const wasGenerating = useRef(generating);
+	const signedOut = useAuthStore((s) => s.status === 'anonymous');
+	useEffect(() => {
+		const ended = wasGenerating.current && !generating;
+		wasGenerating.current = generating;
+		// Signed out: a 401 ends the session before the reply fails, so the draft is kept for after sign-in.
+		if (!ended || sent.current === null || signedOut) return;
+		saveDraft(sent.current, '');
+		sent.current = null;
+	}, [generating, signedOut]);
 	const [cursor, setCursor] = useState(0);
 	const [selected, setSelected] = useState(0);
 	const [dismissed, setDismissed] = useState<string | null>(null);
@@ -149,8 +205,20 @@ export const ChatInput = forwardRef<
 		submit: () => {
 			// Nothing to send (the box was emptied meanwhile): nothing to refuse either.
 			if (text.trim() || files.length) submit();
+		},
+		restoreDraft: () => {
+			const draft = draftKey ? loadDraft(draftKey) : '';
+			setText(draft);
+			setCursor(draft.length);
 		}
 	}));
+	const edit = (next: string) => {
+		setText(next);
+		if (!draftKey) return;
+		saveDraft(draftKey, next);
+		// New text in the same box replaces what was sent; another chat's sent draft is still waiting.
+		if (sent.current === draftKey) sent.current = null;
+	};
 
 	const command = commandAt(text, cursor);
 	const active = command && `${command.trigger}${command.start}` !== dismissed ? command : null;
@@ -236,6 +304,32 @@ export const ChatInput = forwardRef<
 	// arrow keys step from what is highlighted.
 	const highlighted = Math.min(selected, suggestions.length - 1);
 
+	// A trigger with nothing to offer says so in one row, once its list has loaded (STA-2), and
+	// tells "none yet" from "none match" (STA-3, #1083). Escape closes it; Enter still sends.
+	const emptyRow: ReactNode = (() => {
+		if (!active || suggestions.length) return null;
+		const typed = active.query.trim();
+		if (active.trigger === '/') {
+			if (!prompts.isSuccess || prompts.isFetching) return null;
+			if (typed && prompts.data.length) return `No prompts match “${typed}”`;
+			return (
+				<>
+					No saved prompts yet.{' '}
+					<Link
+						to="/workspace/prompts"
+						className="text-brand underline underline-offset-2"
+						onMouseDown={(e) => e.preventDefault()}
+					>
+						Create one in Workspace &gt; Prompts
+					</Link>
+				</>
+			);
+		}
+		if (active.trigger === '@') return typed ? `No models match “${typed}”` : 'No models yet';
+		if (!knowledge.isSuccess || knowledge.isFetching || q !== active.query) return null;
+		return typed ? `No knowledge or files match “${typed}”` : 'No knowledge or files yet';
+	})();
+
 	// Committed now, so the caret is placed in this same task: placed a frame
 	// later, a key typed before that frame went in at the old caret, and the
 	// frame then moved the caret back in front of it. A dialog that just
@@ -243,7 +337,7 @@ export const ChatInput = forwardRef<
 	// this, so the frame takes it back, but only if it went: while the box
 	// does not have focus, nothing can be typed into it.
 	const place = (next: string, pos: number) => {
-		flushSync(() => setText(next));
+		flushSync(() => edit(next));
 		area.current?.focus();
 		area.current?.setSelectionRange(pos, pos);
 		setCursor(pos);
@@ -301,6 +395,11 @@ export const ChatInput = forwardRef<
 		}
 		setHeld(null);
 		if (onSubmit(text, files)) {
+			// Kept until the server has answered (see `sent`), not emptied with the box.
+			if (draftKey) {
+				saveDraft(draftKey, text);
+				sent.current = draftKey;
+			}
 			setText('');
 			setCursor(0);
 			area.current?.focus();
@@ -374,39 +473,50 @@ export const ChatInput = forwardRef<
 						className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-72 w-full max-w-md overflow-y-auto rounded-xl border p-1 shadow-lg"
 					>
 						{suggestions.map((s, i) => (
-							<Button
+							<RowButton
 								key={s.key}
-								type="button"
 								role="option"
 								aria-selected={i === highlighted}
 								onMouseDown={(e) => e.preventDefault()}
 								onClick={() => void pick(s)}
-								variant="ghost"
-								className={cn('w-full justify-start', i === highlighted && 'bg-muted')}
-							>
-								{s.kind === 'model' && (
-									<img
-										src={modelImage(s.model.id)}
-										alt=""
-										className="size-5 rounded-full object-cover"
-										onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-									/>
+								className={cn(
+									'flex min-h-9 items-center gap-2 px-2 py-1.5 pointer-coarse:min-h-11',
+									i === highlighted && 'bg-surface-3'
 								)}
-								<span className="truncate">{s.label}</span>
-								<span className="text-muted-foreground ml-auto shrink-0 truncate text-xs">{s.detail}</span>
-							</Button>
+							>
+								{s.kind === 'model' ? (
+									<ModelRow model={s.model} />
+								) : s.kind === 'prompt' ? (
+									<>
+										<span className="shrink-0 font-mono">{s.label}</span>
+										<span className="text-foreground-muted min-w-0 truncate" title={s.detail}>
+											{s.detail}
+										</span>
+									</>
+								) : (
+									<>
+										<span className="min-w-0 truncate" title={s.label}>
+											{s.label}
+										</span>
+										<span className="text-foreground-muted ml-auto shrink-0 text-caption">{s.detail}</span>
+									</>
+								)}
+							</RowButton>
 						))}
 					</div>
 				)}
-				<div data-composite-field className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
+				{emptyRow && (
+					<div
+						role="status"
+						className="bg-popover text-foreground-muted absolute bottom-full left-0 z-30 mb-2 w-full max-w-md rounded-xl border px-3 py-2"
+					>
+						{emptyRow}
+					</div>
+				)}
+				<div data-composite-field className="bg-surface-1 border-border-control rounded-3xl border px-3 py-2">
 					{atModel && (
 						<div className="text-muted-foreground mb-1 flex items-center gap-2 px-1 text-xs">
-							<img
-								src={modelImage(atModel.id)}
-								alt=""
-								className="size-4 rounded-full"
-								onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
-							/>
+							<ProfileAvatar src={modelImage(atModel.id)} name={atModel.name} size="sm" className="size-4" />
 							<span>
 								Talking to <span className="text-foreground font-medium">{atModel.name}</span>
 							</span>
@@ -437,9 +547,9 @@ export const ChatInput = forwardRef<
 						autoFocus
 						disabled={disabled}
 						value={text}
-						placeholder={placeholder}
+						placeholder={placeholder ?? (narrow ? PLACEHOLDER_SHORT : PLACEHOLDER)}
 						onChange={(e) => {
-							setText(e.target.value);
+							edit(e.target.value);
 							setCursor(e.target.selectionStart ?? e.target.value.length);
 						}}
 						onSelect={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
@@ -476,7 +586,12 @@ export const ChatInput = forwardRef<
 									return;
 								}
 							}
-							if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+							if (active && emptyRow && e.key === 'Escape') {
+								e.preventDefault();
+								setDismissed(`${active.trigger}${active.start}`);
+								return;
+							}
+							if (e.key !== 'Enter' || e.nativeEvent.isComposing || isTouch()) return;
 							const send = ctrlEnter ? e.ctrlKey || e.metaKey : !e.shiftKey;
 							if (send) {
 								e.preventDefault();
