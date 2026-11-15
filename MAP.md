@@ -526,7 +526,8 @@ structural summary.
   dialog's bridge.
 - **`static/`**: `status.html`/`.css`/`.js`, the progress and settings
   dialog; `static/fonts/` holds its Atkinson Hyperlegible Next and Mono
-  (latin woff2) with their OFL licences.
+  (latin woff2) with their OFL licences, and `mark.svg` is a copy of the
+  web app's `favicon.svg` (the mark) for its header.
 - **`test/fixtures/`**: `make backend` logs the progress tests replay.
 - **`electron-builder.yml`**: the `.rpm` and its fuses.
   **`scripts/build-info.mjs`** records the checkout and commit a build came

@@ -61,7 +61,7 @@ p {
 }
 header {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
 }
@@ -98,6 +98,18 @@ header {
 }
 #progress-view > * + * {
 	margin-top: 12px;
+}
+/* The mark beside the window's heading (#1115): the app's Sigma, the same
+   file as the web app's favicon. */
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.mark {
+	flex: none;
+	border-radius: 6px;
 }
 h1 {
 	margin: 0;
