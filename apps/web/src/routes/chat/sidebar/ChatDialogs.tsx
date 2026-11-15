@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link2, SquarePen } from 'lucide-react';
+import { CircleAlert, Link2, Link2Off, SquarePen } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { LoadFailed } from '@/components/common/LoadFailed';
+import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,10 +45,12 @@ type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 export const shareUrl = (shareId: string) => `${window.location.origin}${appHref(`/s/${shareId}`)}`;
 
 /**
- * Ports chat/ShareChatModal.svelte: Copy Link shares the chat as it is now
- * (again, if it was shared before, which updates the snapshot), and an
- * existing link can be deleted. Not ported: sharing to the original project's
- * community site.
+ * Ports chat/ShareChatModal.svelte: Copy link shares the chat as it is now
+ * (again, if it was shared before, which updates the snapshot), and Stop
+ * sharing deletes the link, as a button rather than a phrase in a sentence
+ * (#1006). Who can open a new link is still the owner's open question (the
+ * link starts private, as before). Not ported: sharing to the original
+ * project's community site.
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -125,7 +128,7 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		setBusy(false);
 		if (!res?.share_id) return;
 		await copyToClipboard(shareUrl(res.share_id));
-		toast.success('Copied shared chat URL to clipboard!');
+		toast.success('Link copied');
 		// A new link opens to no one but its owner, so the dialog stays to say who else may.
 		if (shared) onOpenChange(false);
 		void chat.refetch();
@@ -148,19 +151,11 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle>Share Chat</DialogTitle>
+					<DialogTitle>Share chat</DialogTitle>
 					<DialogDescription>
-						{shared ? (
-							<>
-								You have shared this chat before.{' '}
-								<Button type="button" variant="link" className="h-auto p-0" onClick={unshare}>
-									Delete this link
-								</Button>{' '}
-								to stop sharing, or update it with the chat as it is now. Choose below who can open it.
-							</>
-						) : (
-							'Messages you send after creating your link won’t be shared. Once the link exists, you choose who can open it.'
-						)}
+						{shared
+							? 'This chat has a link. Copying it again updates the link with the chat as it is now. Choose below who can open it.'
+							: 'Messages you send after creating your link won’t be shared. Once the link exists, you choose who can open it.'}
 					</DialogDescription>
 				</DialogHeader>
 				{shared && grants !== null && (
@@ -174,8 +169,13 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 					/>
 				)}
 				<DialogFooter>
+					{shared && (
+						<Button variant="outline" className="text-danger sm:mr-auto" onClick={unshare}>
+							<Link2Off aria-hidden /> Stop sharing
+						</Button>
+					)}
 					<Button onClick={copy} disabled={busy || chat.isLoading}>
-						<Link2 className="size-4" /> {shared ? 'Update and Copy Link' : 'Copy Link'}
+						<Link2 aria-hidden /> {shared ? 'Update and copy link' : 'Copy link'}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
@@ -369,8 +369,10 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 
 /**
  * Ports Folders/FolderModal.svelte's name and system prompt (a folder's
- * system prompt applies to every chat in it; the server adds it). Not ported:
- * the background image and the folder's knowledge files.
+ * system prompt applies to every chat in it; the server adds it), worded as
+ * the instructions they are (#1071). An empty name is said at the field
+ * (FRM-2), not in a toast. Not ported: the background image and the
+ * folder's knowledge files.
  */
 export function FolderDialog({
 	open,
@@ -381,24 +383,32 @@ export function FolderDialog({
 	const [name, setName] = useState('');
 	const [prompt, setPrompt] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [nameError, setNameError] = useState<string | null>(null);
+	const nameField = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		if (!open) return;
 		setName(folder?.name ?? '');
 		setPrompt(String(folder?.data?.system_prompt ?? ''));
+		setNameError(null);
 	}, [open, folder]);
+	const editing = Boolean(folder);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle>{folder ? 'Edit Folder' : 'Create Folder'}</DialogTitle>
-					<DialogDescription className="sr-only">Folder name and system prompt</DialogDescription>
+					<DialogTitle>{editing ? 'Edit folder' : 'New folder'}</DialogTitle>
+					<DialogDescription className="sr-only">
+						The folder's name and the instructions for its chats
+					</DialogDescription>
 				</DialogHeader>
 				<form
-					className="flex flex-col gap-3"
+					className="flex flex-col gap-4"
+					noValidate
 					onSubmit={async (e) => {
 						e.preventDefault();
 						if (!name.trim()) {
-							toast.error('Folder name cannot be empty.');
+							setNameError('Enter a name for the folder.');
+							nameField.current?.focus();
 							return;
 						}
 						setBusy(true);
@@ -408,27 +418,42 @@ export function FolderDialog({
 					}}
 				>
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="folder-name">Folder Name</Label>
+						<Label htmlFor="folder-name">Name</Label>
 						<Input
 							id="folder-name"
+							ref={nameField}
 							autoFocus
-							placeholder="Enter folder name"
 							value={name}
-							onChange={(e) => setName(e.target.value)}
+							aria-invalid={nameError ? true : undefined}
+							aria-describedby={nameError ? 'folder-name-error' : undefined}
+							onChange={(e) => {
+								setName(e.target.value);
+								if (e.target.value.trim()) setNameError(null);
+							}}
 						/>
+						{nameError && (
+							<p id="folder-name-error" className="text-dense text-danger flex items-center gap-1.5">
+								<CircleAlert aria-hidden className="size-4 shrink-0" />
+								{nameError}
+							</p>
+						)}
 					</div>
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="folder-prompt">System Prompt</Label>
+						<Label htmlFor="folder-prompt">Instructions for chats in this folder (optional)</Label>
 						<Textarea
 							id="folder-prompt"
-							placeholder="Write your model system prompt content here"
 							value={prompt}
+							aria-describedby="folder-prompt-help"
 							onChange={(e) => setPrompt(e.target.value)}
 						/>
+						<p id="folder-prompt-help" className="text-dense text-foreground-muted">
+							Added to every chat in this folder.
+						</p>
 					</div>
 					<DialogFooter>
-						<Button type="submit" disabled={busy}>
-							Save
+						<Button type="submit" disabled={busy} aria-busy={busy || undefined}>
+							{busy && <Spinner className="size-4" />}
+							{busy ? (editing ? 'Saving…' : 'Creating…') : editing ? 'Save folder' : 'Create folder'}
 						</Button>
 					</DialogFooter>
 				</form>

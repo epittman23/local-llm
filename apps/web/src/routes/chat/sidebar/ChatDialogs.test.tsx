@@ -11,7 +11,7 @@ import {
 	updateChatAccessGrants
 } from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { ShareChatDialog } from './ChatDialogs';
+import { FolderDialog, ShareChatDialog } from './ChatDialogs';
 
 const { toastError, toastSuccess, toastWarning } = vi.hoisted(() => ({
 	toastError: vi.fn(),
@@ -101,7 +101,7 @@ describe('ShareChatDialog: who can open the link (#334)', () => {
 		vi.mocked(getChatById).mockResolvedValue({ share_id: null } as never);
 		open();
 
-		await screen.findByRole('button', { name: /Copy Link/ });
+		await screen.findByRole('button', { name: /Copy link/ });
 		expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument();
 		expect(screen.queryByText(/Users with the URL will be able to view/)).not.toBeInTheDocument();
 		expect(getChatAccessGrants).not.toHaveBeenCalled();
@@ -115,13 +115,13 @@ describe('ShareChatDialog: who can open the link (#334)', () => {
 		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
 		const onOpenChange = open();
 
-		const copyLink = await screen.findByRole('button', { name: /Copy Link/ });
+		const copyLink = await screen.findByRole('button', { name: /Copy link/ });
 		await waitFor(() => expect(copyLink).toBeEnabled());
 		fireEvent.click(copyLink);
 
 		expect(await screen.findByLabelText('Visibility')).toHaveValue('private');
 		expect(onOpenChange).not.toHaveBeenCalledWith(false);
-		expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/Copied/));
+		expect(toastSuccess).toHaveBeenCalledWith('Link copied');
 	});
 
 	const options = () =>
@@ -202,9 +202,86 @@ describe('ShareChatDialog: who can open the link (#334)', () => {
 		open();
 		await screen.findByLabelText('Visibility');
 
-		fireEvent.click(screen.getByRole('button', { name: 'Delete this link' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }));
 
 		await waitFor(() => expect(toastError).toHaveBeenCalledWith('not now'));
 		expect(screen.getByLabelText('Visibility')).toHaveValue('public');
+	});
+});
+
+describe('ShareChatDialog: its words (#1006)', () => {
+	it('is titled Share chat, and stopping sharing is a button that removes the link and its access panel', async () => {
+		vi.mocked(getChatById)
+			.mockResolvedValueOnce({ share_id: 's1' } as never)
+			.mockResolvedValue({ share_id: null } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([PUBLIC_READ] as never);
+		vi.mocked(deleteSharedChatById).mockResolvedValue(true as never);
+		open();
+
+		expect(await screen.findByRole('dialog', { name: 'Share chat' })).toBeInTheDocument();
+		await screen.findByLabelText('Visibility');
+		expect(screen.getByRole('button', { name: /Update and copy link/ })).toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }));
+
+		await waitFor(() => expect(deleteSharedChatById).toHaveBeenCalledWith('t', 'c1'));
+		await waitFor(() => expect(screen.queryByLabelText('Visibility')).not.toBeInTheDocument());
+		expect(await screen.findByRole('button', { name: /^Copy link$/ })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Stop sharing' })).not.toBeInTheDocument();
+	});
+});
+
+describe('FolderDialog (#1071)', () => {
+	const show = (props: Partial<Parameters<typeof FolderDialog>[0]> = {}) => {
+		const onSave = vi.fn(async () => true);
+		const onOpenChange = vi.fn();
+		render(<FolderDialog open onOpenChange={onOpenChange} onSave={onSave} {...props} />);
+		return { onSave, onOpenChange };
+	};
+
+	it('names a new folder with one verb throughout, and says what the instructions do', () => {
+		show();
+		expect(screen.getByRole('dialog', { name: 'New folder' })).toBeInTheDocument();
+		const instructions = screen.getByLabelText('Instructions for chats in this folder (optional)');
+		expect(instructions).toHaveAccessibleDescription('Added to every chat in this folder.');
+		expect(instructions).not.toHaveAttribute('placeholder');
+		expect(screen.getByLabelText('Name')).not.toHaveAttribute('placeholder');
+		expect(screen.getByRole('button', { name: 'Create folder' })).toBeInTheDocument();
+	});
+
+	it('says an empty name at the field, not in a toast, and clears it once a name is typed (FRM-2)', async () => {
+		const { onSave } = show();
+		fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
+
+		const name = screen.getByLabelText('Name');
+		expect(name).toHaveAttribute('aria-invalid', 'true');
+		expect(name).toHaveAccessibleDescription('Enter a name for the folder.');
+		expect(name).toHaveFocus();
+		expect(toastError).not.toHaveBeenCalled();
+		expect(onSave).not.toHaveBeenCalled();
+
+		fireEvent.change(name, { target: { value: 'Travel' } });
+		expect(name).not.toHaveAttribute('aria-invalid');
+		expect(screen.queryByText('Enter a name for the folder.')).not.toBeInTheDocument();
+	});
+
+	it('saves an edited folder with its trimmed name and instructions, then closes', async () => {
+		let finish: (ok: boolean) => void = () => {};
+		const onSave = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+		const { onOpenChange } = show({
+			folder: { id: 'f1', name: 'Work', data: { system_prompt: 'Be formal' } },
+			onSave
+		});
+		expect(screen.getByRole('dialog', { name: 'Edit folder' })).toBeInTheDocument();
+		expect(screen.getByLabelText('Instructions for chats in this folder (optional)')).toHaveValue('Be formal');
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: '  Office  ' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save folder' }));
+
+		const busy = await screen.findByRole('button', { name: /Saving…/ });
+		expect(busy).toBeDisabled();
+		expect(busy).toHaveAttribute('aria-busy', 'true');
+		expect(onSave).toHaveBeenCalledWith({ name: 'Office', system_prompt: 'Be formal' });
+		finish(true);
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
 	});
 });
