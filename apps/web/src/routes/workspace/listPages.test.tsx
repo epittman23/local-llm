@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ import * as toolsApi from '@/lib/apis/tools';
 import { searchUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { FunctionsPage } from '@/routes/admin/functions/FunctionsPage';
 import { KnowledgePage } from './knowledge/KnowledgePage';
 import { ModelsPage } from './models/ModelsPage';
@@ -252,5 +253,52 @@ describe.each(cases)('$name list', (c) => {
 		fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 		await waitFor(() => expect(screen.getByRole('heading', { name: c.empty })).toBeVisible());
 		expect(localStorage.workspaceViewOption).toBe('');
+	});
+});
+
+describe('code from elsewhere says where it came from (S4-D4)', () => {
+	const toolCase = cases.find((c) => c.name === 'Tools') as Case;
+	const functionCase = cases.find((c) => c.name === 'Functions') as Case;
+
+	it.each([
+		[toolCase, 'tool', () => vi.mocked(toolsApi.getToolById)],
+		[functionCase, 'function', () => vi.mocked(functionsApi.getFunctionById)]
+	] as const)('a cloned %s carries its source to the editor', async (c, key, getById) => {
+		c.seed(c.items);
+		getById().mockResolvedValue({ id: 'x', name: c.item, content: 'class Tools: pass', meta: {} } as never);
+		renderAt(c);
+		await screen.findByText(c.item);
+		fireEvent.pointerDown(screen.getByRole('button', { name: c.menu }), { button: 0, pointerType: 'mouse' });
+		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Clone' }));
+		expect(await screen.findByText('Elsewhere')).toBeVisible();
+		expect(JSON.parse(sessionStorage[key]).source).toEqual({ kind: 'clone', from: c.item });
+		sessionStorage.removeItem(key);
+	});
+
+	it.each([
+		[toolCase, 'tool', () => vi.mocked(toolsApi.loadToolByUrl)],
+		[functionCase, 'function', () => vi.mocked(functionsApi.loadFunctionByUrl)]
+	] as const)('a %s imported from a link carries the link', async (c, key, load) => {
+		c.seed(c.items);
+		load().mockResolvedValue({ name: 'Fetched', content: 'x' } as never);
+		renderAt(c);
+		await screen.findByText(c.item);
+		if (key === 'tool') {
+			const action = useWorkspaceStore.getState().actions.find((a) => a.id === 'tools-import-link');
+			act(() => void action?.onClick?.());
+		} else {
+			fireEvent.pointerDown(screen.getByRole('button', { name: 'Open create menu' }), {
+				button: 0,
+				pointerType: 'mouse'
+			});
+			fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Import from link' }));
+		}
+		const dialog = await screen.findByRole('dialog');
+		fireEvent.change(within(dialog).getByLabelText('URL'), { target: { value: 'https://example.com/x.py' } });
+		fireEvent.submit(within(dialog).getByLabelText('URL').closest('form') as HTMLFormElement);
+		await waitFor(() =>
+			expect(JSON.parse(sessionStorage[key] ?? '{}').source).toEqual({ kind: 'link', from: 'https://example.com/x.py' })
+		);
+		sessionStorage.removeItem(key);
 	});
 });

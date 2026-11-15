@@ -90,6 +90,7 @@ export function FunctionsPage() {
 	const [showImportUrl, setShowImportUrl] = useState(false);
 	const [pendingImport, setPendingImport] = useState<File | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
+	const importedFrom = useRef('');
 
 	const list = useQuery({
 		queryKey: LIST_KEY,
@@ -178,7 +179,13 @@ export function FunctionsPage() {
 	const cloneHandler = async (fn: FunctionListItem) => {
 		const full = await fetchFull(fn);
 		if (!full) return;
-		sessionStorage.function = JSON.stringify({ ...full, id: `${full.id}_clone`, name: `${full.name} (Clone)` });
+		// S4-D4: the stash says where the code came from (`source`, P4's CodeSource), so the editor confirms code it did not write.
+		sessionStorage.function = JSON.stringify({
+			...full,
+			id: `${full.id}_clone`,
+			name: `${full.name} (Clone)`,
+			source: { kind: 'clone', from: full.name }
+		});
 		navigate(routePaths.adminFunctionsCreate);
 	};
 
@@ -244,10 +251,13 @@ export function FunctionsPage() {
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
-				loadUrl={(url) => loadFunctionByUrl(token, url)}
+				loadUrl={(url) => {
+					importedFrom.current = url;
+					return loadFunctionByUrl(token, url);
+				}}
 				successMessage="Function imported successfully"
 				onImport={(fn) => {
-					sessionStorage.function = JSON.stringify(fn);
+					sessionStorage.function = JSON.stringify({ ...fn, source: { kind: 'link', from: importedFrom.current } });
 					navigate(routePaths.adminFunctionsCreate);
 				}}
 			/>

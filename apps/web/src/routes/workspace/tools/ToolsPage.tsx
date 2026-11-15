@@ -66,6 +66,7 @@ export function ToolsPage() {
 	const [showImportUrl, setShowImportUrl] = useState(false);
 	const [pendingImport, setPendingImport] = useState<File | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
+	const importedFrom = useRef('');
 
 	const isAdmin = user?.role === 'admin';
 	const can = (key: string) => isAdmin || Boolean(user?.permissions?.workspace?.[key]);
@@ -141,7 +142,13 @@ export function ToolsPage() {
 	const cloneHandler = async (tool: ToolListItem) => {
 		const full = await fetchFull(tool);
 		if (!full) return;
-		sessionStorage.tool = JSON.stringify({ ...full, id: `${full.id}_clone`, name: `${full.name} (Clone)` });
+		// S4-D4: the stash says where the code came from (`source`, P4's CodeSource), so the editor confirms code it did not write.
+		sessionStorage.tool = JSON.stringify({
+			...full,
+			id: `${full.id}_clone`,
+			name: `${full.name} (Clone)`,
+			source: { kind: 'clone', from: full.name }
+		});
 		navigate(routePaths.workspaceToolsCreate);
 	};
 
@@ -194,10 +201,13 @@ export function ToolsPage() {
 			<ImportUrlModal
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
-				loadUrl={(url) => loadToolByUrl(token, url)}
+				loadUrl={(url) => {
+					importedFrom.current = url;
+					return loadToolByUrl(token, url);
+				}}
 				successMessage="Tool imported successfully"
 				onImport={(tool) => {
-					sessionStorage.tool = JSON.stringify(tool);
+					sessionStorage.tool = JSON.stringify({ ...tool, source: { kind: 'link', from: importedFrom.current } });
 					navigate(routePaths.workspaceToolsCreate);
 				}}
 			/>
