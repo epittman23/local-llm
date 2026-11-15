@@ -9,6 +9,10 @@ const auth = vi.hoisted(() => ({ role: 'admin' }));
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: { id: 'u1', role: auth.role } })
 }));
+const features = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+vi.mock('@/lib/stores/configStore', () => ({
+	useConfigStore: (sel: (s: unknown) => unknown) => sel({ config: { features: features.value } })
+}));
 
 const failed = (content: unknown): Message => ({
 	id: 'a',
@@ -22,6 +26,7 @@ const failed = (content: unknown): Message => ({
 
 beforeEach(() => {
 	auth.role = 'admin';
+	features.value = {};
 	useSettingsModalStore.getState().closeSettings();
 });
 afterEach(cleanup);
@@ -35,9 +40,20 @@ describe('errorDetail and errorHint', () => {
 	it('recognises a refused key and a local server that is not serving', () => {
 		expect(errorHint('Error 401: Unauthorized')).toBe('key');
 		expect(errorHint('No auth credentials found: invalid API key')).toBe('key');
+		expect(errorHint('Missing api_key')).toBe('key');
 		expect(errorHint('Cannot connect to host 127.0.0.1:8090')).toBe('local');
-		expect(errorHint('[Errno 111] Connection refused')).toBe('local');
+		expect(errorHint('Cannot connect to host localhost:8090 ssl:default [Connection refused]')).toBe('local');
 		expect(errorHint('The upstream model is overloaded.')).toBeNull();
+	});
+
+	it('gives no hint for a bare "key" or another host refusing the connection', () => {
+		expect(errorHint("unknown key 'reasoning'")).toBeNull();
+		expect(errorHint('duplicate key value violates unique constraint "chat_pkey"')).toBeNull();
+		expect(errorHint('[Errno 111] Connection refused')).toBeNull();
+		expect(
+			errorHint('Cannot connect to host openrouter.ai:443 ssl:default [Temporary failure in name resolution]')
+		).toBeNull();
+		expect(errorHint('Cannot connect to host 10.0.0.5:8090')).toBeNull();
 	});
 });
 
@@ -69,7 +85,28 @@ describe('ErrorReply', () => {
 
 	it('points a refused local connection at Benchmarks > Serve', () => {
 		show('Cannot connect to host localhost:8090');
-		expect(screen.getByText('The local server is not running. Start it from Benchmarks > Serve.')).toBeTruthy();
+		expect(
+			screen.getByText('If this is the local server, it may not be running: start it from Benchmarks > Serve.')
+		).toBeTruthy();
 		expect(screen.getByRole('link', { name: 'Open Serve' }).getAttribute('href')).toBe('/benchmarks/serve');
+	});
+
+	it('offers Open Serve only to an admin with Benchmarks on', () => {
+		auth.role = 'user';
+		show('Cannot connect to host 127.0.0.1:8090');
+		expect(screen.getByText(/If this is the local server/)).toBeTruthy();
+		expect(screen.queryByRole('link', { name: 'Open Serve' })).toBeNull();
+		cleanup();
+		auth.role = 'admin';
+		features.value = { enable_benchmarks: false };
+		show('Cannot connect to host 127.0.0.1:8090');
+		expect(screen.queryByRole('link', { name: 'Open Serve' })).toBeNull();
+	});
+
+	it('gives an offline provider no misleading hint', () => {
+		show('Cannot connect to host openrouter.ai:443 ssl:default [Temporary failure in name resolution]');
+		expect(screen.queryByText(/local server/)).toBeNull();
+		expect(screen.queryByText(/API key/)).toBeNull();
+		expect(screen.queryByRole('link', { name: 'Open Serve' })).toBeNull();
 	});
 });

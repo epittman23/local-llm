@@ -203,6 +203,13 @@ export function SidePanel({
 		},
 		onPointerUp() {
 			drag.current = null;
+		},
+		// The browser took the pointer (a touch turned into a scroll, a system gesture): the drag ends too.
+		onPointerCancel() {
+			drag.current = null;
+		},
+		onLostPointerCapture() {
+			drag.current = null;
 		}
 	};
 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,6 +50,8 @@ type Session = {
 	regenerate: (m: Message, suggestion?: string) => Promise<void>;
 	rate: (m: Message, rating: number | null, details?: FeedbackDetails | null) => Promise<void>;
 	unrate: (m: Message) => Promise<void>;
+	/** Replies whose rating is being saved or removed. */
+	ratingIds: ReadonlySet<string>;
 	runAction: (actionId: string, m: Message) => Promise<void>;
 };
 
@@ -112,10 +115,13 @@ function EditBox({ message, onDone, session }: { message: Message; onDone: () =>
  */
 function RateNote({
 	message,
+	busy,
 	onSave,
 	onClose
 }: {
 	message: Message;
+	/** The rating is being saved or removed: the note waits for it (ACT-5). */
+	busy: boolean;
 	onSave: (comment: string) => void;
 	onClose: () => void;
 }) {
@@ -146,7 +152,13 @@ function RateNote({
 				}}
 			/>
 			<div className="flex justify-end">
-				<Button size="sm" variant="outline" onClick={() => onSave(comment)}>
+				<Button
+					size="sm"
+					variant="outline"
+					aria-disabled={busy || undefined}
+					className={cn(busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed')}
+					onClick={() => !busy && onSave(comment)}
+				>
 					Save note
 				</Button>
 			</div>
@@ -234,6 +246,8 @@ export function useMessageActions(
 	);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [noteId, setNoteId] = useState<string | null>(null);
+	// The thumb last pressed: it shows the spinner while its reply's rating is saved (ACT-5).
+	const [pressedThumb, setPressedThumb] = useState<{ id: string; value: 1 | -1 } | null>(null);
 	const [deleting, setDeleting] = useState<Message | null>(null);
 	const { speakingId, speak, stop } = useReadAloud();
 	const saved = Boolean(session.chatId) && !isTemporaryChatId(session.chatId);
@@ -309,26 +323,53 @@ export function useMessageActions(
 
 		const rates = !errorOnly && saved && ratingOn !== false && canChat(user, 'rate_response');
 		// S3-D2: a thumb saves at once and says so; the other thumb switches the rating, and
-		// pressing the given one again removes it, with its note (S3-D2b).
+		// pressing the given one again removes it, with its note (S3-D2b). While either call is
+		// pending both thumbs wait, so a second press cannot add a second rating (ACT-5).
+		const busy = session.ratingIds.has(m.id);
 		const thumb = (value: 1 | -1) => {
 			const given = rating === value;
-			const name = value === 1 ? (given ? 'Rated good' : 'Good response') : given ? 'Rated bad' : 'Bad response';
+			const spinning = busy && pressedThumb?.id === m.id && pressedThumb.value === value;
+			const name = spinning
+				? given
+					? 'Removing rating…'
+					: 'Saving rating…'
+				: value === 1
+					? given
+						? 'Rated good'
+						: 'Good response'
+					: given
+						? 'Rated bad'
+						: 'Bad response';
 			return (
-				<Tip content={name}>
+				<Tip content={busy && !spinning ? `${name}: waits for the rating to save` : name}>
 					<Button
 						type="button"
 						aria-label={name}
 						aria-pressed={given}
+						aria-busy={spinning || undefined}
+						// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page.
+						aria-disabled={busy || undefined}
 						variant="ghost"
 						size="icon-sm"
-						className={cn(given && 'text-foreground bg-muted')}
+						className={cn(
+							given && 'text-foreground bg-muted',
+							busy && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed'
+						)}
 						onClick={() => {
+							if (busy) return;
+							setPressedThumb({ id: m.id, value });
 							if (!given) return void session.rate(m, value);
 							if (noteId === m.id) setNoteId(null);
 							void session.unrate(m);
 						}}
 					>
-						{value === 1 ? <ThumbsUp className="size-3.5" /> : <ThumbsDown className="size-3.5" />}
+						{spinning ? (
+							<Spinner className="size-3.5" />
+						) : value === 1 ? (
+							<ThumbsUp className="size-3.5" />
+						) : (
+							<ThumbsDown className="size-3.5" />
+						)}
 					</Button>
 				</Tip>
 			);
@@ -439,9 +480,12 @@ export function useMessageActions(
 			m.id === noteId ? (
 				<RateNote
 					message={m}
+					busy={session.ratingIds.has(m.id)}
 					onClose={() => setNoteId(null)}
 					onSave={async (comment) => {
 						setNoteId(null);
+						// A note is not a thumb press: no thumb shows the note's save as its own.
+						setPressedThumb(null);
 						await session.rate(m, null, { comment });
 					}}
 				/>

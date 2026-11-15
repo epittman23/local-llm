@@ -159,6 +159,8 @@ export function ChatPage() {
 	useOnChatSwitch(id, session.adoptedChatId, () => {
 		attachments.clear();
 		input.current?.restoreDraft();
+		// A rename made here is in the title the next chat loads; one made since in the sidebar would be hidden.
+		setRenamed(null);
 	});
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
@@ -632,7 +634,7 @@ export function ChatPage() {
 				)}
 				<ChatInput
 					ref={input}
-					draftKey={draftKeyFor(id, folderId)}
+					draftKey={user ? draftKeyFor(user.id, id, folderId) : undefined}
 					generating={session.generating}
 					queued={session.queue}
 					onRemoveQueued={session.removeQueued}

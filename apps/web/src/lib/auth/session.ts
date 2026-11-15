@@ -10,6 +10,7 @@
 import { getBackendConfig } from '@/lib/apis';
 import { getSessionUser, updateUserTimezone, userSignOut } from '@/lib/apis/auths';
 import { isServerUnreachable } from '@/lib/apis/errors';
+import { forgetOtherUsersDrafts } from '@/lib/chat/drafts';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -140,6 +141,8 @@ const installSessionWatch = () => {
 		stopTokenTimer();
 		if (state.status === 'authenticated') {
 			endReason = null;
+			// Drafts kept through an expiry belong to whoever was signed in: another account does not get them.
+			if (state.user?.id) forgetOtherUsersDrafts(state.user.id);
 			tokenTimer = setInterval(checkTokenExpiry, TOKEN_CHECK_INTERVAL_MS);
 		}
 	});

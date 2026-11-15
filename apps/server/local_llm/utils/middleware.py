@@ -4975,6 +4975,8 @@ class _StreamingReply:
         self.finish_reason: str | None = None
         # A continued reply that was stopped or cut off: how this run ends replaces those marks.
         self.clear_marks = False
+        # Set once _finish() has saved the finished reply; a cancel after that must not mark it stopped.
+        self.finished = False
         self.last_response_id = None
 
         # Joined content_parts, cached until content_parts grows
@@ -5913,6 +5915,7 @@ class _StreamingReply:
                     **finish,
                 },
             )
+        self.finished = True
 
         await clear_response_stream(self.request.app.state.redis, self.response_stream_task_id)
         await publish_chat_finished_event(
@@ -5958,7 +5961,9 @@ class _StreamingReply:
         async def save_cancelled_state():
             if cancelled:
                 await self.event_emitter({'type': 'chat:tasks:cancel'})
-            if self.save_to_chat:
+            # Already saved finished: a cancel during the outlet filters or the follow-up, title, tags and
+            # memory tasks must not rewrite the finished reply as stopped, or drop its finish_reason.
+            if self.save_to_chat and not self.finished:
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     self.metadata['chat_id'],
                     self.metadata['message_id'],

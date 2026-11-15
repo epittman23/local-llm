@@ -2132,3 +2132,36 @@ def test_a_continuation_stopped_again_is_saved_as_stopped(monkeypatch):
 
     final = [s for s in _saved(observed) if s.get('done') is True][-1]
     assert (final['stopped'], final['finish_reason']) == (True, None)
+
+
+def _cancel_during_background_tasks(monkeypatch, stream, world):
+    """Run a reply to its end, then cancel the task while the follow-up, title, tags and memory tasks run."""
+    log = []
+    _install(monkeypatch, world, log, [])
+
+    async def cancelled_background(ctx):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(middleware, 'background_tasks_handler', cancelled_background)
+    ctx = _ctx(world, {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'}, {}, None, log)
+    assert asyncio.run(_drive([stream], world, ctx, log)) == {'cancelled': True}
+    return [c[2] for c in log if c[0] == 'chats.upsert_message' and c[2].get('done') is True]
+
+
+def test_a_cancel_after_the_reply_finished_does_not_mark_it_stopped(monkeypatch):
+    """A stop pressed while the background tasks run must not rewrite a finished reply as stopped."""
+    length = sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'length'}]})
+    done_saves = _cancel_during_background_tasks(monkeypatch, [chunk('The answer is'), length, DONE], {})
+
+    assert not [s for s in done_saves if s.get('stopped')]
+    assert done_saves[-1]['finish_reason'] == 'length'
+
+
+def test_a_cancel_after_a_continued_reply_finished_keeps_its_finish_reason(monkeypatch):
+    """The continued reply's freshly saved finish_reason must not be overwritten with None by the cancel."""
+    stop = sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]})
+    done_saves = _cancel_during_background_tasks(
+        monkeypatch, [chunk(' tail'), stop, DONE], {'stored_message': STOPPED_HEAD}
+    )
+
+    assert (done_saves[-1]['stopped'], done_saves[-1]['finish_reason']) == (False, 'stop')

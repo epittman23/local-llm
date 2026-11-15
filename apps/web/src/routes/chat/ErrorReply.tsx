@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import type { Message } from '@/lib/chat/history';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { routePaths } from '@/routes/routePaths';
 
@@ -16,10 +17,14 @@ export function errorDetail(message: Message): string {
 	return typeof content === 'string' ? content.replace(STORED_PREFIX, '').trim() : '';
 }
 
-/** What to do next for the failures we recognise by their wording: a refused key, or llama-server not serving. */
+/**
+ * What to do next for the failures we recognise by their wording: a refused API key, or an
+ * error naming the local llama-server's loopback port. A bare "key" (an unknown key in a
+ * request, a duplicate key value) or another host refusing the connection gets no hint.
+ */
 export function errorHint(text: string): 'key' | 'local' | null {
-	if (/\b401\b|unauthori[sz]ed|api[ _-]?key|\bkey\b/i.test(text)) return 'key';
-	if (/connection refused|econnrefused|connect call failed|cannot connect to host|:8090\b/i.test(text)) return 'local';
+	if (/\b401\b|unauthori[sz]ed|api[ _-]?key/i.test(text)) return 'key';
+	if (/(127\.0\.0\.1|localhost):8090\b/i.test(text)) return 'local';
 	return null;
 }
 
@@ -38,6 +43,8 @@ export function ErrorReply({
 	onTryAnotherModel?: () => void;
 }) {
 	const admin = useAuthStore((s) => s.user?.role === 'admin');
+	// The sidebar's gate for Benchmarks: only then can Serve be opened.
+	const benchmarks = useConfigStore((s) => s.config?.features?.enable_benchmarks !== false);
 	const openSettings = useSettingsModalStore((s) => s.openSettings);
 	const detail = errorDetail(message);
 	const hint = errorHint(detail);
@@ -54,7 +61,7 @@ export function ErrorReply({
 				)}
 				{hint === 'local' && (
 					<p className="text-body text-foreground-muted">
-						The local server is not running. Start it from Benchmarks &gt; Serve.
+						If this is the local server, it may not be running: start it from Benchmarks &gt; Serve.
 					</p>
 				)}
 				<div className="mt-1 flex flex-wrap gap-2">
@@ -74,7 +81,7 @@ export function ErrorReply({
 							Open Connections
 						</Button>
 					)}
-					{hint === 'local' && (
+					{hint === 'local' && admin && benchmarks && (
 						<Button asChild variant="ghost" size="sm">
 							<Link to={routePaths.benchmarksServe}>Open Serve</Link>
 						</Button>

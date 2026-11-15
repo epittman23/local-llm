@@ -194,6 +194,20 @@ describe('SidePanel as a column', () => {
 		expect(handle.getAttribute('aria-valuenow')).toBe('370');
 	});
 
+	it.each([
+		['cancelled', fireEvent.pointerCancel],
+		['loses its capture', fireEvent.lostPointerCapture]
+	])('ends the drag when the pointer is %s', (_, end) => {
+		render(<Harness initiallyOpen />);
+		const handle = screen.getByRole('separator');
+		fireEvent.pointerDown(handle, { clientX: 500, pointerId: 1 });
+		fireEvent.pointerMove(handle, { clientX: 450, pointerId: 1 });
+		expect(handle.getAttribute('aria-valuenow')).toBe('370');
+		end(handle, { pointerId: 1 });
+		fireEvent.pointerMove(handle, { clientX: 300, pointerId: 1 });
+		expect(handle.getAttribute('aria-valuenow')).toBe('370');
+	});
+
 	it('moves focus to its heading on opening and back to the opener on closing (NAV-4)', () => {
 		render(<Harness />);
 		const opener = screen.getByRole('button', { name: 'Controls' });

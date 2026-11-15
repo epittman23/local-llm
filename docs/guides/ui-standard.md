@@ -523,8 +523,8 @@ alone, no internal identifier as the message. The technical detail may be
 offered behind "Details". It does not apologise and does not blame. A failed
 reply is `routes/chat/ErrorReply.tsx`: the heading 'The model didn't answer',
 the provider's own words, a next step for the causes it recognises (a refused
-key: Admin Settings > Connections; llama-server not serving: Benchmarks >
-Serve), and Retry and Try another model. An error-only reply offers no Copy,
+API key: Admin Settings > Connections; an error naming the local server's
+port, 127.0.0.1:8090: Benchmarks > Serve), and Retry and Try another model. An error-only reply offers no Copy,
 Edit, Read aloud or rating. Run on a host without the sandbox says "The code
 sandbox isn't set up on this machine", what it needs, and links the guide;
 Run is then disabled for the session with that reason (ACT-5).

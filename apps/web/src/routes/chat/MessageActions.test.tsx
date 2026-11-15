@@ -63,6 +63,7 @@ function show(message: Message, over: Partial<Session> = {}, ctx: ExtraActionsCo
 		regenerate: vi.fn(async () => undefined),
 		rate: vi.fn(async () => undefined),
 		unrate: vi.fn(async () => undefined),
+		ratingIds: new Set<string>(),
 		runAction: vi.fn(async () => undefined),
 		...over
 	};
@@ -75,6 +76,38 @@ function show(message: Message, over: Partial<Session> = {}, ctx: ExtraActionsCo
 	);
 	return session;
 }
+
+/** One reply whose session's pending ratings the test sets on each render. */
+function BusyHarness({
+	message,
+	ratingIds,
+	rate
+}: {
+	message: Message;
+	ratingIds: ReadonlySet<string>;
+	rate: Session['rate'];
+}) {
+	const session: Session = {
+		chatId: 'c1',
+		history: { messages: { u: user, [message.id]: message }, currentId: message.id },
+		editMessage: async () => undefined,
+		removeMessage: async () => undefined,
+		continueReply: async () => undefined,
+		regenerate: async () => undefined,
+		rate,
+		unrate: async () => undefined,
+		ratingIds,
+		runAction: async () => undefined
+	};
+	return (
+		<QueryClientProvider client={busyClient}>
+			<TooltipProvider>
+				<Harness message={message} session={session} ctx={{ isLast: true }} />
+			</TooltipProvider>
+		</QueryClientProvider>
+	);
+}
+const busyClient = new QueryClient();
 
 /** Opens a Radix menu the way a keyboard does (jsdom has no pointer events for it). */
 async function openMenu(name: string) {
@@ -196,6 +229,51 @@ describe('rating a reply (S3-D2)', () => {
 		expect(session.rate).not.toHaveBeenCalled();
 		expect(session.unrate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
 		expect(screen.queryByTestId('rate-note')).toBeNull();
+	});
+
+	it('makes both thumbs and the note wait while the rating is saved (ACT-5)', async () => {
+		const session = show(reply({ annotation: { rating: 1 } }), { ratingIds: new Set(['a']) });
+		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+		expect(await screen.findByTestId('rate-note')).toBeTruthy();
+		for (const name of ['Rated good', 'Bad response', 'Save note']) {
+			const button = screen.getByRole('button', { name });
+			expect(button.getAttribute('aria-disabled')).toBe('true');
+			fireEvent.click(button);
+		}
+		expect(session.rate).not.toHaveBeenCalled();
+		expect(session.unrate).not.toHaveBeenCalled();
+	});
+
+	it('shows the pressed thumb busy until its rating is saved (ACT-5)', async () => {
+		const message = reply();
+		const rate = vi.fn(async () => undefined);
+		const { rerender } = render(<BusyHarness message={message} ratingIds={new Set()} rate={rate} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Good response' }));
+		expect(rate).toHaveBeenCalledTimes(1);
+		rerender(<BusyHarness message={message} ratingIds={new Set(['a'])} rate={rate} />);
+		const saving = screen.getByRole('button', { name: 'Saving rating…' });
+		expect(saving.getAttribute('aria-busy')).toBe('true');
+		expect(saving.getAttribute('aria-disabled')).toBe('true');
+		// Still focusable: the keyboard focus stays on the thumb pressed.
+		saving.focus();
+		expect(document.activeElement).toBe(saving);
+		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-disabled')).toBe('true');
+		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-busy')).toBeNull();
+		rerender(<BusyHarness message={message} ratingIds={new Set()} rate={rate} />);
+		expect(screen.getByRole('button', { name: 'Good response' }).getAttribute('aria-disabled')).toBeNull();
+	});
+
+	it('shows no thumb busy while a note is saved after a thumb press', () => {
+		const rate = vi.fn(async () => undefined);
+		const { rerender } = render(<BusyHarness message={reply()} ratingIds={new Set()} rate={rate} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Good response' }));
+		const rated = reply({ annotation: { rating: 1 } });
+		rerender(<BusyHarness message={rated} ratingIds={new Set()} rate={rate} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save note' }));
+		rerender(<BusyHarness message={rated} ratingIds={new Set(['a'])} rate={rate} />);
+		expect(screen.queryByRole('button', { name: /Removing rating|Saving rating/ })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Rated good' }).getAttribute('aria-disabled')).toBe('true');
 	});
 
 	it('switches the rating with the other thumb', async () => {
