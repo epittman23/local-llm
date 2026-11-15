@@ -304,6 +304,58 @@ function pausedForUser(m: Message): boolean {
 	);
 }
 
+export type PendingAskUser = {
+	messageId: string;
+	callId: string;
+	questions: unknown[];
+	allowOther: boolean;
+};
+
+/** Tool arguments as an object; the server may have stringified them more than once. */
+function toolArguments(raw: unknown): Record<string, unknown> {
+	let value = raw;
+	while (typeof value === 'string') {
+		try {
+			value = JSON.parse(value);
+		} catch {
+			break;
+		}
+	}
+	return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/**
+ * The ask_user question the shown branch is waiting on, if any: a reply that
+ * paused on a `pending` ask_user call with no result yet (Chat.svelte's
+ * findPendingAskUser). With native function calling the server only stores
+ * the call and stops; nothing is sent over the socket, so the page has to ask
+ * from the stored reply.
+ */
+export function pendingAskUser(history: History): PendingAskUser | null {
+	for (const m of messagesList(history, history.currentId).reverse()) {
+		if (m.role !== 'assistant' || !Array.isArray(m.output)) continue;
+		const items = m.output as Record<string, unknown>[];
+		const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
+		const call = items.find(
+			(i) =>
+				i.type === 'function_call' &&
+				i.name === 'ask_user' &&
+				i.status === 'pending' &&
+				Boolean(i.call_id ?? i.id) &&
+				!answered.has(i.call_id ?? i.id)
+		);
+		if (!call) continue;
+		const args = toolArguments(call.arguments);
+		return {
+			messageId: m.id,
+			callId: String(call.call_id ?? call.id),
+			questions: Array.isArray(args.questions) ? args.questions : [],
+			allowOther: args.allow_other !== false
+		};
+	}
+	return null;
+}
+
 /**
  * Whether a reply is still marked as being written with nothing after it: an
  * assistant leaf that is not done and is not paused for the user. With no
