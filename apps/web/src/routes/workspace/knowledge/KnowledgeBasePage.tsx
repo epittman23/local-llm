@@ -336,7 +336,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [pendingSync, setPendingSync] = useState<DirectoryFileEntry[] | null>(null);
 	const [deletingDir, setDeletingDir] = useState<string | null>(null);
 	// Off at first: deleting a folder's files deletes their extracted text and embeddings too (#1012).
-	const [deleteContents, setDeleteContents] = useState(false);
+	// The owner kept deleting a folder's files with it by default (2026-11-15); unticking keeps them.
+	const [deleteContents, setDeleteContents] = useState(true);
 	const fileInput = useRef<HTMLInputElement>(null);
 
 	// --- drag files anywhere onto the page to upload -------------------------
@@ -808,7 +809,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 											)
 										}
 										onDeleteDirectory={(dirId) => {
-											setDeleteContents(false);
+											setDeleteContents(true);
 											setDeletingDir(dirId);
 										}}
 										onMove={move}

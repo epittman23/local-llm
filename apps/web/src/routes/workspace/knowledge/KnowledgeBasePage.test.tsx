@@ -558,7 +558,7 @@ describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
 		);
 	});
 
-	it('names the folder, keeps its files unless asked, and says which happens', async () => {
+	it('names the folder, keeps its files when asked, and says which happens', async () => {
 		vi.mocked(deleteKnowledgeDirectory).mockResolvedValue({ status: true });
 		renderPage();
 		await screen.findByText('file1.txt');
@@ -566,16 +566,16 @@ describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
 		fireEvent.click(await screen.findByText('Delete'));
 		const dialog = await screen.findByRole('alertdialog');
 		expect(dialog).toHaveTextContent('Delete the folder "Folder"?');
-		expect(dialog).toHaveTextContent('The files in them move up to the folder above.');
-		const box = screen.getByRole('checkbox', { name: 'Also delete the files inside' });
-		expect(box).not.toBeChecked();
-		fireEvent.click(box);
 		expect(dialog).toHaveTextContent('every file in them are deleted');
+		const box = screen.getByRole('checkbox', { name: 'Also delete the files inside' });
+		expect(box).toBeChecked();
+		fireEvent.click(box);
+		expect(dialog).toHaveTextContent('The files in them move up to the folder above.');
 		fireEvent.click(screen.getByRole('button', { name: 'Delete folder' }));
-		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', false));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', true));
 	});
 
-	it("moves a deleted folder's files up by default", async () => {
+	it("deletes a folder's files with it by default", async () => {
 		vi.mocked(deleteKnowledgeDirectory).mockRejectedValueOnce('kept');
 		const error = vi.spyOn(toast, 'error');
 		renderPage();
@@ -583,7 +583,7 @@ describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
 		openMenu('Folder menu');
 		fireEvent.click(await screen.findByText('Delete'));
 		fireEvent.click(await screen.findByRole('button', { name: 'Delete folder' }));
-		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', true));
+		await waitFor(() => expect(deleteKnowledgeDirectory).toHaveBeenCalledWith('t', 'kb1', 'd1', false));
 		await waitFor(() =>
 			expect(error).toHaveBeenCalledWith('Couldn\'t delete the folder "Folder".', { description: expect.anything() })
 		);
