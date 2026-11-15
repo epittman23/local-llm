@@ -170,7 +170,7 @@ describe('ChatMenu', () => {
 		expect(name).toBe('chat-Sample _ variance.md');
 		expect(blob.type).toBe('text/markdown');
 		expect(await blob.text()).toBe(
-			'# Sample / variance\n\n## You\n\nWhat is $\\sigma^2$?\n\n## Qwen\n\nThe mean square.\n'
+			'# Sample / variance\n\n## You\n\nWhat is $\\sigma^2$?\n\n---\n\n## Qwen\n\nThe mean square.\n'
 		);
 
 		fireEvent.click(await openDownload().then(() => screen.getByRole('menuitem', { name: 'Plain text (.txt)' })));

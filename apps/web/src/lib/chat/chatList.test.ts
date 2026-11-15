@@ -86,7 +86,7 @@ describe('export', () => {
 			}
 		};
 		expect(chatAsMarkdown(chat)).toBe(
-			'# Variance\n\n## You\n\nWhat is $\\sigma^2$?\n\n## Qwen reasoning\n\n$$\\sigma^2 = E[X^2]$$\n\n```python\nprint(1)\n```\n'
+			'# Variance\n\n## You\n\nWhat is $\\sigma^2$?\n\n---\n\n## Qwen reasoning\n\n$$\\sigma^2 = E[X^2]$$\n\n```python\nprint(1)\n```\n'
 		);
 	});
 	it('names a reply by its model id without a name, and an old flat record without a title', () => {
@@ -101,7 +101,7 @@ describe('export', () => {
 			}
 		};
 		expect(chatAsMarkdown(chat)).toBe(
-			'## You\n\nHi\n\n## qwen\n\nHello\n\n## Assistant\n\nAgain\n\n## system\n\nBe brief\n'
+			'## You\n\nHi\n\n---\n\n## qwen\n\nHello\n\n---\n\n## Assistant\n\nAgain\n\n---\n\n## system\n\nBe brief\n'
 		);
 		expect(chatAsText(chat)).toBe(
 			'### USER\nHi\n\n### ASSISTANT\nHello\n\n### ASSISTANT\nAgain\n\n### SYSTEM\nBe brief'

@@ -115,7 +115,8 @@ export function chatAsText(chat: SavedChat): string {
 /**
  * A chat as Markdown (#1085): its title, then a "## You" or "## <model>"
  * heading per message along the current branch, each followed by the
- * message's own source, so mathematics, tables and code stay as written.
+ * message's own source, so mathematics, tables and code stay as written. A
+ * rule separates the messages, since a reply's own headings can be "##" too.
  */
 export function chatAsMarkdown(chat: SavedChat): string {
 	const title = chat.chat?.title?.trim();
@@ -124,7 +125,8 @@ export function chatAsMarkdown(chat: SavedChat): string {
 			m.role === 'user' ? 'You' : m.role === 'assistant' ? m.modelName || m.model || 'Assistant' : String(m.role);
 		return `## ${who}\n\n${messageText(m).trim()}`;
 	});
-	return `${[title ? `# ${title}` : null, ...parts].filter(Boolean).join('\n\n')}\n`;
+	const body = parts.join('\n\n---\n\n');
+	return `${[title ? `# ${title}` : null, body].filter(Boolean).join('\n\n')}\n`;
 }
 
 /** A title safe to use in a file name. */
