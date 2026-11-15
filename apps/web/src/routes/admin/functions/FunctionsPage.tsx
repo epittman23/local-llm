@@ -404,8 +404,8 @@ export function FunctionsPage() {
 													<div className="min-w-0 truncate text-dense leading-5 group-hover:underline">{fn.name}</div>
 												</Tip>
 												{/* Drawn first, read after the name, so the row is named by its function (A11Y-2). */}
+												<span className="sr-only">, </span>
 												<div className="bg-muted text-muted-foreground order-first shrink-0 rounded-sm px-1 text-caption leading-4 uppercase">
-													<span className="sr-only">, </span>
 													{fn.type}
 												</div>
 												{fn.meta?.manifest?.version && (
