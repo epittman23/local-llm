@@ -43,6 +43,7 @@ import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { ChatTitle, RenameChatDialog } from './ChatTitle';
 import { CitationDialog } from './CitationDialog';
+import { DropOverlay, useFileDrag } from './DropOverlay';
 import { FolderHome } from './FolderHome';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { JumpToLatest } from './JumpToLatest';
@@ -435,6 +436,7 @@ export function ChatPage() {
 		/>
 	) : null;
 	const isMd = useMdUp();
+	const fileDrag = useFileDrag();
 	const iconSize = isMd ? 'icon-sm' : 'icon';
 	const modelSelector = (
 		<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
@@ -480,15 +482,19 @@ export function ChatPage() {
 		<div className="flex h-full min-h-0 w-full">
 			<div
 				className="relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
+				onDragEnter={fileDrag.onDragEnter}
+				onDragLeave={fileDrag.onDragLeave}
 				onDragOver={(e) => {
 					if (e.dataTransfer.types.includes('Files')) e.preventDefault();
 				}}
 				onDrop={(e) => {
+					fileDrag.onDrop();
 					if (!e.dataTransfer.files.length) return;
 					e.preventDefault();
 					attachments.addFiles(Array.from(e.dataTransfer.files));
 				}}
 			>
+				<DropOverlay shown={fileDrag.dragging} />
 				{prefs.backgroundImageUrl && (
 					// The user's chat background, behind a wash that keeps the text readable.
 					<div

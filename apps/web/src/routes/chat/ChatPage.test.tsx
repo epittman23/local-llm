@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellBarSlotContext } from '@/components/layout/ShellBarSlot';
@@ -71,6 +71,20 @@ describe('ChatPage header', () => {
 		show();
 		const row = screen.getByRole('button', { name: 'Controls' }).closest('header');
 		expect(row?.hasAttribute('data-page-top')).toBe(true);
+	});
+
+	it('shows the drop zone while files are dragged over the chat, and clears it on a drop (#1084)', () => {
+		show();
+		const column = screen.getByRole('textbox', { name: 'Message' }).closest('.isolate') as HTMLElement;
+		const drag = (type: 'dragEnter' | 'drop') => {
+			const event = createEvent[type](column);
+			Object.defineProperty(event, 'dataTransfer', { value: { types: ['Files'], files: [] } });
+			fireEvent(column, event);
+		};
+		drag('dragEnter');
+		expect(screen.getByText('Drop files to attach them to your message')).toBeInTheDocument();
+		drag('drop');
+		expect(screen.queryByText('Drop files to attach them to your message')).toBeNull();
 	});
 
 	it('toggles the Controls panel', () => {
