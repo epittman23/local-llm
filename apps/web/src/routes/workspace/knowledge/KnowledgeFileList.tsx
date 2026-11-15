@@ -283,6 +283,8 @@ export function KnowledgeFileList({
 					<div
 						key={item.itemId}
 						role="listitem"
+						// Retry turns the row's buttons into a spinner; focus waits on the row (A11Y-1).
+						tabIndex={-1}
 						data-upload-status={item.status}
 						className={cn(
 							'flex w-full gap-2 rounded-xl px-2 py-2',
@@ -303,7 +305,15 @@ export function KnowledgeFileList({
 								</div>
 								<div className="flex shrink-0 items-center gap-1 max-sm:ms-5">
 									{!item.duplicate && (
-										<Button variant="outline" size="sm" type="button" onClick={() => onRetryUpload(item.itemId)}>
+										<Button
+											variant="outline"
+											size="sm"
+											type="button"
+											onClick={(e) => {
+												(e.currentTarget.closest('[role="listitem"]') as HTMLElement | null)?.focus();
+												onRetryUpload(item.itemId);
+											}}
+										>
 											<RotateCw aria-hidden />
 											Retry
 											<span className="sr-only"> {item.name}</span>

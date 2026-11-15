@@ -70,7 +70,10 @@ describe('/ui workspace demos', () => {
 		);
 		expect(screen.getByText("It was uploaded but couldn't be processed into searchable text.")).toBeInTheDocument();
 		expect(screen.getByText('Details')).toBeInTheDocument();
-		expect(screen.getAllByRole('button', { name: /^Retry / })).toHaveLength(1);
+		const retry = screen.getByRole('button', { name: /^Retry / });
+		fireEvent.click(retry);
+		// The row's buttons give way to a spinner on Retry, so focus waits on the row.
+		expect(document.activeElement).toBe(retry.closest('[role="listitem"]'));
 		fireEvent.click(screen.getByRole('button', { name: 'Dismiss sample-variance.md' }));
 		expect(screen.queryByRole('button', { name: 'Dismiss sample-variance.md' })).toBeNull();
 		fireEvent.click(screen.getByRole('button', { name: 'Show the rows again' }));
