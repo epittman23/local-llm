@@ -7,6 +7,72 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-15** (latest): **The workspace: the owner's decisions for the UX
+  review's section 4 (#1116), and editors that guard unsaved work.**
+  - **Multi-user chrome is hidden while the install has one account (#1013,
+    S4-D1 A).** The owner on each row, the 'View: All / Created by you /
+    Shared with you' filter (Models, Knowledge, Prompts, Skills, Tools and
+    Admin > Functions), the Access control in the editors and Knowledge's
+    create dialog, and knowledge files' "By <owner>" are hidden while there
+    is one account (`useSingleUser` in `routes/workspace/workspaceAccess.ts`,
+    counted by `GET /users/search`'s total). A view stored from before is
+    ignored. Everything returns once a second account exists. Stored access
+    grants, data and API are untouched.
+  - **What a new model starts with (#1008, S4-D2).** The owner asked for
+    memory, web search and the code interpreter on, the rest at discretion: a
+    new workspace model starts with Memory, Web search, Code interpreter,
+    File upload, File context, Citations, Status updates, Usage and Builtin
+    tools on, and Vision, Image generation and Terminal off
+    (`NEW_MODEL_CAPABILITIES` in `modelEditorLogic.ts`). It stores no
+    picture (null, so its initials show), and a custom parameter row starts
+    blank, and an unnamed one is left out. Admin wins: Admin Settings >
+    Models defaults, once saved, apply on top of a new model's starting
+    capabilities (saving that panel stores the full set, Vision, Image
+    generation and Terminal included). `DEFAULT_CAPABILITIES`, which Admin >
+    Models reads, is unchanged, and existing models are untouched.
+  - **Features switched off stay listed, disabled (#1008, S4-D3 B).** In the
+    model editor a capability, default feature or builtin tool whose feature
+    is off in `/api/config` is shown disabled with where to turn it on
+    ('Image generation is off in Admin Settings > Images.'). Stored values
+    are kept.
+  - **Only code from elsewhere is acknowledged (#1098, S4-D4 A).** A tool or
+    function written in the editor saves without the acknowledgement. A
+    clone, a link import or a JSON file import asks once, in one sentence
+    naming its source: 'Create tool?' / 'Create function?' on the create
+    page, and 'Import tools?' / 'Import functions?' on the list, whose button
+    repeats the action. The warning line under the editor stays. The
+    `source` travels in the `sessionStorage` hand-off and never reaches the
+    server. Frontend only.
+  - **Shift-click delete is removed (#1012, S4-D5 A).** On Models, Prompts,
+    Skills, Tools and Admin > Functions every delete confirms, naming the
+    thing and what is lost, with a danger button that repeats the action.
+    Admin > Models keeps its Shift shortcut for now (the admin section).
+  - **Removing a file from a knowledge base asks first (#906, S4-D6 A):**
+    'Remove "<file>"? Its extracted text and embeddings are deleted.', with
+    "Remove file" in the danger colour. Frontend only.
+  - **A failed knowledge upload stays for the visit (#907, S4-D7 A)** in the
+    list with its reason, Retry and Dismiss; it is gone after a reload. The
+    server still discards the failed record. Frontend only.
+  - **The owner kept deleting a folder's files by default.** Deleting a
+    knowledge-base folder still deletes the files inside unless "Also delete
+    the files inside" is unticked, which moves them up a level; the
+    confirmation now says which happens.
+  - **Editors guard unsaved work (#905, FRM-3).** The model, skill, tool and
+    function editors ask 'Discard changes?' before Back,
+    a workspace tab, the browser's Back or Forward, or a change of `?id=`
+    would lose changes, and the browser asks before a reload or tab close
+    (not in the desktop app): `lib/ui/useUnsavedChanges.ts`. Settings'
+    identical question now has a danger button too.
+  - **Behaviour changes without a decision.** A knowledge base's name and
+    description no longer save themselves a second after typing; they save
+    from an "Edit name and description" dialog. A knowledge file opens on
+    its rendered text, and editing the extracted text is behind "Edit text".
+    The Models row's second line is the base model and tags; the model's
+    description is no longer shown on the row. Knowledge's description is
+    optional. A tool's or function's "Valves" are its "Settings". Code Black
+    cannot parse is not sent, and the editor marks the line. Below 640 px an
+    editor does not repeat the workspace header and tabs. Failure toasts in
+    the workspace keep the server's words behind Details.
 - **2026-11-15** (later): **The chat: the owner's decisions for the UX review's
   section 3 (#1116), and canvas Phase 1, the side panel.**
   - **The Arena model is off (#990, S3-D1 A).** `ENABLE_EVALUATION_ARENA_MODELS`

@@ -384,7 +384,11 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   STA-4), `Gone` (something that no longer exists, said in place, NAV-3),
   `FilterSelects` (the workspace
   View/Tag selectors), `ListChrome` (search bar, sortable header, empty
-  state shared by every workspace list), `PagePagination`, `Tags`, and the access-control
+  state and match count shared by every workspace list), `failureToast.tsx`
+  (`toastFailure`: a failure toast with the server's words behind Details,
+  FBK-4), `EditorError.tsx` (an editor's inline parse or save error, and the
+  words for save failures, FBK-1), `codeSource.ts` (where imported code came
+  from, and the one-sentence acknowledgement, S4-D4), `PagePagination`, `Tags`, and the access-control
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
   `MemberSelector`, `AccessButton`), `CodeEditor` (CodeMirror, lazy-loaded
   by its one caller), `Valves`/`ValvesModal`, `ManifestModal`,
@@ -408,6 +412,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   plus hand-written ones the interface standard defines: `row-button.tsx`
   (ACT-7), `image-button.tsx` (ACT-8), `page-header.tsx` (LAY-5),
   `app-mark.tsx` (the product's mark, WRD-3), `save-bar.tsx` (FRM-3),
+  `field-message.tsx` (the help or error line under a field, FRM-2),
   `segmented-control.tsx` (FRM-4) and `command.tsx` (a list chosen from by
   keyboard, on cmdk, NAV-5).
 - **`src/routes/`** — react-router. `AppRouter.tsx` has two kinds of
@@ -420,7 +425,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   holds all eight Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
-  and `workspaceAccess.ts` (the pure permission rules, unit-tested); the
+  and `workspaceAccess.ts` (the pure permission rules, unit-tested, and
+  `useSingleUser`, whether the install has one account, which hides the
+  multi-user chrome, S4-D1); the
   five sections mount beneath it as they are ported. `workspace/prompts/`
   is the first: list, create dialog, and the edit page with version history;
   `workspace/skills/` and `workspace/tools/` follow (tools: list with
@@ -507,7 +514,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   holds the count of bypasses to **`ui-standard-baseline.json`** (in
   `apps/web/`), which only shrinks. **`src/lib/ui/contrast.ts`** is
   the WCAG arithmetic both use; `src/lib/ui/useCopy.ts` is every copy
-  control's "Copied" and refusal toast (FBK-3); `src/lib/ui/pageTitle.ts` is the route
+  control's "Copied" and refusal toast (FBK-3); `src/lib/ui/useUnsavedChanges.ts`
+  is a page's 'Discard changes?' guard (FRM-3); `src/lib/ui/pageTitle.ts` is the route
   `handle` and title format (LAY-5), `focusSource.ts` marks keyboard focus
   (A11Y-1) and `returnFocus.ts` returns focus to what opened a layer (NAV-4). **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of the
