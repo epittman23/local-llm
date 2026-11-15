@@ -5,3 +5,4 @@
 // them -- see that file's own comment.
 declare const APP_VERSION: string;
 declare const APP_BUILD_HASH: string;
+declare const APP_BUILD_DATE: string;

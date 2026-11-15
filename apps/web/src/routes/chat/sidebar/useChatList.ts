@@ -9,7 +9,19 @@ import { useAuthStore } from '@/lib/stores/authStore';
 // ['chats'] (what useChatSession does when a reply ends or a title arrives)
 // refreshes the list, the pinned chats and every open folder at once.
 
+// A failed load throws, so the sidebar shows it in place (STA-4) instead of
+// an empty list.
+
 const asList = (r: unknown) => (Array.isArray(r) ? (r as ChatListItem[]) : []);
+
+/** How many chats a page of the main list holds (routers/chats.py, `get_session_user_chat_list`). */
+export const CHAT_PAGE_SIZE = 60;
+/** How many chats a page of a folder holds (routers/chats.py, `get_chat_list_by_folder_id`). */
+export const FOLDER_PAGE_SIZE = 10;
+
+/** The next page's number, or undefined when the last page was short, so there is no more (#1070). */
+export const nextPage = (size: number) => (last: unknown[], pages: unknown[][]) =>
+	last.length < size ? undefined : pages.length + 1;
 
 export function useChatPages() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -17,9 +29,8 @@ export function useChatPages() {
 		queryKey: ['chats', 'list'],
 		enabled: Boolean(token),
 		initialPageParam: 1,
-		queryFn: async ({ pageParam }) => asList(await getChatList(token, pageParam).catch(() => [])),
-		// The server pages until it returns an empty page.
-		getNextPageParam: (last, pages) => (last.length === 0 ? undefined : pages.length + 1)
+		queryFn: async ({ pageParam }) => asList(await getChatList(token, pageParam)),
+		getNextPageParam: nextPage(CHAT_PAGE_SIZE)
 	});
 }
 
@@ -28,7 +39,7 @@ export function usePinnedChats() {
 	return useQuery({
 		queryKey: ['chats', 'pinned'],
 		enabled: Boolean(token),
-		queryFn: async () => asList(await getPinnedChatList(token).catch(() => []))
+		queryFn: async () => asList(await getPinnedChatList(token))
 	});
 }
 
@@ -38,19 +49,22 @@ export function useFolderChats(folderId: string, enabled: boolean) {
 		queryKey: ['chats', 'folder', folderId],
 		enabled: enabled && Boolean(token),
 		initialPageParam: 1,
-		queryFn: async ({ pageParam }) => asList(await getChatListByFolderId(token, folderId, pageParam).catch(() => [])),
-		getNextPageParam: (last, pages) => (last.length === 0 ? undefined : pages.length + 1)
+		queryFn: async ({ pageParam }) => asList(await getChatListByFolderId(token, folderId, pageParam)),
+		getNextPageParam: nextPage(FOLDER_PAGE_SIZE)
 	});
 }
 
-/** The folders, under ['folders'] (the key Automations already reads). */
-export function useFolders() {
+/**
+ * The folders, under ['folders'] (the key Automations already reads). Asked
+ * for only when `enabled` (folders on, and this account may use them), since
+ * the server answers 403 otherwise.
+ */
+export function useFolders(enabled: boolean) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	return useQuery({
 		queryKey: ['folders'],
-		enabled: Boolean(token),
-		queryFn: async () =>
-			((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token).catch(() => null))
+		enabled: enabled && Boolean(token),
+		queryFn: async () => ((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token))
 	});
 }
 

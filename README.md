@@ -190,7 +190,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/auth` | Sign in / sign up / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>`, `?reason=expired` (shows "Your session expired. Sign in to continue where you left off."; set when a session ends while the app is open, or when the token saved from an earlier visit is refused on load) |
 | `/error` | "Can't reach the server": shown when the server does not answer. Asks it again every 3 s and on "Try now"; once it answers, loads `?redirect=<path>` (a same-origin app path; home if none) |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
-| `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
+| `/s/<share-id>` | Read-only shared chat with a header (app name, when it was captured, Continue this chat for a signed-in viewer). The id comes from a chat's Share dialog (sidebar chat menu > Share, which first asks whether anyone with the link or only you (signed in) can open it). To the owner of the shared chat it also offers Open original and Stop sharing (which asks first). A link that no longer works says so in place, signed in or not (the server answers 404); a share that exists but is not open sends an anonymous viewer to sign in and back, and tells a signed-in one it is not open to them |
 | `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch, and a mock of the planned canvas ([docs/plans/canvas.md](docs/plans/canvas.md)). Static; shows nothing from the backend |
 
 ### Signed-in
@@ -241,22 +241,26 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/automations/<id>` | Detail and runs |
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
 | `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
-| `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
+| `/home` | Start page: New chat, quick actions (Search chats always; New note and Calendar only when that feature is available), pinned chats then the 8 most recent outside folders, and today's calendar events. Linked from the sidebar as Home |
 | `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent once the models load, with any `?load-url=` page attached, unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
-| `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id |
-| `/folders/<folderId>` | A new chat inside that folder (a missing folder sends you to `/`) |
+| `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id. A chat that no longer exists says so in place and keeps the address |
+| `/folders/<folderId>` | The folder's page: its name, instructions and chats, above a message box that starts a chat in the folder. A missing folder says so in place |
 
 **Automation schedules:** switching an automation off and on re-anchors a rule that does not state its own time to the moment it is switched back on: rows saved before #825, and rules without `BYHOUR`/`BYMINUTE` or a `DTSTART`, take their time from then (and a weekly rule without `BYDAY` its weekday). A rule that states its time keeps it. The schedule picker always writes `BYHOUR`/`BYMINUTE`, and for a weekly rule with no day chosen, `BYDAY` for the weekday of the save.
 
 A workspace section you lack permission for redirects you to `/`.
 
 **Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
-admin, `?settings=admin:<tab>` opens the modal on that admin tab and the param
-is removed from the URL. Personal tab ids (plain `?settings=<tab>`, anyone):
-`general`, `interface`, `notifications`, `shortcuts`, `connections`, `tools`
-(Integrations), `personalization`, `audio`, `data_controls`,
+admin, `?settings=admin:<tab>` opens the modal on that admin tab. The
+parameter stays in the address while the modal is open (a tab change replaces
+it, so a reload reopens the same tab); closing removes it, and Back closes the
+modal, asking first if the open tab has unsaved changes. Personal tab ids
+(plain `?settings=<tab>`, anyone): `general`, `interface`, `notifications`,
+`shortcuts`, `connections`, `personalization`, `audio`, `data_controls`,
 `archived_chats`, `account`, `about`; some are shown only when the backend and
-your permissions allow them. Admin tab ids (`admin:<tab>`): `general`,
+your permissions allow them. `tools` (personal tool and terminal servers) is
+hidden until chats use personal servers (#1090), so `?settings=tools` opens
+General. Admin tab ids (`admin:<tab>`): `general`,
 `authentication`, `connections`, `models`, `evaluations`, `integrations`,
 `documents`, `web`, `code-execution`, `interface`, `audio`, `images`,
 `pipelines`, `db`, `subagents`, `analytics`. An unknown tab falls back to the
@@ -265,7 +269,9 @@ first one listed; a non-admin asking for an admin tab gets no modal.
 ### Anything else
 
 Any path not listed above falls into the router's catch-all, `NotFound`,
-which never navigates on its own and renders a 404 page.
+inside the app shell (so an anonymous visitor is sent to sign in first). It
+never navigates on its own and shows "Page not found" with Go home and Search
+chats.
 
 ### Backend URLs
 

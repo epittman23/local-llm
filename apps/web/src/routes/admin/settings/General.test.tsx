@@ -37,6 +37,16 @@ const renderTab = async () => {
 };
 
 describe('General settings', () => {
+	it('names the app URL in the app’s words, and gives this app’s build, not the upstream version (#1003, WRD-2)', async () => {
+		await renderTab();
+		expect(screen.getByLabelText('App URL')).toBeInTheDocument();
+		expect(screen.queryByText('WebUI URL')).toBeNull();
+		expect(screen.getByText('Build')).toBeInTheDocument();
+		expect(screen.getByText(new RegExp(`· ${APP_BUILD_DATE}$`))).toBeInTheDocument();
+		expect(screen.getByText('Derived from Open WebUI v0.11.3 (see NOTICE).')).toBeInTheDocument();
+		expect(screen.queryByText('Version')).toBeNull();
+	});
+
 	it('shows the memory system context switch only while memories are on', async () => {
 		await renderTab();
 		const context = screen.getByRole('switch', { name: /Memory System Context/ });

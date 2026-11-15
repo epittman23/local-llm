@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link2, MessageSquare, Search } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { CircleAlert, Copy, Globe, Link2, Link2Off, Lock, RefreshCw, SquarePen } from 'lucide-react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandLoading } from '@/components/ui/command';
 import {
 	Dialog,
 	DialogContent,
@@ -17,8 +20,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Textarea } from '@/components/ui/textarea';
-import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
+import {
+	type AccessGrant,
+	DROPPED_GRANTS_WARNING,
+	grantsDropped,
+	hasAnyoneReadGrant,
+	hasPublicReadGrant,
+	setVisibility
+} from '@/lib/access/accessGrants';
 import {
 	deleteSharedChatById,
 	getChatAccessGrants,
@@ -27,40 +38,82 @@ import {
 	shareChatById,
 	updateChatAccessGrants
 } from '@/lib/apis/chats';
+import { searchUsers } from '@/lib/apis/users';
 import type { ChatListItem, Folder } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { copyToClipboard } from '@/lib/utils';
+import { getTimeRange } from '@/lib/utils/api-helpers';
+import { shownTime } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { appHref } from '@/routes/routePaths';
+import { useChatPages } from './useChatList';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 
 /** The public link to a shared chat (the app's own /s/<id> page). */
 export const shareUrl = (shareId: string) => `${window.location.origin}${appHref(`/s/${shareId}`)}`;
 
+type Audience = 'anyone' | 'me';
+
+/** What each answer to "Who can open the link" means, shown under the choice. */
+const AUDIENCE_HELP: Record<Audience | '', string> = {
+	'': 'Anyone with the link: no sign-in needed. Only me: it opens only while you are signed in, such as on your other devices.',
+	anyone: 'Anyone you send the link to can read this chat without signing in.',
+	me: 'The link opens only while you are signed in, such as on your other devices.'
+};
+
+/** Why "Anyone with the link" cannot be chosen (ACT-5). */
+const BLOCKED_HELP = 'Your sharing permissions do not allow links that anyone can open.';
+
 /**
- * Ports chat/ShareChatModal.svelte: Copy Link shares the chat as it is now
- * (again, if it was shared before, which updates the snapshot), and an
- * existing link can be deleted. Not ported: sharing to the original project's
- * community site.
+ * Ports chat/ShareChatModal.svelte, asking first (#1006, S2-D2): before a link
+ * exists the dialog asks who can open it, "Anyone with the link" or "Only me
+ * (signed in)", with nothing preselected and nothing created until one is
+ * chosen. Then it shows the link in a read-only field with Copy link, Update
+ * snapshot (shares the chat again as it is now) and Stop sharing.
+ *
+ * The answer is stored as the share's access grants (#334) through the
+ * existing routes: "anyone" is the `anyone:*` read grant (`getVisibility`'s
+ * "open"), "only me" is no grant, since the shared-chat route always serves a
+ * share to its owner. A share made with the old dialog may instead hold the
+ * `user:*` read grant (every signed-in account): that is said as it is, with
+ * neither answer chosen and a way to make it only the owner's. The users-and-groups list is shown only when more than
+ * one account exists (WRD-4), counted by GET /users/search's `total`. Not
+ * ported: sharing to the original project's community site.
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	const canShareOpen = Boolean(user?.permissions?.sharing?.open_chats) || isAdmin;
 	const chat = useQuery({
 		queryKey: ['chat-share', chatId],
 		enabled: open,
 		queryFn: async () => (await getChatById(token, chatId)) as { share_id?: string | null }
 	});
-	const [busy, setBusy] = useState(false);
-	const shared = Boolean(chat.data?.share_id);
+	const shareId = chat.data?.share_id ?? null;
+	const shared = Boolean(shareId);
+	// Several accounts make users and groups worth granting; one account never does.
+	const accounts = useQuery({
+		queryKey: ['account-count'],
+		enabled: open && shared,
+		queryFn: async () => ((await searchUsers(token)) as { total?: number } | null)?.total ?? 1
+	});
+	const severalAccounts = (accounts.data ?? 1) > 1;
 
-	// Who can open the link (#334). A share starts private: the shared-chat route
-	// serves it only to its owner and the users and groups granted read here, as
-	// ShareChatModal.svelte's AccessControl panel set them.
+	// The answer before a link exists: nothing until the owner picks one.
+	const [choice, setChoice] = useState<Audience | ''>('');
+	const [busy, setBusy] = useState<'create' | 'update' | null>(null);
+	useEffect(() => {
+		if (open) setChoice('');
+	}, [open]);
+	const copyButton = useRef<HTMLButtonElement>(null);
+	const focusCopy = useRef(false);
+	const ids = useId();
+
+	// Who can open the link as stored (#334). A new share starts with no grant: only its owner.
 	const [grants, setGrants] = useState<AccessGrant[] | null>(null);
-	// What the server last said it stored: the panel goes back to it when a save fails.
+	// What the server last said it stored: the choice goes back to it when a save fails.
 	const saved = useRef<AccessGrant[]>([]);
 	useEffect(() => {
 		if (!open || !shared) return;
@@ -76,6 +129,14 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 			current = false;
 		};
 	}, [open, shared, token, chatId]);
+
+	// After a link is created its Copy link button takes the focus the Create button had.
+	useEffect(() => {
+		if (shared && focusCopy.current) {
+			focusCopy.current = false;
+			copyButton.current?.focus();
+		}
+	}, [shared]);
 
 	// Shown at once. Each save waits for the one before it, so the server applies
 	// them in order: it replaces the grants wholesale, and two in flight together
@@ -111,19 +172,55 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		return saveChain.current;
 	};
 
-	const copy = async () => {
-		setBusy(true);
+	const create = async () => {
+		if (!choice) return;
+		setBusy('create');
 		const res = (await shareChatById(token, chatId).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		})) as { share_id?: string } | null;
-		setBusy(false);
-		if (!res?.share_id) return;
-		await copyToClipboard(shareUrl(res.share_id));
-		toast.success('Copied shared chat URL to clipboard!');
-		// A new link opens to no one but its owner, so the dialog stays to say who else may.
-		if (shared) onOpenChange(false);
-		void chat.refetch();
+		if (!res?.share_id) {
+			setBusy(null);
+			return;
+		}
+		// The link exists and opens to its owner alone; "anyone" is granted next, and
+		// the link is copied only once the server says it stored that grant.
+		let stored: AccessGrant[] = [];
+		if (choice === 'anyone') {
+			const ok = await updateChatAccessGrants(token, chatId, setVisibility([], 'open')).then(
+				() => true,
+				() => false
+			);
+			const readBack = ok ? await getChatAccessGrants(token, chatId).catch(() => null) : null;
+			stored = Array.isArray(readBack) ? (readBack as AccessGrant[]) : [];
+		}
+		accessSaves.current += 1;
+		saved.current = stored;
+		setGrants(stored);
+		focusCopy.current = true;
+		if (choice === 'anyone' && !hasAnyoneReadGrant(stored)) {
+			toast.error('The link was created, but only you can open it: opening it to anyone was not saved.');
+		} else {
+			await copyToClipboard(shareUrl(res.share_id));
+			toast.success('Link copied');
+		}
+		// Busy until the dialog knows the link exists, or Create could be pressed again (ACT-5).
+		await chat.refetch();
+		setBusy(null);
+	};
+	const copyLink = async () => {
+		if (!shareId) return;
+		await copyToClipboard(shareUrl(shareId));
+		toast.success('Link copied');
+	};
+	const updateSnapshot = async () => {
+		setBusy('update');
+		const res = (await shareChatById(token, chatId).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		})) as { share_id?: string } | null;
+		setBusy(null);
+		if (res?.share_id) toast.success('Snapshot updated: the link shows the chat as it is now');
 	};
 	const unshare = async () => {
 		const deleted = await deleteSharedChatById(token, chatId).then(
@@ -135,53 +232,201 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 			accessSaves.current += 1;
 			saved.current = [];
 			setGrants(null);
+			setChoice('');
 		}
 		void chat.refetch();
 	};
 
+	// A link every signed-in account may open (`user:*`), from the old dialog: neither answer.
+	const everyAccount = shared && grants !== null && !hasAnyoneReadGrant(grants) && hasPublicReadGrant(grants);
+	// Before a link exists the owner's pick; after, what is stored.
+	const audience: Audience | '' = shared
+		? grants === null || everyAccount
+			? ''
+			: hasAnyoneReadGrant(grants)
+				? 'anyone'
+				: 'me'
+		: choice;
+	const pick = (next: Audience) => {
+		if (!shared) setChoice(next);
+		else if (grants !== null) void saveAccess(setVisibility(grants, next === 'anyone' ? 'open' : 'private'));
+	};
+	const anyoneBlocked = !canShareOpen && audience !== 'anyone';
+	const help = `${AUDIENCE_HELP[audience]}${anyoneBlocked ? ` ${BLOCKED_HELP}` : ''}`;
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			{/* OVL-1: 32 rem, a short form; the two answers then fit side by side. */}
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Share Chat</DialogTitle>
+					<DialogTitle>Share chat</DialogTitle>
 					<DialogDescription>
-						{shared ? (
-							<>
-								You have shared this chat before.{' '}
-								<Button type="button" variant="link" className="h-auto p-0" onClick={unshare}>
-									Delete this link
-								</Button>{' '}
-								to stop sharing, or update it with the chat as it is now. Choose below who can open it.
-							</>
-						) : (
-							'Messages you send after creating your link won’t be shared. Once the link exists, you choose who can open it.'
-						)}
+						{shared
+							? 'The link shows the chat as it was when it was last shared. Update the snapshot to add what was said since.'
+							: 'The link will show the chat as it is now. Messages you send later are not in it until you update the snapshot.'}
 					</DialogDescription>
 				</DialogHeader>
-				{shared && grants !== null && (
-					<AccessControl
-						accessGrants={grants}
-						onChange={(next) => void saveAccess(next)}
-						accessRoles={['read']}
-						sharePublic={Boolean(user?.permissions?.sharing?.public_chats) || isAdmin}
-						shareOpen={Boolean(user?.permissions?.sharing?.open_chats) || isAdmin}
-						shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-					/>
-				)}
+				<div className="flex min-w-0 flex-col gap-4">
+					<div>
+						<p id={`${ids}-who`} className="text-foreground-strong font-strong mb-1.5">
+							Who can open the link
+						</p>
+						<SegmentedControl<Audience | ''>
+							aria-labelledby={`${ids}-who`}
+							aria-describedby={`${ids}-who-help`}
+							value={audience}
+							onValueChange={(v) => v && pick(v)}
+							// On a phone the icons go, so each answer stays on one line.
+							className="w-full max-sm:[&_svg]:hidden sm:grid sm:grid-cols-2"
+							options={[
+								{ value: 'anyone', label: 'Anyone with the link', icon: Globe, disabled: anyoneBlocked },
+								{ value: 'me', label: 'Only me (signed in)', icon: Lock }
+							]}
+						/>
+						{everyAccount ? (
+							<div className="mt-1 flex flex-wrap items-center gap-x-2">
+								<p id={`${ids}-who-help`} className="text-foreground-muted text-dense">
+									All signed-in accounts can open this link.{anyoneBlocked && ` ${BLOCKED_HELP}`}
+								</p>
+								<Button
+									variant="link"
+									className="px-0"
+									onClick={() => grants && void saveAccess(setVisibility(grants, 'private'))}
+								>
+									Make it only me
+								</Button>
+							</div>
+						) : (
+							<p id={`${ids}-who-help`} className="text-foreground-muted mt-1 text-dense">
+								{help}
+							</p>
+						)}
+					</div>
+					{shareId && (
+						<div className="min-w-0">
+							<Label htmlFor={`${ids}-url`}>Link</Label>
+							<div className="mt-1.5 flex min-w-0 gap-2">
+								<Input
+									id={`${ids}-url`}
+									readOnly
+									value={shareUrl(shareId)}
+									onFocus={(e) => e.currentTarget.select()}
+									className="min-w-0 flex-1"
+								/>
+								<Button ref={copyButton} variant="outline" onClick={copyLink}>
+									<Copy aria-hidden /> Copy link
+								</Button>
+							</div>
+						</div>
+					)}
+					{shared && severalAccounts && grants !== null && (
+						<AccessControl
+							accessGrants={grants}
+							onChange={(next) => void saveAccess(next)}
+							accessRoles={['read']}
+							showVisibility={false}
+							shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
+						/>
+					)}
+				</div>
 				<DialogFooter>
-					<Button onClick={copy} disabled={busy || chat.isLoading}>
-						<Link2 className="size-4" /> {shared ? 'Update and Copy Link' : 'Copy Link'}
-					</Button>
+					{shared ? (
+						<>
+							<Button variant="outline" className="text-danger sm:mr-auto" onClick={unshare}>
+								<Link2Off aria-hidden /> Stop sharing
+							</Button>
+							<Button
+								variant="outline"
+								onClick={updateSnapshot}
+								disabled={busy !== null}
+								aria-busy={busy === 'update' || undefined}
+							>
+								{busy === 'update' ? <Spinner className="size-3.5" /> : <RefreshCw aria-hidden />}
+								{busy === 'update' ? 'Updating…' : 'Update snapshot'}
+							</Button>
+						</>
+					) : (
+						<>
+							{!choice && (
+								<p id={`${ids}-why`} className="text-foreground-muted self-center text-dense sm:mr-auto">
+									Choose who can open the link first.
+								</p>
+							)}
+							<Button
+								onClick={create}
+								disabled={!choice || busy !== null || chat.isLoading}
+								aria-describedby={choice ? undefined : `${ids}-why`}
+								aria-busy={busy === 'create' || undefined}
+							>
+								{busy === 'create' ? <Spinner className="size-3.5" /> : <Link2 aria-hidden />}
+								{busy === 'create' ? 'Creating…' : 'Create and copy link'}
+							</Button>
+						</>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);
 }
 
+/** The chats in `list`, under their time headings ("Today", "Previous 7 days"), in the order they came. */
+export function groupByTime(list: ChatListItem[]): [string, ChatListItem[]][] {
+	const groups = new Map<string, ChatListItem[]>();
+	for (const chat of list) {
+		const label = chat.time_range ?? getTimeRange(chat.updated_at ?? 0);
+		groups.set(label, [...(groups.get(label) ?? []), chat]);
+	}
+	return [...groups];
+}
+
+/** A search that already names its own `archived:` filter gets no second, archived-only search. */
+const archivedQuery = (q: string) => (/(^|\s)archived:/.test(q) ? '' : `${q} archived:true`);
+
+/** How many recent chats the empty search offers. */
+const RECENT_COUNT = 8;
+/** The command list's value for the New chat item, and for an archived chat (kept apart from a live one's id). */
+const NEW_CHAT = 'new-chat';
+const archivedValue = (chat?: ChatListItem) => (chat ? `archived:${chat.id}` : undefined);
+
+/** One chat in the search list: its title, the matching text when there is any, and when it was last changed. */
+function ChatOption({ chat, archived, onOpen }: { chat: ChatListItem; archived?: boolean; onOpen: () => void }) {
+	const snippet = typeof chat.snippet === 'string' && chat.snippet ? chat.snippet : null;
+	const time = chat.updated_at ? shownTime(chat.updated_at) : null;
+	return (
+		<CommandItem value={archived ? archivedValue(chat) : chat.id} onSelect={onOpen} className="items-start">
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className="flex min-w-0 items-center gap-2">
+					<span className="truncate" title={chat.title}>
+						{chat.title}
+					</span>
+					{archived && (
+						<Badge variant="secondary" className="shrink-0">
+							Archived
+						</Badge>
+					)}
+				</span>
+				{snippet && <span className="text-dense text-foreground-muted line-clamp-1">{snippet}</span>}
+			</span>
+			{time && (
+				<time dateTime={time.iso} title={time.exact} className="text-caption text-foreground-muted shrink-0 pt-0.5">
+					{time.label}
+				</time>
+			)}
+		</CommandItem>
+	);
+}
+
 /**
- * Ports layout/SearchModal.svelte's search: chats matching the text (the
- * server also understands `tag:`, `folder:`, `pinned:` and similar filters),
- * newest first; choosing one opens it.
+ * Ports layout/SearchModal.svelte's search (NAV-5): a command list the arrow
+ * keys move through and Enter opens, with the first result highlighted.
+ * Before anything is typed it offers the most recent chats outside folders
+ * (the server's main list, which leaves out pinned chats and chats in
+ * folders), saying so while they load or when they fail. Results are
+ * grouped by time, each with the matching text and its date; archived chats
+ * that match come last, marked, from a second search with the server's own
+ * `archived:true` filter; when that half fails it says so below the rest.
+ * The server also understands `tag:`, `folder:` and
+ * `pinned:`, which the footer says.
  */
 export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -191,61 +436,149 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	useEffect(() => {
 		if (!open) setQuery('');
 	}, [open]);
+	const search = (text: string) => async () =>
+		((await getChatListBySearchText(token, text, 1)) ?? []) as ChatListItem[];
 	const results = useQuery({
 		queryKey: ['chats', 'search', q],
 		enabled: open && q.length > 0,
-		queryFn: async () => ((await getChatListBySearchText(token, q, 1).catch(() => [])) ?? []) as ChatListItem[]
+		queryFn: search(q)
 	});
+	const archivedText = archivedQuery(q);
+	const archived = useQuery({
+		queryKey: ['chats', 'search', archivedText],
+		enabled: open && q.length > 0 && archivedText.length > 0,
+		queryFn: search(archivedText)
+	});
+	const recent = useChatPages();
+	const recentChats = (recent.data?.pages[0] ?? []).slice(0, RECENT_COUNT);
+
 	const go = (path: string) => {
 		onOpenChange(false);
 		navigate(path);
 	};
+	const typing = query.trim() !== q;
+	const found = results.data ?? [];
+	const foundArchived = archivedText ? (archived.data ?? []) : [];
+	const archivedFailed = Boolean(archivedText) && archived.isError;
+	const groups = groupByTime(found);
+
+	// cmdk highlights the first item only when its own filter runs; results that
+	// arrive from the server would otherwise start with nothing highlighted, and
+	// Enter would do nothing. The first item shown is highlighted instead.
+	const first = !q ? (recentChats[0]?.id ?? NEW_CHAT) : (groups[0]?.[1][0]?.id ?? archivedValue(foundArchived[0]));
+	const [highlighted, setHighlighted] = useState('');
+	useEffect(() => setHighlighted(first ?? ''), [first]);
+
+	let body: ReactNode;
+	if (!q) {
+		body = (
+			<>
+				{recent.isLoading ? (
+					<CommandLoading label="Loading recent chats">
+						<div aria-hidden className="flex flex-col gap-2 px-2 py-2">
+							{[0, 1, 2].map((i) => (
+								<div key={i} className="bg-surface-3 h-8 animate-pulse rounded-lg" />
+							))}
+						</div>
+					</CommandLoading>
+				) : recent.isError && !recent.data ? (
+					<LoadFailed
+						what="recent chats"
+						error={recent.error}
+						onRetry={() => void recent.refetch()}
+						retrying={recent.isFetching}
+					/>
+				) : recentChats.length > 0 ? (
+					<CommandGroup heading="Recent chats">
+						{recentChats.map((c) => (
+							<ChatOption key={c.id} chat={c} onOpen={() => go(`/c/${c.id}`)} />
+						))}
+					</CommandGroup>
+				) : (
+					<p className="text-dense text-foreground-muted px-2 py-1.5">
+						Recent chats outside folders appear here. Type to search all your chats.
+					</p>
+				)}
+				<CommandGroup>
+					<CommandItem value={NEW_CHAT} onSelect={() => go('/')}>
+						<SquarePen aria-hidden /> New chat
+					</CommandItem>
+				</CommandGroup>
+			</>
+		);
+	} else if (results.isError) {
+		body = (
+			<LoadFailed
+				what="search results"
+				error={results.error}
+				onRetry={() => void results.refetch()}
+				retrying={results.isFetching}
+			/>
+		);
+	} else if (typing || results.isLoading) {
+		body = (
+			<CommandLoading label="Searching chats">
+				<div aria-hidden className="flex flex-col gap-2 px-2 py-2">
+					{[0, 1, 2].map((i) => (
+						<div key={i} className="bg-surface-3 h-8 animate-pulse rounded-lg" />
+					))}
+				</div>
+			</CommandLoading>
+		);
+	} else if (!found.length && !foundArchived.length && !archivedFailed) {
+		body = (
+			<div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
+				<p className="text-foreground-muted">No chats match “{q}”.</p>
+				<Button variant="outline" size="sm" onClick={() => setQuery('')}>
+					Clear search
+				</Button>
+			</div>
+		);
+	} else {
+		body = (
+			<>
+				{groups.map(([label, chats]) => (
+					<CommandGroup key={label} heading={label}>
+						{chats.map((c) => (
+							<ChatOption key={c.id} chat={c} onOpen={() => go(`/c/${c.id}`)} />
+						))}
+					</CommandGroup>
+				))}
+				{foundArchived.length > 0 && (
+					<CommandGroup heading="Archived">
+						{foundArchived.map((c) => (
+							<ChatOption key={c.id} chat={c} archived onOpen={() => go(`/c/${c.id}`)} />
+						))}
+					</CommandGroup>
+				)}
+				{archivedFailed && (
+					<div role="alert" className="text-dense text-foreground-muted flex items-center gap-2 px-2 py-1.5">
+						Couldn't search archived chats.
+						<Button variant="ghost" size="xs" onClick={() => void archived.refetch()} disabled={archived.isFetching}>
+							{archived.isFetching ? 'Trying again…' : 'Try again'}
+						</Button>
+					</div>
+				)}
+			</>
+		);
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg p-3">
+			<DialogContent className="gap-2 p-3 sm:max-w-lg" showCloseButton={false}>
 				<DialogHeader className="sr-only">
 					<DialogTitle>Search chats</DialogTitle>
 					<DialogDescription>Search your chats by text or filters</DialogDescription>
 				</DialogHeader>
-				<div className="relative">
-					<Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-					<Input
-						autoFocus
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-						placeholder="Search"
-						aria-label="Search chats"
-						className="pl-8"
-					/>
-				</div>
-				<div className="max-h-96 overflow-y-auto" role="listbox" aria-label="Search results">
-					{!q ? (
-						<Button type="button" variant="ghost" className="w-full justify-start" onClick={() => go('/')}>
-							<MessageSquare className="size-4" /> Start a new conversation
-						</Button>
-					) : results.isLoading ? (
-						<div className="flex justify-center py-6">
-							<Spinner className="size-4" />
-						</div>
-					) : !results.data?.length ? (
-						<p className="text-muted-foreground px-2 py-6 text-center text-sm">No results found</p>
-					) : (
-						results.data.map((c) => (
-							<Button
-								key={c.id}
-								type="button"
-								role="option"
-								aria-selected={false}
-								variant="ghost"
-								className="w-full justify-between"
-								onClick={() => go(`/c/${c.id}`)}
-							>
-								<span className="truncate">{c.title}</span>
-								<span className="text-muted-foreground shrink-0 text-xs">{c.time_range}</span>
-							</Button>
-						))
-					)}
-				</div>
+				<Command shouldFilter={false} loop label="Search chats" value={highlighted} onValueChange={setHighlighted}>
+					<CommandInput value={query} onValueChange={setQuery} placeholder="Search chats" />
+					<CommandList label="Search results" className="mt-2">
+						{body}
+					</CommandList>
+					<p className="text-caption text-foreground-muted border-border-divider mt-2 border-t px-1 pt-2">
+						↑↓ to move · Enter to open · Filters: tag: folder: pinned:
+					</p>
+				</Command>
 			</DialogContent>
 		</Dialog>
 	);
@@ -253,8 +586,10 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 
 /**
  * Ports Folders/FolderModal.svelte's name and system prompt (a folder's
- * system prompt applies to every chat in it; the server adds it). Not ported:
- * the background image and the folder's knowledge files.
+ * system prompt applies to every chat in it; the server adds it), worded as
+ * the instructions they are (#1071). An empty name is said at the field
+ * (FRM-2), not in a toast. Not ported: the background image and the
+ * folder's knowledge files.
  */
 export function FolderDialog({
 	open,
@@ -265,24 +600,32 @@ export function FolderDialog({
 	const [name, setName] = useState('');
 	const [prompt, setPrompt] = useState('');
 	const [busy, setBusy] = useState(false);
+	const [nameError, setNameError] = useState<string | null>(null);
+	const nameField = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		if (!open) return;
 		setName(folder?.name ?? '');
 		setPrompt(String(folder?.data?.system_prompt ?? ''));
+		setNameError(null);
 	}, [open, folder]);
+	const editing = Boolean(folder);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>{folder ? 'Edit Folder' : 'Create Folder'}</DialogTitle>
-					<DialogDescription className="sr-only">Folder name and system prompt</DialogDescription>
+					<DialogTitle>{editing ? 'Edit folder' : 'New folder'}</DialogTitle>
+					<DialogDescription className="sr-only">
+						The folder's name and the instructions for its chats
+					</DialogDescription>
 				</DialogHeader>
 				<form
-					className="flex flex-col gap-3"
+					className="flex flex-col gap-4"
+					noValidate
 					onSubmit={async (e) => {
 						e.preventDefault();
 						if (!name.trim()) {
-							toast.error('Folder name cannot be empty.');
+							setNameError('Enter a name for the folder.');
+							nameField.current?.focus();
 							return;
 						}
 						setBusy(true);
@@ -292,27 +635,41 @@ export function FolderDialog({
 					}}
 				>
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="folder-name">Folder Name</Label>
+						<Label htmlFor="folder-name">Name</Label>
 						<Input
 							id="folder-name"
-							autoFocus
-							placeholder="Enter folder name"
+							ref={nameField}
 							value={name}
-							onChange={(e) => setName(e.target.value)}
+							aria-invalid={nameError ? true : undefined}
+							aria-describedby={nameError ? 'folder-name-error' : undefined}
+							onChange={(e) => {
+								setName(e.target.value);
+								if (e.target.value.trim()) setNameError(null);
+							}}
 						/>
+						{nameError && (
+							<p id="folder-name-error" className="text-dense text-danger flex items-center gap-1.5">
+								<CircleAlert aria-hidden className="size-4 shrink-0" />
+								{nameError}
+							</p>
+						)}
 					</div>
 					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="folder-prompt">System Prompt</Label>
+						<Label htmlFor="folder-prompt">Instructions for chats in this folder (optional)</Label>
 						<Textarea
 							id="folder-prompt"
-							placeholder="Write your model system prompt content here"
 							value={prompt}
+							aria-describedby="folder-prompt-help"
 							onChange={(e) => setPrompt(e.target.value)}
 						/>
+						<p id="folder-prompt-help" className="text-dense text-foreground-muted">
+							Added to every chat in this folder.
+						</p>
 					</div>
 					<DialogFooter>
-						<Button type="submit" disabled={busy}>
-							Save
+						<Button type="submit" disabled={busy} aria-busy={busy || undefined}>
+							{busy && <Spinner className="size-4" />}
+							{busy ? (editing ? 'Saving…' : 'Creating…') : editing ? 'Save folder' : 'Create folder'}
 						</Button>
 					</DialogFooter>
 				</form>

@@ -1,15 +1,41 @@
 // The theme picker's apply step (Settings/General.svelte's applyTheme), for
-// this app's class-based tokens: `dark` for dark and OLED dark, plus `oled`
-// (pure black surfaces, see styles/global.css) for OLED; "system" follows the
-// OS. The choice lives in localStorage.theme, which Base.astro reads before
-// first paint.
+// this app's class-based tokens: `dark` for dark and black, plus `oled`
+// (pure black surfaces, see styles/standard.css) for black; "system" follows
+// the OS. The choice lives in localStorage.theme, which Base.astro reads
+// before first paint; it is also saved with the account (#1089,
+// lib/settings/useThemeChoice.ts), and AppShell applies the account's
+// choice when it differs from this browser's.
 
+import { Circle, Monitor, Moon, Sun } from 'lucide-react';
+
+/**
+ * The four themes, named in words with a line icon each (WRD-6, #1089), as
+ * Settings and the user menu offer them: "Black" is the standard's own name
+ * for pure black surfaces, stored as `oled-dark` as it always was.
+ */
 export const THEMES = [
-	{ id: 'system', label: '⚙️ System' },
-	{ id: 'dark', label: '🌑 Dark' },
-	{ id: 'oled-dark', label: '🌃 OLED Dark' },
-	{ id: 'light', label: '☀️ Light' }
+	{ id: 'system', label: 'System', icon: Monitor },
+	{ id: 'dark', label: 'Dark', icon: Moon },
+	{ id: 'oled-dark', label: 'Black', icon: Circle },
+	{ id: 'light', label: 'Light', icon: Sun }
 ] as const;
+
+export type ThemeId = (typeof THEMES)[number]['id'];
+
+/** Whether `value` (a stored setting, say) names one of the four themes. */
+export function isThemeId(value: unknown): value is ThemeId {
+	return THEMES.some((t) => t.id === value);
+}
+
+const themeListeners = new Set<() => void>();
+
+/** Calls `listener` after every applyTheme; the returned function stops it (for useSyncExternalStore). */
+export function subscribeTheme(listener: () => void): () => void {
+	themeListeners.add(listener);
+	return () => {
+		themeListeners.delete(listener);
+	};
+}
 
 /**
  * The theme of a browser that has never chosen one. Dark, by the owner's
@@ -50,6 +76,7 @@ export function applyTheme(theme: string) {
 		// --page in each theme (styles/standard.css).
 		root.classList.contains('oled') ? '#000000' : root.classList.contains('dark') ? '#121916' : '#f8f7f2'
 	);
+	for (const listener of themeListeners) listener();
 }
 
 let systemThemeListenerInstalled = false;

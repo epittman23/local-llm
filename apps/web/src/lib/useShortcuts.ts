@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { getUserSettings } from '@/lib/apis/users';
-import { type KeybindingsMap, Shortcut, matchKeybinding, resolveKeybindings } from '@/lib/shortcuts';
 import { useUserSettings } from '@/lib/settings/userSettings';
+import { type KeybindingsMap, matchKeybinding, resolveKeybindings, Shortcut } from '@/lib/shortcuts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
@@ -126,7 +126,7 @@ export function useShortcuts() {
 					break;
 				case Shortcut.OPEN_SETTINGS:
 					event.preventDefault();
-					if (modal.open) modal.closeSettings();
+					if (modal.open) modal.requestClose();
 					else modal.openSettings();
 					break;
 				case Shortcut.SHOW_SHORTCUTS:
@@ -134,7 +134,15 @@ export function useShortcuts() {
 					modal.openSettings('shortcuts');
 					break;
 				case Shortcut.CLOSE_MODAL:
-					if (modal.open) modal.closeSettings();
+					// Escape itself is left to the layer on top (Radix closes only that one,
+					// NAV-4): closing Settings here also closed it under a confirmation or a
+					// menu (#950). Bound to another key, it presses Escape for that layer.
+					if (event.key !== 'Escape') {
+						event.preventDefault();
+						(document.activeElement ?? document.body).dispatchEvent(
+							new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+						);
+					}
 					break;
 				case Shortcut.OPEN_MODEL_SELECTOR:
 					click('#model-selector-model-button');

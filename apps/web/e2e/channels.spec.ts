@@ -568,12 +568,15 @@ test('home links to what the user may use; a folder opens a chat inside it', asy
 	await mockWorkspaceBackend(page, { role: 'user', features: { enable_notes: true, enable_calendar: true } });
 	await page.route('**/api/v1/folders/f1', (route) => json(route, { id: 'f1', name: 'Research' }));
 	await page.route('**/api/models*', (route) => json(route, { data: [] }));
-	await page.route('**/api/v1/folders/missing', (route) => json(route, { detail: 'Folder not found' }, 404));
+	await page.route('**/api/v1/folders/missing', (route) =>
+		json(route, { detail: "We could not find what you're looking for :/" }, 404)
+	);
 	await page.goto('/home');
-	await expect(page.getByRole('navigation', { name: 'Home' }).getByRole('link')).toHaveText(['Notes']);
+	await expect(page.getByRole('list', { name: 'Quick actions' }).getByRole('link')).toHaveText(['New note']);
 	await page.goto('/folders/f1');
-	await expect(page.getByTestId('chat-folder')).toHaveText('Research');
-	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
+	await expect(page.getByRole('heading', { level: 1, name: 'Research' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'New chat in Research');
 	await page.goto('/folders/missing');
-	await expect(page).toHaveURL(/localhost:5174\/$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'This folder no longer exists.' })).toBeVisible();
+	await expect(page).toHaveURL(/\/folders\/missing$/);
 });

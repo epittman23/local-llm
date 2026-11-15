@@ -1,5 +1,9 @@
+import { CircleAlert, Eye, EyeOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { Tip } from '@/components/common/Tip';
+import { BootSplash } from '@/components/layout/BootSplash';
+import { AppMark } from '@/components/ui/app-mark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,7 +60,11 @@ export function AuthPage() {
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [onboarding, setOnboarding] = useState(false);
+	const [showPassword, setShowPassword] = useState(false);
 	const ranOnce = useRef(false);
+	const nameField = useRef<HTMLInputElement>(null);
+	const emailField = useRef<HTMLInputElement>(null);
+	const passwordField = useRef<HTMLInputElement>(null);
 
 	const form = searchParams.get('form');
 	const redirectParam = safeRedirect(searchParams.get('redirect'));
@@ -88,6 +96,11 @@ export function AuthPage() {
 			await finishSignIn(await userSignIn(email, password));
 		} catch (err) {
 			setError(String(err));
+			// The password is what is most often wrong: selected, so typing replaces it.
+			requestAnimationFrame(() => {
+				passwordField.current?.focus();
+				passwordField.current?.select();
+			});
 		}
 	};
 
@@ -198,23 +211,27 @@ export function AuthPage() {
 	const oauthProviders = Object.keys(config?.oauth?.providers ?? {});
 	const showLoginFields = config?.features?.enable_login_form || !!form;
 	const trustedOrNoAuth = (config?.features?.auth_trusted_header ?? false) || config?.features?.auth === false;
+	const formShown = authStatus !== 'pending' && !!config && !onboarding && !trustedOrNoAuth && showLoginFields;
 
-	if (authStatus === 'pending' || !config) {
-		return (
-			<div className="flex h-screen w-full items-center justify-center">
-				<p className="text-muted-foreground text-sm">Loading…</p>
-			</div>
-		);
-	}
+	// The first field to type in has focus (#1004): Email, Password when the
+	// browser has already filled Email, or Name when signing up.
+	useEffect(() => {
+		if (!formShown) return;
+		if (mode === 'signup') nameField.current?.focus();
+		else if (emailField.current?.value) passwordField.current?.focus();
+		else emailField.current?.focus();
+	}, [formShown, mode]);
+
+	// STA-2: the boot splash's look while the server's config arrives, never a bare "Loading…".
+	if (authStatus === 'pending' || !config) return <BootSplash />;
 
 	if (onboarding) {
 		return (
 			<main className="flex h-screen w-full items-center justify-center px-10 text-center">
 				<div className="flex max-w-md flex-col items-center gap-4">
+					<AppMark size={32} />
 					<h1 className="text-heading font-title tracking-tight">Welcome to {WEBUI_NAME}</h1>
-					<p className="text-muted-foreground text-sm">
-						Get started by creating the first admin account for this instance.
-					</p>
+					<p className="text-foreground-muted">Get started by creating the first admin account for this instance.</p>
 					<Button
 						onClick={() => {
 							setOnboarding(false);
@@ -237,10 +254,14 @@ export function AuthPage() {
 	}
 
 	return (
-		<main className="flex h-screen w-full items-center justify-center px-10">
-			<div className="w-full max-w-md">
+		<main className="flex min-h-svh w-full flex-col px-4">
+			{/* A third of the free space above and two below on a phone, where the keyboard rises; centred from sm up. */}
+			<div aria-hidden className="flex-1" />
+			<div className="mx-auto w-full max-w-sm">
 				<form className="flex flex-col justify-center" onSubmit={submitHandler}>
-					<h1 className="text-heading font-title mb-4 text-center tracking-tight">
+					{/* WRD-3: the product's mark above its name (#1004, #1065). */}
+					<AppMark size={32} className="mx-auto mb-3" />
+					<h1 className="text-heading font-title mb-6 text-center tracking-tight">
 						{config?.onboarding
 							? `Get started with ${WEBUI_NAME}`
 							: mode === 'signin'
@@ -258,20 +279,24 @@ export function AuthPage() {
 					)}
 
 					{error && (
-						<div className="border-destructive/20 bg-destructive/10 text-destructive mb-3 rounded-lg border px-3 py-2 text-sm">
-							{error}
+						<div
+							role="alert"
+							className="border-destructive/20 bg-destructive/10 text-destructive mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-dense"
+						>
+							<CircleAlert aria-hidden className="mt-px size-4 shrink-0" />
+							<span>{error}</span>
 						</div>
 					)}
 
 					{showLoginFields && (
-						<div className="mt-2 flex flex-col gap-3">
+						<div className="flex flex-col gap-4">
 							{mode === 'signup' && (
-								<div className="flex flex-col gap-1 text-left">
+								<div className="flex flex-col gap-1.5 text-left">
 									<Label htmlFor="name">Name</Label>
 									<Input
 										id="name"
+										ref={nameField}
 										autoComplete="name"
-										placeholder="Enter Your Full Name"
 										value={name}
 										onChange={(e) => setName(e.target.value)}
 										required
@@ -279,40 +304,56 @@ export function AuthPage() {
 								</div>
 							)}
 
-							<div className="flex flex-col gap-1 text-left">
+							<div className="flex flex-col gap-1.5 text-left">
 								<Label htmlFor="email">Email</Label>
 								<Input
 									id="email"
+									ref={emailField}
 									type="email"
 									autoComplete="email"
-									placeholder="Enter Your Email"
+									placeholder="you@example.com"
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									required
 								/>
 							</div>
 
-							<div className="flex flex-col gap-1 text-left">
+							<div className="flex flex-col gap-1.5 text-left">
 								<Label htmlFor="password">Password</Label>
-								<Input
-									id="password"
-									type="password"
-									autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-									placeholder="Enter Your Password"
-									value={password}
-									onChange={(e) => setPassword(e.target.value)}
-									required
-								/>
+								<div className="relative">
+									<Input
+										id="password"
+										ref={passwordField}
+										type={showPassword ? 'text' : 'password'}
+										autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+										value={password}
+										onChange={(e) => setPassword(e.target.value)}
+										className="pe-11"
+										required
+									/>
+									<Tip content={showPassword ? 'Hide password' : 'Show password'}>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon-sm"
+											className="absolute inset-y-0 end-1 my-auto"
+											aria-label={showPassword ? 'Hide password' : 'Show password'}
+											aria-controls="password"
+											onClick={() => setShowPassword((v) => !v)}
+										>
+											{showPassword ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+										</Button>
+									</Tip>
+								</div>
 							</div>
 
 							{mode === 'signup' && config?.features?.enable_signup_password_confirmation && (
-								<div className="flex flex-col gap-1 text-left">
-									<Label htmlFor="confirm-password">Confirm Password</Label>
+								<div className="flex flex-col gap-1.5 text-left">
+									<Label htmlFor="confirm-password">Confirm password</Label>
 									<Input
 										id="confirm-password"
-										type="password"
+										type={showPassword ? 'text' : 'password'}
 										autoComplete="new-password"
-										placeholder="Confirm Your Password"
 										value={confirmPassword}
 										onChange={(e) => setConfirmPassword(e.target.value)}
 										required
@@ -322,21 +363,23 @@ export function AuthPage() {
 						</div>
 					)}
 
-					<div className="mt-5">
+					<div className="mt-6">
 						{showLoginFields && (
 							<>
-								<Button type="submit" className="w-full" disabled={submitting}>
+								<Button type="submit" className="w-full" disabled={submitting} aria-busy={submitting || undefined}>
 									{submitting
-										? 'Please wait…'
+										? mode === 'signin'
+											? 'Signing in…'
+											: 'Creating account…'
 										: mode === 'signin'
 											? 'Sign in'
 											: config?.onboarding
-												? 'Create Admin Account'
-												: 'Create Account'}
+												? 'Create admin account'
+												: 'Create account'}
 								</Button>
 
 								{config?.features?.enable_signup && !config?.onboarding && (
-									<div className="mt-4 text-center text-sm">
+									<div className="mt-4 text-center">
 										{mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
 										<Button
 											type="button"
@@ -355,7 +398,7 @@ export function AuthPage() {
 
 				{oauthProviders.length > 0 && (
 					<div className="mt-4 flex flex-col gap-2">
-						{showLoginFields && <div className="text-muted-foreground my-2 text-center text-sm">or</div>}
+						{showLoginFields && <div className="text-foreground-muted my-2 text-center">or</div>}
 						{oauthProviders.map((provider) => (
 							<Button
 								key={provider}
@@ -372,6 +415,7 @@ export function AuthPage() {
 					</div>
 				)}
 			</div>
+			<div aria-hidden className="flex-2 sm:flex-1" />
 		</main>
 	);
 }

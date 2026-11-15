@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	createAPIKey,
 	deleteAPIKey,
@@ -69,6 +70,8 @@ export default function Account() {
 	const [loadFailed, setLoadFailed] = useState(false);
 	const [customGender, setCustomGender] = useState(false);
 	const [rows, setRows] = useState<VariableRow[]>([]);
+	// The profile and variables as saved: what Discard changes goes back to (#951).
+	const [saved, setSaved] = useState<{ profile: Profile; rows: VariableRow[] } | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
 	// The password fields belong to a form of their own (#260), so Enter in one
@@ -120,15 +123,18 @@ export default function Account() {
 			if (!live) return;
 			// Saving sends the whole profile and every variable, so a part that didn't load would be overwritten.
 			setLoadFailed(failed);
-			setProfile({
+			const loaded = {
 				name: u.name ?? '',
 				profile_image_url: u.profile_image_url ?? '',
 				bio: u.bio ?? '',
 				gender: u.gender ?? '',
 				date_of_birth: u.date_of_birth ?? ''
-			});
+			};
+			const loadedRows = variableRows((vars as { variables?: unknown } | null)?.variables);
+			setProfile(loaded);
 			setCustomGender(!GENDERS.includes(u.gender ?? ''));
-			setRows(variableRows((vars as { variables?: unknown } | null)?.variables));
+			setRows(loadedRows);
+			setSaved({ profile: loaded, rows: loadedRows });
 			if (canApiKeys) await loadAPIKey(() => live);
 		})();
 		return () => {
@@ -155,11 +161,13 @@ export default function Account() {
 				gender: profile.gender || null,
 				date_of_birth: profile.date_of_birth || null
 			});
-			const saved = await updateUserVariables(token, variables);
+			const savedVariables = await updateUserVariables(token, variables);
 			if (updated && user)
 				setSession(token, { ...user, name: profile.name, profile_image_url: profile.profile_image_url });
-			setRows(variableRows((saved as { variables?: unknown } | null)?.variables ?? variables));
-			toast.success('Settings saved successfully!');
+			const savedRows = variableRows((savedVariables as { variables?: unknown } | null)?.variables ?? variables);
+			setRows(savedRows);
+			setSaved({ profile, rows: savedRows });
+			toast.success('Profile saved');
 		} catch (e) {
 			toast.error(`${e}`);
 		}
@@ -210,12 +218,21 @@ export default function Account() {
 	};
 
 	const set = (patch: Partial<Profile>) => profile && setProfile({ ...profile, ...patch });
+	const dirty = Boolean(saved) && JSON.stringify({ profile, rows }) !== JSON.stringify(saved);
+	const discard = () => {
+		if (!saved) return;
+		setProfile(saved.profile);
+		setRows(saved.rows);
+		setCustomGender(!GENDERS.includes(saved.profile.gender ?? ''));
+	};
 
 	return (
 		<SettingsForm
 			title="Account"
 			onSubmit={save}
 			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
 			loading={!profile}
 			disabled={loadFailed}
 			after={canPassword && <form id={passwordForm} aria-label="Change Password" hidden onSubmit={submitPassword} />}
@@ -260,47 +277,85 @@ export default function Account() {
 								onChange={(e) => set({ name: e.target.value })}
 							/>
 						</SettingField>
-						<SettingField label="Bio" htmlFor="account-bio">
+						{/* Bio, gender and birth date are not a profile anyone sees: each fills a
+						    variable in any prompt that uses it (utils/task.py), so each says which (#1088). */}
+						<SettingField
+							label="Bio"
+							optional
+							htmlFor="account-bio"
+							descriptionId="account-bio-help"
+							description={
+								<>
+									Fills <code>{'{{USER_BIO}}'}</code> in any prompt that uses it.
+								</>
+							}
+						>
 							<SettingTextarea
 								id="account-bio"
 								rows={2}
 								value={profile.bio ?? ''}
-								placeholder="Share your background and interests"
+								aria-describedby="account-bio-help"
 								onChange={(e) => set({ bio: e.target.value })}
 							/>
 						</SettingField>
-						<SettingField label="Gender" htmlFor="account-gender">
-							<div className="flex flex-col gap-1">
-								<select
-									id="account-gender"
-									className="border-input h-8 rounded-md border bg-transparent px-2 text-xs"
-									value={customGender ? 'custom' : (profile.gender ?? '')}
-									onChange={(e) => {
-										const v = e.target.value;
+						<SettingField
+							label="Gender"
+							optional
+							htmlFor="account-gender"
+							descriptionId="account-gender-help"
+							description={
+								<>
+									Fills <code>{'{{USER_GENDER}}'}</code> in any prompt that uses it.
+								</>
+							}
+						>
+							<div className="flex flex-col gap-1.5">
+								<Select
+									value={customGender ? 'custom' : profile.gender || 'unset'}
+									onValueChange={(v) => {
 										setCustomGender(v === 'custom');
-										set({ gender: v === 'custom' ? '' : v });
+										set({ gender: v === 'custom' || v === 'unset' ? '' : v });
 									}}
 								>
-									<option value="">Prefer not to say</option>
-									<option value="female">Female</option>
-									<option value="male">Male</option>
-									<option value="custom">Custom</option>
-								</select>
+									<SelectTrigger id="account-gender" aria-describedby="account-gender-help" className="w-56 max-w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{/* The shared Select cannot hold an empty value; "unset" stands for none. */}
+										<SelectItem value="unset">Prefer not to say</SelectItem>
+										<SelectItem value="female">Female</SelectItem>
+										<SelectItem value="male">Male</SelectItem>
+										<SelectItem value="custom">Custom</SelectItem>
+									</SelectContent>
+								</Select>
 								{customGender && (
 									<SettingInput
 										aria-label="Custom gender"
+										aria-describedby="account-gender-help"
 										value={profile.gender ?? ''}
-										placeholder="Enter your gender"
 										onChange={(e) => set({ gender: e.target.value })}
 									/>
 								)}
 							</div>
 						</SettingField>
-						<SettingField label="Birth Date" htmlFor="account-birth-date">
+						<SettingField
+							label="Birth date"
+							optional
+							htmlFor="account-birth-date"
+							descriptionId="account-birth-date-help"
+							description={
+								<>
+									Fills <code>{'{{USER_BIRTH_DATE}}'}</code> and <code>{'{{USER_AGE}}'}</code> in any prompt that uses
+									them.
+								</>
+							}
+						>
 							<SettingInput
 								id="account-birth-date"
 								type="date"
 								value={profile.date_of_birth ?? ''}
+								aria-describedby="account-birth-date-help"
+								className="w-56 max-w-full"
 								onChange={(e) => set({ date_of_birth: e.target.value })}
 							/>
 						</SettingField>
@@ -352,40 +407,47 @@ export default function Account() {
 					{canPassword && (
 						<SettingsSection title="Change Password">
 							{/* Its own form, submitted by its own button or Enter: the tab's Save must not change the password, nor Enter here save the tab. */}
-							<SettingInput
-								type="password"
-								form={passwordForm}
-								aria-label="Current Password"
-								placeholder="Current Password"
-								autoComplete="current-password"
-								value={passwords.current}
-								onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-							/>
-							<SettingInput
-								type="password"
-								form={passwordForm}
-								aria-label="New Password"
-								placeholder="New Password"
-								autoComplete="new-password"
-								value={passwords.next}
-								onChange={(e) => setPasswords({ ...passwords, next: e.target.value })}
-							/>
-							<SettingInput
-								type="password"
-								form={passwordForm}
-								aria-label="Confirm Password"
-								placeholder="Confirm Password"
-								autoComplete="new-password"
-								value={passwords.confirm}
-								onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
-							/>
+							<SettingField label="Current password" htmlFor="account-password-current">
+								<SettingInput
+									id="account-password-current"
+									type="password"
+									form={passwordForm}
+									autoComplete="current-password"
+									value={passwords.current}
+									onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+								/>
+							</SettingField>
+							<SettingField label="New password" htmlFor="account-password-new">
+								<SettingInput
+									id="account-password-new"
+									type="password"
+									form={passwordForm}
+									autoComplete="new-password"
+									value={passwords.next}
+									onChange={(e) => setPasswords({ ...passwords, next: e.target.value })}
+								/>
+							</SettingField>
+							<SettingField
+								label="Confirm password"
+								htmlFor="account-password-confirm"
+								description="Changing it signs you out; sign in again with the new one."
+							>
+								<SettingInput
+									id="account-password-confirm"
+									type="password"
+									form={passwordForm}
+									autoComplete="new-password"
+									value={passwords.confirm}
+									onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+								/>
+							</SettingField>
+							{/* The section's own primary action (ACT-1): it saves nothing else, and the tab's Save never changes the password. */}
 							<Button
 								type="submit"
 								form={passwordForm}
-								size="sm"
-								variant="outline"
 								className="self-start"
 								disabled={!passwords.current || !passwords.next || changingPassword}
+								aria-busy={changingPassword || undefined}
 							>
 								Update password
 							</Button>

@@ -11,6 +11,8 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
+import { rowClass, rowMenuButtonClass } from '@/routes/chat/sidebar/ChatItem';
+import { DISCLOSURE } from '@/routes/chat/sidebar/ChatSidebar';
 import { ChannelFormDialog } from './ChannelDialogs';
 import { type Channel, channelTitle, formatUnread, isPublicChannel } from './channelModel';
 import { CHANNELS_KEY, hideConversation, useChannelList, useChannelsEnabled, useMarkChannelRead } from './useChannels';
@@ -54,12 +56,13 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 
 	return (
 		<div className="mt-3">
-			<div className="text-muted-foreground flex items-center px-2 text-xs font-medium">
+			{/* The same row as the chat list's Folders header: no inset of its own beyond the list's (LAY-1). */}
+			<div className="flex items-center">
 				<Button
 					type="button"
 					variant="ghost"
 					size="xs"
-					className="flex-1 justify-start shrink"
+					className={cn('min-w-0 flex-1 shrink justify-start', DISCLOSURE)}
 					aria-expanded={open}
 					onClick={() => setOpen((o) => !o)}
 				>
@@ -72,6 +75,7 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 						variant="ghost"
 						size="icon-xs"
 						aria-label="Create Channel"
+						className="mr-1"
 						onClick={() => setCreating(true)}
 					>
 						<Plus className="size-3.5" />
@@ -133,7 +137,7 @@ function ChannelItem({
 	};
 
 	return (
-		<div className="group relative">
+		<div className={rowClass}>
 			<NavLink
 				to={`/channels/${channel.id}`}
 				onClick={() => {
@@ -142,7 +146,7 @@ function ChannelItem({
 				}}
 				className={({ isActive }) =>
 					cn(
-						'flex items-center gap-2 rounded-md px-2 py-1 pr-7 text-sm',
+						'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 pr-7 text-sm pointer-coarse:min-h-11 pointer-coarse:pr-12',
 						isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
 						unread > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
 					)
@@ -177,7 +181,9 @@ function ChannelItem({
 				) : (
 					<Lock className="size-3.5 shrink-0" />
 				)}
-				<span className="truncate">{channelTitle(channel, me?.id)}</span>
+				<span className="truncate" title={channelTitle(channel, me?.id)}>
+					{channelTitle(channel, me?.id)}
+				</span>
 				{!joined && (
 					<span
 						className="ml-auto rounded border px-1 text-caption font-medium"
@@ -201,7 +207,7 @@ function ChannelItem({
 					variant="ghost"
 					size="icon-xs"
 					aria-label="Hide conversation"
-					className="absolute top-1 right-1 hidden group-hover:inline-flex"
+					className={rowMenuButtonClass}
 					onClick={() => void hideDm()}
 				>
 					<X className="size-3.5" />
@@ -213,7 +219,7 @@ function ChannelItem({
 						variant="ghost"
 						size="icon-xs"
 						aria-label={`Edit ${channel.name}`}
-						className="absolute top-1 right-1 hidden group-hover:inline-flex"
+						className={rowMenuButtonClass}
 						onClick={() => setEditing(true)}
 					>
 						<Settings className="size-3.5" />

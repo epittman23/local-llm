@@ -2,7 +2,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Tip } from '@/components/common/Tip';
 import {
 	SettingField,
 	SettingInput,
@@ -15,11 +14,12 @@ import {
 	SettingTextarea
 } from '@/components/settings/controls';
 import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
+import { FORKED_FROM } from '@/components/settings/personal/About';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
 import { getAdminConfig, updateAdminConfig } from '@/lib/apis/auths';
 import { getBanners, setBanners } from '@/lib/apis/configs';
-import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '@/lib/constants';
+import { WEBUI_BUILD_HASH } from '@/lib/constants';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -32,17 +32,21 @@ import { Events } from './Events';
 type AdminConfig = Record<string, any>;
 type Draft = { admin: AdminConfig; banners: Banner[] };
 
-/** The installed version; there is no upstream release to check against. */
+/**
+ * What is installed (#1003): this app's own build, as Settings > About gives
+ * it (the commit and the build day), and the Open WebUI release it was
+ * derived from. It used to say "Version v0.11.3", the upstream version, as
+ * if it were this app's. There is no upstream release to check against.
+ */
 function AboutBlock() {
 	return (
 		<SettingsSection first>
-			<div className="min-w-0 text-xs">
-				<div className="text-muted-foreground">Version</div>
-				<div className="mt-1">
-					<Tip content={WEBUI_BUILD_HASH}>
-						<span>v{WEBUI_VERSION}</span>
-					</Tip>
+			<div className="min-w-0 text-dense">
+				<div className="text-foreground-muted">Build</div>
+				<div className="mt-1 font-mono">
+					{WEBUI_BUILD_HASH} · {APP_BUILD_DATE}
 				</div>
+				<p className="text-foreground-muted mt-1">Derived from Open WebUI {FORKED_FROM} (see NOTICE).</p>
 			</div>
 		</SettingsSection>
 	);
@@ -320,8 +324,8 @@ export default function General() {
 						</SettingField>
 
 						<SettingField
-							label="WebUI URL"
-							description="Enter the public URL of your WebUI. This URL will be used to generate links in the notifications."
+							label="App URL"
+							description="The address people open this app at. Links in notifications point here."
 							htmlFor="webui-url"
 						>
 							<SettingInput

@@ -164,6 +164,27 @@ describe('useChatSession loadChat', () => {
 		expect(session.history.messages['A-m']).toBeUndefined();
 	});
 
+	it('keeps the URL and says the chat is not there when the server cannot find it (NAV-3, #953)', async () => {
+		vi.mocked(chatsApi.getChatById).mockRejectedValueOnce("We could not find what you're looking for :/");
+		const router = renderAt('gone');
+		await waitFor(() => expect(session.missing?.kind).toBe('not-found'));
+		expect(session.loading).toBe(false);
+		expect(router.state.location.pathname).toBe('/c/gone');
+	});
+
+	it('tells a failed load from a missing chat, and loads it again when asked (STA-4)', async () => {
+		vi.mocked(chatsApi.getChatById).mockRejectedValueOnce('Database is locked');
+		const router = renderAt('A');
+		await waitFor(() => expect(session.missing).toEqual({ kind: 'failed', error: 'Database is locked' }));
+		expect(router.state.location.pathname).toBe('/c/A');
+
+		act(() => void session.reload());
+		await waitFor(() => expect(pending.A).toBeDefined());
+		expect(session.missing).toBeNull();
+		await act(async () => pending.A(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('A'));
+	});
+
 	it('with no task running, finishes a sibling reply saved mid-stream (#150)', async () => {
 		renderAt('M');
 		await waitFor(() => expect(pending.M).toBeDefined());

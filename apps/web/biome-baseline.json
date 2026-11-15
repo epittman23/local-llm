@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 733,
+	"total": 698,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -138,9 +138,6 @@
 			"lint/correctness/useExhaustiveDependencies": 4,
 			"lint/suspicious/noArrayIndexKey": 1
 		},
-		"apps/web/src/components/settings/SettingsModal.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 1
-		},
 		"apps/web/src/components/settings/boundFields.tsx": {
 			"lint/suspicious/noExplicitAny": 1
 		},
@@ -160,7 +157,6 @@
 			"lint/suspicious/noArrayIndexKey": 1
 		},
 		"apps/web/src/components/settings/personal/Audio.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 7,
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/components/settings/personal/Connections.tsx": {
@@ -177,7 +173,6 @@
 		},
 		"apps/web/src/components/settings/personal/Shortcuts.tsx": {
 			"lint/style/noNonNullAssertion": 5,
-			"lint/style/useImportType": 1,
 			"lint/suspicious/noAssignInExpressions": 1
 		},
 		"apps/web/src/components/settings/personal/personalSettings.ts": {
@@ -212,13 +207,12 @@
 			"lint/suspicious/noExplicitAny": 3
 		},
 		"apps/web/src/lib/apis/index.ts": {
-			"lint/complexity/useOptionalChain": 5,
+			"lint/complexity/useOptionalChain": 3,
 			"lint/correctness/noUnusedFunctionParameters": 1,
-			"lint/correctness/noUnusedVariables": 3,
+			"lint/correctness/noUnusedVariables": 2,
 			"lint/suspicious/noEmptyInterface": 1,
 			"lint/suspicious/noExplicitAny": 19,
-			"lint/suspicious/noImplicitAnyLet": 1,
-			"lint/suspicious/noPrototypeBuiltins": 1
+			"lint/suspicious/noImplicitAnyLet": 1
 		},
 		"apps/web/src/lib/apis/knowledge/index.ts": {
 			"lint/suspicious/noExplicitAny": 1
@@ -257,9 +251,6 @@
 		"apps/web/src/lib/apis/utils/index.ts": {
 			"lint/correctness/noUnusedVariables": 1
 		},
-		"apps/web/src/lib/auth/redirect.ts": {
-			"lint/complexity/useOptionalChain": 1
-		},
 		"apps/web/src/lib/auth/session.ts": {
 			"lint/suspicious/noDocumentCookie": 2
 		},
@@ -295,7 +286,7 @@
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/lib/chat/request.test.ts": {
-			"lint/suspicious/noExplicitAny": 3
+			"lint/suspicious/noExplicitAny": 2
 		},
 		"apps/web/src/lib/chat/request.ts": {
 			"lint/suspicious/noExplicitAny": 3
@@ -342,8 +333,8 @@
 			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/lib/utils/api-helpers.ts": {
-			"lint/complexity/useOptionalChain": 2,
-			"lint/suspicious/noExplicitAny": 23,
+			"lint/complexity/useOptionalChain": 1,
+			"lint/suspicious/noExplicitAny": 22,
 			"lint/suspicious/useIterableCallbackReturn": 1
 		},
 		"apps/web/src/lib/utils/textScale.ts": {
@@ -607,13 +598,12 @@
 			"lint/a11y/noStaticElementInteractions": 1,
 			"lint/a11y/useAriaPropsSupportedByRole": 4,
 			"lint/a11y/useKeyWithClickEvents": 1,
-			"lint/suspicious/noArrayIndexKey": 4
+			"lint/suspicious/noArrayIndexKey": 3
 		},
 		"apps/web/src/routes/chat/ChatPage.tsx": {
 			"lint/a11y/noStaticElementInteractions": 1,
-			"lint/correctness/useExhaustiveDependencies": 22,
-			"lint/style/noNonNullAssertion": 1,
-			"lint/suspicious/noExplicitAny": 1
+			"lint/correctness/useExhaustiveDependencies": 13,
+			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/chat/ChatPlaceholder.tsx": {
 			"lint/suspicious/noArrayIndexKey": 1
@@ -641,19 +631,14 @@
 			"lint/a11y/noLabelWithoutControl": 1
 		},
 		"apps/web/src/routes/chat/sidebar/ChatItem.tsx": {
-			"lint/a11y/noAutofocus": 1,
 			"lint/a11y/useAriaPropsSupportedByRole": 1
 		},
 		"apps/web/src/routes/chat/sidebar/ChatSidebar.tsx": {
-			"lint/a11y/useAriaPropsSupportedByRole": 1,
 			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/chat/useAttachments.ts": {
 			"lint/correctness/useExhaustiveDependencies": 4,
 			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/chat/useChatSession.test.tsx": {
-			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/chat/useChatSession.ts": {
 			"lint/suspicious/noExplicitAny": 3
@@ -681,9 +666,6 @@
 		},
 		"apps/web/src/routes/public/SharedChatPage.tsx": {
 			"lint/suspicious/noExplicitAny": 2
-		},
-		"apps/web/src/routes/workspace/WorkspaceLayout.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 3
 		},
 		"apps/web/src/routes/workspace/knowledge/ExternalKnowledgePanel.tsx": {
 			"lint/suspicious/noArrayIndexKey": 1,
@@ -747,9 +729,6 @@
 		},
 		"apps/web/src/routes/workspace/tools/toolTypes.ts": {
 			"lint/complexity/useOptionalChain": 1
-		},
-		"apps/web/src/styles/global.css": {
-			"lint/suspicious/noDuplicateAtImportRules": 1
 		}
 	}
 }

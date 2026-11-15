@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +125,31 @@ describe('Toaster', () => {
 		expect(toaster()?.getAttribute('style')).toContain(`--offset-top: ${PHONE_TOP}`);
 		expect(toaster()?.getAttribute('style')).toContain('--offset-bottom: 24px');
 		expect(PHONE_TOP).toBe('calc(var(--top-band-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)');
+	});
+});
+
+describe('a toast action (Undo)', () => {
+	afterEach(() => {
+		act(() => toast.dismiss());
+		vi.unstubAllGlobals();
+	});
+
+	it('is the button standard.css draws as the small outline Button, not a filled pill (ACT-1, COL-7)', async () => {
+		mockWidth(true);
+		render(<Toaster />);
+		const onClick = vi.fn();
+		act(() => void toast.success('Chat archived', { action: { label: 'Undo', onClick } }));
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+
+		const css = readFileSync(resolve(process.cwd(), 'src/styles/standard.css'), 'utf8');
+		const rule = /(:root \[data-sonner-toast\][^{]*\[data-action\]) \{([^}]*)\}/.exec(css);
+		expect(rule).not.toBeNull();
+		expect(undo.matches((rule as RegExpExecArray)[1])).toBe(true);
+		expect(rule?.[2]).toContain('border: 1px solid var(--border-control)');
+		expect(rule?.[2]).toContain('background-color: transparent');
+
+		act(() => undo.click());
+		expect(onClick).toHaveBeenCalledOnce();
 	});
 });
 

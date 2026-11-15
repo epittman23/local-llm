@@ -8,7 +8,7 @@ eight, and so that two pages doing the same job look and behave the same.
 - **See it:** `/ui` in the running app (`apps/web/src/routes/ui/`) shows the
   rules on the real shared components, in dark, black and light. Each of its
   sections lists the rules it shows; rules about whole pages, words and
-  behaviour over time (for example NAV-1, NAV-3, the WRD rules) are not
+  behaviour over time (for example NAV-1 and most WRD rules) are not
   shown there and are checked on the page being changed. Its Canvas section
   shows a design that is planned, not built (see "Canvas").
 - **Tokens:** `apps/web/src/styles/standard.css`.
@@ -28,8 +28,11 @@ is a default that a pull request may depart from by saying why.
 
 Since 2026-11-14 the standard's tokens are the app's theme on every page, in
 dark, black and light, and **dark is the default**: a browser that has never
-chosen a theme gets dark (`DEFAULT_THEME` in `apps/web/src/lib/theme.ts`),
-and the desktop app's own windows are always dark.
+chosen a theme gets dark (`DEFAULT_THEME` in `apps/web/src/lib/theme.ts`)
+until the account's saved theme, if any, arrives with its settings and
+replaces it, and the desktop app's own windows are always dark. A chosen
+theme is saved with the account and cached in the browser for the first
+paint.
 
 What that did and did not change:
 
@@ -133,7 +136,11 @@ under `.dark` and `light` otherwise, so native controls, scrollbars, date
 pickers and validation bubbles match. Anything the app does not draw itself
 is given a dark treatment explicitly: an embedded frame gets a themed
 container, a generated image or figure is generated per theme or framed, a
-chart reads the tokens.
+chart reads the tokens. The theme is chosen in Settings > General or the user
+menu's Theme submenu, both through `useThemeChoice`
+(`lib/settings/useThemeChoice.ts`): it applies at once, is cached in
+localStorage for the first paint and is saved as `theme` in the account's `ui`
+settings.
 
 **COL-7. Brand blue marks what you can act on.** One filled brand button per
 view (ACT-1), links, the selected item, the focus indicator. It is not used
@@ -240,11 +247,24 @@ it loads (a chat, a note) sets it with `useDocumentTitle(name)`. Nothing
 writes `document.title` directly.
 
 **LAY-6. Widths.** Reading text 72 characters; a form 40 rem; a table the full
-width of its container.
+width of its container. A settings tab's column is the form width, 40 rem; the
+control sits beside its label and wraps under it when narrow.
 
 **LAY-7. Regions scroll, the page does not move sideways.** A list inside a
 panel scrolls inside the panel, so what sits below it (the user menu, a save
 bar) stays reachable. A table's header stays visible while its body scrolls.
+The sidebar is exactly as tall as the window: its header, New chat and
+Search, the destinations and the user row stay put, and only the chat list
+between them scrolls, never sideways. Nothing in a scrolling region is wider
+than the region, since focus can scroll even an `overflow-x: hidden` box.
+From 768 px the sidebar starts open and is remembered per browser once opened
+or closed. Closed, it is a 48 px rail (`SidebarRail` in
+`components/layout/Sidebar.tsx`): Open sidebar, New chat and Search at the top
+and the account menu at the foot, each an icon named by its tooltip, so
+closing the sidebar loses none of them. Close sidebar and Open sidebar hand
+focus to each other. Phones have the drawer instead, wide enough (20 rem, or
+85% of a narrower screen) that each destination's name fits beside its icon,
+since touch has no tooltips (OVL-4).
 
 **SHP-1. A corner says what kind of thing something is.** 4 px (`rounded`):
 checkboxes, inline code. 8 px (`rounded-lg`): buttons, fields, menu items.
@@ -322,7 +342,12 @@ Save button that is disabled until something changed, a line that reads
 "Unsaved changes" or "All changes saved", a Discard changes button, and a
 guard that asks before navigation loses changes. *At once:* each control
 applies when changed and a line beside it confirms it. A view never mixes the
-two without labelling the instant ones.
+two without labelling the instant ones. Implemented by
+`components/ui/save-bar.tsx` (`SaveBar`): the status line, Discard changes and
+Save. In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
+asks 'Discard changes?' before a tab switch, close, Escape or Back loses
+them; an at-once tab passes `savesAtOnce` and confirms each control with
+`SavedNote`.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A native control is allowed only where the shared one cannot do
@@ -331,6 +356,14 @@ remains gets the field's edge, fill, `rounded-lg` and least height
 (`--control-compact`, 44 px on touch) from `standard.css`, so it needs no
 classes of its own; Radix's hidden form select, list boxes and a select inside
 a composite field are skipped.
+Two to five mutually exclusive choices that apply at once are a
+`SegmentedControl` (`components/ui/segmented-control.tsx`): words with
+optional line icons, a radio group, arrow keys to move and choose; on a phone
+the segments share one row. It may also hold a required choice with nothing
+preselected that a separate action confirms (the Share dialog's 'Who can open
+the link', then Create and copy link): a value no option has leaves every
+segment unchosen. A disabled segment gives its reason in the help line under
+the control (ACT-5).
 
 **FRM-5. A switch is for a setting that applies at once; a checkbox is for a
 value in a form that is saved.** The label names the setting ("Name new chats
@@ -344,26 +377,42 @@ under headings, most used first; put rarely used settings behind
 
 **NAV-1. What is shown is in the address.** The open tab, the selected item,
 a filter, a sort: reloading the page or pressing Back restores them. A dialog
-that is a destination (settings) has an address.
+that is a destination (settings) has an address. Settings keeps
+`?settings=<tab>` in the address while it is open: a tab change replaces it,
+opening from the app adds a history entry, closing removes it, Back closes the
+dialog.
 
 **NAV-2. Sibling views are tabs**, built with the shared `Tabs`. The open tab
 is unmistakable, in both themes. The first step of a workflow is the first
-tab.
+tab. A vertical tab list (Settings) is `components/settings/SettingsNav.tsx`:
+one tablist, roving focus (Up, Down, Home, End; Enter opens), captions hidden
+from assistive technology, a repeated name carrying its group ('Server:
+General'). Below 768 px it becomes two levels: the list with search, then the
+tab with a way back. A show/hide toggle is not a menu trigger: when expanded
+it keeps the ghost button's resting look (`aria-expanded:bg-transparent`).
 
 **NAV-3. A link to something that no longer exists says so, in place:** "This
 chat no longer exists", with a way onward. It never silently opens something
-else.
+else. `components/common/Gone` is the in-place panel: what is gone as a
+heading, why it may be, and ways onward, with the tab saying so too ("Chat not
+found"). It is for a definite answer that nothing is there (the server's
+NOT_FOUND detail, `isNotFound`); a failure to load is `LoadFailed` instead
+(STA-4).
 
 **NAV-4. Escape closes the topmost layer only.** When a layer closes, focus
 returns to what opened it. The shared `DialogContent`, `AlertDialogContent`
 and `SheetContent` return focus to the element that had it when they opened
 (or to a menu's trigger, when a menu item opened them), so a dialog opened
-from state needs no `DialogTrigger`.
+from state needs no `DialogTrigger`. Settings ignores an Escape while focus is
+in a layer above it.
 
 **NAV-5. Everything can be done from the keyboard.** A list of choices
 (search results, a model picker, a command palette) moves with the arrow keys
 and chooses with Enter. A shortcut exists for the main action of a
-keyboard-heavy view and is listed in the shortcuts dialog.
+keyboard-heavy view and is listed in the shortcuts dialog. Lists you choose
+from by keyboard are `components/ui/command.tsx` (cmdk): the field keeps
+focus, the arrow keys move a highlight, Enter chooses, and the first item is
+highlighted whenever the list fills, also when its items come from the server.
 
 ## Tables and figures
 
@@ -430,7 +479,9 @@ where nothing is watched) and ConnectionBanner its height in
 `--connection-banner-space`. On a wide screen toasts rise above any
 `data-composite-field` whose top edge is in the lower half of the viewport,
 with 8 px clear. Every toast has a close button with a 24 px hit area (44 px
-on touch). `toast.error` and `toast.warning` default to no time limit and an
+on touch). A toast's action (Undo, Open) is drawn as the small outline button
+(ACT-1), by the conformance layer in `standard.css`, not as sonner's filled
+pill. `toast.error` and `toast.warning` default to no time limit and an
 id taken from the message, so a repeated failure updates one toast. A caller's
 `duration` or `id` still wins. Once a session has expired, failure toasts are
 held back until the next sign-in; the sign-in page's inline message explains
@@ -471,7 +522,8 @@ own message sits behind 'Details', and it offers 'Try again'.
 ## Overlays
 
 **OVL-1. A dialog has a title, and is one of three widths:** 24 rem for a
-confirmation, 32 rem for a short form, 48 rem for a large one. Anything bigger
+confirmation, 32 rem for a short form, 48 rem for a large one. A two-pane
+dialog, a tab list beside a 40 rem form (Settings), is 64 rem. Anything bigger
 is a page (NAV-1).
 
 **OVL-2. Dialogs and menus sit on `--surface-2` with an edge and a shadow**,
@@ -574,7 +626,11 @@ no jargon inherited from the fork ("valves", "toolkits", "arena").
 **WRD-3. The product is "local-llm"**, written that way everywhere: the tab
 title, the sidebar, the sign-in page, the desktop app. Nothing in the
 interface names or links to Open WebUI except the notices the licence
-requires.
+requires. The mark is `components/ui/app-mark.tsx` (`AppMark`): lucide's
+Sigma in `--brand` on a `--surface-1` rounded square, the favicon's shape, at
+20, 24 or 32 px. It appears in the sidebar header, the phone bar, the boot
+splash (Base.astro repeats the same SVG), the sign-in page and the shared
+page.
 
 **WRD-4. There is one owner.** No "users", "admins", "contact your
 administrator", "shared with you". Features that only make sense with several
@@ -614,7 +670,9 @@ folder) gets a visually hidden h1 with its name (`handle.heading: 'sr'`).
 
 **A11Y-4. Nothing is available only on hover.** What appears on hover also
 appears on focus and is reachable by touch: on touch devices a row's actions
-are always shown or are in a menu.
+are always shown or are in a menu. On touch, a row's menu button is always
+shown. Elsewhere it is transparent, not removed, until the row is hovered or
+focused, so focus can return to it when its menu closes (NAV-4).
 
 **A11Y-5. The page works at 200% zoom and reflows at 320 CSS px** without
 losing content or the main action. On a phone screen under 520 px tall, routes

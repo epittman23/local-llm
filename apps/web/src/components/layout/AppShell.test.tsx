@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,7 +9,8 @@ import { AppShell } from './AppShell';
 const auth = vi.hoisted(() => ({ status: 'authenticated' as 'authenticated' | 'pending' | 'anonymous' }));
 vi.mock('@/lib/auth/useAuthGate', () => ({ useAuthGate: () => auth.status }));
 vi.mock('@/lib/settings/useSettingsUrl', () => ({ useSettingsUrl: () => {} }));
-vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
+const account = vi.hoisted(() => ({ settings: {} as Record<string, unknown> | null }));
+vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: account.settings }) }));
 vi.mock('@/lib/socket/SocketProvider', () => ({ useSocketReady: () => {} }));
 vi.mock('@/lib/useShortcuts', () => ({ useShortcuts: () => {} }));
 vi.mock('@/routes/calendar/useCalendarAlerts', () => ({ useCalendarAlerts: () => {} }));
@@ -21,6 +22,11 @@ vi.mock('./Sidebar', () => ({
 	SidebarContent: () => (
 		<nav aria-label="Main">
 			<a href="/workspace">Workspace</a>
+		</nav>
+	),
+	SidebarRail: () => (
+		<nav aria-label="Main">
+			<button type="button">Open sidebar</button>
 		</nav>
 	)
 }));
@@ -51,6 +57,7 @@ function renderAt(path: string) {
 
 beforeEach(() => {
 	auth.status = 'authenticated';
+	account.settings = {};
 	useUIStore.setState({ sidebarOpen: true, searchOpen: false } as never);
 });
 afterEach(() => {
@@ -98,15 +105,97 @@ describe('AppShell', () => {
 		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
 		expect(menu.className).toContain('max-md:[@media(max-height:520px)]:fixed');
 		expect(screen.getByRole('main').parentElement?.className).toContain('[--shell-menu-inset:2.25rem]');
-		expect(screen.getByText('local-llm').className).toContain('[@media(max-height:520px)]:hidden');
+		const bar = within(screen.getByRole('banner'));
+		expect(bar.getByRole('img', { name: 'local-llm' }).getAttribute('class')).toContain(
+			'[@media(max-height:520px)]:hidden'
+		);
+		expect(bar.getByText('Chat').className).toContain('[@media(max-height:520px)]:hidden');
+		expect(bar.getByRole('link', { name: 'New chat' }).className).toContain('[@media(max-height:520px)]:hidden');
 	});
 
-	it('keeps the phone bar, with the product name, on pages that do not make room', () => {
+	it('keeps the phone bar, with the mark and the page name, on pages that do not make room', () => {
 		renderAt('/notes');
 		const menu = screen.getByRole('button', { name: 'Open navigation menu' });
 		expect(menu.className).not.toContain('520px');
 		expect(screen.getByRole('main').parentElement?.className).not.toContain('--shell-menu-inset');
-		expect(screen.getByText('local-llm').className).not.toContain('520px');
+		const bar = within(screen.getByRole('banner'));
+		expect(bar.getByRole('img', { name: 'local-llm' }).getAttribute('class')).not.toContain('520px');
+		expect(bar.getByText('Notes').className).not.toContain('520px');
+	});
+
+	it('puts New chat at the end of the phone bar, after the menu button the top band measures (#1091)', () => {
+		renderAt('/notes');
+		const bar = screen.getByRole('banner');
+		expect(bar.querySelector('button')).toBe(screen.getByRole('button', { name: 'Open navigation menu' }));
+		const newChat = within(bar).getByRole('link', { name: 'New chat' });
+		expect(newChat.getAttribute('href')).toBe('/');
+		expect(bar.lastElementChild).toBe(newChat);
+	});
+
+	it('opens the drawer wide enough for the names of the destinations on touch, 320 px or 85% of a phone, not the sheet default', () => {
+		renderAt('/notes');
+		fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
+		const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+		expect(drawer.className).toContain('data-[side=left]:w-[min(20rem,85vw)]');
+		expect(drawer.className).not.toContain('data-[side=left]:w-3/4');
+	});
+
+	it('collapses the sidebar to the 48 px rail, with no row of its own above the page (#930)', () => {
+		useUIStore.setState({ sidebarOpen: false } as never);
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-12');
+		expect(aside).toContainElement(screen.getByRole('button', { name: 'Open sidebar' }));
+		expect(screen.getAllByRole('button', { name: 'Open sidebar' })).toHaveLength(1);
+		expect(screen.queryByRole('link', { name: 'Workspace' })).toBeNull();
+	});
+
+	it('shows the whole sidebar, 256 px, when open', () => {
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('w-64');
+		expect(within(aside).getByRole('link', { name: 'Workspace' })).toBeTruthy();
+	});
+
+	describe('the theme saved with the account (#1089)', () => {
+		beforeEach(() => {
+			localStorage.theme = 'dark';
+			document.documentElement.className = 'dark';
+		});
+
+		it("applies and caches the account's theme when it differs from this browser's", () => {
+			account.settings = { theme: 'light' };
+			renderAt('/notes');
+			expect(localStorage.theme).toBe('light');
+			expect(document.documentElement.classList.contains('light')).toBe(true);
+		});
+
+		it('leaves the cached theme alone without a valid saved one, and before settings load', () => {
+			for (const settings of [null, {}, { theme: 'her' }]) {
+				account.settings = settings;
+				renderAt('/notes');
+				cleanup();
+			}
+			expect(localStorage.theme).toBe('dark');
+			expect(document.documentElement.className).toBe('dark');
+		});
+
+		it('applies it once per load, so a later change of the saved value does not override this page', () => {
+			account.settings = { theme: 'dark' };
+			renderAt('/notes');
+			account.settings = { theme: 'light' };
+			// Any re-render of the shell reads the settings again.
+			act(() => useUIStore.setState({ sidebarOpen: false } as never));
+			expect(screen.getByRole('complementary', { name: 'Sidebar' }).className).toContain('w-12');
+			expect(localStorage.theme).toBe('dark');
+		});
+	});
+
+	it('keeps the shell exactly viewport-tall, so only the sidebar list scrolls (#903, LAY-7)', () => {
+		renderAt('/notes');
+		const aside = screen.getByRole('complementary', { name: 'Sidebar' });
+		expect(aside.className).toContain('h-svh');
+		expect(aside.parentElement?.className).toContain('overflow-hidden');
 	});
 
 	it('keeps the top band in --top-band-bottom on a phone, and drops it with the shell (FBK-2)', () => {

@@ -27,3 +27,21 @@ export function formatSecondsTimestamp(seconds: number): string {
 	if (date.isYesterday()) return `Yesterday at ${time}`;
 	return `${date.format('L')} at ${time}`;
 }
+
+/** A week: newer times read relative ("3 hours ago"), older ones as a date. */
+const RECENT_SECONDS = 7 * 86_400;
+
+/**
+ * A time in seconds as the standard shows it (DAT-5): relative when recent,
+ * a date (`2026-11-14`) when older, and always the exact `2026-11-14 10:24`
+ * for a `title` and the ISO form for `<time dateTime>`.
+ */
+export function shownTime(seconds: number, now = Date.now()): { label: string; exact: string; iso: string } {
+	const date = dayjs(seconds * 1000);
+	const recent = now / 1000 - seconds < RECENT_SECONDS;
+	return {
+		label: recent ? date.from(now) : date.format('YYYY-MM-DD'),
+		exact: date.format('YYYY-MM-DD HH:mm'),
+		iso: date.toISOString()
+	};
+}

@@ -7,6 +7,66 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-15**: **The app shell, sidebar, Settings and public pages:
+  the owner's decisions for the UX review's section 2 (#1116), and organising
+  a chat no longer changes its date.**
+  - **The sidebar starts open (#930, S2-D1).** From 768 px a browser that has
+    never chosen starts with the sidebar open (an Open WebUI default had it
+    closed, hiding the chat list, New chat and Search), and the choice is
+    remembered per browser once changed. Closed, it is a 48 px rail with Open
+    sidebar, New chat, Search and the account menu. Phones keep the drawer.
+  - **Share links ask first (#1006, S2-D2).** Before a link exists, the Share
+    dialog asks "Anyone with the link" or "Only me (signed in)"; nothing is
+    preselected and nothing is created until one is chosen. Then it shows the
+    link with Copy, Update snapshot and Stop sharing. "Anyone" is the existing
+    `anyone:*` read grant; "only me" is no grant. Users and groups are listed
+    only when more than one account exists (`GET /users/search`'s total). No
+    API or schema change.
+  - **A missing share link says so to anyone (#953, S2-D7).** `GET
+    /chats/share/{id}` answers 404 with the NOT_FOUND detail when no such
+    share exists (it answered 401, as for a private share), so the /s/ page
+    tells an anonymous visitor "This shared link is no longer available."
+    instead of sending them to sign in. A share that exists but is not open
+    to the caller still answers 401. An API change the owner approved; no
+    schema change.
+  - **A share's owner can open the original or stop sharing from the shared
+    page (#1005, S2-D8).** The same route's response gains
+    `original_chat_id`, set only when the caller owns the chat the share was
+    made from and null for anyone else, so nobody else learns which chat it
+    came from. The page offers that owner Open original and Stop sharing,
+    which asks first, naming the chat (ACT-3). An API change the owner
+    approved; no schema change.
+  - **Bio, Gender and Birth date stay (#1088, S2-D3).** All three remain on
+    the Account tab, optional, in the standard's fields, and each one's help
+    names the prompt variable it fills: `{{USER_BIO}}`, `{{USER_GENDER}}`,
+    `{{USER_BIRTH_DATE}}` and `{{USER_AGE}}`. Stored values are untouched.
+  - **The theme is saved with the account (#1089, S2-D4)**, as `theme` in the
+    existing user settings JSON, so the desktop app, a phone and a second
+    browser start on it. localStorage stays the cache read before the first
+    paint. Settings > General and the user menu choose it from the same four
+    named segments (System, Dark, Black, Light; #988). No API or schema
+    change, and nothing stored is rewritten.
+  - **Settings > Integrations is hidden (#1090, S2-D5)** until chats use
+    personal tool and terminal servers; it said chats never use them. Saved
+    servers are kept, Admin > Integrations, where tool servers do work, is
+    unchanged, and `?settings=tools` opens General.
+  - **/home is a start page (#1093, S2-D6).** It was an unlinked stub left
+    over from the Svelte app; it now shows pinned and recent chats, today's
+    calendar and quick actions, and the sidebar links to it as Home.
+  - **A two-pane dialog is 64 rem (OVL-1).** Settings, a tab list beside a
+    40 rem form, is 64 rem wide: at the standard's 48 rem the form column was
+    446 px and clipped Admin > Analytics. The owner accepted the fourth width.
+  - **Organising a chat no longer changes its date (#949).** Pinning,
+    archiving and moving a chat into or out of a folder used to set its
+    `updated_at` to now (and pinning also marked it read), so the sidebar,
+    which groups chats by that date, moved an old chat to Today. The three
+    model functions no longer write those columns. No migration, no rewritten
+    rows, no response change; dates already bumped stay as they are. It also
+    changes ordering: Archived chats (sorted by `updated_at`), a folder's list
+    (`unread_updated_at`: unread first, then by `updated_at`, 10 per page) and
+    the pinned chats (by `updated_at`) now keep a chat at its old date instead
+    of moving it to the top when it is archived, filed or pinned.
+
 - **2026-11-14** (latest, 5): **The product's mark, fallback pictures,
   default colours, new-chat suggestions and three more ratchet patterns**,
   settled by the owner for the UX review's cross-cutting section (#1116).

@@ -2,10 +2,16 @@ import { create } from 'zustand';
 
 // Mirrors d863707:apps/openwebui/src/lib/stores/index.ts's `showSidebar` writable +
 // its localStorage.sidebar persistence (see layout/Sidebar.svelte's own
-// onMount/subscribe pair) -- boolean, defaulting closed, one localStorage key.
+// onMount/subscribe pair): a boolean in one localStorage key. Unlike Open
+// WebUI it starts open (#930): only a person who has closed it finds it
+// closed. Below md the aside is hidden and the drawer has its own state, so
+// this decides nothing on a phone.
 const readPersistedSidebarOpen = () => {
-	if (typeof localStorage === 'undefined') return false;
-	return localStorage.sidebar === 'true';
+	try {
+		return localStorage.sidebar !== 'false';
+	} catch {
+		return true;
+	}
 };
 
 type UIState = {

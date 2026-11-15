@@ -26,6 +26,8 @@ describe('ModelDefaultsPanel', () => {
 		renderPanel();
 		const toggle = screen.getByRole('button', { name: 'Configure model defaults' });
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		// It holds a word, so it is the small text button, not a 28 px icon square that clips it.
+		expect(toggle).toHaveAttribute('data-size', 'sm');
 		fireEvent.click(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(toggle.textContent).toBe('Close');

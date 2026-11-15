@@ -25,9 +25,9 @@ const folders = [
 	{ id: 'f2', name: 'Sub', parent_id: 'f1' }
 ];
 
-async function open(page: Page) {
+async function open(page: Page, user: { role?: 'admin' | 'user' } = {}) {
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
-	const chat = await mockChat(page, { chats: chats(), folders });
+	const chat = await mockChat(page, { chats: chats(), folders, user });
 	await page.goto('/');
 	return chat;
 }
@@ -90,17 +90,27 @@ test('rename in place, pin, clone and delete from the menu', async ({ page }) =>
 	await expect(item(page, 'Clone of Trip planning')).toHaveCount(0);
 });
 
-test('share copies a link to the public page, and move puts a chat in a folder', async ({ page }) => {
-	const chat = await open(page);
+test('share asks who can open the link, then copies it, and move puts a chat in a folder', async ({ page }) => {
+	// An admin may make a link anyone can open, whatever the sharing permissions say.
+	const chat = await open(page, { role: 'admin' });
+	await page.route('**/api/v1/users/search*', (route) => route.fulfill({ json: { users: [], total: 1 } }));
 	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 	await item(page, 'Trip planning').hover();
 	await page.getByRole('button', { name: 'Chat menu: Trip planning' }).click();
 	await page.getByRole('menuitem', { name: 'Share' }).click();
-	await page.getByRole('button', { name: 'Copy Link' }).click();
+	// Nothing is chosen or created until the owner answers (#1006, S2-D2).
+	const dialog = page.getByRole('dialog', { name: 'Share chat' });
+	const create = dialog.getByRole('button', { name: 'Create and copy link' });
+	await expect(create).toBeDisabled();
+	expect(chat.seen.actions).not.toContain('share:c1');
+	await dialog.getByRole('radio', { name: 'Anyone with the link' }).click();
+	await create.click();
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/share-c1$/);
-	// A new link opens to no one else yet, so the dialog stays to say who may (#334).
-	const dialog = page.getByRole('dialog', { name: 'Share Chat' });
-	await expect(dialog.getByLabel('Visibility')).toHaveValue('private');
+	expect(chat.seen.actions).toContain('access:c1');
+	await expect(dialog.getByRole('textbox', { name: 'Link' })).toHaveValue(/\/s\/share-c1$/);
+	await expect(dialog.getByRole('radio', { name: 'Anyone with the link' })).toHaveAttribute('aria-checked', 'true');
+	// Users and groups stay hidden while one account exists (WRD-4).
+	await expect(dialog.getByText('Access List')).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(dialog).toHaveCount(0);
 
@@ -127,28 +137,31 @@ test('search finds chats with Ctrl+K and opens one', async ({ page }) => {
 	const chat = await open(page);
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 	await page.keyboard.press('Control+k');
-	await page.getByRole('textbox', { name: 'Search chats' }).fill('recipe');
-	await page
-		.getByRole('listbox', { name: 'Search results' })
-		.getByRole('option', { name: /Recipe ideas/ })
-		.click();
-	await expect(page).toHaveURL(/\/c\/c2$/);
+	const results = page.getByRole('listbox', { name: 'Search results' });
+	// Before anything is typed the list offers recent chats (#952).
+	await expect(results.getByRole('group', { name: 'Recent chats' })).toBeVisible();
+	await page.getByRole('combobox', { name: 'Search chats' }).fill('recipe');
+	// The recent chats give way to the results, the first highlighted: Enter opens it (NAV-5).
+	await expect(results.getByRole('group', { name: 'Recent chats' })).toHaveCount(0);
+	await expect(results.getByRole('option', { name: /Recipe ideas/ })).toHaveAttribute('aria-selected', 'true');
 	expect(chat.seen.searches).toContain('recipe');
+	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/c\/c2$/);
 });
 
 test('folders: create, edit with a system prompt, and delete', async ({ page }) => {
 	const chat = await open(page);
 	await page.getByRole('button', { name: 'New Folder' }).click();
-	await page.getByLabel('Folder Name').fill('Travel');
-	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByLabel('Name', { exact: true }).fill('Travel');
+	await page.getByRole('button', { name: 'Create folder' }).click();
 	await expect(page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' })).toBeVisible();
 	expect(chat.seen.folderCalls).toContain('POST /');
 
 	await page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Work' }).hover();
 	await page.getByRole('button', { name: 'Folder menu: Work' }).click();
 	await page.getByRole('menuitem', { name: 'Edit' }).click();
-	await page.getByLabel('System Prompt').fill('Be formal');
-	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByLabel('Instructions for chats in this folder (optional)').fill('Be formal');
+	await page.getByRole('button', { name: 'Save folder' }).click();
 	await expect.poll(() => chat.seen.folderCalls).toContain('POST /f1/update');
 
 	await page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' }).hover();
@@ -156,4 +169,36 @@ test('folders: create, edit with a system prompt, and delete', async ({ page }) 
 	await page.getByRole('menuitem', { name: 'Delete' }).click();
 	await page.getByRole('dialog', { name: 'Delete folder?' }).getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('list', { name: 'Folders' }).getByRole('link', { name: 'Travel' })).toHaveCount(0);
+});
+
+test.describe('on a touch phone', () => {
+	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+	test('the drawer shows every destination name whole, since touch has no tooltips (TYP-7, OVL-4)', async ({
+		page
+	}) => {
+		const features = {
+			enable_notes: true,
+			enable_calendar: true,
+			enable_automations: true,
+			enable_benchmarks: true
+		};
+		await mockChat(page, { chats: chats(), folders, user: { role: 'admin', features } });
+		await page.goto('/');
+		await page.getByRole('button', { name: 'Open navigation menu' }).click();
+		const destinations = page.getByRole('dialog', { name: 'Navigation' }).getByRole('list', { name: 'Destinations' });
+		const links = destinations.getByRole('link');
+		await expect(links.filter({ hasText: 'Automations' })).toBeVisible();
+		await expect(links.filter({ hasText: 'Benchmarks' })).toBeVisible();
+		for (const link of await links.all()) {
+			const label = link.locator('span');
+			const { name, fits, oneLine } = await label.evaluate((el) => ({
+				name: el.textContent,
+				fits: el.scrollWidth <= el.clientWidth,
+				oneLine: el.getClientRects().length === 1 && el.getBoundingClientRect().height < 24
+			}));
+			expect(fits, `${name} fits its column`).toBe(true);
+			expect(oneLine, `${name} sits on one line`).toBe(true);
+		}
+	});
 });

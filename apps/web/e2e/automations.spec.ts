@@ -218,7 +218,7 @@ test('the detail page shows the automation and its runs; run now, edit and delet
 	await expect(page.getByText('Model unavailable')).toBeVisible();
 	await page.getByRole('button', { name: 'Run now' }).click();
 	await expect.poll(() => seen.ran).toEqual(['a1']);
-	await page.getByRole('button', { name: 'Edit' }).click();
+	await page.getByRole('button', { name: 'Edit', exact: true }).click();
 	const d = page.getByRole('dialog', { name: 'Edit automation' });
 	await expect(d.getByLabel('Automation title')).toHaveValue('Morning digest');
 	await d.getByLabel('Automation title').fill('Evening digest');

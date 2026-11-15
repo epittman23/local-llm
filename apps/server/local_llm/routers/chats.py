@@ -960,7 +960,14 @@ async def get_shared_session_user_chat_list(
 ############################
 
 
-@router.get('/share/{share_id}', response_model=ChatResponse | None)
+class SharedChatViewResponse(ChatResponse):
+    # The chat the share was made from, given only to that chat's owner, so the
+    # shared page can offer them Open original and Stop sharing (#1005, S2-D8).
+    # Anyone else gets null: who shared what stays the owner's own business.
+    original_chat_id: str | None = None
+
+
+@router.get('/share/{share_id}', response_model=SharedChatViewResponse | None)
 async def get_shared_chat_by_id(
     share_id: str, user=Depends(get_optional_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
@@ -971,7 +978,12 @@ async def get_shared_chat_by_id(
         ):
             chat = await Chats.get_chat_by_share_id(share_id, db=db)
             if chat:
-                return ChatResponse.model_validate(chat, from_attributes=True)
+                response = SharedChatViewResponse.model_validate(chat, from_attributes=True)
+                if user is not None:
+                    original = await Chats.get_chat_by_id(shared.chat_id, db=db)
+                    if original and original.user_id == user.id:
+                        response.original_chat_id = original.id
+                return response
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -985,7 +997,11 @@ async def get_shared_chat_by_id(
         if chat:
             return ChatResponse.model_validate(chat, from_attributes=True)
 
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.NOT_FOUND)
+    # A share that does not exist says so, signed in or not (#953, S2-D7): the
+    # page then says the link no longer works instead of asking for a sign-in
+    # that could not help. One that exists but is not open to the caller stays
+    # 401 above.
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
 
 ############################

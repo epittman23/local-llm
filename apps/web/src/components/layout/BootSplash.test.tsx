@@ -31,8 +31,10 @@ afterEach(() => {
 
 describe('BootSplash', () => {
 	it('shows only the product name at first, never a bare "Loading…" (STA-2, WRD-3)', () => {
-		renderAt('/notes');
+		const { container } = renderAt('/notes');
 		expect(screen.getByText('local-llm')).toBeInTheDocument();
+		// The mark beside the name, as Base.astro's static splash draws it (#1065).
+		expect(container.querySelector('[data-slot="app-mark"]')?.getAttribute('class')).toContain('size-8');
 		expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
 		expect(screen.queryByText('Loading…')).toBeNull();
 	});
