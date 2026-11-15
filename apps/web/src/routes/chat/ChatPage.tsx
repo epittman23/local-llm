@@ -632,7 +632,7 @@ export function ChatPage() {
 				)}
 				<ChatInput
 					ref={input}
-					draftKey={draftKeyFor(id, folderId)}
+					draftKey={user ? draftKeyFor(user.id, id, folderId) : undefined}
 					generating={session.generating}
 					queued={session.queue}
 					onRemoveQueued={session.removeQueued}

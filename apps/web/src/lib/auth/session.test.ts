@@ -84,15 +84,30 @@ describe('a session that runs out (#1061)', () => {
 	it('keeps the unsent drafts and forgets the rest of the tab session; a chosen sign-out forgets them too', async () => {
 		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
 		await initAuth();
-		sessionStorage.setItem('chat-draft:new:', 'half a question');
+		sessionStorage.setItem('chat-draft:u:new:', 'half a question');
 		sessionStorage.setItem('other', 'x');
 
 		clearExpiredSession();
 
 		await vi.waitFor(() => expect(sessionStorage.getItem('other')).toBeNull());
-		expect(sessionStorage.getItem('chat-draft:new:')).toBe('half a question');
+		expect(sessionStorage.getItem('chat-draft:u:new:')).toBe('half a question');
 		await signOut();
-		expect(sessionStorage.getItem('chat-draft:new:')).toBeNull();
+		expect(sessionStorage.getItem('chat-draft:u:new:')).toBeNull();
+	});
+
+	it('gives drafts kept through an expiry back to the same account only, and forgets them for another', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'user' }));
+		await initAuth();
+		sessionStorage.setItem('chat-draft:u:c1', 'mine');
+		clearExpiredSession();
+		await vi.waitFor(() => expect(useAuthStore.getState().status).toBe('anonymous'));
+
+		useAuthStore.getState().setSession('same-token', { id: 'u', role: 'user' } as never);
+		expect(sessionStorage.getItem('chat-draft:u:c1')).toBe('mine');
+
+		clearExpiredSession();
+		useAuthStore.getState().setSession('other-token', { id: 'someone-else', role: 'user' } as never);
+		expect(sessionStorage.getItem('chat-draft:u:c1')).toBeNull();
 	});
 
 	it('records nothing for a sign-out the person chose', async () => {
