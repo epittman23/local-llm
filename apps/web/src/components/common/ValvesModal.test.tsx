@@ -66,6 +66,16 @@ describe('ValvesModal (#1016, WRD-2)', () => {
 		await screen.findByLabelText('Tags');
 	});
 
+	it('wraps a long title short of the close button (#1016)', async () => {
+		vi.mocked(getToolValvesById).mockResolvedValue({});
+		vi.mocked(getToolValvesSpecById).mockResolvedValue(spec);
+		show();
+		const title = screen.getByRole('heading', { name: 'Settings for Unit converter' });
+		expect(title).toHaveClass('break-words');
+		expect(title.parentElement).toHaveClass('pe-11');
+		await screen.findByLabelText('Tags');
+	});
+
 	it('says a tool has no settings, with Save off', async () => {
 		vi.mocked(getToolValvesById).mockResolvedValue({});
 		vi.mocked(getToolValvesSpecById).mockResolvedValue(null);

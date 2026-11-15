@@ -127,8 +127,9 @@ export function ValvesModal({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="flex max-h-[min(40rem,calc(100dvh-2rem))] flex-col gap-0 p-0 sm:max-w-lg">
-				<DialogHeader className="shrink-0 border-b px-5 pt-5 pb-3">
-					<DialogTitle>{name ? `Settings for ${name}` : 'Settings'}</DialogTitle>
+				{/* The title wraps short of the close button, which sits over the top-right corner. */}
+				<DialogHeader className="shrink-0 border-b ps-5 pe-11 pt-5 pb-3">
+					<DialogTitle className="leading-snug break-words">{name ? `Settings for ${name}` : 'Settings'}</DialogTitle>
 					<DialogDescription>
 						{userValves ? `Your own settings for this ${type}.` : `Settings this ${type} takes.`} Leave a field empty to
 						use its default.
