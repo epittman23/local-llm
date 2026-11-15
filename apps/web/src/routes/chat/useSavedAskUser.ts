@@ -43,15 +43,19 @@ export function useSavedAskUser({
 	const callId = pending?.callId;
 	// Call ids come from the provider and may repeat, so the chat and reply are part of the key.
 	const key = pending && historyChatId ? `${historyChatId}:${messageId}:${callId}` : null;
-	// By value: every history update parses the arguments into new arrays.
-	const args = pending ? JSON.stringify({ questions: pending.questions, allow_other: pending.allowOther }) : '';
+	// Read when the dialog is made, not a dependency: every history update parses
+	// the arguments into new arrays, and a paused call's arguments are final, so
+	// the question is the same for as long as the key is.
+	const question = useRef(pending);
+	question.current = pending;
 
 	const dialog = useMemo<ServerDialog | null>(() => {
 		const id = historyChatId;
-		if (!key || !id || isTemporaryChatId(id) || !messageId || !callId || key === handled) return null;
+		const asked = question.current;
+		if (!key || !id || isTemporaryChatId(id) || !messageId || !callId || !asked || key === handled) return null;
 		return {
 			type: 'ask_user',
-			data: JSON.parse(args),
+			data: { questions: asked.questions, allow_other: asked.allowOther },
 			reply: (value) => {
 				setHandled(key);
 				const { token: t, onResolved: done } = latest.current;
@@ -67,7 +71,7 @@ export function useSavedAskUser({
 				});
 			}
 		};
-	}, [key, historyChatId, messageId, callId, args, handled]);
+	}, [key, historyChatId, messageId, callId, handled]);
 
 	return { dialog, close: () => key && setHandled(key) };
 }
