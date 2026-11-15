@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup as cleanupPage, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
+import { cloneSharedChatById, deleteSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { SharedChatPage } from './SharedChatPage';
@@ -27,7 +27,8 @@ vi.mock('@/lib/apis/chats', () => ({
 			}
 		}
 	})),
-	cloneSharedChatById: vi.fn()
+	cloneSharedChatById: vi.fn(),
+	deleteSharedChatById: vi.fn()
 }));
 
 const renderPage = () =>
@@ -37,6 +38,7 @@ const renderPage = () =>
 				<Routes>
 					<Route path="/s/:id" element={<SharedChatPage />} />
 					<Route path="/auth" element={<p>sign-in page</p>} />
+					<Route path="/c/:id" element={<p>original chat page</p>} />
 				</Routes>
 			</MemoryRouter>
 		</QueryClientProvider>
@@ -144,10 +146,76 @@ describe('SharedChatPage: a link that no longer works (NAV-3, #953)', () => {
 		expect(await screen.findByText("Couldn't load this shared chat")).toBeInTheDocument();
 	});
 
-	it('still sends an anonymous viewer to sign in, since the server answers a missing and a private share alike', async () => {
+	it('tells an anonymous viewer, in place, that a missing share is no longer available (404, #953)', async () => {
+		useAuthStore.setState({ status: 'anonymous', token: null, user: null } as never);
+		vi.mocked(getChatByShareId).mockRejectedValueOnce("We could not find what you're looking for :/");
+		renderPage();
+		expect(
+			await screen.findByRole('heading', { level: 1, name: 'This shared link is no longer available.' })
+		).toBeInTheDocument();
+		expect(screen.queryByText('sign-in page')).toBeNull();
+		expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/auth');
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Shared link not available'));
+	});
+
+	it('still sends an anonymous viewer to sign in for a share that exists but is not open (401)', async () => {
 		useAuthStore.setState({ status: 'anonymous', token: null, user: null } as never);
 		vi.mocked(getChatByShareId).mockRejectedValueOnce('401 Unauthorized');
 		renderPage();
 		expect(await screen.findByText('sign-in page')).toBeInTheDocument();
+	});
+});
+
+describe('SharedChatPage: the owner’s own share (#1005)', () => {
+	const owned = () =>
+		vi.mocked(getChatByShareId).mockResolvedValueOnce({
+			id: 'share-1',
+			original_chat_id: 'orig-1',
+			chat: {
+				title: 'Kaplan-Meier curves',
+				history: {
+					currentId: 'm1',
+					messages: { m1: { id: 'm1', parentId: null, childrenIds: [], role: 'user', content: 'question' } }
+				}
+			}
+		} as never);
+
+	it('offers its owner Open original and Stop sharing, and nobody else', async () => {
+		owned();
+		renderPage();
+		expect(await screen.findByRole('link', { name: 'Open original' })).toHaveAttribute('href', '/c/orig-1');
+		expect(screen.getByRole('button', { name: 'Stop sharing' })).toBeInTheDocument();
+		cleanupPage();
+		renderPage();
+		await screen.findByRole('heading', { name: 'shared chat' });
+		expect(screen.queryByRole('link', { name: 'Open original' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Stop sharing' })).toBeNull();
+	});
+
+	it('asks first, naming the chat, then stops sharing and says the link no longer works (ACT-3)', async () => {
+		owned();
+		vi.mocked(deleteSharedChatById).mockResolvedValueOnce(true as never);
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Stop sharing “Kaplan-Meier curves”?' });
+		expect(ask).toHaveTextContent('The link stops working for everyone who has it.');
+		expect(deleteSharedChatById).not.toHaveBeenCalled();
+		fireEvent.click(within(ask).getByRole('button', { name: 'Stop sharing' }));
+		expect(
+			await screen.findByRole('heading', { level: 1, name: 'This shared link is no longer available.' })
+		).toBeInTheDocument();
+		expect(deleteSharedChatById).toHaveBeenCalledWith('t', 'orig-1');
+		expect(screen.getByText(/You stopped sharing this chat/)).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', '/c/orig-1');
+	});
+
+	it('keeps the page and says why when stopping fails', async () => {
+		owned();
+		vi.mocked(deleteSharedChatById).mockRejectedValueOnce('Database is locked');
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Stop sharing' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop sharing' }));
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith('Database is locked'));
+		expect(screen.getByRole('heading', { name: 'Kaplan-Meier curves' })).toBeInTheDocument();
 	});
 });
