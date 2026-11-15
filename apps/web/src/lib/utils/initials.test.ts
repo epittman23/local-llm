@@ -11,6 +11,23 @@ describe('initials', () => {
 		expect(initials('qwen3-coder')).toBe('Q');
 	});
 
+	it('tells model ids with a provider apart by the word parts after the last slash (#990)', () => {
+		expect(initials('qwen/qwen-2.5-coder-32b-instruct')).toBe('QC');
+		expect(initials('qwen/qwen3.6-27b')).toBe('QB');
+		expect(initials('meta-llama/llama_3.1_70b')).toBe('LB');
+		expect(initials('org/deep/mistral')).toBe('M');
+	});
+
+	it('falls back to the whole id when nothing after the slash has a letter', () => {
+		expect(initials('org/123')).toBe('O');
+		expect(initials('org/')).toBe('O');
+	});
+
+	it('keeps a name with spaces as first and last word, slash or not', () => {
+		expect(initials('AC/DC Fan Club')).toBe('AC');
+		expect(initials('Ada Lovelace')).toBe('AL');
+	});
+
 	it('ignores surrounding and repeated spaces', () => {
 		expect(initials('  grace   hopper ')).toBe('GH');
 	});
