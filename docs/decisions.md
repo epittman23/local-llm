@@ -22,6 +22,20 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     `anyone:*` read grant; "only me" is no grant. Users and groups are listed
     only when more than one account exists (`GET /users/search`'s total). No
     API or schema change.
+  - **A missing share link says so to anyone (#953, S2-D7).** `GET
+    /chats/share/{id}` answers 404 with the NOT_FOUND detail when no such
+    share exists (it answered 401, as for a private share), so the /s/ page
+    tells an anonymous visitor "This shared link is no longer available."
+    instead of sending them to sign in. A share that exists but is not open
+    to the caller still answers 401. An API change the owner approved; no
+    schema change.
+  - **A share's owner can open the original or stop sharing from the shared
+    page (#1005, S2-D8).** The same route's response gains
+    `original_chat_id`, set only when the caller owns the chat the share was
+    made from and null for anyone else, so nobody else learns which chat it
+    came from. The page offers that owner Open original and Stop sharing,
+    which asks first, naming the chat (ACT-3). An API change the owner
+    approved; no schema change.
   - **Bio, Gender and Birth date stay (#1088, S2-D3).** All three remain on
     the Account tab, optional, in the standard's fields, and each one's help
     names the prompt variable it fills: `{{USER_BIO}}`, `{{USER_GENDER}}`,
