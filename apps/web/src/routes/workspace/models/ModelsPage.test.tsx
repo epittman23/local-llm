@@ -216,7 +216,7 @@ describe('ModelsPage row content (#1097, #908)', () => {
 
 	it('names the row by its name, state and second line, not its id or time (A11Y-2)', async () => {
 		vi.mocked(getModelItems).mockResolvedValue({ items: [model('tutor', 'Statistics tutor', true)], total: 1 });
-		renderPage();
+		const router = renderPage();
 		await screen.findByText('Statistics tutor');
 		const button = document.querySelector('[data-slot="row-button"]') as HTMLElement;
 		const hidden = [...button.querySelectorAll('[aria-hidden]')].map((el) => el.textContent ?? '');
@@ -224,6 +224,7 @@ describe('ModelsPage row content (#1097, #908)', () => {
 		// New chat is in the menu too, for phones, where the row keeps only the menu and the switch.
 		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model Menu' }), { button: 0, pointerType: 'mouse' });
 		const menu = await screen.findByRole('menu');
-		expect(within(menu).getByRole('menuitem', { name: 'New chat' })).toHaveAttribute('href', '/?model=tutor');
+		fireEvent.click(within(menu).getByRole('menuitem', { name: 'New chat' }));
+		await waitFor(() => expect(router.state.location.search).toBe('?model=tutor'));
 	});
 });

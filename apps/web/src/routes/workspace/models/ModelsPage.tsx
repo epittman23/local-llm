@@ -536,11 +536,12 @@ export function ModelsPage() {
 													</DropdownMenuTrigger>
 												</Tip>
 												<DropdownMenuContent align="end" className="min-w-44">
-													<DropdownMenuItem className="sm:hidden" asChild>
-														<Link to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}>
-															<SquarePen />
-															New chat
-														</Link>
+													<DropdownMenuItem
+														className="sm:hidden"
+														onSelect={() => navigate(`${routePaths.home}?model=${encodeURIComponent(model.id)}`)}
+													>
+														<SquarePen />
+														New chat
 													</DropdownMenuItem>
 													{model.write_access && (
 														<DropdownMenuItem onSelect={() => openModel(model)}>

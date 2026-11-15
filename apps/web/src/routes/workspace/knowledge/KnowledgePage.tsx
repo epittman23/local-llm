@@ -201,9 +201,11 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 					setDeleting(null);
 				}}
 			>
-				{deleting?.file_count === undefined
-					? 'Its files, their extracted text and embeddings are deleted.'
-					: `Its ${deleting.file_count} ${deleting.file_count === 1 ? 'file' : 'files'}, their extracted text and embeddings are deleted.`}{' '}
+				{deleting?.file_count === 0
+					? 'It holds no files.'
+					: deleting?.file_count === undefined
+						? 'Its files, their extracted text and embeddings are deleted.'
+						: `Its ${deleting.file_count} ${deleting.file_count === 1 ? 'file' : 'files'}, their extracted text and embeddings are deleted.`}{' '}
 				It can't be undone.
 			</ConfirmDialog>
 
