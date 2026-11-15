@@ -40,7 +40,13 @@ import { InputVariablesDialog } from './InputVariablesDialog';
 import { ModelRow, modelImage } from './ModelSelector';
 import type { ChatModel } from './useModels';
 
-/** `submit` sends what the box holds now, as Enter would; `restoreDraft` puts back the draft kept for `draftKey`. */
+/**
+ * `submit` sends what the box holds now, as Enter would. `setText` fills the
+ * box and keeps it as the draft; `setText('')` is for a message the page sent
+ * itself (after confirming web search), so its draft is kept until the reply
+ * ends, as a send from the box is. `restoreDraft` puts back the draft kept for
+ * `draftKey`, unless that draft was just sent.
+ */
 export type ChatInputHandle = {
 	focus: () => void;
 	setText: (text: string) => void;
@@ -201,13 +207,21 @@ export const ChatInput = forwardRef<
 	const ctrlEnter = Boolean((settings as Record<string, unknown> | null)?.ctrlEnterToSend);
 	useImperativeHandle(ref, () => ({
 		focus: () => area.current?.focus(),
-		setText: (t) => setText(t),
+		setText: (t) => {
+			setText(t);
+			if (!draftKey) return;
+			if (t) {
+				saveDraft(draftKey, t);
+				if (sent.current === draftKey) sent.current = null;
+			} else sent.current = draftKey;
+		},
 		submit: () => {
 			// Nothing to send (the box was emptied meanwhile): nothing to refuse either.
 			if (text.trim() || files.length) submit();
 		},
 		restoreDraft: () => {
-			const draft = draftKey ? loadDraft(draftKey) : '';
+			// A draft sent and not yet answered stays out of the box (back in this chat mid-reply).
+			const draft = draftKey && sent.current !== draftKey ? loadDraft(draftKey) : '';
 			setText(draft);
 			setCursor(draft.length);
 		}

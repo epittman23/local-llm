@@ -423,6 +423,31 @@ describe('ChatInput: drafts (#997, #1061)', () => {
 		expect(loadDraft('c1')).toBe('two');
 	});
 
+	it('does not put back a draft that was just sent, when its chat is opened again mid-reply', () => {
+		const view = input({ draftKey: 'new:' });
+		type(view.box(), 'already sent');
+		fireEvent.keyDown(view.box(), { key: 'Enter' });
+		view.rerender({ draftKey: 'c9', generating: true });
+		// New chat pressed while the reply is still being written.
+		view.rerender({ draftKey: 'new:', generating: true });
+		act(() => view.ref.current?.restoreDraft());
+		expect(view.box().value).toBe('');
+		view.rerender({ draftKey: 'new:', generating: false });
+		expect(loadDraft('new:')).toBe('');
+	});
+
+	it('keeps text the page puts in, and treats setText("") as the page having sent it', () => {
+		const view = input({ draftKey: 'c1' });
+		act(() => view.ref.current?.setText('a follow-up to edit'));
+		expect(loadDraft('c1')).toBe('a follow-up to edit');
+		// Sent from the web-search confirmation: kept until the reply ends.
+		act(() => view.ref.current?.setText(''));
+		expect(loadDraft('c1')).toBe('a follow-up to edit');
+		view.rerender({ generating: true });
+		view.rerender({ generating: false });
+		expect(loadDraft('c1')).toBe('');
+	});
+
 	it('keeps nothing without a draftKey', () => {
 		const view = input();
 		type(view.box(), 'not kept');
