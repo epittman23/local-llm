@@ -170,13 +170,11 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		if (showCreateOnMount) navigate(routePaths.workspacePrompts);
 	};
 
+	// A failure is thrown to the dialog, which says it at the field it concerns (FRM-2: COMMAND_TAKEN under Command).
 	const createPrompt = async (draft: PromptDraft) => {
-		const res = await createNewPrompt(token, draft).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		const res = await createNewPrompt(token, draft);
 		if (res) {
-			toast.success('Prompt created successfully');
+			toast.success('Prompt created');
 			setPage(1);
 			await refetchList();
 			closeCreate();
@@ -186,7 +184,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const deleteMutation = useMutation({
 		mutationFn: (prompt: PromptListItem) => deletePromptById(token, prompt.id),
 		onSuccess: (res, prompt) => {
-			if (res) toast.success(`Deleted ${prompt.command}`);
+			if (res) toast.success(`Deleted “${prompt.name}”`);
 		},
 		onError: (error) => toast.error(`${error}`),
 		onSettled: () => {

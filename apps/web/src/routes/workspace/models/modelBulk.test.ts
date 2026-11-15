@@ -58,9 +58,9 @@ describe('setVisibility', () => {
 	});
 	it('toasts the outcome and says whether the model was saved', async () => {
 		expect(await setVisibility('t', row('a'), true)).toBe(true);
-		expect(toast.success).toHaveBeenLastCalledWith('Model a is now hidden');
+		expect(toast.success).toHaveBeenLastCalledWith('“A” is hidden');
 		expect(await setVisibility('t', row('a'), false)).toBe(true);
-		expect(toast.success).toHaveBeenLastCalledWith('Model a is now visible');
+		expect(toast.success).toHaveBeenLastCalledWith('“A” is shown');
 
 		vi.mocked(updateModelById).mockResolvedValueOnce(null);
 		expect(await setVisibility('t', row('a'), true)).toBe(false);

@@ -185,7 +185,7 @@ export function SkillsPage() {
 				try {
 					items = parseSkillImport(text);
 				} catch {
-					toast.error('Invalid JSON file');
+					toast.error("That file isn't a skills export (it isn't valid JSON).");
 					return;
 				}
 				if (items.length === 0) {

@@ -4,12 +4,16 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { searchKnowledgeBases } from '@/lib/apis/knowledge';
+import { deleteKnowledgeById, searchKnowledgeBases } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgePage } from './KnowledgePage';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/lib/apis/knowledge', async (original) => ({ ...(await original<object>()), searchKnowledgeBases: vi.fn() }));
+vi.mock('@/lib/apis/knowledge', async (original) => ({
+	...(await original<object>()),
+	searchKnowledgeBases: vi.fn(),
+	deleteKnowledgeById: vi.fn()
+}));
 
 const base = (id: string, name: string, o: Record<string, unknown> = {}) => ({
 	id,
@@ -126,6 +130,13 @@ describe('KnowledgePage create and delete (#1011, #1012, STA-3)', () => {
 		const confirm = await screen.findByRole('alertdialog');
 		expect(within(confirm).getByRole('heading')).toHaveTextContent('Delete “Textbooks”?');
 		expect(confirm).toHaveTextContent('Its 2 files, their extracted text and embeddings are deleted.');
-		expect(within(confirm).getByRole('button', { name: 'Delete knowledge base' })).toBeVisible();
+		vi.mocked(deleteKnowledgeById).mockRejectedValueOnce({ detail: 'Database is locked' });
+		fireEvent.click(within(confirm).getByRole('button', { name: 'Delete knowledge base' }));
+		// FBK-4: plain words naming it, the server's own words as the detail.
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete “Textbooks”", {
+				description: 'Database is locked'
+			})
+		);
 	});
 });

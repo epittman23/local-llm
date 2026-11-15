@@ -208,7 +208,7 @@ test.describe('workspace knowledge list', () => {
 		await mockKnowledgeApi(page, [kb(1, { meta: { document: true } })]);
 		await page.goto('/workspace/knowledge');
 		await page.getByText('Base 1', { exact: true }).click();
-		await expect(page.getByText('Only collections can be edited')).toBeVisible();
+		await expect(page.getByText('A single document can’t be opened here')).toBeVisible();
 		await expect(page).toHaveURL(/\/workspace\/knowledge$/);
 	});
 });

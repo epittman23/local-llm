@@ -5,7 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { getPromptItems } from '@/lib/apis/prompts';
+import { createNewPrompt, getPromptItems } from '@/lib/apis/prompts';
 import { PromptsPage } from './PromptsPage';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -120,5 +120,20 @@ describe('PromptsPage rows and delete', () => {
 		expect(await screen.findByRole('heading', { name: 'No prompts yet' })).toBeVisible();
 		fireEvent.click(screen.getByRole('button', { name: 'New prompt' }));
 		expect(await screen.findByRole('dialog')).toBeVisible();
+	});
+
+	it('throws a failed create to the dialog, which says it and stays open (#1095)', async () => {
+		vi.mocked(getPromptItems).mockResolvedValue({ items: [], total: 0 });
+		vi.mocked(createNewPrompt).mockRejectedValueOnce('Command already in use');
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'New prompt' }));
+		const dialog = await screen.findByRole('dialog');
+		fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Summarise' } });
+		fireEvent.change(within(dialog).getByLabelText('Command'), { target: { value: 'summarise' } });
+		fireEvent.change(within(dialog).getByLabelText('Prompt Content'), { target: { value: 'Summarise this.' } });
+		fireEvent.submit(within(dialog).getByLabelText('Name').closest('form') as HTMLFormElement);
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Command already in use'));
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(screen.getByRole('dialog')).toBeVisible();
 	});
 });

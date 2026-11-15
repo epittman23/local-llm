@@ -45,6 +45,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
+import { errorText } from '@/lib/chat/history';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
@@ -169,12 +170,12 @@ export function ModelsPage() {
 		m.write_access && navigate(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(m.id)}`);
 
 	const deleteModel = async (m: ModelRow) => {
-		const res = await deleteModelById(token, m.id).catch((e) => {
-			toast.error(`${e}`);
+		const res = await deleteModelById(token, m.id).catch((error) => {
+			toast.error(`Couldn't delete “${m.name}”`, { description: errorText(error) || undefined });
 			return null;
 		});
 		if (res) {
-			toast.success(`Deleted ${m.id}`);
+			toast.success(`Deleted “${m.name}”`);
 			setPage(1);
 		}
 		await refetch();
@@ -245,7 +246,7 @@ export function ModelsPage() {
 			try {
 				incoming = parseModelImport(String(event.target?.result));
 			} catch {
-				toast.error('Invalid JSON file');
+				toast.error("That file isn't a models export (it isn't valid JSON).");
 				return;
 			}
 			for (const model of incoming) {

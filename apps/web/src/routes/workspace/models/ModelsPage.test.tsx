@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { getModelItems } from '@/lib/apis/models';
+import { deleteModelById, getModelItems } from '@/lib/apis/models';
 import { searchUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
@@ -14,6 +15,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/lib/apis/models', async (original) => ({
 	...(await original<object>()),
 	getModelItems: vi.fn(),
+	deleteModelById: vi.fn(),
 	getModelTags: vi.fn(async () => [])
 }));
 
@@ -177,6 +179,9 @@ describe('ModelsPage delete (ACT-3, #1012)', () => {
 		expect(within(dialog).getByRole('heading')).toHaveTextContent('Delete “Statistics tutor”?');
 		expect(dialog).toHaveTextContent('Chats that used it keep their messages.');
 		expect(within(dialog).getByRole('button', { name: 'Delete model' })).toHaveAttribute('data-variant', 'destructive');
+		vi.mocked(deleteModelById).mockResolvedValueOnce(true);
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Delete model' }));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted “Statistics tutor”'));
 	});
 });
 

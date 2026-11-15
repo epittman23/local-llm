@@ -35,6 +35,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
+import { errorText } from '@/lib/chat/history';
 import { dayjs } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
@@ -141,8 +142,10 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 
 	const deleteMutation = useMutation({
 		mutationFn: (item: KnowledgeListItem) => deleteKnowledgeById(token, item.id),
-		onSuccess: (res) => res && toast.success('Knowledge deleted successfully.'),
-		onError: (error) => toast.error(`${error}`),
+		// FBK-2, FBK-4: the result names the knowledge base; the server's own words are the detail.
+		onSuccess: (res, item) => res && toast.success(`Deleted “${item.name}”`),
+		onError: (error, item) =>
+			toast.error(`Couldn't delete “${item.name}”`, { description: errorText(error) || undefined }),
 		onSettled: refetch
 	});
 
@@ -158,15 +161,15 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
-			toast.success('Knowledge exported successfully');
+			toast.success(`Exported “${item.name}”`);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(`Couldn't export “${item.name}”`, { description: errorText(error) || undefined });
 		}
 	};
 
 	const openKnowledge = (item: KnowledgeListItem) => {
 		if (item.meta?.document) {
-			toast.error('Only collections can be edited, create a new knowledge base to edit/add documents.');
+			toast.error('A single document can’t be opened here. To work with its file, add it to a new knowledge base.');
 			return;
 		}
 		navigate(`${routePaths.workspaceKnowledge}/${item.id}`);
@@ -432,12 +435,12 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 			return;
 		}
 		setLoading(true);
-		const res = await createNewKnowledge(token, name.trim(), description.trim(), accessGrants).catch((e) => {
-			toast.error(`${e}`);
+		const res = await createNewKnowledge(token, name.trim(), description.trim(), accessGrants).catch((error) => {
+			toast.error("Couldn't create the knowledge base", { description: errorText(error) || undefined });
 			return null;
 		});
 		if (res) {
-			toast.success('Knowledge created successfully.');
+			toast.success('Knowledge base created');
 			onCreated(res);
 		}
 		setLoading(false);
