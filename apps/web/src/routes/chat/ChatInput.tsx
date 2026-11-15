@@ -341,7 +341,19 @@ export const ChatInput = forwardRef<
 		}
 		if (active.trigger === '@') return typed ? `No models match “${typed}”` : 'No models yet';
 		if (!knowledge.isSuccess || knowledge.isFetching || q !== active.query) return null;
-		return typed ? `No knowledge or files match “${typed}”` : 'No knowledge or files yet';
+		if (typed) return `No knowledge or files match “${typed}”`;
+		return (
+			<>
+				No knowledge or files yet.{' '}
+				<Link
+					to="/workspace/knowledge"
+					className="text-brand underline underline-offset-2"
+					onMouseDown={(e) => e.preventDefault()}
+				>
+					Create one in Workspace &gt; Knowledge
+				</Link>
+			</>
+		);
 	})();
 
 	// Committed now, so the caret is placed in this same task: placed a frame
