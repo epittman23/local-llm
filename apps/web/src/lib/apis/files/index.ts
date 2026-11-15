@@ -4,16 +4,19 @@
 // .svelte components). Fixing it here would mean rewriting signatures beyond what a
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
+
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { splitStream } from '@/lib/utils/api-helpers';
-import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 export const uploadFile = async (
 	token: string,
 	file: File,
 	metadata?: object | null,
 	process?: boolean | null,
-	stream: boolean = true
+	stream: boolean = true,
+	/** Called with the new file's id as soon as the server has it, before processing ends. */
+	onCreated?: (id: string) => void
 ) => {
 	const data = new FormData();
 	data.append('file', file);
@@ -50,6 +53,8 @@ export const uploadFile = async (
 		throw error;
 	}
 
+	if (res?.id) onCreated?.(res.id);
+
 	if (res && stream) {
 		const status = await getFileProcessStatus(token, res.id);
 
@@ -63,7 +68,7 @@ export const uploadFile = async (
 				}
 
 				try {
-					let lines = value.split('\n');
+					const lines = value.split('\n');
 
 					for (const line of lines) {
 						if (line !== '') {
@@ -71,7 +76,7 @@ export const uploadFile = async (
 							if (line === 'data: [DONE]') {
 								console.log(line);
 							} else {
-								let data = JSON.parse(line.replace(/^data: /, ''));
+								const data = JSON.parse(line.replace(/^data: /, ''));
 								console.log(data);
 
 								if (data?.error) {

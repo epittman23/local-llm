@@ -242,12 +242,18 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	}, [listed, files.isPlaceholderData, files.isFetching]);
 	const breadcrumbs = listed?.breadcrumbs ?? [];
 
-	const { uploading, syncing, uploadFiles, uploadWeb, uploadDirectoryEntries, syncDirectory } = useKnowledgeUploads({
-		knowledgeId: id,
-		directoryId,
-		breadcrumbs,
-		refresh: reload
-	});
+	const { uploading, syncing, uploadFiles, uploadWeb, retry, dismiss, uploadDirectoryEntries, syncDirectory } =
+		useKnowledgeUploads({
+			knowledgeId: id,
+			directoryId,
+			breadcrumbs,
+			refresh: reload
+		});
+
+	// A file the server lists as pending while this page uploads it is already
+	// shown by its upload row, failed ones included: one row per file (#1072).
+	const inFlight = new Set(uploading.map((i) => i.serverId).filter(Boolean));
+	const shownFiles = (listed?.items ?? []).filter((f) => !f.id || !inFlight.has(f.id));
 
 	// --- name and description save themselves -------------------------------
 	// Leaving the page saves a pending change at once instead of dropping it,
@@ -746,7 +752,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 							{listed.items.length > 0 || listed.directories.length > 0 || uploading.length > 0 ? (
 								<div className="flex h-full w-full overflow-y-auto text-xs">
 									<KnowledgeFileList
-										files={listed.items}
+										files={shownFiles}
 										uploading={uploading}
 										directories={listed.directories}
 										writeAccess={writeAccess}
@@ -768,6 +774,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 											setDeletingDir(dirId);
 										}}
 										onMove={move}
+										onRetryUpload={retry}
+										onDismissUpload={dismiss}
 									/>
 								</div>
 							) : (

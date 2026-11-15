@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SyncDiff } from './knowledgeFiles';
 import { useKnowledgeUploads } from './useKnowledgeUploads';
@@ -23,12 +23,13 @@ const { kb, files, toast, calls } = vi.hoisted(() => {
 		files: {
 			uploadFile: vi.fn()
 		},
-		toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() }
+		toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() }
 	};
 });
 vi.mock('@/lib/apis/knowledge', () => kb);
 vi.mock('@/lib/apis/files', () => files);
-vi.mock('@/lib/apis/retrieval', () => ({ processUrl: vi.fn() }));
+const { processUrl } = vi.hoisted(() => ({ processUrl: vi.fn() }));
+vi.mock('@/lib/apis/retrieval', () => ({ processUrl }));
 vi.mock('@/lib/utils/hash', () => ({ computeFileHash: async (file: File) => `sha-${file.name}` }));
 vi.mock('sonner', () => ({ toast }));
 
@@ -96,7 +97,7 @@ describe('useKnowledgeUploads syncDirectory', () => {
 			// Added files last.
 			'upload new.md'
 		]);
-		expect(toast.error).toHaveBeenCalledWith('Upload failed for 1 of 3 files.');
+		expect(toast.error).toHaveBeenCalledWith("1 of 3 files couldn't be added");
 		expect(toast.success).not.toHaveBeenCalled();
 	});
 
@@ -123,7 +124,12 @@ describe('useKnowledgeUploads syncDirectory', () => {
 
 		const refresh = await sync();
 
-		expect(toast.error).toHaveBeenCalledWith('The old copies of modified files could not be removed: Server error');
+		expect(toast.error).toHaveBeenCalledWith(
+			"The old copies of changed files couldn't be removed. Sync again to retry.",
+			{
+				description: expect.objectContaining({ props: { detail: 'Server error' } })
+			}
+		);
 		expect(toast.success).not.toHaveBeenCalled();
 		expect(refresh).toHaveBeenCalled();
 	});
@@ -137,7 +143,7 @@ describe('useKnowledgeUploads syncDirectory', () => {
 		const refresh = await sync();
 
 		expect(toast.error).toHaveBeenCalledWith(
-			'2 files could not be removed from the knowledge base; the next sync tries again.'
+			"2 files couldn't be removed from the knowledge base. The next sync tries again."
 		);
 		expect(toast.success).not.toHaveBeenCalled();
 		expect(refresh).toHaveBeenCalled();
@@ -162,5 +168,154 @@ describe('useKnowledgeUploads syncDirectory', () => {
 			'upload new.md'
 		]);
 		expect(toast.success).toHaveBeenCalled();
+	});
+});
+
+describe('useKnowledgeUploads single uploads (#907, #1072)', () => {
+	const file = (name: string) => new File(['hello'], name, { type: 'text/plain' });
+	const render = () => {
+		const refresh = vi.fn();
+		const hook = renderHook(() =>
+			useKnowledgeUploads({ knowledgeId: 'kb1', directoryId: null, breadcrumbs: [], refresh })
+		);
+		return { hook, refresh };
+	};
+	beforeEach(() => {
+		vi.clearAllMocks();
+		files.uploadFile.mockReset();
+	});
+
+	it('gives four files one toast and leaves no rows behind', async () => {
+		files.uploadFile.mockImplementation(async (_t: string, f: File) => ({ id: `id-${f.name}` }));
+		const { hook, refresh } = render();
+		await act(() => hook.result.current.uploadFiles(['a', 'b', 'c', 'd'].map(file)));
+		expect(toast.success).toHaveBeenCalledTimes(1);
+		expect(toast.success).toHaveBeenCalledWith('4 files added');
+		expect(hook.result.current.uploading).toEqual([]);
+		expect(refresh).toHaveBeenCalledTimes(4);
+	});
+
+	it('names a single added file', async () => {
+		files.uploadFile.mockResolvedValue({ id: 'x' });
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([file('notes.md')]));
+		expect(toast.success).toHaveBeenCalledWith('Added "notes.md"');
+	});
+
+	it('records the server id as soon as the POST answers, so the pending copy can be skipped', async () => {
+		let finish: (v: unknown) => void = () => {};
+		files.uploadFile.mockImplementation(
+			(_t: string, _f: File, _m: unknown, _p: unknown, _s: unknown, onCreated: (id: string) => void) => {
+				onCreated('srv-1');
+				return new Promise((res) => {
+					finish = res;
+				});
+			}
+		);
+		const { hook } = render();
+		let done: Promise<void> = Promise.resolve();
+		act(() => {
+			done = hook.result.current.uploadFiles([file('a.md')]);
+		});
+		await waitFor(() =>
+			expect(hook.result.current.uploading[0]).toMatchObject({ serverId: 'srv-1', status: 'processing' })
+		);
+		await act(async () => {
+			finish({ id: 'srv-1' });
+			await done;
+		});
+		expect(hook.result.current.uploading).toEqual([]);
+	});
+
+	it('keeps a refused upload as a failed row with the server text, and one summary toast', async () => {
+		files.uploadFile.mockImplementation(async (_t: string, f: File) => {
+			if (f.name === 'b.md') throw 'Embedding model is not available offline';
+			return { id: f.name };
+		});
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([file('a.md'), file('b.md')]));
+		expect(hook.result.current.uploading).toEqual([
+			expect.objectContaining({
+				name: 'b.md',
+				status: 'failed',
+				reason: 'The server refused the upload.',
+				detail: 'Embedding model is not available offline'
+			})
+		]);
+		expect(toast.error).toHaveBeenCalledTimes(1);
+		expect(toast.error).toHaveBeenCalledWith('1 added, 1 failed', expect.anything());
+	});
+
+	it('keeps a file that failed processing, says so, and retries it in the same row', async () => {
+		files.uploadFile.mockResolvedValueOnce({ id: 'x', error: 'no embeddings' });
+		const { hook, refresh } = render();
+		await act(() => hook.result.current.uploadFiles([file('a.md')]));
+		const [row] = hook.result.current.uploading;
+		expect(row).toMatchObject({ status: 'failed', detail: 'no embeddings' });
+		expect(row.reason).toMatch(/couldn't be processed/);
+		expect(toast.error).toHaveBeenCalledWith('Couldn\'t add "a.md"', expect.anything());
+		files.uploadFile.mockResolvedValueOnce({ id: 'y' });
+		await act(() => hook.result.current.retry(row.itemId));
+		expect(hook.result.current.uploading).toEqual([]);
+		expect(refresh).toHaveBeenCalledTimes(1);
+		expect(toast.success).toHaveBeenCalledWith('Added "a.md"');
+	});
+
+	it('marks duplicate content as skipped, with nothing to retry', async () => {
+		files.uploadFile.mockResolvedValue({
+			id: 'x',
+			error: 'Duplicate content detected. Please provide unique content.'
+		});
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([file('a.md')]));
+		expect(hook.result.current.uploading[0]).toMatchObject({ duplicate: true, status: 'failed' });
+		expect(toast.info).toHaveBeenCalledWith('"a.md" is already in this knowledge base, so it was skipped');
+	});
+
+	it('dismisses a failed row', async () => {
+		files.uploadFile.mockResolvedValue(null);
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([file('a.md')]));
+		expect(hook.result.current.uploading[0].reason).toBe("The server didn't answer. Try again.");
+		act(() => hook.result.current.dismiss(hook.result.current.uploading[0].itemId));
+		expect(hook.result.current.uploading).toEqual([]);
+	});
+
+	it('refuses an empty file by name without a request', async () => {
+		const { hook } = render();
+		await act(() => hook.result.current.uploadFiles([new File([], 'empty.md')]));
+		expect(files.uploadFile).not.toHaveBeenCalled();
+		expect(toast.error).toHaveBeenCalledWith('"empty.md" is empty, so it wasn\'t uploaded.');
+	});
+
+	it('adds web pages as text files and summarises them in one toast', async () => {
+		processUrl.mockResolvedValue({ type: 'web', content: 'page text' });
+		files.uploadFile.mockResolvedValue({ id: 'w' });
+		const { hook } = render();
+		await act(() => hook.result.current.uploadWeb(['https://a.example', 'https://b.example']));
+		expect(files.uploadFile).toHaveBeenCalledTimes(2);
+		expect(files.uploadFile.mock.calls[0][2]).toMatchObject({ source_url: 'https://a.example' });
+		expect(toast.success).toHaveBeenCalledWith('2 files added');
+	});
+
+	it('keeps a page that could not be fetched as a failed row, and retries it', async () => {
+		processUrl.mockRejectedValueOnce('timeout');
+		const { hook } = render();
+		await act(() => hook.result.current.uploadWeb(['https://a.example']));
+		const [row] = hook.result.current.uploading;
+		expect(row).toMatchObject({ url: 'https://a.example', status: 'failed', detail: 'timeout' });
+		processUrl.mockResolvedValueOnce({ type: 'file', file: { id: 'f1' } });
+		kb.addFileToKnowledgeById.mockResolvedValueOnce({ id: 'kb1' });
+		await act(() => hook.result.current.retry(row.itemId));
+		expect(kb.addFileToKnowledgeById).toHaveBeenCalledWith(expect.anything(), 'kb1', 'f1', null);
+		expect(hook.result.current.uploading).toEqual([]);
+	});
+
+	it('fails a linked file the knowledge base refused', async () => {
+		processUrl.mockResolvedValue({ type: 'file', file: { id: 'f1' } });
+		kb.addFileToKnowledgeById.mockRejectedValueOnce('nope');
+		const { hook } = render();
+		await act(() => hook.result.current.uploadWeb(['https://a.example/doc.pdf']));
+		expect(hook.result.current.uploading[0]).toMatchObject({ status: 'failed', detail: 'nope' });
 	});
 });

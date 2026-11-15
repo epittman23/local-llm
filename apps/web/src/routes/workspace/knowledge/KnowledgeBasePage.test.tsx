@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AccessGrant } from '@/lib/access/accessGrants';
+import { uploadFile } from '@/lib/apis/files';
 import {
 	deleteKnowledgeDirectory,
 	removeFileFromKnowledgeById,
@@ -549,5 +550,19 @@ describe('KnowledgeBasePage destructive actions (#906, #1012)', () => {
 		);
 		fireEvent.click(screen.getByRole('button', { name: 'Reset knowledge base' }));
 		await waitFor(() => expect(resetKnowledgeById).toHaveBeenCalled());
+	});
+});
+
+describe('KnowledgeBasePage failed uploads (#907)', () => {
+	it('keeps a failed upload in the list with its reason, Retry and Dismiss', async () => {
+		vi.mocked(uploadFile).mockRejectedValueOnce('Embedding model is not available offline');
+		const { container } = renderPage();
+		await screen.findByText('file1.txt');
+		upload(container, 'notes.txt');
+		expect(await screen.findByText('The server refused the upload.')).toBeInTheDocument();
+		expect(screen.getByText('Embedding model is not available offline')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Retry notes.txt' })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Dismiss notes.txt' }));
+		await waitFor(() => expect(screen.queryByText('The server refused the upload.')).toBeNull());
 	});
 });

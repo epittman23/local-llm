@@ -1,4 +1,14 @@
-import { ChevronRight, Download, File as FileIcon, Folder, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import {
+	ChevronRight,
+	CircleAlert,
+	Download,
+	File as FileIcon,
+	Folder,
+	MoreHorizontal,
+	Pencil,
+	RotateCw,
+	Trash2
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -16,6 +26,7 @@ import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { formatFileSize } from '@/lib/utils/files';
 import { type Breadcrumb, KB_DIR_MOVE, KB_FILE_MOVE, readMovePayload } from './knowledgeFiles';
+import { ErrorDetails } from './knowledgeToasts';
 import type { UploadingItem } from './useKnowledgeUploads';
 
 export type KnowledgeFile = {
@@ -149,7 +160,9 @@ export function KnowledgeFileList({
 	onOpenDirectory,
 	onRenameDirectory,
 	onDeleteDirectory,
-	onMove
+	onMove,
+	onRetryUpload,
+	onDismissUpload
 }: {
 	files: KnowledgeFile[];
 	uploading: UploadingItem[];
@@ -163,6 +176,8 @@ export function KnowledgeFileList({
 	onRenameDirectory: (id: string, name: string) => void;
 	onDeleteDirectory: (id: string) => void;
 	onMove: (payload: { kind: 'file' | 'dir'; id: string }, targetDirectoryId: string | null) => void;
+	onRetryUpload: (itemId: string) => void;
+	onDismissUpload: (itemId: string) => void;
 }) {
 	const [renamingFile, setRenamingFile] = useState<string | null>(null);
 	const [renamingDir, setRenamingDir] = useState<string | null>(null);
@@ -257,17 +272,56 @@ export function KnowledgeFileList({
 				</div>
 			))}
 
-			{uploading.map((item) => (
-				<div key={item.itemId} role="listitem" className="flex w-full items-center rounded-xl px-2 py-2 text-xs">
-					<Spinner className="mr-2 size-3.5" />
-					<span className="line-clamp-1">
-						{item.name}
-						{item.size ? (
-							<span className="text-muted-foreground ml-1 text-caption">{formatFileSize(item.size)}</span>
-						) : null}
-					</span>
-				</div>
-			))}
+			{uploading.map((item) => {
+				const failed = item.status === 'failed';
+				return (
+					<div
+						key={item.itemId}
+						role="listitem"
+						data-upload-status={item.status}
+						className={cn(
+							'flex w-full gap-2 rounded-xl px-2 py-2',
+							failed ? 'flex-wrap items-start gap-y-1' : 'items-center'
+						)}
+					>
+						{failed ? (
+							<>
+								<CircleAlert aria-hidden className="text-danger mt-0.5 size-4 shrink-0" />
+								<div className="min-w-0 flex-1">
+									<div className="truncate">{item.name}</div>
+									<div className="text-dense text-foreground-muted">{item.reason}</div>
+									{item.detail && (
+										<div className="text-foreground-muted">
+											<ErrorDetails detail={item.detail} />
+										</div>
+									)}
+								</div>
+								<div className="flex shrink-0 items-center gap-1">
+									{!item.duplicate && (
+										<Button variant="outline" size="sm" type="button" onClick={() => onRetryUpload(item.itemId)}>
+											<RotateCw aria-hidden />
+											Retry
+											<span className="sr-only"> {item.name}</span>
+										</Button>
+									)}
+									<Button variant="ghost" size="sm" type="button" onClick={() => onDismissUpload(item.itemId)}>
+										Dismiss
+										<span className="sr-only"> {item.name}</span>
+									</Button>
+								</div>
+							</>
+						) : (
+							<>
+								<Spinner className="size-3.5 shrink-0" />
+								<span className="min-w-0 flex-1 truncate">{item.name}</span>
+								<span className="text-dense text-foreground-muted shrink-0">
+									{item.status === 'processing' ? 'Processing…' : 'Uploading…'}
+								</span>
+							</>
+						)}
+					</div>
+				);
+			})}
 
 			{files.map((file) => {
 				const fileId = file.id ?? file.tempId;
