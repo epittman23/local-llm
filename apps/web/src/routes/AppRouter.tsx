@@ -84,7 +84,7 @@ const router = createBrowserRouter(
 							children: [
 								{ path: routePaths.home, element: null, handle: page('New chat') },
 								{ path: 'c/:id', element: null, handle: { title: 'Chat', heading: 'sr' } },
-								{ path: `${routePaths.folders}/:folderId`, element: null, handle: { title: 'Folder', heading: 'sr' } }
+								{ path: `${routePaths.folders}/:folderId`, element: null, handle: page('Folder') }
 							]
 						},
 						{

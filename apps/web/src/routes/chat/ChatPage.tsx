@@ -40,6 +40,7 @@ import { ChatMenu } from './ChatMenu';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
+import { FolderHome } from './FolderHome';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
@@ -53,7 +54,7 @@ import { type ChatModel, useModels } from './useModels';
 import { useOnChatSwitch } from './useOnChatSwitch';
 import { useParamsAutosave } from './useParamsAutosave';
 
-type Folder = { id: string; name: string; data?: { model_ids?: string[] } | null };
+type Folder = { id: string; name: string; data?: { model_ids?: string[]; system_prompt?: string } | null };
 
 /**
  * Ports routes/(app)/+page.svelte, c/[id] and folders/[folderId], which all
@@ -198,9 +199,12 @@ export function ChatPage() {
 			? 'Chat not found'
 			: folderGone
 				? 'Folder not found'
-				: prefs.titleInTab
-					? session.title || 'New Chat'
-					: null
+				: // A folder's page is named after the folder (#998) until a chat started there has a title.
+					folderId && folder.data && !session.title
+					? folder.data.name
+					: prefs.titleInTab
+						? session.title || 'New Chat'
+						: null
 	);
 	const setSearchOpen = useUIStore((s) => s.setSearchOpen);
 	const openSettings = useSettingsModalStore((s) => s.openSettings);
@@ -440,11 +444,6 @@ export function ChatPage() {
 						disabled={session.generating}
 					/>
 					<div className="ml-auto flex items-center gap-2 pt-1">
-						{folder.data && (
-							<span className="text-muted-foreground text-sm" data-testid="chat-folder">
-								{folder.data.name}
-							</span>
-						)}
 						{!id && temporaryAllowed && (
 							<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
 								<Button
@@ -492,6 +491,15 @@ export function ChatPage() {
 					<div className="flex flex-1 items-center justify-center">
 						<Spinner className="size-5" />
 					</div>
+				) : empty && folderId ? (
+					// The folder's own page (#998): its name, instructions and chats, above the message box.
+					folder.data ? (
+						<FolderHome folder={folder.data} />
+					) : (
+						<div aria-hidden className="mx-auto w-full max-w-3xl flex-1 px-6 py-8" data-testid="folder-home-loading">
+							<div className="bg-surface-3 h-7 w-48 animate-pulse rounded-lg" />
+						</div>
+					)
 				) : empty ? (
 					<>
 						{!id && <ChatBanners />}
@@ -553,6 +561,7 @@ export function ChatPage() {
 					waiting={heldSend.waiting}
 					onCancelWaiting={heldSend.cancel}
 					wide={prefs.widescreen}
+					placeholder={folderId && folder.data ? `New chat in ${folder.data.name}` : undefined}
 					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
 					disabled={session.loading}
 					onPasteText={prefs.largeTextAsFile ? (file) => attachments.addFiles([file], { context: 'full' }) : undefined}

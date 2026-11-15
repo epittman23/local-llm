@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -21,7 +21,11 @@ vi.mock('@/lib/settings/userSettings', () => ({
 }));
 vi.mock('@/lib/apis/configs', () => ({ getBanners: vi.fn(async () => []) }));
 vi.mock('@/lib/apis/tools', () => ({ getTools: vi.fn(async () => []) }));
-vi.mock('@/lib/apis/chats', async (orig) => ({ ...(await orig<object>()), getChatById: vi.fn() }));
+vi.mock('@/lib/apis/chats', async (orig) => ({
+	...(await orig<object>()),
+	getChatById: vi.fn(),
+	getChatListByFolderId: vi.fn(async () => [])
+}));
 vi.mock('@/lib/apis/folders', async (orig) => ({ ...(await orig<object>()), getFolderById: vi.fn() }));
 
 function show() {
@@ -124,5 +128,17 @@ describe('ChatPage: a link to something that is not there (NAV-3, #953)', () => 
 		vi.mocked(getFolderById).mockRejectedValueOnce('Database is locked');
 		showAt('/folders/f1');
 		expect(await screen.findByText("Couldn't load this folder")).toBeInTheDocument();
+	});
+});
+
+describe('ChatPage: a folder’s page (#998)', () => {
+	it('is headed by the folder, once, names the tab after it, and says where a new chat goes', async () => {
+		vi.mocked(getFolderById).mockResolvedValueOnce({ id: 'f1', name: 'Statistics', data: {} });
+		showAt('/folders/f1');
+		expect(await screen.findByRole('heading', { level: 1, name: 'Statistics' })).toBeInTheDocument();
+		expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Statistics'));
+		expect(screen.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'New chat in Statistics');
+		expect(screen.queryByTestId('chat-folder')).toBeNull();
 	});
 });
