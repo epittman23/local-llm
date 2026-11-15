@@ -1,19 +1,27 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { History, Message } from '@/lib/chat/history';
 import { chatPrefs } from '@/lib/chat/prefs';
+import type { ExtraActionsContext } from './ChatMessages';
 import { useMessageActions } from './MessageActions';
 
-vi.mock('./useModels', () => ({ useModels: () => ({ models: [] }) }));
-vi.mock('./useChatPrefs', () => ({ useChatPrefs: () => chatPrefs(null) }));
+const state = vi.hoisted(() => ({
+	features: {} as Record<string, unknown>,
+	models: [] as { id: string; actions?: { id: string; name: string; icon?: string | null }[] }[],
+	prefs: {} as Record<string, unknown>
+}));
+
+vi.mock('./useModels', () => ({ useModels: () => ({ models: state.models }) }));
+vi.mock('./useChatPrefs', () => ({ useChatPrefs: () => chatPrefs(state.prefs) }));
 vi.mock('./useReadAloud', () => ({ useReadAloud: () => ({ speakingId: null, speak: vi.fn(), stop: vi.fn() }) }));
 vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'u1', role: 'admin' } })
 }));
 vi.mock('@/lib/stores/configStore', () => ({
-	useConfigStore: (sel: (s: unknown) => unknown) => sel({ config: { features: {} } })
+	useConfigStore: (sel: (s: unknown) => unknown) => sel({ config: { features: state.features } })
 }));
 
 const user: Message = { id: 'u', parentId: null, childrenIds: ['a'], role: 'user', content: 'hi', done: true };
@@ -28,18 +36,23 @@ const reply = (over: Partial<Message> = {}): Message => ({
 	...over
 });
 
-function Harness({ message, session }: { message: Message; session: Parameters<typeof useMessageActions>[0] }) {
+type Session = Parameters<typeof useMessageActions>[0];
+
+function Harness({ message, session, ctx }: { message: Message; session: Session; ctx: ExtraActionsContext }) {
 	const h = useMessageActions(session);
 	return (
 		<div>
 			{h.editing?.(message)}
-			{h.extraActions?.(message, { isLast: true })}
+			{h.extraActions?.(message, ctx)}
+			{h.regenerate?.(message)}
 			{h.below?.(message)}
+			<Button data-testid="retry" onClick={() => h.onRetry?.(message)} />
+			<Button data-testid="continue" onClick={() => h.onContinue?.(message)} />
 		</div>
 	);
 }
 
-function show(message: Message, over: Partial<Parameters<typeof useMessageActions>[0]> = {}) {
+function show(message: Message, over: Partial<Session> = {}, ctx: ExtraActionsContext = { isLast: true }) {
 	const history: History = { messages: { u: user, [message.id]: message }, currentId: message.id };
 	const session = {
 		chatId: 'c1',
@@ -55,88 +68,202 @@ function show(message: Message, over: Partial<Parameters<typeof useMessageAction
 	render(
 		<QueryClientProvider client={new QueryClient()}>
 			<TooltipProvider>
-				<Harness message={message} session={session} />
+				<Harness message={message} session={session} ctx={ctx} />
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
 	return session;
 }
 
+/** Opens a Radix menu the way a keyboard does (jsdom has no pointer events for it). */
+async function openMenu(name: string) {
+	const trigger = screen.getByRole('button', { name });
+	trigger.focus();
+	fireEvent.keyDown(trigger, { key: 'Enter' });
+	return screen.findByRole('menu');
+}
+
+beforeEach(() => {
+	state.features = { enable_message_rating: true };
+	state.models = [];
+	state.prefs = {};
+});
 afterEach(cleanup);
 
-describe('message actions', () => {
-	it('opens the editor from Edit', () => {
+describe('a reply’s More actions menu (#995)', () => {
+	it('holds Edit, Read aloud, Continue, the model’s actions, then Delete last below a separator', async () => {
+		state.models = [{ id: 'm1', actions: [{ id: 'sum', name: 'Summarize', icon: null }] }];
 		show(reply());
-		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-		expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
+		const menu = await openMenu('More actions');
+		expect(
+			within(menu)
+				.getAllByRole('menuitem')
+				.map((i) => i.textContent)
+		).toEqual(['Edit', 'Read aloud', 'Continue', 'Summarize', 'Delete']);
+		expect(within(menu).getByRole('separator')).toBeTruthy();
 	});
 
-	it('asks before deleting, then removes the message', async () => {
+	it('opens the editor from Edit', async () => {
+		show(reply());
+		fireEvent.click(within(await openMenu('More actions')).getByRole('menuitem', { name: 'Edit' }));
+		expect(await screen.findByRole('textbox', { name: 'Edit message' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Save as copy' })).toBeTruthy();
+	});
+
+	it('asks before deleting, naming the message, then removes it', async () => {
 		const session = show(reply());
-		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		fireEvent.click(within(await openMenu('More actions')).getByRole('menuitem', { name: 'Delete' }));
 		expect(session.removeMessage).not.toHaveBeenCalled();
-		const dialog = await screen.findByRole('alertdialog');
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+		const dialog = await screen.findByRole('alertdialog', { name: 'Delete message?' });
+		expect(dialog.textContent).toContain('This reply and everything after it are deleted.');
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Delete message' }));
 		await waitFor(() => expect(session.removeMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' })));
 	});
 
-	it('rates a reply good, which opens the feedback form', async () => {
+	it('runs a model’s action and continues a reply from the menu', async () => {
+		state.models = [{ id: 'm1', actions: [{ id: 'sum', name: 'Summarize', icon: 'data:image/svg+xml,x' }] }];
 		const session = show(reply());
-		fireEvent.click(screen.getByRole('button', { name: 'Good Response' }));
+		fireEvent.click(within(await openMenu('More actions')).getByRole('menuitem', { name: 'Summarize' }));
+		expect(session.runAction).toHaveBeenCalledWith('sum', expect.objectContaining({ id: 'a' }));
+		fireEvent.click(within(await openMenu('More actions')).getByRole('menuitem', { name: 'Continue' }));
+		expect(session.continueReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+	});
+
+	it('leaves Continue out for a reply that is not the last, or that says Continue under it already', async () => {
+		show(reply(), {}, { isLast: false });
+		expect(within(await openMenu('More actions')).queryByRole('menuitem', { name: 'Continue' })).toBeNull();
+		cleanup();
+		show(reply({ stopped: true }), {}, { isLast: true, cutOff: true });
+		expect(within(await openMenu('More actions')).queryByRole('menuitem', { name: 'Continue' })).toBeNull();
+	});
+
+	it('offers only Delete for a reply that is only an error, with no thumbs (#992)', async () => {
+		show(reply({ content: '', error: { content: 'down' } }), {}, { isLast: true, errorOnly: true });
+		expect(screen.queryByRole('button', { name: 'Good response' })).toBeNull();
+		const menu = await openMenu('More actions');
+		expect(
+			within(menu)
+				.getAllByRole('menuitem')
+				.map((i) => i.textContent)
+		).toEqual(['Delete']);
+		expect(within(menu).queryByRole('separator')).toBeNull();
+	});
+
+	it('shows Generation info for a reply that holds usage', () => {
+		show(reply({ usage: { prompt_tokens: 1, completion_tokens: 2 } }));
+		expect(screen.getByRole('button', { name: 'Generation info' })).toBeTruthy();
+	});
+
+	it('gives a prompt Edit and Delete buttons of its own', async () => {
+		const session = show({ ...user, childrenIds: [], parentId: 'root' });
+		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		const dialog = await screen.findByRole('alertdialog', { name: 'Delete message?' });
+		expect(dialog.textContent).toContain('This message and the replies under it are deleted.');
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		expect(await screen.findByRole('textbox', { name: 'Edit message' })).toBeTruthy();
+		expect(session.removeMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe('rating a reply (S3-D2)', () => {
+	it('saves a thumb at once and opens nothing', async () => {
+		const session = show(reply());
+		fireEvent.click(screen.getByRole('button', { name: 'Good response' }));
 		await waitFor(() => expect(session.rate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 1));
+		expect(screen.queryByTestId('rate-note')).toBeNull();
 	});
 
 	it('rates a reply bad', async () => {
 		const session = show(reply());
-		fireEvent.click(screen.getByRole('button', { name: 'Bad Response' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Bad response' }));
 		await waitFor(() => expect(session.rate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), -1));
 	});
 
-	it('marks a bad rating as pressed instead of the good one', () => {
+	it('names the given rating "Rated" and marks it pressed', () => {
 		show(reply({ annotation: { rating: -1 } }));
-		expect(screen.getByRole('button', { name: 'Bad Response' }).getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByRole('button', { name: 'Good Response' }).getAttribute('aria-pressed')).toBe('false');
+		expect(screen.getByRole('button', { name: 'Rated bad' }).getAttribute('aria-pressed')).toBe('true');
+		expect(screen.getByRole('button', { name: 'Good response' }).getAttribute('aria-pressed')).toBe('false');
 	});
 
-	it('marks the rating given as pressed', () => {
+	it('does not save the given rating again', () => {
+		const session = show(reply({ annotation: { rating: 1 } }));
+		expect(screen.getByRole('button', { name: 'Bad response' }).getAttribute('aria-pressed')).toBe('false');
+		fireEvent.click(screen.getByRole('button', { name: 'Rated good' }));
+		expect(session.rate).not.toHaveBeenCalled();
+	});
+
+	it('shows no thumbs while rating is off', () => {
+		state.features = { enable_message_rating: false };
 		show(reply({ annotation: { rating: 1 } }));
-		expect(screen.getByRole('button', { name: 'Good Response' }).getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByRole('button', { name: 'Bad Response' }).getAttribute('aria-pressed')).toBe('false');
+		expect(screen.queryByRole('button', { name: /Good response|Rated good/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Add a note' })).toBeNull();
+	});
+
+	it('shows no thumbs in a chat that is not saved', () => {
+		show(reply(), { chatId: null });
+		expect(screen.queryByRole('button', { name: 'Good response' })).toBeNull();
 	});
 });
 
-describe('the rating form', () => {
-	const rated = () => reply({ annotation: { rating: 1 } });
-
-	async function open(message = rated()) {
-		const session = show(message);
-		fireEvent.click(screen.getByRole('button', { name: 'Good Response' }));
-		await screen.findByTestId('rate-comment');
-		return session;
-	}
-
-	it('opens after a rating and closes with its Close button', async () => {
-		await open();
-		fireEvent.click(screen.getByRole('button', { name: 'Close feedback' }));
-		expect(screen.queryByTestId('rate-comment')).toBeNull();
+describe('the note on a rating (S3-D2)', () => {
+	it('is offered only once the reply is rated', () => {
+		show(reply());
+		expect(screen.queryByRole('button', { name: 'Add a note' })).toBeNull();
 	});
 
-	it('marks the chosen score 1 to 10 as pressed, one at a time', async () => {
-		await open();
-		expect(screen.getAllByRole('button', { name: /^Rate \d+ out of 10$/ })).toHaveLength(10);
-		fireEvent.click(screen.getByRole('button', { name: 'Rate 7 out of 10' }));
-		expect(screen.getByRole('button', { name: 'Rate 7 out of 10' }).getAttribute('aria-pressed')).toBe('true');
-		fireEvent.click(screen.getByRole('button', { name: 'Rate 3 out of 10' }));
-		expect(screen.getByRole('button', { name: 'Rate 7 out of 10' }).getAttribute('aria-pressed')).toBe('false');
+	it('opens a comment box and saves the comment alone', async () => {
+		const session = show(reply({ annotation: { rating: 1 } }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add a note' }));
+		const note = await screen.findByTestId('rate-note');
+		expect(within(note).queryAllByRole('button', { name: /out of 10/ })).toHaveLength(0);
+		fireEvent.change(within(note).getByRole('textbox', { name: 'Note on your rating' }), {
+			target: { value: 'Clear' }
+		});
+		fireEvent.click(within(note).getByRole('button', { name: 'Save note' }));
+		await waitFor(() =>
+			expect(session.rate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), null, { comment: 'Clear' })
+		);
+		expect(screen.queryByTestId('rate-note')).toBeNull();
 	});
 
-	it('offers reasons for a good rating, marking the chosen one pressed', async () => {
-		await open();
-		const reasons = within(screen.getByTestId('rate-comment'))
-			.getAllByRole('button')
-			.filter((b) => b.hasAttribute('aria-pressed') && !/^Rate /.test(b.getAttribute('aria-label') ?? ''));
-		expect(reasons.length).toBeGreaterThan(0);
-		fireEvent.click(reasons[0]);
-		expect(reasons[0].getAttribute('aria-pressed')).toBe('true');
+	it('says Edit note for a note already given, filled in, and closes with Close or Escape', async () => {
+		show(reply({ annotation: { rating: -1, comment: 'Too long' } }));
+		fireEvent.click(screen.getByRole('button', { name: 'Edit note' }));
+		const box = await screen.findByRole('textbox', { name: 'Note on your rating' });
+		expect((box as HTMLTextAreaElement).value).toBe('Too long');
+		fireEvent.keyDown(box, { key: 'Escape' });
+		expect(screen.queryByTestId('rate-note')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit note' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Close note' }));
+		expect(screen.queryByTestId('rate-note')).toBeNull();
+	});
+});
+
+describe('regenerating', () => {
+	it('labels the menu in sentence case and still sends the suggestion as written', async () => {
+		const session = show(reply());
+		const menu = await openMenu('Regenerate options');
+		expect(within(menu).getByRole('menuitem', { name: 'Try again' })).toBeTruthy();
+		await act(async () => {
+			fireEvent.click(within(menu).getByRole('menuitem', { name: 'Add details' }));
+		});
+		expect(session.regenerate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'Add Details');
+	});
+
+	it('is a single button when the menu is turned off', () => {
+		state.prefs = { regenerateMenu: false };
+		const session = show(reply());
+		expect(screen.queryByRole('button', { name: 'Regenerate options' })).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+		expect(session.regenerate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+	});
+
+	it('hands ChatMessages a Retry and a Continue for the labelled buttons', () => {
+		const session = show(reply());
+		fireEvent.click(screen.getByTestId('retry'));
+		fireEvent.click(screen.getByTestId('continue'));
+		expect(session.regenerate).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+		expect(session.continueReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
 	});
 });

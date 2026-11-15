@@ -3,12 +3,19 @@
 // these ~30 controls by hand; nearly all follow one pattern -- a "Default /
 // Custom" toggle that, when on Custom, shows a control seeded with a starting
 // value -- so here they are rows in a table and one renderer handles them all.
-// The seeds, ranges, labels and tooltip text are copied from that component.
+// The seeds and ranges are copied from that component. Each row is named as a
+// person would name it, with its API name (`key`) shown beside it, and has one
+// sentence of help (WRD-2, #996).
 
 export type ParamDef = {
+	/** The API name, sent with the request. */
 	key: string;
+	/** What the person reads (WRD-2). */
 	label: string;
-	tip: string;
+	/** One sentence, shown under the row. */
+	help: string;
+	/** `common`: the first, always-open group; `ollama`: only used by Ollama models; otherwise "More parameters". */
+	group?: 'common' | 'ollama';
 	/** Only shown to admins (server-side / Ollama-level settings). */
 	admin?: boolean;
 } & (
@@ -31,14 +38,14 @@ export type ParamDef = {
 export const paramDefs: ParamDef[] = [
 	{
 		key: 'stream_response',
-		label: 'Stream Chat Response',
+		label: 'Stream the reply',
 		kind: 'tri',
 		tri: 'stream_response',
-		tip: 'When enabled, the model will respond to each chat message in real-time, generating a response as soon as the user sends a message. This mode is useful for live chat applications, but may impact performance on slower hardware.'
+		help: 'Show the reply as it is written instead of all at once.'
 	},
 	{
 		key: 'stream_delta_chunk_size',
-		label: 'Stream Delta Chunk Size',
+		label: 'Stream chunk size',
 		admin: true,
 		kind: 'range',
 		seed: 1,
@@ -47,80 +54,84 @@ export const paramDefs: ParamDef[] = [
 		step: 1,
 		numberStep: 'any',
 		numberMax: null,
-		tip: 'The stream delta chunk size for the model. Increasing the chunk size will make the model respond with larger pieces of text at once.'
+		help: 'How much text is sent to the page at a time while a reply streams.'
 	},
 	{
 		key: 'compact_token_threshold',
-		label: 'Context Compaction Threshold',
+		label: 'Context compaction threshold',
 		admin: true,
 		kind: 'number',
 		seed: 80000,
 		min: 1,
 		step: 1,
 		placeholder: 'Enter token threshold',
-		tip: 'Set a model-specific context compaction token threshold. When set, this overrides the global threshold up to the global cap.'
+		help: 'Compact the conversation past this many tokens, overriding the server-wide threshold up to its cap.'
 	},
 	{
 		key: 'function_calling',
-		label: 'Function Calling',
+		label: 'Function calling',
 		kind: 'tri',
 		tri: 'function_calling',
-		tip: "Native mode (default) leverages the model's built-in tool-calling capabilities. Legacy mode works with a wider range of models by calling tools once before execution via prompt injection."
+		help: "Native uses the model's own tool calling; Legacy works with more models by prompting for tools."
 	},
 	{
 		key: 'reasoning_tags',
-		label: 'Reasoning Tags',
+		label: 'Reasoning tags',
 		kind: 'tri',
 		tri: 'reasoning_tags',
-		tip: 'Enable, disable, or customize the reasoning tags used by the model. "Enabled" uses default tags, "Disabled" turns off reasoning tags, and "Custom" lets you specify your own start and end tags.'
+		help: "Which tags mark the model's reasoning: the usual ones, none, or your own."
 	},
 	{
 		key: 'seed',
+		group: 'common',
 		label: 'Seed',
 		kind: 'number',
 		seed: 0,
 		min: 0,
 		step: 1,
 		placeholder: 'Enter Seed',
-		tip: 'Sets the random number seed to use for generation. Setting this to a specific number will make the model generate the same text for the same prompt.'
+		help: 'A fixed seed makes the same prompt give the same reply.'
 	},
 	{
 		key: 'stop',
-		label: 'Stop Sequence',
+		label: 'Stop sequence',
 		kind: 'text',
 		seed: '',
 		placeholder: 'Enter stop sequence',
-		tip: 'Sets the stop sequences to use. When this pattern is encountered, the LLM will stop generating text and return. Multiple stop patterns may be set by specifying multiple separate stop parameters in a modelfile.'
+		help: 'Text at which the model stops writing; separate several with commas.'
 	},
 	{
 		key: 'temperature',
+		group: 'common',
 		label: 'Temperature',
 		kind: 'range',
 		seed: 0.8,
 		min: 0,
 		max: 2,
 		step: 0.05,
-		tip: 'The temperature of the model. Increasing the temperature will make the model answer more creatively.'
+		help: 'Higher values give more varied replies, lower values more focused ones.'
 	},
 	{
 		key: 'reasoning_effort',
-		label: 'Reasoning Effort',
+		group: 'common',
+		label: 'Reasoning effort',
 		kind: 'text',
 		seed: 'medium',
 		placeholder: 'Enter reasoning effort',
-		tip: 'Constrains effort on reasoning for reasoning models. Only applicable to reasoning models from specific providers that support reasoning effort.'
+		help: 'How much a reasoning model thinks before it answers (low, medium or high), where the provider supports it.'
 	},
 	{
 		key: 'logit_bias',
-		label: 'logit_bias',
+		label: 'Token bias',
 		kind: 'text',
 		seed: '',
 		placeholder: 'Enter comma-separated "token:bias_value" pairs (example: 5432:100, 413:-100)',
-		tip: 'Boosting or penalizing specific tokens for constrained responses. Bias values will be clamped between -100 and 100 (inclusive). (Default: none)'
+		help: 'Make specific tokens more or less likely, as token:bias pairs from -100 to 100.'
 	},
 	{
 		key: 'max_tokens',
-		label: 'max_tokens',
+		group: 'common',
+		label: 'Max tokens',
 		kind: 'range',
 		seed: 128,
 		min: -2,
@@ -128,11 +139,11 @@ export const paramDefs: ParamDef[] = [
 		step: 1,
 		numberStep: 1,
 		numberMax: null,
-		tip: 'This option sets the maximum number of tokens the model can generate in its response. Increasing this limit allows the model to provide longer answers, but it may also increase the likelihood of unhelpful or irrelevant content being generated.'
+		help: 'The longest reply the model may write, in tokens.'
 	},
 	{
 		key: 'top_k',
-		label: 'top_k',
+		label: 'Top K',
 		kind: 'range',
 		seed: 40,
 		min: 0,
@@ -140,146 +151,151 @@ export const paramDefs: ParamDef[] = [
 		step: 1,
 		numberStep: 1,
 		integer: true,
-		tip: 'Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative.'
+		help: 'Sample only from the K most likely tokens; lower is more conservative.'
 	},
 	{
 		key: 'top_p',
-		label: 'top_p',
+		label: 'Top P',
 		kind: 'range',
 		seed: 0.9,
 		min: 0,
 		max: 1,
 		step: 0.05,
-		tip: 'Works together with top-k. A higher value (e.g., 0.95) will lead to more diverse text, while a lower value (e.g., 0.5) will generate more focused and conservative text.'
+		help: 'Sample from the smallest set of tokens whose probabilities add up to P.'
 	},
 	{
 		key: 'min_p',
-		label: 'min_p',
+		label: 'Min P',
 		kind: 'range',
 		seed: 0,
 		min: 0,
 		max: 1,
 		step: 0.05,
-		tip: 'Alternative to the top_p, and aims to ensure a balance of quality and variety. The parameter p represents the minimum probability for a token to be considered, relative to the probability of the most likely token. For example, with p=0.05 and the most likely token having a probability of 0.9, logits with a value less than 0.045 are filtered out.'
+		help: 'Drop tokens less likely than P times the most likely one.'
 	},
 	{
 		key: 'frequency_penalty',
-		label: 'frequency_penalty',
+		label: 'Frequency penalty',
 		kind: 'range',
 		seed: 1.1,
 		min: -2,
 		max: 2,
 		step: 0.05,
-		tip: 'Sets a scaling bias against tokens to penalize repetitions, based on how many times they have appeared. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient. At 0, it is disabled.'
+		help: 'Make a token less likely the more often it has appeared; 0 turns it off.'
 	},
 	{
 		key: 'presence_penalty',
-		label: 'presence_penalty',
+		label: 'Presence penalty',
 		kind: 'range',
 		seed: 0,
 		min: -2,
 		max: 2,
 		step: 0.05,
-		tip: 'Sets a flat bias against tokens that have appeared at least once. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 0.9) will be more lenient. At 0, it is disabled.'
+		help: 'Make a token less likely once it has appeared at all; 0 turns it off.'
 	},
 	{
 		key: 'mirostat',
-		label: 'mirostat',
+		label: 'Mirostat',
 		kind: 'range',
 		seed: 0,
 		min: 0,
 		max: 2,
 		step: 1,
 		numberStep: 1,
-		tip: 'Enable Mirostat sampling for controlling perplexity.'
+		help: 'Sampling that steers toward a steady perplexity: 0 is off, 1 and 2 are its versions.'
 	},
 	{
 		key: 'mirostat_eta',
-		label: 'mirostat_eta',
+		label: 'Mirostat learning rate',
 		kind: 'range',
 		seed: 0.1,
 		min: 0,
 		max: 1,
 		step: 0.05,
-		tip: 'Influences how quickly the algorithm responds to feedback from the generated text. A lower learning rate will result in slower adjustments, while a higher learning rate will make the algorithm more responsive.'
+		help: 'How quickly Mirostat reacts to the text written so far.'
 	},
 	{
 		key: 'mirostat_tau',
-		label: 'mirostat_tau',
+		label: 'Mirostat target',
 		kind: 'range',
 		seed: 5,
 		min: 0,
 		max: 10,
 		step: 0.5,
-		tip: 'Controls the balance between coherence and diversity of the output. A lower value will result in more focused and coherent text.'
+		help: 'Lower values give more focused, coherent text.'
 	},
 	{
 		key: 'repeat_last_n',
-		label: 'repeat_last_n',
+		label: 'Repeat window',
 		kind: 'range',
 		seed: 64,
 		min: -1,
 		max: 128,
 		step: 1,
 		numberStep: 1,
-		tip: 'Sets how far back for the model to look back to prevent repetition.'
+		help: 'How many recent tokens the repeat penalty looks back over.'
 	},
 	{
 		key: 'tfs_z',
-		label: 'tfs_z',
+		label: 'Tail-free sampling',
 		kind: 'range',
 		seed: 1,
 		min: 0,
 		max: 2,
 		step: 0.05,
-		tip: 'Tail free sampling is used to reduce the impact of less probable tokens from the output. A higher value (e.g., 2.0) will reduce the impact more, while a value of 1.0 disables this setting.'
+		help: 'Lowers the weight of unlikely tokens; 1 turns it off.'
 	},
 	{
 		key: 'repeat_penalty',
-		label: 'repeat_penalty',
+		label: 'Repeat penalty',
 		kind: 'range',
 		seed: 1.1,
 		min: -2,
 		max: 2,
 		step: 0.05,
-		tip: 'Control the repetition of token sequences in the generated text. A higher value (e.g., 1.5) will penalize repetitions more strongly, while a lower value (e.g., 1.1) will be more lenient. At 1, it is disabled.'
+		help: 'Make repeated runs of tokens less likely; 1 turns it off.'
 	},
 	{
 		key: 'use_mmap',
-		label: 'use_mmap',
+		group: 'ollama',
+		label: 'Memory-map the model',
 		admin: true,
 		kind: 'switch',
 		seed: true,
-		tip: 'Enable Memory Mapping (mmap) to load model data. This option allows the system to use disk storage as an extension of RAM by treating disk files as if they were in RAM. This can improve model performance by allowing for faster data access. However, it may not work correctly with all systems and can consume a significant amount of disk space.'
+		help: 'Load the model by mapping its file into memory.'
 	},
 	{
 		key: 'use_mlock',
-		label: 'use_mlock',
+		group: 'ollama',
+		label: 'Lock the model in memory',
 		admin: true,
 		kind: 'switch',
 		seed: true,
-		tip: "Enable Memory Locking (mlock) to prevent model data from being swapped out of RAM. This option locks the model's working set of pages into RAM, ensuring that they will not be swapped out to disk. This can help maintain performance by avoiding page faults and ensuring fast data access."
+		help: "Keep the model's memory from being swapped out to disk."
 	},
 	{
 		key: 'think',
-		label: 'think (Ollama)',
+		group: 'ollama',
+		label: 'Think',
 		admin: true,
 		kind: 'tri',
 		tri: 'think',
-		tip: 'This option enables or disables the use of the reasoning feature in Ollama, which allows the model to think before generating a response. When enabled, the model can take a moment to process the conversation context and generate a more thoughtful response.'
+		help: 'Let the model reason before it answers.'
 	},
 	{
 		key: 'format',
-		label: 'format (Ollama)',
+		group: 'ollama',
+		label: 'Response format',
 		admin: true,
 		kind: 'text',
 		seed: 'json',
 		placeholder: 'e.g. "json" or a JSON schema',
-		tip: 'The format to return a response in. Format can be json or a JSON schema.'
+		help: 'json, or a JSON schema the reply must follow.'
 	},
 	{
 		key: 'num_keep',
-		label: 'num_keep (Ollama)',
+		group: 'ollama',
+		label: 'Tokens kept',
 		admin: true,
 		kind: 'range',
 		seed: 24,
@@ -288,11 +304,12 @@ export const paramDefs: ParamDef[] = [
 		step: 1,
 		numberStep: 1,
 		numberMax: null,
-		tip: 'This option controls how many tokens are preserved when refreshing the context. For example, if set to 2, the last 2 tokens of the conversation context will be retained. Preserving context can help maintain the continuity of a conversation, but it may reduce the ability to respond to new topics.'
+		help: 'How many tokens are kept when the context is refreshed.'
 	},
 	{
 		key: 'num_ctx',
-		label: 'num_ctx (Ollama)',
+		group: 'ollama',
+		label: 'Context window',
 		admin: true,
 		kind: 'range',
 		seed: 2048,
@@ -301,11 +318,12 @@ export const paramDefs: ParamDef[] = [
 		step: 1,
 		numberStep: 1,
 		numberMax: null,
-		tip: 'Sets the size of the context window used to generate the next token.'
+		help: 'The size of the context window, in tokens.'
 	},
 	{
 		key: 'num_batch',
-		label: 'num_batch (Ollama)',
+		group: 'ollama',
+		label: 'Batch size',
 		admin: true,
 		kind: 'range',
 		seed: 512,
@@ -314,11 +332,12 @@ export const paramDefs: ParamDef[] = [
 		step: 256,
 		numberStep: 256,
 		numberMax: null,
-		tip: 'The batch size determines how many text requests are processed together at once. A higher batch size can increase the performance and speed of the model, but it also requires more memory.'
+		help: 'How many tokens are processed together; larger is faster and uses more memory.'
 	},
 	{
 		key: 'num_thread',
-		label: 'num_thread (Ollama)',
+		group: 'ollama',
+		label: 'CPU threads',
 		admin: true,
 		kind: 'range',
 		seed: 2,
@@ -326,11 +345,12 @@ export const paramDefs: ParamDef[] = [
 		max: 256,
 		step: 1,
 		numberStep: 1,
-		tip: 'Set the number of worker threads used for computation. This option controls how many threads are used to process incoming requests concurrently. Increasing this value can improve performance under high concurrency workloads but may also consume more CPU resources.'
+		help: 'How many threads do the computation.'
 	},
 	{
 		key: 'num_gpu',
-		label: 'num_gpu (Ollama)',
+		group: 'ollama',
+		label: 'Layers on the GPU',
 		admin: true,
 		kind: 'range',
 		seed: 0,
@@ -338,16 +358,17 @@ export const paramDefs: ParamDef[] = [
 		max: 256,
 		step: 1,
 		numberStep: 1,
-		tip: 'Set the number of layers, which will be off-loaded to GPU. Increasing this value can significantly improve performance for models that are optimized for GPU acceleration but may also consume more power and GPU resources.'
+		help: "How many of the model's layers are offloaded to the GPU."
 	},
 	{
 		key: 'keep_alive',
-		label: 'keep_alive (Ollama)',
+		group: 'ollama',
+		label: 'Keep loaded',
 		admin: true,
 		kind: 'text',
 		seed: '5m',
 		placeholder: "e.g. '30s','10m'. Valid time units are 's', 'm', 'h'.",
-		tip: 'This option controls how long the model will stay loaded into memory following the request (default: 5m)'
+		help: 'How long the model stays loaded after a request, such as 5m.'
 	}
 ];
 
@@ -355,6 +376,37 @@ export type Params = Record<string, any>;
 
 /** `null`/`undefined` both mean "not overridden". */
 export const isUnset = (value: unknown) => (value ?? null) === null;
+
+/** The order of the Common group: what a math and coding user changes most. */
+const COMMON_ORDER = ['temperature', 'max_tokens', 'reasoning_effort', 'seed'];
+
+/** The rows of each group, in the order they are shown. */
+export function paramGroups(defs: ParamDef[] = paramDefs) {
+	return {
+		common: defs
+			.filter((d) => d.group === 'common')
+			.sort((a, b) => COMMON_ORDER.indexOf(a.key) - COMMON_ORDER.indexOf(b.key)),
+		more: defs.filter((d) => !d.group),
+		ollama: defs.filter((d) => d.group === 'ollama')
+	};
+}
+
+/** How many of `defs` hold a value of their own (the Controls button's dot, "Reset all"). */
+export const overriddenCount = (params: Params | null | undefined, defs: ParamDef[] = paramDefs) =>
+	defs.filter((d) => !isUnset(params?.[d.key])).length;
+
+/** Whether a row matches the filter text, by its name, its API name or its help. */
+export const matchesFilter = (def: ParamDef, filter: string) => {
+	const q = filter.trim().toLowerCase();
+	return !q || [def.label, def.key, def.help].some((t) => t.toLowerCase().includes(q));
+};
+
+/** A value as the resting row shows it: "Default (0.7)". */
+export function shownValue(value: unknown): string {
+	if (Array.isArray(value)) return value.join(', ');
+	if (typeof value === 'boolean') return value ? 'On' : 'Off';
+	return String(value);
+}
 
 /**
  * The next value when the tri-state button is clicked. These four cycle rather

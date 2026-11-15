@@ -7,6 +7,7 @@ import { type KeybindingsMap, matchKeybinding, resolveKeybindings, Shortcut } fr
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { openModelPicker } from '@/routes/chat/modelPickerStore';
 
 export const KEYBINDINGS_KEY = ['user-keybindings'] as const;
 
@@ -56,8 +57,8 @@ const lastEnabled = (selector: string) =>
 /**
  * Ports (app)/+layout.svelte's keyboard handler: each configurable shortcut
  * (as the user bound it) triggers the same control a click would, unless the
- * user turned keyboard shortcuts off. Not ported: Generate Message Pair and
- * Toggle Dictation (their features are not in this app).
+ * user turned keyboard shortcuts off. Not ported: Generate message pair and
+ * Toggle dictation (their features are not in this app).
  */
 export function useShortcuts() {
 	const navigate = useNavigate();
@@ -145,7 +146,9 @@ export function useShortcuts() {
 					}
 					break;
 				case Shortcut.OPEN_MODEL_SELECTOR:
-					click('#model-selector-model-button');
+					// The picker on screen opens (the header's, or the phone's in the message box).
+					event.preventDefault();
+					openModelPicker();
 					break;
 				case Shortcut.ALLOW_TOOL_CALL:
 					click('.tool-call-allow-button');

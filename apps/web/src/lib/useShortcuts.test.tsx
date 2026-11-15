@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Shortcut } from '@/lib/shortcuts';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+import { useModelPickerStore } from '@/routes/chat/modelPickerStore';
 import { KEYBINDINGS_KEY, useShortcuts } from './useShortcuts';
 
 function Host() {
@@ -49,5 +50,24 @@ describe('the Close shortcut (#950, NAV-4)', () => {
 		});
 		document.removeEventListener('keydown', onKey);
 		expect(escapes).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('the Open model selector shortcut (NAV-5)', () => {
+	it('asks the model picker on screen to open its first list', () => {
+		mount({ [Shortcut.OPEN_MODEL_SELECTOR]: 'Alt+M' });
+		const before = useModelPickerStore.getState().request?.n ?? 0;
+		const event = new KeyboardEvent('keydown', {
+			key: 'm',
+			code: 'KeyM',
+			altKey: true,
+			bubbles: true,
+			cancelable: true
+		});
+		act(() => {
+			document.body.dispatchEvent(event);
+		});
+		expect(useModelPickerStore.getState().request).toEqual({ index: 0, n: before + 1 });
+		expect(event.defaultPrevented).toBe(true);
 	});
 });

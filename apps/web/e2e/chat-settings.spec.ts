@@ -37,8 +37,8 @@ test('web search confirmation: asked once per chat before a prompt with search o
 	await withSettings(page, {});
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Integrations' }).click();
-	await page.getByRole('switch', { name: 'Web Search' }).click();
+	await page.getByRole('button', { name: 'Tools' }).click();
+	await page.getByRole('switch', { name: 'Web search' }).click();
 	await page.keyboard.press('Escape');
 	const box = page.getByRole('textbox', { name: 'Message' });
 
@@ -71,7 +71,7 @@ test('Web Search in Chat: Always starts a new chat with search on', async ({ pag
 	await withSettings(page, { webSearch: 'always' });
 	await page.goto('/');
 	await chat.socket.connected;
-	await expect(page.getByRole('button', { name: 'Web Search (on)' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Web search (on)' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Message' }).fill('Latest news');
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);

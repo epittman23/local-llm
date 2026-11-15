@@ -653,6 +653,24 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 
+	it('Stop marks the reply being written as stopped (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			const { send, answer } = await holdNextPost();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => session.stop());
+			await act(async () => answer.resolve({ task_ids: ['t1'] }));
+
+			const reply = session.history.messages[session.history.currentId ?? ''];
+			expect(reply).toMatchObject({ role: 'assistant', done: true, stopped: true });
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('a send after a stop waits for the stopped request to cancel its tasks first (#516)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {
@@ -745,6 +763,28 @@ describe('useChatSession loadChat', () => {
 
 			expect(session.history.messages.r.error).toBeTruthy();
 			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('continuing a stopped reply drops its stopped and token-limit marks (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() =>
+				session.setHistory((h) =>
+					updateMessage(h, 'r', { done: true, content: 'half', model: 'm', stopped: true, finish_reason: 'length' })
+				)
+			);
+			const { send } = await holdNextPost();
+			act(() => void session.continueReply(session.history.messages.r));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			expect(session.history.messages.r).toMatchObject({ done: false });
+			expect(session.history.messages.r.stopped).toBeUndefined();
+			expect(session.history.messages.r.finish_reason).toBeUndefined();
 		} finally {
 			probeModels = [];
 		}
