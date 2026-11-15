@@ -211,6 +211,9 @@ test('a stopped reply says so after a reload, and continues by name (#1081)', as
 	await line.getByRole('button', { name: 'Continue' }).click();
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	expect(chat.seen.completions[0]).toMatchObject({ id: 'a1', assistant_message_id: 'a1' });
+	await chat.stream(' 4.');
+	await expect(page.getByTestId('response-message')).toContainText('It is 4.');
+	await expect(page.getByTestId('cut-off')).toHaveCount(0);
 });
 
 test('generation info opens by click and shows tokens in words (#994)', async ({ page }) => {

@@ -2092,3 +2092,43 @@ def test_a_reply_that_failed_mid_stream_is_not_saved_as_stopped(monkeypatch):
     saved = [c[2] for c in log if c[0] == 'chats.upsert_message']
     assert any(s.get('done') for s in saved)
     assert not [s for s in saved if s.get('stopped')]
+
+
+STOPPED_HEAD = {
+    'content': 'head',
+    'stopped': True,
+    'finish_reason': 'length',
+    'output': [
+        {'type': 'message', 'id': 'msg_s', 'status': 'completed', 'content': [{'type': 'output_text', 'text': 'head'}]}
+    ],
+}
+
+
+def test_continuing_a_stopped_reply_clears_its_marks(monkeypatch):
+    """S3-D4: a reply continued to its end no longer says it was stopped or cut off."""
+    observed = _run(
+        [[chunk(' tail'), DONE]],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {'stored_message': STOPPED_HEAD},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert final['stopped'] is False
+    assert final['finish_reason'] is None
+
+
+def test_a_continuation_stopped_again_is_saved_as_stopped(monkeypatch):
+    observed = _run(
+        [[chunk(' tail'), 'CANCEL']],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {'stored_message': STOPPED_HEAD},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert (final['stopped'], final['finish_reason']) == (True, None)

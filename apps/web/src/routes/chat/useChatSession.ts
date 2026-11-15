@@ -700,7 +700,8 @@ export function useChatSession({
 				toast.error('Model not found');
 				return;
 			}
-			setHistory((h) => updateMessage(h, message.id, { done: false }));
+			// Continued, it no longer ends where it was stopped or cut off (S3-D4); the server clears its copy too.
+			setHistory((h) => updateMessage(h, message.id, { done: false, stopped: undefined, finish_reason: undefined }));
 			const req = await beginRequest();
 			if (!req) return;
 			const chatId = chatIdRef.current;

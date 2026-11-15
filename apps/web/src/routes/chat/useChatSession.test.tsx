@@ -768,6 +768,28 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 
+	it('continuing a stopped reply drops its stopped and token-limit marks (S3-D4)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() =>
+				session.setHistory((h) =>
+					updateMessage(h, 'r', { done: true, content: 'half', model: 'm', stopped: true, finish_reason: 'length' })
+				)
+			);
+			const { send } = await holdNextPost();
+			act(() => void session.continueReply(session.history.messages.r));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			expect(session.history.messages.r).toMatchObject({ done: false });
+			expect(session.history.messages.r.stopped).toBeUndefined();
+			expect(session.history.messages.r.finish_reason).toBeUndefined();
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('continuing a reply is stopped the same way (#151)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {
