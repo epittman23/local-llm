@@ -62,6 +62,7 @@ import { useModelPick } from './useModelPick';
 import { type ChatModel, useModels } from './useModels';
 import { useOnChatSwitch } from './useOnChatSwitch';
 import { useParamsAutosave } from './useParamsAutosave';
+import { useSavedAskUser } from './useSavedAskUser';
 
 /** Below md on a short screen the app bar's buttons float over the top of the page (AppShell, A11Y-5). */
 const SHORT_PHONE_TOP = 'max-md:[@media(max-height:520px)]:pt-12';
@@ -152,6 +153,13 @@ export function ChatPage() {
 		toolIds
 	});
 	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
+	// A reply paused on an ask_user call (native function calling) asks from the stored reply.
+	const askUser = useSavedAskUser({
+		history: session.history,
+		chatId: session.chatId,
+		token,
+		onResolved: () => void session.reload()
+	});
 	const input = useRef<ChatInputHandle>(null);
 	// Files attached and text typed in one chat are not carried into the next
 	// (#217). Declared before the effects below that fill them for the chat now
@@ -706,7 +714,11 @@ export function ChatPage() {
 				>
 					<SafeMarkdown text={webSearchConfirmText(config)} className="text-sm" />
 				</ConfirmDialog>
-				<ServerDialogs dialog={session.dialog} onClose={session.closeDialog} />
+				{/* A dialog the server sent over the socket comes first; a stored ask_user question waits behind it. */}
+				<ServerDialogs
+					dialog={session.dialog ?? askUser.dialog}
+					onClose={session.dialog ? session.closeDialog : askUser.close}
+				/>
 				<CitationDialog source={citation} onClose={() => setCitation(null)} />
 			</div>
 			{/* One side panel (CNV-2): the preview while one is open, else Controls. */}

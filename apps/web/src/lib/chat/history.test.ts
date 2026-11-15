@@ -14,6 +14,7 @@ import {
 	isGenerating,
 	messagesList,
 	normalizeHistory,
+	pendingAskUser,
 	replyColumns,
 	saveReplyAsCopy,
 	showBranch,
@@ -394,6 +395,79 @@ describe('hasPendingAssistantLeaf (#214)', () => {
 		const h = history([reply('a', { done: true }), reply('b')]);
 		expect(hasPendingAssistantLeaf(h, 'a')).toBe(true);
 		expect(hasPendingAssistantLeaf(history([reply('a', { done: true })]), 'a')).toBe(false);
+	});
+});
+
+describe('pendingAskUser', () => {
+	const questions = [{ id: 'q1', question: 'Which?', options: [{ label: 'A' }, { label: 'B' }] }];
+	const ask = (extra: Record<string, unknown> = {}) => ({
+		type: 'function_call',
+		id: 'call_1',
+		call_id: 'call_1',
+		name: 'ask_user',
+		arguments: JSON.stringify({ questions, allow_other: true, timeout_ms: 120000 }),
+		status: 'pending',
+		...extra
+	});
+	const history = (output: unknown[], currentId = 'a') =>
+		({
+			currentId,
+			messages: {
+				q: { id: 'q', parentId: null, childrenIds: ['a', 'b'], role: 'user', content: 'q' },
+				a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: '', done: false, output },
+				b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'other', done: true }
+			}
+		}) as unknown as History;
+
+	it('finds the question a stored reply paused on, with its arguments parsed', () => {
+		expect(pendingAskUser(history([{ type: 'message', content: [] }, ask()]))).toEqual({
+			messageId: 'a',
+			callId: 'call_1',
+			questions,
+			allowOther: true
+		});
+	});
+	it('parses arguments stringified twice, and reads allow_other false', () => {
+		const twice = JSON.stringify(JSON.stringify({ questions, allow_other: false }));
+		expect(pendingAskUser(history([ask({ arguments: twice })]))).toMatchObject({ questions, allowOther: false });
+	});
+	it('ignores a question already answered, rejected or failed', () => {
+		const out = { type: 'function_call_output', call_id: 'call_1', output: [] };
+		expect(pendingAskUser(history([ask(), out]))).toBeNull();
+		expect(pendingAskUser(history([ask({ status: 'completed' })]))).toBeNull();
+		expect(pendingAskUser(history([ask({ status: 'rejected' })]))).toBeNull();
+	});
+	it('ignores other tools waiting for approval', () => {
+		expect(pendingAskUser(history([ask({ name: 'bash' })]))).toBeNull();
+	});
+	it('looks only at the branch shown', () => {
+		expect(pendingAskUser(history([ask()], 'b'))).toBeNull();
+	});
+	it('ignores a paused reply the conversation went on from', () => {
+		const h = history([ask()]);
+		h.messages.a.childrenIds = ['u2'];
+		h.messages.u2 = { id: 'u2', parentId: 'a', childrenIds: [], role: 'user', content: 'next' } as never;
+		h.currentId = 'u2';
+		expect(pendingAskUser(h)).toBeNull();
+	});
+	it('gives no questions for arguments it cannot read, so the dialog still appears to be skipped', () => {
+		expect(pendingAskUser(history([ask({ arguments: '{not json' })]))).toMatchObject({ questions: [] });
+	});
+});
+
+describe('canContinue', () => {
+	const reply = (output?: unknown[]) =>
+		({ id: 'a', role: 'assistant', content: 'Before I start, a question.', done: true, output }) as never;
+	it('offers Continue for a finished reply', () => {
+		expect(canContinue(reply())).toBe(true);
+	});
+	it('does not offer it for a reply paused on a question or an approval, even once a load marked it done', () => {
+		const call = (name: string) => ({ type: 'function_call', call_id: 'c1', name, status: 'pending' });
+		expect(canContinue(reply([call('ask_user')]))).toBe(false);
+		expect(canContinue(reply([call('bash')]))).toBe(false);
+		expect(canContinue(reply([call('ask_user'), { type: 'function_call_output', call_id: 'c1', output: [] }]))).toBe(
+			true
+		);
 	});
 });
 
