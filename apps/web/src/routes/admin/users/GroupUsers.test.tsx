@@ -111,16 +111,11 @@ describe('GroupUsers', () => {
 		vi.mocked(addUserToGroup).mockResolvedValue({ id: 'g1', member_count: 1 } as never);
 		await renderPanel();
 		fireEvent.click(screen.getByRole('checkbox', { name: 'Ada' }));
-		await waitFor(() => expect(toast.success).toHaveBeenCalled());
-		const [message, options] = vi.mocked(toast.success).mock.calls[0] as [
-			string,
-			{ action: { label: string; onClick: () => void } }
-		];
-		expect(message).toBe('Removed “Ada” from Analysts');
-		expect(options.action.label).toBe('Undo');
-		options.action.onClick();
+		expect(await screen.findByRole('status')).toHaveTextContent('Removed “Ada” from Analysts');
+		fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
 		await waitFor(() => expect(addUserToGroup).toHaveBeenCalledWith('tok', 'g1', ['u1']));
-		expect(toast.success).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(screen.queryByText('Removed “Ada” from Analysts')).toBeNull());
+		expect(toast.success).not.toHaveBeenCalled();
 	});
 
 	it('reports a failed change through the failure toast', async () => {

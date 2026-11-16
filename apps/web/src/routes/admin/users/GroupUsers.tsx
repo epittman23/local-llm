@@ -51,7 +51,7 @@ const ROLE_NAMES: Record<string, string> = { admin: 'Admin', user: 'User', pendi
  *
  * #1099: the shared table and search, "Member" for the tick column, Import
  * named by its text (#987), "Never" for an account never active, and removing
- * someone says so in a toast with Undo (ACT-3).
+ * someone says so above the table, with Undo (ACT-3).
  */
 export function GroupUsers({
 	groupId,
@@ -94,6 +94,7 @@ export function GroupUsers({
 		setPage(1);
 	};
 
+	const [removed, setRemoved] = useState<GroupUser | null>(null);
 	const toggleMember = async (user: GroupUser, checked: boolean, undo = false) => {
 		const call = checked ? addUserToGroup : removeUserFromGroup;
 		const res = await call(token, groupId, [user.id]).catch((error) => {
@@ -106,10 +107,8 @@ export function GroupUsers({
 		if (res) {
 			onUserCountChange(res.member_count ?? userCount);
 			onMemberChange(res);
-			if (!checked && !undo)
-				toast.success(`Removed “${user.name}” from ${groupName}`, {
-					action: { label: 'Undo', onClick: () => toggleMember(user, true, true) }
-				});
+			// Said in the panel, not a toast: a toast sits under the dialog's overlay, so its Undo can't be pressed.
+			setRemoved(!checked && !undo ? user : null);
 		}
 		await refetch();
 	};
@@ -231,6 +230,20 @@ export function GroupUsers({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</ListSearchBar>
+
+			{removed && (
+				<div
+					role="status"
+					className="bg-surface-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5"
+				>
+					<span className="min-w-0">
+						Removed “{removed.name}” from {groupName}
+					</span>
+					<Button variant="outline" size="sm" type="button" onClick={() => toggleMember(removed, true, true)}>
+						Undo
+					</Button>
+				</div>
+			)}
 
 			{list.isError && !list.data ? (
 				<LoadFailed what="users" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
