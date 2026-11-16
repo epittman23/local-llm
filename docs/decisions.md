@@ -76,7 +76,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     without conversion and nothing is re-saved on open; the mathematics
     extension was not added (its katex peer stops at 0.18). New web
     dependencies: `@tiptap/extension-code-block-lowlight` and `lowlight`
-    (note code blocks) and `rrule` (schedules are spelled out and preview
+    (note code blocks; `highlight.js` is held at `~11.11.0`, down from
+    11.12, so the chat and lowlight share one copy, since lowlight 3.3 pins
+    `~11.11.0`) and `rrule` (schedules are spelled out and preview
     their next runs; custom rules are checked in the browser). `/channels` is
     a new index page. The Playground keeps each tab's work for the session,
     until sign-out.
