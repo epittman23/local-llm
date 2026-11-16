@@ -126,6 +126,13 @@ describe('/ui components', () => {
 		expect(within(list).getAllByRole('option')[0].textContent).not.toContain('(current)');
 	});
 
+	it('shows a chip: a secondary pill of size chip that names its value (ACT-6, LAY-3)', () => {
+		inProvider(<ActionsSection />);
+		const chip = screen.getByRole('button', { name: 'Role: User' });
+		expect(chip).toHaveAttribute('data-size', 'chip');
+		expect(chip).toHaveAttribute('data-variant', 'secondary');
+	});
+
 	it('shows a disabled switch on and off, by itself and inside a disabled fieldset, each with its reason (ACT-5)', () => {
 		inProvider(<ActionsSection />);
 		const off = screen.getByRole('switch', { name: 'Image generation' });

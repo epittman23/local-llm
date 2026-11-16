@@ -236,7 +236,9 @@ has one height.
 
 **LAY-3. A target is at least 24 by 24 px with a pointer and 44 by 44 px on
 touch**, including the space that belongs to it. `Checkbox` and `Switch` reach
-44 by 44 on touch through their `::after` hit area; `CheckboxMark` is a
+44 by 44 on touch through their `::after` hit area, and so does a `Button` of
+size `chip` (a value changed in place, such as a user's role), which keeps its
+24 px pill and dense type on touch; `CheckboxMark` is a
 checkbox's picture for a row that is itself `role="checkbox"`. A `Textarea`'s
 least height is its `rows`, in lines, on every pointer and never under 44 px
 on touch; set `rows`, not a `min-h-*` class, to make one taller.
@@ -336,6 +338,8 @@ or the off knob in the disabled grey.
 
 **ACT-6. Use the shared `Button`.** No `<button>` with its own classes. A new
 kind of button is a new variant of the shared component, added here first.
+A value that opens its own menu beside a name (a user's role in Admin >
+Users) is a `secondary` button of size `chip` (LAY-3).
 
 **ACT-7. A whole row that opens something is a `RowButton`**
 (`components/ui/row-button.tsx`): a list entry with an image or icon, a name

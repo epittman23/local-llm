@@ -78,7 +78,7 @@ function RoleControl({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="secondary" size="xs" type="button" className="rounded-full">
+				<Button variant="secondary" size="chip" type="button">
 					<span className="sr-only">Role: </span>
 					{roleLabel(user.role)}
 					<ChevronDown aria-hidden data-icon="inline-end" />

@@ -1,4 +1,5 @@
 import {
+	ChevronDownIcon,
 	CircleAlertIcon,
 	CircleCheckIcon,
 	CopyIcon,
@@ -164,6 +165,19 @@ export function ActionsSection() {
 					<span className="text-foreground-muted text-dense">
 						Nothing is being served, so there is nothing to test.
 					</span>
+				</div>
+			</Example>
+			<Example
+				title="A chip"
+				note="A value changed in place beside a name, such as a user's role: a secondary pill of size chip that opens its own menu. On touch it keeps its size and type, and an invisible layer around it takes the 44 px target."
+			>
+				<div className="flex flex-wrap items-center gap-2">
+					<span className="text-body">Ada Lovelace</span>
+					<Button variant="secondary" size="chip" onClick={() => toast.success('Role menu opened')}>
+						<span className="sr-only">Role: </span>
+						User
+						<ChevronDownIcon aria-hidden data-icon="inline-end" />
+					</Button>
 				</div>
 			</Example>
 			<Example

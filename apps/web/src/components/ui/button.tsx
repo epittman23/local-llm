@@ -5,7 +5,7 @@ import { Slot } from 'radix-ui';
 
 // Sizes and type follow the interface standard (docs/guides/ui-standard.md,
 // LAY-2, TYP-2, TYP-3): 36 px for default, lg and icon; 28 px for sm, xs and
-// icon-sm; 24 px for icon-xs. Colours come from the tokens and from the
+// icon-sm; 24 px for icon-xs and chip. Colours come from the tokens and from the
 // conformance layer in styles/standard.css.
 const buttonVariants = cva(
 	"group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-body font-strong whitespace-nowrap transition-[color,background-color,border-color] duration-(--motion-fast) outline-none select-none active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -28,6 +28,9 @@ const buttonVariants = cva(
 				xs: "h-7 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-dense in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
 				sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-dense in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
 				lg: 'h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5',
+				// A value you can change in place (a user's role): a 24 px pill that keeps its size and
+				// type on touch, its hit area grown to 44 px by standard.css (LAY-3).
+				chip: "h-6 gap-1 rounded-full px-2 text-dense has-data-[icon=inline-end]:pr-1.5 [&_svg:not([class*='size-'])]:size-3",
 				icon: 'size-9',
 				'icon-xs':
 					"size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",

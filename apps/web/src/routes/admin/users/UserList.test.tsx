@@ -160,6 +160,8 @@ describe('UserList roles (#1026)', () => {
 		vi.mocked(updateUserById).mockResolvedValue({ id: 'b' } as never);
 		await renderList();
 		const [trigger] = screen.getAllByRole('button', { name: 'Role: User' });
+		// A chip: secondary beside the name, its 44 px touch target from standard.css (LAY-3).
+		expect(trigger).toHaveAttribute('data-size', 'chip');
 		fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse' });
 		fireEvent.click(within(await screen.findByRole('menu')).getByRole('menuitemradio', { name: 'Pending' }));
 		await waitFor(() =>
