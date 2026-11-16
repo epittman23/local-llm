@@ -38,6 +38,8 @@ const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
 test.describe('server settings pages (S5-D1, #932)', () => {
 	// The server's settings are pages under Admin; the dialog keeps personal settings.
 	const server = (page: Page) => page.getByRole('region', { name: 'Server settings' });
+	// The dialog itself, not the file's `modal` helper, which may also match the pages.
+	const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
 
 	test('?settings=admin:<tab> is replaced with its page under Admin (NAV-1)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
@@ -88,7 +90,7 @@ test.describe('server settings pages (S5-D1, #932)', () => {
 		await page.goto('/admin/users/overview');
 		await page.getByRole('link', { name: 'Settings', exact: true }).click();
 		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
-		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('Server: General');
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('General');
 		await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
 		await expect(modal(page)).toHaveCount(0);
 	});
@@ -106,7 +108,7 @@ test.describe('server settings pages (S5-D1, #932)', () => {
 		await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:nonsense');
 		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
-		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('Server: General');
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('General');
 	});
 
 	test('search finds server tabs from the dialog and on the page, and says when nothing matches (#1001)', async ({
