@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useState } from 'react';
 import { createMemoryRouter, Link, RouterProvider, useNavigate } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useUnsavedChanges } from './useUnsavedChanges';
 
 function Editor({ message }: { message?: string }) {
@@ -44,6 +45,50 @@ function Editor({ message }: { message?: string }) {
 			{dialog}
 		</div>
 	);
+}
+
+// A dialog holding a draft, as the Edit prompt dialog does. "Scrim" raises the
+// question the way a scrim click does: with a mouse focus leaves for <body> just
+// after (`after`), on touch it has already left (`before`).
+function DraftDialog() {
+	const [open, setOpen] = useState(true);
+	const [value, setValue] = useState('');
+	const guard = useUnsavedChanges(value !== '');
+	const close = () => guard.confirmLeave(() => setOpen(false));
+	const scrim = (when: 'before' | 'after') => () => {
+		if (when === 'before') (document.activeElement as HTMLElement | null)?.blur();
+		close();
+		if (when === 'after') (document.activeElement as HTMLElement | null)?.blur();
+	};
+	return (
+		<>
+			<Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+				<DialogContent showCloseButton={false} aria-describedby={undefined}>
+					<DialogTitle>Edit</DialogTitle>
+					<label>
+						Content
+						<input value={value} onChange={(e) => setValue(e.target.value)} />
+					</label>
+					<button type="button" onPointerDown={scrim('after')}>
+						Scrim by mouse
+					</button>
+					<button type="button" onPointerDown={scrim('before')}>
+						Scrim by touch
+					</button>
+				</DialogContent>
+			</Dialog>
+			{guard.dialog}
+		</>
+	);
+}
+
+function setupDialog() {
+	const router = createMemoryRouter([{ path: '/', element: <DraftDialog /> }]);
+	render(<RouterProvider router={router} />);
+	const field = screen.getByRole('textbox', { name: 'Content' });
+	fireEvent.change(field, { target: { value: 'half a prompt' } });
+	field.focus();
+	return field;
 }
 
 function setup(message?: string) {
@@ -223,5 +268,52 @@ describe('useUnsavedChanges', () => {
 		setup();
 		type('x');
 		expect(unload()).toBe(false);
+	});
+
+	it('Keep editing after a mouse click on the scrim puts focus back on the field that had it (NAV-4)', async () => {
+		const field = setupDialog();
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Scrim by mouse' }));
+		expect(document.activeElement).not.toBe(field);
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(field));
+	});
+
+	it('Keep editing after a tap on the scrim, with focus already on <body>, focuses the dialog’s first control', async () => {
+		const field = setupDialog();
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Scrim by touch' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(field));
+		expect((field as HTMLInputElement).value).toBe('half a prompt');
+	});
+
+	it('Escape on the question returns focus to the field too', async () => {
+		const field = setupDialog();
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Scrim by touch' }));
+		fireEvent.keyDown(await screen.findByRole('alertdialog'), { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(field));
+	});
+
+	it('Discard changes leaves focus to the closed dialog, never to a field that has gone', async () => {
+		setupDialog();
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Scrim by mouse' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(screen.queryByRole('textbox', { name: 'Content' })).toBeNull();
+		expect(document.activeElement?.closest('[role="dialog"], [role="alertdialog"]') ?? null).toBeNull();
+	});
+
+	it('Keep editing on a page with no dialog under it leaves focus to where the question came from', async () => {
+		setup();
+		type('x');
+		const back = screen.getByRole('link', { name: 'Back' });
+		back.focus();
+		fireEvent.click(back);
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(back));
 	});
 });

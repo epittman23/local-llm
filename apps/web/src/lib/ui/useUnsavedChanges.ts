@@ -21,6 +21,11 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * while nothing is unsaved, and otherwise asks the same question first. An
  * `action` that navigates is let through, so it never asks twice; one that
  * only closes something (a dialog with a draft) leaves the guard as it was.
+ *
+ * NAV-4, OVL-2: Keep editing puts focus back where it was when the question
+ * was raised. A click on a dialog's scrim raises it as focus leaves for
+ * <body> (at once on touch), so then focus goes to the first control of the
+ * dialog still open underneath instead.
  */
 export function useUnsavedChanges(
 	dirty: boolean,
@@ -32,15 +37,28 @@ export function useUnsavedChanges(
 	dirtyNow.current = dirty;
 	const allowed = useRef(false);
 	const confirmed = useRef(false);
-
-	const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
-		if (allowed.current) {
-			allowed.current = false;
-			return false;
-		}
-		const moving = currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search;
-		return dirtyNow.current && moving;
+	// Where Keep editing returns focus, and whether the dialog is closing on Discard instead.
+	const returnTo = useRef<HTMLElement | null>(null);
+	const discarding = useRef(false);
+	const rememberFocus = useCallback(() => {
+		const active = document.activeElement;
+		returnTo.current = active instanceof HTMLElement && active !== document.body ? active : null;
 	}, []);
+
+	const shouldBlock = useCallback<BlockerFunction>(
+		({ currentLocation, nextLocation }) => {
+			if (allowed.current) {
+				allowed.current = false;
+				return false;
+			}
+			const moving =
+				currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search;
+			const block = dirtyNow.current && moving;
+			if (block) rememberFocus();
+			return block;
+		},
+		[rememberFocus]
+	);
 	const blocker = useBlocker(shouldBlock);
 
 	useEffect(() => {
@@ -56,10 +74,15 @@ export function useUnsavedChanges(
 
 	// The leave confirmLeave is holding while the dialog asks (in an object: a function in state is an updater).
 	const [pending, setPending] = useState<{ action: () => void } | null>(null);
-	const confirmLeave = useCallback((action: () => void) => {
-		if (dirtyNow.current) setPending({ action });
-		else action();
-	}, []);
+	const confirmLeave = useCallback(
+		(action: () => void) => {
+			if (dirtyNow.current) {
+				rememberFocus();
+				setPending({ action });
+			} else action();
+		},
+		[rememberFocus]
+	);
 
 	const dialog = createElement(
 		ConfirmDialog,
@@ -76,7 +99,17 @@ export function useUnsavedChanges(
 			confirmLabel: 'Discard changes',
 			cancelLabel: 'Keep editing',
 			destructive: true,
+			onCloseAutoFocus: (event: Event) => {
+				const target = discarding.current ? undefined : keptFocusTarget(returnTo.current);
+				discarding.current = false;
+				returnTo.current = null;
+				// After Discard the dialog's own way out decides (a closed dialog returns focus to its opener).
+				if (!target) return;
+				event.preventDefault();
+				target.focus({ preventScroll: true });
+			},
 			onConfirm: () => {
+				discarding.current = true;
 				if (pending) {
 					setPending(null);
 					// A navigating action is blocked or let through as it starts; one that only closes
@@ -96,4 +129,15 @@ export function useUnsavedChanges(
 		message
 	);
 	return { dialog, allowNext, confirmLeave };
+}
+
+const TABBABLE =
+	'input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])';
+
+/** Where Keep editing puts focus: what had it, or else the first control of the topmost open dialog. */
+function keptFocusTarget(remembered: HTMLElement | null): HTMLElement | undefined {
+	if (remembered?.isConnected) return remembered;
+	const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"][data-state="open"]');
+	const dialog = dialogs[dialogs.length - 1];
+	return dialog?.querySelector<HTMLElement>(TABBABLE) ?? dialog;
 }
