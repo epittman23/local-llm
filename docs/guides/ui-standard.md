@@ -633,8 +633,9 @@ page starts with. A header scrolled out of view stops counting.
 `components/layout/topBand.ts` keeps it in `--top-band-bottom` (0 from 768 px,
 where nothing is watched) and ConnectionBanner its height in
 `--connection-banner-space`. On a wide screen toasts rise above any
-`data-composite-field` whose top edge is in the lower half of the viewport,
-with 8 px clear. Every toast has a close button with a 24 px hit area (44 px
+`data-composite-field` (the message box) or `data-keep-clear` element (the
+SaveBar, so a failure never covers Save) whose top edge is in the lower half
+of the viewport, with 8 px clear. Every toast has a close button with a 24 px hit area (44 px
 on touch). A toast's action (Undo, Open) is drawn as the small outline button
 (ACT-1), by the conformance layer in `standard.css`, not as sonner's filled
 pill. `toast.error` and `toast.warning` default to no time limit and an

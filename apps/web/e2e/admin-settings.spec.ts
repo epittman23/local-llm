@@ -161,6 +161,43 @@ test.describe('server settings pages (S5-D1, #932)', () => {
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
 		await expect(modal(page)).toBeVisible();
 	});
+
+	// FBK-2: toasts rise above the SaveBar (`data-keep-clear`), so a failure never covers Save. On a
+	// phone they sit at the top, clear of it too. A short wide window is where the two met.
+	for (const viewport of [
+		{ width: 1280, height: 720 },
+		{ width: 1024, height: 600 },
+		{ width: 390, height: 844 }
+	])
+		test(`a failure toast never covers the SaveBar (${viewport.width}×${viewport.height})`, async ({ page }) => {
+			await page.setViewportSize(viewport);
+			await mockWorkspaceBackend(page);
+			await page.route('**/api/v1/audio/**', (route) => {
+				const path = new URL(route.request().url()).pathname;
+				if (path.endsWith('/config/update')) return json(route, { detail: 'The server refused the change' }, 500);
+				if (path.endsWith('/config'))
+					return json(route, {
+						tts: { ENGINE: '', VOICE: '', MODEL: '', SPLIT_ON: 'punctuation', OPENAI_PARAMS: {} },
+						stt: { ENGINE: '', WHISPER_MODEL: 'base', SUPPORTED_CONTENT_TYPES: [], ALLOWED_EXTENSIONS: [] }
+					});
+				return json(route, {});
+			});
+			await page.goto('/admin/settings/audio');
+			await server(page).getByLabel('Supported MIME Types').fill('audio/wav');
+			const save = server(page).getByRole('button', { name: 'Save' });
+			await save.click();
+			const failure = page.locator('[data-sonner-toast][data-type="error"]');
+			await expect(failure).toContainText('The server refused the change');
+			const bar = server(page).locator('[data-slot="save-bar"]');
+			await expect
+				.poll(async () => {
+					const [toast, saveBar] = await Promise.all([failure.boundingBox(), bar.boundingBox()]);
+					return toast && saveBar ? toast.y + toast.height <= saveBar.y : false;
+				})
+				.toBe(true);
+			// Still dirty, so Save can be pressed again: nothing is over it.
+			await save.click({ trial: true, timeout: 2000 });
+		});
 });
 
 test.describe('settings: Sub-agents', () => {

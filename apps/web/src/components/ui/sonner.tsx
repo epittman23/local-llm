@@ -40,16 +40,22 @@ const KEEP_CLEAR_GAP = 8;
 export const PHONE_TOP = 'calc(var(--top-band-bottom, 0px) + var(--connection-banner-space, 0px) + 8px)';
 
 /**
- * The bottom offset that keeps a toast off the message box (FBK-2): the
- * distance from the viewport's bottom to the top edge of the highest
- * composite field whose top is in the lower half of the viewport (the chat's
- * message box, not a search box near the top), plus a gap. Null when there
- * is none, so the toast keeps Sonner's own offset.
+ * What a toast keeps clear of (FBK-2): composite fields (the chat's message
+ * box) and anything marked `data-keep-clear` (the SaveBar).
+ */
+export const KEEP_CLEAR = '[data-composite-field], [data-keep-clear]';
+
+/**
+ * The bottom offset that keeps a toast off the message box and the SaveBar
+ * (FBK-2): the distance from the viewport's bottom to the top edge of the
+ * highest `KEEP_CLEAR` element whose top is in the lower half of the viewport
+ * (the chat's message box, not a search box near the top), plus a gap. Null
+ * when there is none, so the toast keeps Sonner's own offset.
  */
 export function keepClearOffset(): number | null {
 	const height = window.innerHeight;
 	let offset: number | null = null;
-	for (const field of document.querySelectorAll('[data-composite-field]')) {
+	for (const field of document.querySelectorAll(KEEP_CLEAR)) {
 		const rect = field.getBoundingClientRect();
 		if (rect.height === 0 || rect.top < height / 2 || rect.top > height) continue;
 		const clear = Math.ceil(height - rect.top + KEEP_CLEAR_GAP);
@@ -72,7 +78,7 @@ function useKeepClearOffset(enabled: boolean) {
 			frame = 0;
 			setOffset(keepClearOffset());
 			// Watch the fields themselves too: a message box grows as it is typed in.
-			for (const field of document.querySelectorAll('[data-composite-field]')) {
+			for (const field of document.querySelectorAll(KEEP_CLEAR)) {
 				if (observed.has(field)) continue;
 				observed.add(field);
 				resize.observe(field);

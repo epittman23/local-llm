@@ -8,6 +8,8 @@ describe('SaveBar (FRM-3)', () => {
 	it('says all is saved, and offers nothing to do, while clean', () => {
 		render(<SaveBar dirty={false} onDiscard={() => {}} />);
 		expect(screen.getByRole('status')).toHaveTextContent('All changes saved');
+		// FBK-2: toasts rise above it (components/ui/sonner.tsx's KEEP_CLEAR).
+		expect(screen.getByRole('status').parentElement).toHaveAttribute('data-keep-clear');
 		expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 		expect(screen.getByRole('button', { name: 'Discard changes' })).toBeDisabled();
 	});
