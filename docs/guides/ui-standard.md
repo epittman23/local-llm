@@ -54,7 +54,8 @@ below. The workspace (Models, Knowledge, Prompts, Skills, Tools, Admin >
 Functions, and their editors) was brought to the standard on 2026-11-15.
 Admin (Users and Groups, Evaluations, Analytics, Functions, and the server's
 settings, which are now pages under Admin > Settings) was brought to it on
-2026-11-16.
+2026-11-16. Notes, Calendar, Automations, Channels and the Playground were
+brought to it on 2026-11-16 too.
 
 The rules below apply to every new or changed piece of interface.
 
@@ -100,6 +101,7 @@ Tokens, by role. Values are in `standard.css`; hex values are shown on `/ui`.
 | `--important` | The Important callout in a rendered answer. Not a status |
 | `--canvas` | The inside of a frame showing a page the app did not write. White in every theme |
 | `--on-scrim` | An icon or word drawn over `--scrim` |
+| `--highlight` / `--highlight-foreground` | Text the writer highlighted (`<mark>`, a note's Highlight), and the words on it. Not a status |
 | `--series-1` to `--series-6` | Chart series, in order |
 | `--scrim` | The layer behind a dialog |
 
@@ -130,6 +132,9 @@ shown by colour alone: it is a word, with an icon where space allows (`/ui`,
 **COL-4. Anything that carries meaning without being text is at least 3:1**
 against what is next to it: the edge of a field, checkbox or switch, the
 focus indicator, an icon that is the only label, a chart series.
+A pressed toggle in a toggle group (an automation's weekdays) is the brand
+fill (`Button` `default` with `aria-pressed="true"`); an unpressed one is the
+outline `Button`.
 
 **COL-5. Surfaces are a ladder, and each step has one job** (the table
 above). Two neighbouring surfaces differ in fill and are separated by a
@@ -242,6 +247,7 @@ size `chip` (a value changed in place, such as a user's role), which keeps its
 checkbox's picture for a row that is itself `role="checkbox"`. A `Textarea`'s
 least height is its `rows`, in lines, on every pointer and never under 44 px
 on touch; set `rows`, not a `min-h-*` class, to make one taller.
+Calendar chips and '+N more' are 24 px tall, 44 on touch.
 
 **LAY-4. Every page works at 390 px wide.** The page itself never scrolls
 sideways. A side panel is `components/layout/SidePanel.tsx`: a resizable
@@ -339,6 +345,10 @@ its help line says where to turn it on ('Image generation is off in Admin >
 Settings > Images.'). A disabled switch, by its own `disabled` or a disabled
 fieldset around it, keeps showing its state: a divider edge, and the on track
 or the off knob in the disabled grey.
+A whole tab or page whose feature is off is hidden instead, as the
+Ollama-only parameters are (S3-D3): the Playground's Images tab shows only
+while image generation is on, and a direct link to it says 'Image generation
+is off', says where to turn it on, and disables Run.
 
 **ACT-6. Use the shared `Button`.** No `<button>` with its own classes. A new
 kind of button is a new variant of the shared component, added here first.
@@ -394,6 +404,11 @@ problems by the field's element id) and passes its `errors` to
 error in place of the help and the control is `aria-invalid`. A wrong field
 that is not on the page (another engine's) is said in a toast instead. A
 field the API does not require is marked '(optional)', never `required`.
+A schedule says its next runs under itself ('Next: …' with the time zone),
+and a rule the scheduler refuses is said there in words, with an example. In
+a dialog, `useFieldErrors(problems, order, { inDialog: true })` shows a left
+field's error once focus has moved on, so the dialog's focus trap does not
+send Tab past the next field.
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads
@@ -547,6 +562,13 @@ left aligned, the model's name over a muted second line (its description, or
 a workspace entry's base model in mono), and the current one is checked.
 Ctrl+Shift+M (Open model selector) opens the picker on screen;
 `openModelPicker()` opens it from code.
+A toolbar of tools (the note editor's formatting bar) is one tab stop: the
+arrow keys, Home and End move between tools, Escape returns to the text it
+acts on, and each tool's name and shortcut are in its Tip ("Bold, Ctrl+B").
+A grid of days (the calendar's month and mini month) is one tab stop: the
+arrow keys move a day or a week, Home and End go to the ends of the week,
+and moving past the edge pages the month. Event chips sit beside the day's
+button, never inside it.
 
 ## Tables and figures
 
@@ -597,6 +619,17 @@ scroll region outside `Table` (a code listing, an equation) uses
 `useScrollEdges` with the `scroll-edges` frame and `scroll-region` scroller
 in standard.css: the same shaded edges, a thin scrollbar where the platform
 allows, focus drawn inside.
+
+**DAT-7. A time grid** (Calendar week and day) places each event by its
+start and end on the local clock: its height is its length, never under
+24 px (44 on touch). Events that overlap share the width in columns. Today's
+column is `--surface-1` with a 2 px `--brand` now-line. The grid opens at
+7 AM, or an hour before now when today is shown, and the day names and the
+all-day band stay in view above the hours. All-day and multi-day events are
+bars in that band, or across their days in a month. An automation's runs on
+one day are one item with a count ('Daily digest ×24', read as '24 runs'),
+listed after your own events. The layout is `layoutDay` in
+`routes/calendar/calendarModel.ts` (`/ui`, "A time grid").
 
 ## Feedback
 
@@ -673,6 +706,8 @@ A failure toast is `toastFailure(message, error)` in
 `components/common/failureToast.tsx`: the message says what failed, and the
 server's own words (`errorText`) sit behind a closed 'Details'
 (`ErrorDetails`), never as the toast's visible text.
+The Playground shows a failed run with the same `ErrorReply`, under the
+message that caused it, with Retry; no toast.
 
 ## Loading, empty and failed
 
@@ -744,6 +779,8 @@ exist on touch.
 playground, reports, a knowledge preview. One implementation of rendered
 Markdown and one set of prose styles (`.rich-text`), at `text-reading` and
 within TYP-5.
+A highlight (`<mark>`) is `--highlight` under `--highlight-foreground` in
+every theme, held by the contrast test to 7:1, the same promise as body text.
 
 **CNT-2. Code blocks have one theme, built from the tokens, in both app
 themes.** Code is highlighted by highlight.js and coloured by the `.hljs-*`
@@ -772,6 +809,8 @@ vanish (`--math-black` in dark and black, `--math-white` in light). A display
 equation wider than the column scrolls inside its own box, shades the edge
 that hides the rest (`scroll-edges`, DAT-6), and is a tab stop while it
 overflows; on its own line it is a figure named "Equation".
+In the note editor a formula is typeset over its source and the source
+returns while the caret is in it; the stored text is never converted.
 
 **CNT-4. Output the app did not write** (an HTML preview, a sandbox's file, a
 generated figure) sits in a frame that belongs to the theme (COL-6). The
@@ -944,6 +983,9 @@ focused, so focus can return to it when its menu closes (NAV-4). A message's
 actions are always shown: muted (`--foreground-muted`) at rest and
 `--foreground-strong` while the message is hovered or holds focus, never
 `opacity-0` until hover.
+A channel message's actions are its own: on touch they are in its
+'Message actions' menu, a 44 px ⋯ always shown; on a pointer its toolbar is
+transparent and inert until the message is hovered or holds focus.
 
 **A11Y-5. The page works at 200% zoom and reflows at 320 CSS px** without
 losing content or the main action. On a phone screen under 520 px tall, routes
