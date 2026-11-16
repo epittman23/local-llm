@@ -33,7 +33,11 @@ async function mockConfigApi(
 	return { calls };
 }
 
-const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
+// Server tabs are pages under Admin (S5-D1); personal tabs are in the dialog.
+const modal = (page: Page) =>
+	page
+		.getByRole('dialog', { name: 'Settings' })
+		.or(page.getByRole('region', { name: /^(Server settings|Analytics)$/ }));
 
 test.describe('server settings pages (S5-D1, #932)', () => {
 	// The server's settings are pages under Admin; the dialog keeps personal settings.
@@ -399,12 +403,14 @@ test.describe('settings: Evaluations', () => {
 });
 
 test.describe('settings: Pipelines', () => {
-	test('with no server it says so and has no Save', async ({ page }) => {
+	test('with no server the tab is not offered, and its address goes to the first tab (S5-D4)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/pipelines/list', (route) => json(route, { data: [] }));
-		await page.goto('/?settings=admin:pipelines');
-		await expect(modal(page).getByText('Pipelines Not Detected')).toBeVisible();
-		await expect(modal(page).getByRole('button', { name: 'Save' })).toHaveCount(0);
+		await page.goto('/admin/settings/pipelines');
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(
+			page.getByRole('region', { name: 'Server settings' }).getByRole('tab', { name: 'Pipelines' })
+		).toHaveCount(0);
 	});
 
 	test('picks a pipeline, edits a valve (None -> Custom), and saves arrays as arrays', async ({ page }) => {
