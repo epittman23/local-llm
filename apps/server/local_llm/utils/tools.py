@@ -1595,7 +1595,8 @@ async def get_tool_server_data(url: str, headers: dict | None) -> dict[str, Any]
     except (aiohttp.ClientConnectionError, TimeoutError) as err:
         error = str(err) or type(err).__name__
         log.error(f'Could not fetch tool server spec from {url}: {error}')
-        raise Exception(error)
+        # Chained, so a caller can still say why (a refused connection, a timeout).
+        raise Exception(error) from err
     except Exception as err:
         log.exception(f'Could not fetch tool server spec from {url}')
         if isinstance(err, dict) and 'detail' in err:

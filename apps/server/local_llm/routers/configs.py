@@ -11,6 +11,7 @@ from local_llm.config import CODE_ENGINES, BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.config import API_CONFIG_KEYS, Config
+from local_llm.routers.openai import _verify_failure, _verify_target
 from local_llm.sandbox.manager import SETTING_KEYS, TIMEOUT_KEY, sandbox_setting_error
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
@@ -438,6 +439,9 @@ async def verify_terminal_server_connection(
     if form_data.auth_type == 'bearer' and form_data.key:
         headers.update(bearer_auth_header(form_data.key))
 
+    # What the last attempt met, so the refusal can say why (#1018).
+    failure: BaseException | None = None
+    refused_status: int | None = None
     try:
         async with aiohttp.ClientSession(
             trust_env=True,
@@ -450,8 +454,8 @@ async def verify_terminal_server_connection(
                 ) as resp:
                     if resp.ok:
                         return {'status': True, 'type': 'orchestrator'}
-            except Exception:
-                pass
+            except Exception as e:
+                failure = e
 
             # Fall back to open-terminal config endpoint.
             try:
@@ -460,13 +464,34 @@ async def verify_terminal_server_connection(
                 ) as resp:
                     if resp.ok:
                         return {'status': True, 'type': 'terminal'}
-            except Exception:
-                pass
+                    refused_status = resp.status
+                    failure = None
+            except Exception as e:
+                failure = e
 
     except Exception as e:
         log.debug('Failed to connect to the terminal server: %s', e)
+        failure = e
 
-    raise HTTPException(status_code=400, detail='Failed to connect to the terminal server')
+    raise HTTPException(status_code=400, detail=_terminal_failure(base_url, failure, refused_status))
+
+
+def _connection_cause(url: str, error: BaseException) -> str | None:
+    """Why a connection test could not reach `url`, as `/openai/verify` says it (#1018); None when it did."""
+    # The error itself (aiohttp's, which chains the OSError under it), or the one a wrapper chained.
+    for cause in (error, error.__cause__):
+        if isinstance(cause, (aiohttp.ClientError, TimeoutError)):
+            return _verify_failure(url, cause)
+    return None
+
+
+def _terminal_failure(url: str, failure: BaseException | None, status: int | None) -> str:
+    """A terminal test's refusal: what stopped it, never the whole URL."""
+    if failure is not None and (cause := _connection_cause(url, failure)):
+        return cause
+    if status is not None:
+        return f'{_verify_target(url)} answered HTTP {status}, but not as a terminal server. Check the URL and the key.'
+    return 'Failed to connect to the terminal server'
 
 
 class TerminalServerPolicyForm(BaseModel):
@@ -718,7 +743,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
         log.debug('Failed to connect to the tool server: %s', e)
         raise HTTPException(
             status_code=400,
-            detail='Failed to connect to the tool server',
+            detail=_connection_cause(form_data.url, e) or 'Failed to connect to the tool server',
         )
 
 

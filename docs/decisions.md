@@ -58,7 +58,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     timeout, a host not found, a refused connection, a lost connection, or
     an HTTP status with what to check), giving the host and port, never the
     whole URL. Status codes are unchanged. The dialog itself says when a 200
-    is not a model list.
+    is not a model list. The OpenAPI tool server and terminal tests
+    (`/configs/{tool,terminal}_servers/verify`) say the same of a refused,
+    timed-out or unknown host, still with a 400; an MCP tool server's test
+    still says only that it failed.
   - **The Shift quick buttons are removed (S5-D11 A):** the buttons Admin >
     Models' rows showed while Shift was held (hide or show, set as default,
     pin by default) are gone; the row menu does the same things.
