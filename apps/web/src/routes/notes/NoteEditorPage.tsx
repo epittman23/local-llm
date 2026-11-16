@@ -382,7 +382,8 @@ function NoteEditor() {
 
 			{/* The page's own header: on a phone, toasts start below it (FBK-2). */}
 			<div data-page-top="" className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
-				<Tip content="Back to notes">
+				{/* Beside it, not below: below, it covered the toolbar's first tools. */}
+				<Tip content="Back to notes" side="left">
 					<Button asChild variant="ghost" size="icon-sm">
 						<Link to="/notes" onClick={() => void flush()} aria-label="Back to notes">
 							<ChevronLeft className="size-4" />

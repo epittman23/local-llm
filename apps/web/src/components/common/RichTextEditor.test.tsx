@@ -193,6 +193,8 @@ describe('the formatting toolbar (#1038)', () => {
 		const list = tools();
 		expect(list.filter((b) => b.tabIndex === 0)).toEqual([list[0]]);
 		list[0].focus();
+		// Padded by the focus ring's width, so its scrolling frame doesn't clip the first tool's ring.
+		expect(screen.getByRole('toolbar')).toHaveClass('overflow-x-auto', 'p-1');
 		fireEvent.keyDown(list[0], { key: 'ArrowRight' });
 		expect(document.activeElement).toBe(list[1]);
 		await waitFor(() => expect(list[1].tabIndex).toBe(0));

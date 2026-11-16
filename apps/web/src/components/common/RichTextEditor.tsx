@@ -363,7 +363,8 @@ function Toolbar({ editor }: { editor: Editor }) {
 			table: e.isActive('table')
 		})
 	});
-	// One tab stop: Escape returns to the text the tools act on.
+	// One tab stop: Escape returns to the text the tools act on. The bar scrolls in its own frame,
+	// padded by the focus ring's 4 px (and pulled back by as much) so the frame never clips it.
 	const toolbar = useToolbarKeys(() => editor.commands.focus());
 	const c = () => editor.chain().focus();
 	return (
@@ -371,7 +372,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 			{...toolbar}
 			role="toolbar"
 			aria-label="Formatting"
-			className="scroll-region mb-1 flex shrink-0 items-center gap-0.5 overflow-x-auto pb-0.5 [&_svg]:size-4"
+			className="scroll-region -mx-1 -mt-1 mb-0.5 flex shrink-0 items-center gap-0.5 overflow-x-auto p-1 [&_svg]:size-4"
 		>
 			<ToolButton label="Undo" chord="Cmd+Z" blocked={!s.undo} onClick={() => c().undo().run()}>
 				<Undo2 />

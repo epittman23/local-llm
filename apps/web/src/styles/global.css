@@ -113,11 +113,13 @@
 	.rich-text :where(code) {
 		@apply bg-muted rounded px-1 py-0.5 font-mono text-[0.85em];
 	}
+	/* TYP-2: a code block's text is text-dense; its code keeps that size, not inline code's 0.85em of it. */
 	.rich-text :where(pre) {
-		@apply bg-muted my-2 overflow-x-auto rounded-lg p-3 font-mono text-xs;
+		@apply bg-muted my-2 overflow-x-auto rounded-lg p-3 font-mono text-dense;
 	}
 	.rich-text :where(pre code) {
 		@apply bg-transparent p-0;
+		font-size: inherit;
 	}
 	/* A note's code block (components/common/RichTextCodeBlock): the frame and header are the view's. */
 	.rich-text :where([data-slot="note-code-block"] pre) {
