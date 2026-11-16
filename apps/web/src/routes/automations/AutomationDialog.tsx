@@ -542,8 +542,12 @@ function AutomationForm({
 	}, [automation, cloneFrom, startModel]);
 	// A clone may point at a folder or channel this user does not have: drop it
 	// once the lists are known, without touching anything else being edited.
+	// Once: the lists can come back as new arrays on any render.
+	const checkedDestinations = useRef(false);
 	useEffect(() => {
-		if (cloneFrom && !automation && loaded) setF((prev) => withoutMissingDestinations(prev, folders, channels));
+		if (!cloneFrom || automation || !loaded || checkedDestinations.current) return;
+		checkedDestinations.current = true;
+		setF((prev) => withoutMissingDestinations(prev, folders, channels));
 	}, [cloneFrom, automation, loaded, folders, channels]);
 
 	const dirty =

@@ -191,7 +191,11 @@ function Automation() {
 	};
 	const allRuns = runs.data?.pages.flat() ?? [];
 	const last = lastRun(a);
-	const next = a.is_active ? (a.next_runs?.length ? a.next_runs : [nextRunAt(a)].filter((n) => n !== null)) : [];
+	const next = a.is_active
+		? a.next_runs?.length
+			? a.next_runs
+			: [nextRunAt(a)].filter((n): n is number => n !== null)
+		: [];
 	const destination = destinationLabel(a, folders, channels, true);
 
 	return (
@@ -274,7 +278,7 @@ function Automation() {
 							<>
 								{next
 									.slice(0, 3)
-									.map((ns) => runTimeText(new Date(ns / 1_000_000)))
+									.map((ns: number) => runTimeText(new Date(ns / 1_000_000)))
 									.join('; ')}
 								<span className="text-foreground-muted"> ({localTimeZone()})</span>
 							</>

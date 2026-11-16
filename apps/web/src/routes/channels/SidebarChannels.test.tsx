@@ -13,8 +13,9 @@ import { SidebarChannels } from './SidebarChannels';
 // join, who may post, the permission) is in
 // apps/server/tests/test_channel_public_groups.py.
 
-const { createNewChannel, updateChannelById, toast, list, me, enabled } = vi.hoisted(() => ({
+const { createNewChannel, updateChannelById, deleteChannelById, toast, list, me, enabled } = vi.hoisted(() => ({
 	enabled: { current: true },
+	deleteChannelById: vi.fn(async () => true),
 	toast: { error: vi.fn(), success: vi.fn() },
 	createNewChannel: vi.fn(async () => ({ id: 'new' })),
 	updateChannelById: vi.fn(async () => ({ id: 'team' })),
@@ -35,7 +36,8 @@ vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket: null
 vi.mock('@/lib/apis/channels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	createNewChannel,
-	updateChannelById
+	updateChannelById,
+	deleteChannelById
 }));
 vi.mock('./useChannels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -212,5 +214,31 @@ describe('direct messages in the sidebar', () => {
 		list.current = [dm(false)];
 		show();
 		expect(dot()?.className).toContain('bg-foreground-muted');
+	});
+});
+
+describe('editing a channel', () => {
+	it('deletes it after a confirmation that names it', async () => {
+		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete channel' }));
+		expect(await screen.findByText(/and all its messages are deleted for everyone/)).toBeTruthy();
+		fireEvent.click(screen.getAllByRole('button', { name: 'Delete channel' }).at(-1) as HTMLElement);
+		await waitFor(() => expect(deleteChannelById).toHaveBeenCalledWith('t', 'team'));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted team'));
+	});
+
+	it('says so when saving fails, and keeps the dialog open', async () => {
+		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
+		updateChannelById.mockRejectedValueOnce('Server busy' as never);
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+		await waitFor(() => expect(toast.error).toHaveBeenCalled());
+		expect(toast.error.mock.calls[0][0]).toBe("Couldn't save the channel");
+		expect(screen.getByRole('heading', { name: 'Edit channel' })).toBeTruthy();
 	});
 });

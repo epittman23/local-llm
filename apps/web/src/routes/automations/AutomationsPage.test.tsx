@@ -160,3 +160,83 @@ describe('an Automations list that cannot load (STA-4, #981)', () => {
 		expect(await screen.findByText('No automations yet')).toBeInTheDocument();
 	});
 });
+
+describe('the list actions', () => {
+	const openMenu = async (name: string) =>
+		fireEvent.pointerDown(await screen.findByRole('button', { name }), { button: 0, ctrlKey: false });
+
+	it('deletes after a confirmation that names what goes', async () => {
+		api.getAutomationItems.mockResolvedValue({ items: [item()], total: 1 });
+		api.deleteAutomationById.mockResolvedValue(true);
+		open();
+		await openMenu('More actions for Morning digest');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		expect(await screen.findByText(/and its run history are deleted/)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Delete automation' }));
+		await waitFor(() => expect(api.deleteAutomationById).toHaveBeenCalledWith('t', 'a1'));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted Morning digest'));
+	});
+
+	it('says so when a delete fails', async () => {
+		api.getAutomationItems.mockResolvedValue({ items: [item()], total: 1 });
+		api.deleteAutomationById.mockRejectedValue('Server busy');
+		open();
+		await openMenu('More actions for Morning digest');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete automation' }));
+		await waitFor(() => expect(toast.error.mock.calls[0]?.[0]).toBe("Couldn't delete Morning digest"));
+	});
+
+	it('duplicates one into a new automation', async () => {
+		api.getAutomationItems.mockResolvedValue({ items: [item()], total: 1 });
+		open();
+		await openMenu('More actions for Morning digest');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Duplicate' }));
+		expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('Morning digest (Clone)');
+	});
+
+	it('resumes or pauses every automation shown, and counts them', async () => {
+		api.getAutomationItems.mockResolvedValue({
+			items: [item(), item({ id: 'a2', name: 'Weekly', is_active: false })],
+			total: 2
+		});
+		api.toggleAutomationById.mockResolvedValue({});
+		open();
+		await openMenu('Actions');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Pause all' }));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('1 automation paused'));
+		expect(api.toggleAutomationById).toHaveBeenCalledWith('t', 'a1');
+		await openMenu('Actions');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Resume all' }));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('1 automation resumed'));
+	});
+
+	it('filters by status, says how many match, and clears the filter', async () => {
+		api.getAutomationItems.mockImplementation(async (_t: string, _q: string | null, status: string) =>
+			status === 'paused' ? { items: [], total: 0 } : { items: [item()], total: 1 }
+		);
+		open();
+		await openMenu('Status: All');
+		fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Paused' }));
+		expect(await screen.findByText('Nothing matches these filters')).toBeInTheDocument();
+		expect(screen.getByRole('status')).toHaveTextContent('0 of 1 automations');
+		fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+		expect(await screen.findByRole('button', { name: /^Morning digest/ })).toBeInTheDocument();
+	});
+
+	it('imports a file, and says when it cannot read one', async () => {
+		api.getAutomationItems.mockResolvedValue({ items: [], total: 0 });
+		api.createAutomation.mockResolvedValue({ id: 'n' });
+		open();
+		const input = screen.getByLabelText('Import automations file') as HTMLInputElement;
+		const file = (text: string) => ({ text: async () => text }) as unknown as File;
+		fireEvent.change(input, {
+			target: {
+				files: [file(JSON.stringify([{ name: 'A', data: { prompt: 'p', model_id: 'm', rrule: 'RRULE:FREQ=DAILY' } }]))]
+			}
+		});
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Imported 1 automation'));
+		fireEvent.change(input, { target: { files: [file('not json')] } });
+		await waitFor(() => expect(toast.error.mock.calls[0]?.[0]).toBe("Couldn't read that file as automations"));
+	});
+});

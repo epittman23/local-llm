@@ -303,7 +303,12 @@ export function previewRuns(rrule: string, count = 3, now = new Date()): Date[] 
 		const options = ruleOptions(rrule);
 		const start = ruleStart(rrule);
 		const wallNow = toWall(now);
-		const step = { [RRule.MINUTELY]: 60_000, [RRule.HOURLY]: 3_600_000, [RRule.SECONDLY]: 1_000 }[options.freq ?? -1];
+		const steps: Partial<Record<number, number>> = {
+			[RRule.MINUTELY]: 60_000,
+			[RRule.HOURLY]: 3_600_000,
+			[RRule.SECONDLY]: 1_000
+		};
+		const step = steps[options.freq ?? -1];
 		let dtstart: Date;
 		if (start) dtstart = toWall(start);
 		else if (step) {
