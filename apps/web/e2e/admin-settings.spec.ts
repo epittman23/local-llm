@@ -194,6 +194,7 @@ test.describe('settings: Sub-agents limits (#602)', () => {
 		const posted = () => calls.filter((c) => c.method === 'POST' && c.path === '/configs/subagents');
 
 		// The browser's own validation used to block Save on the whole tab here.
+		await m.getByLabel('System prompt').fill('be brief');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => posted()[0]?.body)
@@ -233,6 +234,7 @@ test.describe('settings: Code Execution', () => {
 		await expect(m.getByLabel('Code Execution Engine')).toHaveCount(0);
 		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
 		await expect(m.getByText(/jupyter/i)).toHaveCount(0);
+		await m.getByLabel('Sandbox Maximum Running').fill('5');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
@@ -265,9 +267,10 @@ test.describe('settings: Code Execution', () => {
 		);
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByRole('status')).toHaveText(
-			'The sandbox is unavailable: the kata-clh runtime is not registered with Docker'
-		);
+		const notice = m.locator('[data-slot="status-notice"]');
+		await expect(notice).toHaveAttribute('data-tone', 'warning');
+		await expect(notice).toContainText("The sandbox isn't ready");
+		await expect(notice).toContainText('The kata-clh runtime is not registered with Docker');
 		await expect(m.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeVisible();
 		await m.getByLabel('Sandbox Default Image').selectOption('web');
 		await m.getByLabel('Sandbox Maximum Running').fill('8');
@@ -1360,6 +1363,7 @@ test.describe('settings: Authentication', () => {
 		const m = modal(page);
 		await expect(m.getByText(/read from environment variables/)).toBeVisible();
 		await expect(m.getByLabel('Email Claim')).toBeDisabled();
+		await m.getByLabel('JWT Expiration').fill('2w');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config')).toBeTruthy();
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
@@ -1478,6 +1482,7 @@ test.describe('settings: Audio', () => {
 			ALLOWED_EXTENSIONS: ['wav', 'mp3'],
 			OPENAI_API_REQUEST_FORMAT: 'multipart'
 		});
+		await stt.getByLabel('STT Model').fill('medium');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => updates(calls).length).toBe(2);
 		await expect(page.getByText('Settings saved successfully!').first()).toBeVisible();
@@ -2168,6 +2173,7 @@ test.describe('settings: Documents', () => {
 		await page.goto('/?settings=admin:documents');
 		const r = region(page, 'Retrieval');
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).toBeChecked();
+		await r.getByLabel('Top K', { exact: true }).fill('5');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).not.toBeChecked();
@@ -2343,6 +2349,7 @@ test.describe('settings: Web Search', () => {
 		}));
 		await page.goto('/?settings=admin:web');
 		await expect(modal(page).getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await modal(page).getByLabel('Domain Filter List').fill('example.com');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 	});
