@@ -329,7 +329,7 @@ def runs_between_ns(
     The rule is read as the scheduler reads it (`_parse_rule`), anchored at
     `anchor_ns`, the automation's next run: a rule without DTSTART takes its
     unstated time from there, as the scheduler's did, and a COUNT counts from
-    the rule's own DTSTART. The Scheduled Tasks calendar used to re-anchor
+    the rule's own DTSTART. The Automations calendar used to re-anchor
     the rule at the next run, so a COUNT started over there and it showed
     runs that never come (#356). A sub-daily rule, which takes nothing from
     its anchor but where to start walking, is read from the range's start
@@ -472,7 +472,9 @@ async def scheduler_worker_loop(app) -> None:
                     if batch:
                         log.info('Claimed %s due automation(s)', len(batch))
                     for automation in batch:
-                        run_in_background(execute_automation(app, automation))
+                        if not start_automation_run(app, automation):
+                            # Its last run is still going: this occurrence is skipped, not queued.
+                            log.info('Automation %s is still running; skipping this run', automation.id)
                 except Exception:
                     raise_if_cancelled()
                     log.exception('Scheduler: automation error')
@@ -766,6 +768,28 @@ async def _execute_channel_automation(
         subject_id=automation.id,
         data={'name': automation.name, 'channel_id': channel.id, 'message_id': assistant_message.id},
     )
+
+
+# Automations with a run under way in this process. A second run of one at the
+# same time (Run now during a scheduled run) would fork a same-chat thread, or
+# make a second chat for one that has none yet, so it is refused instead.
+_running_automations: set[str] = set()
+
+
+def start_automation_run(app, automation: AutomationModel) -> bool:
+    """Run `automation` in the background, unless a run of it is already under way here; False if one is."""
+    if automation.id in _running_automations:
+        return False
+    _running_automations.add(automation.id)
+
+    async def run() -> None:
+        try:
+            await execute_automation(app, automation)
+        finally:
+            _running_automations.discard(automation.id)
+
+    run_in_background(run())
+    return True
 
 
 async def _same_chat(automation: AutomationModel):

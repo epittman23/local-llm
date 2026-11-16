@@ -130,7 +130,7 @@ permission.
 |---|---|
 | `/notes` | A TipTap editor with autosave and a save status; math typeset with KaTeX and code highlighted, the Markdown kept as written; pinned notes lead the list and the sidebar; a new note left empty is dropped; a chat about a note sees the note |
 | `/calendar` | Month, week and day views, events placed by their times; automation runs on the "Automations" calendar, one item per automation a day; event alerts come from the backend's scheduler |
-| `/automations` | Prompts run on a schedule (an RRULE, spelled out, with its next runs), with each run listed; a run can post into the same chat every time |
+| `/automations` | Prompts run on a schedule (an RRULE, spelled out, with its next runs), with each run listed, one at a time; a run can post into the same chat every time |
 | `/channels`, `/channels/<id>` | Live messages, threads, reactions, pins and members; shown only while the server has more than one account |
 
 The assistant can also reach these through its builtin tools (search

@@ -62,7 +62,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     post every run into the chat the last run used ("Same chat every time").
     It is stored as `data.target.same_chat` in the existing JSON, with no
     migration. The model is sent only the run's prompt, not the earlier
-    runs; a deleted or archived chat starts a new one.
+    runs; a deleted or archived chat starts a new one. An automation runs
+    once at a time, in this backend process: Run now during a run is a 409,
+    and a scheduled run that comes due during one is skipped, not queued, so
+    two runs never share or both create the same chat.
   - **A new event starts at the next :00 or :30, for one hour (#1105, S6-D14
     A).**
   - **Behaviour changes without a decision.** Note math is a KaTeX decoration
