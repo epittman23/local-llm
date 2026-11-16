@@ -3,15 +3,26 @@ import { cn } from '@/lib/utils';
 const SIZES = { 20: 'size-5', 24: 'size-6', 32: 'size-8' } as const;
 
 /**
- * local-llm's mark (WRD-3): public/favicon.svg's shape drawn with the theme's
- * tokens, lucide's Sigma glyph in the brand colour on a `--surface-1`
- * rounded square. Shown beside the name in the sidebar header, the phone bar
- * and the boot splash; layouts/Base.astro's static splash repeats the same
- * SVG. Decorative unless given a `label`.
- *
- * The glyph is lucide's Sigma (ISC licence; copyright (c) for portions of
- * Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT); all other
- * copyright (c) for Lucide are held by Lucide Contributors 2022).
+ * The mark's three shapes. public/favicon.svg, apps/desktop/static/mark.svg
+ * and layouts/Base.astro's static splash draw the same paths, and
+ * app-mark.test.tsx fails if any of them drifts.
+ */
+export const MARK_PATHS = {
+	/** A squircle: one cubic per quadrant, within 0.06 units of an n=5 superellipse. */
+	tile: 'M16 0C31.9 0 32 .1 32 16S31.9 32 16 32 0 31.9 0 16 .1 0 16 0Z',
+	/** The ll of local-llm, each with the tail that keeps it from reading as I or 1. */
+	letters: 'M9 7V23a2 2 0 0 0 2 2M15 7V23a2 2 0 0 0 2 2'
+} as const;
+
+/** The block cursor after the letters: a model writing its answer. */
+export const MARK_CURSOR = { x: 20, y: 18, width: 4, height: 8, rx: 1 } as const;
+
+/**
+ * local-llm's mark (WRD-3): the ll of the name in `--foreground-strong`
+ * followed by a block cursor in `--brand`, on a `--surface-1` squircle.
+ * Strokes are 2 units on whole-unit centres, so they land on the pixel grid
+ * at 16 and 32 px. Shown beside the name in the sidebar header, the phone bar
+ * and the boot splash. Decorative unless given a `label`.
  */
 export function AppMark({
 	size = 24,
@@ -31,16 +42,16 @@ export function AppMark({
 			className={cn('shrink-0', SIZES[size], className)}
 			{...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
 		>
-			<rect width="32" height="32" rx="7" className="fill-surface-1" />
+			<path d={MARK_PATHS.tile} className="fill-surface-1" />
 			<path
-				transform="translate(4 4)"
-				d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"
+				d={MARK_PATHS.letters}
 				fill="none"
-				strokeWidth="2.25"
+				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"
-				className="stroke-brand"
+				className="stroke-foreground-strong"
 			/>
+			<rect {...MARK_CURSOR} className="fill-brand" />
 		</svg>
 	);
 }
