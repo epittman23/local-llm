@@ -52,6 +52,9 @@ What that did and did not change:
 Section by section, the review's issues are being fixed against the rules
 below. The workspace (Models, Knowledge, Prompts, Skills, Tools, Admin >
 Functions, and their editors) was brought to the standard on 2026-11-15.
+Admin (Users and Groups, Evaluations, Analytics, Functions, and the server's
+settings, which are now pages under Admin > Settings) was brought to it on
+2026-11-16.
 
 The rules below apply to every new or changed piece of interface.
 
@@ -155,7 +158,13 @@ for decoration, headings or emphasis.
 Axes, gridlines, tick labels and legends use `--foreground-muted` and
 `--border-divider`. A series is also told apart by something other than
 colour when there are more than three: a label at the line's end, a marker
-shape or a dash pattern.
+shape or a dash pattern. A chart has a legend naming each series' colour, a
+titled y axis with round ticks, and a 'Show as table' toggle that gives every
+value to the keyboard and to a screen reader (A11Y-4); the drawing is
+`role="img"` with a label summarising it, and a hover tooltip opens away from
+the nearer edge so it stays inside the chart. Examples:
+`routes/admin/analytics/ChartLine.tsx` (`axisTop` picks the round top) and
+`routes/admin/evaluations/ModelActivityChart.tsx`.
 
 **How it is checked.** `standard.contrast.test.ts` parses `standard.css` and
 asserts every pair COL-2, COL-4 and COL-5 promise, in both themes (the list is
@@ -320,8 +329,10 @@ spinner, sets `aria-busy` and cannot be pressed twice. A disabled control stays
 readable and the reason it is disabled is stated next to it or in its
 tooltip. An action that cannot work is not offered as if it could.
 A choice whose feature is off on this install stays listed and disabled, and
-its help line says where to turn it on ('Image generation is off in Admin
-Settings > Images.').
+its help line says where to turn it on ('Image generation is off in Admin >
+Settings > Images.'). A disabled switch, by its own `disabled` or a disabled
+fieldset around it, keeps showing its state: a divider edge, and the on track
+or the off knob in the disabled grey.
 
 **ACT-6. Use the shared `Button`.** No `<button>` with its own classes. A new
 kind of button is a new variant of the shared component, added here first.
@@ -382,7 +393,17 @@ Save. On a create page (`creating`) nothing exists until Save, so before the
 first change the line reads "Nothing to save yet", never "All changes saved". In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
 asks 'Discard changes?' before a tab switch, close, Escape or Back loses
 them; an at-once tab passes `savesAtOnce` and confirms each control with
-`SavedNote`.
+`SavedNote`. Every Admin settings tab is one or the other: Connections and
+Integrations save each change at once (one toast, or `toastFailure` with the
+old value put back); the rest show the `SaveBar`. On an Admin settings page
+the page's one guard (`SettingsPageHost`) asks before another tab or any
+navigation; a tab reports through `useSettingsHost().setDirty`, and anything
+it embeds with its own guard turns that off while hosted. The model editor,
+embedded in Admin > Models, reports through `onDirtyChange` and asks from its
+own Back through `useConfirmLeave`, which is `useUnsavedChanges` without the
+router blocker (a router obeys one blocker, the last registered). In a
+settings tab, lists edited in a dialog (arena models) change the draft and are
+sent with the tab's Save.
 On a page, `lib/ui/useUnsavedChanges(dirty, { message })` is the guard. It
 asks 'Discard changes?' ('Keep editing' / 'Discard changes') before in-app
 navigation, the browser's Back or Forward, or a change of `?id=` would lose
@@ -408,6 +429,9 @@ remains gets the field's edge, fill, `rounded-lg` and least height
 (`--control-compact`, 44 px on touch) from `standard.css`, so it needs no
 classes of its own; Radix's hidden form select, list boxes and a select inside
 a composite field are skipped.
+`SelectField` (`components/settings/formFields.tsx`) maps an empty-string
+option to a stand-in value for Radix and back, so the stand-in never reaches
+stored data.
 Two to five mutually exclusive choices that apply at once are a
 `SegmentedControl` (`components/ui/segmented-control.tsx`): words with
 optional line icons, a radio group, arrow keys to move and choose; on a phone
@@ -420,12 +444,32 @@ the control (ACT-5).
 **FRM-5. A switch is for a setting that applies at once; a checkbox is for a
 value in a form that is saved.** The label names the setting ("Name new chats
 automatically"), not its current state, and does not change when toggled.
+A group's permissions are checkboxes, since the group is saved
+(`routes/admin/users/Permissions.tsx`): the box, then the label and a
+one-line description, the label toggling the box. A switch's help is static
+and says what turning it on does, with its trade-off; it never narrates the
+current state. A warning that depends on a change (reindex after a new
+embedding model) shows only once that change is made.
 
 **FRM-6. Mark the optional fields**, not the required ones. Group long forms
 under headings, most used first; put rarely used settings behind
 "Advanced", closed. Example: the model editor, with the sections Identity,
 Behaviour, Knowledge and tools, Capabilities, and Advanced (closed), and a
 `SaveBar` footer.
+A folded group is the one disclosure row, `Disclosure` in
+`components/settings/formFields.tsx`: a full-width row with the group's
+name, an optional second line, optional meta (a count, a 'changed' badge)
+and a chevron that turns while open; it is named by its title, described by
+the rest, and sets `aria-expanded` and `aria-controls`. Opened, its panel
+grows in the scroller around it inside a `rounded-lg border p-3` frame,
+never an inner max-height, and a click that opens it brings the row and
+panel into view (`scrollIntoView({ block: 'nearest' })`, `scroll-mt-3` so the
+focus outline shows, no smooth scrolling); opened by its holder (a filter, a
+form opening Advanced at an error) it keeps the scroll where it is. A long
+list of settings in one form folds into named groups; each group's heading
+shows how many it holds and how many differ from the defaults, and a filter
+box finds a setting by its label or description and opens the groups that
+hold one (a group's permissions).
 
 ## Pages and navigation
 
@@ -442,7 +486,9 @@ tab. A vertical tab list (Settings) is `components/settings/SettingsNav.tsx`:
 one tablist, roving focus (Up, Down, Home, End; Enter opens), captions hidden
 from assistive technology, a repeated name carrying its group ('Server:
 General'). Below 768 px it becomes two levels: the list with search, then the
-tab with a way back. A show/hide toggle is not a menu trigger: when expanded
+tab with a way back. A section's sub-tabs (Admin > Users, Evaluations) are a
+strip above the content (`SubTabs`, the `SectionTabs` look), a navigation
+landmark, with counts as secondary badges. A show/hide toggle is not a menu trigger: when expanded
 it keeps the ghost button's resting look (`aria-expanded:bg-transparent`).
 
 **NAV-3. A link to something that no longer exists says so, in place:** "This
@@ -496,7 +542,9 @@ colour for the same state on every page. The status badge is the shared
 `--surface-3`) and an icon marked `data-icon="inline-start"`; a neutral state
 is `variant="secondary"` with no icon. A list row's state (Hidden, Off, Read
 only) is a `Badge variant="secondary"` on its first line, never opacity on the
-row or its picture (COL-2).
+row or its picture (COL-2). Admin's lists show theirs the same way (Hidden,
+Off, Default, Pinned, Pipelines, OpenAPI, MCP); with one account the Pinned
+badge is hidden.
 
 **DAT-4. An identifier is monospaced, can be copied, and links to the thing it
 identifies** when that thing has a page.
@@ -510,8 +558,14 @@ rows become stacked label and value pairs. The page does not scroll sideways
 (LAY-4). The shared `Table` scrolls inside its own frame and shades the edge
 that hides columns. Give it `aria-label`: the scrolling container becomes a
 named region and, while it overflows, a tab stop the arrow keys scroll.
-`stickyFirstColumn` keeps the first column in view (set `--table-surface` if
-the table does not sit on `--page`). Tables in rendered answers use it too,
+`stickyFirstColumn` keeps the first column in view; its cells are opaque in
+`--table-surface` (set it if the table does not sit on `--page`) and take
+the row's hover tint. A sortable column's heading is `TableSortHead`: the
+shared sort button, with `aria-sort` on the open sort's heading only. A row
+that opens something is `TableRow onOpen`: a click anywhere on it opens it,
+except on a control in it (a button, link, field or a menu item portalled
+out of it), and its name cell holds a button calling the same open, which
+is the keyboard's way in (NAV-5). Tables in rendered answers use it too,
 with Copy table (tab-separated, so it pastes as cells) and Download CSV in an
 always-visible toolbar above the table, never over a heading (A11Y-4). A
 scroll region outside `Table` (a code listing, an equation) uses
@@ -528,6 +582,11 @@ below the phone's top band (FBK-2), while the socket is down for more than
 Every reconnect refetches what is on screen.
 A save error in an editor stays inline above its footer, never a toast over
 Save (`components/common/EditorError.tsx`).
+A connection's URL field has Test connection beside it
+(`ConnectionUrlField` in `components/settings/formFields.tsx`). It checks for
+http:// or https:// first, then says under the URL what it found: 'Reachable:
+N models' in the success colour, or the server's reason in the danger colour
+with the field `aria-invalid`. An edit clears the result.
 
 | Situation | Where |
 |---|---|
@@ -579,7 +638,7 @@ alone, no internal identifier as the message. The technical detail may be
 offered behind "Details". It does not apologise and does not blame. A failed
 reply is `routes/chat/ErrorReply.tsx`: the heading 'The model didn't answer',
 the provider's own words, a next step for the causes it recognises (a refused
-API key: Admin Settings > Connections; an error naming the local server's
+API key: Admin > Settings > Connections; an error naming the local server's
 port, 127.0.0.1:8090: Benchmarks > Serve), and Retry and Try another model. An error-only reply offers no Copy,
 Edit, Read aloud or rating. Run on a host without the sandbox says "The code
 sandbox isn't set up on this machine", what it needs, and links the guide;
@@ -595,7 +654,7 @@ server's own words (`errorText`) sit behind a closed 'Details'
 empty, failed and full. All four are checked.
 
 **STA-2. Loading** that lasts longer than about 300 ms shows a skeleton in the
-shape of what is coming. A spinner is for inside a button. Loading is never
+shape of what is coming (a table's is `components/common/TableSkeleton`). A spinner is for inside a button. Loading is never
 shown as an empty state or as zeros. While the app starts, the boot splash
 (the name on the page colour, a spinner after 400 ms, 'Still waiting for the
 server… Retry' after 8 s) stands in for the page, never a bare 'Loading…'.
@@ -621,13 +680,21 @@ the reason in plain words, the server's text behind Details, and Retry and
 Dismiss; Dismiss alone when retrying cannot help (duplicate content). It is
 kept for the visit, not across a reload. At 390 its buttons wrap under the
 reason. Example: `routes/workspace/knowledge/KnowledgeFileList.tsx`.
+A section's state (a service it depends on: ready, checking, not ready, the
+check failed) is a `StatusNotice` (`components/ui/status-notice.tsx`) at the
+top of the section: an icon and a title in its status colour (COL-3), what it
+means and what to do as sentences, one action ('Check again'), and the
+server's own words behind 'Details'. It is not help text and never shares
+help text's grey. Example: Admin > Settings > Code Execution's sandbox.
 
 ## Overlays
 
 **OVL-1. A dialog has a title, and is one of three widths:** 24 rem for a
 confirmation, 32 rem for a short form, 48 rem for a large one. A two-pane
 dialog, a tab list beside a 40 rem form (Settings), is 64 rem. Anything bigger
-is a page (NAV-1).
+is a page (NAV-1). A dialog is never taller than the viewport less 1 rem each
+side; content taller than that scrolls inside it. A tall form puts its fields
+in `DialogBody`, so the header and the footer's buttons stay pinned.
 
 **OVL-2. Dialogs and menus sit on `--surface-2` with an edge and a shadow**,
 over `--scrim`. Focus is trapped inside a dialog and returns on close (NAV-4).
@@ -635,7 +702,9 @@ over `--scrim`. Focus is trapped inside a dialog and returns on close (NAV-4).
 **OVL-3. A menu holds actions on one thing:** at most about seven, grouped,
 each a verb, with the destructive one last (ACT-3). Its labels do not wrap.
 A reply's More actions menu: Edit, Read aloud, Continue, the model's own
-actions, a separator, then Delete.
+actions, a separator, then Delete. A menu entry that is a setting is a
+checkbox item: a fixed label, a one-line description, a check while on
+(Admin > Models' row menu).
 
 **OVL-4. A tooltip names an icon or shows text that was truncated.** It never
 holds information that is not available some other way, because it does not

@@ -384,7 +384,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   STA-4), `Gone` (something that no longer exists, said in place, NAV-3),
   `FilterSelects` (the workspace
   View/Tag selectors), `ListChrome` (search bar, sortable header, empty
-  state and match count shared by every workspace list), `failureToast.tsx`
+  state and match count shared by every workspace list), `TableSkeleton` (a
+  table's loading placeholder, STA-2), `failureToast.tsx`
   (`toastFailure`: a failure toast with the server's words behind Details,
   FBK-4), `EditorError.tsx` (an editor's inline parse or save error, and the
   words for save failures, FBK-1), `codeSource.ts` (where imported code came
@@ -395,9 +396,17 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `ImportUrlModal`, `SafeMarkdown` (marked + DOMPurify), `AttachWebpageDialog`,
   and `AdvancedParams` (table-driven request parameters,
   `advancedParamDefs.ts`).
-- **`src/components/settings/`** — the Settings modal: `SettingsModal`
+- **`src/components/settings/`** — the Settings modal (personal tabs, plus
+  a "Server settings" link for admins) and the frame the server's tabs share
+  with their Admin pages: `SettingsModal`
   (the two-pane dialog, setting search, the unsaved-changes guard, and the
-  URL param via `lib/settings/useSettingsUrl.ts`), `SettingsNav.tsx` (the
+  URL param via `lib/settings/useSettingsUrl.ts`), `SettingsTabContent.tsx`
+  (one tab's body, in the dialog or on a page), `useServerTabs.ts` (the
+  server tabs this install offers: Pipelines only with a pipelines server,
+  Analytics only while it is on), `formFields.tsx` (the form language of the
+  settings forms and connection dialogs: `FormField`, `FieldLabel`, the
+  `Disclosure` row of FRM-6, `ConnectionUrlField` with Test connection,
+  `SecretInput`, `SelectField`, `SwitchField`), `SettingsNav.tsx` (the
   vertical tab list), `settingsIndex.ts` (the setting labels search
   matches), `settingsTabs.ts` (every tab id), `adminTabComponents.ts` (lazy
   tab bodies), `controls.tsx` (the compact form vocabulary every tab uses:
@@ -413,8 +422,10 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (ACT-7), `image-button.tsx` (ACT-8), `page-header.tsx` (LAY-5),
   `app-mark.tsx` (the product's mark, WRD-3), `save-bar.tsx` (FRM-3),
   `field-message.tsx` (the help or error line under a field, FRM-2),
-  `segmented-control.tsx` (FRM-4) and `command.tsx` (a list chosen from by
-  keyboard, on cmdk, NAV-5).
+  `segmented-control.tsx` (FRM-4), `status-notice.tsx` (a section's state,
+  STA-4) and `command.tsx` (a list chosen from by keyboard, on cmdk, NAV-5).
+  `table.tsx` adds `TableSortHead`, `TableRow onOpen` and `stickyFirstColumn`
+  to shadcn's table (DAT-6).
 - **`src/routes/`** — react-router. `AppRouter.tsx` has two kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/`, the Phase 9 surfaces and, last, `NotFound`, the
@@ -440,13 +451,16 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `modelEditorLogic.ts`, the
   pickers in `EditorPickers`/`KnowledgePicker`, and import
   sanitizers in `modelImport.ts`). `admin/` is Phase 8's surface:
-  `AdminLayout` (admin-only gate, tab bar) and `adminAccess.ts`; `users/`
+  `AdminLayout` (admin-only gate, tab bar, the sub-tab strip), `adminAccess.ts`
+  and `adminVisibility.ts` (`useAdminSingleUser`: one account and sign-ups
+  off, which hides the multi-user parts, S5-D2); `users/`
   (users and groups, permissions table in `permissionRows.ts`),
   `evaluations/` (leaderboard with the chart.js activity chart, feedback),
-  `functions/` (list and editor). `/admin/settings[/<tab>]` and
-  `/admin/analytics` are only redirects (`SettingsRedirects.tsx`): admin
-  Settings is a *modal* (`?settings=admin:<tab>`), and the sixteen tab
-  bodies live in `admin/settings/` (plus `admin/analytics/` and
+  `functions/` (list and editor). The server's settings are pages:
+  `settings/AdminSettingsPage.tsx` serves `/admin/settings/<tab>` (the tab
+  list with its own search beside the tab, one page guard) and the
+  `/admin/analytics` page; old `?settings=admin:<tab>` links redirect there.
+  The tab bodies live in `admin/settings/` (plus `admin/analytics/` and
   `admin/settings/models/`), each with its rules in a `*.ts` beside it and a
   unit test. Phase 9's surfaces sit beside them, each gated by
   `common/FeatureGate` on the rules in `lib/access/features.ts`: `notes/`
@@ -495,7 +509,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
   **`socket/`**, **`i18n/`** (i18next setup and the one shipped locale, `en-US`),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
-  `utils/index.ts` that ported pages actually use, plus small React hooks: `useDebouncedValue`, `useDebouncedCallback`, `useShiftKey`),
+  `utils/index.ts` that ported pages actually use, plus small React hooks: `useDebouncedValue`, `useDebouncedCallback`),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
   `AccessControl`; `useAccessGrants`, the save-on-change state of the skill,
   prompt and tool access dialogs, which shows the grants the server stored), and **`settings/`** (`userSettings.ts`: the user's saved

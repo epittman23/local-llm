@@ -3,7 +3,7 @@
 The services and models behind three of the assistant's tools, added on
 2026-10-24. The services run from `infra/docker-compose.yml` and start and
 stop with `make backend`. The settings that point the app at them live in
-the app's database (Admin Settings), not in a repo file.
+the app's database (Admin > Settings), not in a repo file.
 
 ## Code interpreter: the sandbox
 
@@ -46,7 +46,7 @@ It needs no service from the Compose file beyond the package mirror that
   switched on and for a user
   with its permission (admins always have it).
 
-**Settings** (Admin Settings > Code Execution): there is no engine choice.
+**Settings** (Admin > Settings > Code Execution): there is no engine choice.
 The page holds the sandbox fields (default image, command timeout, how
 many run at once, idle minutes, retention days, workspaces per user) and a
 status line saying whether the host can run sandboxes. The host needs
@@ -73,7 +73,7 @@ without knowing which user or chat it came from. Upstream engines also
 rate-limit it now and then. On 2026-10-24 a query returned 20 results
 while Brave and DuckDuckGo did not answer.
 
-**Settings** (Admin Settings > Web Search): turn web search on, set the
+**Settings** (Admin > Settings > Web Search): turn web search on, set the
 engine to `searxng` and the query URL to
 `http://127.0.0.1:8080/search?q=<query>`.
 
@@ -137,7 +137,7 @@ one knowledge base; queries worded unlike their answers):
 Each query took about 1.8 s. Loading both models offline took about 4 s
 each.
 
-**Settings** (Admin Settings > Documents): embedding engine "Default
+**Settings** (Admin > Settings > Documents): embedding engine "Default
 (SentenceTransformers)" with model `BAAI/bge-m3`; hybrid search on;
 reranking engine "Default (SentenceTransformers)" with model
 `BAAI/bge-reranker-v2-m3`; top K 5, top K reranker 3.

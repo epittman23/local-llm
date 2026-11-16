@@ -7,6 +7,77 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-16**: **Admin: the owner's decisions for the UX review's section 5
+  (#1116), and server settings that are pages.**
+  - **The server's settings are pages under Admin (#932, S5-D1 A).**
+    `/admin/settings/<tab>` shows one tab beside the list of tabs, with its
+    own search; below 768 px `/admin/settings` is the list, and from 768 px
+    it opens the first tab. Analytics is its own Admin tab,
+    `/admin/analytics`, shown while admin analytics is on. The Settings
+    dialog keeps the personal tabs plus a "Server settings" link for admins.
+    Old `?settings=admin:<tab>` links, and anything that opened a server tab
+    in the dialog, now go to the page.
+  - **One account hides the multi-user parts of Admin (#1022, S5-D2 A),**
+    by the workspace's rule: while there is one account and sign-ups are
+    off (`useAdminSingleUser`), Users hides Groups, Default permissions and
+    its sub-tabs; Authentication hides Default role, Default group and
+    Pending accounts; General hides Channels, User webhooks, User status,
+    Response watermark and Banners; Analytics hides its Users column, User
+    activity, group filter and user count. OAuth folds to one line. Users
+    stays. Everything returns with a second account or with sign-ups on.
+  - **Ollama stays on (#1019, S5-D3 C).** No default, migration or stored
+    value changes; only the words do ("OpenAI-compatible connections", no
+    troubleshooting link).
+  - **Pipelines is a tab only while a pipelines server is connected (#1024,
+    S5-D4 A);** its address goes back to the list otherwise.
+  - **The SQLite download is removed (#961, S5-D5 A).** `GET
+    /api/v1/utils/db/download` (the backend has run on Postgres only) and its
+    client are gone; Database shows the `pg_dump` command to back up with.
+    The removed route answers like any unknown `/api` GET, the app's page
+    with a 200 (#1131, a follow-up).
+  - **Web Search with no engine stored preselects the bundled SearXNG
+    (#1025, S5-D6 B)** with `http://127.0.0.1:8080/search?q=<query>` and the
+    language `all`. Nothing is stored until Save, so that tab opens with
+    unsaved changes and leaving it asks "Discard changes?".
+  - **Task prompts show their defaults (#1101, S5-D7 A).** New `GET
+    /api/v1/tasks/config/defaults` (admin, read-only) returns the built-in
+    templates keyed like `GET /api/v1/tasks/config`; Admin > Settings >
+    Tasks & prompts (the Interface tab, renamed; its id is unchanged) offers
+    Show default, Start from default and Reset to default. The Context
+    Compaction and Code Interpreter prompts are not in it.
+  - **Add user shows the password rule (#1103, S5-D8 A).** `/api/config`'s
+    features gain `enable_password_validation` and `password_validation_hint`
+    (additive); the hint shows only while validation is on, with Generate
+    and Copy.
+  - **Admin > Models lists two groups (#1030, S5-D9 A):** "From connections"
+    and "Workspace models", whose rows link to the Workspace editor.
+  - **A failed connection test says why (#1018, S5-D10 A).**
+    `/openai/verify`'s `detail` names the cause (not a web address, a
+    timeout, a host not found, a refused connection, a lost connection, an
+    HTTP status with what to check, or an answer that is not a model list),
+    giving the host and port, never the whole URL. Status codes are
+    unchanged.
+  - **The Shift quick buttons are removed (S5-D11 A):** the buttons Admin >
+    Models' rows showed while Shift was held (hide or show, set as default,
+    pin by default) are gone; the row menu does the same things.
+  - **"Pin by default" is hidden while there is one account (S5-D12,
+    2026-11-16),** with its Pinned badge and "Pinned by default" view; it
+    returns with a second account or sign-ups. Stored pins are untouched.
+  - **Admin > Models reorders within a group (S5-D13, 2026-11-16).**
+  - **Behaviour changes without a decision.** Every Admin settings tab
+    either shows a SaveBar and asks "Discard changes?" before a tab switch or
+    navigation loses changes, or saves each change at once: Connections and
+    Integrations save at once, one toast per change, and put the old value
+    back when a save fails. Arena model edits join Evaluations' Save. A
+    destructive confirmation names what is lost (deleting uploads, resetting
+    vector storage, which deletes every knowledge base, clearing interface
+    defaults, a banner, a webhook, a connection, a group). Connection dialogs
+    test a URL in place and show errors under the field. A group's
+    permissions are checkboxes in six folding groups with a filter; folded
+    settings groups are one disclosure row. A member removed from a group is
+    said in the group dialog with Undo, not in a toast. The leaderboard ranks
+    only rated models, and a model id with a slash opens its history
+    (`/leaderboard/{model_id:path}/history`, same URL and response).
 - **2026-11-15** (latest): **The workspace: the owner's decisions for the UX
   review's section 4 (#1116), and editors that guard unsaved work.**
   - **Multi-user chrome is hidden while the install has one account (#1013,
