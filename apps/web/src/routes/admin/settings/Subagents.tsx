@@ -93,19 +93,21 @@ export default function Subagents() {
 	const set = (patch: Partial<Form>) => setEdits((e) => ({ ...e, ...patch }));
 
 	const save = async () => {
+		const sent = form;
 		setSaving(true);
 		try {
 			await setSubagentsConfig(token, {
-				ENABLE_SUBAGENTS: form.enabled,
-				SUBAGENTS_BACKGROUND_ENABLED: form.backgroundEnabled,
-				SUBAGENTS_MAX_CONCURRENT: form.maxConcurrent,
-				SUBAGENTS_MAX_ASYNC: form.maxAsync,
-				SUBAGENTS_MAX_ITERATIONS: form.maxIterations,
-				SUBAGENTS_MAX_OUTPUT: form.maxOutput,
-				SUBAGENTS_SYSTEM_PROMPT: form.systemPrompt
+				ENABLE_SUBAGENTS: sent.enabled,
+				SUBAGENTS_BACKGROUND_ENABLED: sent.backgroundEnabled,
+				SUBAGENTS_MAX_CONCURRENT: sent.maxConcurrent,
+				SUBAGENTS_MAX_ASYNC: sent.maxAsync,
+				SUBAGENTS_MAX_ITERATIONS: sent.maxIterations,
+				SUBAGENTS_MAX_OUTPUT: sent.maxOutput,
+				SUBAGENTS_SYSTEM_PROMPT: sent.systemPrompt
 			});
-			setBase(form);
-			setEdits({});
+			setBase(sent);
+			// Drop only the edits this save sent: a field typed into while it was in flight keeps its value.
+			setEdits((e) => Object.fromEntries(Object.entries(e).filter(([k, v]) => v !== sent[k as keyof Form])));
 			toastSaved();
 		} catch (error) {
 			toast.error(`${error}`);
