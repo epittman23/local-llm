@@ -45,6 +45,8 @@
 	--color-canvas: var(--canvas);
 	--color-scrim: var(--scrim);
 	--color-on-scrim: var(--on-scrim);
+	--color-highlight: var(--highlight);
+	--color-highlight-foreground: var(--highlight-foreground);
 	--color-series-1: var(--series-1);
 	--color-series-2: var(--series-2);
 	--color-series-3: var(--series-3);
@@ -113,6 +115,9 @@
 	--canvas: oklch(1 0 0);
 	/* An icon or word over --scrim, which is dark in every theme. */
 	--on-scrim: oklch(0.98 0.005 95);
+	/* CNT-1: text the writer highlighted (<mark>), and the words on it. */
+	--highlight: oklch(0.91 0.11 95);
+	--highlight-foreground: oklch(0.24 0.02 170);
 
 	/* LAY-2: control heights. */
 	--control-compact: 1.75rem;
@@ -152,6 +157,8 @@
 	--important: oklch(0.76 0.1 295);
 	--canvas: oklch(1 0 0);
 	--on-scrim: oklch(0.98 0.005 95);
+	--highlight: oklch(0.42 0.085 85);
+	--highlight-foreground: oklch(0.96 0.03 95);
 }
 
 /* ---- 2. The shared components' token names ------------------------------ */
@@ -539,6 +546,16 @@
 }
 :root:not(.dark) .katex {
 	--math-white: currentColor;
+}
+
+/*
+ * CNT-1: a highlight the writer marked (<mark>, a note's highlight) reads like
+ * the text around it in every theme: the browser's own black text on a dark
+ * amber patch was the hardest thing on a dark page to read (#916).
+ */
+:root mark {
+	background-color: var(--highlight);
+	color: var(--highlight-foreground);
 }
 
 /* DAT-2: figures line up. */

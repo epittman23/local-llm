@@ -111,5 +111,7 @@ export const CONTRAST_RULES: ContrastRule[] = [
 	...['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6'].flatMap((series) =>
 		onEvery('CNT-2', series, 4.5, ['--surface-1'])
 	),
+	// CNT-1: highlighted words are read like the body text around them.
+	{ rule: 'CNT-1', foreground: '--highlight-foreground', background: '--highlight', minimum: 7 },
 	...onEvery('COL-5', '--border-divider', 1.3, ['--page', '--surface-1', '--surface-2'])
 ];

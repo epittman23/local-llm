@@ -123,7 +123,7 @@
 		@apply underline;
 	}
 	.rich-text :where(mark) {
-		@apply rounded bg-yellow-200 px-0.5 dark:bg-yellow-500/40;
+		@apply rounded px-0.5;
 	}
 	.rich-text :where(hr) {
 		@apply border-border my-4;
