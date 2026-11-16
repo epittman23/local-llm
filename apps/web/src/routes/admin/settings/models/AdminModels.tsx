@@ -225,6 +225,13 @@ export default function AdminModels() {
 		return () => host.setDirty(false);
 	}, [editingId, listDirty, editorDirty, host]);
 
+	// The editor has its own back ("Models"), so a page drops its "All server settings" meanwhile.
+	useEffect(() => {
+		if (editingId === null) return;
+		host.setOwnBack(true);
+		return () => host.setOwnBack(false);
+	}, [editingId, host]);
+
 	// A way out that leaves Settings (a workspace model's editor, Clone) asks first in the dialog;
 	// on a page the page's own guard asks as the navigation starts.
 	const leaveGuard = useConfirmLeave(listDirty && host.kind !== 'page', {
@@ -554,6 +561,7 @@ export default function AdminModels() {
 					toast.success(`“${info.name}” saved`);
 					await refreshApp();
 				}}
+				backLabel="Models"
 				onBack={async () => {
 					setEditingId(null);
 					setEditorDirty(false);

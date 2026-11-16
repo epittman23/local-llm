@@ -2954,7 +2954,7 @@ test.describe('settings: Models', () => {
 		await page.goto('/?settings=admin:models');
 		await row(page, 'gpt-4o').getByRole('button', { name: 'Edit GPT-4o' }).click();
 		await expect(modal(page).getByLabel('Model name')).toHaveValue('GPT-4o');
-		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Back' }).click();
+		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Models', exact: true }).click();
 		await expect(row(page, 'gpt-4o')).toBeVisible();
 		await row(page, 'helper').getByRole('button', { name: 'Edit Helper' }).click();
 		// The editor itself, not only its URL: a model it cannot edit sends it back

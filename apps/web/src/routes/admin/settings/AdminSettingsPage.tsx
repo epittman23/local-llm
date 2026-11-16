@@ -35,6 +35,8 @@ export function AdminSettingsPage() {
 	// Every tab here is the server's: the region says so, so names drop "Server: ".
 	const tabs = server.tabs.map((t) => ({ ...t, title: plainTabTitle(t) }));
 	const [search, setSearch] = useState('');
+	// The open tab shows its own back (Admin > Models' editor): then the page's goes (NAV-4).
+	const [ownBack, setOwnBack] = useState(false);
 	const selected = segment ? `admin:${segment}` : null;
 	const open = tabs.find((t) => t.id === selected) ?? null;
 	const first = tabs[0]?.id ?? null;
@@ -100,19 +102,21 @@ export function AdminSettingsPage() {
 			</div>
 			{open && (
 				<div className="flex min-h-0 min-w-0 flex-1 flex-col p-6 max-md:p-4">
-					<Button asChild variant="ghost" className="mb-2 self-start md:hidden">
-						<Link to={serverTabPath()}>
-							<ChevronLeft aria-hidden />
-							All server settings
-						</Link>
-					</Button>
+					{!ownBack && (
+						<Button asChild variant="ghost" className="mb-2 self-start md:hidden">
+							<Link to={serverTabPath()}>
+								<ChevronLeft aria-hidden />
+								All server settings
+							</Link>
+						</Button>
+					)}
 					<div
 						id={SETTINGS_PANEL_ID}
 						role="tabpanel"
 						aria-labelledby={settingsTabId(open.id)}
 						className="relative min-h-0 flex-1 overflow-hidden"
 					>
-						<SettingsPageHost>
+						<SettingsPageHost onOwnBack={setOwnBack}>
 							<SettingsTabContent id={open.id} />
 						</SettingsPageHost>
 					</div>

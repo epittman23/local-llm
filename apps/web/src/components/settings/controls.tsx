@@ -59,11 +59,20 @@ export const settingSlug = (label: string) =>
  * editor) turns that guard off while `kind` is set and reports through
  * `setDirty` instead, so one leave never asks twice.
  */
-export type SettingsHost = { kind: 'dialog' | 'page' | null; setDirty: (dirty: boolean) => void };
+export type SettingsHost = {
+	kind: 'dialog' | 'page' | null;
+	setDirty: (dirty: boolean) => void;
+	/**
+	 * The tab shows its own way back (an editor swapped in for its list), so a
+	 * page drops its "All server settings" back: one back at a time (NAV-4).
+	 */
+	setOwnBack: (own: boolean) => void;
+};
 
 const storeSetDirty = (dirty: boolean) => useSettingsModalStore.getState().setDirty(dirty);
-const dialogHost: SettingsHost = { kind: 'dialog', setDirty: storeSetDirty };
-const SettingsHostContext = createContext<SettingsHost>({ kind: null, setDirty: storeSetDirty });
+const noOwnBack = () => {};
+const dialogHost: SettingsHost = { kind: 'dialog', setDirty: storeSetDirty, setOwnBack: noOwnBack };
+const SettingsHostContext = createContext<SettingsHost>({ kind: null, setDirty: storeSetDirty, setOwnBack: noOwnBack });
 
 /** The settings host around this component: see `SettingsHost`. */
 export const useSettingsHost = () => useContext(SettingsHostContext);
@@ -78,12 +87,19 @@ export function SettingsDialogHost({ children }: { children: ReactNode }) {
  * by whatever the tab reports. Leaving the page, or opening another tab (a
  * navigation), asks "Discard changes?" first while it is dirty.
  */
-export function SettingsPageHost({ children }: { children: ReactNode }) {
+export function SettingsPageHost({
+	children,
+	onOwnBack = noOwnBack
+}: {
+	children: ReactNode;
+	/** Told whether the tab shows its own way back (`SettingsHost.setOwnBack`). */
+	onOwnBack?: (own: boolean) => void;
+}) {
 	const [dirty, setDirty] = useState(false);
 	const { dialog } = useUnsavedChanges(dirty, {
 		message: 'This tab has changes that are not saved. They are lost if you leave it.'
 	});
-	const host = useMemo<SettingsHost>(() => ({ kind: 'page', setDirty }), []);
+	const host = useMemo<SettingsHost>(() => ({ kind: 'page', setDirty, setOwnBack: onOwnBack }), [onOwnBack]);
 	return (
 		<SettingsHostContext.Provider value={host}>
 			{children}

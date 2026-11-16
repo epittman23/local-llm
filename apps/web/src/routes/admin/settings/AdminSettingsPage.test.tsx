@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingRow, SettingsForm } from '@/components/settings/controls';
+import { SettingRow, SettingsForm, useSettingsHost } from '@/components/settings/controls';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { AdminAnalyticsPage, AdminSettingsPage } from './AdminSettingsPage';
@@ -15,7 +15,8 @@ const loaders = vi.hoisted(() => ({
 	'admin:general': vi.fn(),
 	'admin:db': vi.fn(),
 	'admin:pipelines': vi.fn(),
-	'admin:analytics': vi.fn()
+	'admin:analytics': vi.fn(),
+	'admin:models': vi.fn()
 }));
 vi.mock('@/components/settings/adminTabComponents', () => ({
 	tabLoaders: loaders,
@@ -33,6 +34,20 @@ function DirtyTab() {
 				<input aria-label="Draft" value={value} onChange={(e) => setValue(e.target.value)} />
 			</SettingRow>
 		</SettingsForm>
+	);
+}
+
+/** A tab that shows its own back (an editor in place), as Admin > Models does. */
+function OwnBackTab() {
+	const host = useSettingsHost();
+	const [own, setOwn] = useState(true);
+	useEffect(() => {
+		host.setOwnBack(own);
+	}, [own, host]);
+	return (
+		<button type="button" onClick={() => setOwn(false)}>
+			Close the editor
+		</button>
 	);
 }
 
@@ -67,6 +82,7 @@ beforeEach(() => {
 	loaders['admin:db'].mockResolvedValue(tab('Database body'));
 	loaders['admin:pipelines'].mockResolvedValue(tab('Pipelines body'));
 	loaders['admin:analytics'].mockResolvedValue(tab('Analytics body'));
+	loaders['admin:models'].mockResolvedValue({ default: OwnBackTab });
 	apis.getPipelinesList.mockReset().mockResolvedValue([]);
 	useAuthStore.setState({ token: 't', user: { id: 'u', name: 'U', email: 'u@x', role: 'admin' } } as never);
 	width(true);
@@ -112,6 +128,15 @@ describe('the server’s settings as pages under Admin (S5-D1, #932)', () => {
 		expect(back.closest('a')).toHaveClass('md:hidden');
 		fireEvent.click(back);
 		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings'));
+	});
+
+	it('on a phone shows one back at a time: none of its own while the tab shows one (#1030)', async () => {
+		width(false);
+		mount('/admin/settings/models');
+		const close = await screen.findByRole('button', { name: 'Close the editor' });
+		expect(screen.queryByRole('link', { name: 'All server settings' })).toBeNull();
+		fireEvent.click(close);
+		expect(await screen.findByRole('link', { name: 'All server settings' })).toBeInTheDocument();
 	});
 
 	it('sends a tab it does not know back to the list', async () => {

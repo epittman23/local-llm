@@ -153,6 +153,7 @@ export function ModelEditor({
 	preset = true,
 	onSubmit,
 	onBack,
+	backLabel = 'Back',
 	onDirtyChange
 }: {
 	model: (Record<string, any> & { id: string; name: string }) | null;
@@ -160,6 +161,8 @@ export function ModelEditor({
 	preset?: boolean;
 	onSubmit: (info: ModelInfo) => Promise<void>;
 	onBack: () => void;
+	/** Where Back goes, named (NAV-4): "Models" in Admin. */
+	backLabel?: string;
 	onDirtyChange?: (dirty: boolean) => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -185,6 +188,7 @@ export function ModelEditor({
 			defaults={defaults.data ?? {}}
 			onSubmit={onSubmit}
 			onBack={onBack}
+			backLabel={backLabel}
 			onDirtyChange={onDirtyChange}
 		/>
 	);
@@ -198,6 +202,7 @@ function EditorForm({
 	defaults,
 	onSubmit,
 	onBack,
+	backLabel,
 	onDirtyChange
 }: {
 	model: (Record<string, any> & { id: string; name: string }) | null;
@@ -207,6 +212,7 @@ function EditorForm({
 	defaults: Record<string, any>;
 	onSubmit: (info: ModelInfo) => Promise<void>;
 	onBack: () => void;
+	backLabel: string;
 	onDirtyChange?: (dirty: boolean) => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -359,7 +365,7 @@ function EditorForm({
 			<div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-3">
 				<Button variant="ghost" size="sm" className="-ms-2" type="button" onClick={() => guard.confirmLeave(onBack)}>
 					<ChevronLeft aria-hidden />
-					Back
+					{backLabel}
 				</Button>
 				<h2 className="text-heading font-title min-w-0 flex-1 truncate tracking-tight">
 					{edit ? 'Edit model' : 'New model'}

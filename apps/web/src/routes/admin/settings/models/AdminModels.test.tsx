@@ -5,7 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toastFailure } from '@/components/common/failureToast';
-import { SettingsDialogHost } from '@/components/settings/controls';
+import { SettingsDialogHost, SettingsPageHost } from '@/components/settings/controls';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getModels } from '@/lib/apis';
 import { getModelsConfig, setModelsConfig } from '@/lib/apis/configs';
@@ -70,11 +70,13 @@ vi.mock('@/routes/workspace/models/ModelEditor', () => ({
 		model,
 		onDirtyChange,
 		onBack,
+		backLabel,
 		onSubmit
 	}: {
 		model: { id: string; name: string } | null;
 		onDirtyChange: (d: boolean) => void;
 		onBack: () => void;
+		backLabel?: string;
 		onSubmit: (info: unknown) => Promise<void>;
 	}) => (
 		<div>
@@ -91,6 +93,7 @@ vi.mock('@/routes/workspace/models/ModelEditor', () => ({
 			<button type="button" onClick={onBack}>
 				Editor back
 			</button>
+			<p>Back reads {backLabel}</p>
 		</div>
 	)
 }));
@@ -109,12 +112,16 @@ const CONFIG = {
 	DEFAULT_MODEL_PARAMS: null
 };
 
-function renderTab() {
+function renderTab(onOwnBack?: (own: boolean) => void) {
 	const router = createMemoryRouter(
 		[
 			{
 				path: '/',
-				element: (
+				element: onOwnBack ? (
+					<SettingsPageHost onOwnBack={onOwnBack}>
+						<AdminModels />
+					</SettingsPageHost>
+				) : (
 					<SettingsDialogHost>
 						<AdminModels />
 					</SettingsDialogHost>
@@ -287,6 +294,19 @@ describe('AdminModels', () => {
 			.getAllByRole('button', { name: /^Edit / })
 			.map((b) => b.getAttribute('aria-label'));
 		expect(names).toEqual(['Edit Beta', 'Edit Alpha']);
+	});
+
+	it('names its back "Models", and has the page drop its own back while the editor is open (#1030)', async () => {
+		const onOwnBack = vi.fn();
+		renderTab(onOwnBack);
+		await screen.findByText('Alpha');
+		expect(onOwnBack).not.toHaveBeenCalledWith(true);
+		fireEvent.click(screen.getByRole('button', { name: 'Edit Beta' }));
+		expect(await screen.findByText('Back reads Models')).toBeInTheDocument();
+		expect(onOwnBack).toHaveBeenLastCalledWith(true);
+		fireEvent.click(screen.getByRole('button', { name: 'Editor back' }));
+		await screen.findByText('Alpha');
+		expect(onOwnBack).toHaveBeenLastCalledWith(false);
 	});
 
 	it('opens a workspace model in Workspace, asking first while the order is unsaved', async () => {
