@@ -46,6 +46,18 @@ const renderModal = (props: Partial<Parameters<typeof ArenaModelModal>[0]> = {})
 	return { onSubmit, onDelete, onOpenChange };
 };
 
+// The shared Select: open it from the keyboard and pick an option once the models have loaded.
+const chooseModel = async (name: string) => {
+	fireEvent.keyDown(screen.getByRole('combobox', { name: 'Select a model' }), { key: 'Enter' });
+	fireEvent.click(await screen.findByRole('option', { name }));
+};
+// The models have loaded once the picker lists one; Escape then closes it again.
+const modelsLoaded = async () => {
+	fireEvent.keyDown(screen.getByRole('combobox', { name: 'Select a model' }), { key: 'Enter' });
+	fireEvent.keyDown(await screen.findByRole('option', { name: 'Model Two' }), { key: 'Escape' });
+	await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+};
+
 describe('ArenaModelModal', () => {
 	it('derives the id from the name while adding', () => {
 		renderModal();
@@ -91,7 +103,7 @@ describe('ArenaModelModal', () => {
 
 	it('says under Name what is missing or taken, without saving', async () => {
 		const { onSubmit } = renderModal();
-		await screen.findByRole('option', { name: 'Model Two' });
+		await modelsLoaded();
 		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
 		const name = screen.getByLabelText('Name');
 		expect(name).toHaveAccessibleDescription('Enter a name for the arena model.');
@@ -111,10 +123,11 @@ describe('ArenaModelModal', () => {
 
 	it('adds a picked model to the list and removes it again', async () => {
 		renderModal();
-		const select = screen.getByLabelText('Select a model');
-		await screen.findByRole('option', { name: 'Model Two' });
-		fireEvent.change(select, { target: { value: 'm2' } });
+		await chooseModel('Model Two');
+		expect(screen.getByRole('combobox', { name: 'Select a model' })).toHaveTextContent('Model Two');
 		fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
+		// Back to nothing picked, and the added model is no longer offered.
+		expect(screen.getByRole('combobox', { name: 'Select a model' })).toHaveTextContent('Select a model');
 		expect(screen.getByRole('button', { name: 'Remove m2' })).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Remove m2' }));
 		expect(screen.queryByRole('button', { name: 'Remove m2' })).toBeNull();
@@ -122,9 +135,8 @@ describe('ArenaModelModal', () => {
 
 	it('submits the new arena model with its listed models and mode', async () => {
 		const { onSubmit } = renderModal();
-		await screen.findByRole('option', { name: 'Model Two' });
 		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Rumble' } });
-		fireEvent.change(screen.getByLabelText('Select a model'), { target: { value: 'm2' } });
+		await chooseModel('Model Two');
 		fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
 		fireEvent.click(screen.getByRole('radio', { name: 'All but these' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
@@ -180,8 +192,7 @@ describe('Closing the arena model dialog with unsaved changes (FRM-3)', () => {
 	it('counts a model picked but not added, while adding', async () => {
 		const onOpenChange = vi.fn();
 		renderModal({ onOpenChange });
-		await screen.findByRole('option', { name: 'Model Two' });
-		fireEvent.change(screen.getByLabelText('Select a model'), { target: { value: 'm2' } });
+		await chooseModel('Model Two');
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
 		expect(ask).toHaveTextContent('This arena model is not added yet.');

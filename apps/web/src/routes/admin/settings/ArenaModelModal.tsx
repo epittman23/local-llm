@@ -13,6 +13,7 @@ import { FieldMessage } from '@/components/ui/field-message';
 import { ImageButton } from '@/components/ui/image-button';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getModels } from '@/lib/apis';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -294,21 +295,21 @@ export function ArenaModelModal({
 								</ul>
 							)}
 							<div className="mt-2 flex items-center gap-2">
-								<select
-									className="min-w-0 flex-1"
-									aria-label="Select a model"
-									value={selectedModelId}
-									onChange={(e) => setSelectedModelId(e.target.value)}
-								>
-									<option value="">Select a model</option>
-									{known
-										.filter((m) => m?.owned_by !== 'arena' && !modelIds.includes(m?.id))
-										.map((m) => (
-											<option key={m.id} value={m.id}>
-												{m.name}
-											</option>
-										))}
-								</select>
+								{/* "" shows the placeholder: nothing picked. */}
+								<Select value={selectedModelId} onValueChange={setSelectedModelId}>
+									<SelectTrigger aria-label="Select a model" className="min-w-0 flex-1">
+										<SelectValue placeholder="Select a model" />
+									</SelectTrigger>
+									<SelectContent>
+										{known
+											.filter((m) => m?.owned_by !== 'arena' && !modelIds.includes(m?.id))
+											.map((m) => (
+												<SelectItem key={m.id} value={m.id}>
+													{m.name}
+												</SelectItem>
+											))}
+									</SelectContent>
+								</Select>
 								<Button
 									variant="outline"
 									size="icon"

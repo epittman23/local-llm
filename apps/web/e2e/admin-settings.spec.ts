@@ -366,7 +366,8 @@ test.describe('settings: Evaluations', () => {
 		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('My Arena!');
 		await expect(dialog.getByLabel('ID', { exact: true })).toHaveValue('my-arena');
-		await dialog.getByLabel('Select a model').selectOption('m1');
+		await dialog.getByRole('combobox', { name: 'Select a model' }).click();
+		await page.getByRole('option', { name: 'Model One' }).click();
 		await dialog.getByRole('button', { name: 'Add model' }).click();
 		await dialog.getByRole('button', { name: 'Add arena model' }).click();
 		// Nothing is sent until the tab's Save.
