@@ -48,11 +48,13 @@ function Editor({ message }: { message?: string }) {
 }
 
 // A dialog holding a draft, as the Edit prompt dialog does. "Scrim" raises the
-// question the way a scrim click does: with a mouse focus leaves for <body> just
-// after (`after`), on touch it has already left (`before`).
+// question the way a scrim press does: focus leaves for <body> just after
+// (`after`), or has already left (`before`). "Gone" is a control that goes as
+// it raises the question, so focus has nowhere to return to.
 function DraftDialog() {
 	const [open, setOpen] = useState(true);
 	const [value, setValue] = useState('');
+	const [gone, setGone] = useState(false);
 	const guard = useUnsavedChanges(value !== '');
 	const close = () => guard.confirmLeave(() => setOpen(false));
 	const scrim = (when: 'before' | 'after') => () => {
@@ -75,6 +77,21 @@ function DraftDialog() {
 					<button type="button" onPointerDown={scrim('before')}>
 						Scrim by touch
 					</button>
+					<label>
+						Note
+						<input />
+					</label>
+					{!gone && (
+						<button
+							type="button"
+							onClick={() => {
+								setGone(true);
+								close();
+							}}
+						>
+							Gone
+						</button>
+					)}
 				</DialogContent>
 			</Dialog>
 			{guard.dialog}
@@ -279,13 +296,26 @@ describe('useUnsavedChanges', () => {
 		await waitFor(() => expect(document.activeElement).toBe(field));
 	});
 
-	it('Keep editing after a tap on the scrim, with focus already on <body>, focuses the dialog’s first control', async () => {
+	it('Keep editing after focus had already left for <body> returns it to the control focused last', async () => {
 		const field = setupDialog();
+		const note = screen.getByRole('textbox', { name: 'Note' });
+		note.focus();
 		fireEvent.pointerDown(screen.getByRole('button', { name: 'Scrim by touch' }));
 		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
-		await waitFor(() => expect(document.activeElement).toBe(field));
+		await waitFor(() => expect(document.activeElement).toBe(note));
 		expect((field as HTMLInputElement).value).toBe('half a prompt');
+	});
+
+	it('Keep editing focuses the dialog’s first control when the control that had focus has gone', async () => {
+		const field = setupDialog();
+		const gone = screen.getByRole('button', { name: 'Gone' });
+		gone.focus();
+		fireEvent.click(gone);
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(screen.queryByRole('button', { name: 'Gone' })).toBeNull();
+		await waitFor(() => expect(document.activeElement).toBe(field));
 	});
 
 	it('Escape on the question returns focus to the field too', async () => {

@@ -23,9 +23,9 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * only closes something (a dialog with a draft) leaves the guard as it was.
  *
  * NAV-4, OVL-2: Keep editing puts focus back where it was when the question
- * was raised. A click on a dialog's scrim raises it as focus leaves for
- * <body> (at once on touch), so then focus goes to the first control of the
- * dialog still open underneath instead.
+ * was raised. A press on a dialog's scrim moves focus to <body> first, so
+ * then it goes back to the control focused last before that, or, if that has
+ * gone, to the first control of the dialog still open underneath.
  */
 export function useUnsavedChanges(
 	dirty: boolean,
@@ -40,10 +40,21 @@ export function useUnsavedChanges(
 	// Where Keep editing returns focus, and whether the dialog is closing on Discard instead.
 	const returnTo = useRef<HTMLElement | null>(null);
 	const discarding = useRef(false);
+	const lastFocused = useRef<HTMLElement | null>(null);
 	const rememberFocus = useCallback(() => {
 		const active = document.activeElement;
-		returnTo.current = active instanceof HTMLElement && active !== document.body ? active : null;
+		returnTo.current = active instanceof HTMLElement && active !== document.body ? active : lastFocused.current;
 	}, []);
+	useEffect(() => {
+		if (!dirty) return;
+		const active = document.activeElement;
+		if (active instanceof HTMLElement && active !== document.body) lastFocused.current = active;
+		const note = (event: FocusEvent) => {
+			if (event.target instanceof HTMLElement) lastFocused.current = event.target;
+		};
+		document.addEventListener('focusin', note);
+		return () => document.removeEventListener('focusin', note);
+	}, [dirty]);
 
 	const shouldBlock = useCallback<BlockerFunction>(
 		({ currentLocation, nextLocation }) => {
