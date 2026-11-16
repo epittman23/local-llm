@@ -1012,6 +1012,23 @@ test.describe('settings: General', () => {
 		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
+	for (const viewport of [
+		{ width: 1440, height: 900 },
+		{ width: 390, height: 844 }
+	])
+		test(`the page itself never scrolls at ${viewport.width} px: the tab's body does`, async ({ page }) => {
+			await page.setViewportSize(viewport);
+			await mockWorkspaceBackend(page);
+			await mockGeneral(page);
+			await page.goto('/admin/settings/general');
+			await expect(modal(page).getByRole('switch', { name: 'Folders' })).toBeVisible();
+			const sizes = await page.evaluate(() => ({
+				scroll: document.documentElement.scrollHeight,
+				view: window.innerHeight
+			}));
+			expect(sizes.scroll).toBeLessThanOrEqual(sizes.view);
+		});
+
 	test('memory and channel options appear only while their feature is on', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockGeneral(page);
