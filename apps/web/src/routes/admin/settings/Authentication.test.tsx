@@ -76,6 +76,24 @@ describe('Authentication settings and the OAuth provider', () => {
 		renderTab();
 		const fold = await screen.findByRole('button', { name: /^Sign-in with an identity provider/ });
 		expect(fold).toHaveTextContent(/Not configured$/);
+		// Opened, the switch reads off and cannot be turned on, and the settings that need it stay folded away;
+		// the stored ENABLE_OAUTH is left as it is, so the tab has nothing to save.
+		fireEvent.click(fold);
+		const toggle = screen.getByRole('switch', { name: /^OAuth \/ OIDC/ });
+		expect(toggle).toHaveAttribute('aria-checked', 'false');
+		expect(toggle).toBeDisabled();
+		expect(screen.getByText('Off until the environment names a provider.')).toBeInTheDocument();
+		expect(screen.queryByText('Email Claim')).toBeNull();
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+	});
+
+	it('shows the stored switch and its settings once a provider is named', async () => {
+		renderTab();
+		fireEvent.click(await screen.findByRole('button', { name: /^Sign-in with an identity provider/ }));
+		const toggle = screen.getByRole('switch', { name: /^OAuth \/ OIDC/ });
+		expect(toggle).toHaveAttribute('aria-checked', 'true');
+		expect(toggle).toBeEnabled();
+		expect(screen.getByText('Email Claim')).toBeInTheDocument();
 	});
 
 	it('names the default role’s choices in words, keeping the stored ids (WRD-1)', async () => {

@@ -196,6 +196,8 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	// A provider exists only once the environment names one (`/api/config` lists it); until then nothing signs in.
 	const providers = Object.keys(useConfigStore((s) => s.config?.oauth?.providers) ?? {}).length > 0;
 	const state = !providers ? 'Not configured' : oauth.ENABLE_OAUTH ? 'On' : 'Off';
+	// Without a provider nothing signs in, so the switch reads off whatever ENABLE_OAUTH says; what is stored stays.
+	const on = providers && Boolean(oauth.ENABLE_OAUTH);
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
 		<Text config={oauth} set={set} name={name} label={label} description={description} placeholder={placeholder} />
 	);
@@ -227,9 +229,21 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 						className="flex min-w-0 flex-col gap-2.5 disabled:cursor-not-allowed disabled:opacity-75"
 						disabled={!editable}
 					>
-						{toggle('ENABLE_OAUTH', 'OAuth / OIDC', 'Sign in with an OAuth / OIDC provider.')}
+						{providers ? (
+							toggle('ENABLE_OAUTH', 'OAuth / OIDC', 'Sign in with an OAuth / OIDC provider.')
+						) : (
+							<fieldset disabled className="min-w-0">
+								<Toggle
+									config={{ ...oauth, ENABLE_OAUTH: false }}
+									set={set}
+									name="ENABLE_OAUTH"
+									label="OAuth / OIDC"
+									description="Off until the environment names a provider."
+								/>
+							</fieldset>
+						)}
 
-						{oauth.ENABLE_OAUTH && (
+						{on && (
 							<>
 								<div className={grid}>
 									{text('OAUTH_EMAIL_CLAIM', 'Email Claim', "Claim used as the account's email address.", 'email')}
