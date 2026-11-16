@@ -26,22 +26,34 @@ describe('SubTabs', () => {
 		expect(screen.getByRole('link', { name: 'Groups' }).getAttribute('href')).toBe('/admin/users/groups');
 	});
 
-	it('mutes the tabs that are not active', () => {
+	it('is a strip of links in a navigation landmark, the open one the current page (NAV-2, #1102)', () => {
 		renderTabs('overview');
-		expect(screen.getByRole('link', { name: 'Groups' }).className).toContain('text-foreground-muted');
-		expect(screen.getByRole('link', { name: /Overview/ }).className).not.toContain('text-foreground-muted');
+		const strip = screen.getByRole('navigation', { name: 'Sections' });
+		expect(strip.className).toContain('px-4');
+		expect(screen.getByRole('link', { name: /Overview/ })).toHaveAttribute('aria-current', 'page');
+		expect(screen.getByRole('link', { name: 'Groups' })).not.toHaveAttribute('aria-current');
+		expect(screen.getByRole('link', { name: 'Groups' }).className).toContain('text-muted-foreground');
+		cleanup();
+		render(
+			<MemoryRouter>
+				<SubTabs tabs={TABS} active="groups" label="Users sections" />
+			</MemoryRouter>
+		);
+		expect(screen.getByRole('navigation', { name: 'Users sections' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
 	});
 
 	it('shows a tab count only when one is given', () => {
 		renderTabs('groups');
-		expect(screen.getByRole('link', { name: /Overview/ }).textContent).toContain('12');
+		expect(screen.getByRole('link', { name: 'Overview 12' })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: 'Groups' }).textContent).toBe('Groups');
 	});
 
-	it('draws a count in the muted colour, not by fading the text (COL-2)', () => {
+	it('draws a count as a small secondary badge, not by fading the text (COL-2)', () => {
 		renderTabs('overview');
 		const count = screen.getByText('12');
-		expect(count.className).toContain('text-muted-foreground');
+		expect(count).toHaveAttribute('data-slot', 'badge');
+		expect(count).toHaveAttribute('data-variant', 'secondary');
 		expect(count.className).not.toContain('opacity');
 	});
 });
