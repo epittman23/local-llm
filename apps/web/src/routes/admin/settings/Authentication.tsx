@@ -54,9 +54,9 @@ function UserAccess({
 							onChange={(v) => set({ DEFAULT_USER_ROLE: v })}
 							aria-label="Default User Role"
 						>
-							<option value="pending">pending</option>
-							<option value="user">user</option>
-							<option value="admin">admin</option>
+							<option value="pending">Pending</option>
+							<option value="user">User</option>
+							<option value="admin">Admin</option>
 						</SettingSelect>
 					</SettingRow>
 

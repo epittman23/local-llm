@@ -78,6 +78,16 @@ describe('Authentication settings and the OAuth provider', () => {
 		expect(fold).toHaveTextContent(/Not configured$/);
 	});
 
+	it('names the default role’s choices in words, keeping the stored ids (WRD-1)', async () => {
+		renderTab();
+		const role = (await screen.findByLabelText('Default User Role')) as HTMLSelectElement;
+		expect(Array.from(role.options).map((o) => [o.value, o.text])).toEqual([
+			['pending', 'Pending'],
+			['user', 'User'],
+			['admin', 'Admin']
+		]);
+	});
+
 	it('hides the settings for new accounts while this is the only one and sign-ups are off (S5-D2)', async () => {
 		ADMIN = { ...ADMIN, ENABLE_SIGNUP: false };
 		renderTab();
