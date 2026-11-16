@@ -147,7 +147,7 @@ describe('the schedule (#1032, #1104)', () => {
 		expect(screen.getByText(/^Next: .+, Jan 2, 8:30 AM/)).toBeInTheDocument();
 	});
 
-	it('explains a custom rule, and says what is wrong with one it cannot read', () => {
+	it('explains a custom rule, and says what is wrong with one it cannot read', async () => {
 		open({ automation });
 		chooseFrequency('CUSTOM');
 		const rule = screen.getByLabelText('Rule');
@@ -155,7 +155,7 @@ describe('the schedule (#1032, #1104)', () => {
 		expect(screen.getByText(/^An iCalendar rule, for example/)).toBeInTheDocument();
 		fireEvent.change(rule, { target: { value: 'RRULE:FREQ' } });
 		fireEvent.blur(rule);
-		expect(screen.getByText(/^The scheduler can't read this rule/)).toBeInTheDocument();
+		expect(await screen.findByText(/^The scheduler can't read this rule/)).toBeInTheDocument();
 		expect(rule).toHaveAttribute('aria-invalid', 'true');
 	});
 

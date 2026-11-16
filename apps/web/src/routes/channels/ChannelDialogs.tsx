@@ -612,7 +612,13 @@ function ChannelForm({
 	const [confirmPublic, setConfirmPublic] = useState(false);
 	const [showWebhooks, setShowWebhooks] = useState(false);
 	const ids = { name: useId(), nameMsg: useId(), visibility: useId(), visibilityMsg: useId(), membersMsg: useId() };
-	const { errors, field, submit: checkFields } = useFieldErrors(channelProblems(value), ['name', 'members'] as const);
+	const {
+		errors,
+		field,
+		submit: checkFields
+	} = useFieldErrors(channelProblems(value), ['name', 'members'] as const, {
+		inDialog: true
+	});
 
 	const save = async () => {
 		const result = channelPayload(value);

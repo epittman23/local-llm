@@ -575,7 +575,7 @@ function AutomationForm({
 		!channelOptions(channels).some((c) => c.id === f.channelId)
 	)
 		problems.channel = 'Choose a channel, or post to a chat instead.';
-	const { errors, field, submit: checkFields } = useFieldErrors(problems, AUTOMATION_FIELDS);
+	const { errors, field, submit: checkFields } = useFieldErrors(problems, AUTOMATION_FIELDS, { inDialog: true });
 	const scheduleError = errors.schedule ?? scheduleRefused ?? undefined;
 
 	const save = async () => {
