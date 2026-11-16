@@ -14,7 +14,7 @@ export const NS = 1_000_000;
 // browser's locale through Intl: Monday for most of Europe, Sunday for en-US,
 // "9:00 AM" with its space. There is no setting.
 
-/** Regions whose week starts on Sunday (6) or Saturday (5), from CLDR, for a browser without `Intl.Locale` week info. */
+/** Regions whose week starts on Sunday (0) or Saturday (6), from CLDR, for a browser without `Intl.Locale` week info. */
 const SUNDAY_REGIONS =
 	'AG AS BD BR BS BT BW BZ CA CN CO DM DO ET GT GU HK HN ID IL IN JM JP KE KH KR LA MH MM MO MT MX MZ NI NP PA PE PH PK PR PT PY SA SG SV TH TT TW UM US VE VI WS YE ZA ZW';
 const SATURDAY_REGIONS = 'AE AF BH DJ DZ EG IQ IR JO KW LY OM QA SD SY';
