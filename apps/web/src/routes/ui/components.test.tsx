@@ -43,6 +43,15 @@ describe('/ui components', () => {
 		expect(within(region).getByRole('table')).toBeInTheDocument();
 	});
 
+	it('demonstrates a long name in a field that grows to show all of it (FRM-4)', () => {
+		inProvider(<FormsSection />);
+		const field = screen.getByRole('textbox', { name: 'Tool name' });
+		expect(field).toHaveAttribute('rows', '1');
+		expect((field as HTMLTextAreaElement).value.length).toBeGreaterThan(140);
+		expect(field.className).not.toMatch(/max-h-/);
+		expect(screen.getByText(/wraps and grows to show the whole name, however long/)).toBeInTheDocument();
+	});
+
 	it('demonstrates a native select beside the shared one (FRM-4)', () => {
 		inProvider(<FormsSection />);
 		const native = screen.getByRole('combobox', { name: 'Native select' });

@@ -65,6 +65,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     Models, where the model editor opens in place, its Back asks too
     (`confirmLeave`). Settings' identical question now has a danger button
     too.
+  - **A long name shows whole (#958).** A skill's, tool's or function's name
+    is one line that wraps and grows to as many lines as the name takes
+    (`LineTextarea`, FRM-4), with no three-line cap; Enter still submits.
   - **Behaviour changes without a decision.** A knowledge base's name and
     description no longer save themselves a second after typing; they save
     from an "Edit name and description" dialog. A knowledge file opens on

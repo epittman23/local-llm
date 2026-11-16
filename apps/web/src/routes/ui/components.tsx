@@ -323,14 +323,14 @@ export function FormsSection() {
 			</Example>
 			<Example
 				title="A name that may be long"
-				note="A name field is one line that wraps to show the whole name, up to three lines, then scrolls (the shared LineTextarea). Enter does what it does in an input, and a pasted line break becomes a space."
+				note="A name field is one line that wraps and grows to show the whole name, however long (the shared LineTextarea). Enter does what it does in an input, and a pasted line break becomes a space."
 			>
 				<Panel className="max-w-[24rem]">
 					<Field label="Tool name">
 						{(props) => (
 							<LineTextarea
 								{...props}
-								defaultValue="Regression diagnostics with residual plots, leverage and Cook's distance"
+								defaultValue="Regression diagnostics with residual plots, leverage, Cook's distance, variance inflation factors and a Breusch-Pagan test for heteroscedasticity"
 							/>
 						)}
 					</Field>

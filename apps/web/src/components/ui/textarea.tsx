@@ -24,8 +24,8 @@ function Textarea({ className, rows = 2, style, ...props }: React.ComponentProps
 }
 
 /**
- * A one-line field for a name that may be long (#958): it wraps to show all
- * of it, up to three lines, then scrolls. Enter does what it does in an
+ * A one-line field for a name that may be long (#958): it wraps and grows to
+ * show the whole name, however long. Enter does what it does in an
  * input: it submits the form through its default button, unless that button
  * is disabled. A line break never gets in (a pasted one becomes a space).
  */
@@ -33,7 +33,7 @@ function LineTextarea({ className, onChange, onKeyDown, ...props }: Omit<React.C
 	return (
 		<Textarea
 			rows={1}
-			className={cn('max-h-[calc(3lh_+_1rem_+_2px)] resize-none', className)}
+			className={cn('resize-none', className)}
 			onKeyDown={(e) => {
 				onKeyDown?.(e);
 				if (e.key === 'Enter' && !e.defaultPrevented && !e.nativeEvent.isComposing) {

@@ -23,7 +23,7 @@ describe('Textarea (LAY-3, #1009)', () => {
 });
 
 describe('LineTextarea (#958)', () => {
-	it('wraps a long name to three lines at most, submits on Enter and keeps line breaks out', () => {
+	it('grows to show the whole of a long name, submits on Enter and keeps line breaks out', () => {
 		const onSubmit = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
 		const onChange = vi.fn();
 		render(
@@ -33,7 +33,9 @@ describe('LineTextarea (#958)', () => {
 		);
 		const field = screen.getByRole('textbox', { name: 'Tool name' });
 		expect(field).toHaveAttribute('rows', '1');
-		expect(field.className).toContain('max-h-[calc(3lh_+_1rem_+_2px)]');
+		// No height cap: field-sizing grows it to fit every line of the name.
+		expect(field).toHaveClass('field-sizing-content');
+		expect(field.className).not.toMatch(/max-h-/);
 		fireEvent.change(field, { target: { value: 'Unit\nconverter' } });
 		expect(onChange).toHaveBeenLastCalledWith('Unit converter');
 		fireEvent.keyDown(field, { key: 'Enter' });
