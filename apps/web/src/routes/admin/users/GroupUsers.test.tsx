@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
+import { toastFailure } from '@/components/common/failureToast';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { addUserToGroup, removeUserFromGroup } from '@/lib/apis/groups';
@@ -8,6 +10,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { GroupUsers } from './GroupUsers';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
+vi.mock('@/components/common/failureToast', () => ({ toastFailure: vi.fn() }));
 vi.mock('@/lib/apis/groups', () => ({ addUserToGroup: vi.fn(), removeUserFromGroup: vi.fn() }));
 vi.mock('@/lib/apis/users', () => ({ getUsers: vi.fn() }));
 
@@ -35,7 +38,13 @@ const renderPanel = async () => {
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<GroupUsers groupId="g1" userCount={1} onUserCountChange={onUserCountChange} onMemberChange={onMemberChange} />
+				<GroupUsers
+					groupId="g1"
+					groupName="Analysts"
+					userCount={1}
+					onUserCountChange={onUserCountChange}
+					onMemberChange={onMemberChange}
+				/>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -70,5 +79,71 @@ describe('GroupUsers', () => {
 		await renderPanel();
 		fireEvent.click(screen.getByRole('button', { name: /^Name/ }));
 		await waitFor(() => expect(getUsers).toHaveBeenLastCalledWith('tok', '', 'name', 'asc', 1));
+	});
+
+	it('heads the tick column "Member", names the table, and says "Never" for an account never active', async () => {
+		vi.mocked(getUsers).mockResolvedValue({
+			users: [{ ...user('u3', 'Cy', 'pending', []), last_active_at: 0 }],
+			total: 1
+		} as never);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<GroupUsers
+						groupId="g1"
+						groupName="Analysts"
+						userCount={0}
+						onUserCountChange={vi.fn()}
+						onMemberChange={vi.fn()}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		expect(await screen.findByText('Never')).toBeTruthy();
+		expect(screen.getByRole('button', { name: /^Member/ })).toBeTruthy();
+		expect(screen.queryByText('MBR')).toBeNull();
+		expect(screen.getByRole('table')).toBeTruthy();
+		expect(screen.getByText('Pending')).toBeTruthy();
+	});
+
+	it('says who was removed, with an Undo that adds them back (ACT-3)', async () => {
+		vi.mocked(removeUserFromGroup).mockResolvedValue({ id: 'g1', member_count: 0 } as never);
+		vi.mocked(addUserToGroup).mockResolvedValue({ id: 'g1', member_count: 1 } as never);
+		await renderPanel();
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Ada' }));
+		await waitFor(() => expect(toast.success).toHaveBeenCalled());
+		const [message, options] = vi.mocked(toast.success).mock.calls[0] as [
+			string,
+			{ action: { label: string; onClick: () => void } }
+		];
+		expect(message).toBe('Removed “Ada” from Analysts');
+		expect(options.action.label).toBe('Undo');
+		options.action.onClick();
+		await waitFor(() => expect(addUserToGroup).toHaveBeenCalledWith('tok', 'g1', ['u1']));
+		expect(toast.success).toHaveBeenCalledTimes(1);
+	});
+
+	it('reports a failed change through the failure toast', async () => {
+		vi.mocked(addUserToGroup).mockRejectedValue('nope');
+		await renderPanel();
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Ben' }));
+		await waitFor(() => expect(toastFailure).toHaveBeenCalledWith("Couldn't add “Ben” to Analysts.", 'nope'));
+	});
+
+	it('names Import by its text (#987) and searches users', async () => {
+		await renderPanel();
+		expect(screen.getByRole('button', { name: 'Import CSV' })).toBeTruthy();
+		fireEvent.change(screen.getByLabelText('Search users'), { target: { value: 'zz' } });
+		await waitFor(() => expect(getUsers).toHaveBeenLastCalledWith('tok', 'zz', 'group_id:g1', 'desc', 1));
+	});
+
+	it('imports members from a CSV, matched on email', async () => {
+		vi.mocked(addUserToGroup).mockResolvedValue({ id: 'g1', member_count: 2 } as never);
+		await renderPanel();
+		vi.mocked(getUsers).mockResolvedValue({ users: [{ id: 'u2', email: 'ben@example.com' }], total: 1 } as never);
+		const file = new File(['Name,Email\nBen,ben@example.com\nbad\n'], 'm.csv', { type: 'text/csv' });
+		fireEvent.change(screen.getByLabelText('CSV file of members'), { target: { files: [file] } });
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 1 member'));
+		expect(toast.error).toHaveBeenCalledWith('Row 3: not a name and an email.');
 	});
 });
