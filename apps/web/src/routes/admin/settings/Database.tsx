@@ -42,7 +42,7 @@ function BackupNote() {
 				</p>
 			</div>
 			<div className="bg-surface-1 flex items-start gap-2 rounded-lg border py-1.5 ps-3 pe-1.5">
-				<code className="text-foreground min-w-0 flex-1 py-1 font-mono text-dense break-all">{BACKUP_COMMAND}</code>
+				<code className="text-foreground min-w-0 flex-1 py-1 font-mono text-dense break-words">{BACKUP_COMMAND}</code>
 				<Button
 					variant="outline"
 					size="sm"
