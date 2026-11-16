@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import Authentication from './Authentication';
 
 // The OAuth provider is built from the environment at startup, so Admin
@@ -30,6 +31,10 @@ beforeEach(() => {
 	ADMIN = { DEFAULT_USER_ROLE: 'pending', DEFAULT_GROUP_ID: '', ENABLE_SIGNUP: true };
 	OAUTH = oauth();
 	useAuthStore.setState({ token: 't' } as never);
+	// A provider named by the environment, as `/api/config` lists it.
+	useConfigStore.setState({
+		config: { name: 'local-llm', version: '', oauth: { providers: { oidc: 'SSO' } } }
+	} as never);
 	vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
 		const path = String(url);
 		if (path.endsWith('/auths/admin/config/oauth')) return new Response(JSON.stringify(OAUTH));
@@ -61,8 +66,16 @@ describe('Authentication settings and the OAuth provider', () => {
 		OAUTH = { ...oauth(), ENABLE_OAUTH_PERSISTENT_CONFIG: false, ENABLE_OAUTH: false };
 		renderTab();
 		const fold = await screen.findByRole('button', { name: /^Sign-in with an identity provider/ });
-		expect(fold).toHaveTextContent('Not configured (set by environment variables)');
+		expect(fold).toHaveTextContent('Off (set by environment variables)');
 		expect(fold).toHaveAttribute('aria-expanded', 'false');
+	});
+
+	it('says Not configured while the environment names no provider, whatever ENABLE_OAUTH says (#1022)', async () => {
+		useConfigStore.setState({ config: { name: 'local-llm', version: '', oauth: { providers: {} } } } as never);
+		OAUTH = { ...oauth(), ENABLE_OAUTH_PERSISTENT_CONFIG: false, ENABLE_OAUTH: true };
+		renderTab();
+		const fold = await screen.findByRole('button', { name: /^Sign-in with an identity provider/ });
+		expect(fold).toHaveTextContent(/Not configured$/);
 	});
 
 	it('hides the settings for new accounts while this is the only one and sign-ups are off (S5-D2)', async () => {

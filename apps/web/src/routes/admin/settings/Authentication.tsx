@@ -15,6 +15,7 @@ import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { isOAuthEditable } from './authentication';
 
@@ -192,7 +193,9 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	const editable = isOAuthEditable(oauth);
 	// S5-D2: folded to one line; the details are rarely needed on a one-owner install.
 	const [open, setOpen] = useState(false);
-	const state = oauth.ENABLE_OAUTH ? 'on' : editable ? 'off' : 'not configured';
+	// A provider exists only once the environment names one (`/api/config` lists it); until then nothing signs in.
+	const providers = Object.keys(useConfigStore((s) => s.config?.oauth?.providers) ?? {}).length > 0;
+	const state = !providers ? 'Not configured' : oauth.ENABLE_OAUTH ? 'On' : 'Off';
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
 		<Text config={oauth} set={set} name={name} label={label} description={description} placeholder={placeholder} />
 	);
@@ -204,7 +207,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 		<SettingsSection title="OAuth / OIDC">
 			<Disclosure
 				title="Sign-in with an identity provider"
-				description={`${state[0].toUpperCase() + state.slice(1)}${editable ? '' : ' (set by environment variables)'}`}
+				description={providers && !editable ? `${state} (set by environment variables)` : state}
 				open={open}
 				onOpenChange={setOpen}
 			>

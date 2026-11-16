@@ -1445,7 +1445,8 @@ test.describe('settings: Authentication', () => {
 	});
 
 	test('OAuth settings that come from the environment are read-only and are not saved', async ({ page }) => {
-		await mockWorkspaceBackend(page);
+		// A provider the environment names, as /api/config lists it.
+		await mockWorkspaceBackend(page, { config: { oauth: { providers: { oidc: 'SSO' } } } });
 		const { calls } = await mockAuth(page, {
 			oauth: oauthCfg({ ENABLE_OAUTH_PERSISTENT_CONFIG: false, ENABLE_OAUTH: true })
 		});
