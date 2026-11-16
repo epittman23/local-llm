@@ -342,7 +342,8 @@ export default function General() {
 
 					<Events />
 
-					<SettingsSection title="UI">
+					{/* Not "UI": the default interface settings inside it have a UI section of their own (A11Y landmark-unique). */}
+					<SettingsSection title="Interface">
 						{!singleUser && (
 							<div>
 								<div className="mb-2 flex w-full items-start justify-between gap-4">

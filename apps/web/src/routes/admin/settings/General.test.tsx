@@ -83,6 +83,9 @@ describe('General settings', () => {
 			'0 settings configured'
 		);
 		expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+		// Opened, it shows a UI section of its own, so the tab's section around it is not also "UI".
+		expect(screen.getAllByRole('region', { name: 'UI' })).toHaveLength(1);
+		expect(screen.getByRole('region', { name: 'Interface' })).toContainElement(toggle);
 		fireEvent.click(toggle);
 		expect(screen.queryByText('0 settings configured')).toBeNull();
 	});
