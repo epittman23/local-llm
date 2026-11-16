@@ -106,6 +106,8 @@ describe('Feedbacks table (#1027, #1062)', () => {
 		const table = await screen.findByRole('table');
 		expect(within(table).getByRole('columnheader', { name: 'User' })).toBeInTheDocument();
 		expect(within(table).getByText('Ben Tester')).toBeInTheDocument();
+		fireEvent.click(within(table).getByRole('button', { name: /^User/ }));
+		await waitFor(() => expect(getFeedbackItems).toHaveBeenLastCalledWith('tok', 'user', 'asc', 1, ''));
 	});
 
 	it('opens a rating from its model name, from the keyboard (NAV-5), or from the row', async () => {

@@ -33,7 +33,10 @@ import { feedbackResult, ResultBadge } from './feedbackResult';
 
 const PER_PAGE = 30;
 
-const SORTS: { key: string; label: string; className: string; align?: 'end' }[] = [
+// The sort keys the server knows (`_FEEDBACK_ORDER_COLUMNS`; tests/test_feedback_list_order.py
+// reads this list). User is shown, and sorts, only while there is more than one account.
+const COLUMNS: { key: string; label: string; className: string; align?: 'end'; multiUser?: boolean }[] = [
+	{ key: 'user', label: 'User', className: 'hidden w-40 md:table-cell', multiUser: true },
 	{ key: 'model_id', label: 'Model', className: '' },
 	{ key: 'rating', label: 'Result', className: 'w-24' },
 	{ key: 'updated_at', label: 'Updated', className: 'hidden w-36 sm:table-cell', align: 'end' }
@@ -192,12 +195,7 @@ export function Feedbacks() {
 				<Table aria-label="Feedback" className="text-dense table-fixed text-left">
 					<thead>
 						<tr className="border-b">
-							{!singleUser && (
-								<th scope="col" className="text-foreground-muted hidden w-40 px-2 py-1.5 font-normal md:table-cell">
-									User
-								</th>
-							)}
-							{SORTS.map((col) => (
+							{COLUMNS.filter((col) => !(col.multiUser && singleUser)).map((col) => (
 								<TableSortHead
 									key={col.key}
 									label={col.label}
