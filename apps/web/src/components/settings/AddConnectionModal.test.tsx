@@ -246,3 +246,49 @@ describe('AddConnectionModal (#933)', () => {
 		expect(url()).toHaveValue('https://openrouter.ai/api/v1');
 	});
 });
+
+describe('Closing the connection dialog with unsaved changes (FRM-3)', () => {
+	it('closes at once while untouched; after an edit Escape asks, Keep editing returns to the field', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ edit: true, connection: SAVED, onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		type(url(), 'http://127.0.0.1:9000/v1');
+		url().focus();
+		fireEvent.keyDown(url(), { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to this connection are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(url()));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(url()).toHaveValue('http://127.0.0.1:9000/v1');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('asks for an added connection too, counting a model id typed but not added', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+		type(screen.getByPlaceholderText('Add a model ID'), 'qwen');
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This connection is not added yet.');
+		expect(onOpenChange).not.toHaveBeenCalled();
+	});
+
+	it('closes without asking once the edit is saved', async () => {
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		const onOpenChange = vi.fn();
+		renderModal({ edit: true, connection: SAVED, onSubmit, onOpenChange });
+		type(url(), 'http://127.0.0.1:9000/v1');
+		save();
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+});

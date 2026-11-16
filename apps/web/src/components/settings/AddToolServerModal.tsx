@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { getToolServerData } from '@/lib/apis';
 import { initiateOAuthRedirect, registerOAuthClient, verifyToolServerConnection } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { parseHeaders, type TestResult } from './connectionModel';
 import {
 	ConnectionUrlField,
@@ -109,6 +110,15 @@ export function AddToolServerModal({
 	const [errors, setErrors] = useState<Errors>({});
 	const [registration, setRegistration] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
+	// FRM-3: what the dialog opened with; Escape, the scrim and × ask before losing a change to it.
+	const [initial, setInitial] = useState<string | null>(null);
+	const dirty = open && initial !== null && JSON.stringify(f) !== initial;
+	const guard = useConfirmLeave(dirty, {
+		message: edit
+			? 'The changes to this tool server are not saved. They are lost if you close it.'
+			: 'This tool server is not added yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
 	const oauth = isOAuth21(f.authType);
 	const fieldOf: Partial<Record<keyof ToolServerFields, ToolServerField>> = {
 		url: 'url',
@@ -135,8 +145,13 @@ export function AddToolServerModal({
 	};
 
 	useEffect(() => {
-		if (!open) return;
-		setF(toolServerFields(connection));
+		if (!open) {
+			setInitial(null);
+			return;
+		}
+		const start = toolServerFields(connection);
+		setF(start);
+		setInitial(JSON.stringify(start));
 		setShowAdvanced(false);
 		setErrors({});
 		setRegistration(null);
@@ -277,8 +292,9 @@ export function AddToolServerModal({
 				onChange={(accessGrants) => set({ accessGrants })}
 			/>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
 				<DialogContent className="sm:max-w-lg">
+					{guard.dialog}
 					<DialogHeader>
 						<DialogTitle>{edit ? 'Edit tool server' : 'Add tool server'}</DialogTitle>
 						<DialogDescription>

@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Permissions as PermissionsShape, withDefaults } from '@/lib/access/permissions';
 import { getUserDefaultPermissions, getUserDefaultPermissionsDefaults } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { GroupGeneral } from './GroupGeneral';
 import { GroupPreviewPanel } from './GroupPreviewPanel';
 import { GroupUsers } from './GroupUsers';
@@ -53,6 +54,10 @@ const tabLabels: Record<TabId, string> = {
  * #1099: the tabs are a strip across the top (none for one tab), the dialog
  * keeps one height whichever tab is open, Reset is a button that asks first,
  * and deleting says what happens to the members (ACT-3).
+ *
+ * FRM-3: the name, description and permissions are a draft; Escape, the
+ * scrim, × and Cancel ask "Discard changes?" before losing a change to them.
+ * Members are saved as they change, so they never count.
  */
 export function EditGroupModal({
 	open,
@@ -93,15 +98,34 @@ export function EditGroupModal({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [confirmReset, setConfirmReset] = useState(false);
 	const nameId = useId();
+	// What the dialog opened with, to tell a change from none.
+	const [initial, setInitial] = useState<string | null>(null);
+	const dirty = open && initial !== null && JSON.stringify({ name, description, data, permissions }) !== initial;
+	const guard = useConfirmLeave(dirty, {
+		message: custom
+			? 'The changes to this group are not saved. They are lost if you close it.'
+			: 'The changes to the default permissions are not saved. They are lost if you close this.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open) {
+			setInitial(null);
+			return;
+		}
+		const start = {
+			name: group?.name ?? '',
+			description: group?.description ?? '',
+			data: structuredClone(group?.data ?? {}),
+			permissions: withDefaults(group ? group.permissions : initialPermissions)
+		};
 		setTab(tabs[0]);
-		setName(group?.name ?? '');
+		setName(start.name);
 		setNameError(null);
-		setDescription(group?.description ?? '');
-		setData(structuredClone(group?.data ?? {}));
-		setPermissions(withDefaults(group ? group.permissions : initialPermissions));
+		setDescription(start.description);
+		setData(start.data);
+		setPermissions(start.permissions);
+		setInitial(JSON.stringify(start));
 		setUserCount(group?.member_count ?? 0);
 		// The inputs are read when the dialog opens; edits inside it are local state.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,8 +201,9 @@ export function EditGroupModal({
 				Nothing changes until you press {saveLabel}.
 			</ConfirmDialog>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
 				<DialogContent className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col overflow-hidden sm:max-w-3xl">
+					{guard.dialog}
 					<DialogHeader>
 						<DialogTitle>{title}</DialogTitle>
 						<DialogDescription className={custom ? 'sr-only' : undefined}>
@@ -263,7 +288,7 @@ export function EditGroupModal({
 									)}
 								</div>
 								<div className="flex gap-2">
-									<Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+									<Button variant="outline" type="button" onClick={close}>
 										Cancel
 									</Button>
 									<Button type="submit" disabled={loading} aria-busy={loading || undefined}>

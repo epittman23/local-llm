@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toastFailure } from '@/components/common/failureToast';
@@ -135,5 +135,60 @@ describe('EditUserModal', () => {
 		const { onOpenChange } = renderModal();
 		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});
+
+describe('Closing Edit user with unsaved changes (FRM-3)', () => {
+	it('asks before Escape or Cancel drops an edit; Keep editing returns to the field', async () => {
+		const { onOpenChange } = renderModal();
+		const email = screen.getByLabelText('Email');
+		fireEvent.change(email, { target: { value: 'grace@example.org' } });
+		email.focus();
+		fireEvent.keyDown(email, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to this user are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Email')));
+		expect(onOpenChange).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('follows a group link at once while unchanged, and asks first after an edit', async () => {
+		const onOpenChange = vi.fn();
+		const router = createMemoryRouter(
+			[
+				{
+					path: '*',
+					element: <EditUserModal open onOpenChange={onOpenChange} selectedUser={USER} onSaved={vi.fn()} />
+				}
+			],
+			{ initialEntries: ['/admin/users'] }
+		);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>
+		);
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Grace H' } });
+		fireEvent.click(await screen.findByRole('link', { name: 'Research' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(router.state.location.pathname).toBe('/admin/users');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Grace' } });
+		fireEvent.click(screen.getByRole('link', { name: 'Research' }));
+		await waitFor(() => expect(router.state.location.search).toBe('?id=g1'));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('leaves a new-tab click on a group link to the browser', async () => {
+		const { onOpenChange } = renderModal();
+		fireEvent.click(await screen.findByRole('link', { name: 'Research' }), { ctrlKey: true });
+		expect(onOpenChange).not.toHaveBeenCalled();
 	});
 });

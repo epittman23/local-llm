@@ -12,6 +12,7 @@ import { ImageButton } from '@/components/ui/image-button';
 import { getModels } from '@/lib/apis';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
 import { type ArenaModel, arenaIdFromName, buildArenaModel } from './arenaModels';
 
@@ -60,17 +61,40 @@ export function ArenaModelModal({
 	const [loading, setLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const imageInput = useRef<HTMLInputElement>(null);
+	// FRM-3: what the dialog opened with; Escape, the scrim and × ask before losing a change to it.
+	const [initial, setInitial] = useState<string | null>(null);
+	const draft = JSON.stringify({ name, id, profileImageUrl, description, modelIds, filterMode, accessGrants });
+	const dirty = open && initial !== null && (draft !== initial || selectedModelId !== '');
+	const guard = useConfirmLeave(dirty, {
+		message: edit
+			? 'The changes to this arena model are not saved. They are lost if you close it.'
+			: 'This arena model is not added yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
 
 	useEffect(() => {
-		if (!open) return;
-		setName(model?.name ?? '');
-		setId(model?.id ?? '');
-		setProfileImageUrl(model?.meta?.profile_image_url ?? FALLBACK_IMAGE);
-		setDescription(model?.meta?.description ?? '');
-		setModelIds([...new Set(model?.meta?.model_ids ?? [])]);
+		if (!open) {
+			setInitial(null);
+			return;
+		}
+		const start = {
+			name: model?.name ?? '',
+			id: model?.id ?? '',
+			profileImageUrl: model?.meta?.profile_image_url ?? FALLBACK_IMAGE,
+			description: model?.meta?.description ?? '',
+			modelIds: [...new Set(model?.meta?.model_ids ?? [])],
+			filterMode: model?.meta?.filter_mode ?? 'include',
+			accessGrants: model?.meta?.access_grants ?? []
+		};
+		setName(start.name);
+		setId(start.id);
+		setProfileImageUrl(start.profileImageUrl);
+		setDescription(start.description);
+		setModelIds(start.modelIds);
 		setSelectedModelId('');
-		setFilterMode(model?.meta?.filter_mode ?? 'include');
-		setAccessGrants(model?.meta?.access_grants ?? []);
+		setFilterMode(start.filterMode);
+		setAccessGrants(start.accessGrants);
+		setInitial(JSON.stringify(start));
 		// Seeded when the dialog opens; edits inside it are local.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
@@ -128,8 +152,9 @@ export function ArenaModelModal({
 				Chats stop offering it once you save the Evaluations tab. Its settings cannot be recovered.
 			</ConfirmDialog>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
 				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+					{guard.dialog}
 					<DialogHeader>
 						<DialogTitle className="text-sm font-medium">{edit ? 'Edit arena model' : 'Add arena model'}</DialogTitle>
 						<DialogDescription className="sr-only">An alias the arena chooses between.</DialogDescription>

@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { verifyOllamaConnection } from '@/lib/apis/ollama';
 import { verifyOpenAIConnection } from '@/lib/apis/openai';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import {
 	blankFields,
 	buildConnection,
@@ -111,6 +112,15 @@ export function AddConnectionModal({
 	const [errors, setErrors] = useState<Errors>({});
 	const [loading, setLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	// FRM-3: what the dialog opened with; Escape, the scrim and × ask before losing a change to it.
+	const [initial, setInitial] = useState<string | null>(null);
+	const dirty = open && initial !== null && (JSON.stringify(f) !== initial || modelId.trim() !== '');
+	const guard = useConfirmLeave(dirty, {
+		message: edit
+			? 'The changes to this connection are not saved. They are lost if you close it.'
+			: 'This connection is not added yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
 	const mode = { ollama, direct };
 	const azure = isAzure(f.provider, f.url, direct);
 	const set = (patch: Partial<ConnectionFields>) => {
@@ -124,8 +134,13 @@ export function AddConnectionModal({
 	};
 
 	useEffect(() => {
-		if (!open) return;
-		setF(fieldsFromConnection(connection, { ollama }));
+		if (!open) {
+			setInitial(null);
+			return;
+		}
+		const start = fieldsFromConnection(connection, { ollama });
+		setF(start);
+		setInitial(JSON.stringify(start));
 		setModelId('');
 		setShowAdvanced(false);
 		setErrors({});
@@ -243,8 +258,9 @@ export function AddConnectionModal({
 				Its models disappear from the model picker, and chats that use them stop getting replies. This can't be undone.
 			</ConfirmDialog>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
 				<DialogContent className="sm:max-w-lg">
+					{guard.dialog}
 					<DialogHeader>
 						<DialogTitle>{edit ? 'Edit connection' : 'Add connection'}</DialogTitle>
 						<DialogDescription>

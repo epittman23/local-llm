@@ -69,7 +69,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     navigation loses changes, or saves each change at once (Database has
     nothing to save; Pipelines' valves have the SaveBar): Connections and
     Integrations save at once, one toast per change, and put the old value
-    back when a save fails. Arena model edits join Evaluations' Save. A
+    back when a save fails. Admin's form dialogs (connections, tool servers,
+    terminals, users, groups, arena models) ask "Discard changes?" before
+    Escape, the scrim, × or Cancel drops a change. Arena model edits join
+    Evaluations' Save. A
     destructive confirmation names what is lost (deleting uploads, resetting
     vector storage, which deletes every knowledge base, clearing interface
     defaults, a banner, a webhook, a connection, a group). Connection dialogs

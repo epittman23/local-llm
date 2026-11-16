@@ -215,3 +215,38 @@ describe('AddToolServerModal (#933)', () => {
 		expect(onOpenChange).not.toHaveBeenCalledWith(false);
 	});
 });
+
+describe('Closing the tool server dialog with unsaved changes (FRM-3)', () => {
+	it('closes at once while untouched; after an edit Escape asks, Keep editing returns to the field', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		type(url(), 'https://tools.example.com');
+		url().focus();
+		fireEvent.keyDown(url(), { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This tool server is not added yet.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(url()));
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(url()).toHaveValue('https://tools.example.com');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('closes without asking once the server is saved', async () => {
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		const onOpenChange = vi.fn();
+		renderModal({ onSubmit, onOpenChange });
+		type(url(), 'https://tools.example.com');
+		save();
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+});

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
-import { Link } from 'react-router';
+import { type RefObject, useId, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
 import { ProfileImageEditor } from '@/components/common/ProfileImageEditor';
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { getUserGroupsById, updateUserById } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useFieldErrors } from '@/lib/ui/useFieldErrors';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
@@ -57,8 +58,10 @@ export function EditUserModal({
 	selectedUser: AdminUser | null;
 	onSaved: () => void;
 }) {
+	// Escape, the scrim, × and Cancel close through the form, which asks first while it holds a change (FRM-3).
+	const requestClose = useRef(() => onOpenChange(false));
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose.current())}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Edit user</DialogTitle>
@@ -68,14 +71,29 @@ export function EditUserModal({
 				</DialogHeader>
 				{/* Mounted per open, so every open starts from the user as stored. */}
 				{open && selectedUser && (
-					<EditUserForm user={selectedUser} onClose={() => onOpenChange(false)} onSaved={onSaved} />
+					<EditUserForm
+						user={selectedUser}
+						onClose={() => onOpenChange(false)}
+						requestClose={requestClose}
+						onSaved={onSaved}
+					/>
 				)}
 			</DialogContent>
 		</Dialog>
 	);
 }
 
-function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: () => void; onSaved: () => void }) {
+function EditUserForm({
+	user,
+	onClose,
+	requestClose,
+	onSaved
+}: {
+	user: AdminUser;
+	onClose: () => void;
+	requestClose: RefObject<() => void>;
+	onSaved: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const sessionUserId = useAuthStore((s) => s.user?.id);
 	const [form, setForm] = useState({
@@ -85,6 +103,14 @@ function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
 		email: user.email,
 		password: ''
 	});
+	const [initial] = useState(() => JSON.stringify(form));
+	const dirty = JSON.stringify(form) !== initial;
+	const guard = useConfirmLeave(dirty, {
+		message: 'The changes to this user are not saved. They are lost if you close this.'
+	});
+	const close = () => guard.confirmLeave(onClose);
+	requestClose.current = close;
+	const navigate = useNavigate();
 	const [serverError, setServerError] = useState<{ field: FieldName; message: string } | null>(null);
 	const [saving, setSaving] = useState(false);
 	const id = useId();
@@ -149,6 +175,8 @@ function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
 				save();
 			}}
 		>
+			{/* Portalled out of the form, so its buttons never submit it. */}
+			{guard.dialog}
 			<div className="flex items-start gap-4">
 				<ProfileImageEditor
 					imageClassName="size-14"
@@ -171,7 +199,19 @@ function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
 						{groups.data!.map((group) => (
 							<li key={group.id}>
 								<Badge asChild variant="secondary">
-									<Link to={`${routePaths.adminUsersGroups}?id=${group.id}`} onClick={onClose}>
+									<Link
+										to={`${routePaths.adminUsersGroups}?id=${group.id}`}
+										onClick={(event) => {
+											// A plain click asks first while there are changes; one for a new tab or window leaves the dialog be.
+											if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+												return;
+											event.preventDefault();
+											guard.confirmLeave(() => {
+												onClose();
+												navigate(`${routePaths.adminUsersGroups}?id=${group.id}`);
+											});
+										}}
+									>
 										{group.name}
 									</Link>
 								</Badge>
@@ -268,7 +308,7 @@ function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
 			</div>
 
 			<div className="flex justify-end gap-2">
-				<Button variant="outline" type="button" onClick={onClose}>
+				<Button variant="outline" type="button" onClick={close}>
 					Cancel
 				</Button>
 				<Button type="submit" disabled={saving} aria-busy={saving || undefined}>

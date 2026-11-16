@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModels } from '@/lib/apis';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -97,5 +97,51 @@ describe('ArenaModelModal', () => {
 	it('has no Delete button while adding', () => {
 		renderModal();
 		expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+	});
+});
+
+describe('Closing the arena model dialog with unsaved changes (FRM-3)', () => {
+	it('closes at once while untouched; after an edit Escape asks, Keep editing returns to the field', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ edit: true, model: EXISTING, onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		const name = screen.getByLabelText('Name');
+		fireEvent.change(name, { target: { value: 'Duel two' } });
+		name.focus();
+		fireEvent.keyDown(name, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to this arena model are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+		expect(onOpenChange).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('counts a model picked but not added, while adding', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ onOpenChange });
+		await screen.findByRole('option', { name: 'Model Two' });
+		fireEvent.change(screen.getByLabelText('Select a model'), { target: { value: 'm2' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This arena model is not added yet.');
+		expect(onOpenChange).not.toHaveBeenCalled();
+	});
+
+	it('closes without asking once it is saved', async () => {
+		const onOpenChange = vi.fn();
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		renderModal({ edit: true, model: EXISTING, onOpenChange, onSubmit });
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Duel two' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 });

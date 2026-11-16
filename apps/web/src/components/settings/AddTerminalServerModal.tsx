@@ -23,6 +23,7 @@ import {
 } from '@/lib/apis/configs';
 import { getTerminalConfig } from '@/lib/apis/terminal';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { type TestResult, urlProblem } from './connectionModel';
 import { ConnectionUrlField, Disclosure, FieldLabel, FormField, SecretInput, SelectField } from './formFields';
 import {
@@ -113,6 +114,16 @@ export function AddTerminalServerModal({
 	const [policyError, setPolicyError] = useState('');
 	const [refreshOnlyIdle, setRefreshOnlyIdle] = useState(true);
 	const [refreshReset, setRefreshReset] = useState(false);
+	// FRM-3: the connection and policy the dialog opened with (the policy once it
+	// has loaded); Escape, the scrim and × ask before losing a change to them.
+	const [initial, setInitial] = useState<{ f: string; p: string } | null>(null);
+	const dirty = open && initial !== null && (JSON.stringify(f) !== initial.f || JSON.stringify(p) !== initial.p);
+	const guard = useConfirmLeave(dirty, {
+		message: edit
+			? 'The changes to this terminal connection are not saved. They are lost if you close it.'
+			: 'This terminal connection is not added yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
 	const set = (patch: Partial<TerminalFields>) => {
 		setF((prev) => ({ ...prev, ...patch }));
 		if ('url' in patch) setUrlError(null);
@@ -124,10 +135,14 @@ export function AddTerminalServerModal({
 	const orchestrator = f.serverType === 'orchestrator' && !direct;
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open) {
+			setInitial(null);
+			return;
+		}
 		const start = terminalFields(connection);
 		setF(start);
 		setP(blankPolicy());
+		setInitial({ f: JSON.stringify(start), p: JSON.stringify(blankPolicy()) });
 		setShowAdvanced(false);
 		setShowOrchestrator(false);
 		setRefreshOnlyIdle(true);
@@ -150,7 +165,10 @@ export function AddTerminalServerModal({
 					}
 				);
 				const lifecycle = await getOrchestratorLifecycle(token, start.url, start.key, start.policyId, start.authType);
-				if (!cancelled) setP(policyFromServer(policy?.data, lifecycle?.data));
+				if (cancelled) return;
+				const loaded = policyFromServer(policy?.data, lifecycle?.data);
+				setP(loaded);
+				setInitial((prev) => prev && { ...prev, p: JSON.stringify(loaded) });
 			} catch (error: any) {
 				if (!cancelled) setPolicyError(error?.message || String(error));
 			} finally {
@@ -297,8 +315,9 @@ export function AddTerminalServerModal({
 				onChange={(accessGrants) => set({ accessGrants })}
 			/>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
 				<DialogContent className="sm:max-w-lg">
+					{guard.dialog}
 					<DialogHeader>
 						<DialogTitle>{edit ? 'Edit terminal connection' : 'Add terminal connection'}</DialogTitle>
 						<DialogDescription>An Open Terminal server, or an Orchestrator that starts one per chat.</DialogDescription>

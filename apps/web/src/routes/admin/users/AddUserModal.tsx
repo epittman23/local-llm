@@ -1,5 +1,5 @@
 import { Check, Copy, Download, FileText, KeyRound } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { type RefObject, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
@@ -17,6 +17,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useCopy } from '@/lib/ui/useCopy';
 import { useFieldErrors } from '@/lib/ui/useFieldErrors';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
 import { generateInitialsImage } from '@/lib/utils/auth-helpers';
 import { parseUserCsv } from './userCsv';
@@ -92,21 +93,31 @@ export function AddUserModal({
 	onOpenChange: (open: boolean) => void;
 	onSaved: () => void;
 }) {
+	// Escape, the scrim, × and Cancel close through the form, which asks first while it holds a draft (FRM-3).
+	const requestClose = useRef(() => onOpenChange(false));
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose.current())}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Add user</DialogTitle>
 					<DialogDescription>Create an account, or import several from a CSV file.</DialogDescription>
 				</DialogHeader>
 				{/* Mounted per open, so every open starts from an empty form. */}
-				{open && <AddUserForm onClose={() => onOpenChange(false)} onSaved={onSaved} />}
+				{open && <AddUserForm onClose={() => onOpenChange(false)} requestClose={requestClose} onSaved={onSaved} />}
 			</DialogContent>
 		</Dialog>
 	);
 }
 
-function AddUserForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function AddUserForm({
+	onClose,
+	requestClose,
+	onSaved
+}: {
+	onClose: () => void;
+	requestClose: RefObject<() => void>;
+	onSaved: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const features = useConfigStore((s) => s.config?.features);
 	const [tab, setTab] = useState<'form' | 'import'>('form');
@@ -118,6 +129,12 @@ function AddUserForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [dragging, setDragging] = useState(false);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const { copied, copy } = useCopy();
+	const dirty = JSON.stringify(user) !== JSON.stringify(blank) || file !== null;
+	const guard = useConfirmLeave(dirty, {
+		message: 'This account is not added yet. What you entered is lost if you close this.'
+	});
+	const close = () => guard.confirmLeave(onClose);
+	requestClose.current = close;
 	const id = useId();
 	const ids = {
 		name: `${id}-name`,
@@ -229,6 +246,8 @@ function AddUserForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				tab === 'form' ? submitOne() : submitCsv();
 			}}
 		>
+			{/* Portalled out of the form, so its buttons never submit it. */}
+			{guard.dialog}
 			<SegmentedControl
 				aria-label="How to add"
 				value={tab}
@@ -389,7 +408,7 @@ function AddUserForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 			)}
 
 			<div className="flex justify-end gap-2">
-				<Button variant="outline" type="button" onClick={onClose}>
+				<Button variant="outline" type="button" onClick={close}>
 					Cancel
 				</Button>
 				<Button type="submit" disabled={loading} aria-busy={loading || undefined}>

@@ -218,3 +218,45 @@ describe('AddTerminalServerModal (#933)', () => {
 		expect(onOpenChange).not.toHaveBeenCalledWith(false);
 	});
 });
+
+describe('Closing the terminal dialog with unsaved changes (FRM-3)', () => {
+	it('closes at once while untouched; after an edit Escape asks, Keep editing returns to the field', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		fireEvent.change(url(), { target: { value: 'http://127.0.0.1:8000' } });
+		url().focus();
+		fireEvent.keyDown(url(), { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This terminal connection is not added yet.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(url()));
+		expect(onOpenChange).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('counts the loaded policy as the start, and a change to it as unsaved', async () => {
+		vi.mocked(getOrchestratorPolicy).mockResolvedValue({ data: { image: 'img:1' } } as never);
+		vi.mocked(getOrchestratorLifecycle).mockResolvedValue({ data: {} } as never);
+		const onOpenChange = vi.fn();
+		renderModal({ edit: true, connection: ORCHESTRATOR, onOpenChange });
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Orchestrator' }));
+		fireEvent.change(screen.getByLabelText(/^Image/), { target: { value: 'img:2' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to this terminal connection are not saved.');
+		expect(onOpenChange).not.toHaveBeenCalled();
+	});
+});

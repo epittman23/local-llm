@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { addUser } from '@/lib/apis/auths';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -112,5 +112,40 @@ describe('AddUserModal helpers', () => {
 		expect(importSummary(1, 0)).toBe('1 user added');
 		expect(importSummary(3, 1)).toBe('3 added, 1 failed');
 		expect(importSummary(0, 2)).toBe("2 users couldn't be added");
+	});
+});
+
+describe('Closing Add user with unsaved changes (FRM-3)', () => {
+	it('closes at once while empty; after typing, Escape asks and Keep editing returns to the field', async () => {
+		const onOpenChange = vi.fn();
+		render(<AddUserModal open onOpenChange={onOpenChange} onSaved={vi.fn()} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		const name = screen.getByLabelText('Name');
+		fireEvent.change(name, { target: { value: 'Ada' } });
+		name.focus();
+		fireEvent.keyDown(name, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This account is not added yet.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+		expect(onOpenChange).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('closes without asking once the user is added', async () => {
+		vi.mocked(addUser).mockResolvedValue({ id: 'u1' } as never);
+		const onOpenChange = vi.fn();
+		render(<AddUserModal open onOpenChange={onOpenChange} onSaved={vi.fn()} />);
+		fill();
+		fireEvent.click(screen.getByRole('button', { name: 'Add user' }));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 });

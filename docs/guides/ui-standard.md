@@ -419,6 +419,12 @@ goes through `confirmLeave(action)`: it runs `action` at once while nothing is
 unsaved and asks the same question first otherwise; an `action` that
 navigates is let through, so it never asks twice. An editor that a page may
 swap out in place (the model editor) calls it from its own Back.
+A form dialog holds a draft the same way: Escape, the scrim, × and Cancel
+close it through `confirmLeave`, which asks while the dialog's values differ
+from what it opened with; a save or a delete closes it without asking.
+Admin's connection, tool server, terminal, user, group and arena model
+dialogs use `useConfirmLeave` (their pages already have a guard), the
+workspace's create dialogs `useUnsavedChanges`.
 
 **FRM-4. Use the shared `Select`, `Checkbox`, `Switch`, `Input` and
 `Textarea`.** A name that may be long (a tool's, a skill's) is

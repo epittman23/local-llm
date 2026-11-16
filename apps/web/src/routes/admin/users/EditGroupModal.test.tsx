@@ -24,10 +24,11 @@ beforeEach(() => {
 });
 
 const renderModal = (props: Partial<Parameters<typeof EditGroupModal>[0]> = {}) => {
-	const onSubmit = vi.fn();
+	// Calls through to a caller's own onSubmit, and records the call either way.
+	const onSubmit = vi.fn<Parameters<typeof EditGroupModal>[0]['onSubmit']>(props.onSubmit ?? (() => {}));
 	render(
 		<TooltipProvider>
-			<EditGroupModal open onOpenChange={vi.fn()} onSubmit={onSubmit} {...props} />
+			<EditGroupModal open onOpenChange={vi.fn()} {...props} onSubmit={onSubmit} />
 		</TooltipProvider>
 	);
 	return onSubmit;
@@ -137,6 +138,58 @@ describe('EditGroupModal', () => {
 		fireEvent.click(within(confirm).getByRole('button', { name: 'Delete group' }));
 		await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('closes at once while untouched, and asks before Escape or Cancel drops a rename (FRM-3)', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ edit: true, group: GROUP, onOpenChange });
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+		onOpenChange.mockClear();
+
+		const name = screen.getByLabelText('Name');
+		fireEvent.change(name, { target: { value: 'Research team' } });
+		name.focus();
+		fireEvent.keyDown(name, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to this group are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(screen.getByLabelText('Name')).toHaveValue('Research team');
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('asks before closing loses a ticked permission, and not once it is unticked again', async () => {
+		const onOpenChange = vi.fn();
+		renderModal({ custom: false, tabs: ['permissions'], onOpenChange });
+		// Open the first group of permissions.
+		fireEvent.click(screen.getAllByRole('button', { expanded: false })[0]);
+		const box = screen.getAllByRole('checkbox')[0];
+		fireEvent.click(box);
+		fireEvent.keyDown(box, { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('The changes to the default permissions are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		fireEvent.click(screen.getAllByRole('checkbox')[0]);
+		fireEvent.keyDown(screen.getAllByRole('checkbox')[0], { key: 'Escape' });
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	it('closes without asking after a save', async () => {
+		const onOpenChange = vi.fn();
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		renderModal({ edit: true, group: GROUP, onOpenChange, onSubmit });
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Research team' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save group' }));
+		await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 
 	it('sets who can share with the group', async () => {
