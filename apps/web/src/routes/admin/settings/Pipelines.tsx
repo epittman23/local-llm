@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { enumChoices, enumOption } from '@/components/common/Valves';
 import {
@@ -54,6 +55,7 @@ export default function Pipelines() {
 	const [uploading, setUploading] = useState(false);
 	const [downloading, setDownloading] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [spec, setSpec] = useState<ValveSpec | null>(null);
 	const [valves, setValves] = useState<ValveValues | null>(null);
 	// The selected pipeline's valves as the server holds them, in the form's shape.
@@ -195,6 +197,19 @@ export default function Pipelines() {
 			onDiscard={() => setValves(savedValves)}
 		>
 			{guard.dialog}
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={`Delete “${current?.name ?? 'this pipeline'}”?`}
+				confirmLabel="Delete pipeline"
+				destructive
+				onConfirm={() => {
+					setConfirmDelete(false);
+					void remove();
+				}}
+			>
+				It is removed from its Pipelines server, with its valves. This can't be undone.
+			</ConfirmDialog>
 			{!hasServers ? (
 				<SettingsSection title="Source" first>
 					<div className={muted}>Pipelines Not Detected</div>
@@ -286,7 +301,7 @@ export default function Pipelines() {
 												</option>
 											))}
 										</SettingSelect>
-										<Button variant="destructive" size="sm" type="button" onClick={remove}>
+										<Button variant="destructive" size="sm" type="button" onClick={() => setConfirmDelete(true)}>
 											Delete
 										</Button>
 									</div>

@@ -148,3 +148,22 @@ describe('Pipelines: the valves are a draft with the SaveBar (FRM-3)', () => {
 		expect(screen.queryByText('All changes saved')).toBeNull();
 	});
 });
+
+describe('Pipelines: Delete', () => {
+	it('asks first, naming the pipeline, and deletes only on Delete pipeline (ACT-3)', async () => {
+		apis.deletePipeline.mockReset().mockResolvedValue({ ok: true });
+		mount();
+		await valveBox();
+		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Delete “Rate limit”?' });
+		expect(apis.deletePipeline).not.toHaveBeenCalled();
+		fireEvent.click(within(ask).getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(apis.deletePipeline).not.toHaveBeenCalled();
+
+		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		const confirm = await screen.findByRole('alertdialog', { name: 'Delete “Rate limit”?' });
+		fireEvent.click(within(confirm).getByRole('button', { name: 'Delete pipeline' }));
+		await waitFor(() => expect(apis.deletePipeline).toHaveBeenCalledWith('t', 'p1', '0'));
+	});
+});
