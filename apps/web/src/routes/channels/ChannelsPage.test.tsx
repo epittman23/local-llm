@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { ChannelsPage } from './ChannelsPage';
 import type { Channel } from './channelModel';
 
@@ -91,6 +92,8 @@ describe('the channels page (#971)', () => {
 		enabled.current = false;
 		show();
 		expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+		// The tab says so too, not "Channels".
+		expect(usePageTitleStore.getState().dynamic).toBe('Page not found');
 	});
 });
 
