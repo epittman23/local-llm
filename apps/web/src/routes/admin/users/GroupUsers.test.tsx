@@ -141,4 +141,18 @@ describe('GroupUsers', () => {
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 1 member'));
 		expect(toast.error).toHaveBeenCalledWith('Row 3: not a name and an email.');
 	});
+
+	it('reports a failed lookup and a file it could not read through the failure toast', async () => {
+		await renderPanel();
+		vi.mocked(getUsers).mockRejectedValue('offline');
+		const file = new File(['Name,Email\nBen,ben@example.com\n'], 'm.csv', { type: 'text/csv' });
+		fireEvent.change(screen.getByLabelText('CSV file of members'), { target: { files: [file] } });
+		await waitFor(() =>
+			expect(toastFailure).toHaveBeenCalledWith("Row 2: couldn't look up ben@example.com.", 'offline')
+		);
+		const unreadable = new File([''], 'broken.csv', { type: 'text/csv' });
+		unreadable.text = () => Promise.reject(new Error('unreadable'));
+		fireEvent.change(screen.getByLabelText('CSV file of members'), { target: { files: [unreadable] } });
+		await waitFor(() => expect(toastFailure).toHaveBeenCalledWith("Couldn't import broken.csv.", expect.any(Error)));
+	});
 });

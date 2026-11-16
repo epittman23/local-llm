@@ -7,6 +7,7 @@ import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,7 +25,6 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { TableSkeleton } from '../TableSkeleton';
 import { chunk, parseGroupCsv } from './groupCsv';
 import { lastActive } from './UserList';
 
@@ -135,7 +135,7 @@ export function GroupUsers({
 								return null;
 							})
 							.catch((error) => {
-								toast.error(`Row ${idx + 1}: ${error}`);
+								toastFailure(`Row ${idx + 1}: couldn't look up ${email}.`, error);
 								return null;
 							})
 					)
@@ -162,7 +162,7 @@ export function GroupUsers({
 			if (added > 0) toast.success(added === 1 ? 'Added 1 member' : `Added ${added} members`);
 			await refetch();
 		} catch (error) {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't import ${file.name}.`, error);
 		} finally {
 			if (fileInput.current) fileInput.current.value = '';
 			setImporting(false);
