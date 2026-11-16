@@ -1,7 +1,7 @@
 import { Pencil } from 'lucide-react';
 import { useRef } from 'react';
 import { toast } from 'sonner';
-import { ProfileAvatar } from '@/components/ui/avatar';
+import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ImageButton } from '@/components/ui/image-button';
 import { getGravatarUrl } from '@/lib/apis/utils';
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { canvasPixelTest, generateInitialsImage } from '@/lib/utils/auth-helpers';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
+import { initials as initialsOf } from '@/lib/utils/initials';
 
 /**
  * Ports chat/Settings/Account/UserProfileImage.svelte: click the avatar to
@@ -117,7 +118,8 @@ export function ProfileImageEditor({
 			<div className="flex self-center">
 				<ImageButton
 					shape="circle"
-					aria-label="Change profile image"
+					// WCAG 2.5.3: a name that holds the initials the button shows, when it shows them.
+					aria-label={hasPicture(value) ? 'Change picture' : `${initialsOf(user?.name)}, change picture`}
 					overlay={<Pencil />}
 					onClick={() => input.current?.click()}
 				>
