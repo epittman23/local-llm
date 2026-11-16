@@ -110,6 +110,10 @@ describe('content', () => {
 		]);
 		expect(notePreview(null)).toBe('');
 	});
+	it('leaves no tag behind when one is hidden inside another', () => {
+		expect(notePreview('a <<script>script>alert(1)<</script>/script> b')).not.toMatch(/<\/?[a-z]/i);
+		expect(notePreview('x <scr<b>ipt>y</scr</b>ipt> z')).not.toMatch(/<\/?[a-z]/i);
+	});
 	it('says when a note changed in a few characters, with the exact time behind it (DAT-5)', () => {
 		const now = new Date(2026, 10, 16, 15, 0);
 		const at = (d: Date) => d.getTime() * 1_000_000;

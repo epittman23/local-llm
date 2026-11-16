@@ -81,16 +81,27 @@ export function editorContent(c: Partial<NoteContent> | null | undefined): unkno
 }
 
 /**
+ * Removes HTML tags until none is left, so a tag hidden inside another
+ * (`<scr<b>ipt>`) can't survive one pass.
+ */
+function stripTags(text: string): string {
+	let out = text;
+	let prev: string;
+	do {
+		prev = out;
+		out = out.replace(/<\/?[a-z][^>]*>/gi, '');
+	} while (out !== prev);
+	return out;
+}
+
+/**
  * A note's Markdown as the words a reader sees, for a list row's preview and
  * a grid card (#935): no heading, list, task or quote markers, no fences,
  * emphasis or HTML tags, links as their text, and no table rules. Formulas
  * keep their source. Lines stay lines; blank ones go.
  */
 export function notePreview(md: string | null | undefined): string {
-	return (md ?? '')
-		.replace(/^[ \t]*(```|~~~).*$/gm, '')
-		.replace(/^[ \t]*\|?[ \t]*:?-{3,}.*$/gm, '')
-		.replace(/<\/?[a-z][^>]*>/gi, '')
+	return stripTags((md ?? '').replace(/^[ \t]*(```|~~~).*$/gm, '').replace(/^[ \t]*\|?[ \t]*:?-{3,}.*$/gm, ''))
 		.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
 		.replace(/^[ \t]*>[ \t]?/gm, '')
 		.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, '')
