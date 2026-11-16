@@ -81,7 +81,10 @@ describe('EditGroupModal', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
 		expect(getUserDefaultPermissions).not.toHaveBeenCalled();
 		const confirm = await screen.findByRole('alertdialog', { name: 'Reset permissions to defaults?' });
-		expect(confirm).toHaveTextContent('Nothing changes until you press Save group.');
+		// The rows are checkboxes now, so it speaks of permissions, not switches (#1099).
+		expect(confirm).toHaveTextContent(
+			'Every permission goes back to what every account has by default. Nothing changes until you press Save group.'
+		);
 		fireEvent.click(within(confirm).getByRole('button', { name: 'Reset permissions' }));
 		await waitFor(() => expect(getUserDefaultPermissions).toHaveBeenCalledWith('tok'));
 		expect(toast.success).toHaveBeenCalledWith('Permissions reset to defaults. Save to keep them.');

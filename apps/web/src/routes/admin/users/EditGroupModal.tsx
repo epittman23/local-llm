@@ -196,8 +196,8 @@ export function EditGroupModal({
 				}}
 			>
 				{custom
-					? 'Every switch goes back to the permissions every account has by default.'
-					: "Every switch goes back to the server's starting configuration."}{' '}
+					? 'Every permission goes back to what every account has by default.'
+					: "Every permission goes back to the server's starting configuration."}{' '}
 				Nothing changes until you press {saveLabel}.
 			</ConfirmDialog>
 
