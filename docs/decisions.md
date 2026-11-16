@@ -19,9 +19,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     channel still names it, and its runs say the channel can't be opened
     instead of linking to Not found.
   - **Channel names are stored as typed (#1109, S6-D2 A):** trimmed, at most
-    60 characters, no longer lower-cased and hyphenated. The limit applies to
-    new and changed names; a longer name saved before it keeps saving until
-    it is changed.
+    60 characters, no longer lower-cased (on create as on rename) or
+    hyphenated. The limit is enforced by the client only, not the server; it
+    applies to new and changed names, and a longer name saved before it keeps
+    saving until it is changed.
   - **Pinned notes get a sidebar group (#963, S6-D3 A),** above the pinned
     chats, and lead the Notes list.
   - **New note starts as "Untitled" with the title selected (#1037, S6-D4
