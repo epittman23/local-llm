@@ -192,9 +192,18 @@ export const adminTabs: SettingsTab[] = [
 	},
 	{
 		id: 'admin:interface',
-		title: 'Server: Interface',
+		title: 'Tasks & prompts',
 		group: 'Experience',
-		keywords: ['interface', 'ui', 'appearance', 'banners', 'tasks', 'prompt suggestions', 'tags']
+		keywords: [
+			'tasks',
+			'prompts',
+			'title generation',
+			'follow-up',
+			'task model',
+			'interface',
+			'prompt suggestions',
+			'tags'
+		]
 	},
 	{
 		id: 'admin:audio',

@@ -995,7 +995,7 @@ test.describe('settings: General', () => {
 		const m = modal(page);
 		await m.getByRole('switch', { name: 'Folders' }).click();
 		await expect(m.getByText('Unsaved changes')).toBeVisible();
-		await m.getByRole('tab', { name: 'Interface', exact: true }).click();
+		await m.getByRole('tab', { name: 'Tasks & prompts', exact: true }).click();
 		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
 		await ask.getByRole('button', { name: 'Keep editing' }).click();
 		await expect(m.getByRole('switch', { name: 'Folders' })).toBeChecked();
