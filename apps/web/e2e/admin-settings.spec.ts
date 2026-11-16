@@ -285,7 +285,7 @@ test.describe('settings: Code Execution', () => {
 });
 
 test.describe('settings: Database', () => {
-	test('Export Config downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
+	test('Export settings downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/export': { a: 1 } });
 		await page.route('**/api/v1/users/all', (route) =>
@@ -294,13 +294,16 @@ test.describe('settings: Database', () => {
 		await page.goto('/?settings=admin:db');
 		const m = modal(page);
 		const cfgDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).first().click();
-		expect((await cfgDownload).suggestedFilename()).toMatch(/^config-\d+\.json$/);
+		await m.getByRole('button', { name: 'Export settings' }).click();
+		expect((await cfgDownload).suggestedFilename()).toMatch(/^local-llm-config-\d{4}-\d{2}-\d{2}\.json$/);
+		// The SQLite-only database download is gone; the backup is a pg_dump command (#961).
+		await expect(m.getByRole('button', { name: 'Database' })).toHaveCount(0);
+		await expect(m.getByText(/pg_dump -Fc/)).toBeVisible();
 
 		const usersDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).last().click();
+		await m.getByRole('button', { name: 'Export users' }).click();
 		const dl = await usersDownload;
-		expect(dl.suggestedFilename()).toBe('users.csv');
+		expect(dl.suggestedFilename()).toMatch(/^local-llm-users-[\d-]+\.csv$/);
 		const stream = await dl.createReadStream();
 		let text = '';
 		for await (const chunk of stream) text += chunk;
@@ -308,7 +311,7 @@ test.describe('settings: Database', () => {
 		expect(text).toContain(`"'=HYPERLINK(""http://evil"",""x"")"`);
 	});
 
-	test('Import Config posts the parsed file', async ({ page }) => {
+	test('Import settings posts the parsed file', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:db');

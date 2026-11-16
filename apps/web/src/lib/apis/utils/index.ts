@@ -1,5 +1,5 @@
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
 export const getGravatarUrl = async (token: string, email: string) => {
 	let error = null;
@@ -141,40 +141,4 @@ export const downloadChatAsPDF = async (token: string, title: string, messages: 
 	if (error) throw error;
 
 	return blob;
-};
-
-export const downloadDatabase = async (token: string) => {
-	let error = null;
-
-	const res = await fetch(`${WEBUI_API_BASE_URL}/utils/db/download`, {
-		method: 'GET',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		}
-	})
-		.then(async (response) => {
-			if (!response.ok) {
-				throw await errorBody(response);
-			}
-			return response.blob();
-		})
-		.then((blob) => {
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'webui.db';
-			document.body.appendChild(a);
-			a.click();
-			window.URL.revokeObjectURL(url);
-		})
-		.catch((err) => {
-			console.error(err);
-			error = errorDetail(err);
-			return null;
-		});
-
-	if (error) {
-		throw error;
-	}
 };
