@@ -57,6 +57,7 @@ type Note = {
 	is_pinned?: boolean;
 	access_grants?: AccessGrant[];
 	data?: { content?: Partial<NoteContent> } | null;
+	updated_at?: number;
 };
 
 /** Where the note's autosave stands (FBK-1): nothing sent yet, sending, stored, or refused. */
@@ -143,6 +144,22 @@ export function useNoteSaver(id: string) {
 	return { schedule, flush: () => send(), retry: () => send(), status };
 }
 
+/**
+ * Deletes a note New note made and nobody used (S6-D4), if the server's copy
+ * agrees: still untitled and empty, and not saved since it was first loaded
+ * (another tab or the desktop app may have written in it). A failed read or
+ * delete leaves the note.
+ */
+async function discardUntouched(token: string, id: string, first: { updated_at?: number }) {
+	try {
+		const now = (await getNoteById(token, id)) as Note | null;
+		if (!now || !isUntouchedNote(now) || now.updated_at !== first.updated_at) return;
+		await deleteNoteById(token, id);
+	} catch {
+		// Left in place: an empty note in the list is the lesser harm.
+	}
+}
+
 /** The save status beside the title, at every width (FBK-1, #1037): Saving…, Saved, or Not saved with Retry. */
 export function SaveState({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
 	return (
@@ -202,12 +219,17 @@ function NoteEditor() {
 	useDocumentTitle(gone ? 'Note not found' : title || 'Note');
 
 	// S6-D4: a note "New note" just made is opened on its title, and deleted on the
-	// way out if nothing was ever typed in it. Only that note, only on this visit:
+	// way out if nothing was ever done with it. Only that note, only on this visit:
 	// the flag is taken out of the history entry, so a reload or Back never counts.
-	const fresh = useRef((location.state as NoteOpenState | null)?.fresh === true ? id : null);
+	// The note as first loaded is kept per id, so leaving it for another note (the
+	// same page, a new id) still finds it, and the server's copy is read again
+	// before the delete: another tab may have written in it since.
+	const fresh = useRef(new Set<string>());
+	if ((location.state as NoteOpenState | null)?.fresh === true) fresh.current.add(id);
+	const firstLoaded = useRef(new Map<string, Note>());
+	if (note.data && fresh.current.has(note.data.id) && !firstLoaded.current.has(note.data.id))
+		firstLoaded.current.set(note.data.id, note.data);
 	const edited = useRef(false);
-	const loaded = useRef<Note | null>(null);
-	loaded.current = note.data ?? null;
 	const leave = useRef({ token, queryClient });
 	leave.current = { token, queryClient };
 	useEffect(() => {
@@ -217,14 +239,15 @@ function NoteEditor() {
 	useEffect(() => {
 		edited.current = false;
 		return () => {
-			const n = loaded.current;
-			if (fresh.current !== id || edited.current || !n || n.id !== id || !isUntouchedNote(n)) return;
-			fresh.current = null;
+			// Not loaded yet (or React's development double mount): nothing to judge, so nothing is deleted.
+			const first = firstLoaded.current.get(id);
+			if (!first) return;
+			fresh.current.delete(id);
+			firstLoaded.current.delete(id);
+			if (edited.current || !isUntouchedNote(first)) return;
 			const { token: t, queryClient: qc } = leave.current;
 			// Silent: the note was never more than a click on New note.
-			void deleteNoteById(t, id)
-				.catch(() => null)
-				.then(() => qc.invalidateQueries({ queryKey: ['notes'] }));
+			void discardUntouched(t, id, first).then(() => qc.invalidateQueries({ queryKey: ['notes'] }));
 		};
 	}, [id]);
 
@@ -242,7 +265,7 @@ function NoteEditor() {
 	}
 	const seeded = seededId === id;
 	useEffect(() => {
-		if (!seeded || fresh.current !== id) return;
+		if (!seeded || !fresh.current.has(id)) return;
 		titleInput.current?.focus();
 		titleInput.current?.select();
 	}, [seeded, id]);
@@ -307,6 +330,8 @@ function NoteEditor() {
 			? toast.success(ok)
 			: toast.error("Couldn't copy: the browser blocked clipboard access");
 	const togglePin = async () => {
+		// Pinning, sharing or copying the link is using the note: a new one is kept.
+		edited.current = true;
 		try {
 			await toggleNotePinnedStatusById(token, n.id);
 			queryClient.setQueryData(['notes', 'item', id], { ...n, is_pinned: !n.is_pinned });
@@ -323,7 +348,7 @@ function NoteEditor() {
 			return void toastFailure("Couldn't delete the note.", error);
 		}
 		// Deleted on purpose: nothing for the way out to discard.
-		fresh.current = null;
+		firstLoaded.current.delete(n.id);
 		toast.success('Note deleted');
 		await queryClient.invalidateQueries({ queryKey: ['notes'] });
 		queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
@@ -347,7 +372,10 @@ function NoteEditor() {
 					open={showAccess}
 					onOpenChange={setShowAccess}
 					accessGrants={n.access_grants ?? []}
-					onChange={(grants) => saveNoteAccess(queryClient, token, n.id, grants)}
+					onChange={(grants) => {
+						edited.current = true;
+						return saveNoteAccess(queryClient, token, n.id, grants);
+					}}
 					{...noteAccessProps(user)}
 				/>
 			)}
@@ -401,7 +429,10 @@ function NoteEditor() {
 							<Download /> Download (.txt)
 						</DropdownMenuItem>
 						<DropdownMenuItem
-							onSelect={() => copy(`${window.location.origin}/notes/${n.id}`, 'Copied link to clipboard')}
+							onSelect={() => {
+								edited.current = true;
+								void copy(`${window.location.origin}/notes/${n.id}`, 'Copied link to clipboard');
+							}}
 						>
 							<Link2 /> Copy link
 						</DropdownMenuItem>

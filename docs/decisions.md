@@ -26,8 +26,11 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **Pinned notes get a sidebar group (#963, S6-D3 A),** above the pinned
     chats, and lead the Notes list.
   - **New note starts as "Untitled" with the title selected (#1037, S6-D4
-    B).** A note New note just made is deleted on leaving it, on that visit,
-    when it is still untitled and empty; a note only opened is never deleted.
+    B).** A note New note just made is deleted on leaving it, on that visit
+    (for another page or another note), when it is still untitled and empty
+    and was not pinned, shared or its link copied; the server's copy is read
+    again first, and a note saved since (another tab) is kept. A note only
+    opened is never deleted.
   - **Notes and chat (#1039, S6-D5 A)** is a follow-up issue; "Attach notes"
     in the chat already covers part of it.
   - **The Playground's Completions calls a real text completion (#1108, S6-D6

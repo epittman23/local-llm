@@ -15,7 +15,7 @@ vi.mock('@/lib/apis/notes', () => ({
 	getNoteById: vi.fn(),
 	deleteNoteById: vi.fn(async () => true),
 	toggleNotePinnedStatusById: vi.fn(async () => ({})),
-	updateNoteAccessGrants: vi.fn()
+	updateNoteAccessGrants: vi.fn(async () => ({ access_grants: [] }))
 }));
 const toast = vi.hoisted(() => ({
 	error: vi.fn(() => 'failure-toast'),
@@ -28,7 +28,20 @@ const singleUser = vi.hoisted(() => ({ value: true }));
 vi.mock('@/routes/workspace/workspaceAccess', () => ({ useSingleUser: () => singleUser.value }));
 vi.mock('@/routes/common/FeatureGate', () => ({ FeatureGate: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
-vi.mock('@/components/common/AccessControlModal', () => ({ AccessControlModal: () => null }));
+// Access's dialog is its own tests' business: here a button saves a grant.
+vi.mock('@/components/common/AccessControlModal', () => ({
+	AccessControlModal: ({ open, onChange }: { open: boolean; onChange: (grants: unknown[]) => unknown }) =>
+		open ? (
+			<button type="button" onClick={() => onChange([])}>
+				Save access
+			</button>
+		) : null
+}));
+const clipboard = vi.hoisted(() => ({ ok: true }));
+vi.mock('@/lib/utils', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/lib/utils')>()),
+	copyToClipboard: vi.fn(async () => clipboard.ok)
+}));
 // The editor itself is RichTextEditor's own tests' business: here a textarea reports edits.
 vi.mock('@/components/common/RichTextEditor', () => ({
 	default: ({ onChange }: { onChange: (v: { html: string; json: null; md: string }) => void }) => (
@@ -126,6 +139,7 @@ const stored = (extra: Record<string, unknown> = {}) => ({
 	write_access: true,
 	is_pinned: false,
 	data: { content: { json: null, html: '', md: '' } },
+	updated_at: 100,
 	...extra
 });
 
@@ -181,7 +195,96 @@ describe('the note page', () => {
 		await waitFor(() => expect(router.state.location.state).toBeNull());
 		await act(() => router.navigate('/elsewhere'));
 		await waitFor(() => expect(deleteNoteById).toHaveBeenCalledExactlyOnceWith('t', 'n1'));
+		// Read again first: the copy loaded on the way in may be out of date.
+		expect(getNoteById).toHaveBeenCalledTimes(2);
 		expect(toast.success).not.toHaveBeenCalled();
+	});
+
+	it('keeps a new note another tab wrote in, though this tab saw it empty (S6-D4)', async () => {
+		vi.mocked(getNoteById)
+			.mockResolvedValueOnce(stored())
+			.mockResolvedValueOnce(stored({ title: 'Plan', data: { content: { md: 'Typed elsewhere' } }, updated_at: 200 }));
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		await act(() => router.navigate('/elsewhere'));
+		await waitFor(() => expect(getNoteById).toHaveBeenCalledTimes(2));
+		await screen.findByText('elsewhere');
+		expect(deleteNoteById).not.toHaveBeenCalled();
+	});
+
+	it('keeps a new note saved since it was opened, even if it is empty again (S6-D4)', async () => {
+		vi.mocked(getNoteById)
+			.mockResolvedValueOnce(stored())
+			.mockResolvedValueOnce(stored({ updated_at: 300 }));
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		await act(() => router.navigate('/elsewhere'));
+		await waitFor(() => expect(getNoteById).toHaveBeenCalledTimes(2));
+		expect(deleteNoteById).not.toHaveBeenCalled();
+	});
+
+	it('keeps a new note it could not read again', async () => {
+		vi.mocked(getNoteById).mockResolvedValueOnce(stored()).mockRejectedValueOnce('Database is locked');
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		await act(() => router.navigate('/elsewhere'));
+		await waitFor(() => expect(getNoteById).toHaveBeenCalledTimes(2));
+		expect(deleteNoteById).not.toHaveBeenCalled();
+	});
+
+	it('deletes an untouched new note when another note opens in its place (S6-D4)', async () => {
+		vi.mocked(getNoteById).mockImplementation(async (_t, id) =>
+			id === 'n1' ? stored() : stored({ id: 'n2', title: 'Other', data: { content: { md: 'kept' } } })
+		);
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		await act(() => router.navigate('/notes/n2'));
+		expect(await screen.findByDisplayValue('Other')).toBeTruthy();
+		await waitFor(() => expect(deleteNoteById).toHaveBeenCalledExactlyOnceWith('t', 'n1'));
+		// The note opened in its place was only opened: leaving it deletes nothing more.
+		await act(() => router.navigate('/elsewhere'));
+		await screen.findByText('elsewhere');
+		expect(deleteNoteById).toHaveBeenCalledTimes(1);
+	});
+
+	it('treats a note opened fresh in place of another as new too', async () => {
+		vi.mocked(getNoteById).mockImplementation(async (_t, id) =>
+			id === 'n1' ? stored({ title: 'Plan', data: { content: { md: 'text' } } }) : stored({ id: 'n2' })
+		);
+		const router = openNote();
+		await screen.findByDisplayValue('Plan');
+		await act(() => router.navigate('/notes/n2', { state: { fresh: true } }));
+		await screen.findByDisplayValue('Untitled');
+		await act(() => router.navigate('/elsewhere'));
+		await waitFor(() => expect(deleteNoteById).toHaveBeenCalledExactlyOnceWith('t', 'n2'));
+	});
+
+	it.each([
+		['Pin to sidebar', 'Note pinned'],
+		['Copy link', 'Copied link to clipboard']
+	])('keeps a new note after %s: that is using it (S6-D4)', async (item, said) => {
+		vi.mocked(getNoteById).mockResolvedValue(stored());
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		openMenu();
+		fireEvent.click(await screen.findByRole('menuitem', { name: item }));
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith(said));
+		await act(() => router.navigate('/elsewhere'));
+		await screen.findByText('elsewhere');
+		expect(deleteNoteById).not.toHaveBeenCalled();
+	});
+
+	it('keeps a new note after its access is saved (S6-D4)', async () => {
+		singleUser.value = false;
+		vi.mocked(getNoteById).mockResolvedValue(stored());
+		const router = openNote({ fresh: true });
+		await screen.findByDisplayValue('Untitled');
+		openMenu();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Access' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Save access' }));
+		await act(() => router.navigate('/elsewhere'));
+		await screen.findByText('elsewhere');
+		expect(deleteNoteById).not.toHaveBeenCalled();
 	});
 
 	it('keeps a new note that was typed in', async () => {
