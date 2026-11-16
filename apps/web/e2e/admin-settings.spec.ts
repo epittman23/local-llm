@@ -1484,7 +1484,8 @@ test.describe('settings: Authentication', () => {
 	});
 
 	test('OAuth on reveals the claim fields; role and group mapping reveal theirs', async ({ page }) => {
-		await mockWorkspaceBackend(page);
+		// A provider named by the environment: without one the switch reads off and the claims stay hidden.
+		await mockWorkspaceBackend(page, { config: { oauth: { providers: { oidc: 'SSO' } } } });
 		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
