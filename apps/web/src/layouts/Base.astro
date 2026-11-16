@@ -16,7 +16,7 @@ const { title = 'local-llm' } = Astro.props;
 		<!-- lib/theme.ts keeps this at the page colour of the current theme. -->
 		<meta name="theme-color" content="#121916" />
 		<title>{title}</title>
-		<!-- The mark (decision D1, 2026-11-14): lucide's Sigma until a real one exists. -->
+		<!-- The mark (decision 2026-11-16): the ll of the name and a block cursor. -->
 		<link rel="icon" href="/favicon.ico" sizes="32x32" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -54,15 +54,15 @@ const { title = 'local-llm' } = Astro.props;
 			<!-- components/ui/app-mark.tsx's AppMark at 32 px, drawn before any script; keep the two the same. -->
 			<div class="flex items-center gap-2">
 				<svg class="size-8 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true">
-					<rect width="32" height="32" rx="7" class="fill-surface-1"></rect>
+					<path d="M16 0C31.9 0 32 .1 32 16S31.9 32 16 32 0 31.9 0 16 .1 0 16 0Z" class="fill-surface-1"></path>
 					<path
-						transform="translate(4 4)"
-						d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"
+						d="M9 7V23a2 2 0 0 0 2 2M15 7V23a2 2 0 0 0 2 2"
 						fill="none"
-						stroke-width="2.25"
+						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						class="stroke-brand"></path>
+						class="stroke-foreground-strong"></path>
+					<rect x="20" y="18" width="4" height="8" rx="1" class="fill-brand"></rect>
 				</svg>
 				<p class="text-title font-title">local-llm</p>
 			</div>

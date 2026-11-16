@@ -7,7 +7,7 @@ an empty value, the stored defaults (/user.png, /favicon.png,
 /static/favicon.png: left in the rows as they are) and an unusable one. A real
 picture is still served as before. A webhook without a picture keeps its
 status (the owner approved the 404 for models and users only) and gets the
-mark, lucide's Sigma, in place of Open WebUI's favicon.
+product's mark in place of Open WebUI's favicon.
 
 Run from apps/server:
 

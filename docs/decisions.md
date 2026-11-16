@@ -7,6 +7,30 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-16** (latest): **local-llm has its own mark: the ll of the name
+  and a block cursor**, replacing lucide's Sigma, which decision D1
+  (2026-11-14, #924) had made the mark only until a real one existed. The
+  owner chose it from four rounds of concepts (a roof over the ll, an
+  A-frame, hardware and chat symbols, and circular avatars).
+  - **What it is.** The two l's, each with the tail Atkinson Hyperlegible
+    gives a lowercase l so it cannot be read as I or 1 (TYP-1), in
+    `--foreground-strong`, then a block cursor in `--brand`: a model writing
+    its answer. The tile is a squircle (one cubic per quadrant, within 0.06
+    units of an n=5 superellipse) in place of the 7-unit rounded square.
+  - **Why it is drawn this way.** Strokes are 2 units on whole-unit centres
+    and every gap is 2 units, so at 16 and 32 px each edge lands on a pixel
+    and the favicon has no grey fringe. In the dark theme the letters are
+    15.5:1 and the cursor 9.7:1 on the tile; in light the cursor is 6.1:1
+    on the page (COL-4 asks 3:1).
+  - **Where it changed.** `AppMark` (`MARK_PATHS`, `MARK_CURSOR`), the boot
+    splash in `layouts/Base.astro`, `public/favicon.svg`, `favicon.ico`
+    (16 and 32 px frames, each rendered at its size), `apple-touch-icon.png`
+    (180 px, full bleed on `#121916`, since iOS rounds the corners itself),
+    `icon-512.png` (also the desktop window's, the rpm's, the PWA manifest's
+    and the webhook fallback's image) and `apps/desktop/static/mark.svg`,
+    whose `.mark` no longer rounds its corners because the squircle is its
+    own shape. `app-mark.test.tsx` now checks every copy, the desktop one
+    included, against `AppMark`'s shapes.
 - **2026-11-15** (latest): **The workspace: the owner's decisions for the UX
   review's section 4 (#1116), and editors that guard unsaved work.**
   - **Multi-user chrome is hidden while the install has one account (#1013,
