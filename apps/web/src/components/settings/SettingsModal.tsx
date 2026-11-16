@@ -22,7 +22,7 @@ import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
 import { implementedTabIds, tabLoaders } from './adminTabComponents';
-import { settingSlug } from './controls';
+import { SettingsDialogHost, settingSlug } from './controls';
 import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from './SettingsNav';
 import { searchSettings } from './settingsIndex';
 import { availableTabs, filterTabs, personalSettingsRestricted, resolveTab } from './settingsTabs';
@@ -376,7 +376,9 @@ export function SettingsModal() {
 										</div>
 									}
 								>
-									<Active key={selected} />
+									<SettingsDialogHost>
+										<Active key={selected} />
+									</SettingsDialogHost>
 								</Suspense>
 							</TabErrorBoundary>
 						)}
