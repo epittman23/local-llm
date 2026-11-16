@@ -129,8 +129,9 @@ export function AnalyticsModelModal({
 					<DialogTitle className="truncate pe-8" title={model.name}>
 						{model.name}
 					</DialogTitle>
-					<DialogDescription className="truncate" title={model.id}>
-						{model.id}
+					{/* The id under the name, unless they are the same words. */}
+					<DialogDescription className={model.name === model.id ? 'sr-only' : 'truncate'} title={model.id}>
+						{model.name === model.id ? `Usage of ${model.name}` : model.id}
 					</DialogDescription>
 				</DialogHeader>
 

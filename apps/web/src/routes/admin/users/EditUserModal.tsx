@@ -149,14 +149,14 @@ function EditUserForm({ user, onClose, onSaved }: { user: AdminUser; onClose: ()
 				save();
 			}}
 		>
-			<div className="flex items-center gap-4">
+			<div className="flex items-start gap-4">
 				<ProfileImageEditor
 					imageClassName="size-14"
 					value={form.profile_image_url}
 					onChange={(profile_image_url) => change({ profile_image_url })}
 					user={form}
 				/>
-				<div className="min-w-0">
+				<div className="min-w-0 pt-3">
 					<p className="font-strong truncate" title={user.name}>
 						{user.name}
 					</p>

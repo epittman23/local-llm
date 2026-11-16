@@ -337,13 +337,13 @@ export default function Analytics() {
 						</div>
 					)}
 
-					<div className={cn('grid gap-6', !singleUser && 'xl:grid-cols-2')}>
+					<div className="flex flex-col gap-6">
 						<div className="flex min-w-0 flex-col gap-2">
 							<h3 className="text-foreground-strong font-strong">Model usage</h3>
 							{sortedModels.length === 0 ? (
 								<p className="text-foreground-muted py-6 text-center">No messages in this period.</p>
 							) : (
-								<Table aria-label="Model usage" className="text-dense table-fixed text-left">
+								<Table aria-label="Model usage" className="text-dense table-fixed text-left sm:min-w-xl">
 									<thead>
 										<tr className="border-b">
 											<Head label="Model" by="name" sort={modelSort} onSort={sortModel} />

@@ -85,6 +85,25 @@ describe('AnalyticsModelModal', () => {
 		await screen.findByText('math');
 	});
 
+	it('does not repeat a name that is its id', async () => {
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<MemoryRouter>
+					<AnalyticsModelModal
+						open
+						onOpenChange={vi.fn()}
+						model={{ id: 'qwen/x', name: 'qwen/x' }}
+						startDate={1}
+						endDate={2}
+					/>
+				</MemoryRouter>
+			</QueryClientProvider>
+		);
+		expect(screen.getAllByText('qwen/x')).toHaveLength(1);
+		expect(screen.getByText('Usage of qwen/x').className).toContain('sr-only');
+		await screen.findByText('math');
+	});
+
 	it('says in place when the overview fails to load, and tries again', async () => {
 		vi.mocked(getModelOverview).mockRejectedValueOnce('Database is locked');
 		renderModal();
