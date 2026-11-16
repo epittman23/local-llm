@@ -257,7 +257,8 @@ function ScheduleField({
 					onChange={(e) => set({ custom: e.target.value })}
 				/>
 			)}
-			<FieldMessage id={ids.message} error={error} help={help} />
+			{/* A rule has no spaces to break at: it wraps anywhere rather than run out of the dialog. */}
+			<FieldMessage id={ids.message} error={error} help={help} className="[overflow-wrap:anywhere]" />
 		</div>
 	);
 }
@@ -284,7 +285,7 @@ function PickerTrigger({
 			type="button"
 			variant="outline"
 			aria-expanded={open}
-			className="w-full min-w-0 shrink justify-between font-normal aria-invalid:border-danger"
+			className="w-full min-w-0 shrink justify-between font-normal aria-invalid:border-danger aria-invalid:ring-0"
 			{...rest}
 		>
 			<span className={cn('flex min-w-0 items-center gap-2', !label && 'text-foreground-muted')}>

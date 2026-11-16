@@ -132,8 +132,9 @@ function AutomationRow({
 		// LAY-4, #964: min-w-0 lets the name and schedule shorten, so the menu and switch stay on screen.
 		<li className="group flex min-w-0 items-center gap-1 rounded-lg pe-1 hover:bg-surface-3">
 			<RowButton className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2 hover:bg-transparent" onClick={onOpen}>
-				<span className="flex min-w-0 items-center gap-2">
-					<span className="truncate font-strong">{a.name}</span>
+				{/* On a phone the name has its own line, so the badges do not squeeze it away. */}
+				<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="min-w-0 truncate font-strong max-sm:basis-full">{a.name}</span>
 					{!a.is_active && <Badge variant="secondary">Paused</Badge>}
 					{last?.status && <RunBadge status={last.status} />}
 					{last?.error && <span className="sr-only">: {last.error}</span>}

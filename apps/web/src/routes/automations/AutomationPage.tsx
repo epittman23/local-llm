@@ -206,7 +206,7 @@ function Automation() {
 					</Button>
 					{/* LAY-5: the automation's name is the h1; a long one is shortened, and whole in its tooltip. */}
 					<div data-page-top="" className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-						<div className="min-w-0 flex-1">
+						<div className="min-w-0 flex-1 max-sm:basis-full">
 							<Tip content={a.name}>
 								<h1 className="text-heading font-title truncate tracking-tight">{a.name}</h1>
 							</Tip>
@@ -300,7 +300,7 @@ function Automation() {
 						)}
 					</Detail>
 				</dl>
-				<section aria-labelledby="automation-instructions" className="max-w-[72ch] border-t py-3">
+				<section aria-labelledby="automation-instructions" className="max-w-[48rem] border-t py-3">
 					<h2 id="automation-instructions" className="text-foreground-muted mb-2 font-strong">
 						Instructions
 					</h2>
