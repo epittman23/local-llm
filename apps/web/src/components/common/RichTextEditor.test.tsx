@@ -211,18 +211,19 @@ describe('the formatting toolbar (#1038)', () => {
 	});
 
 	it('writes the selection, or a placeholder, as a formula with the formula selected', async () => {
-		const { editor } = await mount('<p>a+b</p>');
+		const { editor } = await mount('<p>a&lt;b</p>');
 		act(() => {
 			editor.commands.setTextSelection({ from: 1, to: 4 });
 			insertFormula(editor);
 		});
-		expect(editor.getText()).toBe('$a+b$');
-		expect(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)).toBe('a+b');
+		// An inequality stays text: a string would be read as HTML, and `<b` as a tag.
+		expect(editor.getText()).toBe('$a<b$');
+		expect(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)).toBe('a<b');
 		act(() => {
 			editor.commands.setTextSelection(editor.state.doc.content.size - 1);
 		});
 		fireEvent.click(screen.getByRole('button', { name: 'Formula' }));
-		expect(editor.getText()).toBe('$a+b$$x$');
+		expect(editor.getText()).toBe('$a<b$$x$');
 	});
 
 	const linkPopover = async (value: string, submit: string) => {
@@ -231,6 +232,15 @@ describe('the formatting toolbar (#1038)', () => {
 		fireEvent.change(field, { target: { value } });
 		fireEvent.click(screen.getByRole('button', { name: submit }));
 	};
+
+	it('leaves Escape in the Link popover to the popover, not the text', async () => {
+		const { editor } = await mount('<p>docs</p>');
+		fireEvent.click(screen.getByRole('button', { name: 'Link' }));
+		const field = await screen.findByRole('textbox', { name: 'Link address' });
+		fireEvent.keyDown(field, { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Link address' })).toBeNull());
+		expect(document.activeElement).not.toBe(editor.view.dom);
+	});
 
 	it('links the selection to the address given', async () => {
 		const { editor } = await mount('<p>docs</p>');

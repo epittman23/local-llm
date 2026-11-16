@@ -303,7 +303,8 @@ export function insertFormula(editor: Editor) {
 	editor
 		.chain()
 		.focus()
-		.insertContentAt({ from, to }, `$${latex}$`)
+		// A text node, not a string: TipTap reads a string as HTML, and `a<b` would open a tag.
+		.insertContentAt({ from, to }, { type: 'text', text: `$${latex}$` })
 		.setTextSelection({ from: from + 1, to: from + 1 + latex.length })
 		.run();
 }
@@ -348,6 +349,8 @@ function Toolbar({ editor }: { editor: Editor }) {
 		});
 	});
 	const onKeyDown = (e: KeyboardEvent) => {
+		// Keys from the Link popover or the Table menu reach here through React's portals: they are theirs.
+		if (!bar.current?.contains(e.target as Node)) return;
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			editor.commands.focus();

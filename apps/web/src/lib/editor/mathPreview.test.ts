@@ -91,7 +91,7 @@ describe('MathPreview', () => {
 	});
 
 	it('typing a formula typesets it, and code is never math', () => {
-		const editor = editorWith('```\n$x$\n```');
+		const editor = editorWith('```\n$x$\n```\n\nInline `$y$` too.');
 		expect(rendered(editor)).toBe(0);
 		editor.commands.insertContentAt(editor.state.doc.content.size, '<p>Then $y$.</p>');
 		expect(rendered(editor)).toBe(1);

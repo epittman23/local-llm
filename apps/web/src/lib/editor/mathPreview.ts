@@ -55,6 +55,11 @@ export function mathRanges(doc: PMNode): MathRange[] {
 		if (!node.isTextblock) return true;
 		if (node.type.spec.code) return false;
 		const text = node.textBetween(0, node.content.size, undefined, leafText);
+		// Inline code is code: its characters stand for themselves, so it never holds a formula.
+		const code: [number, number][] = [];
+		node.forEach((child, offset) => {
+			if (child.marks.some((m) => m.type.spec.code)) code.push([offset, offset + child.nodeSize]);
+		});
 		const base = pos + 1;
 		let plain = true;
 		node.forEach((child) => {
@@ -71,7 +76,8 @@ export function mathRanges(doc: PMNode): MathRange[] {
 			});
 		else
 			for (const m of findInlineMath(text))
-				ranges.push({ from: base + m.start, to: base + m.end, latex: m.latex, display: m.display });
+				if (!code.some(([a, b]) => m.start < b && m.end > a))
+					ranges.push({ from: base + m.start, to: base + m.end, latex: m.latex, display: m.display });
 		return false;
 	});
 	return ranges;
