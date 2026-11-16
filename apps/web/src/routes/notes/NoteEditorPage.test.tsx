@@ -17,7 +17,12 @@ vi.mock('@/lib/apis/notes', () => ({
 	toggleNotePinnedStatusById: vi.fn(async () => ({})),
 	updateNoteAccessGrants: vi.fn()
 }));
-const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
+const toast = vi.hoisted(() => ({
+	error: vi.fn(() => 'failure-toast'),
+	success: vi.fn(),
+	warning: vi.fn(),
+	dismiss: vi.fn()
+}));
 vi.mock('sonner', () => ({ toast }));
 const singleUser = vi.hoisted(() => ({ value: true }));
 vi.mock('@/routes/workspace/workspaceAccess', () => ({ useSingleUser: () => singleUser.value }));
@@ -81,15 +86,20 @@ describe('useNoteSaver', () => {
 
 	it('keeps a refused save, merged under later edits, and Retry sends it again (FBK-4)', async () => {
 		const content = { json: null, html: '<p>x</p>', md: 'x' };
-		vi.mocked(updateNoteById).mockRejectedValueOnce('Internal Server Error');
+		vi.mocked(updateNoteById).mockRejectedValueOnce('Internal Server Error').mockRejectedValueOnce('Still down');
 		const { result } = renderHook(() => useNoteSaver('n1'), { wrapper });
 		act(() => result.current.schedule('A', content));
 		await act(async () => void vi.advanceTimersByTime(500));
+		expect(result.current.status).toBe('failed');
+		// A second failure replaces the first toast rather than stacking.
+		await act(async () => void (await result.current.retry()));
+		expect(toast.dismiss).toHaveBeenCalledWith('failure-toast');
 		expect(result.current.status).toBe('failed');
 		expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/^Couldn't save the note\./), expect.anything());
 		await act(async () => void (await result.current.retry()));
 		expect(updateNoteById).toHaveBeenLastCalledWith('t', 'n1', { title: 'A', data: { content } }, false);
 		expect(result.current.status).toBe('saved');
+		expect(toast.dismiss).toHaveBeenCalledTimes(2);
 	});
 });
 

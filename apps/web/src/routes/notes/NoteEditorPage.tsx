@@ -86,6 +86,8 @@ export function useNoteSaver(id: string) {
 	const pending = useRef<Pending | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [status, setStatus] = useState<SaveStatus>('idle');
+	// The failure toast, taken down once a save gets through.
+	const failure = useRef<string | number | null>(null);
 
 	const send = useCallback(
 		async (keepalive = false) => {
@@ -103,11 +105,17 @@ export function useNoteSaver(id: string) {
 					keepalive
 				);
 				setStatus(pending.current ? 'saving' : 'saved');
+				if (failure.current !== null) toast.dismiss(failure.current);
+				failure.current = null;
 			} catch (error) {
 				const later = pending.current as Pending | null;
 				pending.current = later ? { title: later.title, content: later.content ?? p.content } : p;
 				setStatus('failed');
-				toastFailure("Couldn't save the note. Your changes are still here: choose Retry next to the title.", error);
+				if (failure.current !== null) toast.dismiss(failure.current);
+				failure.current = toastFailure(
+					"Couldn't save the note. Your changes are still here: choose Retry next to the title.",
+					error
+				);
 			}
 			queryClient.invalidateQueries({ queryKey: ['notes', 'list'] });
 			queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
