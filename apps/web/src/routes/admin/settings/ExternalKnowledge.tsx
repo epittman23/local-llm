@@ -33,6 +33,7 @@ import {
 	updateExternalKnowledgeSource
 } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
 import {
 	blankSourceForm,
@@ -243,11 +244,25 @@ function SourceDialog({
 	const [missing, setMissing] = useState<ReadonlySet<keyof SourceForm>>(new Set());
 	const [testing, setTesting] = useState(false);
 	const [saving, setSaving] = useState(false);
+	// FRM-3: what the dialog opened with; Escape, the scrim and × ask before losing a change to it.
+	const [initial, setInitial] = useState<string | null>(null);
+	const dirty = open && initial !== null && JSON.stringify({ f, accessGrants }) !== initial;
+	const guard = useConfirmLeave(dirty, {
+		message: editing
+			? 'The changes to this knowledge source are not saved. They are lost if you close it.'
+			: 'This knowledge source is not added yet. What you entered is lost if you close it.'
+	});
 
 	useEffect(() => {
-		if (!open) return;
-		setF(editing ? formFromItem(editing.item, editing.connection) : blankSourceForm());
-		setAccessGrants(editing?.item.access_grants ?? []);
+		if (!open) {
+			setInitial(null);
+			return;
+		}
+		const start = editing ? formFromItem(editing.item, editing.connection) : blankSourceForm();
+		const grants = editing?.item.access_grants ?? [];
+		setF(start);
+		setAccessGrants(grants);
+		setInitial(JSON.stringify({ f: start, accessGrants: grants }));
 		setTestResult(null);
 		setTestProblem(null);
 		setMissing(new Set());
@@ -356,8 +371,12 @@ function SourceDialog({
 	);
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog
+			open={open}
+			onOpenChange={(next) => (next ? onOpenChange(true) : guard.confirmLeave(() => onOpenChange(false)))}
+		>
 			<DialogContent className="sm:max-w-lg">
+				{guard.dialog}
 				<DialogHeader>
 					<DialogTitle>{editing ? 'Edit knowledge source' : 'Add knowledge source'}</DialogTitle>
 					<DialogDescription>

@@ -74,6 +74,31 @@ describe('ExternalKnowledge', () => {
 		expect(screen.queryByText('access control')).toBeNull();
 	});
 
+	it('asks before Escape drops what was typed, and Keep editing keeps it (FRM-3)', async () => {
+		await renderList();
+		fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+		await screen.findByRole('heading', { name: 'Add knowledge source' });
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Papers' } });
+		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask).toHaveTextContent('This knowledge source is not added yet.');
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Papers');
+		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(screen.queryByRole('heading', { name: 'Add knowledge source' })).toBeNull());
+	});
+
+	it('closes an untouched edit without asking', async () => {
+		await renderList();
+		fireEvent.click(screen.getByRole('button', { name: 'Configure Research' }));
+		await screen.findByRole('heading', { name: 'Edit knowledge source' });
+		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit knowledge source' })).toBeNull());
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
 	it('opens a blank add dialog from Add source, on the shared fields (#933)', async () => {
 		await renderList();
 		fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
