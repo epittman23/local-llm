@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
 	updateAutomationById: vi.fn()
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+const channelsAccess = vi.hoisted(() => ({ value: 'shown' as 'shown' | 'hidden' | 'unknown' }));
 
 vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/apis/automations', () => api);
@@ -26,6 +27,7 @@ vi.mock('@/lib/stores/authStore', () => ({
 	useAuthStore: (sel: (s: unknown) => unknown) => sel({ token: 't', user: { id: 'me', role: 'user' } })
 }));
 vi.mock('@/routes/common/FeatureGate', () => ({ FeatureGate: ({ children }: { children: unknown }) => children }));
+vi.mock('@/routes/channels/useChannels', () => ({ useChannelsAccess: () => channelsAccess.value }));
 vi.mock('./useDestinations', () => ({ useDestinations: () => ({ folders: [], channels: [], loaded: true }) }));
 
 const automation = (extra = {}) => ({
@@ -88,6 +90,7 @@ const runs = [
 
 beforeEach(() => {
 	vi.resetAllMocks();
+	channelsAccess.value = 'shown';
 	api.getAutomationById.mockResolvedValue(automation());
 	api.getAutomationRuns.mockResolvedValue(runs);
 	api.getAutomationItems.mockResolvedValue({ items: [], total: 3 });
@@ -114,6 +117,17 @@ describe('an automation page', () => {
 		expect(list[2].getByRole('link', { name: 'Open channel' })).toHaveAttribute('href', '/channels/c9');
 		fireEvent.click(list[1].getByRole('button', { name: 'Run again' }));
 		await waitFor(() => expect(api.runAutomationById).toHaveBeenCalledWith('t', 'a1'));
+	});
+
+	it('says a channel run cannot be opened while Channels are hidden, instead of linking to Not found (S6-D1)', async () => {
+		channelsAccess.value = 'hidden';
+		open();
+		const list = (await screen.findAllByRole('listitem')).map((li) => within(li));
+		expect(list[0].getByRole('link', { name: 'Open chat' })).toBeInTheDocument();
+		expect(list[2].queryByRole('link', { name: 'Open channel' })).toBeNull();
+		expect(
+			list[2].getByText('Posted to a channel. Channels are off, or this server has one account.')
+		).toBeInTheDocument();
 	});
 
 	it('shows the last run from the server, not only the scheduler (#915)', async () => {

@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { dayjs } from '@/lib/utils/dates';
+import { useChannelsAccess } from '@/routes/channels/useChannels';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { AutomationDialog } from './AutomationDialog';
 import {
@@ -64,6 +65,8 @@ function RunRow({ run, onRunAgain, running }: { run: AutomationRunModel; onRunAg
 	const when = recordTime(run.created_at);
 	const failed = run.status !== 'success';
 	const channel = run.chat_id?.startsWith('channel:');
+	// S6-D1: with Channels hidden, a link to one would land on Not found; say why there is none instead.
+	const channels = useChannelsAccess();
 	return (
 		<li className="flex min-w-0 flex-col gap-1.5 border-b py-3 last:border-b-0">
 			<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -77,7 +80,12 @@ function RunRow({ run, onRunAgain, running }: { run: AutomationRunModel; onRunAg
 							Run again
 						</Button>
 					)}
-					{run.chat_id && (
+					{run.chat_id && channel && channels === 'hidden' && (
+						<span className="text-foreground-muted text-dense">
+							Posted to a channel. Channels are off, or this server has one account.
+						</span>
+					)}
+					{run.chat_id && (!channel || channels === 'shown') && (
 						<Button asChild variant="ghost" size="sm">
 							<Link to={runTarget(run.chat_id)}>
 								{channel ? 'Open channel' : 'Open chat'}

@@ -22,6 +22,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
+import { useChannelsAccess } from '@/routes/channels/useChannels';
 import { initialModel } from '@/routes/playground/playgroundModel';
 import {
 	AUTOMATION_FIELDS,
@@ -359,6 +360,11 @@ function DestinationField({
 	const [open, setOpen] = useState(false);
 	const folderList = folderOptions(folders);
 	const channelList = channelOptions(channels);
+	// S6-D1: while Channels are hidden (one account), a channel is no new destination; one already chosen still reads.
+	const channelsShown = useChannelsAccess() === 'shown';
+	const pickableChannels = channelsShown
+		? channelList
+		: channelList.filter((x) => f.targetType === 'channel' && x.id === f.channelId);
 	const selectedFolder = folderList.find((x) => x.id === f.folderId);
 	const selectedChannel = channelList.find((x) => x.id === f.channelId);
 	const channel = f.targetType === 'channel';
@@ -395,7 +401,10 @@ function DestinationField({
 			</PopoverTrigger>
 			<PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-64 p-0">
 				<Command>
-					<CommandInput placeholder="Search folders and channels" aria-label="Search folders and channels" />
+					<CommandInput
+						placeholder={channelsShown ? 'Search folders and channels' : 'Search folders'}
+						aria-label={channelsShown ? 'Search folders and channels' : 'Search folders'}
+					/>
 					<CommandList>
 						<CommandEmpty>Nothing matches.</CommandEmpty>
 						<CommandGroup>
@@ -424,9 +433,9 @@ function DestinationField({
 								})}
 							</CommandGroup>
 						)}
-						{channelList.length > 0 && (
+						{pickableChannels.length > 0 && (
 							<CommandGroup heading="Channel">
-								{channelList.map((x) => (
+								{pickableChannels.map((x) => (
 									<CommandItem
 										key={x.id}
 										value={`channel ${x.name} ${x.id}`}

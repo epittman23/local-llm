@@ -13,6 +13,7 @@ const { getModels, createAutomation, updateAutomationById, destinations, setting
 	destinations: { folders: [] as unknown[], channels: [] as unknown[], loaded: true },
 	settings: { models: [] as string[] }
 }));
+const channelsAccess = vi.hoisted(() => ({ value: 'shown' as 'shown' | 'hidden' | 'unknown' }));
 
 vi.mock('@/lib/apis', () => ({ getModels }));
 vi.mock('@/lib/apis/automations', () => ({ createAutomation, updateAutomationById }));
@@ -24,6 +25,7 @@ vi.mock('@/lib/stores/configStore', () => ({
 }));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings }) }));
 vi.mock('./useDestinations', () => ({ useDestinations: () => destinations }));
+vi.mock('@/routes/channels/useChannels', () => ({ useChannelsAccess: () => channelsAccess.value }));
 // cmdk measures its list, and Radix positions popovers, with APIs jsdom lacks.
 vi.stubGlobal(
 	'ResizeObserver',
@@ -68,6 +70,7 @@ const chooseFrequency = (value: string) => {
 
 beforeEach(() => {
 	vi.resetAllMocks();
+	channelsAccess.value = 'shown';
 	getModels.mockResolvedValue([
 		{ id: 'm1', name: 'Model One' },
 		{ id: 'm2', name: 'Model Two' },
@@ -203,6 +206,31 @@ describe('where runs go (S6-D13)', () => {
 		fireEvent.click(trigger);
 		fireEvent.click(await screen.findByRole('option', { name: /Chat, in no folder/ }));
 		expect(trigger).toHaveTextContent('Chat');
+	});
+
+	it('offers no channel while Channels are hidden, and keeps one already chosen (S6-D1)', async () => {
+		channelsAccess.value = 'hidden';
+		open({ automation });
+		const trigger = screen.getByRole('button', { name: 'Post to' });
+		fireEvent.click(trigger);
+		expect(await screen.findByRole('option', { name: 'Work' })).toBeInTheDocument();
+		expect(screen.getByLabelText('Search folders')).toBeInTheDocument();
+		expect(screen.queryByRole('option', { name: 'general' })).toBeNull();
+		expect(screen.queryByText('Channel')).toBeNull();
+	});
+
+	it('still names and ticks a channel target while Channels are hidden (S6-D1)', async () => {
+		channelsAccess.value = 'hidden';
+		open({
+			automation: {
+				...automation,
+				data: { ...automation.data, target: { type: 'channel', channel_id: 'c1' } }
+			} as AutomationResponse
+		});
+		const trigger = screen.getByRole('button', { name: 'Post to' });
+		expect(trigger).toHaveTextContent('#general');
+		fireEvent.click(trigger);
+		expect(await screen.findByRole('option', { name: 'general' })).toBeInTheDocument();
 	});
 
 	it('marks a channel target with no channel', () => {
