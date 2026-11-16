@@ -3,17 +3,19 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { create } from 'zustand';
+import { toastFailure } from '@/components/common/failureToast';
 import { canUseFeature } from '@/lib/access/features';
-import { getChannels, updateChannelMemberActiveStatusById } from '@/lib/apis/channels';
+import { createNewChannel, getChannels, updateChannelMemberActiveStatusById } from '@/lib/apis/channels';
+import { searchUsers } from '@/lib/apis/users';
+import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { isLastActiveTab, startLastActiveTab } from '@/lib/utils/lastActiveTab';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { useUserSettings } from '@/lib/settings/userSettings';
+import { isLastActiveTab, startLastActiveTab } from '@/lib/utils/lastActiveTab';
 import {
+	applyUnreadEvent,
 	type Channel,
 	type ChannelEvent,
-	applyUnreadEvent,
 	markRead,
 	mentionsToText,
 	sortChannels
@@ -47,10 +49,53 @@ export const useOpenChannelStore = create<{
 	setOpenChannelId: (openChannelId) => set({ openChannelId })
 }));
 
-export function useChannelsEnabled() {
+/**
+ * Whether Channels are shown: the feature is on for this user, and the
+ * install has more than one account (S6-D1: Channels are a multi-account
+ * feature, hidden while there is one, as Admin's switch is, S5-D2).
+ * 'unknown' while the account count loads, so a page waits rather than
+ * saying it is not found (STA-2). The count is useSingleUser's query, under
+ * the same key; one that cannot be read counts as one account, as there.
+ */
+export function useChannelsAccess(): 'shown' | 'hidden' | 'unknown' {
+	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
-	return canUseFeature('channels', user, config);
+	const feature = canUseFeature('channels', user, config);
+	const accounts = useQuery({
+		queryKey: ['account-count'],
+		enabled: Boolean(token) && feature,
+		staleTime: Number.POSITIVE_INFINITY,
+		queryFn: async () => ((await searchUsers(token)) as { total?: number } | null)?.total ?? 1
+	});
+	if (!feature) return 'hidden';
+	if (accounts.data === undefined) return accounts.isError ? 'hidden' : 'unknown';
+	return accounts.data > 1 ? 'shown' : 'hidden';
+}
+
+export function useChannelsEnabled() {
+	return useChannelsAccess() === 'shown';
+}
+
+/**
+ * Creating a channel: the new channel is joined on the socket and listed.
+ * Answers its id, or null when it was not created; a failure says so in a
+ * toast (FBK-4).
+ */
+export function useCreateChannel() {
+	const token = useAuthStore((s) => s.token) ?? '';
+	const { socket } = useSocket();
+	const queryClient = useQueryClient();
+	return async (payload: Record<string, unknown>): Promise<string | null> => {
+		const res = await createNewChannel(token, payload as never).catch((e) => {
+			toastFailure("Couldn't create the channel", e);
+			return null;
+		});
+		if (!res) return null;
+		socket?.emit('join-channels', { auth: { token } });
+		await queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
+		return res.id as string;
+	};
 }
 
 export function useChannelList() {

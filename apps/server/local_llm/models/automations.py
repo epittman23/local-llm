@@ -84,6 +84,9 @@ class AutomationTerminalConfig(BaseModel):
 class AutomationTarget(BaseModel):
     type: Literal['chat', 'channel'] = 'chat'
     channel_id: str | None = None
+    # A chat target posts every run into the chat the previous run used (S6-D13),
+    # instead of a new chat each time. Kept in the `data` JSON: no column.
+    same_chat: bool = False
 
 
 class AutomationData(BaseModel):
@@ -434,6 +437,21 @@ class AutomationRunTable:
             )
             row = result.scalars().first()
             return AutomationRunModel.model_validate(row) if row else None
+
+    async def get_latest_chat_id(self, automation_id: str, db: AsyncSession | None = None) -> str | None:
+        """The chat the newest run that made one posted into; a channel run's id is not a chat."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(AutomationRun.chat_id)
+                .filter(
+                    AutomationRun.automation_id == automation_id,
+                    AutomationRun.chat_id.is_not(None),
+                    AutomationRun.chat_id.not_like('channel:%'),
+                )
+                .order_by(AutomationRun.created_at.desc())
+                .limit(1)
+            )
+            return result.scalars().first()
 
     async def get_latest_batch(
         self, automation_ids: list[str], db: AsyncSession | None = None

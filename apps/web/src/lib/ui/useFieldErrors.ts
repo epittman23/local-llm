@@ -10,8 +10,18 @@ import { useRef, useState } from 'react';
  * with `FieldMessage`/`fieldProps`, and call `submit()` before saving: it
  * shows every error, focuses the first wrong field (once it is on the page,
  * for one a click away), and says whether the form may be sent.
+ *
+ * In a dialog, pass `{ inDialog: true }`: a field's error then appears just
+ * after it is left, once focus has reached the next control. Shown during the
+ * move, it changed the page while nothing had focus, and the dialog's focus
+ * trap (Radix FocusScope) took that for the focused control being removed and
+ * sent focus to the dialog itself, so Tab skipped the next control.
  */
-export function useFieldErrors<F extends string>(problems: Partial<Record<F, string>>, order: readonly F[]) {
+export function useFieldErrors<F extends string>(
+	problems: Partial<Record<F, string>>,
+	order: readonly F[],
+	{ inDialog = false }: { inDialog?: boolean } = {}
+) {
 	const [shown, setShown] = useState<ReadonlySet<F>>(() => new Set());
 	const elements = useRef(new Map<F, HTMLElement | null>());
 
@@ -32,7 +42,11 @@ export function useFieldErrors<F extends string>(problems: Partial<Record<F, str
 			ref: (element: HTMLElement | null) => {
 				elements.current.set(name, element);
 			},
-			onBlur: () => setShown((s) => (s.has(name) ? s : new Set(s).add(name)))
+			onBlur: () => {
+				const show = () => setShown((s) => (s.has(name) ? s : new Set(s).add(name)));
+				if (inDialog) setTimeout(show);
+				else show();
+			}
 		}),
 		submit: (): boolean => {
 			setShown(new Set(order));

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
+import { canUseFeature } from '@/lib/access/features';
 import { getChannels } from '@/lib/apis/channels';
 import { getFolders } from '@/lib/apis/folders';
-import { canUseFeature } from '@/lib/access/features';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import type { Channel, Folder } from './automationModel';

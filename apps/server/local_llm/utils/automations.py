@@ -768,6 +768,13 @@ async def _execute_channel_automation(
     )
 
 
+async def _same_chat(automation: AutomationModel):
+    """The owner's chat the last run posted into, unless it is gone or archived."""
+    chat_id = await AutomationRuns.get_latest_chat_id(automation.id)
+    chat = await Chats.get_chat_by_id_and_user_id(chat_id, automation.user_id) if chat_id else None
+    return chat if chat and not chat.archived else None
+
+
 async def execute_automation(app, automation: AutomationModel) -> None:
     """Execute an automation through the full chat completion pipeline.
 
@@ -830,46 +837,86 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         user_msg_id = str(uuid4())
         assistant_msg_id = str(uuid4())
 
-        chat_id = str(uuid4())
-        chat = await Chats.insert_new_chat(
-            chat_id,
-            automation.user_id,
-            ChatForm(
-                folder_id=folder_id,
-                chat={
-                    'title': automation.name,
-                    'models': [model_id],
-                    'history': {
-                        'currentId': assistant_msg_id,
-                        'messages': {
-                            user_msg_id: {
-                                'id': user_msg_id,
-                                'parentId': None,
-                                'role': 'user',
-                                'content': prompt,
-                                'childrenIds': [assistant_msg_id],
-                                'timestamp': int(time.time()),
-                                'models': [model_id],
-                            },
-                            assistant_msg_id: {
-                                'id': assistant_msg_id,
-                                'parentId': user_msg_id,
-                                'role': 'assistant',
-                                'content': '',
-                                'done': False,
-                                'model': model_id,
-                                'childrenIds': [],
-                                'timestamp': int(time.time()),
+        # "Same chat every time" (S6-D13): this run goes into the chat the last
+        # one used, after its newest message. The model is sent this run's
+        # prompt only, as a new chat would be, so the cost of a run does not
+        # grow with the chat. A chat since deleted or archived starts a new one.
+        parent_id = None
+        chat = await _same_chat(automation) if target.get('same_chat') else None
+        if chat:
+            parent_id = Chats.get_current_message_id(chat.chat)
+            now = int(time.time())
+            for message_id, message in (
+                (
+                    user_msg_id,
+                    {
+                        'id': user_msg_id,
+                        'parentId': parent_id,
+                        'role': 'user',
+                        'content': prompt,
+                        'childrenIds': [assistant_msg_id],
+                        'timestamp': now,
+                        'models': [model_id],
+                    },
+                ),
+                (
+                    assistant_msg_id,
+                    {
+                        'id': assistant_msg_id,
+                        'parentId': user_msg_id,
+                        'role': 'assistant',
+                        'content': '',
+                        'done': False,
+                        'model': model_id,
+                        'childrenIds': [],
+                        'timestamp': now,
+                    },
+                ),
+            ):
+                chat = await Chats.upsert_message_to_chat_by_id_and_message_id(chat.id, message_id, message)
+                if not chat:
+                    break
+        if not chat:
+            parent_id = None
+            chat = await Chats.insert_new_chat(
+                str(uuid4()),
+                automation.user_id,
+                ChatForm(
+                    folder_id=folder_id,
+                    chat={
+                        'title': automation.name,
+                        'models': [model_id],
+                        'history': {
+                            'currentId': assistant_msg_id,
+                            'messages': {
+                                user_msg_id: {
+                                    'id': user_msg_id,
+                                    'parentId': None,
+                                    'role': 'user',
+                                    'content': prompt,
+                                    'childrenIds': [assistant_msg_id],
+                                    'timestamp': int(time.time()),
+                                    'models': [model_id],
+                                },
+                                assistant_msg_id: {
+                                    'id': assistant_msg_id,
+                                    'parentId': user_msg_id,
+                                    'role': 'assistant',
+                                    'content': '',
+                                    'done': False,
+                                    'model': model_id,
+                                    'childrenIds': [],
+                                    'timestamp': int(time.time()),
+                                },
                             },
                         },
+                        'messages': [
+                            {'role': 'user', 'content': prompt},
+                        ],
+                        'meta': {'automation_id': automation.id},
                     },
-                    'messages': [
-                        {'role': 'user', 'content': prompt},
-                    ],
-                    'meta': {'automation_id': automation.id},
-                },
-            ),
-        )
+                ),
+            )
 
         if not chat:
             error = 'Failed to create chat'
@@ -908,10 +955,11 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             'stream': True,
             'chat_id': chat.id,
             'id': assistant_msg_id,
-            'parent_id': None,  # Root message (chat already created above)
+            # The root of a new chat, or the reused chat's newest message
+            'parent_id': parent_id,
             'user_message': {
                 'id': user_msg_id,
-                'parentId': None,
+                'parentId': parent_id,
                 'role': 'user',
                 'content': prompt,
             },

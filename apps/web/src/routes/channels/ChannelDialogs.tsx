@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Copy, Plus, Search, Trash2, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { MemberSelector } from '@/components/common/MemberSelector';
 import { PagePagination } from '@/components/common/PagePagination';
@@ -21,9 +22,11 @@ import {
 	DialogHeader,
 	DialogTitle
 } from '@/components/ui/dialog';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	addMembersById,
@@ -37,23 +40,24 @@ import {
 } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { resizeToDataUrl } from '@/lib/utils/image';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { ChannelMessageView } from './ChannelMessageView';
 import {
+	CHANNEL_NAME_MAX,
 	type Channel,
 	type ChannelFormValue,
 	channelPayload,
-	isPublicChannel,
-	normalizeChannelName
+	channelProblems,
+	isPublicChannel
 } from './channelModel';
 import { usePinnedMessages } from './usePinnedMessages';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
-const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm';
 
 /**
  * Ports channel/PinnedMessagesModal.svelte: the channel's pinned messages,
@@ -69,7 +73,7 @@ export function PinnedMessagesDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Pinned Messages</DialogTitle>
 				</DialogHeader>
@@ -163,7 +167,7 @@ export function ChannelInfoDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-1.5">
 						{dm ? 'Direct Message' : `${isPublicChannel(channel) ? '#' : ''}${channel.name}`}
@@ -292,7 +296,7 @@ function AddMembersDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Add Members</DialogTitle>
 					<DialogDescription className="sr-only">Choose users and groups to add to the channel</DialogDescription>
@@ -412,7 +416,7 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-3">
 						Webhooks
@@ -530,15 +534,15 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 }
 
 const TYPE_HELP: Record<ChannelFormValue['type'], string> = {
-	'': 'Discussion channel where access is based on groups and permissions',
-	group: 'Collaboration channel where people join as members',
-	dm: 'Private conversation between selected users'
+	'': 'Whoever you give access, by group or by person, can read and write in it.',
+	group: 'People join it as members. A public one anyone can find and join.',
+	dm: 'A private conversation with the people you choose.'
 };
-const TYPE_LABEL: Record<ChannelFormValue['type'], string> = {
-	'': 'Channel',
-	group: 'Group Channel',
-	dm: 'Direct Message'
-};
+const TYPE_OPTIONS: SegmentedOption<ChannelFormValue['type']>[] = [
+	{ value: '', label: 'Channel' },
+	{ value: 'group', label: 'Group' },
+	{ value: 'dm', label: 'Direct message' }
+];
 
 /**
  * Ports layout/Sidebar/ChannelModal.svelte: create a channel (an admin may
@@ -547,7 +551,8 @@ const TYPE_LABEL: Record<ChannelFormValue['type'], string> = {
  * the payload the API takes and returns whether it saved. A group channel can
  * be made Public only with `sharing.public_channels` (admins always), and
  * turning a private one public asks first, since its whole history becomes
- * readable to everyone who may use channels (#331).
+ * readable to everyone who may use channels (#331). The name is kept as typed
+ * (S6-D2), and a missing name or member is said under its field (#1109).
  */
 export function ChannelFormDialog({
 	open,
@@ -560,6 +565,30 @@ export function ChannelFormDialog({
 	onSubmit: (payload: Record<string, unknown>) => Promise<boolean>;
 	onDeleted?: () => void;
 }) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			{/* OVL-1: a short form is 32 rem; its fields shorten rather than widen it (#967). */}
+			<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+				{/* Remounted per open, so the form starts from the channel it was opened on. */}
+				{open && (
+					<ChannelForm channel={channel} onOpenChange={onOpenChange} onSubmit={onSubmit} onDeleted={onDeleted} />
+				)}
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+function ChannelForm({
+	onOpenChange,
+	channel,
+	onSubmit,
+	onDeleted
+}: {
+	onOpenChange: (open: boolean) => void;
+	channel?: Channel | null;
+	onSubmit: (payload: Record<string, unknown>) => Promise<boolean>;
+	onDeleted?: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const sharePublic = useAuthStore((s) => Boolean(s.user?.permissions?.sharing?.public_channels));
@@ -567,38 +596,33 @@ export function ChannelFormDialog({
 	const navigate = useNavigate();
 	const location = useLocation();
 	const edit = Boolean(channel);
-	const types: ChannelFormValue['type'][] = isAdmin ? ['', 'group', 'dm'] : ['group', 'dm'];
-	const [value, setValue] = useState<ChannelFormValue>({
-		type: types[0],
-		name: '',
-		isPrivate: true,
-		accessGrants: [],
-		userIds: []
-	});
-	const [saving, setSaving] = useState(false);
-	const [confirmDelete, setConfirmDelete] = useState(false);
-	const [confirmPublic, setConfirmPublic] = useState(false);
-	const [showWebhooks, setShowWebhooks] = useState(false);
-
-	useEffect(() => {
-		if (!open) return;
-		const type = ((channel?.type ?? types[0]) || '') as ChannelFormValue['type'];
-		setValue({
+	const types = TYPE_OPTIONS.filter((t) => isAdmin || t.value !== '');
+	const [value, setValue] = useState<ChannelFormValue>(() => {
+		const type = ((channel?.type ?? types[0].value) || '') as ChannelFormValue['type'];
+		return {
 			type,
 			name: channel?.name ?? '',
 			isPrivate: type === 'group' ? (typeof channel?.is_private === 'boolean' ? channel.is_private : true) : true,
 			accessGrants: channel?.access_grants ?? [],
 			userIds: channel?.user_ids ?? []
-		});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open, channel]);
+		};
+	});
+	const [saving, setSaving] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [confirmPublic, setConfirmPublic] = useState(false);
+	const [showWebhooks, setShowWebhooks] = useState(false);
+	const ids = { name: useId(), nameMsg: useId(), visibility: useId(), visibilityMsg: useId(), membersMsg: useId() };
+	const {
+		errors,
+		field,
+		submit: checkFields
+	} = useFieldErrors(channelProblems(value), ['name', 'members'] as const, {
+		inDialog: true
+	});
 
 	const save = async () => {
 		const result = channelPayload(value);
-		if ('error' in result) {
-			toast.error(result.error);
-			return;
-		}
+		if (!('payload' in result)) return;
 		setSaving(true);
 		const ok = await onSubmit(result.payload);
 		setSaving(false);
@@ -607,11 +631,7 @@ export function ChannelFormDialog({
 
 	const submit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		const result = channelPayload(value);
-		if ('error' in result) {
-			toast.error(result.error);
-			return;
-		}
+		if (!checkFields()) return;
 		if (edit && value.type === 'group' && !value.isPrivate && channel?.is_private !== false) {
 			setConfirmPublic(true);
 			return;
@@ -622,141 +642,139 @@ export function ChannelFormDialog({
 	const remove = async () => {
 		if (!channel) return;
 		const res = await deleteChannelById(token, channel.id).catch((e) => {
-			toast.error(`${e}`);
+			toastFailure("Couldn't delete the channel", e);
 			return null;
 		});
 		if (res) {
-			toast.success('Channel deleted successfully');
+			toast.success(`Deleted ${channel.name}`);
 			onDeleted?.();
 			if (location.pathname === `/channels/${channel.id}`) navigate('/');
 		}
 		onOpenChange(false);
 	};
 
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
-				<DialogHeader>
-					<DialogTitle>{edit ? 'Edit Channel' : 'Create Channel'}</DialogTitle>
-					<DialogDescription>{TYPE_HELP[value.type]}</DialogDescription>
-				</DialogHeader>
-				<form onSubmit={submit} className="flex flex-col gap-4">
-					{!edit && (
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="channel-type">Channel Type</Label>
-							<select
-								id="channel-type"
-								className={nativeSelect}
-								value={value.type}
-								onChange={(e) => setValue((v) => ({ ...v, type: e.target.value as ChannelFormValue['type'] }))}
-							>
-								{types.map((t) => (
-									<option key={t || 'standard'} value={t}>
-										{TYPE_LABEL[t]}
-									</option>
-								))}
-							</select>
-						</div>
-					)}
-					<div className="flex flex-col gap-1.5">
-						<Label htmlFor="channel-name">
-							Channel Name {value.type === 'dm' && <span className="text-muted-foreground text-xs">Optional</span>}
-						</Label>
-						<Input
-							id="channel-name"
-							autoComplete="off"
-							placeholder="new-channel"
-							maxLength={128}
-							required={value.type !== 'dm'}
-							value={value.name}
-							onChange={(e) => setValue((v) => ({ ...v, name: normalizeChannelName(e.target.value) }))}
-						/>
-					</div>
+	const visibilityHelp = !canMakePublic
+		? value.isPrivate
+			? 'Making a channel public needs the Public channels permission.'
+			: 'You may not keep this channel public: saving makes it private.'
+		: value.isPrivate
+			? 'Only the people you invite can open it.'
+			: 'Anyone who may use channels can find and join it.';
 
-					{value.type === '' && (
-						<AccessControl
-							accessGrants={value.accessGrants as AccessGrant[]}
-							onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))}
-							accessRoles={['read', 'write']}
+	return (
+		<>
+			<DialogHeader>
+				<DialogTitle>{edit ? 'Edit channel' : 'New channel'}</DialogTitle>
+				<DialogDescription>{TYPE_HELP[value.type]}</DialogDescription>
+			</DialogHeader>
+			<form onSubmit={submit} noValidate className="flex min-w-0 flex-col gap-4">
+				{!edit && types.length > 1 && (
+					<SegmentedControl
+						aria-label="Kind of channel"
+						value={value.type}
+						options={types}
+						onValueChange={(type) => setValue((v) => ({ ...v, type }))}
+					/>
+				)}
+				<div className="flex min-w-0 flex-col gap-1.5">
+					<Label htmlFor={ids.name}>
+						Name {value.type === 'dm' && <span className="text-foreground-muted font-normal">(optional)</span>}
+					</Label>
+					<Input
+						id={ids.name}
+						autoComplete="off"
+						placeholder="e.g. Reading group"
+						maxLength={CHANNEL_NAME_MAX}
+						value={value.name}
+						{...field('name')}
+						{...fieldProps(ids.nameMsg, { error: errors.name })}
+						onChange={(e) => setValue((v) => ({ ...v, name: e.target.value }))}
+					/>
+					<FieldMessage id={ids.nameMsg} error={errors.name} />
+				</div>
+
+				{value.type === '' && (
+					<AccessControl
+						accessGrants={value.accessGrants as AccessGrant[]}
+						onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))}
+						accessRoles={['read', 'write']}
+					/>
+				)}
+				{value.type === 'group' && (
+					<div className="flex min-w-0 flex-col gap-1.5">
+						<Label id={ids.visibility}>Who can join</Label>
+						<SegmentedControl
+							aria-labelledby={ids.visibility}
+							aria-describedby={ids.visibilityMsg}
+							value={value.isPrivate ? 'private' : 'public'}
+							options={[
+								{ value: 'private', label: 'Invited people' },
+								{ value: 'public', label: 'Anyone', disabled: !canMakePublic }
+							]}
+							onValueChange={(v) => setValue((prev) => ({ ...prev, isPrivate: v === 'private' }))}
 						/>
-					)}
-					{value.type === 'group' && (
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="channel-visibility">Visibility</Label>
-							<select
-								id="channel-visibility"
-								className={nativeSelect}
-								value={value.isPrivate ? 'private' : 'public'}
-								onChange={(e) => setValue((v) => ({ ...v, isPrivate: e.target.value === 'private' }))}
-							>
-								<option value="private">Private</option>
-								<option value="public" disabled={!canMakePublic}>
-									Public
-								</option>
-							</select>
-							<p className="text-muted-foreground text-xs">
-								{value.isPrivate ? 'Only invited users can access' : 'Visible to all users'}
-							</p>
-							{!canMakePublic && (
-								<p className="text-muted-foreground text-xs">
-									{value.isPrivate
-										? 'Making a channel public needs a permission from an admin.'
-										: 'You may not keep this channel public: saving makes it private.'}
-								</p>
-							)}
-						</div>
-					)}
-					{value.type === 'dm' && (
+						<FieldMessage id={ids.visibilityMsg} help={visibilityHelp} />
+					</div>
+				)}
+				{value.type === 'dm' && (
+					<div className="flex min-w-0 flex-col gap-1.5">
 						<MemberSelector
 							accessGrants={[]}
 							userIds={value.userIds}
 							groupIds={[]}
-							onUserIdsChange={(ids) => setValue((v) => ({ ...v, userIds: ids }))}
+							onUserIdsChange={(userIds) => setValue((v) => ({ ...v, userIds }))}
 							onGroupIdsChange={() => {}}
 							includeGroups={false}
 						/>
-					)}
+						<FieldMessage id={ids.membersMsg} error={errors.members} />
+					</div>
+				)}
 
-					{edit && (
-						<div className="flex items-center justify-between text-sm">
-							<span>Webhooks</span>
-							<Button type="button" size="sm" variant="outline" onClick={() => setShowWebhooks(true)}>
-								Manage
-							</Button>
-						</div>
-					)}
-
-					<DialogFooter className="gap-2">
-						{edit && (
-							<Button type="button" variant="ghost" onClick={() => setConfirmDelete(true)}>
-								Delete
-							</Button>
-						)}
-						<Button type="submit" disabled={saving}>
-							{edit ? 'Update' : 'Create'} {saving && <Spinner className="size-3.5" />}
+				{edit && (
+					<div className="flex items-center justify-between gap-2">
+						<span>Webhooks</span>
+						<Button type="button" size="sm" variant="outline" onClick={() => setShowWebhooks(true)}>
+							Manage webhooks
 						</Button>
-					</DialogFooter>
-				</form>
-				<ConfirmDialog
-					open={confirmPublic}
-					onOpenChange={setConfirmPublic}
-					title="Make channel public?"
-					confirmLabel="Make public"
-					onConfirm={save}
-				>
-					Everyone who may use channels will be able to find this channel and read its whole history, and join it.
-				</ConfirmDialog>
-				<ConfirmDialog
-					open={confirmDelete}
-					onOpenChange={setConfirmDelete}
-					title="Delete channel?"
-					confirmLabel="Delete"
-					onConfirm={remove}
-				>
-					Are you sure you want to delete this channel?
-				</ConfirmDialog>
-				{channel && <WebhooksDialog open={showWebhooks} onOpenChange={setShowWebhooks} channel={channel} />}
-			</DialogContent>
-		</Dialog>
+					</div>
+				)}
+
+				<DialogFooter className="gap-2">
+					{edit && (
+						<Button type="button" variant="ghost" className="sm:me-auto" onClick={() => setConfirmDelete(true)}>
+							<Trash2 data-icon="inline-start" />
+							Delete channel
+						</Button>
+					)}
+					<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+						Cancel
+					</Button>
+					<Button type="submit" disabled={saving} aria-busy={saving || undefined}>
+						{saving && <Spinner className="size-3.5" />}
+						{edit ? 'Save changes' : 'Create channel'}
+					</Button>
+				</DialogFooter>
+			</form>
+			<ConfirmDialog
+				open={confirmPublic}
+				onOpenChange={setConfirmPublic}
+				title="Make channel public?"
+				confirmLabel="Make public"
+				onConfirm={save}
+			>
+				Everyone who may use channels will be able to find this channel and read its whole history, and join it.
+			</ConfirmDialog>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete channel?"
+				confirmLabel="Delete channel"
+				destructive
+				onConfirm={remove}
+			>
+				<span className="font-medium">{channel?.name}</span> and all its messages are deleted for everyone in it.
+			</ConfirmDialog>
+			{channel && <WebhooksDialog open={showWebhooks} onOpenChange={setShowWebhooks} channel={channel} />}
+		</>
 	);
 }

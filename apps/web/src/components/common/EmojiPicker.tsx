@@ -2,7 +2,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { searchEmojis, useEmojiIndex } from '@/lib/emoji/emoji';
 
 /**
@@ -11,17 +11,25 @@ import { searchEmojis, useEmojiIndex } from '@/lib/emoji/emoji';
  * Used" row (it writes to user settings on every pick) and the virtual list;
  * the grid renders only the matches for the current search, capped, which
  * keeps the DOM small without one.
+ *
+ * It opens from its child, a button, or, given `open`, from its owner: then
+ * the child is only where it is drawn (a menu item opened it, A11Y-4). It
+ * keeps 8 px clear of the window's edges (OVL-2, #1078).
  */
 export function EmojiPicker({
 	children,
 	onSubmit,
-	onOpenChange
+	onOpenChange,
+	open: openProp
 }: {
 	children: ReactNode;
 	onSubmit: (name: string) => void;
 	onOpenChange?: (open: boolean) => void;
+	open?: boolean;
 }) {
-	const [open, setOpen] = useState(false);
+	const [openState, setOpen] = useState(false);
+	const controlled = openProp !== undefined;
+	const open = controlled ? openProp : openState;
 	const [search, setSearch] = useState('');
 	const index = useEmojiIndex();
 	const matches = useMemo(
@@ -37,8 +45,12 @@ export function EmojiPicker({
 
 	return (
 		<Popover open={open} onOpenChange={change}>
-			<PopoverTrigger asChild>{children}</PopoverTrigger>
-			<PopoverContent align="start" side="top" className="w-72 p-2">
+			{controlled ? (
+				<PopoverAnchor asChild>{children}</PopoverAnchor>
+			) : (
+				<PopoverTrigger asChild>{children}</PopoverTrigger>
+			)}
+			<PopoverContent align="end" side="top" collisionPadding={8} className="w-72 p-2">
 				<Input
 					autoFocus
 					value={search}

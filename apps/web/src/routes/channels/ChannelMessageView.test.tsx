@@ -76,8 +76,7 @@ describe('a message toolbar', () => {
 		const message = plain();
 		show(message, { actions: { onDelete } });
 		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-		const confirm = (await screen.findAllByRole('button', { name: 'Delete' })).at(-1) as HTMLElement;
-		fireEvent.click(confirm);
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete message' }));
 		await waitFor(() => expect(onDelete).toHaveBeenCalledWith(message));
 	});
 
@@ -147,5 +146,54 @@ describe('message body and reactions', () => {
 		expect(screen.getByRole('button', { name: 'eyes 1' })).toHaveAttribute('aria-pressed', 'false');
 		fireEvent.click(mine);
 		expect(onReaction).toHaveBeenCalledWith(message, 'tada');
+	});
+});
+
+describe('a message on touch (A11Y-4, #914)', () => {
+	const message = reply('hello', undefined);
+	it('offers its actions in a Message actions menu', async () => {
+		const onReply = vi.fn();
+		const onThread = vi.fn();
+		const onPin = vi.fn();
+		const onDelete = vi.fn();
+		show(message, { actions: { onReply, onThread, onPin, onDelete, onEdit: vi.fn(), onReaction: vi.fn() } });
+		const open = () =>
+			fireEvent.pointerDown(screen.getByRole('button', { name: 'Message actions' }), { button: 0, ctrlKey: false });
+		open();
+		for (const name of ['Add reaction', 'Reply', 'Reply in thread', 'Pin', 'Edit', 'Delete'])
+			expect(await screen.findByRole('menuitem', { name })).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Reply' }));
+		expect(onReply).toHaveBeenCalledWith(message);
+		open();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Reply in thread' }));
+		expect(onThread).toHaveBeenCalledWith('r1');
+		open();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Pin' }));
+		expect(onPin).toHaveBeenCalledWith(message);
+		open();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+		expect(screen.getByLabelText('Edit message')).toHaveValue('hello');
+	});
+
+	it('opens the emoji picker from the menu, and deletes after confirming', async () => {
+		const onDelete = vi.fn();
+		show(message, { actions: { onDelete, onReaction: vi.fn() } });
+		const trigger = screen.getByRole('button', { name: 'Message actions' });
+		fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Add reaction' }));
+		expect(await screen.findByLabelText('Search emojis')).toBeInTheDocument();
+		fireEvent.keyDown(screen.getByLabelText('Search emojis'), { key: 'Escape' });
+		fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete message' }));
+		await waitFor(() => expect(onDelete).toHaveBeenCalledWith(message));
+	});
+
+	it('keeps the pointer toolbar in the page, transparent until hover or focus', () => {
+		show(message, { actions: { onReply: vi.fn() } });
+		const toolbar = screen.getByRole('button', { name: 'Reply' }).closest('div.absolute') as HTMLElement;
+		expect(toolbar.className).toContain('opacity-0');
+		expect(toolbar.className).toContain('group-focus-within:opacity-100');
+		expect(toolbar.className).not.toMatch(/(^|\s)hidden(\s|$)/);
 	});
 });

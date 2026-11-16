@@ -14,6 +14,13 @@ import { CHANNELS_KEY, useChannelUnreadEvents } from './useChannels';
 // count it; a model's reply is not announced while it is still empty.
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
+// Channels show with more than one account (S6-D1): each client starts knowing there are two.
+vi.mock('@/lib/apis/users', () => ({ searchUsers: async () => ({ users: [], total: 2 }) }));
+const twoAccounts = () => {
+	const client = new QueryClient();
+	client.setQueryData(['account-count'], 2);
+	return client;
+};
 vi.mock('sonner', () => ({ toast }));
 const handlers = vi.hoisted(() => new Map<string, (event: unknown) => void>());
 vi.mock('@/lib/socket/SocketProvider', () => ({
@@ -38,7 +45,7 @@ const withClient =
 			<MemoryRouter>{children}</MemoryRouter>
 		</QueryClientProvider>
 	);
-const wrapper = ({ children }: { children: ReactNode }) => withClient(new QueryClient())({ children });
+const wrapper = ({ children }: { children: ReactNode }) => withClient(twoAccounts())({ children });
 
 const message = {
 	channel_id: 'c1',
@@ -81,7 +88,7 @@ describe('useChannelUnreadEvents (#254, #255)', () => {
 
 	it("announces a person's thread reply but does not count it (#255)", () => {
 		vi.mocked(isLastActiveTab).mockReturnValue(true);
-		const client = new QueryClient();
+		const client = twoAccounts();
 		client.setQueryData(CHANNELS_KEY, [{ id: 'c1', name: 'general', type: 'group', unread_count: 0 }]);
 		renderHook(() => useChannelUnreadEvents(), { wrapper: withClient(client) });
 		handlers.get('events:channel')?.({

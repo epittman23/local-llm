@@ -3,19 +3,27 @@ import {
 	ChevronRight,
 	FileText,
 	MessageSquare,
+	MoreHorizontal,
 	Pencil,
 	Pin,
 	PinOff,
 	SmilePlus,
 	Trash2
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
 import { Textarea } from '@/components/ui/textarea';
 import { getMessageData } from '@/lib/apis/channels';
@@ -137,16 +145,19 @@ export function ChannelMessageView({
 			)}
 		>
 			{editing === null && !disabled && !pending && (
+				// A11Y-4, NAV-4: on a pointer the toolbar is transparent, not removed, until the
+				// message is hovered or holds focus, so focus can return to it; on touch the
+				// message's ⋯ menu holds the same actions (#914).
 				<div
 					className={cn(
-						'absolute -top-7 right-1 z-20 hidden group-focus-within:flex group-hover:flex',
-						pickerOpen && 'flex'
+						'pointer-events-none absolute -top-7 right-1 z-20 flex opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 pointer-coarse:hidden',
+						pickerOpen && 'pointer-events-auto opacity-100'
 					)}
 				>
 					<div className="bg-popover flex gap-0.5 rounded-lg border p-0.5 shadow-md">
 						{actions.onReaction && (
 							<EmojiPicker onSubmit={(name) => actions.onReaction?.(message, name)} onOpenChange={setPickerOpen}>
-								<Button type="button" variant="ghost" size="icon-sm" aria-label="Add Reaction">
+								<Button type="button" variant="ghost" size="icon-sm" aria-label="Add reaction">
 									<SmilePlus className="size-4" />
 								</Button>
 							</EmojiPicker>
@@ -178,12 +189,12 @@ export function ChannelMessageView({
 							</Tip>
 						)}
 						{!thread && actions.onThread && (
-							<Tip content="Reply in Thread">
+							<Tip content="Reply in thread">
 								<Button
 									type="button"
 									variant="ghost"
 									size="icon-sm"
-									aria-label="Reply in Thread"
+									aria-label="Reply in thread"
 									onClick={() => actions.onThread?.(message.id)}
 								>
 									<MessageSquare className="size-4" />
@@ -245,7 +256,7 @@ export function ChannelMessageView({
 					) : (
 						message.created_at > 0 && (
 							<Tip content={dayjs(message.created_at / 1_000_000).format('LLLL')}>
-								<span className="text-muted-foreground mt-1.5 hidden text-caption group-hover:inline">
+								<span className="text-muted-foreground mt-1.5 hidden text-caption group-hover:inline pointer-coarse:inline">
 									{dayjs(message.created_at / 1_000_000).format('HH:mm')}
 								</span>
 							</Tip>
@@ -406,17 +417,116 @@ export function ChannelMessageView({
 						</>
 					)}
 				</div>
+				{editing === null && !disabled && !pending && (
+					<TouchActions
+						message={message}
+						thread={thread}
+						mine={mine}
+						actions={actions}
+						onEdit={() => setEditing(message.content)}
+						onDelete={() => setConfirmDelete(true)}
+					/>
+				)}
 			</div>
 
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete Message"
-				confirmLabel="Delete"
+				title="Delete message?"
+				confirmLabel="Delete message"
+				destructive
 				onConfirm={() => actions.onDelete?.(message)}
 			>
-				Are you sure you want to delete this message?
+				It is deleted for everyone in the channel.
 			</ConfirmDialog>
+		</div>
+	);
+}
+
+/**
+ * A11Y-4 (#914): on touch, where nothing hovers, a message's actions are in
+ * its own "Message actions" menu, always shown, 44 px square. Add reaction
+ * opens the emoji picker from the same button.
+ */
+function TouchActions({
+	message,
+	thread,
+	mine,
+	actions,
+	onEdit,
+	onDelete
+}: {
+	message: ChannelMessage;
+	thread: boolean;
+	mine: boolean;
+	actions: MessageActions;
+	onEdit: () => void;
+	onDelete: () => void;
+}) {
+	const [picking, setPicking] = useState(false);
+	// The picker opens once the menu has closed and given focus back: opened at
+	// once, the menu's closing took focus out of it and closed it again.
+	const pickNext = useRef(false);
+	const editable = mine && (actions.onEdit || actions.onDelete);
+	return (
+		<div className="hidden shrink-0 self-start pointer-coarse:flex">
+			<EmojiPicker open={picking} onOpenChange={setPicking} onSubmit={(name) => actions.onReaction?.(message, name)}>
+				<span>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button type="button" variant="ghost" size="icon" aria-label="Message actions">
+								<MoreHorizontal />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent
+							align="end"
+							collisionPadding={8}
+							onCloseAutoFocus={(e) => {
+								if (!pickNext.current) return;
+								pickNext.current = false;
+								e.preventDefault();
+								setPicking(true);
+							}}
+						>
+							{actions.onReaction && (
+								<DropdownMenuItem
+									onSelect={() => {
+										pickNext.current = true;
+									}}
+								>
+									<SmilePlus /> Add reaction
+								</DropdownMenuItem>
+							)}
+							{actions.onReply && (
+								<DropdownMenuItem onSelect={() => actions.onReply?.(message)}>
+									<ArrowUpLeft /> Reply
+								</DropdownMenuItem>
+							)}
+							{!thread && actions.onThread && (
+								<DropdownMenuItem onSelect={() => actions.onThread?.(message.id)}>
+									<MessageSquare /> Reply in thread
+								</DropdownMenuItem>
+							)}
+							{actions.onPin && (
+								<DropdownMenuItem onSelect={() => actions.onPin?.(message)}>
+									{message.is_pinned ? <PinOff /> : <Pin />} {message.is_pinned ? 'Unpin' : 'Pin'}
+								</DropdownMenuItem>
+							)}
+							{mine && actions.onEdit && (
+								<DropdownMenuItem onSelect={onEdit}>
+									<Pencil /> Edit
+								</DropdownMenuItem>
+							)}
+							{editable && actions.onDelete && <DropdownMenuSeparator />}
+							{mine && actions.onDelete && (
+								<DropdownMenuItem variant="destructive" onSelect={onDelete}>
+									<Trash2 /> Delete
+								</DropdownMenuItem>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</span>
+			</EmojiPicker>
 		</div>
 	);
 }

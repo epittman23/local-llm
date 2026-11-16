@@ -77,6 +77,7 @@ export const MessageComposer = forwardRef<
 	ref
 ) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const selfId = useAuthStore((s) => s.user?.id);
 	const maxSize = useConfigStore((s) => s.config?.file?.max_size ?? null);
 	const [text, setText] = useState('');
 	const [mentions, setMentions] = useState<Mention[]>([]);
@@ -129,14 +130,17 @@ export const MessageComposer = forwardRef<
 				.filter(match)
 				.slice(0, 20);
 		}
-		const u = (users.data ?? []).map(
-			(x): Suggestion => ({
-				kind: 'user',
-				id: x.id,
-				label: x.name,
-				image: `${WEBUI_API_BASE_URL}/users/${x.id}/profile/image`
-			})
-		);
+		// #1035: you are not someone to mention.
+		const u = (users.data ?? [])
+			.filter((x) => x.id !== selfId)
+			.map(
+				(x): Suggestion => ({
+					kind: 'user',
+					id: x.id,
+					label: x.name,
+					image: `${WEBUI_API_BASE_URL}/users/${x.id}/profile/image`
+				})
+			);
 		const m = (models.data ?? []).map(
 			(x): Suggestion => ({
 				kind: 'model',
@@ -146,7 +150,7 @@ export const MessageComposer = forwardRef<
 			})
 		);
 		return [...u, ...m].filter(match).slice(0, 30);
-	}, [active, users.data, models.data, channels.data]);
+	}, [active, users.data, models.data, channels.data, selfId]);
 
 	useEffect(() => setSelected(0), [active?.query, active?.trigger]);
 	// The list can shrink without the query changing (the debounced user search

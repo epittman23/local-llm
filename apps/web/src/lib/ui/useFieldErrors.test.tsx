@@ -3,13 +3,22 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { useFieldErrors } from './useFieldErrors';
 
-function Form({ onSave, later = false }: { onSave: () => void; later?: boolean }) {
+function Form({
+	onSave,
+	later = false,
+	inDialog = false
+}: {
+	onSave: () => void;
+	later?: boolean;
+	inDialog?: boolean;
+}) {
 	const [name, setName] = useState('');
 	const [id, setId] = useState('');
 	const [open, setOpen] = useState(!later);
 	const { errors, field, submit, reset } = useFieldErrors(
 		{ name: name.trim() ? undefined : 'Enter a name.', id: id.trim() ? undefined : 'Enter an ID.' },
-		['name', 'id'] as const
+		['name', 'id'] as const,
+		{ inDialog }
 	);
 	return (
 		<form
@@ -43,6 +52,13 @@ describe('useFieldErrors (FRM-2)', () => {
 		expect(screen.queryByText('Enter an ID.')).toBeNull();
 		fireEvent.change(name, { target: { value: 'Tutor' } });
 		expect(screen.queryByText('Enter a name.')).toBeNull();
+	});
+
+	it("in a dialog, shows a left field's error once focus has moved on", async () => {
+		render(<Form onSave={vi.fn()} inDialog />);
+		fireEvent.blur(screen.getByRole('textbox', { name: 'Name' }));
+		expect(screen.queryByText('Enter a name.')).toBeNull();
+		expect(await screen.findByText('Enter a name.')).toBeInTheDocument();
 	});
 
 	it('shows every error on submit, focuses the first wrong field, and sends only a valid form', () => {

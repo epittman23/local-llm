@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Hash, Lock, Pin, User, Users } from 'lucide-react';
+import { Hash, Lock, Pin, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
@@ -14,12 +16,14 @@ import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { FeatureGate } from '@/routes/common/FeatureGate';
+import { NotFound } from '@/routes/NotFound';
+import { routePaths } from '@/routes/routePaths';
 import { ChannelInfoDialog, PinnedMessagesDialog } from './ChannelDialogs';
 import { type Channel, type ChannelMessage, channelTitle, isPublicChannel, joinsOnOpen } from './channelModel';
 import { type ComposerHandle, MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
 import { ThreadPanel } from './ThreadPanel';
-import { CHANNELS_KEY, useMarkChannelRead, useOpenChannelStore } from './useChannels';
+import { CHANNELS_KEY, useChannelsAccess, useMarkChannelRead, useOpenChannelStore } from './useChannels';
 import { useMessageFeed } from './useMessageFeed';
 
 function useLargeScreen() {
@@ -38,11 +42,30 @@ function useLargeScreen() {
 /** Ports routes/(app)/channels/[id]: keyed by id, so moving between channels starts each one fresh. */
 export function ChannelPage() {
 	const { id = '' } = useParams();
+	// S6-D1: hidden while the install has one account, as any unknown address is.
+	const access = useChannelsAccess();
 	return (
 		<FeatureGate feature="channels">
-			<ChannelView key={id} id={id} />
+			{access === 'shown' ? (
+				<ChannelView key={id} id={id} />
+			) : access === 'hidden' ? (
+				<NotFound />
+			) : (
+				<div className="flex flex-1 items-center justify-center p-8">
+					<Spinner className="size-5" />
+				</div>
+			)}
 		</FeatureGate>
 	);
+}
+
+/** What a channel is, for the header's sentence (LAY-5): its own description, or its kind. */
+function channelSentence(channel: Channel): string {
+	if (channel.description?.trim()) return channel.description.trim();
+	if (channel.type === 'dm') return 'A private conversation.';
+	if (channel.type === 'group')
+		return isPublicChannel(channel) ? 'A public group: anyone can join.' : 'A private group.';
+	return 'A channel for everyone given access.';
 }
 
 /**
@@ -60,7 +83,6 @@ export function ChannelPage() {
 function ChannelView({ id }: { id: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const me = useAuthStore((s) => s.user);
-	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const { socket } = useSocket();
 	const setOpenChannelId = useOpenChannelStore((s) => s.setOpenChannelId);
@@ -85,11 +107,16 @@ function ChannelView({ id }: { id: string }) {
 		onMessageDeleted: (deleted) => setThreadId((t) => (t === deleted ? null : t))
 	});
 
-	useDocumentTitle(channel ? (channel.type === 'dm' ? channelTitle(channel, me?.id) : `#${channel.name}`) : 'Channel');
-
-	useEffect(() => {
-		if (channelQuery.isError || (channelQuery.isSuccess && !channel)) navigate('/', { replace: true });
-	}, [channelQuery.isError, channelQuery.isSuccess, channel, navigate]);
+	const gone = (channelQuery.isError && isNotFound(channelQuery.error)) || (channelQuery.isSuccess && !channel);
+	useDocumentTitle(
+		gone
+			? 'Channel not found'
+			: channel
+				? channel.type === 'dm'
+					? channelTitle(channel, me?.id)
+					: `#${channel.name}`
+				: 'Channel'
+	);
 
 	const joining = useRef(false);
 	useEffect(() => {
@@ -135,6 +162,30 @@ function ChannelView({ id }: { id: string }) {
 	};
 
 	const members = (channel?.users ?? []).filter((u) => u.id !== me?.id);
+	// NAV-3: a channel that is gone says so in place; one that did not load offers to try again (STA-4).
+	if (gone)
+		return (
+			<Gone
+				title="This channel no longer exists"
+				description="It may have been deleted, or you may have left it."
+				actions={
+					<Button asChild>
+						<Link to={routePaths.channels}>Back to channels</Link>
+					</Button>
+				}
+			/>
+		);
+	if (channelQuery.isError)
+		return (
+			<div className="p-4">
+				<LoadFailed
+					what="this channel"
+					error={channelQuery.error}
+					onRetry={() => channelQuery.refetch()}
+					retrying={channelQuery.isFetching}
+				/>
+			</div>
+		);
 	const thread = channel && threadId && (
 		<ThreadPanel
 			key={threadId}
@@ -159,12 +210,12 @@ function ChannelView({ id }: { id: string }) {
 			}}
 		>
 			<div className="relative flex h-full min-w-0 flex-1 flex-col">
-				<header className="flex items-center gap-2 border-b px-3 py-2">
+				<header data-page-top="" className="flex items-center gap-2 border-b px-4 py-2">
 					{channel && (
 						<>
 							{channel.type === 'dm' ? (
 								members.length ? (
-									<div className="relative flex">
+									<div className="relative flex shrink-0">
 										{members.slice(0, 2).map((u, i) => (
 											<ProfileAvatar
 												key={u.id}
@@ -183,36 +234,43 @@ function ChannelView({ id }: { id: string }) {
 										)}
 									</div>
 								) : (
-									<Users className="size-4" />
+									<Users className="size-4 shrink-0" />
 								)
 							) : isPublicChannel(channel) ? (
-								<Hash className="size-4" aria-label="Public channel" />
+								<Hash className="size-4 shrink-0" aria-label="Public channel" />
 							) : (
-								<Lock className="size-4" aria-label="Private channel" />
+								<Lock className="size-4 shrink-0" aria-label="Private channel" />
 							)}
-							<h1 className="line-clamp-1 flex-1 text-sm font-medium">{channelTitle(channel, me?.id)}</h1>
-							<Tip content="Pinned Messages">
+							{/* LAY-5, #1040: the channel's name and what it is. On a phone the app bar already names it. */}
+							<div className="min-w-0 flex-1">
+								<Tip content={channelTitle(channel, me?.id)}>
+									<h1 className="font-title truncate text-body max-md:sr-only md:text-heading">
+										{channelTitle(channel, me?.id)}
+									</h1>
+								</Tip>
+								<p className="text-foreground-muted truncate text-dense">{channelSentence(channel)}</p>
+							</div>
+							<Tip content="Pinned messages">
 								<Button
 									type="button"
-									variant="outline"
-									size="sm"
-									aria-label="Pinned Messages"
+									variant="ghost"
+									size="icon"
+									aria-label="Pinned messages"
 									onClick={() => setShowPinned(true)}
 								>
-									<Pin className="size-4" />
+									<Pin />
 								</Button>
 							</Tip>
 							{channel.user_count !== undefined && (
-								<Tip content="Users">
+								<Tip content="Members">
 									<Button
 										type="button"
-										variant="outline"
-										size="sm"
-										aria-label="User Count"
+										variant="ghost"
+										aria-label={`Members, ${channel.user_count}`}
 										onClick={() => setShowInfo(true)}
 									>
-										<User className="size-4" />
-										{channel.user_count}
+										<Users data-icon="inline-start" />
+										<span className="tabular-nums">{channel.user_count}</span>
 									</Button>
 								</Tip>
 							)}
@@ -246,7 +304,9 @@ function ChannelView({ id }: { id: string }) {
 								channel={channel}
 								disabled={!channel.write_access}
 								placeholder={
-									channel.write_access ? 'Type here...' : 'You do not have permission to send messages in this channel.'
+									channel.write_access
+										? `Message ${channelTitle(channel, me?.id)}`
+										: 'You can read this channel, but not write in it.'
 								}
 								typingUsers={feed.typing}
 								replyTo={replyTo}
