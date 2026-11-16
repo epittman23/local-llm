@@ -218,7 +218,9 @@ test('a new calendar starts on a colour no calendar has; deleting one asks first
 	await d.getByLabel('Name').fill('Gym');
 	// The presets are the series tokens in the current theme (dark) (#989, D1b). Personal is blue,
 	// Work red (next to orange) and Automations violet, so yellow is the first one free (#1106).
-	await expect(d.locator('button[aria-pressed]')).toHaveCount(6);
+	// Six presets, then Custom colour: a control of its own, not pressed while a preset is chosen.
+	await expect(d.locator('button[aria-pressed]')).toHaveCount(7);
+	await expect(d.getByRole('button', { name: 'Custom colour' })).toHaveAttribute('aria-pressed', 'false');
 	await expect(d.getByRole('button', { name: 'Yellow' })).toHaveAttribute('aria-pressed', 'true');
 	await d.getByRole('button', { name: 'Green' }).click();
 	await d.getByRole('button', { name: 'Create calendar' }).click();
