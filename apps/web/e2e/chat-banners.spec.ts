@@ -1,7 +1,7 @@
 import { json, mockChat, savedChat } from './chat-helpers';
 import { expect, test } from './test';
 
-// What GET /api/v1/configs/banners answers: the banners set in Admin Settings > General (#243).
+// What GET /api/v1/configs/banners answers: the banners set in Admin > Settings > General (#243).
 const BANNERS = [
 	{ id: 'b1', type: 'warning', content: 'Maintenance **tonight**', dismissible: true, timestamp: 0 },
 	{

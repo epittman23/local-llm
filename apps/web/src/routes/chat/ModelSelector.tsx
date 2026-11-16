@@ -125,7 +125,7 @@ function ModelList({
 			<CommandInput value={query} onValueChange={setQuery} placeholder="Search models" />
 			<CommandList aria-label="Models" className="mt-1 max-h-80">
 				<CommandEmpty>
-					{q ? `No models match “${q}”` : 'No models yet. Connections are in Admin Settings > Connections.'}
+					{q ? `No models match “${q}”` : 'No models yet. Connections are in Admin > Settings > Connections.'}
 				</CommandEmpty>
 				{models.map((m) => (
 					<CommandItem

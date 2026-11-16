@@ -105,7 +105,7 @@ describe('ModelEditor layout (#1009)', () => {
 		expect(advanced).toHaveAttribute('aria-expanded', 'true');
 		expect(screen.getByRole('group', { name: 'Builtin tools' })).toBeInTheDocument();
 		expect(screen.getByLabelText(/Voice for reading aloud/)).toHaveAccessibleDescription(
-			'Empty uses the voice set in Admin Settings > Audio.'
+			'Empty uses the voice set in Admin > Settings > Audio.'
 		);
 		fireEvent.click(screen.getByRole('button', { name: 'JSON preview' }));
 		expect(document.querySelector('pre')?.textContent).toContain('"id": "m1"');
@@ -192,7 +192,7 @@ describe('ModelEditor layout (#1009)', () => {
 		renderEditor({ model: null, edit: false });
 		const images = await screen.findByRole('checkbox', { name: 'Image generation' });
 		expect(images).toBeDisabled();
-		expect(images).toHaveAccessibleDescription('Image generation is off in Admin Settings > Images.');
+		expect(images).toHaveAccessibleDescription('Image generation is off in Admin > Settings > Images.');
 		for (const box of screen.getAllByRole('checkbox', { name: 'Web search' })) expect(box).toBeEnabled();
 	});
 });

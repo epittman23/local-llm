@@ -57,18 +57,18 @@ export const availableFeatures = (capabilities: Record<string, unknown>) =>
 
 // Which /api/config switch each row depends on, and where an admin turns it on.
 const SWITCHES: Record<string, { flag: string; name: string; where: string }> = {
-	web_search: { flag: 'enable_web_search', name: 'Web search', where: 'Admin Settings > Web Search' },
-	image_generation: { flag: 'enable_image_generation', name: 'Image generation', where: 'Admin Settings > Images' },
+	web_search: { flag: 'enable_web_search', name: 'Web search', where: 'Admin > Settings > Web Search' },
+	image_generation: { flag: 'enable_image_generation', name: 'Image generation', where: 'Admin > Settings > Images' },
 	code_interpreter: {
 		flag: 'enable_code_interpreter',
 		name: 'The code interpreter',
-		where: 'Admin Settings > Code Execution'
+		where: 'Admin > Settings > Code Execution'
 	},
-	memory: { flag: 'enable_memories', name: 'Memory', where: 'Admin Settings > General' },
-	notes: { flag: 'enable_notes', name: 'Notes', where: 'Admin Settings > General' },
-	channels: { flag: 'enable_channels', name: 'Channels', where: 'Admin Settings > General' },
-	calendar: { flag: 'enable_calendar', name: 'The calendar', where: 'Admin Settings > General' },
-	automations: { flag: 'enable_automations', name: 'Automations', where: 'Admin Settings > General' }
+	memory: { flag: 'enable_memories', name: 'Memory', where: 'Admin > Settings > General' },
+	notes: { flag: 'enable_notes', name: 'Notes', where: 'Admin > Settings > General' },
+	channels: { flag: 'enable_channels', name: 'Channels', where: 'Admin > Settings > General' },
+	calendar: { flag: 'enable_calendar', name: 'The calendar', where: 'Admin > Settings > General' },
+	automations: { flag: 'enable_automations', name: 'Automations', where: 'Admin > Settings > General' }
 };
 
 /**

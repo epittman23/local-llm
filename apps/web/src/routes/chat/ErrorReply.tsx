@@ -57,7 +57,7 @@ export function ErrorReply({
 					{detail || 'The provider gave no reason.'}
 				</p>
 				{hint === 'key' && (
-					<p className="text-body text-foreground-muted">Check the API key in Admin Settings &gt; Connections.</p>
+					<p className="text-body text-foreground-muted">Check the API key in Admin &gt; Settings &gt; Connections.</p>
 				)}
 				{hint === 'local' && (
 					<p className="text-body text-foreground-muted">

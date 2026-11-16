@@ -56,7 +56,7 @@ export default function About() {
 				{connections.data && connections.data.length > 0 && (
 					<SettingRow
 						label="Model connections"
-						description="The OpenAI-compatible addresses the models come from (Admin Settings > Connections)."
+						description="The OpenAI-compatible addresses the models come from (Admin > Settings > Connections)."
 					>
 						{() => (
 							<span className="flex flex-col items-end gap-1">
