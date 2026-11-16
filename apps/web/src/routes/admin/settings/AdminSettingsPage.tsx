@@ -60,7 +60,7 @@ export function AdminSettingsPage() {
 					open && 'max-md:hidden'
 				)}
 			>
-				<div className="relative mx-2 mb-2 shrink-0">
+				<div className="relative mx-2 mb-2 shrink-0 max-md:mx-4">
 					<Search
 						aria-hidden
 						className="text-foreground-muted pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
