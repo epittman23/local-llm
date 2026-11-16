@@ -31,8 +31,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **Pipelines is a tab only while a pipelines server is connected (#1024,
     S5-D4 A);** its address goes back to the list otherwise.
   - **The SQLite download is removed (#961, S5-D5 A).** `GET
-    /api/v1/utils/db/download` (the backend has run on Postgres only) and its
-    client are gone; Database shows the `pg_dump` command to back up with.
+    /api/v1/utils/db/download`, which served only a SQLite database (this
+    install runs on Postgres), and its client are gone; Database shows the `pg_dump` command to back up with.
     The removed route answers like any unknown `/api` GET, the app's page
     with a 200 (#1131, a follow-up).
   - **Web Search with no engine stored preselects the bundled SearXNG
@@ -53,10 +53,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     and "Workspace models", whose rows link to the Workspace editor.
   - **A failed connection test says why (#1018, S5-D10 A).**
     `/openai/verify`'s `detail` names the cause (not a web address, a
-    timeout, a host not found, a refused connection, a lost connection, an
-    HTTP status with what to check, or an answer that is not a model list),
-    giving the host and port, never the whole URL. Status codes are
-    unchanged.
+    timeout, a host not found, a refused connection, a lost connection, or
+    an HTTP status with what to check), giving the host and port, never the
+    whole URL. Status codes are unchanged. The dialog itself says when a 200
+    is not a model list.
   - **The Shift quick buttons are removed (S5-D11 A):** the buttons Admin >
     Models' rows showed while Shift was held (hide or show, set as default,
     pin by default) are gone; the row menu does the same things.
