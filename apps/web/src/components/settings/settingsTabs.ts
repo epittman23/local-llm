@@ -306,10 +306,12 @@ export function serverTabs(
 
 /**
  * Where a server tab lives (S5-D1): `/admin/settings/<segment>`, or
- * `/admin/analytics` for Analytics; `/admin/settings` (the list) for none.
+ * `/admin/analytics` for Analytics; `/admin/settings` (the list) for none,
+ * and for an id that is not a server tab (an old or hand-edited
+ * `?settings=admin:a/b` never becomes an odd path).
  */
 export function serverTabPath(id?: string | null): string {
-	if (!id) return routePaths.adminSettings;
+	if (!id || !adminTabs.some((t) => t.id === id)) return routePaths.adminSettings;
 	if (id === 'admin:analytics') return routePaths.adminAnalytics;
 	return `${routePaths.adminSettings}/${adminTabSegment(id)}`;
 }

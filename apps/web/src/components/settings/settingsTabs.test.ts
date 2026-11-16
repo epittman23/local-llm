@@ -100,6 +100,8 @@ describe('serverTabPath and plainTabTitle', () => {
 		expect(serverTabPath('admin:code-execution')).toBe('/admin/settings/code-execution');
 		expect(serverTabPath('admin:analytics')).toBe('/admin/analytics');
 		expect(serverTabPath(null)).toBe('/admin/settings');
+		for (const unknown of ['admin:a/b', 'admin:../..', 'admin:nope', 'general'])
+			expect(serverTabPath(unknown)).toBe('/admin/settings');
 	});
 	it('drops the "Server: " a repeated name carries in the list', () => {
 		const byId = (id: string) => adminTabs.find((t) => t.id === id) as (typeof adminTabs)[number];

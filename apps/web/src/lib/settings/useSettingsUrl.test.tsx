@@ -1,9 +1,10 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { useSettingsUrl } from './useSettingsUrl';
 
 function Host() {
@@ -11,10 +12,16 @@ function Host() {
 	return null;
 }
 
+/** A page with unsaved changes under the shell, as an Admin settings tab is (`SettingsPageHost`). */
+function DirtyPageHost() {
+	useSettingsUrl();
+	return useUnsavedChanges(true).dialog;
+}
+
 const store = () => useSettingsModalStore.getState();
 
-function mount(path: string) {
-	const router = createMemoryRouter([{ path: '*', element: <Host /> }], {
+function mount(path: string, element = <Host />) {
+	const router = createMemoryRouter([{ path: '*', element }], {
 		initialEntries: ['/start', path],
 		initialIndex: 1
 	});
@@ -92,6 +99,31 @@ describe('?settings= while the modal is open (NAV-1)', () => {
 		expect(store().pending).toEqual({ kind: 'close' });
 	});
 
+	it('opens and closes over a page with unsaved changes without its guard asking, address in step', async () => {
+		// At '/', the address jsdom's window holds, as the close check reads it.
+		const router = mount('/', <DirtyPageHost />);
+		act(() => store().openSettings('account'));
+		modalResolves();
+		await waitFor(() => expect(settingsParam(router)).toBe('account'));
+		expect(store().open).toBe(true);
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		act(() => store().setTab('interface'));
+		await waitFor(() => expect(settingsParam(router)).toBe('interface'));
+		act(() => store().closeSettings());
+		await waitFor(() => expect(settingsParam(router)).toBeNull());
+		expect(router.state.location.pathname).toBe('/');
+		expect(store().open).toBe(false);
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		// Back from a reopened dialog closes it too, without asking.
+		act(() => store().openSettings('account'));
+		modalResolves();
+		await waitFor(() => expect(settingsParam(router)).toBe('account'));
+		await act(() => router.navigate(-1));
+		await waitFor(() => expect(store().open).toBe(false));
+		expect(settingsParam(router)).toBeNull();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
 	it('drops an admin tab a non-admin asked for, without opening anything', async () => {
 		useAuthStore.setState({ user: { id: 'u', name: 'U', role: 'user' } } as never);
 		const router = mount('/?settings=admin:db');
@@ -107,6 +139,14 @@ describe('a server tab, a page under Admin since S5-D1 (#932)', () => {
 		expect(router.state.location.search).toBe('?x=1');
 		expect(router.state.historyAction).toBe('REPLACE');
 		expect(store().open).toBe(false);
+	});
+
+	it('an id that is not a server tab goes to the list, never an odd path', async () => {
+		for (const id of ['admin:a/b', 'admin:../..']) {
+			const router = mount(`/?settings=${encodeURIComponent(id)}`);
+			await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings'));
+			expect(router.state.location.search).toBe('');
+		}
 	});
 
 	it('?settings=admin:analytics goes to the Analytics tab', async () => {

@@ -254,8 +254,8 @@ A workspace section you lack permission for redirects you to `/`.
 `?settings=<tab>`, which opens the Settings modal on a personal tab; for an
 admin the modal also has a "Server settings" link to `/admin/settings`. An
 old `?settings=admin:<tab>` link redirects to `/admin/settings/<tab>` (and
-`admin:analytics` to `/admin/analytics`), keeping any other query
-parameters. The parameter stays in the address while the modal is open (a tab change replaces
+`admin:analytics` to `/admin/analytics`; an id that is not a server tab to
+the list, `/admin/settings`), keeping any other query parameters. The parameter stays in the address while the modal is open (a tab change replaces
 it, so a reload reopens the same tab); closing removes it, and Back closes the
 modal, asking first if the open tab has unsaved changes. Personal tab ids
 (plain `?settings=<tab>`, anyone): `general`, `interface`, `notifications`,
