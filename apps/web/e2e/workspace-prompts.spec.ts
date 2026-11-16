@@ -324,7 +324,8 @@ test.describe('workspace prompts', () => {
 		await page.getByRole('button', { name: 'Access' }).click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('Only select users and groups with permission can access')).toBeVisible();
-		await dialog.getByLabel('Visibility').selectOption('public');
+		await dialog.getByRole('combobox', { name: 'Visibility' }).click();
+		await page.getByRole('option', { name: 'Public' }).click();
 		await expect(dialog.getByText('Accessible to all users')).toBeVisible();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/p1/access/update')?.body)

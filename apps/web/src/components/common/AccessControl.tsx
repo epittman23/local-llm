@@ -5,6 +5,7 @@ import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
 	type AccessGrant,
@@ -30,8 +31,6 @@ import { useAuthStore } from '@/lib/stores/authStore';
 
 type Group = { id: string; name: string; member_count?: number };
 type UserInfo = { id: string; name: string; email?: string };
-
-const nativeSelectClass = 'bg-transparent text-sm';
 
 /**
  * Ports workspace/common/AccessControl.svelte: the visibility picker
@@ -162,17 +161,20 @@ export function AccessControl({
 
 	const accessLevelPicker = (type: Principal, id: string, isWrite: boolean) =>
 		canWrite ? (
-			<select
-				aria-label="Access level"
-				className={nativeSelectClass}
+			<Select
 				value={isWrite ? 'write' : 'read'}
-				onChange={(e) => {
-					if ((e.target.value === 'write') !== isWrite) onChange(togglePrincipalWrite(grants, type, id));
+				onValueChange={(value) => {
+					if ((value === 'write') !== isWrite) onChange(togglePrincipalWrite(grants, type, id));
 				}}
 			>
-				<option value="read">Read</option>
-				<option value="write">Write</option>
-			</select>
+				<SelectTrigger size="sm" aria-label="Access level">
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="read">Read</SelectItem>
+					<SelectItem value="write">Write</SelectItem>
+				</SelectContent>
+			</Select>
 		) : (
 			<Badge variant="secondary">Read</Badge>
 		);
@@ -209,18 +211,23 @@ export function AccessControl({
 							{visibility === 'private' ? <Lock className="size-5" /> : <Globe className="size-5" />}
 						</div>
 						<div>
-							<Tip content={visibilityBlocked ? 'You do not have permission to make this public' : ''}>
-								<select
-									aria-label="Visibility"
-									className={`${nativeSelectClass} block w-fit max-w-full pr-8`}
-									value={visibility}
-									onChange={(e) => onChange(setVisibility(grants, e.target.value as Visibility))}
-								>
-									<option value="private">Private</option>
-									{((share && sharePublic) || hasPublicReadGrant(grants)) && <option value="public">Public</option>}
-									{((share && shareOpen) || hasAnyoneReadGrant(grants)) && <option value="open">Open</option>}
-								</select>
-							</Tip>
+							<Select
+								value={visibility}
+								onValueChange={(value) => onChange(setVisibility(grants, value as Visibility))}
+							>
+								<Tip content={visibilityBlocked ? 'You do not have permission to make this public' : ''}>
+									<SelectTrigger aria-label="Visibility" className="max-w-full">
+										<SelectValue />
+									</SelectTrigger>
+								</Tip>
+								<SelectContent>
+									<SelectItem value="private">Private</SelectItem>
+									{((share && sharePublic) || hasPublicReadGrant(grants)) && (
+										<SelectItem value="public">Public</SelectItem>
+									)}
+									{((share && shareOpen) || hasAnyoneReadGrant(grants)) && <SelectItem value="open">Open</SelectItem>}
+								</SelectContent>
+							</Select>
 							<div className="text-muted-foreground text-xs">
 								{visibility === 'private'
 									? 'Only select users and groups with permission can access'

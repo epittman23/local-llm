@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getGroupInfoById, getGroups } from '@/lib/apis/groups';
 import { getUserInfoById } from '@/lib/apis/users';
@@ -11,6 +11,18 @@ vi.mock('@/lib/apis/users', () => ({ getUserInfoById: vi.fn(), searchUsers: vi.f
 vi.mock('@/components/common/AddAccessModal', () => ({
 	AddAccessModal: ({ open }: { open: boolean }) => (open ? <div role="dialog">Add Access dialog</div> : null)
 }));
+
+beforeAll(() => {
+	// Radix Select measures and captures the pointer, which jsdom does not do.
+	Element.prototype.scrollIntoView = vi.fn();
+	Element.prototype.hasPointerCapture = vi.fn(() => false);
+	Element.prototype.releasePointerCapture = vi.fn();
+});
+
+const choose = async (combobox: string, option: string) => {
+	fireEvent.keyDown(screen.getByRole('combobox', { name: combobox }), { key: 'Enter' });
+	fireEvent.click(await screen.findByRole('option', { name: option }));
+};
 
 describe('AccessControl', () => {
 	beforeEach(() => {
@@ -66,5 +78,32 @@ describe('AccessControl', () => {
 		);
 		fireEvent.click(await screen.findByRole('button', { name: 'Remove Ada' }));
 		expect(onChange).toHaveBeenCalledWith([]);
+	});
+
+	it('picks visibility and a principal’s access level from the shared Select (FRM-4)', async () => {
+		const onChange = vi.fn();
+		render(
+			<TooltipProvider>
+				<AccessControl
+					accessGrants={[{ principal_type: 'user', principal_id: 'u1', permission: 'read' }]}
+					onChange={onChange}
+					accessRoles={['read', 'write']}
+					share
+					sharePublic
+				/>
+			</TooltipProvider>
+		);
+		const visibility = await screen.findByRole('combobox', { name: 'Visibility' });
+		expect(visibility).toHaveAttribute('data-slot', 'select-trigger');
+		expect(visibility).toHaveTextContent('Private');
+		await choose('Visibility', 'Public');
+		expect(onChange).toHaveBeenLastCalledWith(
+			expect.arrayContaining([expect.objectContaining({ principal_type: 'user', principal_id: '*' })])
+		);
+		await screen.findByRole('button', { name: 'Remove Ada' });
+		await choose('Access level', 'Write');
+		expect(onChange).toHaveBeenLastCalledWith(
+			expect.arrayContaining([expect.objectContaining({ principal_id: 'u1', permission: 'write' })])
+		);
 	});
 });
