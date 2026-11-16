@@ -1,7 +1,7 @@
 const ROWS = ['r1', 'r2', 'r3', 'r4', 'r5', 'r6'];
 
 /**
- * STA-2: the placeholder for an admin table while its first page loads, in
+ * STA-2: the placeholder for a table (Admin's lists) while its first page loads, in
  * the shape of what is coming (a heading row and a few rows), never a bare
  * spinner or an empty table.
  */

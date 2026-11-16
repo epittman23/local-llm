@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
 import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -19,7 +20,6 @@ import { createNewGroup, getGroups } from '@/lib/apis/groups';
 import { getUserDefaultPermissions, updateUserDefaultPermissions } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { TableSkeleton } from '../TableSkeleton';
 import { EditGroupModal, type Group, type GroupFormValue } from './EditGroupModal';
 import { GroupItem } from './GroupItem';
 import { filterAndSortGroups, type GroupSort } from './groupList';

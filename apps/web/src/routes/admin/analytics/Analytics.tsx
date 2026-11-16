@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { LoadFailed } from '@/components/common/LoadFailed';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +21,6 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, formatNumber } from '@/lib/utils';
 import { useAdminSingleUser } from '../adminVisibility';
-import { TableSkeleton } from '../TableSkeleton';
 import { AnalyticsModelModal } from './AnalyticsModelModal';
 import {
 	CHART_COLORS,

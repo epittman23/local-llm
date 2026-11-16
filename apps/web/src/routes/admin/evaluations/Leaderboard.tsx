@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Table, TableRow, TableSortHead } from '@/components/ui/table';
@@ -15,7 +16,6 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
-import { TableSkeleton } from '../TableSkeleton';
 import { LeaderboardModal } from './LeaderboardModal';
 import {
 	buildRankedModels,
