@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Camera, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react';
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
@@ -9,6 +9,7 @@ import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { failureCause } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
+import { useSettingsHost } from '@/components/settings/controls';
 import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
@@ -29,7 +30,7 @@ import { getTerminalServers } from '@/lib/apis/terminal';
 import { getTools } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
+import { useConfirmLeave, useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
 import { initials } from '@/lib/utils/initials';
 import { routePaths } from '@/routes/routePaths';
@@ -163,19 +164,26 @@ function Disclosure({ title, children }: { title: string; children: ReactNode })
  *
  * `onSubmit` saves and throws on failure; after a save the editor leaves
  * through `onBack`.
+ *
+ * Inside a settings host (Admin > Models, in the Settings dialog or on its
+ * page) the host guards navigation, once (#951): the editor's own guard then
+ * only asks before its Back, and it reports its unsaved changes through
+ * `onDirtyChange`, or else straight to the host.
  */
 export function ModelEditor({
 	model,
 	edit = false,
 	preset = true,
 	onSubmit,
-	onBack
+	onBack,
+	onDirtyChange
 }: {
 	model: (Record<string, any> & { id: string; name: string }) | null;
 	edit?: boolean;
 	preset?: boolean;
 	onSubmit: (info: ModelInfo) => Promise<void>;
 	onBack: () => void;
+	onDirtyChange?: (dirty: boolean) => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const models = useQuery({ queryKey: ['models-all'], queryFn: async () => asArray<any>(await getModels(token)) });
@@ -200,6 +208,7 @@ export function ModelEditor({
 			defaults={defaults.data ?? {}}
 			onSubmit={onSubmit}
 			onBack={onBack}
+			onDirtyChange={onDirtyChange}
 		/>
 	);
 }
@@ -211,7 +220,8 @@ function EditorForm({
 	allModels,
 	defaults,
 	onSubmit,
-	onBack
+	onBack,
+	onDirtyChange
 }: {
 	model: (Record<string, any> & { id: string; name: string }) | null;
 	edit: boolean;
@@ -220,6 +230,7 @@ function EditorForm({
 	defaults: Record<string, any>;
 	onSubmit: (info: ModelInfo) => Promise<void>;
 	onBack: () => void;
+	onDirtyChange?: (dirty: boolean) => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
@@ -251,7 +262,15 @@ function EditorForm({
 	// Switching suggestions to Default and back keeps what was written.
 	const lastSuggestions = useRef<PromptSuggestion[] | null>(null);
 
-	const guard = useUnsavedChanges(dirty, {
+	// A host's guard is the only navigation guard (a router keeps one blocker); the host is fixed for a mount.
+	const host = useSettingsHost();
+	const useLeaveGuard = host.kind === null ? useUnsavedChanges : useConfirmLeave;
+	const report = onDirtyChange ?? (host.kind === null ? undefined : host.setDirty);
+	useEffect(() => {
+		report?.(dirty);
+	}, [report, dirty]);
+	useEffect(() => () => report?.(false), [report]);
+	const guard = useLeaveGuard(dirty, {
 		message: edit
 			? `Your changes to “${baseline.name}” are not saved. They are lost if you leave.`
 			: 'This model is not created yet. What you entered is lost if you leave.'

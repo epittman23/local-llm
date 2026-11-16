@@ -1,14 +1,15 @@
-import { Check, Minus, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Minus, Plus } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Textarea } from '@/components/ui/textarea';
 import { verifyOllamaConnection } from '@/lib/apis/ollama';
 import { verifyOpenAIConnection } from '@/lib/apis/openai';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -16,13 +17,26 @@ import {
 	blankFields,
 	buildConnection,
 	type Connection,
+	type ConnectionField,
 	type ConnectionFields,
 	fieldsFromConnection,
 	isAzure,
+	modelListResult,
 	parseHeaders,
+	type TestResult,
+	urlProblem,
 	validateConnection,
 	verifyConfig
 } from './connectionModel';
+import {
+	ConnectionUrlField,
+	Disclosure,
+	FieldLabel,
+	FormField,
+	SecretInput,
+	SelectField,
+	SwitchField
+} from './formFields';
 
 const SUGGESTIONS = [
 	'https://api.openai.com/v1',
@@ -34,19 +48,40 @@ const SUGGESTIONS = [
 	'https://api.x.ai/v1'
 ];
 
-const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
-const label = 'text-muted-foreground text-xs';
+const AUTH_HELP: Record<string, string> = {
+	none: 'Requests go without credentials.',
+	session: "Sends the signed-in user's session credentials.",
+	system_oauth: "Sends the signed-in user's OAuth access token.",
+	microsoft_entra_id: 'Uses DefaultAzureCredential.',
+	azure_ad: 'Uses DefaultAzureCredential.'
+};
+
+const PROVIDERS = [
+	['', 'Default'],
+	['azure', 'Azure OpenAI'],
+	['llama.cpp', 'llama.cpp'],
+	['lmstudio', 'LM Studio'],
+	['litellm', 'LiteLLM']
+] as const;
+
+/** A thrown verify error, as a sentence: the API helpers throw the server's words, some still prefixed. */
+const causeText = (error: unknown) => `${error}`.replace(/^(OpenAI|Ollama): /, '');
+
+type Errors = Partial<Record<ConnectionField | 'headers', string>>;
 
 /**
  * Ports components/AddConnectionModal.svelte: add or edit one upstream (an
  * OpenAI-compatible server, an Ollama server, or -- with `direct` -- a user's
- * own endpoint). It verifies the connection on request and hands the finished
+ * own endpoint). It tests the connection on request and hands the finished
  * `{ url, key, config }` to `onSubmit`; the caller decides what saving means.
  * The rules live in connectionModel.ts.
  *
- * Every open starts from `connection` (or blank), where the Svelte modal keeps its
- * last values between opens; and a header field that is not valid JSON no longer
- * leaves the Save button spinning (the original returns without clearing `loading`).
+ * #933: one form language, the shared fields with their labels above and
+ * their lines under (FRM-1, FRM-2); the two-way choices as segmented controls
+ * (FRM-4); Advanced behind a chevron disclosure (FRM-6). #1018: Test
+ * connection sits beside the URL and says what it found under it (FBK-1).
+ * Save checks the form and says what is wrong under the field at fault,
+ * opening Advanced when that is where it is.
  */
 export function AddConnectionModal({
 	open,
@@ -68,69 +103,82 @@ export function AddConnectionModal({
 	onDelete?: () => void | Promise<void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const ids = useId();
+	const id = (name: string) => `${ids}-${name}`;
 	const [f, setF] = useState<ConnectionFields>(blankFields());
 	const [modelId, setModelId] = useState('');
 	const [showAdvanced, setShowAdvanced] = useState(false);
+	const [errors, setErrors] = useState<Errors>({});
 	const [loading, setLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const mode = { ollama, direct };
-	const set = (patch: Partial<ConnectionFields>) => setF((prev) => ({ ...prev, ...patch }));
 	const azure = isAzure(f.provider, f.url, direct);
+	const set = (patch: Partial<ConnectionFields>) => {
+		setF((prev) => ({ ...prev, ...patch }));
+		// An edit to a field clears what was said about it.
+		setErrors((prev) => {
+			const next = { ...prev };
+			for (const key of Object.keys(patch)) delete next[key as keyof Errors];
+			return next;
+		});
+	};
 
 	useEffect(() => {
 		if (!open) return;
 		setF(fieldsFromConnection(connection, { ollama }));
 		setModelId('');
 		setShowAdvanced(false);
+		setErrors({});
 		setLoading(false);
 		// Seeded when the dialog opens; edits inside it are local.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	const headersOrToast = () => {
+	/** The headers as an object, or null after saying under the field why they are not one. */
+	const checkedHeaders = () => {
 		try {
 			const { value, text } = parseHeaders(f.headers);
-			set({ headers: text });
+			setF((prev) => ({ ...prev, headers: text }));
 			return { ok: true as const, value };
 		} catch {
-			toast.error('Headers must be a valid JSON object');
+			setShowAdvanced(true);
+			setErrors((prev) => ({ ...prev, headers: 'Enter the headers as a JSON object, or leave them empty.' }));
 			return { ok: false as const, value: null };
 		}
 	};
 
-	// A block body on purpose: `(e) => toast.error(e)` would return the toast's
-	// id, which is truthy, and report a failed check as verified (docs/history/code-review.md M5).
-	const failed = (error: unknown) => {
-		toast.error(`${error}`);
-		return null;
-	};
-
-	const verify = async () => {
-		const url = f.url.replace(/\/$/, '');
-		set({ url });
-		if (ollama) {
-			const res = await verifyOllamaConnection(token, { url, key: f.key }).catch(failed);
-			if (res) toast.success('Server connection verified');
-			return;
+	const test = async (): Promise<TestResult | null> => {
+		const url = f.url.trim().replace(/\/$/, '');
+		const problem = urlProblem(url);
+		if (problem) return { ok: false, text: problem };
+		setF((prev) => ({ ...prev, url }));
+		try {
+			if (ollama) {
+				const res = await verifyOllamaConnection(token, { url, key: f.key });
+				const version = (res as { version?: string } | null)?.version;
+				return { ok: true, text: version ? `Reachable: Ollama ${version}` : 'Reachable' };
+			}
+			const headers = checkedHeaders();
+			if (!headers.ok) return null;
+			const res = await verifyOpenAIConnection(
+				token,
+				{ url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) },
+				direct
+			);
+			return modelListResult(res);
+		} catch (error) {
+			return { ok: false, text: causeText(error) };
 		}
-		const headers = headersOrToast();
-		if (!headers.ok) return;
-		const res = await verifyOpenAIConnection(
-			token,
-			{ url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) },
-			direct
-		).catch(failed);
-		if (res) toast.success('Server connection verified');
 	};
 
 	const addModel = () => {
-		const id = modelId.trim();
-		if (!id) return;
-		if (f.modelIds.includes(id)) {
-			toast.error('Model ID is already added');
+		const value = modelId.trim();
+		if (!value) return;
+		if (f.modelIds.includes(value)) {
+			toast.error(`“${value}” is already in the list.`);
 			return;
 		}
-		set({ modelIds: [...f.modelIds, id] });
+		set({ modelIds: [...f.modelIds, value] });
 		setModelId('');
 	};
 
@@ -138,346 +186,318 @@ export function AddConnectionModal({
 		const problem = validateConnection(f, mode);
 		if (problem) {
 			if (problem.openAdvanced) setShowAdvanced(true);
-			toast.error(problem.message);
+			setErrors({ [problem.field]: problem.message });
+			// After the render that shows it (and opens Advanced), so the field exists.
+			setTimeout(() => document.getElementById(id(problem.field))?.focus());
 			return;
 		}
-		const headers = headersOrToast();
+		const headers = checkedHeaders();
 		if (!headers.ok) return;
 		setLoading(true);
 		try {
 			await onSubmit(buildConnection(f, mode, headers.value));
+		} catch {
+			// The caller has said why; the dialog stays open with what was entered.
+			return;
 		} finally {
 			setLoading(false);
 		}
 		onOpenChange(false);
 	};
 
+	const authOptions: [string, string][] = [
+		['none', 'None'],
+		['bearer', 'API key (Bearer)'],
+		...(ollama
+			? []
+			: ([
+					['session', 'Session'],
+					...(direct
+						? []
+						: [
+								['system_oauth', 'OAuth'],
+								['microsoft_entra_id', 'Entra ID']
+							])
+				] as [string, string][]))
+	];
+	const modelsHelp = ollama
+		? `Empty: every model the server lists at ${f.url || 'its URL'}/api/tags.`
+		: azure
+			? 'Azure OpenAI needs its deployment names here.'
+			: `Empty: every model the server lists at ${f.url || 'its URL'}/models.`;
+
 	return (
 		<>
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete connection?"
-				confirmLabel="Delete"
+				title={`Delete “${f.url || 'this connection'}”?`}
+				confirmLabel="Delete connection"
+				destructive
 				onConfirm={async () => {
 					setConfirmDelete(false);
 					await onDelete?.();
 					onOpenChange(false);
 				}}
 			>
-				Are you sure you want to delete this connection? This action cannot be undone.
+				Its models disappear from the model picker, and chats that use them stop getting replies. This can't be undone.
 			</ConfirmDialog>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+				<DialogContent className="sm:max-w-lg">
 					<DialogHeader>
-						<DialogTitle className="text-sm font-medium">{edit ? 'Edit Connection' : 'Add Connection'}</DialogTitle>
-						<DialogDescription className="sr-only">An upstream model server.</DialogDescription>
+						<DialogTitle>{edit ? 'Edit connection' : 'Add connection'}</DialogTitle>
+						<DialogDescription>
+							{ollama
+								? 'An Ollama server.'
+								: direct
+									? 'An OpenAI-compatible server your browser talks to directly.'
+									: 'An OpenAI-compatible server: OpenRouter, or llama-server on :8090.'}
+						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="flex flex-col gap-2.5"
+						noValidate
+						className="flex flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
-							submit();
+							void submit();
 						}}
 					>
 						{!direct && (
-							<div className="flex items-center justify-between">
-								<div className={label}>Connection Type</div>
-								<Button
-									variant="link"
-									size="xs"
-									type="button"
-									onClick={() => set({ connectionType: f.connectionType === 'local' ? 'external' : 'local' })}
-								>
-									{f.connectionType === 'local' ? 'Local' : 'External'}
-								</Button>
+							<div className="flex flex-col">
+								<FieldLabel>
+									<span id={id('type-label')}>Connection type</span>
+								</FieldLabel>
+								<SegmentedControl
+									aria-labelledby={id('type-label')}
+									aria-describedby={id('type-help')}
+									value={f.connectionType === 'local' ? 'local' : 'external'}
+									onValueChange={(connectionType) => set({ connectionType })}
+									options={[
+										{ value: 'external', label: 'External' },
+										{ value: 'local', label: 'Local' }
+									]}
+									className="self-start"
+								/>
+								<FieldMessage
+									id={id('type-help')}
+									className="mt-1.5"
+									help="A chat on one of its models uses the local or the external task model."
+								/>
 							</div>
 						)}
 
-						<div className="flex items-end gap-2">
-							<div className="min-w-0 flex-1">
-								<label className={label} htmlFor="url-input">
-									URL
-								</label>
-								<input
-									id="url-input"
-									className={bare}
-									type="text"
-									value={f.url}
-									onChange={(e) => set({ url: e.target.value })}
-									placeholder="API Base URL"
-									autoComplete="off"
-									list={ollama ? undefined : 'connection-url-suggestions'}
-									required
-								/>
-								{!ollama && (
-									<datalist id="connection-url-suggestions">
-										{SUGGESTIONS.map((s) => (
-											<option key={s} value={s} />
-										))}
-									</datalist>
-								)}
-							</div>
-							<Tip content="Verify Connection">
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									className="mb-0.5"
-									type="button"
-									aria-label="Verify Connection"
-									onClick={verify}
-								>
-									<Check className="size-4" />
-								</Button>
-							</Tip>
-							<div className="mb-0.5 flex items-center" title={f.enable ? 'Enabled' : 'Disabled'}>
-								<label className="sr-only" htmlFor="toggle-connection">
-									Toggle whether current connection is active.
-								</label>
-								<Switch id="toggle-connection" checked={f.enable} onCheckedChange={(enable) => set({ enable })} />
-							</div>
-						</div>
+						<ConnectionUrlField
+							id={id('url')}
+							value={f.url}
+							onChange={(url) => set({ url })}
+							placeholder={ollama ? 'http://localhost:11434' : 'https://openrouter.ai/api/v1'}
+							list={ollama ? undefined : id('suggestions')}
+							error={errors.url}
+							onTest={test}
+						/>
+						{!ollama && (
+							<datalist id={id('suggestions')}>
+								{SUGGESTIONS.map((s) => (
+									<option key={s} value={s} />
+								))}
+							</datalist>
+						)}
 
-						<div>
-							<label className={label} htmlFor="select-bearer-or-session">
-								Auth
-							</label>
-							<div className="flex items-center gap-2">
-								<select
-									id="select-bearer-or-session"
-									className="bg-transparent pr-5 text-sm"
+						<SwitchField
+							id={id('enable')}
+							label="Enabled"
+							checked={f.enable}
+							onCheckedChange={(enable) => set({ enable })}
+						/>
+
+						<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
+							{(props) => (
+								<SelectField
+									{...props}
+									className="sm:w-60"
 									value={f.authType}
-									onChange={(e) => set({ authType: e.target.value })}
-								>
-									<option value="none">None</option>
-									<option value="bearer">Bearer</option>
-									{!ollama && (
-										<>
-											<option value="session">Session</option>
-											{!direct && (
-												<>
-													<option value="system_oauth">OAuth</option>
-													<option value="microsoft_entra_id">Entra ID</option>
-												</>
-											)}
-										</>
-									)}
-								</select>
-								<div className="min-w-0 flex-1 text-sm">
-									{f.authType === 'bearer' ? (
-										<SensitiveInput
-											value={f.key}
-											onChange={(key) => set({ key })}
-											placeholder="API Key"
-											required={false}
-										/>
-									) : f.authType === 'none' ? (
-										<div className="text-muted-foreground text-xs">No authentication</div>
-									) : f.authType === 'session' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user session credentials to authenticate
-										</div>
-									) : f.authType === 'system_oauth' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user OAuth access token to authenticate
-										</div>
-									) : ['azure_ad', 'microsoft_entra_id'].includes(f.authType) ? (
-										<div className="text-muted-foreground text-xs">Uses DefaultAzureCredential to authenticate</div>
-									) : null}
-								</div>
-							</div>
-						</div>
+									onChange={(authType) => set({ authType })}
+									options={authOptions}
+								/>
+							)}
+						</FormField>
+						{f.authType === 'bearer' && (
+							<FormField id={id('key')} label="API key" optional={!azure} error={errors.key}>
+								{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+							</FormField>
+						)}
 
 						{!ollama && !direct && (
-							<div className="flex items-center justify-between">
-								<label className={label} htmlFor="api-type-toggle">
-									API Type
-								</label>
-								<Button
-									variant="link"
-									size="xs"
-									id="api-type-toggle"
-									type="button"
-									onClick={() => set({ apiType: f.apiType === 'responses' ? '' : 'responses' })}
-								>
-									{f.apiType === 'responses' ? 'Responses' : 'Chat Completions'}
-								</Button>
+							<div className="flex flex-col">
+								<FieldLabel>
+									<span id={id('api-label')}>API type</span>
+								</FieldLabel>
+								<SegmentedControl
+									aria-labelledby={id('api-label')}
+									value={f.apiType === 'responses' ? 'responses' : 'chat'}
+									onValueChange={(v) => set({ apiType: v === 'responses' ? 'responses' : '' })}
+									options={[
+										{ value: 'chat', label: 'Chat Completions' },
+										{ value: 'responses', label: 'Responses' }
+									]}
+									className="self-start"
+								/>
 							</div>
 						)}
 
-						<Button
-							variant="ghost"
-							size="xs"
-							className="w-fit"
-							type="button"
-							aria-expanded={showAdvanced}
-							onClick={() => setShowAdvanced((v) => !v)}
-						>
-							{showAdvanced ? '▾' : '▸'} Advanced
-						</Button>
-
-						{showAdvanced && (
-							<>
+						<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+							<div className="flex flex-col gap-4">
 								{!direct && (
-									<div>
-										<label className={label} htmlFor="headers-input">
-											Headers
-										</label>
-										<Tip content='Enter additional headers in JSON format (e.g. {"X-Custom-Header": "value"}'>
-											<textarea
-												id="headers-input"
-												className={`${bare} min-h-8 resize-y`}
+									<FormField
+										id={id('headers')}
+										label="Headers"
+										optional
+										help='A JSON object, such as {"X-Custom-Header": "value"}.'
+										error={errors.headers}
+									>
+										{(props) => (
+											<Textarea
+												{...props}
+												className="font-mono"
 												value={f.headers}
 												onChange={(e) => set({ headers: e.target.value })}
-												placeholder="Enter additional headers in JSON format"
 											/>
-										</Tip>
-									</div>
+										)}
+									</FormField>
 								)}
 								{!ollama && !direct && (
-									<div>
-										<label className={label} htmlFor="allowed-passthrough-params-input">
-											Passthrough params
-										</label>
-										<Tip content="Comma-separated top-level request parameters this upstream may receive without translation. Use * to allow all captured passthrough params.">
-											<input
-												id="allowed-passthrough-params-input"
-												className={bare}
-												type="text"
+									<FormField
+										id={id('passthrough')}
+										label="Passthrough parameters"
+										optional
+										help="Top-level request parameters this server may receive as they are, separated by commas. * allows every one."
+									>
+										{(props) => (
+											<Input
+												{...props}
 												value={f.passthroughParams}
 												onChange={(e) => set({ passthroughParams: e.target.value })}
 												placeholder="thinking, output_config"
 												autoComplete="off"
 											/>
-										</Tip>
-									</div>
+										)}
+									</FormField>
 								)}
-								<div>
-									<label className={label} htmlFor="prefix-id-input">
-										Prefix ID
-									</label>
-									<Tip content="Prefix ID is used to avoid conflicts with other connections by adding a prefix to the model IDs - leave empty to disable">
-										<input
-											id="prefix-id-input"
-											className={bare}
-											type="text"
+								<FormField
+									id={id('prefix')}
+									label="Prefix ID"
+									optional
+									help="Added in front of this server's model IDs, so they can't clash with another connection's."
+								>
+									{(props) => (
+										<Input
+											{...props}
 											value={f.prefixId}
 											onChange={(e) => set({ prefixId: e.target.value })}
-											placeholder="Prefix ID"
 											autoComplete="off"
 										/>
-									</Tip>
-								</div>
+									)}
+								</FormField>
 								{!ollama && !direct && (
-									<div>
-										<label className={label} htmlFor="provider-select">
-											Provider
-										</label>
-										<select
-											id="provider-select"
-											className="block bg-transparent text-sm"
-											value={f.provider}
-											onChange={(e) => set({ provider: e.target.value })}
-										>
-											<option value="">Default</option>
-											<option value="azure">Azure OpenAI</option>
-											<option value="llama.cpp">llama.cpp</option>
-											<option value="lmstudio">LM Studio</option>
-											<option value="litellm">LiteLLM</option>
-										</select>
-									</div>
+									<FormField id={id('provider')} label="Provider">
+										{(props) => (
+											<SelectField
+												{...props}
+												className="sm:w-60"
+												value={f.provider}
+												onChange={(provider) => set({ provider })}
+												options={PROVIDERS}
+											/>
+										)}
+									</FormField>
 								)}
 								{azure && (
-									<div>
-										<label className={label} htmlFor="api-version-input">
-											API Version
-										</label>
-										<input
-											id="api-version-input"
-											className={bare}
-											type="text"
-											value={f.apiVersion}
-											onChange={(e) => set({ apiVersion: e.target.value })}
-											placeholder="API Version"
-											autoComplete="off"
-											required
-										/>
-									</div>
+									<FormField id={id('apiVersion')} label="API version" error={errors.apiVersion}>
+										{(props) => (
+											<Input
+												{...props}
+												value={f.apiVersion}
+												onChange={(e) => set({ apiVersion: e.target.value })}
+												placeholder="2024-10-21"
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
 								)}
-								<div>
-									<div className={label}>Model IDs</div>
-									{f.modelIds.length > 0 ? (
-										<ul className="mt-1 flex flex-col gap-1">
-											{f.modelIds.map((id) => (
-												<li key={id} className="flex items-center justify-between text-xs">
-													<div className="min-w-0 truncate">{id}</div>
+								<div className="flex flex-col">
+									<FieldLabel htmlFor={id('modelIds')} optional={!azure}>
+										Model IDs
+									</FieldLabel>
+									{f.modelIds.length > 0 && (
+										<ul className="mb-2 flex flex-col gap-1">
+											{f.modelIds.map((m) => (
+												<li key={m} className="flex min-w-0 items-center justify-between gap-2 text-body">
+													<span className="min-w-0 truncate font-mono">{m}</span>
 													<Button
 														variant="ghost"
-														size="icon-xs"
+														size="icon-sm"
 														type="button"
-														aria-label={`Remove ${id} from list.`}
-														onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== id) })}
+														aria-label={`Remove ${m}`}
+														onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== m) })}
 													>
-														<Minus className="size-3.5" strokeWidth={2} />
+														<Minus aria-hidden />
 													</Button>
 												</li>
 											))}
 										</ul>
-									) : (
-										<div className="text-muted-foreground mt-1 text-xs">
-											{ollama
-												? `Leave empty to include all models from "${f.url}/api/tags" endpoint`
-												: azure
-													? 'Deployment names are required for Azure OpenAI'
-													: `Leave empty to include all models from "${f.url}/models" endpoint`}
-										</div>
 									)}
-								</div>
-								<div className="flex items-center gap-2">
-									<label className="sr-only" htmlFor="add-model-id-input">
-										Add a model ID
-									</label>
-									<input
-										id="add-model-id-input"
-										className={bare}
-										value={modelId}
-										onChange={(e) => setModelId(e.target.value)}
-										onKeyDown={(e) => {
-											// Enter here adds the model, it must not submit the connection.
-											if (e.key === 'Enter') {
-												e.preventDefault();
-												addModel();
-											}
-										}}
-										placeholder="Add a model ID"
+									<div className="flex items-center gap-2">
+										<Input
+											id={id('modelIds')}
+											value={modelId}
+											onChange={(e) => setModelId(e.target.value)}
+											onKeyDown={(e) => {
+												// Enter here adds the model, it must not submit the connection.
+												if (e.key === 'Enter') {
+													e.preventDefault();
+													addModel();
+												}
+											}}
+											placeholder="Add a model ID"
+											{...fieldProps(id('modelIds-message'), { error: errors.modelIds, help: modelsHelp })}
+										/>
+										<Button variant="outline" size="icon" type="button" aria-label="Add model ID" onClick={addModel}>
+											<Plus aria-hidden />
+										</Button>
+									</div>
+									<FieldMessage
+										id={id('modelIds-message')}
+										className="mt-1.5"
+										error={errors.modelIds}
+										help={modelsHelp}
 									/>
-									<Button variant="ghost" size="icon-xs" type="button" aria-label="Add" onClick={addModel}>
-										<Plus className="size-3.5" strokeWidth={2} />
-									</Button>
 								</div>
-								<div>
-									<div className={label}>Tags</div>
+								<div className="flex flex-col">
+									<FieldLabel htmlFor={id('tags')} optional>
+										Tags
+									</FieldLabel>
 									<Tags
+										id={id('tags')}
 										tags={f.tags}
 										onAdd={(name) => set({ tags: [...f.tags, { name }] })}
 										onDelete={(name) => set({ tags: f.tags.filter((t) => t.name !== name) })}
 									/>
 								</div>
-							</>
-						)}
+							</div>
+						</Disclosure>
 
-						<div className="flex items-center justify-between pt-1">
+						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
 							<div>
 								{edit && (
-									<Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-										Delete
+									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>
+										Delete connection
 									</Button>
 								)}
 							</div>
-							<Button type="submit" size="sm" disabled={loading}>
-								Save
+							<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
 								{loading && <Spinner className="size-3.5" />}
+								{loading ? 'Saving…' : 'Save'}
 							</Button>
 						</div>
 					</form>

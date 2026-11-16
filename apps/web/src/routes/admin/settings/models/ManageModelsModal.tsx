@@ -9,9 +9,9 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { ManageOllama } from './ManageOllama';
 import { ManageProviderModels } from './ManageProviderModels';
 import {
-	type ProviderConnection,
 	hasOllamaManagement,
 	managementConnections,
+	type ProviderConnection,
 	providerLabel,
 	providerSupportsDelete
 } from './providerModels';

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SettingsPageHost } from '@/components/settings/controls';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getModels } from '@/lib/apis';
 import { getFunctions } from '@/lib/apis/functions';
@@ -295,6 +296,62 @@ describe('ModelEditor unsaved changes (#905, FRM-3)', () => {
 		expect(router.state.location.pathname).toBe('/editor');
 		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 		expect(screen.queryByRole('alert')).toBeNull();
+	});
+});
+
+describe('ModelEditor inside a settings host (Admin > Models, #951)', () => {
+	const renderHosted = (onDirtyChange?: (dirty: boolean) => void) => {
+		const onBack = vi.fn();
+		const router = createMemoryRouter(
+			[
+				{
+					path: '/editor',
+					element: (
+						<SettingsPageHost>
+							<ModelEditor model={existing} edit onSubmit={vi.fn()} onBack={onBack} onDirtyChange={onDirtyChange} />
+						</SettingsPageHost>
+					)
+				},
+				{ path: '/list', element: <p>The list</p> }
+			],
+			{ initialEntries: ['/editor'] }
+		);
+		const view = render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<RouterProvider router={router} />
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		return { router, onBack, view };
+	};
+
+	it('leaves navigation to the host, which asks once, and its own Back still asks', async () => {
+		const { router, onBack } = renderHosted();
+		fireEvent.change(await screen.findByLabelText('Model name'), { target: { value: 'Renamed' } });
+		act(() => {
+			router.navigate('/list');
+		});
+		const asks = await screen.findAllByRole('alertdialog');
+		expect(asks).toHaveLength(1);
+		expect(asks[0]).toHaveTextContent('This tab has changes that are not saved.');
+		fireEvent.click(within(asks[0]).getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(router.state.location.pathname).toBe('/editor');
+		fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+		const ask = await screen.findByRole('alertdialog');
+		expect(ask).toHaveTextContent('Your changes to “My model” are not saved.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+		expect(onBack).toHaveBeenCalledTimes(1);
+	});
+
+	it('reports its unsaved changes through onDirtyChange, and clean once it closes', async () => {
+		const onDirtyChange = vi.fn();
+		const { view } = renderHosted(onDirtyChange);
+		fireEvent.change(await screen.findByLabelText('Model name'), { target: { value: 'Renamed' } });
+		await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+		view.unmount();
+		expect(onDirtyChange).toHaveBeenLastCalledWith(false);
 	});
 });
 

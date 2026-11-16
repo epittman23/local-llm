@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw, Settings } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Pencil, Plus, RefreshCw } from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { toastFailure } from '@/components/common/failureToast';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { AddConnectionModal } from '@/components/settings/AddConnectionModal';
 import type { Connection } from '@/components/settings/connectionModel';
 import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { getModels } from '@/lib/apis';
@@ -22,82 +24,67 @@ type OllamaState = { enabled: boolean; urls: string[]; configs: ConfigMap };
 type DirectState = { ENABLE_DIRECT_CONNECTIONS?: boolean; ENABLE_BASE_MODELS_CACHE?: boolean };
 
 /**
- * One connection: a read-only URL, a cog that opens the editor, an enable switch.
- * (The URL is shown, not edited, in the row -- the modal is where it changes.)
- * A disabled connection is dimmed.
+ * One connection: its URL and what local-llm sends to, its state as badges
+ * (Off, Pipelines; never a faded row, DAT-3, COL-2), Edit, which opens the
+ * dialog, and the enable switch, outside any tooltip (#912).
  */
 function ConnectionRow({
 	url,
-	requestHint,
+	requestUrl,
 	config,
 	pipeline = false,
 	ollama = false,
 	keyValue,
 	onSubmit,
+	onToggle,
 	onDelete
 }: {
 	url: string;
-	requestHint: string;
+	requestUrl: string;
 	config: Record<string, any>;
 	pipeline?: boolean;
 	ollama?: boolean;
 	keyValue: string;
-	onSubmit: (connection: Connection) => void;
-	onDelete: () => void;
+	onSubmit: (connection: Connection) => Promise<boolean>;
+	onToggle: (enable: boolean) => void;
+	onDelete: () => Promise<boolean>;
 }) {
 	const [editing, setEditing] = useState(false);
 	const enabled = config?.enable ?? true;
 	return (
-		<>
+		<li className="flex min-w-0 items-center gap-2">
 			<AddConnectionModal
 				open={editing}
 				onOpenChange={setEditing}
 				edit
 				ollama={ollama}
 				connection={{ url, key: keyValue, config }}
-				onSubmit={onSubmit}
-				onDelete={onDelete}
+				onSubmit={async (c) => {
+					if (!(await onSubmit(c))) throw new Error('not saved');
+				}}
+				onDelete={async () => {
+					await onDelete();
+				}}
 			/>
-			<div className="flex items-center gap-1.5">
-				<Tip content={requestHint} side="top">
-					<div className={`relative flex min-w-0 flex-1 items-center ${enabled ? '' : 'opacity-50'}`}>
-						<input
-							className="bg-muted/40 h-7 w-full rounded-lg border px-2 text-xs"
-							placeholder={ollama ? 'Enter URL (e.g. http://localhost:11434)' : 'API Base URL'}
-							aria-label={ollama ? 'Ollama URL' : 'API Base URL'}
-							value={url}
-							readOnly
-						/>
-						{pipeline && (
-							<span className="text-muted-foreground absolute end-2 text-caption" title="Pipelines">
-								pipeline
-							</span>
-						)}
-					</div>
-				</Tip>
-				<Tip content="Configure">
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						type="button"
-						aria-label={`Configure ${url}`}
-						onClick={() => setEditing(true)}
-					>
-						<Settings className="size-4" />
-					</Button>
-				</Tip>
-				<Tip content={enabled ? 'Enabled' : 'Disabled'}>
-					<span>
-						<Switch
-							size="sm"
-							aria-label={`${enabled ? 'Disable' : 'Enable'} ${url}`}
-							checked={enabled}
-							onCheckedChange={(checked) => onSubmit({ url, key: keyValue, config: { ...config, enable: checked } })}
-						/>
-					</span>
-				</Tip>
+			<div className="flex min-w-0 flex-1 flex-col">
+				<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+					<span className="min-w-0 truncate font-mono text-body">{url}</span>
+					{!enabled && (
+						<Badge variant="secondary">
+							<span className="sr-only">, </span>Off
+						</Badge>
+					)}
+					{pipeline && <Badge variant="secondary">Pipelines</Badge>}
+				</span>
+				<span className="text-foreground-muted min-w-0 truncate text-dense">
+					local-llm sends requests to {requestUrl}
+				</span>
 			</div>
-		</>
+			<Button variant="ghost" size="icon-sm" type="button" aria-label={`Edit ${url}`} onClick={() => setEditing(true)}>
+				<Pencil aria-hidden />
+			</Button>
+			<Switch aria-label={`Enable ${url}`} checked={enabled} onCheckedChange={onToggle} />
+		</li>
 	);
 }
 
@@ -106,14 +93,12 @@ function ConnectionRow({
  * upstreams (this is where an OpenRouter or llama.cpp base URL and key live), plus
  * the two "user connections" switches.
  *
- * Every change saves at once -- toggling an API on or off, adding, editing or
- * deleting a connection -- as in the original; the Save button re-saves both APIs.
- * The connection list is edited through pure helpers (connectionsList.ts): URLs
- * lose a trailing slash, keys are kept the same length as the URLs, and deleting
- * one re-indexes the config map, which is keyed by list position.
- *
- * Not here yet: the Ollama row's "Manage" (pull / delete models) button, which
- * opens ManageOllama and is ported with the Models tab.
+ * Every change saves at once (FRM-3, `savesAtOnce`) -- toggling an API on or
+ * off, adding, editing or deleting a connection -- and says what it saved in
+ * one toast, or why it couldn't, putting the old values back. The connection
+ * list is edited through pure helpers (connectionsList.ts): URLs lose a
+ * trailing slash, keys are kept the same length as the URLs, and deleting one
+ * re-indexes the config map, which is keyed by list position.
  */
 export default function Connections() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -137,6 +122,7 @@ export default function Connections() {
 			]);
 			return { ollama: o, openai: l, direct: c };
 		},
+		retry: false,
 		gcTime: 0,
 		staleTime: Infinity,
 		refetchOnWindowFocus: false
@@ -165,11 +151,8 @@ export default function Connections() {
 		});
 		setDirect(d.direct ?? {});
 	}, [loaded.data, openai]);
-	useEffect(() => {
-		if (loaded.isError) toast.error(`${loaded.error}`);
-	}, [loaded.isError, loaded.error]);
 
-	// Which enabled OpenAI connections front a Pipelines server (shows a marker).
+	// Which enabled OpenAI connections front a Pipelines server (shows a badge).
 	useEffect(() => {
 		if (!openai?.enabled) return;
 		let cancelled = false;
@@ -179,7 +162,7 @@ export default function Connections() {
 				const res = await getOpenAIModels(token, idx);
 				if (!cancelled && res?.pipelines) setPipelineUrls((p) => ({ ...p, [url]: true }));
 			} catch {
-				/* an unreachable upstream just gets no marker */
+				/* an unreachable upstream just gets no badge */
 			}
 		});
 		return () => {
@@ -194,50 +177,51 @@ export default function Connections() {
 		queryClient.invalidateQueries({ queryKey: ['models-all'] });
 	};
 
-	// Each save shows the new values at once and puts the old ones back if the
-	// server refuses them. The `.catch` returns null: returning the toast's id
-	// (truthy) reported a failed save as done (docs/history/code-review.md M5).
-	const failed = (error: unknown) => {
-		toast.error(`${error}`);
-		return null;
-	};
-
-	/** Saves the OpenAI upstreams; whether the server took them. */
-	const saveOpenAI = async (next: OpenAIState): Promise<boolean> => {
+	/**
+	 * Saves the OpenAI-compatible upstreams, showing them at once and putting the
+	 * old ones back if the server refuses; whether it took them.
+	 */
+	const saveOpenAI = async (next: OpenAIState, done: string): Promise<boolean> => {
 		const urls = stripTrailingSlashes(next.urls);
 		const state = { ...next, urls, keys: alignKeys(urls, next.keys) };
 		const prev = openai;
 		setOpenAI(state);
-		const res = await updateOpenAIConfig(token, {
-			ENABLE_OPENAI_API: state.enabled,
-			OPENAI_API_BASE_URLS: state.urls,
-			OPENAI_API_KEYS: state.keys,
-			OPENAI_API_CONFIGS: state.configs
-		}).catch(failed);
-		if (!res) {
+		try {
+			const res = await updateOpenAIConfig(token, {
+				ENABLE_OPENAI_API: state.enabled,
+				OPENAI_API_BASE_URLS: state.urls,
+				OPENAI_API_KEYS: state.keys,
+				OPENAI_API_CONFIGS: state.configs
+			});
+			if (!res) throw new Error('The server returned nothing.');
+		} catch (error) {
 			if (prev) setOpenAI(prev);
+			toastFailure("Couldn't save the OpenAI-compatible connections.", error);
 			return false;
 		}
-		toast.success('OpenAI API settings updated');
+		toast.success(done);
 		refreshModels();
 		return true;
 	};
 
-	/** Saves the Ollama upstreams; whether the server took them. */
-	const saveOllama = async (next: OllamaState): Promise<boolean> => {
+	/** Saves the Ollama upstreams the same way; whether the server took them. */
+	const saveOllama = async (next: OllamaState, done: string): Promise<boolean> => {
 		const state = { ...next, urls: stripTrailingSlashes(next.urls) };
 		const prev = ollama;
 		setOllama(state);
-		const res = await updateOllamaConfig(token, {
-			ENABLE_OLLAMA_API: state.enabled,
-			OLLAMA_BASE_URLS: state.urls,
-			OLLAMA_API_CONFIGS: state.configs
-		}).catch(failed);
-		if (!res) {
+		try {
+			const res = await updateOllamaConfig(token, {
+				ENABLE_OLLAMA_API: state.enabled,
+				OLLAMA_BASE_URLS: state.urls,
+				OLLAMA_API_CONFIGS: state.configs
+			});
+			if (!res) throw new Error('The server returned nothing.');
+		} catch (error) {
 			if (prev) setOllama(prev);
+			toastFailure("Couldn't save the Ollama connections.", error);
 			return false;
 		}
-		toast.success('Ollama API settings updated');
+		toast.success(done);
 		refreshModels();
 		return true;
 	};
@@ -245,9 +229,14 @@ export default function Connections() {
 	const saveDirect = async (next: DirectState) => {
 		const prev = direct;
 		setDirect(next);
-		const res = await setConnectionsConfig(token, next).catch(failed);
-		if (!res) return void setDirect(prev);
-		toast.success('Connections settings updated');
+		try {
+			const res = await setConnectionsConfig(token, next);
+			if (!res) throw new Error('The server returned nothing.');
+		} catch (error) {
+			setDirect(prev);
+			toastFailure("Couldn't save the change.", error);
+			return;
+		}
 		refreshModels();
 		await saved();
 	};
@@ -259,37 +248,48 @@ export default function Connections() {
 			refreshModels();
 			toast.success('Model list refreshed');
 		} catch (error) {
-			toast.error(`${error}`);
+			toastFailure("Couldn't refresh the model list.", error);
 		} finally {
 			setRefreshing(false);
 		}
 	};
 
-	// "Settings saved" only when both saves were taken: it used to follow two
-	// failures, after each had shown its own error (#239).
-	const submitAll = async () => {
-		// Nothing loaded (the tab failed to load) is nothing saved, not a success.
-		const results = await Promise.all([openai ? saveOpenAI(openai) : false, ollama ? saveOllama(ollama) : false]);
-		if (results.every(Boolean)) await saved();
-	};
+	const onOff = (on: boolean) => (on ? 'on' : 'off');
+	const quoted = (url: string) => `“${url}”`;
+
+	if (loaded.isError) {
+		return (
+			<SettingsForm title="Connections" savesAtOnce>
+				<LoadFailed
+					what="the connections"
+					error={loaded.error}
+					retrying={loaded.isFetching}
+					onRetry={() => void loaded.refetch()}
+				/>
+			</SettingsForm>
+		);
+	}
 
 	const ready = openai && ollama && direct;
-	const heading = 'text-xs font-normal';
 
 	return (
-		<SettingsForm title="Connections" loading={!ready && !loaded.isError} onSubmit={submitAll}>
+		<SettingsForm title="Connections" loading={!ready} savesAtOnce>
 			{ready && (
 				<>
 					<AddConnectionModal
 						open={showAddOpenAI}
 						onOpenChange={setShowAddOpenAI}
 						onSubmit={async (c) => {
-							await saveOpenAI({
-								...openai,
-								urls: [...openai.urls, c.url],
-								keys: [...openai.keys, c.key],
-								configs: { ...openai.configs, [openai.urls.length]: c.config }
-							});
+							const ok = await saveOpenAI(
+								{
+									...openai,
+									urls: [...openai.urls, c.url],
+									keys: [...openai.keys, c.key],
+									configs: { ...openai.configs, [openai.urls.length]: c.config }
+								},
+								`${quoted(c.url)} added`
+							);
+							if (!ok) throw new Error('not saved');
 						}}
 					/>
 					<AddConnectionModal
@@ -297,134 +297,126 @@ export default function Connections() {
 						onOpenChange={setShowAddOllama}
 						ollama
 						onSubmit={async (c) => {
-							await saveOllama({
-								...ollama,
-								urls: [...ollama.urls, c.url],
-								configs: { ...ollama.configs, [ollama.urls.length]: { ...c.config, key: c.key } }
-							});
+							const ok = await saveOllama(
+								{
+									...ollama,
+									urls: [...ollama.urls, c.url],
+									configs: { ...ollama.configs, [ollama.urls.length]: { ...c.config, key: c.key } }
+								},
+								`${quoted(c.url)} added`
+							);
+							if (!ok) throw new Error('not saved');
 						}}
 					/>
 
 					<SettingsSection first>
-						<SettingRow label="OpenAI API">
+						<SettingRow label="OpenAI-compatible connections" description="OpenRouter, or llama-server on :8090.">
 							{(id) => (
 								<SettingSwitch
 									checked={openai.enabled}
-									onChange={(enabled) => saveOpenAI({ ...openai, enabled })}
+									onChange={(enabled) =>
+										saveOpenAI({ ...openai, enabled }, `OpenAI-compatible connections are ${onOff(enabled)}`)
+									}
 									labelledBy={id}
 								/>
 							)}
 						</SettingRow>
 						{openai.enabled && (
-							<div className="flex flex-col gap-1.5">
-								<div className="flex items-center justify-between">
-									<div className={heading}>Manage OpenAI API Connections</div>
-									<Tip content="Add Connection">
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											type="button"
-											aria-label="Add OpenAI Connection"
-											onClick={() => setShowAddOpenAI(true)}
-										>
-											<Plus className="size-4" />
-										</Button>
-									</Tip>
-								</div>
-								<div className="flex flex-col gap-1.5">
-									{openai.urls.map((url, idx) => (
-										<ConnectionRow
-											key={`${idx}:${url}`}
-											url={url}
-											keyValue={openai.keys[idx] ?? ''}
-											config={openai.configs[idx] ?? {}}
-											pipeline={Boolean(pipelineUrls[url])}
-											requestHint={`WebUI will make requests to "${url}/chat/completions"`}
-											onSubmit={(c) =>
-												saveOpenAI({
+							<ConnectionList
+								label="OpenAI-compatible connections"
+								empty="None yet. Add OpenRouter, or llama-server on :8090."
+								onAdd={() => setShowAddOpenAI(true)}
+							>
+								{openai.urls.map((url, idx) => (
+									<ConnectionRow
+										key={`${idx}:${url}`}
+										url={url}
+										keyValue={openai.keys[idx] ?? ''}
+										config={openai.configs[idx] ?? {}}
+										pipeline={Boolean(pipelineUrls[url])}
+										requestUrl={`${url}/chat/completions`}
+										onSubmit={(c) =>
+											saveOpenAI(
+												{
 													...openai,
 													urls: openai.urls.map((u, i) => (i === idx ? c.url : u)),
 													keys: openai.keys.map((k, i) => (i === idx ? c.key : k)),
 													configs: { ...openai.configs, [idx]: c.config }
-												})
-											}
-											onDelete={() => {
-												const r = removeConnection(openai.urls, openai.keys, openai.configs, idx);
-												saveOpenAI({ ...openai, urls: r.urls, keys: r.keys ?? [], configs: r.configs });
-											}}
-										/>
-									))}
-								</div>
-							</div>
+												},
+												`${quoted(c.url)} saved`
+											)
+										}
+										onToggle={(enable) =>
+											void saveOpenAI(
+												{ ...openai, configs: { ...openai.configs, [idx]: { ...openai.configs[idx], enable } } },
+												`${quoted(url)} is ${onOff(enable)}`
+											)
+										}
+										onDelete={() => {
+											const r = removeConnection(openai.urls, openai.keys, openai.configs, idx);
+											return saveOpenAI(
+												{ ...openai, urls: r.urls, keys: r.keys ?? [], configs: r.configs },
+												`${quoted(url)} deleted`
+											);
+										}}
+									/>
+								))}
+							</ConnectionList>
 						)}
 
-						<SettingRow label="Ollama API">
+						<SettingRow label="Ollama" description="Models from an Ollama server.">
 							{(id) => (
 								<SettingSwitch
 									checked={ollama.enabled}
-									onChange={(enabled) => saveOllama({ ...ollama, enabled })}
+									onChange={(enabled) => saveOllama({ ...ollama, enabled }, `Ollama connections are ${onOff(enabled)}`)}
 									labelledBy={id}
 								/>
 							)}
 						</SettingRow>
 						{ollama.enabled && (
-							<div className="flex flex-col gap-1.5">
-								<div className="flex items-center justify-between">
-									<div className={heading}>Manage Ollama API Connections</div>
-									<Tip content="Add Connection">
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											type="button"
-											aria-label="Add Ollama Connection"
-											onClick={() => setShowAddOllama(true)}
-										>
-											<Plus className="size-4" />
-										</Button>
-									</Tip>
-								</div>
-								<div className="flex flex-col gap-1.5">
-									{ollama.urls.map((url, idx) => (
-										<ConnectionRow
-											key={`${idx}:${url}`}
-											ollama
-											url={url}
-											keyValue={ollama.configs[idx]?.key ?? ''}
-											config={ollama.configs[idx] ?? {}}
-											requestHint={`WebUI will make requests to "${url}/api/chat"`}
-											onSubmit={(c) =>
-												saveOllama({
+							<ConnectionList
+								label="Ollama connections"
+								empty="None yet. Add the URL of an Ollama server."
+								onAdd={() => setShowAddOllama(true)}
+							>
+								{ollama.urls.map((url, idx) => (
+									<ConnectionRow
+										key={`${idx}:${url}`}
+										ollama
+										url={url}
+										keyValue={ollama.configs[idx]?.key ?? ''}
+										config={ollama.configs[idx] ?? {}}
+										requestUrl={`${url}/api/chat`}
+										onSubmit={(c) =>
+											saveOllama(
+												{
 													...ollama,
 													urls: ollama.urls.map((u, i) => (i === idx ? c.url : u)),
 													configs: { ...ollama.configs, [idx]: { ...c.config, key: c.key } }
-												})
-											}
-											onDelete={() => {
-												const r = removeConnection(ollama.urls, null, ollama.configs, idx);
-												saveOllama({ ...ollama, urls: r.urls, configs: r.configs });
-											}}
-										/>
-									))}
-								</div>
-								<div className="text-muted-foreground text-xs">
-									Trouble accessing Ollama?{' '}
-									<a
-										className="text-foreground underline"
-										href="https://github.com/open-webui/open-webui#troubleshooting"
-										target="_blank"
-										rel="noreferrer"
-									>
-										Click here for help.
-									</a>
-								</div>
-							</div>
+												},
+												`${quoted(c.url)} saved`
+											)
+										}
+										onToggle={(enable) =>
+											void saveOllama(
+												{ ...ollama, configs: { ...ollama.configs, [idx]: { ...ollama.configs[idx], enable } } },
+												`${quoted(url)} is ${onOff(enable)}`
+											)
+										}
+										onDelete={() => {
+											const r = removeConnection(ollama.urls, null, ollama.configs, idx);
+											return saveOllama({ ...ollama, urls: r.urls, configs: r.configs }, `${quoted(url)} deleted`);
+										}}
+									/>
+								))}
+							</ConnectionList>
 						)}
 					</SettingsSection>
 
-					<SettingsSection title="User Connections">
+					<SettingsSection title="User connections">
 						<SettingRow
-							label="Direct Connections"
-							description="Direct Connections allow users to connect to their own OpenAI compatible API endpoints."
+							label="Direct connections"
+							description="Each user may add their own OpenAI-compatible servers, which their browser talks to directly."
 						>
 							{(id) => (
 								<SettingSwitch
@@ -435,36 +427,63 @@ export default function Connections() {
 							)}
 						</SettingRow>
 						<SettingRow
-							label="Cache Base Model List"
-							description="Base Model List Cache speeds up access by fetching base models only at startup or on settings save—faster, but may not show recent base model changes."
+							label="Cache the base model list"
+							description="The list of models is read at startup and on each save, so it opens faster but can miss a model added since."
 						>
 							{(id) => (
-								<div className="flex items-center gap-2">
-									{direct.ENABLE_BASE_MODELS_CACHE && (
-										<Tip content="Refresh">
-											<Button
-												variant="ghost"
-												size="icon-sm"
-												type="button"
-												aria-label="Refresh"
-												disabled={refreshing}
-												onClick={refreshModelList}
-											>
-												{refreshing ? <Spinner className="size-3.5" /> : <RefreshCw className="size-4" />}
-											</Button>
-										</Tip>
-									)}
-									<SettingSwitch
-										checked={Boolean(direct.ENABLE_BASE_MODELS_CACHE)}
-										onChange={(v) => saveDirect({ ...direct, ENABLE_BASE_MODELS_CACHE: v })}
-										labelledBy={id}
-									/>
-								</div>
+								<SettingSwitch
+									checked={Boolean(direct.ENABLE_BASE_MODELS_CACHE)}
+									onChange={(v) => saveDirect({ ...direct, ENABLE_BASE_MODELS_CACHE: v })}
+									labelledBy={id}
+								/>
 							)}
 						</SettingRow>
+						{direct.ENABLE_BASE_MODELS_CACHE && (
+							<Button
+								variant="outline"
+								size="sm"
+								type="button"
+								className="self-start"
+								disabled={refreshing}
+								aria-busy={refreshing || undefined}
+								onClick={refreshModelList}
+							>
+								{refreshing ? <Spinner className="size-3.5" /> : <RefreshCw aria-hidden />}
+								{refreshing ? 'Refreshing…' : 'Refresh the model list'}
+							</Button>
+						)}
 					</SettingsSection>
 				</>
 			)}
 		</SettingsForm>
+	);
+}
+
+/** A list of connections under its API's switch, with Add connection, or what to add when it is empty. */
+function ConnectionList({
+	label,
+	empty,
+	onAdd,
+	children
+}: {
+	label: string;
+	empty: string;
+	onAdd: () => void;
+	children: ReactNode[];
+}) {
+	return (
+		<div className="flex flex-col gap-2">
+			{children.length > 0 ? (
+				<ul aria-label={label} className="flex flex-col gap-2">
+					{children}
+				</ul>
+			) : (
+				<p className="text-foreground-muted text-dense">{empty}</p>
+			)}
+			<Button variant="outline" size="sm" type="button" className="self-start" onClick={onAdd}>
+				<Plus aria-hidden />
+				Add connection
+			</Button>
+		</div>
 	);
 }
