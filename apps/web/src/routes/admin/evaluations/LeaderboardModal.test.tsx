@@ -9,14 +9,18 @@ import type { RankedModel } from './leaderboard';
 
 vi.mock('@/lib/apis/evaluations', () => ({ getModelHistory: vi.fn() }));
 vi.mock('./ModelActivityChart', () => ({
-	ModelActivityChart: ({ weekly }: { weekly: boolean }) => <div data-testid="chart">{weekly ? 'weekly' : 'daily'}</div>
+	ModelActivityChart: ({ weekly, history }: { weekly: boolean; history: unknown[] }) => (
+		<div data-testid="chart">
+			{weekly ? 'weekly' : 'daily'} {history.length}
+		</div>
+	)
 }));
 
 const MODEL: RankedModel = {
-	id: 'm1',
+	id: 'qwen/qwen3.6-27b',
 	name: 'Model One',
-	rating: 1000,
-	stats: { count: 3, won: '2', lost: '1' },
+	rating: 1032,
+	stats: { count: 3, won: 2, lost: 1 },
 	top_tags: [{ tag: 'coding', count: 4 }]
 };
 
@@ -39,31 +43,55 @@ const renderModal = (model: RankedModel | null = MODEL) => {
 };
 
 describe('LeaderboardModal', () => {
-	it('starts on the 30D range with a daily chart', async () => {
+	it('starts on 30 days with a daily chart, asking for the slash id as is', async () => {
 		renderModal();
-		expect(screen.getByRole('button', { name: '30D' }).getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByTestId('chart').textContent).toBe('daily');
-		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'm1', 30));
+		expect(screen.getByRole('radio', { name: '30 days' })).toHaveAttribute('aria-checked', 'true');
+		expect(screen.getByTestId('chart').textContent).toContain('daily');
+		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'qwen/qwen3.6-27b', 30));
 	});
 
-	it('switches to a weekly chart and refetches for the 1Y range', async () => {
+	it('switches to a weekly chart and refetches for 1 year', async () => {
 		renderModal();
-		fireEvent.click(screen.getByRole('button', { name: '1Y' }));
-		expect(screen.getByRole('button', { name: '1Y' }).getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByRole('button', { name: '30D' }).getAttribute('aria-pressed')).toBe('false');
-		expect(screen.getByTestId('chart').textContent).toBe('weekly');
-		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'm1', 365));
+		fireEvent.click(screen.getByRole('radio', { name: '1 year' }));
+		expect(screen.getByRole('radio', { name: '1 year' })).toHaveAttribute('aria-checked', 'true');
+		expect(screen.getByRole('radio', { name: '30 days' })).toHaveAttribute('aria-checked', 'false');
+		expect(screen.getByTestId('chart').textContent).toContain('weekly');
+		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'qwen/qwen3.6-27b', 365));
 	});
 
-	it('asks for all time with days 0 from the All button', async () => {
+	it('asks for all time with days 0', async () => {
 		renderModal();
-		fireEvent.click(screen.getByRole('button', { name: 'All' }));
-		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'm1', 0));
+		fireEvent.click(screen.getByRole('radio', { name: 'All time' }));
+		await waitFor(() => expect(getModelHistory).toHaveBeenCalledWith('tok', 'qwen/qwen3.6-27b', 0));
 	});
 
 	it('lists the model top tags with their counts', () => {
 		renderModal();
 		expect(screen.getByText('coding')).toBeTruthy();
+	});
+
+	it('says there are no tags rather than a dash', () => {
+		renderModal({ ...MODEL, top_tags: [] });
+		expect(screen.getByText("No tags on this model's ratings.")).toBeInTheDocument();
+	});
+
+	it('names the model, its id, rating and record', () => {
+		renderModal();
+		expect(screen.getByRole('heading', { name: 'Model One' })).toBeInTheDocument();
+		expect(screen.getByText('qwen/qwen3.6-27b')).toHaveClass('font-mono');
+		expect(screen.getByText('qwen/qwen3.6-27b').parentElement).toHaveTextContent(
+			'qwen/qwen3.6-27b · Elo 1,032 · 2 wins, 1 loss'
+		);
+	});
+
+	it('shows a failed history request in place with Try again, not as no activity (#913)', async () => {
+		vi.mocked(getModelHistory).mockRejectedValueOnce('Not found');
+		renderModal();
+		expect(await screen.findByText("Couldn't load this model's activity")).toBeInTheDocument();
+		expect(screen.queryByTestId('chart')).toBeNull();
+		vi.mocked(getModelHistory).mockResolvedValueOnce({ history: [{ date: '2026-11-15', won: 1, lost: 0 }] } as never);
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByTestId('chart')).toHaveTextContent('daily 1');
 	});
 
 	it('closes from the Close button', () => {

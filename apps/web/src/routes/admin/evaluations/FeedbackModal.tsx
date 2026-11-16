@@ -1,10 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { Spinner } from '@/components/common/Spinner';
+import { ExternalLink } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getFeedbackById } from '@/lib/apis/evaluations';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { dayjs } from '@/lib/utils/dates';
 import { appHref } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { feedbackResult, ResultBadge } from './feedbackResult';
 
 type Message = { content?: string; parentId?: string | null };
 export type FeedbackItem = {
@@ -23,20 +27,23 @@ export type FeedbackItem = {
 	updated_at: number;
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
 	return (
-		<div className="mb-2 flex w-full flex-col">
-			<div className="text-muted-foreground mb-1 text-xs">{label}</div>
-			{children}
+		<div className="flex flex-col gap-0.5">
+			<dt className="text-foreground-muted text-dense">{label}</dt>
+			<dd className="break-words">{children}</dd>
 		</div>
 	);
 }
 
+/** A missing value is an en dash, never blank (DAT-2). */
+const orDash = (text?: string | null) => text || <span className="text-foreground-muted">–</span>;
+
 /**
- * Ports Evaluations/FeedbackModal.svelte: one feedback's chat link, the prompt
- * and response it was about (read from the chat snapshot), rating, reason,
- * comment and tags. The Svelte version throws when a feedback has no snapshot;
- * here the prompt and response are simply omitted.
+ * Ports Evaluations/FeedbackModal.svelte: one rating's model, result and date,
+ * the prompt and response it was about (read from the chat snapshot), its
+ * reason, comment and tags, and a link to the chat. The Svelte version throws
+ * when a feedback has no snapshot; here the prompt and response are omitted.
  */
 export function FeedbackModal({
 	open,
@@ -48,9 +55,10 @@ export function FeedbackModal({
 	feedback: FeedbackItem | null;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const singleUser = useSingleUser();
 	const detail = useQuery({
 		queryKey: ['admin', 'feedback', feedback?.id],
-		queryFn: () => getFeedbackById(token, feedback!.id).catch(() => null),
+		queryFn: () => getFeedbackById(token, feedback?.id ?? '').catch(() => null),
 		enabled: open && !!feedback?.id
 	});
 
@@ -66,68 +74,85 @@ export function FeedbackModal({
 	const response = messages[data?.meta?.message_id ?? ''];
 	const prompt = response?.parentId ? messages[response.parentId] : undefined;
 	const chatId = feedback.meta?.chat_id;
+	const siblings = feedback.data?.sibling_model_ids ?? [];
+	const when = dayjs(feedback.updated_at * 1000);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle className="text-sm font-medium">Feedback Details</DialogTitle>
-					<DialogDescription className="sr-only">The chat, rating and comments behind one feedback.</DialogDescription>
+					<DialogTitle>Rating details</DialogTitle>
+					<DialogDescription className="sr-only">
+						The model, result and chat behind one rating, with its reason and comment.
+					</DialogDescription>
 				</DialogHeader>
-				{detail.isPending ? (
-					<div className="flex h-32 w-full items-center justify-center">
-						<Spinner />
+				<dl className="flex w-full flex-col gap-3">
+					<div className="grid grid-cols-2 gap-3">
+						<Field label="Model">
+							<span className="font-mono break-all">{orDash(feedback.data?.model_id)}</span>
+						</Field>
+						<Field label="Result">
+							<ResultBadge result={feedbackResult(feedback)} />
+						</Field>
+						{siblings.length > 0 && (
+							<Field label="Compared with">
+								<span className="font-mono break-all">{siblings.join(', ')}</span>
+							</Field>
+						)}
+						<Field label="Rated">
+							<time dateTime={when.toISOString()}>{when.format('YYYY-MM-DD HH:mm')}</time>
+						</Field>
+						{/* S4-D1: who rated says nothing while the install has one account. */}
+						{!singleUser && feedback.user?.name && <Field label="By">{feedback.user.name}</Field>}
 					</div>
-				) : (
-					<div className="flex w-full flex-col">
-						<Field label="Chat ID">
-							<div className="flex-1 text-xs">
-								{chatId ? (
-									<a href={appHref(`/s/${chatId}`)} className="hover:underline" target="_blank" rel="noreferrer">
-										{chatId}
-									</a>
-								) : (
-									'-'
-								)}
-							</div>
-						</Field>
-						{prompt && (
-							<Field label="Prompt">
-								<div className="flex-1 text-xs break-words whitespace-pre-line">{prompt.content || '-'}</div>
-							</Field>
-						)}
-						{response && (
-							<Field label="Response">
-								<div className="max-h-32 flex-1 overflow-y-auto text-xs break-words whitespace-pre-line">
-									{response.content || '-'}
-								</div>
-							</Field>
-						)}
-						<Field label="Rating">
-							<div className="flex-1 text-xs">{String(feedback.data?.details?.rating ?? '-')}</div>
-						</Field>
-						<Field label="Reason">
-							<div className="flex-1 text-xs">{feedback.data?.reason || '-'}</div>
-						</Field>
-						<Field label="Comment">
-							<div className="flex-1 text-xs">{feedback.data?.comment || '-'}</div>
-						</Field>
-						{feedback.data?.tags && feedback.data.tags.length > 0 && (
-							<div className="-mx-1 mb-2 mt-1 flex flex-wrap gap-1">
+					{detail.isPending ? (
+						<div aria-busy="true" className="bg-surface-3 h-20 animate-pulse rounded">
+							<span className="sr-only" role="status">
+								Loading the chat
+							</span>
+						</div>
+					) : (
+						<>
+							{prompt && (
+								<Field label="Prompt">
+									<span className="whitespace-pre-line">{orDash(prompt.content)}</span>
+								</Field>
+							)}
+							{response && (
+								<Field label="Response">
+									<div className="max-h-40 overflow-y-auto whitespace-pre-line">{orDash(response.content)}</div>
+								</Field>
+							)}
+						</>
+					)}
+					<Field label="Reason">{orDash(feedback.data?.reason)}</Field>
+					<Field label="Comment">{orDash(feedback.data?.comment)}</Field>
+					{feedback.data?.tags && feedback.data.tags.length > 0 && (
+						<Field label="Tags">
+							<span className="flex flex-wrap gap-1">
 								{feedback.data.tags.map((tag) => (
-									<span key={tag} className="bg-muted rounded-full px-2 py-0.5 text-caption">
+									<span key={tag} className="bg-muted text-caption rounded-full px-2 py-0.5">
 										{tag}
 									</span>
 								))}
-							</div>
-						)}
-						<div className="flex justify-end pt-2">
-							<Button size="sm" onClick={() => onOpenChange(false)}>
-								Close
-							</Button>
-						</div>
-					</div>
-				)}
+							</span>
+						</Field>
+					)}
+				</dl>
+				<div className="flex flex-wrap justify-end gap-2">
+					{chatId && (
+						<Button asChild variant="outline">
+							<a href={appHref(`/s/${chatId}`)} target="_blank" rel="noreferrer">
+								Open chat
+								<ExternalLink data-icon="inline-end" aria-hidden />
+								<span className="sr-only"> (opens in a new tab)</span>
+							</a>
+						</Button>
+					)}
+					<Button variant="outline" onClick={() => onOpenChange(false)}>
+						Close
+					</Button>
+				</div>
 			</DialogContent>
 		</Dialog>
 	);

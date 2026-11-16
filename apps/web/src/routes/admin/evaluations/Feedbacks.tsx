@@ -1,11 +1,14 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Check, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from 'lucide-react';
+import { ChevronDown, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ListEmptyState } from '@/components/common/ListChrome';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { TagSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
-import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -13,53 +16,51 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Table } from '@/components/ui/table';
 import { deleteFeedbackById, exportAllFeedbacks, getFeedbackItems, getFeedbackModelIds } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { openRow } from '../rowOpen';
+import { TableSkeleton } from '../TableSkeleton';
 import { type FeedbackItem, FeedbackModal } from './FeedbackModal';
-import { feedbacksToCsv, ratingOutcome } from './feedbackCsv';
+import { feedbacksToCsv } from './feedbackCsv';
+import { feedbackResult, ResultBadge } from './feedbackResult';
 
 const PER_PAGE = 30;
 
-const OUTCOME_STYLE = {
-	won: { label: 'Won', className: 'bg-success/15 text-success' },
-	draw: { label: 'Draw', className: 'bg-muted text-muted-foreground' },
-	lost: { label: 'Lost', className: 'bg-danger/15 text-danger' }
-} as const;
-
-const COLUMNS: { key: string; label: string; className: string; inner?: string }[] = [
-	{ key: 'user', label: 'User', className: 'w-3', inner: 'justify-end' },
-	{ key: 'model_id', label: 'Models', className: '' },
-	{ key: 'rating', label: 'Result', className: 'text-right w-fit', inner: 'justify-end' },
-	{ key: 'updated_at', label: 'Updated At', className: 'text-right w-0', inner: 'justify-end' }
+const SORTS: { key: string; label: string; className: string; align?: 'end' }[] = [
+	{ key: 'model_id', label: 'Model', className: '' },
+	{ key: 'rating', label: 'Result', className: 'w-24' },
+	{ key: 'updated_at', label: 'Updated', className: 'hidden w-36 sm:table-cell', align: 'end' }
 ];
 
 /**
- * Ports Evaluations/Feedbacks.svelte: the paginated (30/page), sortable feedback
- * table with a model filter and JSON / CSV export. Click a row for details.
+ * Ports Evaluations/Feedbacks.svelte: the paginated (30/page), sortable
+ * feedback table with a model filter and JSON / CSV export. A row opens its
+ * details, from its model name (a button, NAV-5) or anywhere on the row.
  *
- * Differences from the Svelte version, all small fixes: the Result cell is
- * always rendered (the original omits it when the rating is falsy, shifting the
- * columns, and a numeric `0` "draw" is falsy); and the unused "share to
- * community" handler (it references an undefined variable) is not ported.
+ * The User column shows only while the install has more than one account
+ * (S4-D1). Deleting a rating asks first (ACT-3); a failure says what failed
+ * with the server's words behind Details (FBK-4).
  */
 export function Feedbacks() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const queryClient = useQueryClient();
 	const setCount = useAdminStore((s) => s.setCount);
+	const singleUser = useSingleUser();
 	const [page, setPage] = useState(1);
 	const [orderBy, setOrderBy] = useState('updated_at');
 	const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
 	const [modelId, setModelId] = useState('');
 	const [selected, setSelected] = useState<FeedbackItem | null>(null);
 	const [showModal, setShowModal] = useState(false);
+	const [deleting, setDeleting] = useState<FeedbackItem | null>(null);
 
 	const list = useQuery({
 		queryKey: ['admin', 'feedbacks', { orderBy, direction, page, modelId }],
@@ -75,11 +76,9 @@ export function Feedbacks() {
 	const items = list.data?.items ?? null;
 	const total = list.data?.total ?? null;
 	useEffect(() => {
-		if (list.isError) toast.error(`${list.error}`);
-	}, [list.isError, list.error]);
-	useEffect(() => {
-		if (total !== null) setCount('feedback', total);
-	}, [total, setCount]);
+		// The tab keeps the whole count while the model filter narrows the list (DAT-2).
+		if (total !== null && modelId === '') setCount('feedback', total);
+	}, [total, modelId, setCount]);
 
 	const setSortKey = (key: string) => {
 		if (orderBy === key) setDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -88,23 +87,29 @@ export function Feedbacks() {
 			setDirection('asc');
 		}
 	};
+	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
+	const open = (feedback: FeedbackItem) => {
+		setSelected(feedback);
+		setShowModal(true);
+	};
 
 	const deleteFeedback = async (id: string) => {
 		const res = await deleteFeedbackById(token, id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't delete the rating.", error);
 			return null;
 		});
 		if (res) {
-			toast.success('Feedback deleted successfully');
-			setPage(1);
+			toast.success('Rating deleted');
+			if (items?.length === 1 && page > 1) setPage(page - 1);
 			queryClient.invalidateQueries({ queryKey: ['admin', 'feedbacks'] });
 			queryClient.invalidateQueries({ queryKey: ['admin', 'feedback-model-ids'] });
+			queryClient.invalidateQueries({ queryKey: ['admin', 'leaderboard'] });
 		}
 	};
 
 	const exportFeedbacks = async (format: 'json' | 'csv') => {
 		const all = await exportAllFeedbacks(token, modelId).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't export the ratings.", error);
 			return null;
 		});
 		if (!all) return;
@@ -117,58 +122,56 @@ export function Feedbacks() {
 			);
 	};
 
-	if (items === null || total === null) {
-		return (
-			<div className="my-10 flex justify-center">
-				<Spinner />
-			</div>
-		);
+	if (list.isError && items === null) {
+		return <LoadFailed what="feedback" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />;
 	}
+	if (items === null || total === null) return <TableSkeleton label="feedback" />;
 
 	const ids = modelIds.data ?? [];
+	const deletingName = deleting?.data?.model_id;
 	return (
-		<div>
+		<div className="flex flex-col gap-2">
 			<FeedbackModal open={showModal} onOpenChange={setShowModal} feedback={selected} />
+			<ConfirmDialog
+				open={deleting !== null}
+				onOpenChange={(next) => !next && setDeleting(null)}
+				title="Delete this rating?"
+				confirmLabel="Delete rating"
+				destructive
+				onConfirm={() => {
+					if (deleting) deleteFeedback(deleting.id);
+					setDeleting(null);
+				}}
+			>
+				{deletingName ? `The rating of ${deletingName} is removed` : 'The rating is removed'}, and the leaderboard is
+				worked out again without it. This can't be undone.
+			</ConfirmDialog>
 
 			{(ids.length > 0 || total > 0) && (
-				<div className="flex h-8 w-full flex-1 items-center gap-2">
-					<div className="flex min-w-0 flex-1 overflow-x-auto bg-transparent">
-						{ids.length > 0 && (
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant="ghost" size="icon-sm" type="button" aria-label="Model">
-										<span className="truncate px-0.5">{modelId || 'All'}</span>
-										<ChevronDown className="size-3.5" strokeWidth={2.5} />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-									<DropdownMenuRadioGroup
-										value={modelId}
-										onValueChange={(value) => {
-											setModelId(value);
-											setPage(1);
-										}}
-									>
-										{[{ value: '', label: 'All' }, ...ids.map((id) => ({ value: id, label: id }))].map((item) => (
-											<DropdownMenuRadioItem key={item.value} value={item.value}>
-												{item.label}
-												{item.value === modelId && <Check className="ml-auto" />}
-											</DropdownMenuRadioItem>
-										))}
-									</DropdownMenuRadioGroup>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						)}
-					</div>
+				<div className="flex w-full flex-wrap items-center justify-between gap-2">
+					{ids.length > 0 ? (
+						<TagSelector
+							value={modelId}
+							tags={ids}
+							name="Model"
+							placeholder="All models"
+							onChange={(value) => {
+								setModelId(value);
+								setPage(1);
+							}}
+						/>
+					) : (
+						<span />
+					)}
 					{total > 0 && (
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="sm" className="shrink-0" type="button">
-									Export
-									<ChevronDown className="size-3" strokeWidth={2.5} />
+								<Button variant="outline" size="sm" type="button">
+									Export ratings
+									<ChevronDown data-icon="inline-end" />
 								</Button>
 							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="w-[10.625rem]">
+							<DropdownMenuContent align="end">
 								<DropdownMenuItem onSelect={() => exportFeedbacks('json')}>Export as JSON</DropdownMenuItem>
 								<DropdownMenuItem onSelect={() => exportFeedbacks('csv')}>Export as CSV</DropdownMenuItem>
 							</DropdownMenuContent>
@@ -177,146 +180,131 @@ export function Feedbacks() {
 				</div>
 			)}
 
-			<div className="relative max-w-full overflow-x-auto whitespace-nowrap">
-				{items.length === 0 ? (
-					<ListEmptyState
-						title="No feedback yet"
-						description="The ratings you give replies in chat appear here."
-						filtered={modelId !== ''}
-						onClear={() => {
-							setModelId('');
-							setPage(1);
-						}}
-					/>
-				) : (
-					<table className="text-muted-foreground w-full max-w-full table-auto px-2 text-left text-sm">
-						<thead className="text-foreground bg-transparent text-xs uppercase">
-							<tr className="border-b">
-								{COLUMNS.map((col) => (
-									<th
-										key={col.key}
-										scope="col"
-										className={cn('cursor-pointer px-2.5 py-2 font-normal select-none', col.className)}
+			{items.length === 0 ? (
+				<ListEmptyState
+					title="No feedback yet"
+					description="The ratings you give replies in chat appear here."
+					filtered={modelId !== ''}
+					onClear={() => {
+						setModelId('');
+						setPage(1);
+					}}
+				/>
+			) : (
+				<Table aria-label="Feedback" className="text-dense table-fixed text-left">
+					<thead>
+						<tr className="border-b">
+							{!singleUser && (
+								<th scope="col" className="text-foreground-muted hidden w-40 px-2 py-1.5 font-normal md:table-cell">
+									User
+								</th>
+							)}
+							{SORTS.map((col) => (
+								<th
+									key={col.key}
+									scope="col"
+									aria-sort={sortState(col.key)}
+									className={cn('py-1 font-normal', col.align === 'end' && 'text-right', col.className)}
+								>
+									<SortHeaderButton
+										label={col.label}
+										active={orderBy === col.key}
+										direction={direction}
+										className="text-foreground-muted"
 										onClick={() => setSortKey(col.key)}
-									>
-										<div className={cn('flex items-center gap-1.5', col.inner)}>
-											{col.label}
-											{orderBy === col.key ? (
-												direction === 'asc' ? (
-													<ChevronUp className="size-2" />
-												) : (
-													<ChevronDown className="size-2" />
-												)
-											) : (
-												<ChevronUp className="invisible size-2" />
-											)}
-										</div>
-									</th>
-								))}
-								<th scope="col" className="w-0 px-2.5 py-2 text-right font-normal" />
-							</tr>
-						</thead>
-						<tbody>
-							{items.map((feedback) => {
-								const outcome = ratingOutcome(feedback.data?.rating);
-								const siblings = feedback.data?.sibling_model_ids;
-								return (
-									<tr
-										key={feedback.id}
-										className="hover:bg-muted/50 cursor-pointer rounded-xl text-xs transition"
-										onClick={() => {
-											setSelected(feedback);
-											setShowModal(true);
-										}}
-									>
-										<td className="py-0.5 text-right font-normal">
-											<div className="flex justify-center">
-												<Tip content={feedback.user?.name}>
-													<div className="shrink-0">
-														{feedback.user && (
-															<ProfileAvatar
-																src={`${WEBUI_API_BASE_URL}/users/${feedback.user.id}/profile/image`}
-																name={feedback.user.name}
-																label={feedback.user.name}
-																size="sm"
-																className="size-5"
-															/>
-														)}
-													</div>
-												</Tip>
-											</div>
-										</td>
-										<td className="py-1 pl-3">
-											<div className="flex h-full flex-col">
-												{siblings ? (
-													<>
-														<Tip content={feedback.data?.model_id} side="top">
-															<div className="text-muted-foreground line-clamp-1 flex-1 font-normal">
-																{feedback.data?.model_id}
-															</div>
-														</Tip>
-														<Tip content={siblings.join(', ')}>
-															<div className="text-muted-foreground line-clamp-1 text-caption">
-																{siblings.length > 2
-																	? `${siblings.slice(0, 2).join(', ')}, and ${siblings.length - 2} more`
-																	: siblings.join(', ')}
-															</div>
-														</Tip>
-													</>
-												) : (
-													<Tip content={feedback.data?.model_id} side="top">
-														<div className="text-muted-foreground line-clamp-1 flex-1 py-1.5 text-sm font-normal">
-															{feedback.data?.model_id}
-														</div>
-													</Tip>
-												)}
-											</div>
-										</td>
-										<td className="w-max px-3 py-1 text-right font-normal">
-											<div className="flex justify-end">
-												{outcome && (
-													<span
-														className={cn(
-															'inline-flex h-5 items-center rounded-full px-2 text-xs font-medium',
-															OUTCOME_STYLE[outcome].className
-														)}
-													>
-														{OUTCOME_STYLE[outcome].label}
+									/>
+								</th>
+							))}
+							<th scope="col" className="w-10">
+								<span className="sr-only">Actions</span>
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						{items.map((feedback) => {
+							const siblings = feedback.data?.sibling_model_ids;
+							const when = dayjs(feedback.updated_at * 1000);
+							const model = feedback.data?.model_id ?? 'Unknown model';
+							return (
+								<tr
+									key={feedback.id}
+									className="hover:bg-muted/50 cursor-pointer border-b last:border-0"
+									onClick={openRow(() => open(feedback))}
+								>
+									{!singleUser && (
+										<td className="hidden px-2 py-1.5 md:table-cell">
+											{feedback.user && (
+												<div className="flex min-w-0 items-center gap-2">
+													<ProfileAvatar
+														src={`${WEBUI_API_BASE_URL}/users/${feedback.user.id}/profile/image`}
+														name={feedback.user.name}
+														size="sm"
+													/>
+													<span className="truncate" title={feedback.user.name}>
+														{feedback.user.name}
 													</span>
-												)}
-											</div>
+												</div>
+											)}
 										</td>
-										<td className="px-3 py-1 text-right font-normal">{dayjs(feedback.updated_at * 1000).fromNow()}</td>
-										<td className="px-3 py-1 text-right font-normal" onClick={(e) => e.stopPropagation()}>
-											<DropdownMenu>
-												<Tip content="More">
-													<DropdownMenuTrigger asChild>
-														<Button
-															variant="ghost"
-															size="icon-sm"
-															className="w-fit self-center"
-															type="button"
-															aria-label="Feedback Menu"
-														>
-															<MoreHorizontal className="size-4" />
-														</Button>
-													</DropdownMenuTrigger>
-												</Tip>
-												<DropdownMenuContent align="end" className="min-w-[9.375rem]">
-													<DropdownMenuItem onSelect={() => deleteFeedback(feedback.id)}>
-														<Trash2 />
-														Delete
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				)}
-			</div>
+									)}
+									<td className="py-1">
+										<div className="flex min-w-0 flex-col items-start">
+											<Button
+												variant="ghost"
+												size="sm"
+												type="button"
+												title={model}
+												className="text-foreground -mx-2.5 max-w-full shrink justify-start"
+												onClick={() => open(feedback)}
+											>
+												<span className="truncate">{model}</span>
+											</Button>
+											{siblings && siblings.length > 0 && (
+												<span
+													className="text-foreground-muted text-caption max-w-full truncate"
+													title={siblings.join(', ')}
+												>
+													Compared with{' '}
+													{siblings.length > 2
+														? `${siblings.slice(0, 2).join(', ')} and ${siblings.length - 2} more`
+														: siblings.join(', ')}
+												</span>
+											)}
+											{/* LAY-4: a phone shows when on the second line instead of a column. */}
+											<span className="text-foreground-muted text-caption sm:hidden">{when.fromNow()}</span>
+										</div>
+									</td>
+									<td className="px-2 py-1.5">
+										<ResultBadge result={feedbackResult(feedback)} />
+									</td>
+									<td className="text-foreground-muted hidden px-2 py-1.5 text-right sm:table-cell">
+										<Tip content={when.format('YYYY-MM-DD HH:mm')}>
+											<span>{when.fromNow()}</span>
+										</Tip>
+									</td>
+									<td className="px-1 py-1 text-right">
+										<DropdownMenu>
+											<Tip content="More actions">
+												<DropdownMenuTrigger asChild>
+													<Button variant="ghost" size="icon-sm" type="button" aria-label="More actions">
+														<MoreHorizontal className="size-4" />
+													</Button>
+												</DropdownMenuTrigger>
+											</Tip>
+											<DropdownMenuContent align="end">
+												<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(feedback)}>
+													<Trash2 />
+													Delete rating
+												</DropdownMenuItem>
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</Table>
+			)}
 			{total > PER_PAGE && <PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />}
 		</div>
 	);
