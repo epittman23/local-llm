@@ -1,9 +1,10 @@
 import Highlight from '@tiptap/extension-highlight';
 import Image from '@tiptap/extension-image';
-import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { ListItem, TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import Typography from '@tiptap/extension-typography';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
+import type { EditorState } from '@tiptap/pm/state';
 import { type Editor, EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -88,11 +89,12 @@ export function RichTextEditor({
 		editable,
 		extensions: [
 			// The code block is RichTextCodeBlock: highlighted, with its language and Copy (CNT-2).
-			StarterKit.configure({ codeBlock: false, link: { openOnClick: false, autolink: true } }),
+			StarterKit.configure({ codeBlock: false, listItem: false, link: { openOnClick: false, autolink: true } }),
+			NestedOnlyListItem,
 			RichTextCodeBlock,
 			MathPreview,
 			TaskList,
-			TaskItem.configure({ nested: true }),
+			NestedOnlyTaskItem.configure({ nested: true }),
 			TableKit.configure({ table: { resizable: true } }),
 			Image.configure({ allowBase64: true }),
 			Highlight,
@@ -148,6 +150,36 @@ export function RichTextEditor({
 		</div>
 	);
 }
+
+const LIST_ITEMS = ['listItem', 'taskItem'];
+
+/** Whether the caret's nearest `name` item sits inside another list item: a level Shift+Tab can lift it out of. */
+function inNestedItem(state: EditorState, name: string): boolean {
+	const { $from } = state.selection;
+	for (let d = $from.depth; d > 0; d--) {
+		if ($from.node(d).type.name !== name) continue;
+		return d >= 3 && LIST_ITEMS.includes($from.node(d - 2).type.name);
+	}
+	return false;
+}
+
+/**
+ * Shift+Tab lifts a nested item up a level, and leaves a top-level one where
+ * it is (#1138): there, lifting took the item out of its list (a task lost
+ * its tick) and saved the note, from a key people press to move focus back.
+ * Unhandled, the key does that instead: focus goes back to the toolbar.
+ */
+const liftNestedOnly = <T extends typeof ListItem | typeof TaskItem>(item: T) =>
+	item.extend({
+		addKeyboardShortcuts() {
+			return {
+				...this.parent?.(),
+				'Shift-Tab': () => inNestedItem(this.editor.state, this.name) && this.editor.commands.liftListItem(this.name)
+			};
+		}
+	}) as T;
+const NestedOnlyListItem = liftNestedOnly(ListItem);
+const NestedOnlyTaskItem = liftNestedOnly(TaskItem);
 
 /** A tool's hint: its name, and its shortcut when it has one ("Bold, Ctrl+B"). */
 export const toolHint = (label: string, chord?: string) => (chord ? `${label}, ${formatChord(chord)}` : label);

@@ -124,6 +124,56 @@ describe('RichTextEditor', () => {
 	});
 });
 
+/** Shift+Tab pressed in the editor, as ProseMirror hears it; true when the editor took the key. */
+const shiftTab = (editor: Editor) => {
+	const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+	act(() => {
+		editor.view.dom.dispatchEvent(event);
+	});
+	return event.defaultPrevented;
+};
+const caretIn = (editor: Editor, text: string) => {
+	let at = -1;
+	editor.state.doc.descendants((node, pos) => {
+		if (at < 0 && node.isText && node.text === text) at = pos + 1;
+	});
+	act(() => {
+		editor.commands.setTextSelection(at);
+	});
+};
+
+describe('Shift+Tab in a list (#1138)', () => {
+	it.each([
+		['the first checklist item', '- [ ] residual plot\n- [x] QQ plot', 'residual plot'],
+		['a later checklist item', '- [ ] residual plot\n- [x] QQ plot', 'QQ plot'],
+		['a bullet', '- mean\n- median', 'mean']
+	])(
+		'in %s of a top-level list changes nothing, saves nothing, and leaves the key to move focus',
+		async (_where, md, text) => {
+			const { onChange, editor } = await mount(editorContent(contentFromMarkdown(md)));
+			caretIn(editor, text);
+			const before = htmlToMarkdown(editor.getHTML());
+			expect(shiftTab(editor)).toBe(false);
+			expect(htmlToMarkdown(editor.getHTML())).toBe(before);
+			expect(onChange).not.toHaveBeenCalled();
+		}
+	);
+
+	it.each([
+		['checklist', '- [ ] fit\n  - [x] residual plot', 'taskList'],
+		['bullet', '- fit\n  - residual plot', 'bulletList']
+	])('in a nested %s item still lifts it a level', async (_kind, md, list) => {
+		const { onChange, editor } = await mount(editorContent(contentFromMarkdown(md)));
+		expect(editor.$nodes(list)).toHaveLength(2);
+		caretIn(editor, 'residual plot');
+		expect(shiftTab(editor)).toBe(true);
+		// One list now, both items in it.
+		expect(editor.$nodes(list)).toHaveLength(1);
+		expect(editor.$nodes(list)?.[0].children).toHaveLength(2);
+		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+});
+
 const tools = () => screen.getAllByRole('button').filter((b) => b.closest('[role="toolbar"]'));
 
 describe('the formatting toolbar (#1038)', () => {
