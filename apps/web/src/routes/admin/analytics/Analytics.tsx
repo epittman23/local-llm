@@ -1,11 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { FilterMenu } from '@/components/common/FilterSelects';
 import { SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Table } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
@@ -89,6 +95,42 @@ function Head<K extends string>({
 				onClick={() => onSort(by)}
 			/>
 		</th>
+	);
+}
+
+/** A filter named by its text ("Period: Last 7 days", #987) opening a menu of choices in sentence case. */
+function FilterChoice({
+	name,
+	value,
+	items,
+	onChange
+}: {
+	name: string;
+	value: string;
+	items: { value: string; label: string }[];
+	onChange: (value: string) => void;
+}) {
+	const label = items.find((i) => i.value === value)?.label ?? '';
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="outline" type="button" className="max-w-full shrink">
+					<span className="truncate">
+						{name}: {label}
+					</span>
+					<ChevronDown aria-hidden data-icon="inline-end" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+					{items.map((item) => (
+						<DropdownMenuRadioItem key={item.value} value={item.value}>
+							{item.label}
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -198,8 +240,6 @@ export default function Analytics() {
 
 	const chartSeries = chartModels(daily);
 	const range = dateRange(period, customStart, customEnd);
-	const periodLabel = PERIODS.find((p) => p.value === period)?.label ?? '';
-	const groupLabel = groups.data?.find((g) => g.id === groupId)?.name ?? 'All users';
 
 	const openModel = (model: ModelStat) => {
 		setSelectedModel({ id: model.model_id, name: model.name });
@@ -230,32 +270,17 @@ export default function Analytics() {
 			<h2 className="sr-only">Analytics</h2>
 			<div className="flex flex-wrap items-center gap-2">
 				{!singleUser && (groups.data?.length ?? 0) > 0 && (
-					<FilterMenu
+					<FilterChoice
+						name="Group"
 						value={groupId ?? ''}
 						onChange={(v) => setGroupId(v || null)}
 						items={[
 							{ value: '', label: 'All users' },
 							...(groups.data ?? []).map((g) => ({ value: g.id, label: g.name }))
 						]}
-						trigger={
-							<Button variant="outline" type="button" className="shrink">
-								<span className="truncate">Group: {groupLabel}</span>
-								<ChevronDown aria-hidden data-icon="inline-end" />
-							</Button>
-						}
 					/>
 				)}
-				<FilterMenu
-					value={period}
-					onChange={(v) => setPeriod(v as Period)}
-					items={PERIODS}
-					trigger={
-						<Button variant="outline" type="button">
-							Period: {periodLabel}
-							<ChevronDown aria-hidden data-icon="inline-end" />
-						</Button>
-					}
-				/>
+				<FilterChoice name="Period" value={period} onChange={(v) => setPeriod(v as Period)} items={PERIODS} />
 				{period === 'custom' && (
 					<div className="flex flex-wrap items-center gap-2">
 						<Input
