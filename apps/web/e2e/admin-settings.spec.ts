@@ -738,6 +738,8 @@ test.describe('settings: Analytics', () => {
 		const calls: { path: string; search: string }[] = [];
 		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'alpha', name: 'Alpha' }] }));
 		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		// Two accounts: with one, Analytics hides its users and group filter (S5-D2).
+		await page.route('**/api/v1/users/search**', (route) => json(route, { users: [], total: 2 }));
 		await page.route('**/api/v1/analytics/**', (route) => {
 			const url = new URL(route.request().url());
 			const path = url.pathname.replace('/api/v1/analytics', '');
@@ -793,7 +795,7 @@ test.describe('settings: Analytics', () => {
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
 		await expect(m.getByText('tokens', { exact: false }).first()).toBeVisible();
-		await expect(m.getByRole('img', { name: 'Messages over time' })).toBeVisible();
+		await expect(m.getByRole('img', { name: /^Messages per day/ })).toBeVisible();
 		// Sorted by messages, descending: the unnamed model falls back to its id.
 		const rows = m.locator('table').first().locator('tbody tr');
 		await expect(rows.nth(0)).toContainText('zeta');
@@ -810,11 +812,14 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
-		await m.getByLabel('Period').selectOption('30d');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Last 30 days' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('start_date='))).toBe(true);
-		await m.getByLabel('Group').selectOption('g1');
+		await m.getByRole('button', { name: /^Group:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Staff' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('group_id=g1'))).toBe(true);
-		await m.getByLabel('Period').selectOption('24h');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Last 24 hours' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/daily' && c.search.includes('granularity=hourly')))
 			.toBe(true);
@@ -828,7 +833,8 @@ test.describe('settings: Analytics', () => {
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
 		const before = calls.length;
-		await m.getByLabel('Period').selectOption('custom');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Custom range' }).click();
 		await m.getByLabel('Start date').fill('2026-09-01');
 		await page.waitForTimeout(300);
 		expect(calls.length).toBe(before);
@@ -842,7 +848,7 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		const rows = modal(page).locator('table').first().locator('tbody tr');
 		await expect(rows.nth(0)).toContainText('zeta');
-		await modal(page).getByRole('columnheader', { name: 'Model' }).click();
+		await modal(page).getByRole('columnheader', { name: 'Model' }).getByRole('button').click();
 		await expect(rows.nth(0)).toContainText('Alpha');
 	});
 
@@ -854,9 +860,9 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Alpha' });
-		await expect(dialog.getByText('Feedback Activity')).toBeVisible();
+		await expect(dialog.getByRole('heading', { name: 'Feedback' })).toBeVisible();
 		await expect(dialog.getByText('code', { exact: false }).first()).toBeVisible();
-		await expect(dialog.getByRole('button', { name: 'Chats' })).toHaveCount(0);
+		await expect(dialog.getByRole('tab', { name: 'Chats' })).toHaveCount(0);
 	});
 
 	test("with chat access the dialog lists that model's chats", async ({ page }) => {
@@ -865,7 +871,7 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Alpha' });
-		await dialog.getByRole('button', { name: 'Chats' }).click();
+		await dialog.getByRole('tab', { name: 'Chats' }).click();
 		await expect(dialog.getByRole('link', { name: 'Hello there' })).toHaveAttribute('href', /\/s\/c1$/);
 	});
 
@@ -2955,7 +2961,7 @@ test.describe('settings: Models', () => {
 		await expect(modal(page)).toHaveCount(0);
 	});
 
-	test('Escape in the model editor asks once before its changes are lost (#951)', async ({ page }) => {
+	test('leaving the model editor for another tab asks once before its changes are lost (#951)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockModels(page);
 		await page.goto('/?settings=admin:models');
@@ -2964,14 +2970,19 @@ test.describe('settings: Models', () => {
 		await expect(name).toHaveValue('GPT-4o');
 		await name.fill('GPT-4o, renamed');
 		await expect(modal(page).getByText('Unsaved changes')).toBeVisible();
+		// On the page there is no layer for Escape to close (S5-D1).
 		await page.keyboard.press('Escape');
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
+		await expect(name).toHaveValue('GPT-4o, renamed');
+		const connections = modal(page).getByRole('tab', { name: 'Connections', exact: true });
+		await connections.click();
 		await expect(page.getByRole('alertdialog')).toHaveCount(1);
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
 		await expect(name).toHaveValue('GPT-4o, renamed');
-		await page.keyboard.press('Escape');
+		await connections.click();
 		await expect(page.getByRole('alertdialog')).toHaveCount(1);
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
-		await expect(modal(page)).toHaveCount(0);
+		await expect(page).toHaveURL(/\/admin\/settings\/connections$/);
 		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 	});
 
