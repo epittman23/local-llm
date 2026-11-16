@@ -1,4 +1,6 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { createMemoryRouter, Link, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import {
@@ -8,11 +10,14 @@ import {
 	SettingNumber,
 	SettingRow,
 	SettingSelect,
+	SettingsDialogHost,
 	SettingsForm,
+	SettingsPageHost,
 	SettingsSection,
 	SettingTextarea,
 	settingSlug,
-	useSavedFlash
+	useSavedFlash,
+	useSettingsHost
 } from './controls';
 
 afterEach(() => {
@@ -155,5 +160,96 @@ describe('SavedNote and useSavedFlash (FRM-3 at once)', () => {
 		expect(screen.getByRole('status')).toHaveTextContent('Saved');
 		act(() => vi.advanceTimersByTime(1001));
 		expect(screen.queryByText('Saved')).toBeNull();
+	});
+});
+
+/** A tab with one field, saved on request: dirty while the field differs from what was saved. */
+function DraftTab() {
+	const [value, setValue] = useState('');
+	const host = useSettingsHost();
+	return (
+		<SettingsForm title="General" dirty={value !== ''} onDiscard={() => setValue('')}>
+			<p>host: {String(host.kind)}</p>
+			<label>
+				Name
+				<input value={value} onChange={(e) => setValue(e.target.value)} />
+			</label>
+		</SettingsForm>
+	);
+}
+
+describe('settings hosts (#951, FRM-3)', () => {
+	it('outside any host the tab reports to the dialog store, with no kind', () => {
+		render(<DraftTab />);
+		expect(screen.getByText('host: null')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(true);
+	});
+
+	it('in the dialog host the tab reports to the dialog store', () => {
+		const { unmount } = render(
+			<SettingsDialogHost>
+				<DraftTab />
+			</SettingsDialogHost>
+		);
+		expect(screen.getByText('host: dialog')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(true);
+		unmount();
+		expect(useSettingsModalStore.getState().dirty).toBe(false);
+	});
+
+	it('on a page the one page guard asks once before another tab, and never touches the dialog store', async () => {
+		const router = createMemoryRouter(
+			[
+				{
+					path: '/admin/settings/:tab',
+					element: (
+						<SettingsPageHost>
+							<Link to="/admin/settings/audio">Audio</Link>
+							<DraftTab />
+						</SettingsPageHost>
+					)
+				},
+				{ path: '/elsewhere', element: <p>Elsewhere</p> }
+			],
+			{ initialEntries: ['/admin/settings/general'] }
+		);
+		render(<RouterProvider router={router} />);
+		expect(screen.getByText('host: page')).toBeInTheDocument();
+		// Clean: a tab change goes straight through.
+		fireEvent.click(screen.getByRole('link', { name: 'Audio' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/audio'));
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(false);
+		await act(() => router.navigate('/admin/settings/general'));
+		expect(await screen.findAllByRole('alertdialog')).toHaveLength(1);
+		expect(screen.getByText('This tab has changes that are not saved. They are lost if you leave it.')).toBeVisible();
+		expect(router.state.location.pathname).toBe('/admin/settings/audio');
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/general'));
+	});
+
+	it('on a page, saving clears the guard: a clean tab leaves without asking', async () => {
+		const router = createMemoryRouter(
+			[
+				{
+					path: '/a',
+					element: (
+						<SettingsPageHost>
+							<DraftTab />
+						</SettingsPageHost>
+					)
+				},
+				{ path: '/b', element: <p>Page B</p> }
+			],
+			{ initialEntries: ['/a'] }
+		);
+		render(<RouterProvider router={router} />);
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+		await act(() => router.navigate('/b'));
+		expect(await screen.findByText('Page B')).toBeInTheDocument();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 });
