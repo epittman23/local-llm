@@ -94,7 +94,7 @@ describe('UserList', () => {
 	it('opens the edit dialog from Edit', async () => {
 		await renderList();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit Ben' }));
-		expect(await screen.findByText('Edit User', { selector: '[role="dialog"] *' })).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Edit user' })).toBeTruthy();
 	});
 
 	it('confirms before deleting, naming the user and what goes (ACT-3), then deletes', async () => {
