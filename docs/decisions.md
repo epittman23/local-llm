@@ -66,7 +66,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **Admin > Models reorders within a group (S5-D13, 2026-11-16).**
   - **Behaviour changes without a decision.** Every Admin settings tab
     either shows a SaveBar and asks "Discard changes?" before a tab switch or
-    navigation loses changes, or saves each change at once: Connections and
+    navigation loses changes, or saves each change at once (Database has
+    nothing to save; Pipelines' valves have the SaveBar): Connections and
     Integrations save at once, one toast per change, and put the old value
     back when a save fails. Arena model edits join Evaluations' Save. A
     destructive confirmation names what is lost (deleting uploads, resetting

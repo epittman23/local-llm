@@ -25,6 +25,7 @@ import {
 } from '@/lib/apis';
 import { toastSaved } from '@/lib/settings/useAdminSaved';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { formToValves, type ValveSpec, type ValveValues, valvesToForm } from './pipelineValves';
 
 type PipelineServer = { idx: number; url: string };
@@ -37,6 +38,10 @@ const muted = 'text-muted-foreground text-xs';
  * install a pipeline onto it, pick an installed one to delete or to edit the
  * valves of (each valve is None or a custom value). Save writes the valves of the
  * selected pipeline.
+ *
+ * FRM-3: the valves are a draft against what the server holds, with the
+ * SaveBar; the page asks before a tab switch or navigation loses them, and
+ * choosing another server or pipeline asks first too.
  */
 export default function Pipelines() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -51,6 +56,12 @@ export default function Pipelines() {
 	const [saving, setSaving] = useState(false);
 	const [spec, setSpec] = useState<ValveSpec | null>(null);
 	const [valves, setValves] = useState<ValveValues | null>(null);
+	// The selected pipeline's valves as the server holds them, in the form's shape.
+	const [savedValves, setSavedValves] = useState<ValveValues | null>(null);
+	const dirty = valves !== null && savedValves !== null && JSON.stringify(valves) !== JSON.stringify(savedValves);
+	const guard = useConfirmLeave(dirty, {
+		message: "This pipeline's valves have changes that are not saved. They are lost if you choose another."
+	});
 
 	const servers = useQuery({
 		queryKey: ['admin-settings', 'pipelines-list'],
@@ -76,6 +87,7 @@ export default function Pipelines() {
 	useEffect(() => {
 		setSpec(null);
 		setValves(null);
+		setSavedValves(null);
 		if (!current?.valves) return;
 		let cancelled = false;
 		(async () => {
@@ -85,8 +97,10 @@ export default function Pipelines() {
 					await getPipelineValves(token, current.id, urlIdx)
 				];
 				if (cancelled) return;
+				const form = valvesToForm(loaded ?? {}, loadedSpec);
 				setSpec(loadedSpec);
-				setValves(valvesToForm(loaded ?? {}, loadedSpec));
+				setValves(form);
+				setSavedValves(form);
 			} catch (error) {
 				if (!cancelled) toast.error(`${error}`);
 			}
@@ -108,12 +122,14 @@ export default function Pipelines() {
 			return;
 		}
 		setSaving(true);
-		const res = await updatePipelineValves(token, current.id, formToValves(valves, spec), urlIdx).catch((error) => {
+		const sent = valves;
+		const res = await updatePipelineValves(token, current.id, formToValves(sent, spec), urlIdx).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
 		setSaving(false);
 		if (res) {
+			setSavedValves(sent);
 			toast.success('Valves updated successfully');
 			await refresh();
 			toastSaved();
@@ -169,7 +185,16 @@ export default function Pipelines() {
 	const hasServers = (servers.data?.length ?? 0) > 0;
 
 	return (
-		<SettingsForm title="Pipelines" loading={servers.isPending} footer={hasServers} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Pipelines"
+			loading={servers.isPending}
+			footer={hasServers}
+			onSubmit={save}
+			saving={saving}
+			dirty={hasServers ? dirty : undefined}
+			onDiscard={() => setValves(savedValves)}
+		>
+			{guard.dialog}
 			{!hasServers ? (
 				<SettingsSection title="Source" first>
 					<div className={muted}>Pipelines Not Detected</div>
@@ -187,7 +212,12 @@ export default function Pipelines() {
 					/>
 					<SettingsSection title="Source" first>
 						<SettingField label="Pipeline URL" description="Select the Pipelines server to manage.">
-							<SettingSelect value={urlIdx} onChange={setUrlIdx} className="w-full" aria-label="Pipeline URL">
+							<SettingSelect
+								value={urlIdx}
+								onChange={(v) => guard.confirmLeave(() => setUrlIdx(v))}
+								className="w-full"
+								aria-label="Pipeline URL"
+							>
 								{servers.data!.map((s) => (
 									<option key={s.idx} value={s.idx.toString()}>
 										{s.url}
@@ -246,7 +276,7 @@ export default function Pipelines() {
 									<div className="flex items-center gap-2">
 										<SettingSelect
 											value={selectedIdx}
-											onChange={(v) => setSelectedIdx(Number(v))}
+											onChange={(v) => guard.confirmLeave(() => setSelectedIdx(Number(v)))}
 											className="w-full"
 											aria-label="Pipeline"
 										>

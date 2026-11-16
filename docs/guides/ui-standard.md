@@ -395,7 +395,8 @@ asks 'Discard changes?' before a tab switch, close, Escape or Back loses
 them; an at-once tab passes `savesAtOnce` and confirms each control with
 `SavedNote`. Every Admin settings tab is one or the other: Connections and
 Integrations save each change at once (one toast, or `toastFailure` with the
-old value put back); the rest show the `SaveBar`. On an Admin settings page
+old value put back); the rest show the `SaveBar` (Pipelines for the selected
+pipeline's valves), except Database, which has nothing to save. On an Admin settings page
 the page's one guard (`SettingsPageHost`) asks before another tab or any
 navigation; a tab reports through `useSettingsHost().setDirty`, and anything
 it embeds with its own guard turns that off while hosted. The model editor,
