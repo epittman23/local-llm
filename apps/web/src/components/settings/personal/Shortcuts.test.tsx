@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DEFAULT_KEYBINDINGS } from '@/lib/shortcuts';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { KEYBINDINGS_KEY } from '@/lib/useShortcuts';
 import Shortcuts from './Shortcuts';
 
@@ -84,7 +85,8 @@ describe('rebinding a shortcut (#808)', () => {
 
 describe('the Playground group (NAV-5, #1031)', () => {
 	beforeEach(() => {
-		useAuthStore.setState({ token: 'tok' });
+		useAuthStore.setState({ token: 'tok', user: { id: 'a', role: 'admin' } as never });
+		useConfigStore.setState({ config: { features: {} } as never });
 	});
 
 	it('lists Run and Stop with their keys', () => {
@@ -94,5 +96,11 @@ describe('the Playground group (NAV-5, #1031)', () => {
 			/^(Ctrl\+Enter|⌘↩\uFE0E?)$/
 		);
 		expect(screen.getByText('Stop a run').nextElementSibling).toHaveTextContent('Esc');
+	});
+
+	it('is not listed for someone who cannot open the Playground (ACT-5)', () => {
+		useAuthStore.setState({ token: 'tok', user: { id: 'u', role: 'user' } as never });
+		renderTab();
+		expect(screen.queryByRole('heading', { name: 'Playground' })).toBeNull();
 	});
 });

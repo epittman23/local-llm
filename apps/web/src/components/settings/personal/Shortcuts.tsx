@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { canUseFeature } from '@/lib/access/features';
 import { updateUserSettings } from '@/lib/apis/users';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import {
@@ -15,6 +16,7 @@ import {
 	shortcuts
 } from '@/lib/shortcuts';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { KEYBINDINGS_KEY, SUPPORTED_SHORTCUTS, useKeybindings } from '@/lib/useShortcuts';
 import { cn } from '@/lib/utils';
 import { SavedNote, SettingRow, SettingSwitch, SettingsForm, SettingsSection, useSavedFlash } from '../controls';
@@ -45,6 +47,12 @@ export default function Shortcuts() {
 	const { settings, update } = useUserSettings();
 	const bindings = useKeybindings();
 	const [recording, setRecording] = useState<Shortcut | null>(null);
+	// The Playground is admin-only (lib/access/features.ts); its keys are listed only for who can open it (ACT-5).
+	const playground = canUseFeature(
+		'playground',
+		useAuthStore((s) => s.user),
+		useConfigStore((s) => s.config)
+	);
 	const enabled = (settings as { keyboardShortcuts?: boolean } | null)?.keyboardShortcuts ?? true;
 
 	// Optimistic, as useUserSettings's save is: the keys show at once and the
@@ -153,14 +161,16 @@ export default function Shortcuts() {
 					})}
 				</SettingsSection>
 			))}
-			<SettingsSection title="Playground">
-				{PLAYGROUND_SHORTCUTS.map((s) => (
-					<div key={s.name} className="flex items-center justify-between gap-3 text-xs">
-						<span className="text-muted-foreground">{s.name}</span>
-						<span className="bg-muted/30 rounded-md px-2 py-0.5 font-mono">{fixedChord(s.keys)}</span>
-					</div>
-				))}
-			</SettingsSection>
+			{playground && (
+				<SettingsSection title="Playground">
+					{PLAYGROUND_SHORTCUTS.map((s) => (
+						<div key={s.name} className="flex items-center justify-between gap-3 text-xs">
+							<span className="text-muted-foreground">{s.name}</span>
+							<span className="bg-muted/30 rounded-md px-2 py-0.5 font-mono">{fixedChord(s.keys)}</span>
+						</div>
+					))}
+				</SettingsSection>
+			)}
 			<div className="mt-4">
 				<Button type="button" size="sm" variant="outline" onClick={() => save({ ...DEFAULT_KEYBINDINGS })}>
 					Reset to defaults
