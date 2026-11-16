@@ -44,6 +44,9 @@ const renderModal = () => {
 	return onOpenChange;
 };
 
+// Radix tabs choose on mouse down.
+const selectTab = (name: string) => fireEvent.mouseDown(screen.getByRole('tab', { name }), { button: 0 });
+
 describe('AnalyticsModelModal', () => {
 	it('opens on Overview with the model tags', async () => {
 		renderModal();
@@ -53,32 +56,52 @@ describe('AnalyticsModelModal', () => {
 
 	it('switches the chart to weekly and refetches when the range changes', async () => {
 		renderModal();
-		fireEvent.click(screen.getByRole('button', { name: '1Y' }));
-		expect(screen.getByRole('button', { name: '1Y' }).getAttribute('aria-pressed')).toBe('true');
+		fireEvent.click(screen.getByRole('radio', { name: '1 year' }));
+		expect(screen.getByRole('radio', { name: '1 year' }).getAttribute('aria-checked')).toBe('true');
 		expect(screen.getByTestId('chart').textContent).toBe('weekly');
 		await waitFor(() => expect(getModelOverview).toHaveBeenCalledWith('tok', 'm1', 365));
 	});
 
 	it('loads the chats of the model when the Chats tab is opened', async () => {
 		renderModal();
-		fireEvent.click(screen.getByRole('button', { name: 'Chats' }));
+		selectTab('Chats');
 		expect(await screen.findByText('Hello there')).toBeTruthy();
 		expect(getModelChats).toHaveBeenCalledWith('tok', 'm1', 10, 20, 0, 50, 'updated_at', 'desc');
-		fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+		selectTab('Overview');
 		expect(screen.getByTestId('chart')).toBeTruthy();
 	});
 
 	it('has no Chats tab when admins may not read chats', () => {
 		useConfigStore.setState({ config: { features: { enable_admin_chat_access: false } } } as never);
 		renderModal();
-		expect(screen.queryByRole('button', { name: 'Chats' })).toBeNull();
+		expect(screen.queryByRole('tab', { name: 'Chats' })).toBeNull();
+		expect(screen.queryByRole('tablist')).toBeNull();
+	});
+
+	it('names the model and its id in the header, with no tooltip on the title', async () => {
+		renderModal();
+		expect(screen.getByRole('heading', { name: 'Model One' })).toBeTruthy();
+		expect(screen.getByText('m1')).toBeTruthy();
+		await screen.findByText('math');
+	});
+
+	it('says in place when the overview fails to load, and tries again', async () => {
+		vi.mocked(getModelOverview).mockRejectedValueOnce('Database is locked');
+		renderModal();
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load feedback");
+		fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+		expect(await screen.findByText('math')).toBeTruthy();
+	});
+
+	it('says so when the model has no tags', async () => {
+		vi.mocked(getModelOverview).mockResolvedValue({ history: [], tags: [] } as never);
+		renderModal();
+		expect(await screen.findByText('No tags in its chats.')).toBeTruthy();
 	});
 
 	it('closes from the Close button', () => {
 		const onOpenChange = renderModal();
-		fireEvent.click(
-			screen.getAllByRole('button', { name: 'Close' }).find((b) => b.textContent === 'Close') as HTMLElement
-		);
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 });

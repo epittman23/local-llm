@@ -1,16 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
-import { SettingSelect } from '@/components/settings/controls';
+import { ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { FilterMenu } from '@/components/common/FilterSelects';
+import { SortHeaderButton } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { ProfileAvatar } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Table } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
 import { getDailyStats, getModelAnalytics, getSummary, getTokenUsage, getUserAnalytics } from '@/lib/apis/analytics';
 import { getGroups } from '@/lib/apis/groups';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
+import { useAdminSingleUser } from '../adminVisibility';
+import { openRow } from '../rowOpen';
+import { TableSkeleton } from '../TableSkeleton';
 import { AnalyticsModelModal } from './AnalyticsModelModal';
 import {
 	CHART_COLORS,
@@ -24,6 +30,7 @@ import {
 	PERIODS,
 	type Period,
 	parsePeriod,
+	sharedPrefix,
 	sharePercent,
 	sortModels,
 	sortUsers,
@@ -50,58 +57,64 @@ const store = {
 	}
 };
 
-const th = 'cursor-pointer px-2.5 py-1.5 font-normal select-none';
-const dateInput = 'bg-muted/40 h-7 rounded-lg border px-2 text-xs';
+const ariaSort = (active: boolean, dir: 'asc' | 'desc') =>
+	active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined;
 
-function Head({
+/** A sortable column heading: `aria-sort` on the cell, the shared header button inside it. */
+function Head<K extends string>({
 	label,
-	active,
-	direction,
-	onClick,
-	className = ''
+	by,
+	sort,
+	onSort,
+	className
 }: {
 	label: string;
-	active: boolean;
-	direction: 'asc' | 'desc';
-	onClick: () => void;
+	by: K;
+	sort: { by: K; dir: 'asc' | 'desc' };
+	onSort: (by: K) => void;
 	className?: string;
 }) {
+	const numeric = by !== 'name';
 	return (
-		<th scope="col" className={`${th} ${className}`} onClick={onClick}>
-			<div className={`flex items-center gap-1.5 ${className.includes('text-right') ? 'justify-end' : ''}`}>
-				{label}
-				{active ? (
-					direction === 'asc' ? (
-						<ChevronUp className="size-2" />
-					) : (
-						<ChevronDown className="size-2" />
-					)
-				) : (
-					<ChevronUp className="invisible size-2" />
-				)}
-			</div>
+		<th
+			scope="col"
+			aria-sort={ariaSort(sort.by === by, sort.dir)}
+			className={cn('py-1 font-normal', numeric && 'text-right', className)}
+		>
+			<SortHeaderButton
+				label={label}
+				active={sort.by === by}
+				direction={sort.dir}
+				className={cn('text-foreground-muted', numeric && 'ms-auto')}
+				onClick={() => onSort(by)}
+			/>
 		</th>
 	);
 }
 
-const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
-	<div className="min-w-0">
-		<div className="mb-1 text-xs font-medium">{title}</div>
-		<div className="max-h-80 overflow-auto rounded-lg border">{children}</div>
-	</div>
-);
+const toggle = <K extends string>(s: { by: K; dir: 'asc' | 'desc' }, by: K) =>
+	s.by === by
+		? { by, dir: s.dir === 'asc' ? ('desc' as const) : ('asc' as const) }
+		: { by, dir: by === 'name' ? ('asc' as const) : ('desc' as const) };
 
 /**
  * Ports admin/Analytics.svelte + Analytics/Dashboard.svelte: usage over a chosen
  * period (and optionally one group) -- totals, a messages-over-time line chart,
- * a model table (click a row for its dialog) and a user table.
+ * a model table (a row opens its dialog) and a user table.
  *
  * The period, and a custom range, are remembered in localStorage. In custom mode
- * nothing is fetched until both dates are set. Token counts are estimates (the
- * tooltip says so); message counts are assistant responses.
+ * nothing is fetched until both dates are set. Token counts are estimates;
+ * message counts are assistant responses.
+ *
+ * #1028: it fills a page; the tables are the shared `Table`, named and
+ * scrollable from the keyboard, the Model column takes the room the figures
+ * leave (a shared provider prefix is dropped in the cell, kept in its title),
+ * and a row opens from its name button too. While there is one account
+ * (S4-D1) the Users column, User activity and the group filter are hidden.
  */
 export default function Analytics() {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const singleUser = useAdminSingleUser();
 	const [period, setPeriod] = useState<Period>(() => parsePeriod(store.get('analyticsPeriod')));
 	const [customStart, setCustomStart] = useState(() => store.get('analyticsCustomStart') ?? '');
 	const [customEnd, setCustomEnd] = useState(() => store.get('analyticsCustomEnd') ?? '');
@@ -119,26 +132,29 @@ export default function Analytics() {
 
 	const groups = useQuery({
 		queryKey: ['admin', 'groups'],
-		queryFn: async () => ((await getGroups(token)) ?? []) as { id: string; name: string }[]
+		queryFn: async () => ((await getGroups(token)) ?? []) as { id: string; name: string }[],
+		enabled: !singleUser
 	});
 	const models = useQuery({
 		queryKey: ['models-all'],
 		queryFn: async () => ((await getModels(token)) ?? []) as { id: string; name?: string }[]
 	});
 
+	// A group chosen before the install went down to one account no longer applies.
+	const group = singleUser ? null : groupId;
 	const incomplete = isCustomIncomplete(period, customStart, customEnd);
 	const data = useQuery({
-		queryKey: ['admin', 'analytics', period, customStart, customEnd, groupId],
+		queryKey: ['admin', 'analytics', period, customStart, customEnd, group],
 		enabled: !incomplete,
 		queryFn: async () => {
 			const { start, end } = dateRange(period, customStart, customEnd);
 			const granularity = period === '24h' ? 'hourly' : 'daily';
 			const [summary, byModel, byUser, daily, tokens] = await Promise.all([
-				getSummary(token, start, end, groupId),
-				getModelAnalytics(token, start, end, groupId),
-				getUserAnalytics(token, start, end, 50, groupId),
-				getDailyStats(token, start, end, granularity, groupId),
-				getTokenUsage(token, start, end, groupId)
+				getSummary(token, start, end, group),
+				getModelAnalytics(token, start, end, group),
+				getUserAnalytics(token, start, end, 50, group),
+				getDailyStats(token, start, end, granularity, group),
+				getTokenUsage(token, start, end, group)
 			]);
 			return { summary, byModel, byUser, daily, tokens };
 		}
@@ -178,22 +194,31 @@ export default function Analytics() {
 	);
 	const sortedUsers = useMemo(() => sortUsers(userStats, userSort.by, userSort.dir), [userStats, userSort]);
 	const totalModelMessages = modelStats.reduce((sum, m) => sum + m.count, 0);
+	const prefix = sharedPrefix(modelStats.map((m) => m.name));
 
-	const toggleModel = (by: ModelSort) =>
-		setModelSort((s) =>
-			s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }
-		);
-	const toggleUser = (by: UserSort) =>
-		setUserSort((s) =>
-			s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }
-		);
-
-	const loading = data.isFetching && !incomplete;
 	const chartSeries = chartModels(daily);
 	const range = dateRange(period, customStart, customEnd);
+	const periodLabel = PERIODS.find((p) => p.value === period)?.label ?? '';
+	const groupLabel = groups.data?.find((g) => g.id === groupId)?.name ?? 'All users';
+
+	const openModel = (model: ModelStat) => {
+		setSelectedModel({ id: model.model_id, name: model.name });
+		setShowModel(true);
+	};
+	const sortModel = (by: ModelSort) => setModelSort((s) => toggle(s, by));
+	const sortUser = (by: UserSort) => setUserSort((s) => toggle(s, by));
+
+	const stats = [
+		{ value: summary.total_messages.toLocaleString(), noun: summary.total_messages === 1 ? 'message' : 'messages' },
+		{ value: formatNumber(totalTokens), noun: 'tokens (estimated)' },
+		{ value: summary.total_chats.toLocaleString(), noun: summary.total_chats === 1 ? 'chat' : 'chats' },
+		...(singleUser
+			? []
+			: [{ value: summary.total_users.toLocaleString(), noun: summary.total_users === 1 ? 'user' : 'users' }])
+	];
 
 	return (
-		<div className="flex h-full w-full flex-col overflow-y-auto pr-1 pb-2">
+		<div className="flex h-full w-full flex-col gap-4 overflow-y-auto pb-4">
 			<AnalyticsModelModal
 				open={showModel}
 				onOpenChange={setShowModel}
@@ -202,246 +227,228 @@ export default function Analytics() {
 				endDate={range.end}
 			/>
 
-			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-				<h2 className="text-sm font-medium">Analytics</h2>
-				<div className="flex flex-wrap items-center gap-2">
-					{(groups.data?.length ?? 0) > 0 && (
-						<SettingSelect value={groupId ?? ''} onChange={(v) => setGroupId(v || null)} aria-label="Group">
-							<option value="">All Users</option>
-							{groups.data!.map((g) => (
-								<option key={g.id} value={g.id}>
-									{g.name}
-								</option>
-							))}
-						</SettingSelect>
-					)}
-					{period === 'custom' && (
-						<>
-							<input
-								type="date"
-								aria-label="Start date"
-								className={dateInput}
-								value={customStart}
-								max={customEnd || undefined}
-								onChange={(e) => setCustomStart(e.target.value)}
-							/>
-							<span className="text-muted-foreground">–</span>
-							<input
-								type="date"
-								aria-label="End date"
-								className={dateInput}
-								value={customEnd}
-								min={customStart || undefined}
-								onChange={(e) => setCustomEnd(e.target.value)}
-							/>
-						</>
-					)}
-					<SettingSelect value={period} onChange={(v) => setPeriod(v as Period)} aria-label="Period">
-						{PERIODS.map((p) => (
-							<option key={p.value} value={p.value}>
-								{p.label}
-							</option>
-						))}
-					</SettingSelect>
-				</div>
+			<h2 className="sr-only">Analytics</h2>
+			<div className="flex flex-wrap items-center gap-2">
+				{!singleUser && (groups.data?.length ?? 0) > 0 && (
+					<FilterMenu
+						value={groupId ?? ''}
+						onChange={(v) => setGroupId(v || null)}
+						items={[
+							{ value: '', label: 'All users' },
+							...(groups.data ?? []).map((g) => ({ value: g.id, label: g.name }))
+						]}
+						trigger={
+							<Button variant="outline" type="button" className="shrink">
+								<span className="truncate">Group: {groupLabel}</span>
+								<ChevronDown aria-hidden data-icon="inline-end" />
+							</Button>
+						}
+					/>
+				)}
+				<FilterMenu
+					value={period}
+					onChange={(v) => setPeriod(v as Period)}
+					items={PERIODS}
+					trigger={
+						<Button variant="outline" type="button">
+							Period: {periodLabel}
+							<ChevronDown aria-hidden data-icon="inline-end" />
+						</Button>
+					}
+				/>
+				{period === 'custom' && (
+					<div className="flex flex-wrap items-center gap-2">
+						<Input
+							type="date"
+							aria-label="Start date"
+							className="w-auto"
+							value={customStart}
+							max={customEnd || undefined}
+							onChange={(e) => setCustomStart(e.target.value)}
+						/>
+						<span aria-hidden className="text-foreground-muted">
+							to
+						</span>
+						<Input
+							type="date"
+							aria-label="End date"
+							className="w-auto"
+							value={customEnd}
+							min={customStart || undefined}
+							onChange={(e) => setCustomEnd(e.target.value)}
+						/>
+					</div>
+				)}
 			</div>
 
-			{loading ? (
-				<div className="flex flex-1 items-center justify-center py-10">
-					<Spinner />
-				</div>
+			{incomplete ? (
+				<p className="text-foreground-muted py-10 text-center">Choose a start and an end date.</p>
+			) : data.isError ? (
+				<LoadFailed what="analytics" error={data.error} onRetry={() => data.refetch()} retrying={data.isFetching} />
+			) : data.isFetching || !data.data ? (
+				<TableSkeleton label="analytics" />
 			) : (
 				<>
-					<div className="text-muted-foreground mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
-						<span>
-							<span className="text-foreground text-base font-medium">{summary.total_messages.toLocaleString()}</span>{' '}
-							messages
-						</span>
-						<Tip content="Token counts are estimates and may not reflect actual API usage">
-							<span>
-								<span className="text-foreground text-base font-medium">{formatNumber(totalTokens)}</span> tokens
-							</span>
-						</Tip>
-						<span>
-							<span className="text-foreground text-base font-medium">{summary.total_chats.toLocaleString()}</span>{' '}
-							chats
-						</span>
-						<span>
-							<span className="text-foreground text-base font-medium">{summary.total_users}</span> users
-						</span>
-					</div>
+					<dl className="flex flex-wrap gap-x-6 gap-y-2">
+						{stats.map((s) => (
+							<div key={s.noun} className="flex items-baseline gap-1.5">
+								<dt className="text-foreground-muted order-2">{s.noun}</dt>
+								<dd className="text-foreground-strong font-strong text-title order-1 tabular-nums">{s.value}</dd>
+							</div>
+						))}
+					</dl>
 
 					{daily.length > 1 && (
-						<div className="mb-4">
-							<div className="mb-1 text-xs font-medium">{period === '24h' ? 'Hourly Messages' : 'Daily Messages'}</div>
+						<div className="flex flex-col gap-2">
+							<h3 className="text-foreground-strong font-strong">Messages over time</h3>
 							<ChartLine
 								data={daily}
 								models={chartSeries}
 								colors={CHART_COLORS}
 								height={200}
 								period={chartPeriod(period)}
+								labelOf={(id) => names.get(id) || id}
 							/>
 						</div>
 					)}
 
-					<div className="grid gap-4 xl:grid-cols-2">
-						<Panel title="Model Usage">
-							<table className="text-muted-foreground w-full text-left text-xs">
-								<thead className="text-foreground bg-background sticky top-0 uppercase">
-									<tr className="border-b">
-										<th scope="col" className="px-2.5 py-1.5 font-normal">
-											#
-										</th>
-										<Head
-											label="Model"
-											active={modelSort.by === 'name'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('name')}
-										/>
-										<Head
-											label="Messages"
-											active={modelSort.by === 'count'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('count')}
-											className="text-right"
-										/>
-										<Head
-											label="Users"
-											active={modelSort.by === 'users'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('users')}
-											className="text-right"
-										/>
-										<Head
-											label="Chats"
-											active={modelSort.by === 'chats'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('chats')}
-											className="text-right"
-										/>
-										<Head
-											label="Tokens"
-											active={modelSort.by === 'tokens'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('tokens')}
-											className="text-right"
-										/>
-										<Head
-											label="%"
-											active={modelSort.by === 'percentage'}
-											direction={modelSort.dir}
-											onClick={() => toggleModel('percentage')}
-											className="text-right"
-										/>
-									</tr>
-								</thead>
-								<tbody>
-									{sortedModels.map((model, idx) => (
-										<tr
-											key={model.model_id}
-											className="hover:bg-muted/50 cursor-pointer transition"
-											onClick={() => {
-												setSelectedModel({ id: model.model_id, name: model.name });
-												setShowModel(true);
-											}}
-										>
-											<td className="px-2.5 py-1.5">{idx + 1}</td>
-											<td className="px-2.5 py-1.5">
-												<div className="flex items-center gap-2">
-													<ProfileAvatar
-														src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.model_id)}`}
-														name={model.name}
-														size="sm"
-														className="size-5"
-													/>
-													<span className="text-foreground line-clamp-1">{model.name}</span>
-												</div>
-											</td>
-											<td className="px-2.5 py-1.5 text-right">{model.count.toLocaleString()}</td>
-											<td className="px-2.5 py-1.5 text-right">{(model.unique_users ?? 0).toLocaleString()}</td>
-											<td className="px-2.5 py-1.5 text-right">{(model.unique_chats ?? 0).toLocaleString()}</td>
-											<td className="px-2.5 py-1.5 text-right">
-												{formatNumber(tokenStats[model.model_id]?.total_tokens ?? 0)}
-											</td>
-											<td className="px-2.5 py-1.5 text-right">{sharePercent(model.count, totalModelMessages)}%</td>
+					<div className={cn('grid gap-6', !singleUser && 'xl:grid-cols-2')}>
+						<div className="flex min-w-0 flex-col gap-2">
+							<h3 className="text-foreground-strong font-strong">Model usage</h3>
+							{sortedModels.length === 0 ? (
+								<p className="text-foreground-muted py-6 text-center">No messages in this period.</p>
+							) : (
+								<Table aria-label="Model usage" className="text-dense table-fixed text-left">
+									<thead>
+										<tr className="border-b">
+											<Head label="Model" by="name" sort={modelSort} onSort={sortModel} />
+											<Head label="Messages" by="count" sort={modelSort} onSort={sortModel} className="w-24" />
+											{!singleUser && (
+												<Head
+													label="Users"
+													by="users"
+													sort={modelSort}
+													onSort={sortModel}
+													className="w-20 max-sm:hidden"
+												/>
+											)}
+											<Head
+												label="Chats"
+												by="chats"
+												sort={modelSort}
+												onSort={sortModel}
+												className="w-20 max-sm:hidden"
+											/>
+											<Head
+												label="Tokens"
+												by="tokens"
+												sort={modelSort}
+												onSort={sortModel}
+												className="w-20 max-sm:hidden"
+											/>
+											<Head label="Share" by="percentage" sort={modelSort} onSort={sortModel} className="w-20" />
 										</tr>
-									))}
-									{sortedModels.length === 0 && (
-										<tr>
-											<td colSpan={7} className="px-2.5 py-3 text-center">
-												No data
-											</td>
-										</tr>
-									)}
-								</tbody>
-							</table>
-						</Panel>
+									</thead>
+									<tbody>
+										{sortedModels.map((model) => {
+											const title = model.name === model.model_id ? model.name : `${model.name} (${model.model_id})`;
+											const shown = prefix ? model.name.slice(prefix.length) : model.name;
+											return (
+												<tr
+													key={model.model_id}
+													className="hover:bg-muted/50 cursor-pointer border-b last:border-0"
+													onClick={openRow(() => openModel(model))}
+												>
+													<td className="py-1">
+														<div className="flex min-w-0 items-center gap-2 ps-2">
+															<ProfileAvatar
+																src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.model_id)}`}
+																name={model.name}
+																size="sm"
+															/>
+															<Button
+																variant="ghost"
+																size="sm"
+																type="button"
+																title={title}
+																className="text-foreground -mx-2.5 max-w-full shrink justify-start"
+																onClick={() => openModel(model)}
+															>
+																<span className="truncate">{shown}</span>
+															</Button>
+														</div>
+													</td>
+													<td className="px-2 py-1 text-right tabular-nums">{model.count.toLocaleString()}</td>
+													{!singleUser && (
+														<td className="px-2 py-1 text-right tabular-nums max-sm:hidden">
+															{(model.unique_users ?? 0).toLocaleString()}
+														</td>
+													)}
+													<td className="px-2 py-1 text-right tabular-nums max-sm:hidden">
+														{(model.unique_chats ?? 0).toLocaleString()}
+													</td>
+													<td className="px-2 py-1 text-right tabular-nums max-sm:hidden">
+														{formatNumber(tokenStats[model.model_id]?.total_tokens ?? 0)}
+													</td>
+													<td className="px-2 py-1 text-right tabular-nums">
+														{sharePercent(model.count, totalModelMessages)}%
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</Table>
+							)}
+						</div>
 
-						<Panel title="User Activity">
-							<table className="text-muted-foreground w-full text-left text-xs">
-								<thead className="text-foreground bg-background sticky top-0 uppercase">
-									<tr className="border-b">
-										<th scope="col" className="px-2.5 py-1.5 font-normal">
-											#
-										</th>
-										<Head
-											label="User"
-											active={userSort.by === 'name'}
-											direction={userSort.dir}
-											onClick={() => toggleUser('name')}
-										/>
-										<Head
-											label="Messages"
-											active={userSort.by === 'count'}
-											direction={userSort.dir}
-											onClick={() => toggleUser('count')}
-											className="text-right"
-										/>
-										<Head
-											label="Tokens"
-											active={userSort.by === 'tokens'}
-											direction={userSort.dir}
-											onClick={() => toggleUser('tokens')}
-											className="text-right"
-										/>
-									</tr>
-								</thead>
-								<tbody>
-									{sortedUsers.map((user, idx) => (
-										<tr key={user.user_id}>
-											<td className="px-2.5 py-1.5">{idx + 1}</td>
-											<td className="px-2.5 py-1.5">
-												<div className="flex items-center gap-2">
-													<ProfileAvatar
-														src={`${WEBUI_API_BASE_URL}/users/${user.user_id}/profile/image`}
-														name={user.name || user.email}
-														size="sm"
-														className="size-5"
-													/>
-													<span className="text-foreground line-clamp-1">
-														{user.name || user.email || user.user_id.substring(0, 8)}
-													</span>
-												</div>
-											</td>
-											<td className="px-2.5 py-1.5 text-right">{user.count.toLocaleString()}</td>
-											<td className="px-2.5 py-1.5 text-right">{formatNumber(user.total_tokens ?? 0)}</td>
-										</tr>
-									))}
-									{sortedUsers.length === 0 && (
-										<tr>
-											<td colSpan={4} className="px-2.5 py-3 text-center">
-												No data
-											</td>
-										</tr>
-									)}
-								</tbody>
-							</table>
-						</Panel>
+						{!singleUser && (
+							<div className="flex min-w-0 flex-col gap-2">
+								<h3 className="text-foreground-strong font-strong">User activity</h3>
+								{sortedUsers.length === 0 ? (
+									<p className="text-foreground-muted py-6 text-center">No messages in this period.</p>
+								) : (
+									<Table aria-label="User activity" className="text-dense table-fixed text-left">
+										<thead>
+											<tr className="border-b">
+												<Head label="User" by="name" sort={userSort} onSort={sortUser} />
+												<Head label="Messages" by="count" sort={userSort} onSort={sortUser} className="w-24" />
+												<Head label="Tokens" by="tokens" sort={userSort} onSort={sortUser} className="w-20" />
+											</tr>
+										</thead>
+										<tbody>
+											{sortedUsers.map((user) => {
+												const name = user.name || user.email || user.user_id.substring(0, 8);
+												return (
+													<tr key={user.user_id} className="border-b last:border-0">
+														<td className="px-2 py-1.5">
+															<div className="flex min-w-0 items-center gap-2">
+																<ProfileAvatar
+																	src={`${WEBUI_API_BASE_URL}/users/${user.user_id}/profile/image`}
+																	name={user.name || user.email}
+																	size="sm"
+																/>
+																<span className="text-foreground truncate" title={name}>
+																	{name}
+																</span>
+															</div>
+														</td>
+														<td className="px-2 py-1.5 text-right tabular-nums">{user.count.toLocaleString()}</td>
+														<td className="px-2 py-1.5 text-right tabular-nums">
+															{formatNumber(user.total_tokens ?? 0)}
+														</td>
+													</tr>
+												);
+											})}
+										</tbody>
+									</Table>
+								)}
+							</div>
+						)}
 					</div>
 
-					<div className="text-muted-foreground mt-2 text-right text-xs">
-						ⓘ Message counts are based on assistant responses.
-					</div>
+					<p className="text-foreground-muted text-caption">
+						Messages count model replies. Token counts are estimates and can differ from what a provider bills.
+					</p>
 				</>
 			)}
 		</div>

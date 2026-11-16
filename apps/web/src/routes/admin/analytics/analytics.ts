@@ -115,3 +115,15 @@ export const chartPeriod = (period: string): 'hour' | 'week' | 'month' | 'year' 
 /** Reads a persisted period, falling back to 7 days for anything unrecognised. */
 export const parsePeriod = (raw: string | null | undefined): Period =>
 	PERIODS.some((p) => p.value === raw) ? (raw as Period) : '7d';
+
+/**
+ * The provider prefix every name shares ("qwen/" in "qwen/qwen3.6-27b" and
+ * "qwen/qwen-2.5-coder"), or '' when they do not all share one. The model
+ * table drops it from the cell to give the names room, and keeps the whole
+ * name in the cell's title (#1028).
+ */
+export function sharedPrefix(names: string[]): string {
+	if (names.length < 2) return '';
+	const first = names[0].split('/')[0];
+	return names.every((n) => n.includes('/') && n.split('/')[0] === first) ? `${first}/` : '';
+}
