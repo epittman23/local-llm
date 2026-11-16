@@ -323,7 +323,7 @@ test.describe('settings: Database', () => {
 });
 
 test.describe('settings: Evaluations', () => {
-	test('adding an arena model saves the whole config with it', async ({ page }) => {
+	test('an added arena model joins the draft and the tab Save sends the whole config (FRM-3)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/groups/**', (route) => json(route, []));
 		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'm1', name: 'Model One' }] }));
@@ -338,14 +338,19 @@ test.describe('settings: Evaluations', () => {
 		});
 		await page.goto('/?settings=admin:evaluations');
 		const m = modal(page);
-		await expect(m.getByText('Using the default arena model with all models.')).toBeVisible();
-		await m.getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await expect(m.getByText('None yet, so the Arena model chooses among all your models.')).toBeVisible();
+		await m.getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('My Arena!');
 		await expect(dialog.getByLabel('ID', { exact: true })).toHaveValue('my-arena');
 		await dialog.getByLabel('Select a model').selectOption('m1');
 		await dialog.getByRole('button', { name: 'Add model' }).click();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
+		// Nothing is sent until the tab's Save.
+		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		expect(saved).toBeNull();
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect
 			.poll(() => saved)
 			.toMatchObject({
@@ -354,7 +359,7 @@ test.describe('settings: Evaluations', () => {
 					{ id: 'my-arena', name: 'My Arena!', meta: { model_ids: ['m1'], filter_mode: 'include', description: null } }
 				]
 			});
-		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
 	test('a duplicate arena name is refused', async ({ page }) => {
@@ -365,10 +370,10 @@ test.describe('settings: Evaluations', () => {
 			json(route, { ENABLE_EVALUATION_ARENA_MODELS: true, EVALUATION_ARENA_MODELS: [] })
 		);
 		await page.goto('/?settings=admin:evaluations');
-		await modal(page).getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await modal(page).getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('Taken');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
 		await expect(page.getByText('Model name already exists')).toBeVisible();
 		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('');
 	});
