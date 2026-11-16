@@ -220,6 +220,9 @@ describe('the list actions', () => {
 		fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Paused' }));
 		expect(await screen.findByText('Nothing matches these filters')).toBeInTheDocument();
 		expect(screen.getByRole('status')).toHaveTextContent('0 of 1 automations');
+		// The header's badge keeps the whole count while a filter narrows the list (DAT-2, #1040).
+		const heading = screen.getByRole('heading', { level: 1, name: 'Automations' });
+		expect(heading.nextElementSibling).toHaveTextContent(/^1 automation$/);
 		fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 		expect(await screen.findByRole('button', { name: /^Morning digest/ })).toBeInTheDocument();
 	});

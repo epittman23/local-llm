@@ -704,11 +704,15 @@ export function NavigationSection() {
 					</span>
 				</div>
 			</Example>
-			<Example title="Page header and tabs">
+			<Example
+				title="Page header and tabs"
+				note="A page that lists things may show how many there are as a secondary badge after its name: the whole count, which a filter does not change, read with its noun."
+			>
 				<Panel>
 					<PageHeader
 						as="h4"
 						title="Knowledge"
+						count={{ value: 3, noun: 'collections' }}
 						description="Collections of files a model can search while it answers."
 						action={
 							<Button>

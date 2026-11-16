@@ -69,13 +69,26 @@ async function allAutomations(token: string, query: string | null = null, status
 	}
 }
 
-/** The page's own header (LAY-5): the h1, what the page is for, New automation, and import and export. */
-function Header({ onNew, onImport, onExport }: { onNew: () => void; onImport: () => void; onExport: () => void }) {
+/** The page's own header (LAY-5): the h1 and how many there are, what the page is for, New automation, and import and export. */
+function Header({
+	count,
+	onNew,
+	onImport,
+	onExport
+}: {
+	count: number | null | undefined;
+	onNew: () => void;
+	onImport: () => void;
+	onExport: () => void;
+}) {
 	return (
 		<div className="border-b px-4 pt-4 pb-3">
 			<div className="ps-[var(--shell-menu-inset,0px)]">
 				<PageHeader
 					title="Automations"
+					count={
+						typeof count === 'number' ? { value: count, noun: count === 1 ? 'automation' : 'automations' } : undefined
+					}
 					description="Instructions a model runs on a schedule, posting each answer to a chat or a channel."
 					action={
 						<div className="flex items-center gap-1">
@@ -302,7 +315,12 @@ function Automations() {
 
 	return (
 		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-			<Header onNew={newAutomation} onImport={() => importInput.current?.click()} onExport={exportAll} />
+			<Header
+				count={total.data}
+				onNew={newAutomation}
+				onImport={() => importInput.current?.click()}
+				onExport={exportAll}
+			/>
 			<input
 				ref={importInput}
 				type="file"

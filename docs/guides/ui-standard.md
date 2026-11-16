@@ -267,7 +267,11 @@ sentence saying what the page is for, and the page's primary action at the
 right (`/ui`, "Page header and tabs"). The browser tab reads
 `<Page> · local-llm`. The header is `components/ui/page-header.tsx`
 (`PageHeader`): the h1, the sentence, and the primary action in its `action`
-slot, wrapping below the text on a phone. In a section (Workspace, Admin,
+slot, wrapping below the text on a phone. A page that lists things may say
+how many there are in its `count` slot: a secondary badge after the h1, never
+a bare number and never inside the heading, holding the whole count (a filter
+does not change it; the list says '3 of 6', DAT-2), with its noun read aloud
+('12 automations'), and left out while it loads. In a section (Workspace, Admin,
 Benchmarks, Playground) the h1 is the section's name and a page's own title is
 an h2. The tab title comes from each route's `handle.title` in
 `AppRouter.tsx`, written by `RootLayout`; a page whose name is only known once
