@@ -104,6 +104,7 @@ timeline
       2026-11-15 : Owner decisions for the UX review's workspace section : multi-user chrome hidden while one account exists, a new model starts with memory, web search and the code interpreter on, only imported or cloned code is acknowledged : editors guard unsaved work, knowledge file removal confirms, failed uploads stay for the visit
       2026-11-16 : local-llm's own mark : the ll of the name and a block cursor on a squircle, replacing lucide's Sigma in the favicon, icons, AppMark, the boot splash and the desktop windows
       2026-11-16 : Owner decisions for the UX review's Admin section : the server's settings are pages under Admin, multi-user parts hidden while one account exists, the SQLite download removed, task prompts show their defaults, a failed connection test says why : every Admin settings tab saves on request or at once and asks before discarding
+      2026-11-16 : Owner decisions for the UX review's Notes, Calendar, Automations, Channels and Playground section : Channels hidden while one account exists, pinned notes in the sidebar, an empty new note dropped, a real text completion at /openai/completions, the Images tab hidden while image generation is off : automation runs may post into the same chat every time, with no migration
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs
