@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TagSelector, ViewSelector } from './FilterSelects';
 
@@ -18,6 +18,37 @@ describe('TagSelector', () => {
 		expect(screen.getByRole('button', { name: 'Tag: stats' })).toBeVisible();
 		expect(screen.getByText('stats')).toHaveClass('capitalize');
 		expect(screen.getByRole('button', { name: 'Clear tag' })).toBeVisible();
+	});
+});
+
+describe('TagSelector of identifiers (asWritten, #1027)', () => {
+	const ID = 'qwen/qwen-2.5-coder-32b-instruct-long-name';
+	it('shows a chosen id exactly as written, never capitalised', () => {
+		render(<TagSelector value={ID} tags={[ID]} name="Model" placeholder="All models" asWritten onChange={vi.fn()} />);
+		const value = screen.getByText(ID);
+		expect(value).not.toHaveClass('capitalize');
+		expect(screen.getByRole('button', { name: `Model: ${ID}` })).toHaveAttribute('title', ID);
+	});
+
+	it('lists every id whole in its menu, not cut at 32 characters', async () => {
+		const onChange = vi.fn();
+		render(<TagSelector value="" tags={[ID]} name="Model" placeholder="All models" asWritten onChange={onChange} />);
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Model: All models' }), {
+			button: 0,
+			pointerType: 'mouse'
+		});
+		const item = await screen.findByRole('menuitemradio', { name: ID });
+		expect(item).not.toHaveClass('capitalize');
+		fireEvent.click(item);
+		expect(onChange).toHaveBeenCalledWith(ID);
+	});
+
+	it('still cuts and capitalises ordinary tags', async () => {
+		const tag = 'a tag that is much longer than thirty-two letters';
+		render(<TagSelector value="" tags={[tag]} onChange={vi.fn()} />);
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Tag: All tags' }), { button: 0, pointerType: 'mouse' });
+		const item = await screen.findByRole('menuitemradio', { name: `${tag.slice(0, 32)}...` });
+		expect(item).toHaveClass('capitalize');
 	});
 });
 

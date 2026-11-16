@@ -156,6 +156,7 @@ export function Feedbacks() {
 							tags={ids}
 							name="Model"
 							placeholder="All models"
+							asWritten
 							onChange={(value) => {
 								setModelId(value);
 								setPage(1);
@@ -206,7 +207,8 @@ export function Feedbacks() {
 									buttonClassName="text-foreground-muted"
 								/>
 							))}
-							<th scope="col" className="w-10">
+							{/* Its button grows to 44 px on touch, with the cell's 4 px each side (LAY-3, LAY-4). */}
+							<th scope="col" className="w-10 pointer-coarse:w-13">
 								<span className="sr-only">Actions</span>
 							</th>
 						</tr>

@@ -20,21 +20,31 @@ export function FilterMenu({
 	value,
 	items,
 	onChange,
-	trigger
+	trigger,
+	asWritten = false
 }: {
 	value: string;
 	items: Item[];
 	onChange: (value: string) => void;
 	trigger: ReactNode;
+	/** Identifiers (model ids): shown whole and as written, never capitalised or cut. */
+	asWritten?: boolean;
 }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="min-w-40">
+			<DropdownMenuContent
+				align="end"
+				className={asWritten ? 'max-w-[min(28rem,calc(100vw-2rem))] min-w-40' : 'min-w-40'}
+			>
 				<DropdownMenuRadioGroup value={value} onValueChange={onChange}>
 					{items.map((item) => (
-						<DropdownMenuRadioItem key={item.value} value={item.value} className="capitalize">
-							{item.label.length > 32 ? `${item.label.slice(0, 32)}...` : item.label}
+						<DropdownMenuRadioItem
+							key={item.value}
+							value={item.value}
+							className={asWritten ? 'font-mono [overflow-wrap:anywhere]' : 'capitalize'}
+						>
+							{asWritten || item.label.length <= 32 ? item.label : `${item.label.slice(0, 32)}...`}
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -79,7 +89,8 @@ export function TagSelector({
 	onChange,
 	placeholder = 'All tags',
 	name = 'Tag',
-	labels = {}
+	labels = {},
+	asWritten = false
 }: {
 	value: string;
 	tags: string[];
@@ -89,6 +100,8 @@ export function TagSelector({
 	name?: string;
 	/** Display text for a value, where it differs from the value itself. */
 	labels?: Record<string, string>;
+	/** The values are identifiers (model ids): shown as written, never capitalised. */
+	asWritten?: boolean;
 }) {
 	return (
 		<div className="flex items-center">
@@ -96,11 +109,12 @@ export function TagSelector({
 				value={value}
 				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
+				asWritten={asWritten}
 				trigger={
-					<Button variant="ghost" size="sm">
+					<Button variant="ghost" size="sm" className="max-w-full shrink" title={value || undefined}>
 						<span className="sr-only">{name}: </span>
-						{/* A tag reads as written but capitalised; the placeholder is a sentence (WRD-1). */}
-						<span className={value ? 'truncate capitalize' : 'truncate'}>
+						{/* A tag reads as written but capitalised, an id exactly as written; the placeholder is a sentence (WRD-1). */}
+						<span className={!value ? 'truncate' : asWritten ? 'truncate font-mono' : 'truncate capitalize'}>
 							{value ? (labels[value] ?? value) : placeholder}
 						</span>
 						{!value && <ChevronDown />}
