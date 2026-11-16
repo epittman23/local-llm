@@ -6,7 +6,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
-import { adminGate, adminSectionOfPath } from './adminAccess';
+import { adminGate, adminSectionOfPath, analyticsOn } from './adminAccess';
 
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/admin/+layout.svelte: the admin-only
@@ -14,9 +14,9 @@ import { adminGate, adminSectionOfPath } from './adminAccess';
  *
  * The Svelte "Users" tab links to bare `/admin` and is active for any
  * `/admin/users*` path; that is kept, so a bookmark to `/admin` keeps working
- * through the index redirect. The Settings "tab" is not a page in this fork:
- * it opens the Settings modal (a `?settings=admin:general` deep link), so it
- * is a link to `/admin/settings` whose redirect does exactly that.
+ * through the index redirect. Settings and Analytics are pages here since
+ * S5-D1 (#932): `/admin/settings/<tab>` and `/admin/analytics`, not tabs of
+ * the Settings dialog, so leaving them never leaves Admin.
  */
 export function AdminLayout() {
 	const authStatus = useAuthStore((s) => s.status);
@@ -49,6 +49,9 @@ export function AdminLayout() {
 	const tabs: SectionTab[] = [
 		{ to: routePaths.admin, label: 'Users', active: section === 'users' },
 		{ to: routePaths.adminEvaluations, label: 'Evaluations', active: section === 'evaluations' },
+		...(analyticsOn(config)
+			? [{ to: routePaths.adminAnalytics, label: 'Analytics', active: section === 'analytics' }]
+			: []),
 		...(config?.features?.enable_plugins
 			? [{ to: routePaths.adminFunctions, label: 'Functions', active: section === 'functions' }]
 			: []),

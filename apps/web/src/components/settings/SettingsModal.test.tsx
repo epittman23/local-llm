@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
@@ -19,12 +20,24 @@ const loaders = vi.hoisted(() => ({
 	notifications: vi.fn(),
 	data_controls: vi.fn(),
 	tools: vi.fn(),
+	about: vi.fn(),
 	'admin:general': vi.fn()
 }));
 
+const apis = vi.hoisted(() => ({ getPipelinesList: vi.fn() }));
+vi.mock('@/lib/apis', async (importOriginal) => ({ ...(await importOriginal<object>()), ...apis }));
+
 vi.mock('./adminTabComponents', () => ({
 	tabLoaders: loaders,
-	implementedTabIds: new Set(['general', 'interface', 'notifications', 'data_controls', 'tools', 'admin:general'])
+	implementedTabIds: new Set([
+		'general',
+		'interface',
+		'notifications',
+		'data_controls',
+		'tools',
+		'about',
+		'admin:general'
+	])
 }));
 
 const tab = (text: string) => ({ default: () => <p>{text}</p> });
@@ -54,10 +67,18 @@ function NestedDialogTab() {
 	);
 }
 
+let client: QueryClient;
+/** `useServerTabs` asks react-query whether a pipelines server is connected. */
+const wrapper = ({ children }: { children: ReactNode }) => (
+	<QueryClientProvider client={client}>{children}</QueryClientProvider>
+);
+
 const store = () => useSettingsModalStore.getState();
 const openOn = (id?: string) => act(() => store().openSettings(id));
 
 beforeEach(() => {
+	client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+	apis.getPipelinesList.mockReset().mockResolvedValue([]);
 	for (const l of Object.values(loaders)) l.mockReset();
 	loaders.general.mockResolvedValue({ default: DirtyTab });
 	loaders.interface.mockResolvedValue(tab('Interface tab body'));
@@ -65,6 +86,7 @@ beforeEach(() => {
 	loaders.data_controls.mockResolvedValue({ default: NestedDialogTab });
 	loaders['admin:general'].mockResolvedValue(tab('Server general body'));
 	loaders.tools.mockResolvedValue(tab('Integrations tab body'));
+	loaders.about.mockResolvedValue(tab('About tab body'));
 	useAuthStore.setState({ user: { id: 'u', name: 'U', email: 'u@x', role: 'admin' } as never });
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -78,29 +100,29 @@ afterEach(() => {
 describe('a Settings tab whose import fails (#836)', () => {
 	it('shows a recoverable message, retries, and leaves other tabs working', async () => {
 		// Its own tab: a lazy component is kept per tab and attempt, so a failed one would linger into other tests.
-		loaders['admin:general'].mockReset();
-		loaders['admin:general'].mockRejectedValueOnce(new Error('Failed to fetch dynamically imported module'));
-		render(<SettingsModal />);
-		openOn('admin:general');
+		loaders.about.mockReset();
+		loaders.about.mockRejectedValueOnce(new Error('Failed to fetch dynamically imported module'));
+		render(<SettingsModal />, { wrapper });
+		openOn('about');
 
 		expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Notifications' }));
 		expect(await screen.findByText('Notifications tab body')).toBeInTheDocument();
 
-		fireEvent.click(screen.getByRole('tab', { name: 'Server: General' }));
+		fireEvent.click(screen.getByRole('tab', { name: 'About' }));
 		expect(await screen.findByRole('alert')).toBeInTheDocument();
 
-		loaders['admin:general'].mockResolvedValue(tab('Server general body'));
+		loaders.about.mockResolvedValue(tab('About tab body'));
 		fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-		expect(await screen.findByText('Server general body')).toBeInTheDocument();
+		expect(await screen.findByText('About tab body')).toBeInTheDocument();
 		await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
 	});
 });
 
 describe('the Settings dialog (#999, #1000)', () => {
 	it('has a visible title and a close button, and starts focus on the open tab', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('notifications');
 		const dialog = await screen.findByRole('dialog', { name: 'Settings' });
 		expect(within(dialog).getByRole('heading', { name: 'Settings' })).not.toHaveClass('sr-only');
@@ -109,19 +131,19 @@ describe('the Settings dialog (#999, #1000)', () => {
 		await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Notifications' })));
 	});
 
-	it('is one tablist in two halves, a repeated name carrying its half', async () => {
-		render(<SettingsModal />);
+	it('is one tablist of your own settings, the server’s being pages under Admin (S5-D1)', async () => {
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		const list = await screen.findByRole('tablist', { name: 'Settings' });
 		expect(list).toHaveAttribute('aria-orientation', 'vertical');
-		const server = within(list).getByRole('tab', { name: 'Server: General' });
-		expect(server).toHaveTextContent('Server: General');
-		expect(within(server).getByText('Server:', { exact: false })).toHaveClass('sr-only');
 		expect(within(list).getByText('Your settings')).toHaveAttribute('aria-hidden', 'true');
+		expect(within(list).queryByRole('tab', { name: /Server/ })).toBeNull();
+		expect(within(list).queryByText('Server')).toBeNull();
+		expect(loaders['admin:general']).not.toHaveBeenCalled();
 	});
 
 	it('moves with the arrow keys, Home and End (roving focus), and opens a tab with Enter', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		const general = await screen.findByRole('tab', { name: 'General' });
 		expect(general).toHaveAttribute('tabindex', '0');
@@ -130,7 +152,7 @@ describe('the Settings dialog (#999, #1000)', () => {
 		fireEvent.keyDown(general, { key: 'ArrowDown' });
 		expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Interface' }));
 		fireEvent.keyDown(document.activeElement as Element, { key: 'End' });
-		expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Server: General' }));
+		expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'About' }));
 		fireEvent.keyDown(document.activeElement as Element, { key: 'Home' });
 		expect(document.activeElement).toBe(general);
 		fireEvent.keyDown(general, { key: 'ArrowUp' });
@@ -143,7 +165,7 @@ describe('the Settings dialog (#999, #1000)', () => {
 	});
 
 	it('on a phone, opens on the requested tab with a way back to the list', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('interface');
 		const back = await screen.findByRole('button', { name: 'All settings' });
 		expect(screen.getByRole('navigation', { name: 'Settings tabs' })).toHaveClass('max-md:hidden');
@@ -155,7 +177,7 @@ describe('the Settings dialog (#999, #1000)', () => {
 
 describe('Escape (#950, NAV-4)', () => {
 	it('closes a confirmation inside Settings, and leaves Settings open', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('data_controls');
 		fireEvent.click(await screen.findByRole('button', { name: 'Archive all chats' }));
 		const confirm = await screen.findByRole('alertdialog', { name: 'Archive all chats?' });
@@ -170,7 +192,7 @@ describe('Escape meant for another layer (#950)', () => {
 	it('is ignored by Settings while focus is in a layer outside it, and closes Settings from inside', async () => {
 		const outside = document.createElement('button');
 		document.body.appendChild(outside);
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('notifications');
 		const tab = await screen.findByRole('tab', { name: 'Notifications' });
 		// Focus in a portal-rendered confirmation or menu, before Radix knows it is on top
@@ -195,7 +217,7 @@ describe('Escape forwarded to another layer, press after press (#950)', () => {
 	it('forwards every press the layer above takes, not only the first three', async () => {
 		const outside = document.createElement('button');
 		document.body.appendChild(outside);
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('notifications');
 		const tab = await screen.findByRole('tab', { name: 'Notifications' });
 		const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(outside);
@@ -220,7 +242,7 @@ describe('Escape forwarded to another layer, press after press (#950)', () => {
 	it('stops after three forwards of one press that keeps coming back, so it cannot loop', async () => {
 		const outside = document.createElement('button');
 		document.body.appendChild(outside);
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('notifications');
 		const tab = await screen.findByRole('tab', { name: 'Notifications' });
 		const active = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(outside);
@@ -238,7 +260,7 @@ describe('Escape forwarded to another layer, press after press (#950)', () => {
 
 describe('unsaved changes (#951, FRM-3)', () => {
 	it('asks before another tab, keeps editing on Keep editing, and leaves on Discard changes', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
 		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
@@ -261,7 +283,7 @@ describe('unsaved changes (#951, FRM-3)', () => {
 	});
 
 	it('asks before closing, and Escape on the question closes only the question', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -280,7 +302,7 @@ describe('unsaved changes (#951, FRM-3)', () => {
 			window.dispatchEvent(event);
 			return event.defaultPrevented;
 		};
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		const draft = await screen.findByRole('textbox', { name: 'Draft' });
 		expect(unload()).toBe(false);
@@ -296,7 +318,7 @@ describe('unsaved changes (#951, FRM-3)', () => {
 
 	it('leaves the desktop app’s unload alone, since Electron would refuse it without asking', async () => {
 		Object.assign(window, { lllmDesktop: {} });
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
 		const event = new Event('beforeunload', { cancelable: true });
@@ -306,7 +328,7 @@ describe('unsaved changes (#951, FRM-3)', () => {
 	});
 
 	it('closes at once when nothing changed', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		await screen.findByRole('textbox', { name: 'Draft' });
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -316,7 +338,7 @@ describe('unsaved changes (#951, FRM-3)', () => {
 
 describe('search (#1001)', () => {
 	it('finds a setting by its description, opens its tab and flashes the row', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('notifications');
 		const search = await screen.findByRole('combobox', { name: 'Search settings' });
 		fireEvent.change(search, { target: { value: 'dark mode' } });
@@ -333,7 +355,7 @@ describe('search (#1001)', () => {
 	});
 
 	it('lists tabs first, then settings, and moves through them with the arrow keys', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		const search = await screen.findByRole('combobox', { name: 'Search settings' });
 		fireEvent.change(search, { target: { value: 'notification' } });
@@ -350,7 +372,7 @@ describe('search (#1001)', () => {
 	});
 
 	it('says what found nothing, keeps the open tab, and offers to clear', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('interface');
 		const search = await screen.findByRole('combobox', { name: 'Search settings' });
 		fireEvent.change(search, { target: { value: 'zzqx' } });
@@ -360,6 +382,48 @@ describe('search (#1001)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 		expect(search).toHaveValue('');
 		expect(screen.getByRole('tablist')).toBeInTheDocument();
+	});
+});
+
+describe('the server’s settings, pages under Admin (S5-D1, #932)', () => {
+	it('ends an admin’s list in “Server settings”, which closes Settings and leaves for the page', async () => {
+		render(<SettingsModal />, { wrapper });
+		openOn('general');
+		const link = await screen.findByRole('button', { name: 'Server settings' });
+		expect(screen.getByText('In Admin, for everyone on this server.')).toBeInTheDocument();
+		fireEvent.click(link);
+		expect(store()).toMatchObject({ open: false, leaveTo: '/admin/settings' });
+	});
+
+	it('has no “Server settings” for someone who is not an admin', async () => {
+		useAuthStore.setState({ user: { id: 'u', name: 'U', email: 'u@x', role: 'user' } as never });
+		render(<SettingsModal />, { wrapper });
+		openOn('general');
+		await screen.findByRole('tablist', { name: 'Settings' });
+		expect(screen.queryByRole('button', { name: 'Server settings' })).toBeNull();
+	});
+
+	it('asks before leaving a tab with unsaved changes for the server’s settings', async () => {
+		render(<SettingsModal />, { wrapper });
+		openOn('general');
+		fireEvent.change(await screen.findByRole('textbox', { name: 'Draft' }), { target: { value: 'x' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		expect(store()).toMatchObject({ open: false, leaveTo: '/admin/settings' });
+	});
+
+	it('still finds a server tab by search, and opens its page', async () => {
+		useAuthStore.setState({ token: 't' } as never);
+		render(<SettingsModal />, { wrapper });
+		openOn('notifications');
+		const search = await screen.findByRole('combobox', { name: 'Search settings' });
+		fireEvent.change(search, { target: { value: 'general' } });
+		const option = await screen.findByRole('option', { name: 'Server: General' });
+		expect(apis.getPipelinesList).toHaveBeenCalled();
+		fireEvent.click(option);
+		expect(store()).toMatchObject({ open: false, leaveTo: '/admin/settings/general' });
+		expect(loaders['admin:general']).not.toHaveBeenCalled();
+		useAuthStore.setState({ token: null } as never);
 	});
 });
 
@@ -374,12 +438,12 @@ describe('the hidden Integrations tab (#1090, S2-D5)', () => {
 		useAuthStore.setState({ status: 'authenticated' } as never);
 		useConfigStore.setState({ config: { name: 'x', version: '1', features: {} } } as never);
 		const router = createMemoryRouter([{ path: '/', element: <AddressedModal /> }], { initialEntries: [path] });
-		render(<RouterProvider router={router} />);
+		render(<RouterProvider router={router} />, { wrapper });
 		return () => new URLSearchParams(router.state.location.search).get('settings');
 	};
 
 	it('is not in the tab list, nor found by search, though its component exists', async () => {
-		render(<SettingsModal />);
+		render(<SettingsModal />, { wrapper });
 		openOn('general');
 		const list = await screen.findByRole('tablist', { name: 'Settings' });
 		expect(within(list).queryByRole('tab', { name: 'Integrations' })).toBeNull();

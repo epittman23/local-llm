@@ -14,7 +14,7 @@ function Host() {
 const store = () => useSettingsModalStore.getState();
 
 function mount(path: string) {
-	const router = createMemoryRouter([{ path: '/', element: <Host /> }], {
+	const router = createMemoryRouter([{ path: '*', element: <Host /> }], {
 		initialEntries: ['/start', path],
 		initialIndex: 1
 	});
@@ -96,6 +96,44 @@ describe('?settings= while the modal is open (NAV-1)', () => {
 		useAuthStore.setState({ user: { id: 'u', name: 'U', role: 'user' } } as never);
 		const router = mount('/?settings=admin:db');
 		await waitFor(() => expect(settingsParam(router)).toBeNull());
+		expect(store().open).toBe(false);
+	});
+});
+
+describe('a server tab, a page under Admin since S5-D1 (#932)', () => {
+	it('an old ?settings=admin:<tab> link is replaced with its page, keeping other parameters', async () => {
+		const router = mount('/?x=1&settings=admin:db');
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/db'));
+		expect(router.state.location.search).toBe('?x=1');
+		expect(router.state.historyAction).toBe('REPLACE');
+		expect(store().open).toBe(false);
+	});
+
+	it('?settings=admin:analytics goes to the Analytics tab', async () => {
+		const router = mount('/?settings=admin:analytics');
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/analytics'));
+		expect(router.state.location.search).toBe('');
+	});
+
+	it('leaving the open modal for a page adds an entry there and leaves the address alone', async () => {
+		const router = mount('/');
+		act(() => store().openSettings());
+		modalResolves();
+		await waitFor(() => expect(settingsParam(router)).toBe('general'));
+		act(() => store().requestLeave('/admin/settings'));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings'));
+		expect(router.state.historyAction).toBe('PUSH');
+		expect(store()).toMatchObject({ open: false, leaveTo: null });
+		await act(() => new Promise((r) => setTimeout(r, 10)));
+		expect(router.state.location.pathname).toBe('/admin/settings');
+		await act(() => router.navigate(-1));
+		await waitFor(() => expect(settingsParam(router)).toBe('general'));
+	});
+
+	it('a server tab asked for while Settings is closed goes straight to its page', async () => {
+		const router = mount('/c/1');
+		act(() => store().openSettings('admin:code-execution'));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/code-execution'));
 		expect(store().open).toBe(false);
 	});
 });

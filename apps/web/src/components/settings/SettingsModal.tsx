@@ -1,19 +1,6 @@
-import { ChevronLeft, Search } from 'lucide-react';
-import {
-	Component,
-	type ComponentType,
-	type KeyboardEvent,
-	type LazyExoticComponent,
-	lazy,
-	type ReactNode,
-	Suspense,
-	useEffect,
-	useMemo,
-	useRef,
-	useState
-} from 'react';
+import { ChevronLeft, ChevronRight, Search, Server } from 'lucide-react';
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -21,47 +8,22 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
-import { implementedTabIds, tabLoaders } from './adminTabComponents';
+import { implementedTabIds } from './adminTabComponents';
 import { SettingsDialogHost, settingSlug } from './controls';
 import { SETTINGS_PANEL_ID, SettingsNav, settingsTabId } from './SettingsNav';
+import { SettingsTabContent } from './SettingsTabContent';
 import { searchSettings } from './settingsIndex';
-import { availableTabs, filterTabs, personalSettingsRestricted, resolveTab } from './settingsTabs';
+import {
+	availableTabs,
+	filterTabs,
+	isAdminTab,
+	personalSettingsRestricted,
+	resolveTab,
+	serverTabPath
+} from './settingsTabs';
+import { useServerTabs } from './useServerTabs';
 
-const lazyTabs = new Map<string, LazyExoticComponent<ComponentType>>();
-
-/** The lazy component for a tab; a higher `attempt` makes a fresh one, so a failed import is retried. */
-function lazyTab(id: string, attempt: number) {
-	const key = `${id}:${attempt}`;
-	let tab = lazyTabs.get(key);
-	if (!tab) {
-		tab = lazy(tabLoaders[id]);
-		lazyTabs.set(key, tab);
-	}
-	return tab;
-}
-
-/** Keeps a tab that fails to load (server down, stale build) from taking the page down with it. */
-class TabErrorBoundary extends Component<{ onRetry: () => void; children: ReactNode }, { failed: boolean }> {
-	state = { failed: false };
-
-	static getDerivedStateFromError() {
-		return { failed: true };
-	}
-
-	render() {
-		if (!this.state.failed) return this.props.children;
-		return (
-			<div role="alert" className="flex h-full flex-col items-center justify-center gap-3 text-center">
-				<p className="text-foreground-muted">This tab could not be loaded. Check your connection to the server.</p>
-				<Button variant="secondary" size="sm" type="button" onClick={this.props.onRetry}>
-					Retry
-				</Button>
-			</div>
-		);
-	}
-}
-
-/** A search result: a whole tab, or one setting on it (scrolled to and flashed when chosen). */
+/** A search result: a whole tab, or one setting on it (scrolled to and flashed when chosen); a server tab is a page. */
 type Result = { key: string; tab: string; label: string; setting: string | null };
 
 /** How long a setting chosen from search stays highlighted. */
@@ -79,7 +41,9 @@ const FLASH_MS = 1600;
  * search finds settings by their label and description as well as tabs, and
  * a miss leaves the open tab where it is. #951: leaving a tab with unsaved
  * changes, by another tab, the close button or Escape, asks first, and so
- * does the browser before a reload.
+ * does the browser before a reload. S5-D1: the server's settings are pages
+ * under Admin; for an admin the list ends in "Server settings", which goes
+ * there, and search still finds the server tabs and opens their page.
  */
 export function SettingsModal() {
 	const open = useSettingsModalStore((s) => s.open);
@@ -88,13 +52,12 @@ export function SettingsModal() {
 	const setting = useSettingsModalStore((s) => s.setting);
 	const pending = useSettingsModalStore((s) => s.pending);
 	const dirty = useSettingsModalStore((s) => s.dirty);
-	const { requestTab, requestClose, confirmLeave, cancelLeave } = useSettingsModalStore.getState();
+	const { requestTab, requestClose, requestLeave, confirmLeave, cancelLeave } = useSettingsModalStore.getState();
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
 	const [search, setSearch] = useState('');
 	const [active, setActive] = useState(0);
 	const [view, setView] = useState<'list' | 'tab'>('list');
-	const [attempts, setAttempts] = useState<Record<string, number>>({});
 	const content = useRef<HTMLDivElement>(null);
 	const panel = useRef<HTMLDivElement>(null);
 	const wasOpen = useRef(false);
@@ -114,13 +77,16 @@ export function SettingsModal() {
 	}, [open, dirty]);
 
 	const tabs = useMemo(() => availableTabs(user, config, implementedTabIds), [user, config]);
+	const searching = search.trim() !== '';
+	// Only asked for while searching: Pipelines' detection makes the backend query each connection.
+	const server = useServerTabs({ enabled: open && searching }).tabs;
 	const tabsNow = useRef(tabs);
 	tabsNow.current = tabs;
 	const results = useMemo<Result[]>(() => {
 		if (!search.trim()) return [];
 		const titles = new Map(tabs.map((t) => [t.id, t.title]));
 		return [
-			...filterTabs(tabs, search).map((t) => ({ key: t.id, tab: t.id, label: t.title, setting: null })),
+			...filterTabs([...tabs, ...server], search).map((t) => ({ key: t.id, tab: t.id, label: t.title, setting: null })),
 			...searchSettings(search, new Set(titles.keys())).map((s) => ({
 				key: `${s.tab}:${s.label}`,
 				tab: s.tab,
@@ -128,7 +94,7 @@ export function SettingsModal() {
 				setting: settingSlug(s.label)
 			}))
 		];
-	}, [tabs, search]);
+	}, [tabs, server, search]);
 
 	// A fresh open starts unsearched, on the requested tab; a phone shows the
 	// list first unless a tab was asked for. A request while open (Back to an
@@ -173,8 +139,6 @@ export function SettingsModal() {
 	}, [open, setting]);
 
 	if (tabs.length === 0) return null;
-	const attempt = selected ? (attempts[selected] ?? 0) : 0;
-	const Active = selected && tabLoaders[selected] ? lazyTab(selected, attempt) : null;
 	const selectedTitle = tabs.find((t) => t.id === selected)?.title ?? '';
 
 	const changeSearch = (value: string) => {
@@ -183,6 +147,7 @@ export function SettingsModal() {
 	};
 	const choose = (tab: string, settingSlugToShow: string | null = null) => {
 		changeSearch('');
+		if (isAdminTab(tab)) return requestLeave(serverTabPath(tab));
 		setView('tab');
 		requestTab(tab, settingSlugToShow);
 	};
@@ -198,7 +163,6 @@ export function SettingsModal() {
 			if (r) choose(r.tab, r.setting);
 		}
 	};
-	const searching = search.trim() !== '';
 
 	return (
 		<Dialog
@@ -250,9 +214,7 @@ export function SettingsModal() {
 					});
 				}}
 			>
-				<DialogDescription className="sr-only">
-					Your settings and, for administrators, the server settings.
-				</DialogDescription>
+				<DialogDescription className="sr-only">Your settings.</DialogDescription>
 
 				<nav
 					aria-label="Settings tabs"
@@ -323,6 +285,21 @@ export function SettingsModal() {
 					) : (
 						<SettingsNav tabs={tabs} selected={selected} onSelect={(id) => choose(id)} className="min-h-0 flex-1" />
 					)}
+					{user?.role === 'admin' && (
+						<div className="shrink-0 border-t px-2 py-2">
+							<Button
+								type="button"
+								variant="ghost"
+								className="w-full shrink justify-start"
+								onClick={() => requestLeave(serverTabPath())}
+							>
+								<Server aria-hidden />
+								<span className="flex-1 truncate text-left">Server settings</span>
+								<ChevronRight aria-hidden className="text-foreground-muted" />
+							</Button>
+							<p className="text-foreground-muted px-2 pt-1 text-dense">In Admin, for everyone on this server.</p>
+						</div>
+					)}
 					{personalSettingsRestricted(user) && (
 						<p className="text-foreground-muted border-t px-4 py-2 text-dense">
 							Your administrator has turned off access to your personal settings (General, Interface, Notifications,
@@ -364,23 +341,10 @@ export function SettingsModal() {
 						aria-label={selected ? undefined : selectedTitle}
 						className="min-h-0 flex-1 overflow-hidden"
 					>
-						{Active && (
-							<TabErrorBoundary
-								key={`${selected}:${attempt}`}
-								onRetry={() => selected && setAttempts((a) => ({ ...a, [selected]: (a[selected] ?? 0) + 1 }))}
-							>
-								<Suspense
-									fallback={
-										<div className="flex h-full items-center justify-center">
-											<Spinner className="size-6" />
-										</div>
-									}
-								>
-									<SettingsDialogHost>
-										<Active key={selected} />
-									</SettingsDialogHost>
-								</Suspense>
-							</TabErrorBoundary>
+						{selected && (
+							<SettingsDialogHost>
+								<SettingsTabContent id={selected} />
+							</SettingsDialogHost>
 						)}
 					</div>
 				</div>

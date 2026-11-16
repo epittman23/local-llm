@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '@/lib/stores/authStore';
-import { adminGate, adminSectionOfPath, analyticsRedirectPath, settingsRedirectPath, tabFromPath } from './adminAccess';
+import { adminGate, adminSectionOfPath, analyticsOn, tabFromPath } from './adminAccess';
 
 const user = (role: string) => ({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '' }) as SessionUser;
 const cfg = (enable_plugins: boolean, extra: Record<string, unknown> = {}) =>
@@ -29,6 +29,8 @@ describe('adminSectionOfPath', () => {
 		expect(adminSectionOfPath('/admin/users/groups')).toBe('users');
 		expect(adminSectionOfPath('/admin/evaluations/feedback')).toBe('evaluations');
 		expect(adminSectionOfPath('/admin/functions/create')).toBe('functions');
+		expect(adminSectionOfPath('/admin/analytics')).toBe('analytics');
+		expect(adminSectionOfPath('/admin/settings/connections')).toBe('settings');
 		expect(adminSectionOfPath('/admin')).toBeNull();
 	});
 });
@@ -45,14 +47,16 @@ describe('tabFromPath', () => {
 	});
 });
 
-describe('settings redirects', () => {
-	it('builds the modal URL and keeps other params', () => {
-		expect(settingsRedirectPath('connections', '')).toBe('/?settings=admin%3Aconnections');
-		expect(settingsRedirectPath(undefined, '?x=1')).toBe('/?x=1&settings=admin%3Ageneral');
+describe('Analytics, an Admin tab of its own (S5-D1)', () => {
+	it('lets an admin open /admin/analytics while admin analytics is on', () => {
+		expect(adminGate(user('admin'), cfg(true), '/admin/analytics')).toEqual({ allowed: true });
+		expect(analyticsOn(cfg(true))).toBe(true);
+		expect(analyticsOn(null)).toBe(true);
 	});
-	it('routes analytics to the modal unless the feature is off', () => {
-		expect(analyticsRedirectPath(cfg(true))).toBe('/?settings=admin%3Aanalytics');
-		expect(analyticsRedirectPath(cfg(true, { enable_admin_analytics: false }))).toBe('/admin');
-		expect(analyticsRedirectPath(null)).toBe('/?settings=admin%3Aanalytics');
+	it('sends /admin/analytics to /admin while it is off, and nothing else', () => {
+		const off = cfg(true, { enable_admin_analytics: false });
+		expect(analyticsOn(off)).toBe(false);
+		expect(adminGate(user('admin'), off, '/admin/analytics')).toEqual({ allowed: false, redirectTo: '/admin' });
+		expect(adminGate(user('admin'), off, '/admin/settings/general')).toEqual({ allowed: true });
 	});
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
-import { availableTabs, isAdminTab } from '@/components/settings/settingsTabs';
+import { availableTabs, isAdminTab, serverTabPath } from '@/components/settings/settingsTabs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
@@ -21,6 +21,10 @@ import { appHref } from '@/routes/routePaths';
  *   it; closing goes back over the entry it added, or removes the parameter.
  * - Back removing the parameter closes the modal; with unsaved changes it puts
  *   the parameter back and asks "Discard changes?" instead (#951).
+ * - A server tab (`?settings=admin:<tab>`, an old link or bookmark) is a page
+ *   under Admin since S5-D1: the address is replaced with that page. The
+ *   modal's own way there (`leaveTo`: a search result, "Server settings",
+ *   `openSettings('admin:…')`) is a navigation that adds an entry.
  */
 export function useSettingsUrl() {
 	const [params, setParams] = useSearchParams();
@@ -32,6 +36,9 @@ export function useSettingsUrl() {
 	const config = useConfigStore((s) => s.config);
 	const open = useSettingsModalStore((s) => s.open);
 	const tab = useSettingsModalStore((s) => s.tab);
+	const leaveTo = useSettingsModalStore((s) => s.leaveTo);
+	// Set while leaving for a page, so closing the modal does not also edit the address.
+	const leaving = useRef(false);
 	// The value this hook last put in the address, and the history entry it pushed.
 	const written = useRef<string | null>(null);
 	const pushed = useRef<{ key: string | null; pending: boolean }>({ key: null, pending: false });
@@ -45,7 +52,12 @@ export function useSettingsUrl() {
 		const store = useSettingsModalStore.getState();
 		if (requested && requested !== written.current) {
 			const allowed = !isAdminTab(requested) || user?.role === 'admin';
-			if (allowed && availableTabs(user, config, implementedTabIds).length > 0) {
+			if (allowed && isAdminTab(requested)) {
+				const rest = new URLSearchParams(params);
+				rest.delete('settings');
+				const query = rest.toString();
+				navigate(`${serverTabPath(requested)}${query ? `?${query}` : ''}`, { replace: true });
+			} else if (allowed && availableTabs(user, config, implementedTabIds).length > 0) {
 				written.current = requested;
 				store.openSettings(requested);
 			} else {
@@ -68,7 +80,16 @@ export function useSettingsUrl() {
 				store.requestClose();
 			} else store.closeSettings();
 		}
-	}, [requested, status, user, config, params, setParams]);
+	}, [requested, status, user, config, params, setParams, navigate]);
+
+	// The modal closed to go to a page (a server tab).
+	useEffect(() => {
+		if (!leaveTo) return;
+		// Only a modal that wrote `?settings=` has a close for the next effect to skip.
+		leaving.current = written.current !== null;
+		useSettingsModalStore.getState().clearLeave();
+		navigate(leaveTo);
+	}, [leaveTo, navigate]);
 
 	// The entry a push created: closing goes back over it.
 	useEffect(() => {
@@ -102,7 +123,10 @@ export function useSettingsUrl() {
 			const timer = setTimeout(() => {
 				const { requested, key, pathname, params, setParams, navigate } = now.current;
 				if (useSettingsModalStore.getState().open || requested !== written.current) return;
-				if (window.location.pathname !== appHref(pathname)) return;
+				if (leaving.current || window.location.pathname !== appHref(pathname)) {
+					leaving.current = false;
+					return;
+				}
 				written.current = null;
 				if (pushed.current.key !== null && pushed.current.key === key) {
 					pushed.current.key = null;
