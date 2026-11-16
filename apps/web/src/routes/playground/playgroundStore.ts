@@ -88,3 +88,12 @@ export const usePlaygroundStore = create<PlaygroundState>()(
 		}
 	)
 );
+
+/**
+ * Forgets every tab's work, in memory and in sessionStorage: on sign-out, so
+ * whoever signs in next in this browser tab starts with an empty Playground.
+ */
+export function resetPlaygroundStore() {
+	usePlaygroundStore.setState({ chat: emptyChat, completions: emptyCompletions, imagePrompt: '' });
+	usePlaygroundStore.persist.clearStorage();
+}

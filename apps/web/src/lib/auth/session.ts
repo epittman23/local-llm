@@ -15,6 +15,7 @@ import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { getUserTimezone } from '@/lib/utils/auth-helpers';
+import { resetPlaygroundStore } from '@/routes/playground/playgroundStore';
 
 const TOKEN_EXPIRY_BUFFER = 60; // seconds
 const TOKEN_CHECK_INTERVAL_MS = 15000;
@@ -98,6 +99,8 @@ export const clearExpiredSession = () => {
 	endReason = 'expired';
 	useAuthStore.getState().clearSession();
 	localStorage.removeItem('token');
+	// The Playground's work is the account's, not the next one's.
+	resetPlaygroundStore();
 	// Clears the OAuth token cookie so /auth doesn't auto-login and redirect-loop.
 	document.cookie = 'token=; Max-Age=0; path=/';
 	// The unsent drafts stay, so the sign-in page's "continue where you left off" holds (#1061).
@@ -112,6 +115,7 @@ export const signOut = async () => {
 	endReason = null;
 	useAuthStore.getState().clearSession();
 	localStorage.removeItem('token');
+	resetPlaygroundStore();
 	document.cookie = 'token=; Max-Age=0; path=/';
 	await userSignOut().catch((error) => {
 		console.error('Error signing out:', error);

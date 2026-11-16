@@ -75,7 +75,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     dependencies: `@tiptap/extension-code-block-lowlight` and `lowlight`
     (note code blocks) and `rrule` (schedules are spelled out and preview
     their next runs; custom rules are checked in the browser). `/channels` is
-    a new index page. The Playground keeps each tab's work for the session.
+    a new index page. The Playground keeps each tab's work for the session,
+    until sign-out.
     A page header may show its count as a badge (Automations).
 - **2026-11-16** (latest): **Admin: the owner's decisions for the UX review's section 5
   (#1116), and server settings that are pages.**
