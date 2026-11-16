@@ -5,22 +5,56 @@
 
 import { uuid } from '@/lib/utils/uuid';
 
-export type PlaygroundMessage = { role: 'user' | 'assistant'; content: string };
+/** How fast a reply came: time to its first token always; its token count and rate when the provider reported usage. */
+export type PlaygroundStats = { ttftMs?: number; tokens?: number; tokensPerSecond?: number };
+
+export type PlaygroundMessage = { role: 'user' | 'assistant'; content: string; stats?: PlaygroundStats };
+
+/** What a provider reports in a stream's `usage` (OpenAI's names). */
+export type StreamUsage = { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+
+/** The JSON event of a `data: {...}` SSE line, or null for blank lines, `[DONE]`, comments and anything unparsable. */
+type StreamEvent = { choices?: { delta?: { content?: unknown }; text?: unknown }[]; usage?: unknown };
+
+function eventOf(line: string): StreamEvent | null {
+	const trimmed = line.trim();
+	if (!trimmed.startsWith('data:')) return null;
+	const payload = trimmed.slice(5).trim();
+	if (!payload || payload === '[DONE]') return null;
+	try {
+		return JSON.parse(payload);
+	} catch {
+		return null;
+	}
+}
 
 /**
- * The text a single SSE line adds: the `delta.content` of a `data: {...}` line.
- * Blank lines, `[DONE]`, comments and anything unparsable add nothing.
+ * The text a single SSE line adds: a chat chunk's `delta.content`, or a text
+ * completion's `text` (`/completions` streams that instead). Blank lines,
+ * `[DONE]`, comments and anything unparsable add nothing.
  */
 export function deltaFromLine(line: string): string {
-	const trimmed = line.trim();
-	if (!trimmed.startsWith('data:')) return '';
-	const payload = trimmed.slice(5).trim();
-	if (!payload || payload === '[DONE]') return '';
-	try {
-		return JSON.parse(payload)?.choices?.[0]?.delta?.content ?? '';
-	} catch {
-		return '';
-	}
+	const choice = eventOf(line)?.choices?.[0];
+	const text = choice?.delta?.content ?? choice?.text;
+	return typeof text === 'string' ? text : '';
+}
+
+/** The `usage` a line reports (most providers send it once, on the last chunk), or null. */
+export function usageFromLine(line: string): StreamUsage | null {
+	const usage = eventOf(line)?.usage;
+	return usage && typeof usage === 'object' ? (usage as StreamUsage) : null;
+}
+
+/**
+ * The line under a reply (D8): time to first token always, then the tokens
+ * and tokens per second when the provider reported them.
+ */
+export function formatStats(stats: PlaygroundStats | undefined): string {
+	if (stats?.ttftMs === undefined) return '';
+	const parts = [`First token in ${(stats.ttftMs / 1000).toFixed(2)} s`];
+	if (stats.tokens !== undefined) parts.push(`${stats.tokens} ${stats.tokens === 1 ? 'token' : 'tokens'}`);
+	if (stats.tokensPerSecond !== undefined) parts.push(`${stats.tokensPerSecond.toFixed(1)} tokens/s`);
+	return parts.join(' · ');
 }
 
 /**
@@ -33,7 +67,8 @@ export function deltaFromLine(line: string): string {
 export async function readCompletionStream(
 	res: Response | null,
 	onText: (text: string) => void,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	onUsage?: (usage: StreamUsage) => void
 ): Promise<void> {
 	if (!res) throw new Error('No response');
 	if (!res.ok) {
@@ -52,16 +87,34 @@ export async function readCompletionStream(
 			buffer = lines.pop() ?? '';
 			const text = lines.map(deltaFromLine).join('');
 			if (text) onText(text);
+			reportUsage(lines, onUsage);
 		}
 		if (!signal?.aborted && buffer) {
 			const text = deltaFromLine(buffer);
 			if (text) onText(text);
+			reportUsage([buffer], onUsage);
 		}
 	} catch (err) {
 		if (!signal?.aborted) throw err;
 	} finally {
 		reader.releaseLock();
 	}
+}
+
+function reportUsage(lines: string[], onUsage?: (usage: StreamUsage) => void) {
+	if (!onUsage) return;
+	for (const line of lines) {
+		const usage = usageFromLine(line);
+		if (usage) onUsage(usage);
+	}
+}
+
+/** Only the parameters that are set: an empty field means "the model's default". */
+function activeParams(params: Record<string, unknown>) {
+	const active = Object.fromEntries(
+		Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== '')
+	);
+	return Object.keys(active).length ? { params: active } : {};
 }
 
 /**
@@ -80,15 +133,21 @@ export function chatRequest(
 	messages: PlaygroundMessage[],
 	params: Record<string, unknown>
 ) {
-	const active = Object.fromEntries(
-		Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== '')
-	);
 	return {
 		model: modelId,
 		stream: true,
-		messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages],
-		...(Object.keys(active).length ? { params: active } : {})
+		// Only the role and the text: a message's speed line is the page's, not the model's.
+		messages: [
+			...(system ? [{ role: 'system', content: system }] : []),
+			...messages.map(({ role, content }) => ({ role, content }))
+		],
+		...activeParams(params)
 	};
+}
+
+/** A text completion's body (`/openai/completions`): the text the model continues, and the parameters set, as Chat sends them. */
+export function completionRequest(modelId: string, prompt: string, params: Record<string, unknown>) {
+	return { model: modelId, stream: true, prompt, ...activeParams(params) };
 }
 
 /** Appends streamed text to the last message if it is the assistant's, else starts an assistant message. */

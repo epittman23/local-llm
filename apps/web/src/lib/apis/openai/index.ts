@@ -1,5 +1,5 @@
-import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { errorBody, errorMessage, requestError } from '@/lib/apis/errors';
+import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 
 export const getErrorMessage = (err: unknown, fallback = 'Server connection failed') => errorMessage(err, fallback);
 
@@ -392,6 +392,30 @@ export const chatCompletion = async (
 		throw error;
 	}
 
+	return [res, controller];
+};
+
+/**
+ * Starts a text completion (`/openai/completions`): the model continues
+ * `body.prompt`. Abortable before its headers arrive, as `chatCompletion` is.
+ */
+export const textCompletion = async (
+	token: string,
+	body: object,
+	controller: AbortController = new AbortController()
+): Promise<[Response | null, AbortController]> => {
+	const res = await fetch(`${OPENAI_API_BASE_URL}/completions`, {
+		signal: controller.signal,
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(body)
+	}).catch((err) => {
+		if (!controller.signal.aborted) console.error(err);
+		throw requestError(err);
+	});
 	return [res, controller];
 };
 
