@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 681,
+	"total": 675,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -539,18 +539,8 @@
 			"lint/suspicious/noArrayIndexKey": 3,
 			"lint/suspicious/noExplicitAny": 9
 		},
-		"apps/web/src/routes/calendar/CalendarDialogs.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 3
-		},
-		"apps/web/src/routes/calendar/CalendarPage.tsx": {
-			"lint/suspicious/noArrayIndexKey": 1
-		},
 		"apps/web/src/routes/calendar/calendarModel.test.ts": {
-			"lint/style/noNonNullAssertion": 1,
 			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/calendar/calendarModel.ts": {
-			"lint/suspicious/noAssignInExpressions": 1
 		},
 		"apps/web/src/routes/channels/ChannelDialogs.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1,

@@ -1,9 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import {
 	type CalendarEventModel,
 	type CalendarModel,
@@ -11,29 +25,35 @@ import {
 	createCalendarEvent,
 	deleteCalendarEvent,
 	getCalendarEventById,
+	updateCalendar,
 	updateCalendarEvent
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { seriesHexes } from '@/lib/ui/tokenColour';
+import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { cn } from '@/lib/utils';
 import {
 	CUSTOM_REPEAT,
+	calendarColour,
+	EVENT_FIELDS,
 	type EventFields,
 	eventFields,
 	eventPayload,
+	eventProblems,
+	firstFreeColour,
 	reminderOptions,
 	repeatFromRrule,
-	SCHEDULED_TASKS_ID
+	SCHEDULED_TASKS_ID,
+	withStart
 } from './calendarModel';
 
-const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
-const label = 'text-muted-foreground mb-1 text-xs';
-const select = 'w-full cursor-pointer bg-transparent text-sm';
+/** The Select's value for "No repeat": a Radix item cannot have an empty value. */
+const NO_REPEAT = 'none';
 
 const REPEATS: [string, string][] = [
-	['', 'No Repeat'],
+	[NO_REPEAT, 'No repeat'],
 	['daily', 'Daily'],
-	['weekdays', 'Monday – Friday'],
+	['weekdays', 'Monday to Friday'],
 	['weekly', 'Weekly'],
 	['monthly', 'Monthly'],
 	['yearly', 'Yearly']
@@ -41,9 +61,14 @@ const REPEATS: [string, string][] = [
 
 /**
  * Ports components/calendar/CalendarEventModal.svelte: create or edit an event.
- * Rules (defaults, the payload, an end before the start) in calendarModel.ts.
- * The Svelte form never showed an end *date* input, so a multi-day event
- * could not be made or kept from the form; this one shows it.
+ * Rules (defaults, the payload, the problems) in calendarModel.ts.
+ *
+ * A visible title says which (#1105); the start and the end are two lines, a
+ * date and a time each, with All day beside the heading. Moving the start
+ * moves the end with it (#966), and an end that is not after the start is an
+ * error under the end, never rewritten (FRM-2). The Svelte form never showed
+ * an end *date* input, so a multi-day event could not be made or kept from
+ * the form; this one shows it.
  */
 export function EventDialog({
 	open,
@@ -66,20 +91,29 @@ export function EventDialog({
 	const [f, setF] = useState<EventFields>(() => eventFields(null, defaultCalendarId, null));
 	const [loading, setLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const { errors, field, submit, reset } = useFieldErrors(eventProblems(f), EVENT_FIELDS);
 	const set = (patch: Partial<EventFields>) => setF((prev) => ({ ...prev, ...patch }));
+	const moveStart = (patch: Partial<Pick<EventFields, 'startDate' | 'startTime'>>) =>
+		setF((prev) => withStart(prev, patch));
 	const editing = event && !event.meta?.automation_id ? event : null;
 	// An occurrence of a repeating event: saving or deleting it acts on the series.
 	const occurrence = Boolean(editing?.instance_id);
+	const endField = field('end');
 
-	useEffect(() => {
-		if (open) setF(eventFields(event, defaultCalendarId, defaultStartAt));
-		// Seeded when the dialog opens.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open]);
+	// Seeded once each time the dialog opens (during render, so it never shows the last event's values).
+	const [seeded, setSeeded] = useState(false);
+	if (open !== seeded) {
+		setSeeded(open);
+		if (open) {
+			setF(eventFields(event, defaultCalendarId, defaultStartAt));
+			reset();
+		}
+	}
 
 	const save = async () => {
+		if (!submit()) return;
 		const checked = eventPayload(f, editing);
-		if ('error' in checked) return void toast.error(checked.error);
+		if ('error' in checked) return;
 		setLoading(true);
 		try {
 			let out = checked;
@@ -92,12 +126,12 @@ export function EventDialog({
 				? await updateCalendarEvent(token, editing.id, out.form)
 				: await createCalendarEvent(token, out.form);
 			if (res) {
-				toast.success(editing ? 'Event updated' : 'Event created');
+				toast.success(editing ? 'Event saved' : 'Event created');
 				onSaved();
 				onOpenChange(false);
 			}
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure(editing ? 'Couldn’t save the event' : 'Couldn’t create the event', err);
 		} finally {
 			setLoading(false);
 		}
@@ -112,205 +146,211 @@ export function EventDialog({
 			onSaved();
 			onOpenChange(false);
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure('Couldn’t delete the event', err);
 		} finally {
 			setLoading(false);
 		}
 	};
+
+	const reminderValues = reminderOptions(f.alertMinutes, Math.max(event?.meta?.alert_minutes ?? 10, -1));
 
 	return (
 		<>
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title={editing?.rrule ? 'Delete Repeating Event' : 'Delete Event'}
-				confirmLabel="Delete"
+				title={editing?.rrule ? 'Delete repeating event' : 'Delete event'}
+				confirmLabel="Delete event"
+				destructive
 				onConfirm={remove}
 			>
 				{editing?.rrule
-					? 'This deletes every occurrence of this event, not just this one. This action cannot be undone.'
-					: 'This action cannot be undone. Do you wish to continue?'}
+					? `This deletes every occurrence of “${editing.title}”, not just this one. This can’t be undone.`
+					: `Delete “${editing?.title ?? ''}”? This can’t be undone.`}
 			</ConfirmDialog>
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="sm:max-w-lg">
+				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
 					<DialogHeader>
-						<DialogTitle className="sr-only">{editing ? 'Edit event' : 'New event'}</DialogTitle>
-						<DialogDescription className="sr-only">A calendar event.</DialogDescription>
+						<DialogTitle className="text-title font-title tracking-tight">
+							{editing ? 'Edit event' : 'New event'}
+						</DialogTitle>
+						<DialogDescription className="sr-only">
+							{editing ? 'Change this event.' : 'Add an event to a calendar.'}
+						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="flex flex-col gap-2.5"
+						noValidate
+						className="flex flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							save();
 						}}
 					>
-						<input
-							className={cn(bare, 'text-base')}
-							aria-label="Event title"
-							placeholder="Event title"
-							value={f.title}
-							onChange={(e) => set({ title: e.target.value })}
-						/>
-						<div>
-							<label className={label} htmlFor="event-calendar">
-								Calendar
-							</label>
-							<select
-								id="event-calendar"
-								className={select}
-								value={f.calendarId}
-								onChange={(e) => set({ calendarId: e.target.value })}
-							>
-								{calendars
-									.filter((c) => c.id !== SCHEDULED_TASKS_ID)
-									.map((c) => (
-										<option key={c.id} value={c.id}>
-											{c.name}
-										</option>
-									))}
-							</select>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="event-title">Title</Label>
+							<Input
+								id="event-title"
+								value={f.title}
+								{...field('title')}
+								{...fieldProps('event-title-message', { error: errors.title })}
+								onChange={(e) => set({ title: e.target.value })}
+							/>
+							<FieldMessage id="event-title-message" error={errors.title} />
 						</div>
-						<div>
-							<div className={label}>When</div>
-							<div className="flex flex-wrap items-center gap-2 text-sm">
-								<input
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="event-calendar">Calendar</Label>
+							<Select value={f.calendarId} onValueChange={(v) => set({ calendarId: v })}>
+								<SelectTrigger id="event-calendar" className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{calendars
+										.filter((c) => c.id !== SCHEDULED_TASKS_ID)
+										.map((c) => (
+											<SelectItem key={c.id} value={c.id}>
+												<span
+													aria-hidden
+													className="size-2.5 rounded-sm"
+													style={{ backgroundColor: calendarColour(c) }}
+												/>
+												{c.name}
+											</SelectItem>
+										))}
+								</SelectContent>
+							</Select>
+						</div>
+						<fieldset className="flex flex-col gap-2">
+							<legend className="sr-only">When</legend>
+							<div className="flex items-center justify-between gap-3">
+								<span aria-hidden className="text-sm leading-none font-medium">
+									When
+								</span>
+								<Label className="font-normal">
+									<Checkbox checked={f.allDay} onCheckedChange={(v) => set({ allDay: v === true })} />
+									All day
+								</Label>
+							</div>
+							<div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+								<span aria-hidden className="text-foreground-muted">
+									Starts
+								</span>
+								<Input
 									type="date"
 									aria-label="Start date"
-									className="bg-transparent"
+									className={cn(f.allDay && 'col-span-2')}
 									value={f.startDate}
-									onChange={(e) => set({ startDate: e.target.value })}
+									{...field('start')}
+									{...fieldProps('event-start-message', { error: errors.start })}
+									onChange={(e) => moveStart({ startDate: e.target.value })}
 								/>
 								{!f.allDay && (
-									<input
+									<Input
 										type="time"
 										aria-label="Start time"
-										className="bg-transparent"
 										value={f.startTime}
-										onChange={(e) => set({ startTime: e.target.value })}
+										onChange={(e) => moveStart({ startTime: e.target.value })}
 									/>
 								)}
-								<span className="text-muted-foreground">–</span>
-								<input
+								<span aria-hidden className="text-foreground-muted">
+									Ends
+								</span>
+								<Input
 									type="date"
 									aria-label="End date"
-									className="bg-transparent"
+									className={cn(f.allDay && 'col-span-2')}
 									value={f.endDate}
+									{...endField}
+									{...fieldProps('event-end-message', { error: errors.end })}
 									onChange={(e) => set({ endDate: e.target.value })}
 								/>
 								{!f.allDay && (
-									<input
+									<Input
 										type="time"
 										aria-label="End time"
-										className="bg-transparent"
 										value={f.endTime}
+										onBlur={endField.onBlur}
+										{...fieldProps('event-end-message', { error: errors.end })}
 										onChange={(e) => set({ endTime: e.target.value })}
 									/>
 								)}
-								<label className="text-muted-foreground ml-auto flex cursor-pointer items-center gap-1.5 text-xs">
-									<input
-										type="checkbox"
-										className="accent-brand"
-										checked={f.allDay}
-										onChange={(e) => set({ allDay: e.target.checked })}
-									/>
-									All day
-								</label>
 							</div>
+							<FieldMessage id="event-start-message" error={errors.start} />
+							<FieldMessage id="event-end-message" error={errors.end} />
+						</fieldset>
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="event-location">Location (optional)</Label>
+							<Input id="event-location" value={f.location} onChange={(e) => set({ location: e.target.value })} />
 						</div>
-						<div>
-							<label className={label} htmlFor="event-location">
-								Location
-							</label>
-							<input
-								id="event-location"
-								className={bare}
-								placeholder="Add location"
-								value={f.location}
-								onChange={(e) => set({ location: e.target.value })}
-							/>
-						</div>
-						<div className="flex gap-3">
-							<div className="flex-1">
-								<label className={label} htmlFor="event-reminder">
-									Reminder
-								</label>
-								<select
-									id="event-reminder"
-									className={select}
-									value={f.alertMinutes}
-									onChange={(e) => set({ alertMinutes: Number(e.target.value) })}
-								>
-									{reminderOptions(f.alertMinutes, Math.max(event?.meta?.alert_minutes ?? 10, -1)).map(([v, l]) => (
-										<option key={v} value={v}>
-											{l}
-										</option>
-									))}
-								</select>
+						<div className="grid gap-3 sm:grid-cols-2">
+							<div className="flex min-w-0 flex-col gap-1.5">
+								<Label htmlFor="event-reminder">Reminder</Label>
+								<Select value={String(f.alertMinutes)} onValueChange={(v) => set({ alertMinutes: Number(v) })}>
+									<SelectTrigger id="event-reminder" className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{reminderValues.map(([v, l]) => (
+											<SelectItem key={v} value={String(v)}>
+												{l}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
-							<div className="flex-1">
-								<label className={label} htmlFor="event-repeat">
-									Repeat
-								</label>
-								<select
-									id="event-repeat"
-									className={select}
-									value={f.repeat}
-									onChange={(e) => set({ repeat: e.target.value })}
-								>
-									{REPEATS.map(([v, l]) => (
-										<option key={v} value={v}>
-											{l}
-										</option>
-									))}
-									{/* Only for an event that has one: it keeps the stored rule (#510). */}
-									{editing && repeatFromRrule(editing.rrule) === CUSTOM_REPEAT && (
-										<option value={CUSTOM_REPEAT}>Custom rule</option>
-									)}
-								</select>
+							<div className="flex min-w-0 flex-col gap-1.5">
+								<Label htmlFor="event-repeat">Repeat</Label>
+								<Select value={f.repeat || NO_REPEAT} onValueChange={(v) => set({ repeat: v === NO_REPEAT ? '' : v })}>
+									<SelectTrigger id="event-repeat" className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{REPEATS.map(([v, l]) => (
+											<SelectItem key={v} value={v}>
+												{l}
+											</SelectItem>
+										))}
+										{/* Only for an event that has one: it keeps the stored rule (#510). */}
+										{editing && repeatFromRrule(editing.rrule) === CUSTOM_REPEAT && (
+											<SelectItem value={CUSTOM_REPEAT}>Custom rule</SelectItem>
+										)}
+									</SelectContent>
+								</Select>
 							</div>
 						</div>
 						{occurrence && (
-							<p className="text-muted-foreground text-xs">
+							<p className="text-foreground-muted text-dense">
 								This is one occurrence of a repeating event: changes apply to every occurrence.
 							</p>
 						)}
-						<div>
-							<label className={label} htmlFor="event-description">
-								Description
-							</label>
-							<textarea
+						<div className="flex flex-col gap-1.5">
+							<Label htmlFor="event-description">Description (optional)</Label>
+							<Textarea
 								id="event-description"
-								className={cn(bare, 'min-h-16 resize-none')}
 								rows={3}
-								placeholder="Add description"
 								value={f.description}
 								onChange={(e) => set({ description: e.target.value })}
 							/>
 						</div>
-						<div className="flex items-center justify-between gap-2 pt-1">
-							<div>
-								{editing && (
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										disabled={loading}
-										onClick={() => setConfirmDelete(true)}
-									>
-										Delete
-									</Button>
-								)}
-							</div>
-							<div className="flex items-center gap-2">
-								<Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-									Cancel
+						<DialogFooter>
+							{editing && (
+								<Button
+									type="button"
+									variant="destructive"
+									className="sm:mr-auto"
+									disabled={loading}
+									onClick={() => setConfirmDelete(true)}
+								>
+									Delete event
 								</Button>
-								<Button type="submit" size="sm" disabled={loading}>
-									{editing ? 'Save' : 'Create'}
-									{loading && <Spinner className="size-3.5" />}
-								</Button>
-							</div>
-						</div>
+							)}
+							<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+								Cancel
+							</Button>
+							<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
+								{loading && <Spinner className="size-3.5" />}
+								{loading ? 'Saving…' : editing ? 'Save event' : 'Create event'}
+							</Button>
+						</DialogFooter>
 					</form>
 				</DialogContent>
 			</Dialog>
@@ -318,47 +358,69 @@ export function EventDialog({
 	);
 }
 
+/** The six series tokens' names, in order, for the colour presets' accessible names. */
+const SERIES_NAMES = ['Blue', 'Yellow', 'Pink', 'Green', 'Orange', 'Violet'];
+
 /**
- * Ports components/calendar/CreateCalendarModal.svelte: a name and a color.
- * The preset colours are the six chart-series tokens' values in the current
- * theme, and a new calendar starts on `--series-1` (#989, decision D1b). The
- * colour is saved as hex: the API stores a colour string, and the custom
- * colour input only takes hex.
+ * Ports components/calendar/CreateCalendarModal.svelte, and edits a calendar
+ * too (#1106): a name and a colour. The preset colours are the six
+ * chart-series tokens' values in the current theme (#989, decision D1b); a new
+ * calendar starts on the first one no calendar is drawn in, so it never looks
+ * like Personal. The colour is saved as hex: the API stores a colour string,
+ * and the custom colour input only takes hex.
  */
-export function CreateCalendarDialog({
+export function CalendarDialog({
 	open,
 	onOpenChange,
-	onCreated
+	calendar = null,
+	calendars,
+	onSaved
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	onCreated: () => void;
+	/** The calendar to edit; none to create one. */
+	calendar?: CalendarModel | null;
+	calendars: CalendarModel[];
+	onSaved: () => void;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [name, setName] = useState('');
 	const [presets, setPresets] = useState(seriesHexes);
 	const [color, setColor] = useState(presets[0]);
 	const [loading, setLoading] = useState(false);
-	useEffect(() => {
-		if (!open) return;
-		const now = seriesHexes();
-		setName('');
-		setPresets(now);
-		setColor(now[0]);
-	}, [open]);
+	const [nameError, setNameError] = useState<string | null>(null);
+	const nameField = useRef<HTMLInputElement>(null);
 
-	const create = async () => {
-		if (!name.trim()) return void toast.error('Name is required');
+	// Seeded once each time the dialog opens, from what is stored then.
+	const [seeded, setSeeded] = useState(false);
+	if (open !== seeded) {
+		setSeeded(open);
+		if (open) {
+			const now = seriesHexes();
+			setName(calendar?.name ?? '');
+			setNameError(null);
+			setPresets(now);
+			setColor(calendar ? calendar.color || now[0] : firstFreeColour(now, calendars));
+		}
+	}
+
+	const save = async () => {
+		if (!name.trim()) {
+			setNameError('Enter a name for the calendar');
+			nameField.current?.focus();
+			return;
+		}
 		setLoading(true);
 		try {
-			const res = await createCalendar(token, { name: name.trim(), color });
+			const form = { name: name.trim(), color };
+			const res = calendar ? await updateCalendar(token, calendar.id, form) : await createCalendar(token, form);
 			if (res) {
-				toast.success('Calendar created');
-				onCreated();
+				toast.success(calendar ? 'Calendar saved' : 'Calendar created');
+				onSaved();
 				onOpenChange(false);
 			}
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure(calendar ? 'Couldn’t save the calendar' : 'Couldn’t create the calendar', err);
 		} finally {
 			setLoading(false);
 		}
@@ -368,74 +430,78 @@ export function CreateCalendarDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-sm">
 				<DialogHeader>
-					<DialogTitle className="text-base font-normal">New Calendar</DialogTitle>
-					<DialogDescription className="sr-only">Create a calendar.</DialogDescription>
+					<DialogTitle className="text-title font-title tracking-tight">
+						{calendar ? 'Edit calendar' : 'New calendar'}
+					</DialogTitle>
+					<DialogDescription className="sr-only">
+						{calendar ? 'Rename or recolour this calendar.' : 'Create a calendar.'}
+					</DialogDescription>
 				</DialogHeader>
 				<form
-					className="flex flex-col gap-3"
+					noValidate
+					className="flex flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
-						create();
+						save();
 					}}
 				>
-					<div>
-						<label className={label} htmlFor="calendar-name">
-							Name
-						</label>
-						<input
+					<div className="flex flex-col gap-1.5">
+						<Label htmlFor="calendar-name">Name</Label>
+						<Input
 							id="calendar-name"
-							className={cn(bare, 'rounded-lg border px-2.5 py-1.5')}
-							placeholder="Calendar name"
+							ref={nameField}
 							value={name}
-							onChange={(e) => setName(e.target.value)}
+							{...fieldProps('calendar-name-message', { error: nameError })}
+							onChange={(e) => {
+								setName(e.target.value);
+								if (e.target.value.trim()) setNameError(null);
+							}}
 						/>
+						<FieldMessage id="calendar-name-message" error={nameError} />
 					</div>
-					<div>
-						<div className={label}>Color</div>
+					<fieldset>
+						<legend className="mb-1.5 text-sm leading-none font-medium">Colour</legend>
 						<div className="flex flex-wrap items-center gap-2">
-							{presets.map((c) => (
+							{presets.map((c, i) => (
 								<Button
 									key={c}
 									type="button"
 									variant="ghost"
 									size="icon-xs"
-									aria-label={c}
+									aria-label={SERIES_NAMES[i] ?? c}
 									aria-pressed={color === c}
-									className={cn(
-										'rounded-full border-2 transition-all',
-										color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
-									)}
+									className={cn('rounded-full border-2', color === c ? 'border-foreground' : 'border-transparent')}
 									style={{ backgroundColor: c }}
 									onClick={() => setColor(c)}
 								/>
 							))}
 							<label
-								title="Custom color"
+								title="Custom colour"
 								className={cn(
-									'relative size-6 cursor-pointer overflow-hidden rounded-full border-2 transition-all',
-									!presets.includes(color) ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
+									'relative size-6 cursor-pointer overflow-hidden rounded-full border-2',
+									!presets.includes(color) ? 'border-foreground' : 'border-transparent'
 								)}
 								style={{ backgroundColor: color }}
 							>
 								<input
 									type="color"
-									aria-label="Custom color"
+									aria-label="Custom colour"
 									className="absolute size-0 opacity-0"
 									value={color}
 									onChange={(e) => setColor(e.target.value)}
 								/>
 							</label>
 						</div>
-					</div>
-					<div className="flex justify-end gap-2 pt-1">
-						<Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+					</fieldset>
+					<DialogFooter>
+						<Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
 							Cancel
 						</Button>
-						<Button type="submit" size="sm" disabled={loading}>
-							Create
+						<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
 							{loading && <Spinner className="size-3.5" />}
+							{loading ? 'Saving…' : calendar ? 'Save calendar' : 'Create calendar'}
 						</Button>
-					</div>
+					</DialogFooter>
 				</form>
 			</DialogContent>
 		</Dialog>
