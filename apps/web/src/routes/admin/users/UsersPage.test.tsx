@@ -46,10 +46,19 @@ describe('UsersPage (S5-D2, #1022)', () => {
 		expect(screen.queryByRole('link', { name: /Groups/ })).toBeNull();
 	});
 
-	it('opens the user list from the Groups address while there is one account', () => {
+	it('shows the user list at the Groups address while there is one account, and Groups once a second appears', async () => {
 		vi.mocked(useAdminSingleUser).mockReturnValue(true);
-		renderAt(routePaths.adminUsersGroups);
+		const { rerender } = renderAt(routePaths.adminUsersGroups);
 		expect(screen.getByText('user list')).toBeTruthy();
 		expect(screen.queryByText('groups panel')).toBeNull();
+		vi.mocked(useAdminSingleUser).mockReturnValue(false);
+		rerender(
+			<MemoryRouter initialEntries={[routePaths.adminUsersGroups]}>
+				<Routes>
+					<Route path="/admin/users/*" element={<UsersPage />} />
+				</Routes>
+			</MemoryRouter>
+		);
+		expect(await screen.findByText('groups panel')).toBeTruthy();
 	});
 });
