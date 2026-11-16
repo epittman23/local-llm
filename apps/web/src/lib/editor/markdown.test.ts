@@ -28,11 +28,31 @@ describe('htmlToMarkdown', () => {
 	it('fenced code keeps its blank lines', () => {
 		expect(htmlToMarkdown('<pre><code>a\n\nb</code></pre>')).toBe('```\na\n\nb\n```');
 	});
+	it('keeps a highlight as <mark> (#1132)', () => {
+		expect(htmlToMarkdown('<p>the <mark>key</mark> part</p>')).toBe('the <mark>key</mark> part');
+	});
+	it('display math is its own block, its lines kept; a lone $$ is an ordinary line (#1132)', () => {
+		expect(htmlToMarkdown('<p>Before</p><p>$$<br>a \\\\ b<br>$$</p><p>After</p>')).toBe(
+			'Before\n\n$$\na \\\\ b\n$$\n\nAfter'
+		);
+		expect(htmlToMarkdown('<p>Before</p><p>$$</p><p>After</p>')).toBe('Before\n$$\nAfter');
+	});
 });
 
 describe('markdownToHtml', () => {
 	it('renders markdown', () => {
 		expect(markdownToHtml('# Hi\n\n- [ ] x')).toContain('<h1>Hi</h1>');
+	});
+	it('task lists as TipTap taskList markup, with their ticks; other lists stay lists (#1132)', () => {
+		expect(markdownToHtml('- [ ] a\n- [x] b')).toBe(
+			'<ul data-type="taskList">\n<li data-type="taskItem" data-checked="false">a</li>\n<li data-type="taskItem" data-checked="true">b</li>\n</ul>\n'
+		);
+		expect(markdownToHtml('- a\n- [x] b')).toBe('<ul>\n<li>a</li>\n<li>b</li>\n</ul>\n');
+		expect(markdownToHtml('1. [x] a')).toBe('<ol>\n<li>a</li>\n</ol>\n');
+	});
+	it('math stays as written: no emphasis or escapes inside it, display lines as breaks (#1132)', () => {
+		expect(markdownToHtml('*x* $a*b*c$ and $\\{a<b\\}$')).toBe('<p><em>x</em> $a*b*c$ and $\\{a&lt;b\\}$</p>\n');
+		expect(markdownToHtml('$$\na \\\\ b\n$$')).toBe('<p>$$<br>a \\\\ b<br>$$</p>\n');
 	});
 	it('strips script and event handlers', () => {
 		const html = markdownToHtml('ok <img src=x onerror="alert(1)"><script>alert(2)</script>');

@@ -1,7 +1,8 @@
 import { gfm } from '@joplin/turndown-plugin-gfm';
 import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import { Marked, type Tokens } from 'marked';
 import TurndownService from 'turndown';
+import markedKatexExtension from '@/lib/markdown/extensions/katex-extension';
 
 // The Markdown <-> HTML bridge behind the rich-text editor, ported from the
 // Turndown setup at the top of common/RichTextInput.svelte. TipTap edits HTML;
@@ -59,6 +60,22 @@ turndown.addRule('taskListItems', {
 });
 
 turndown.addRule('underline', { filter: 'u', replacement: (content) => `<u>${content}</u>` });
+// A highlight is stored as the HTML it came from: Markdown has no syntax for it.
+turndown.addRule('highlight', { filter: 'mark', replacement: (content) => `<mark>${content}</mark>` });
+
+// A paragraph that is display math (`$$...$$`, its lines as hard breaks) is a
+// Markdown block of its own: blank lines around it, line breaks as written.
+// Without the blank line before it, `$$` would join the paragraph above.
+turndown.addRule('displayMath', {
+	filter: (node) => {
+		const text = node.nodeName === 'P' ? (node.textContent ?? '').trim() : '';
+		return text.length > 4 && text.startsWith('$$') && text.endsWith('$$');
+	},
+	replacement: (_content, node) =>
+		`\n\n${Array.from(node.childNodes, (c) => (c.nodeName === 'BR' ? '\n' : c.textContent))
+			.join('')
+			.trim()}\n\n`
+});
 
 /**
  * The editor's HTML as Markdown. An empty paragraph is a line break, and runs
@@ -71,11 +88,46 @@ export function htmlToMarkdown(html: string): string {
 		.trim();
 }
 
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// The editor's own Marked instance (the global `marked` serves other pages).
+// The editor has no math nodes, so math is kept as the text it was written as:
+// the chat's math tokenizers only stop emphasis and backslash escapes from
+// rewriting it. A `$$` block after a blank line is a paragraph with its lines
+// as hard breaks; the block tokenizer goes in without its `start`, which cut
+// paragraphs at any `\b...` (`$\beta$`) and put a line break, so a space,
+// into the math. Task lists come out as TipTap's own taskList markup.
+const [inlineKatex, blockKatex] = markedKatexExtension().extensions;
+const editorMarked = new Marked({
+	extensions: [
+		{ ...inlineKatex, renderer: (token) => escapeHtml(token.raw) },
+		{
+			name: blockKatex.name,
+			level: 'block' as const,
+			tokenizer: blockKatex.tokenizer,
+			renderer: (token) => `<p>${escapeHtml(token.raw.trim()).replaceAll('\n', '<br>')}</p>\n`
+		}
+	],
+	renderer: {
+		checkbox: () => '',
+		list(token: Tokens.List) {
+			if (token.ordered || !token.items.every((item) => item.task)) return false;
+			const items = token.items.map(
+				(item) =>
+					`<li data-type="taskItem" data-checked="${item.checked === true}">${this.parser.parse(item.tokens)}</li>\n`
+			);
+			return `<ul data-type="taskList">\n${items.join('')}</ul>\n`;
+		}
+	}
+});
+
 /**
  * Markdown as sanitized HTML, for loading into the editor. Sanitized because
  * the Markdown may come from anywhere (an imported file, a note shared by
  * someone else, a model's output) and `marked` passes raw HTML through.
  */
 export function markdownToHtml(md: string): string {
-	return DOMPurify.sanitize(marked.parse(md.replaceAll('\n<br/>', '<br/>'), { breaks: false, async: false }) as string);
+	return DOMPurify.sanitize(
+		editorMarked.parse(md.replaceAll('\n<br/>', '<br/>'), { breaks: false, async: false }) as string
+	);
 }
