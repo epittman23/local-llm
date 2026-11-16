@@ -6,7 +6,7 @@ import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { FieldLabel, FormField } from '@/components/settings/formFields';
-import { ProfileAvatar } from '@/components/ui/avatar';
+import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FieldMessage } from '@/components/ui/field-message';
@@ -18,6 +18,7 @@ import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
+import { initials } from '@/lib/utils/initials';
 import { useAdminSingleUser } from '../adminVisibility';
 import { type ArenaModel, arenaIdFromName, buildArenaModel } from './arenaModels';
 
@@ -195,7 +196,8 @@ export function ArenaModelModal({
 								/>
 								<ImageButton
 									shape="circle"
-									aria-label="Change image"
+									// WCAG 2.5.3: a name that holds the initials the button shows, when it shows them.
+									aria-label={hasPicture(profileImageUrl) ? 'Change picture' : `${initials(name)}, change picture`}
 									overlay={<Pencil />}
 									onClick={() => imageInput.current?.click()}
 								>

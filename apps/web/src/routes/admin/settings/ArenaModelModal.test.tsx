@@ -63,6 +63,18 @@ describe('ArenaModelModal', () => {
 		expect(group).toHaveAccessibleDescription('The arena picks among all your models except these.');
 	});
 
+	it('names the picture button with the initials it shows (WCAG 2.5.3)', () => {
+		renderModal();
+		expect(screen.getByRole('button', { name: '?, change picture' })).toBeTruthy();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'My Model' } });
+		expect(screen.getByRole('button', { name: 'MM, change picture' })).toHaveTextContent('MM');
+	});
+
+	it('names the picture button plainly when the model has a picture of its own', () => {
+		renderModal({ edit: true, model: EXISTING });
+		expect(screen.getByRole('button', { name: 'Change picture' })).toBeTruthy();
+	});
+
 	it('labels its fields on the shared controls, and keeps the ID while editing', () => {
 		renderModal({ edit: true, model: EXISTING });
 		expect(screen.getByLabelText('Name')).toHaveAttribute('data-slot', 'input');
