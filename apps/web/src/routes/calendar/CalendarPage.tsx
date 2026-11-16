@@ -1,103 +1,157 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CalendarCheck, Check, ChevronLeft, ChevronRight, Ellipsis, ListChecks, Plus } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
+import { Tip } from '@/components/common/Tip';
+import { useMdUp } from '@/components/layout/SidePanel';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import {
 	type CalendarEventModel,
 	type CalendarModel,
 	deleteCalendar,
 	getCalendarEvents,
-	getCalendars
+	getCalendars,
+	setDefaultCalendar
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
-import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
-import { CalendarViews, dayName } from './CalendarViews';
+import { CalendarDialog, EventDialog } from './CalendarDialogs';
+import { CalendarViews, useRovingDays } from './CalendarViews';
 import {
 	automationTarget,
 	type CalendarViewMode,
+	calendarColour,
+	dayKey,
+	dayName,
 	defaultCalendarId,
 	headerText,
 	isSameDay,
-	MONTH_NAMES,
+	localeWeekStart,
 	monthGrid,
+	monthLabel,
+	readHidden,
+	SCHEDULED_TASKS_ID,
 	stepDate,
-	visibleRange
+	visibleRange,
+	weekdayName,
+	writeHidden
 } from './calendarModel';
 
-/** Ports components/calendar/CalendarSidebar.svelte: a mini month to jump around in, and the calendar list with show/hide and delete. */
+const VIEWS: { value: CalendarViewMode; label: string }[] = [
+	{ value: 'month', label: 'Month' },
+	{ value: 'week', label: 'Week' },
+	{ value: 'day', label: 'Day' }
+];
+
+/** A row's menu button: shown on hover and on focus, always on touch (A11Y-4); transparent, not removed, so focus can return to it. */
+const rowMenuButton =
+	'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100';
+
+/**
+ * Ports components/calendar/CalendarSidebar.svelte: a mini month to jump
+ * around in, and the calendar list: show or hide each one (remembered in this
+ * browser, S6-D9), and a menu on each of your own (#1106).
+ */
 function CalendarSidebar({
 	calendars,
+	userId,
 	hidden,
 	date,
+	weekStart,
 	onToggle,
 	onCreate,
+	onEdit,
+	onMakeDefault,
 	onDelete,
 	onSelectDate
 }: {
 	calendars: CalendarModel[];
+	userId?: string;
 	hidden: Set<string>;
 	date: Date;
+	weekStart: number;
 	onToggle: (id: string) => void;
 	onCreate: () => void;
+	onEdit: (c: CalendarModel) => void;
+	onMakeDefault: (c: CalendarModel) => void;
 	onDelete: (c: CalendarModel) => void;
 	onSelectDate: (d: Date) => void;
 }) {
 	// The mini calendar pages on its own, and follows the main date when that changes.
 	const [mini, setMini] = useState(() => new Date(date.getFullYear(), date.getMonth(), 1));
 	useEffect(() => setMini(new Date(date.getFullYear(), date.getMonth(), 1)), [date]);
+	const days = useMemo(() => monthGrid(mini, weekStart), [mini, weekStart]);
+	const roving = useRovingDays(days, date, (d) => setMini(new Date(d.getFullYear(), d.getMonth(), 1)));
 	const today = new Date();
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-6">
 			<div>
-				<div className="mt-1.5 mb-1.5 flex items-center justify-between px-1">
-					<div className="text-caption">
-						{MONTH_NAMES[mini.getMonth()]} {mini.getFullYear()}
-					</div>
+				<div className="mb-1 flex items-center justify-between gap-2 px-1">
+					{/* Not a heading: it repeats the toolbar's month most of the time. */}
+					<div className="text-body font-strong">{monthLabel(mini)}</div>
 					<div className="flex items-center gap-0.5">
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-xs"
-							aria-label="Previous month"
-							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() - 1, 1))}
-						>
-							<ChevronLeft className="size-3" />
-						</Button>
-						<Button
-							type="button"
-							variant="ghost"
-							size="icon-xs"
-							aria-label="Next month"
-							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() + 1, 1))}
-						>
-							<ChevronRight className="size-3" />
-						</Button>
+						<Tip content="Previous month">
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-xs"
+								aria-label="Previous month"
+								onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() - 1, 1))}
+							>
+								<ChevronLeft aria-hidden className="size-3.5" />
+							</Button>
+						</Tip>
+						<Tip content="Next month">
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon-xs"
+								aria-label="Next month"
+								onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() + 1, 1))}
+							>
+								<ChevronRight aria-hidden className="size-3.5" />
+							</Button>
+						</Tip>
 					</div>
 				</div>
-				<div className="text-muted-foreground grid grid-cols-7 text-center text-caption">
-					{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-						<div key={i} className="py-0.5">
-							{d}
+				<div aria-hidden className="text-foreground-muted grid grid-cols-7 text-center text-caption">
+					{days.slice(0, 7).map((d) => (
+						<div key={dayKey(d)} className="py-0.5">
+							{weekdayName(d, 'narrow')}
 						</div>
 					))}
 				</div>
-				<div className="grid grid-cols-7 text-center text-caption">
-					{monthGrid(mini).map((day) => (
+				<div className="grid grid-cols-7 justify-items-center text-caption">
+					{days.map((day) => (
 						<Button
-							key={day.toISOString()}
+							key={dayKey(day)}
+							{...roving(day)}
 							type="button"
 							variant={isSameDay(day, today) ? 'default' : isSameDay(day, date) ? 'secondary' : 'ghost'}
 							size="icon-xs"
 							aria-label={dayName(day)}
-							className={cn('rounded-full text-caption', day.getMonth() !== mini.getMonth() && 'text-foreground-muted')}
+							aria-current={isSameDay(day, date) ? 'true' : undefined}
+							className={cn(
+								'rounded-full text-caption font-normal',
+								day.getMonth() !== mini.getMonth() && !isSameDay(day, today) && 'text-foreground-muted'
+							)}
 							onClick={() => onSelectDate(day)}
 						>
 							{day.getDate()}
@@ -107,41 +161,66 @@ function CalendarSidebar({
 			</div>
 			<div>
 				<div className="mb-1 flex items-center justify-between px-1">
-					<div className="text-muted-foreground text-caption tracking-wider uppercase">Calendars</div>
-					<Button type="button" variant="ghost" size="icon-xs" aria-label="New calendar" onClick={onCreate}>
-						<Plus className="size-3.5" />
-					</Button>
+					<h2 className="text-body font-strong">Calendars</h2>
+					<Tip content="New calendar">
+						<Button type="button" variant="ghost" size="icon-xs" aria-label="New calendar" onClick={onCreate}>
+							<Plus aria-hidden className="size-3.5" />
+						</Button>
+					</Tip>
 				</div>
-				<ul>
+				<ul className="flex flex-col gap-0.5">
 					{calendars.map((c) => {
 						const shown = !hidden.has(c.id);
+						const colour = calendarColour(c);
+						const own = c.id !== SCHEDULED_TASKS_ID && !c.is_system && (!userId || !c.user_id || c.user_id === userId);
 						return (
-							<li key={c.id} className="group flex items-center">
+							<li key={c.id} className="group flex items-center gap-0.5">
 								<Button
 									type="button"
 									variant="ghost"
-									size="sm"
 									aria-pressed={shown}
-									className="min-w-0 flex-1 justify-start gap-2 text-left shrink"
+									className="min-w-0 flex-1 shrink justify-start gap-2 px-2 text-left font-normal"
 									onClick={() => onToggle(c.id)}
 								>
+									{/* Shown: a filled box with a tick. Hidden: an empty one in the same colour. */}
 									<span
-										className="size-2.5 shrink-0 rounded-sm"
-										style={{ backgroundColor: c.color || 'var(--series-1)', opacity: shown ? 1 : 0.25 }}
-									/>
-									<span className={cn('flex-1 truncate', !shown && 'text-muted-foreground')}>{c.name}</span>
-								</Button>
-								{!c.is_default && !c.is_system && (
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon-xs"
-										aria-label={`Delete calendar ${c.name}`}
-										className="opacity-0 group-hover:opacity-100 focus:opacity-100"
-										onClick={() => onDelete(c)}
+										aria-hidden
+										className="flex size-4 shrink-0 items-center justify-center rounded border-2"
+										style={{ borderColor: colour, backgroundColor: shown ? colour : 'transparent' }}
 									>
-										<X className="size-3" />
-									</Button>
+										{shown && <Check className="text-page size-3" strokeWidth={3} />}
+									</span>
+									<span className={cn('flex-1 truncate', !shown && 'text-foreground-muted')}>{c.name}</span>
+									{c.is_default && <span className="text-foreground-muted text-caption">Default</span>}
+								</Button>
+								{own && (
+									<DropdownMenu>
+										<Tip content={`More actions for ${c.name}`}>
+											<DropdownMenuTrigger asChild>
+												<Button
+													type="button"
+													variant="ghost"
+													size="icon-sm"
+													aria-label={`More actions for ${c.name}`}
+													className={rowMenuButton}
+												>
+													<Ellipsis aria-hidden />
+												</Button>
+											</DropdownMenuTrigger>
+										</Tip>
+										<DropdownMenuContent align="end">
+											<DropdownMenuItem onSelect={() => onEdit(c)}>Edit calendar</DropdownMenuItem>
+											{!c.is_default && (
+												<>
+													<DropdownMenuItem onSelect={() => onMakeDefault(c)}>Make default</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem variant="destructive" onSelect={() => onDelete(c)}>
+														Delete calendar
+													</DropdownMenuItem>
+												</>
+											)}
+										</DropdownMenuContent>
+									</DropdownMenu>
 								)}
 							</li>
 						);
@@ -153,15 +232,17 @@ function CalendarSidebar({
 }
 
 /**
- * Ports routes/(app)/calendar/+page.svelte: month/week/day views of the
- * user's calendars, with a sidebar to jump to a date and show or hide each
- * calendar. Clicking empty space creates an event there; clicking an
- * automation's run opens what it produced. Events are fetched per visible
- * window (TanStack Query, keyed by the window), so paging back is instant.
+ * Ports routes/(app)/calendar/+page.svelte: month, week and day views of the
+ * user's calendars, under the page's header (#1040) and a toolbar with the
+ * month, the arrows, Today and the view. Pressing empty space creates an event
+ * there; an automation's run opens what it produced. Events are fetched per
+ * visible window (TanStack Query, keyed by the window), so paging back is
+ * instant. Weeks start on the locale's first day (S6-D12).
  *
- * Hidden calendars are remembered as "hidden", not "visible", so a calendar
- * created later shows up without a reload (the Svelte page rebuilt the visible
- * set from scratch after each create, re-showing everything hidden).
+ * Below 768 px the page opens in Day view (S6-D11), the month shows dots and
+ * the chosen day's agenda, and the calendar list is a sheet from the toolbar
+ * (#965). Hidden calendars are remembered in this browser (S6-D9), as
+ * "hidden", not "visible", so a calendar created later shows up.
  */
 function Calendar() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -169,20 +250,23 @@ function Calendar() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	useDocumentTitle('Calendar');
-	const [view, setView] = useState<CalendarViewMode>('month');
+	const wide = useMdUp();
+	const weekStart = useMemo(() => localeWeekStart(), []);
+	const [view, setView] = useState<CalendarViewMode>(() => (wide ? 'month' : 'day'));
 	const [date, setDate] = useState(() => new Date());
-	const [hidden, setHidden] = useState<Set<string>>(new Set());
+	const [hidden, setHidden] = useState<Set<string>>(readHidden);
 	const [eventDialog, setEventDialog] = useState<{ event: CalendarEventModel | null; startAt: number | null } | null>(
 		null
 	);
-	const [creatingCalendar, setCreatingCalendar] = useState(false);
+	const [calendarDialog, setCalendarDialog] = useState<{ calendar: CalendarModel | null } | null>(null);
 	const [deleting, setDeleting] = useState<CalendarModel | null>(null);
+	const [listOpen, setListOpen] = useState(false);
 
 	const calendars = useQuery({
 		queryKey: ['calendars'],
 		queryFn: async () => (await getCalendars(token)) ?? []
 	});
-	const range = visibleRange(view, date);
+	const range = visibleRange(view, date, weekStart);
 	const events = useQuery({
 		queryKey: ['calendar-events', range.start, range.end],
 		queryFn: () => getCalendarEvents(token, range.start, range.end),
@@ -205,16 +289,35 @@ function Calendar() {
 		else setEventDialog({ event: e, startAt: null });
 	};
 
+	const toggle = (id: string) =>
+		setHidden((prev) => {
+			const next = new Set(prev);
+			if (!next.delete(id)) next.add(id);
+			writeHidden(next);
+			return next;
+		});
+
+	const makeDefault = async (c: CalendarModel) => {
+		try {
+			await setDefaultCalendar(token, c.id);
+			toast.success(`“${c.name}” is now the default calendar`);
+			await refreshAll();
+		} catch (err) {
+			toastFailure(`Couldn’t make “${c.name}” the default calendar`, err);
+		}
+	};
+
 	const removeCalendar = async () => {
 		if (!deleting) return;
+		const name = deleting.name;
 		try {
 			const ok = await deleteCalendar(token, deleting.id);
 			if (ok) {
 				toast.success('Calendar deleted');
 				await refreshAll();
-			} else toast.error('Failed to delete calendar');
+			} else toastFailure(`Couldn’t delete “${name}”`);
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure(`Couldn’t delete “${name}”`, err);
 		}
 		setDeleting(null);
 	};
@@ -238,6 +341,25 @@ function Calendar() {
 		);
 	}
 
+	const sidebar = (onPicked?: () => void) => (
+		<CalendarSidebar
+			calendars={list}
+			userId={userId}
+			hidden={hidden}
+			date={date}
+			weekStart={weekStart}
+			onToggle={toggle}
+			onCreate={() => setCalendarDialog({ calendar: null })}
+			onEdit={(c) => setCalendarDialog({ calendar: c })}
+			onMakeDefault={makeDefault}
+			onDelete={setDeleting}
+			onSelectDate={(d) => {
+				setDate(d);
+				onPicked?.();
+			}}
+		/>
+	);
+
 	return (
 		<div className="flex h-full min-h-0 w-full flex-col">
 			<EventDialog
@@ -249,87 +371,107 @@ function Calendar() {
 				defaultStartAt={eventDialog?.startAt ?? null}
 				onSaved={refreshEvents}
 			/>
-			<CreateCalendarDialog open={creatingCalendar} onOpenChange={setCreatingCalendar} onCreated={refreshAll} />
+			<CalendarDialog
+				open={calendarDialog !== null}
+				onOpenChange={(o) => !o && setCalendarDialog(null)}
+				calendar={calendarDialog?.calendar ?? null}
+				calendars={list}
+				onSaved={refreshAll}
+			/>
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(o) => !o && setDeleting(null)}
-				title="Delete Calendar"
-				confirmLabel="Delete"
+				title="Delete calendar"
+				confirmLabel="Delete calendar"
+				destructive
 				onConfirm={removeCalendar}
 			>
-				This will permanently delete the calendar "{deleting?.name}" and all its events. This action cannot be undone.
+				Delete “{deleting?.name}”? Its events are deleted with it. This can’t be undone.
 			</ConfirmDialog>
+			{!wide && (
+				<Sheet open={listOpen} onOpenChange={setListOpen}>
+					<SheetContent
+						side="left"
+						className="w-80 max-w-[85%] overflow-y-auto p-4"
+						// Focus the sheet itself, not its first button, whose tooltip would cover the close button.
+						onOpenAutoFocus={(e) => {
+							e.preventDefault();
+							(e.currentTarget as HTMLElement | null)?.focus();
+						}}
+					>
+						<SheetTitle className="text-title font-title tracking-tight">Calendars</SheetTitle>
+						<SheetDescription className="sr-only">Jump to a date, and choose which calendars to show.</SheetDescription>
+						{sidebar(() => setListOpen(false))}
+					</SheetContent>
+				</Sheet>
+			)}
 
-			<nav className="flex shrink-0 items-center gap-1 px-3 py-2">
-				<h1 className="px-1 text-sm">{headerText(view, date)}</h1>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Previous"
-					onClick={() => setDate(stepDate(view, date, -1))}
-				>
-					<ChevronLeft className="text-muted-foreground size-3.5" />
-				</Button>
-				<Button
-					type="button"
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Next"
-					onClick={() => setDate(stepDate(view, date, 1))}
-				>
-					<ChevronRight className="text-muted-foreground size-3.5" />
-				</Button>
-				<div className="ml-auto flex items-center gap-1">
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="hidden sm:inline-flex"
-						onClick={() => setDate(new Date())}
-					>
-						Today
-					</Button>
-					<select
-						aria-label="View"
-						className="bg-transparent px-2 py-1 text-xs"
-						value={view}
-						onChange={(e) => setView(e.target.value as CalendarViewMode)}
-					>
-						<option value="day">Day</option>
-						<option value="week">Week</option>
-						<option value="month">Month</option>
-					</select>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						onClick={() => setEventDialog({ event: null, startAt: null })}
-					>
-						Create
-					</Button>
+			<div className="px-4 pt-4 md:px-6">
+				<PageHeader
+					title="Calendar"
+					description="Your events, and when your automations run, by month, week or day."
+					action={
+						<Button type="button" onClick={() => setEventDialog({ event: null, startAt: null })}>
+							<Plus aria-hidden /> New event
+						</Button>
+					}
+				/>
+			</div>
+
+			<div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 md:px-6">
+				<div className="flex min-w-0 items-center gap-1">
+					<h2 className="text-title font-title min-w-0 truncate pr-1 tracking-tight">
+						{headerText(view, date, !wide)}
+					</h2>
+					<Tip content="Previous">
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Previous"
+							onClick={() => setDate(stepDate(view, date, -1))}
+						>
+							<ChevronLeft aria-hidden />
+						</Button>
+					</Tip>
+					<Tip content="Next">
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Next"
+							onClick={() => setDate(stepDate(view, date, 1))}
+						>
+							<ChevronRight aria-hidden />
+						</Button>
+					</Tip>
+					<Tip content="Today">
+						<Button type="button" variant="ghost" size="icon-sm" aria-label="Today" onClick={() => setDate(new Date())}>
+							<CalendarCheck aria-hidden />
+						</Button>
+					</Tip>
 				</div>
-			</nav>
+				<div className="ml-auto flex items-center gap-2 max-sm:w-full">
+					<SegmentedControl aria-label="View" value={view} onValueChange={setView} options={VIEWS} />
+					{!wide && (
+						<Tip content="Calendars">
+							<Button
+								type="button"
+								variant="outline"
+								size="icon"
+								aria-label="Calendars"
+								onClick={() => setListOpen(true)}
+							>
+								<ListChecks aria-hidden />
+							</Button>
+						</Tip>
+					)}
+				</div>
+			</div>
 
 			<div className="flex min-h-0 flex-1">
-				<aside className="hidden w-56 shrink-0 overflow-y-auto pr-1.5 pl-3 md:flex md:flex-col">
-					<CalendarSidebar
-						calendars={list}
-						hidden={hidden}
-						date={date}
-						onToggle={(id) =>
-							setHidden((prev) => {
-								const next = new Set(prev);
-								if (!next.delete(id)) next.add(id);
-								return next;
-							})
-						}
-						onCreate={() => setCreatingCalendar(true)}
-						onDelete={setDeleting}
-						onSelectDate={setDate}
-					/>
-				</aside>
-				<div className="flex min-h-0 flex-1 flex-col">
+				{wide && <aside className="w-60 shrink-0 overflow-y-auto pb-4 pl-6 pr-1">{sidebar()}</aside>}
+				<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 					{eventsFailed ? (
 						<LoadFailed
 							what="events"
@@ -343,12 +485,15 @@ function Calendar() {
 							date={date}
 							events={visibleEvents}
 							calendars={list}
+							weekStart={weekStart}
+							compact={!wide}
 							onCreate={(startAt) => setEventDialog({ event: null, startAt })}
 							onEventClick={openEvent}
 							onOpenDay={(day) => {
 								setDate(day);
 								setView('day');
 							}}
+							onSelectDay={setDate}
 						/>
 					)}
 				</div>

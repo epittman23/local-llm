@@ -21,14 +21,13 @@ from local_llm.models.folders import Folders
 from local_llm.utils.access_control import has_permission
 from local_llm.utils.auth import get_verified_user
 from local_llm.utils.automations import (
-    execute_automation,
     next_n_runs_ns,
     next_run_ns,
     pin_rule_time,
     rrule_interval_seconds,
+    start_automation_run,
     validate_rrule,
 )
-from local_llm.utils.background import run_in_background
 
 log = logging.getLogger(__name__)
 
@@ -347,7 +346,11 @@ async def run_automation_by_id(
     automation = await Automations.get_by_id(id, db=db)
     check_automation_access(automation, user)
     # execute_automation announces the run (AUTOMATION_RUN_STARTED) itself.
-    run_in_background(execute_automation(request.app, automation))
+    if not start_automation_run(request.app, automation):
+        raise HTTPException(
+            status_code=409,
+            detail='This automation is already running. Run it again once that run has finished.',
+        )
     return await enrich_automation(automation, db, tz=user.timezone)
 
 

@@ -12,20 +12,20 @@ import {
 } from '@/lib/apis/channels';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { uuid } from '@/lib/utils/uuid';
+import type { MessageActions } from './ChannelMessageView';
 import {
+	applyMessageEvent,
+	applyTyping,
 	type ChannelEvent,
 	type ChannelMessage,
 	type ChannelUser,
-	applyMessageEvent,
-	applyTyping,
 	closesThread,
 	nowNs,
 	toggleReaction
 } from './channelModel';
 import type { ComposerSubmit } from './MessageComposer';
-import type { MessageActions } from './ChannelMessageView';
 import { putBack } from './usePinnedMessages';
-import { uuid } from '@/lib/utils/uuid';
 
 const PAGE = 50;
 const TYPING_EXPIRES_MS = 5000;

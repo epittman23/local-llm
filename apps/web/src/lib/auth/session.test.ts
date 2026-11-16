@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { emptyChat, emptyCompletions, usePlaygroundStore } from '@/routes/playground/playgroundStore';
 import { clearExpiredSession, initAuth, sessionEndReason, signOut } from './session';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
@@ -168,5 +169,35 @@ describe('a session that runs out (#1061)', () => {
 
 		expect(sessionEndReason()).toBe('expired');
 		expect(useAuthStore.getState().status).toBe('anonymous');
+	});
+});
+
+describe("the Playground's work (S6-D6)", () => {
+	const filled = () => {
+		usePlaygroundStore.getState().setChat({ system: 'Be terse', messages: [{ role: 'user', content: 'mine' }] });
+		usePlaygroundStore.getState().setCompletions({ prompt: 'Once upon' });
+		usePlaygroundStore.getState().setImagePrompt('a lighthouse');
+		expect(sessionStorage.getItem('lllm-playground')).toContain('Once upon');
+	};
+	const empty = () => {
+		const s = usePlaygroundStore.getState();
+		expect([s.chat, s.completions, s.imagePrompt]).toEqual([emptyChat, emptyCompletions, '']);
+		expect(sessionStorage.getItem('lllm-playground')).toBeNull();
+	};
+
+	it('is forgotten on sign-out, so the next account in this tab starts empty', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'admin' }));
+		await initAuth();
+		filled();
+		await signOut();
+		empty();
+	});
+
+	it('is forgotten when the session runs out too', async () => {
+		route(async () => json({ id: 'u', token: 'saved-token', role: 'admin' }));
+		await initAuth();
+		filled();
+		clearExpiredSession();
+		empty();
 	});
 });

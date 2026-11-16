@@ -134,8 +134,17 @@ export function MemberSelector({
 	};
 
 	const chip = (key: string, label: string, extra: string | undefined, onRemove: () => void) => (
-		<Button variant="secondary" size="sm" key={key} type="button" onClick={onRemove}>
-			<span>
+		// A long name shortens instead of widening the dialog (#967).
+		<Button
+			variant="secondary"
+			size="sm"
+			key={key}
+			type="button"
+			className="max-w-full shrink"
+			aria-label={`Remove ${label}`}
+			onClick={onRemove}
+		>
+			<span className="min-w-0 truncate">
 				{label} {extra && <span className="text-muted-foreground">{extra}</span>}
 			</span>
 			<X className="size-3" />
@@ -145,7 +154,7 @@ export function MemberSelector({
 	const nothingToShow = filteredUsers.length === 0 && filteredGroups.length === 0;
 
 	return (
-		<div>
+		<div className="min-w-0">
 			{groupIds.length > 0 && (
 				<div className="mx-1 mb-1.5">
 					<div className="text-muted-foreground mx-0.5 mb-1 text-xs">{groupIds.length} groups</div>
@@ -162,7 +171,9 @@ export function MemberSelector({
 			)}
 			{userIds.length > 0 && (
 				<div className="mx-1 mb-1.5">
-					<div className="text-muted-foreground mx-0.5 mb-1 text-xs">{userIds.length} users</div>
+					<div className="text-muted-foreground mx-0.5 mb-1 text-xs">
+						{userIds.length} {userIds.length === 1 ? 'person' : 'people'}
+					</div>
 					<div className="flex flex-wrap gap-1">
 						{userIds.map(
 							(id) =>
@@ -185,7 +196,7 @@ export function MemberSelector({
 			</div>
 
 			{nothingToShow ? (
-				<div className="text-muted-foreground px-10 py-5 text-center text-xs">No users were found.</div>
+				<div className="text-muted-foreground px-10 py-5 text-center text-xs">No one matches.</div>
 			) : (
 				<div className="max-h-96 w-full overflow-y-auto rounded-lg">
 					{includeGroups && filteredGroups.length > 0 && (
@@ -200,7 +211,7 @@ export function MemberSelector({
 										aria-checked={groupIds.includes(group.id)}
 										onClick={() => toggleGroup(group)}
 									>
-										<span className="flex flex-1 items-center gap-1 px-3 py-1.5 font-normal">
+										<span className="flex min-w-0 flex-1 items-center gap-1 px-3 py-1.5 font-normal">
 											<span className="truncate">{group.name}</span>
 											<span className="text-muted-foreground">{group.member_count}</span>
 										</span>
@@ -214,7 +225,7 @@ export function MemberSelector({
 					)}
 					{includeUsers && filteredUsers.length > 0 && (
 						<>
-							<div className="text-muted-foreground mx-1 mb-1 text-xs">Users</div>
+							<div className="text-muted-foreground mx-1 mb-1 text-xs">People</div>
 							<div>
 								{filteredUsers.map((user) => (
 									<RowButton
@@ -224,7 +235,7 @@ export function MemberSelector({
 										aria-checked={userIds.includes(user.id)}
 										onClick={() => toggleUser(user)}
 									>
-										<span className="flex flex-1 items-center gap-2 px-3 py-1.5 font-normal">
+										<span className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 font-normal">
 											<ProfileAvatar
 												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
 												name={user.name}

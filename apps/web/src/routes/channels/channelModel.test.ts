@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-	type Channel,
-	type ChannelEvent,
-	type ChannelMessage,
-	type ChannelUser,
 	applyMessageEvent,
 	applyTyping,
 	applyUnreadEvent,
 	attachmentUrl,
+	type Channel,
+	type ChannelEvent,
+	type ChannelMessage,
+	type ChannelUser,
 	channelPayload,
 	channelTitle,
 	closesThread,
@@ -406,24 +406,33 @@ describe('channelPayload', () => {
 		accessGrants: [{ principal_type: 'group', principal_id: 'g1', permission: 'read' }],
 		userIds: []
 	};
-	it('normalises the name and keeps grants only for a standard channel', () => {
-		const r = channelPayload(base);
+	it('keeps the name as typed, trimmed, and keeps grants only for a standard channel (S6-D2)', () => {
+		const r = channelPayload({ ...base, name: '  Regression notes! ' });
 		expect('payload' in r && r.payload).toMatchObject({
-			name: 'my-channel',
+			name: 'Regression notes!',
 			is_private: null,
 			access_grants: base.accessGrants
 		});
 		const g = channelPayload({ ...base, type: 'group' });
-		expect('payload' in g && g.payload).toMatchObject({ is_private: true, access_grants: [] });
+		expect('payload' in g && g.payload).toMatchObject({ name: 'My Channel', is_private: true, access_grants: [] });
 	});
-	it('requires a name, except for a DM, which requires members', () => {
-		expect(channelPayload({ ...base, name: '  ' })).toEqual({ error: 'Channel name cannot be empty.' });
+	it('marks a missing name, except for a DM, which needs members, and a long name (#1109)', () => {
+		expect(channelPayload({ ...base, name: '  ' })).toEqual({ problems: { name: 'Enter a name for the channel.' } });
 		expect(channelPayload({ ...base, type: 'dm', name: '' })).toEqual({
-			error: 'Please select at least one user for Direct Message channel.'
+			problems: { members: 'Choose at least one person to message.' }
 		});
 		expect('payload' in channelPayload({ ...base, type: 'dm', name: '', userIds: ['u2'] })).toBe(true);
-		expect(channelPayload({ ...base, name: 'x'.repeat(129) })).toEqual({
-			error: 'Channel name must be less than 128 characters'
+		expect(channelPayload({ ...base, name: 'x'.repeat(61) })).toEqual({
+			problems: { name: 'Shorten the name to 60 characters or fewer.' }
+		});
+		expect('payload' in channelPayload({ ...base, name: 'x'.repeat(60) })).toBe(true);
+	});
+	it('lets an existing channel keep a longer name until it is changed (S6-D2)', () => {
+		const old = 'x'.repeat(70);
+		expect('payload' in channelPayload({ ...base, name: old }, old)).toBe(true);
+		expect('payload' in channelPayload({ ...base, name: ` ${old} ` }, old)).toBe(true);
+		expect(channelPayload({ ...base, name: `${old}y` }, old)).toEqual({
+			problems: { name: 'Shorten the name to 60 characters or fewer.' }
 		});
 	});
 });

@@ -1,22 +1,28 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { ChevronDown, Copy, MoreHorizontal, Pencil, Play, Trash2 } from 'lucide-react';
-import { type ReactNode, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { ChevronDown, Copy, FileDown, FileUp, MoreHorizontal, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { ListSearchBar } from '@/components/common/ListChrome';
+import { FilterMenu } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListMatchCount, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { PageHeader } from '@/components/ui/page-header';
+import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import {
 	type AutomationResponse,
@@ -37,12 +43,20 @@ import {
 	formatSchedule,
 	importAutomationForms,
 	importMessage,
+	lastRun,
 	parseAutomationImport,
 	toAutomationForm
 } from './automationModel';
+import { RunBadge } from './RunBadge';
 import { useDestinations } from './useDestinations';
 
 const PER_PAGE = 30;
+
+const STATUSES = [
+	{ value: 'all', label: 'All' },
+	{ value: 'active', label: 'Active' },
+	{ value: 'paused', label: 'Paused' }
+];
 
 /** Every automation matching a filter, page by page (bulk toggle and export need them all). */
 async function allAutomations(token: string, query: string | null = null, status = 'all') {
@@ -55,41 +69,149 @@ async function allAutomations(token: string, query: string | null = null, status
 	}
 }
 
-/** Ports the automations layout's header: the title (a link back from a detail page), the total, the item name, and the page's actions. */
-export function AutomationsHeader({ itemName, actions }: { itemName?: string; actions?: ReactNode }) {
-	const token = useAuthStore((s) => s.token) ?? '';
-	const total = useQuery({
-		queryKey: ['automations', 'count'],
-		queryFn: async () => (await getAutomationItems(token, null, 'all', 1).catch(() => null))?.total ?? null
-	});
+/** The page's own header (LAY-5): the h1 and how many there are, what the page is for, New automation, and import and export. */
+function Header({
+	count,
+	onNew,
+	onImport,
+	onExport
+}: {
+	count: number | null | undefined;
+	onNew: () => void;
+	onImport: () => void;
+	onExport: () => void;
+}) {
 	return (
-		<div className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
-			<div className="flex min-w-0 flex-1 items-center gap-1 py-1">
-				{itemName ? (
-					<Link to="/automations" className="hover:bg-muted rounded-lg px-1 text-sm">
-						Automations
-					</Link>
-				) : (
-					<h1 className="px-1 text-sm">Automations</h1>
-				)}
-				<span className="text-muted-foreground text-sm">{total.data ?? ''}</span>
-				{itemName && (
-					<>
-						<span className="text-foreground-muted px-2 text-sm">/</span>
-						<h1 className="min-w-0 flex-1 truncate text-sm">{itemName}</h1>
-					</>
-				)}
+		<div className="border-b px-4 pt-4 pb-3">
+			<div className="ps-[var(--shell-menu-inset,0px)]">
+				<PageHeader
+					title="Automations"
+					count={
+						typeof count === 'number' ? { value: count, noun: count === 1 ? 'automation' : 'automations' } : undefined
+					}
+					description="Instructions a model runs on a schedule, posting each answer to a chat or a channel."
+					action={
+						<div className="flex items-center gap-1">
+							<Button type="button" onClick={onNew}>
+								<Plus data-icon="inline-start" />
+								New automation
+							</Button>
+							<DropdownMenu>
+								<Tip content="Import and export">
+									<DropdownMenuTrigger asChild>
+										<Button type="button" variant="ghost" size="icon" aria-label="Import and export">
+											<MoreHorizontal />
+										</Button>
+									</DropdownMenuTrigger>
+								</Tip>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem onSelect={onImport}>
+										<FileUp /> Import from a file
+									</DropdownMenuItem>
+									<DropdownMenuItem onSelect={onExport}>
+										<FileDown /> Export all to a file
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+					}
+				/>
 			</div>
-			{actions}
 		</div>
+	);
+}
+
+/** One automation: its name, state and last run on the first line, its schedule and destination on the second. */
+function AutomationRow({
+	a,
+	destination,
+	onOpen,
+	onClone,
+	onRun,
+	onDelete,
+	onToggle
+}: {
+	a: AutomationResponse;
+	destination: string;
+	onOpen: () => void;
+	onClone: () => void;
+	onRun: () => void;
+	onDelete: () => void;
+	onToggle: () => void;
+}) {
+	const last = lastRun(a);
+	const when = last ? dayjs(last.at / 1_000_000) : null;
+	return (
+		// LAY-4, #964: min-w-0 lets the name and schedule shorten, so the menu and switch stay on screen.
+		<li className="group flex min-w-0 items-center gap-1 rounded-lg pe-1 hover:bg-surface-3">
+			<RowButton className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2 hover:bg-transparent" onClick={onOpen}>
+				{/* On a phone the name has its own line, so the badges do not squeeze it away. */}
+				<span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+					<span className="min-w-0 truncate font-strong max-sm:basis-full">{a.name}</span>
+					{!a.is_active && <Badge variant="secondary">Paused</Badge>}
+					{last?.status && <RunBadge status={last.status} />}
+					{last?.error && <span className="sr-only">: {last.error}</span>}
+					{when && (
+						<Tip content={`Last run ${when.format('YYYY-MM-DD HH:mm')}`}>
+							<span aria-hidden className="text-foreground-muted shrink-0 text-caption whitespace-nowrap">
+								{when.fromNow()}
+							</span>
+						</Tip>
+					)}
+					{!last && <span className="text-foreground-muted shrink-0 text-caption whitespace-nowrap">Never run</span>}
+				</span>
+				<span className="text-foreground-muted truncate text-dense">
+					{formatSchedule(a.data.rrule)} · {destination}
+				</span>
+				{/* A11Y-4: a failure's text is on the row, not only in a tooltip. */}
+				{last?.error && (
+					<span aria-hidden className="text-danger line-clamp-2 text-dense break-words">
+						{last.error}
+					</span>
+				)}
+			</RowButton>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${a.name}`}>
+						<MoreHorizontal className="size-4" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem onSelect={onOpen}>
+						<Pencil /> Open
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={onClone}>
+						<Copy /> Duplicate
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={onRun}>
+						<Play /> Run now
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
+					<DropdownMenuItem variant="destructive" onSelect={onDelete}>
+						<Trash2 /> Delete
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<Tip content={a.is_active ? 'Runs on its schedule' : 'Paused'}>
+				<span className="flex">
+					<Switch
+						size="sm"
+						aria-label={`Run ${a.name} on its schedule`}
+						checked={a.is_active}
+						onCheckedChange={onToggle}
+					/>
+				</span>
+			</Tip>
+		</li>
 	);
 }
 
 /**
  * Ports routes/(app)/automations/+page.svelte: search, a status filter,
- * enable/disable all, and the paged list (30 a page, from the server). Each
- * row opens the automation; its menu edits, clones, runs now or deletes; its
- * switch pauses or resumes. Create, Import JSON and Export JSON are in the header.
+ * resume or pause all, and the paged list (30 a page, from the server). Each
+ * row opens the automation and shows how its last run went (#915); its menu
+ * duplicates, runs now or deletes; its switch pauses or resumes. New
+ * automation, import and export are in the header (LAY-5).
  */
 function Automations() {
 	useDocumentTitle('Automations');
@@ -110,32 +232,53 @@ function Automations() {
 		queryFn: () => getAutomationItems(token, query || null, status, page),
 		placeholderData: (prev) => prev
 	});
+	const total = useQuery({
+		queryKey: ['automations', 'count'],
+		queryFn: async () => (await getAutomationItems(token, null, 'all', 1).catch(() => null))?.total ?? null
+	});
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ['automations'] });
 	const items = list.data?.items ?? [];
 	// A list that did not load is a failure, not an empty list (STA-4).
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const narrowed = query.trim() !== '' || status !== 'all';
+	const clearFilters = () => {
+		setSearch('');
+		setStatus('all');
+		setPage(1);
+	};
 
 	const toggle = async (a: AutomationResponse) => {
-		const res = await toggleAutomationById(token, a.id).catch((err) => void toast.error(`${err}`));
+		const res = await toggleAutomationById(token, a.id).catch((err) =>
+			toastFailure(`Couldn't ${a.is_active ? 'pause' : 'resume'} ${a.name}`, err)
+		);
 		if (res) await refresh();
 	};
 	const bulkToggle = async (enable: boolean) => {
 		try {
 			const targets = (await allAutomations(token, query || null, status)).filter((a) => a.is_active !== enable);
 			await Promise.all(targets.map((a) => toggleAutomationById(token, a.id)));
+			toast.success(
+				`${targets.length} ${targets.length === 1 ? 'automation' : 'automations'} ${enable ? 'resumed' : 'paused'}`
+			);
 			if (status !== 'all') setPage(1);
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure(`Couldn't ${enable ? 'resume' : 'pause'} every automation`, err);
 		}
 		await refresh();
 	};
 	const runNow = async (a: AutomationResponse) => {
-		const res = await runAutomationById(token, a.id).catch((err) => void toast.error(`${err}`));
-		if (res) toast.success('Automation triggered');
+		const res = await runAutomationById(token, a.id).catch((err) => toastFailure(`Couldn't run ${a.name}`, err));
+		if (!res) return;
+		toast.success(`${a.name} is running`);
+		// The run is recorded once its reply ends; look again shortly (#915).
+		void refresh();
+		setTimeout(() => void refresh(), 2000);
 	};
 	const remove = async () => {
 		if (!deleting) return;
-		const res = await deleteAutomationById(token, deleting.id).catch((err) => void toast.error(`${err}`));
+		const res = await deleteAutomationById(token, deleting.id).catch((err) =>
+			toastFailure(`Couldn't delete ${deleting.name}`, err)
+		);
 		if (res) toast.success(`Deleted ${deleting.name}`);
 		setDeleting(null);
 		setPage(1);
@@ -149,7 +292,7 @@ function Automations() {
 				`automations-export-${Date.now()}.json`
 			);
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure("Couldn't export the automations", err);
 		}
 	};
 	const importFile = async (file: File | undefined) => {
@@ -162,38 +305,21 @@ function Automations() {
 			if (ok) toast.success(message);
 			else toast.error(message);
 		} catch (err) {
-			toast.error(`${err}`);
+			toastFailure("Couldn't read that file as automations", err);
 		}
 		setPage(1);
 		await refresh();
 	};
+	const newAutomation = () => setDialog({ cloneFrom: null });
+	const statusLabel = STATUSES.find((s) => s.value === status)?.label ?? 'All';
 
 	return (
-		<div className="flex h-full min-h-0 w-full flex-col">
-			<AutomationsHeader
-				actions={
-					<div className="flex items-center">
-						<Button type="button" size="sm" className="rounded-r-none" onClick={() => setDialog({ cloneFrom: null })}>
-							Create
-						</Button>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button
-									type="button"
-									size="sm"
-									className="rounded-l-none border-l px-1.5"
-									aria-label="More create options"
-								>
-									<ChevronDown className="size-3.5" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem onSelect={() => importInput.current?.click()}>Import JSON</DropdownMenuItem>
-								<DropdownMenuItem onSelect={exportAll}>Export JSON</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</div>
-				}
+		<div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+			<Header
+				count={total.data}
+				onNew={newAutomation}
+				onImport={() => importInput.current?.click()}
+				onExport={exportAll}
 			/>
 			<input
 				ref={importInput}
@@ -220,114 +346,86 @@ function Automations() {
 				open={deleting !== null}
 				onOpenChange={(o) => !o && setDeleting(null)}
 				title="Delete automation?"
-				confirmLabel="Delete"
+				confirmLabel="Delete automation"
+				destructive
 				onConfirm={remove}
 			>
-				This will delete <span className="font-medium">{deleting?.name}</span>.
+				<span className="font-medium">{deleting?.name}</span> and its run history are deleted. Chats its runs made are
+				kept.
 			</ConfirmDialog>
 
-			<div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-1">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pt-3 pb-2">
 				<ListSearchBar
 					value={search}
 					onChange={(v) => {
 						setSearch(v);
 						setPage(1);
 					}}
-					placeholder="Search Automations"
+					placeholder="Search automations"
 				>
-					<select
-						aria-label="Status"
-						className="bg-transparent px-1.5 text-dense"
+					<FilterMenu
 						value={status}
-						onChange={(e) => {
-							setStatus(e.target.value);
+						items={STATUSES}
+						onChange={(v) => {
+							setStatus(v);
 							setPage(1);
 						}}
-					>
-						<option value="all">All</option>
-						<option value="active">Active</option>
-						<option value="paused">Paused</option>
-					</select>
+						trigger={
+							<Button type="button" variant="ghost" size="sm" aria-label={`Status: ${statusLabel}`}>
+								Status: {statusLabel}
+								<ChevronDown />
+							</Button>
+						}
+					/>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
 							<Button type="button" variant="ghost" size="sm">
-								Actions <ChevronDown className="size-3" />
+								Actions <ChevronDown />
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							<DropdownMenuItem onSelect={() => bulkToggle(true)}>Enable All</DropdownMenuItem>
-							<DropdownMenuItem onSelect={() => bulkToggle(false)}>Disable All</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => bulkToggle(true)}>Resume all</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => bulkToggle(false)}>Pause all</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</ListSearchBar>
+				{narrowed && list.data && (
+					<ListMatchCount shown={list.data.total} total={total.data ?? null} noun="automations" />
+				)}
 
 				{failed ? (
 					<LoadFailed what="automations" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
 				) : list.isLoading ? (
-					<div className="flex min-h-[calc(100dvh-13rem)] items-center justify-center">
+					<div className="flex flex-1 items-center justify-center py-16">
 						<Spinner className="size-5" />
 					</div>
 				) : items.length === 0 ? (
-					<div className="flex min-h-[calc(100dvh-13rem)] flex-col items-center justify-center text-center">
-						<div className="mb-1.5 text-sm">{query ? 'No results found' : 'No automations found'}</div>
-						<div className="text-muted-foreground max-w-sm text-xs leading-5">
-							{query
-								? 'Try adjusting your search or filter to find what you are looking for.'
-								: 'Create scheduled prompts that run automatically on a recurring basis.'}
-						</div>
-					</div>
+					<ListEmptyState
+						title="No automations yet"
+						description="An automation runs your instructions on a schedule, such as a reading list every weekday morning."
+						action={
+							<Button type="button" onClick={newAutomation}>
+								<Plus data-icon="inline-start" />
+								New automation
+							</Button>
+						}
+						query={query}
+						filtered={status !== 'all'}
+						onClear={clearFilters}
+					/>
 				) : (
-					<ul className="my-1 grid gap-y-0.5">
+					<ul className="grid min-w-0 gap-0.5" aria-label="Automations">
 						{items.map((a) => (
-							<li key={a.id} className="hover:bg-muted/50 flex items-center gap-3 rounded-xl px-3 py-2 transition">
-								<Link
-									to={`/automations/${a.id}`}
-									className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-3"
-								>
-									<span className="flex min-w-0 flex-1 items-center gap-2">
-										<span className="truncate text-sm">{a.name}</span>
-										<Tip content={a.last_run_at ? dayjs(a.last_run_at / 1_000_000).format('LLLL') : 'Never'}>
-											<span className="text-muted-foreground shrink-0 text-xs">
-												{a.last_run_at ? dayjs(a.last_run_at / 1_000_000).fromNow() : 'Never'}
-											</span>
-										</Tip>
-									</span>
-									<span className="text-muted-foreground truncate text-xs sm:max-w-[45%]">
-										{formatSchedule(a.data.rrule)} · {destinationLabel(a, folders, channels)}
-									</span>
-								</Link>
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${a.name}`}>
-											<MoreHorizontal className="size-4" />
-										</Button>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end">
-										<DropdownMenuItem onSelect={() => navigate(`/automations/${a.id}`)}>
-											<Pencil /> Edit
-										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => setDialog({ cloneFrom: a })}>
-											<Copy /> Clone
-										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => runNow(a)}>
-											<Play /> Run now
-										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => setDeleting(a)}>
-											<Trash2 /> Delete
-										</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
-								<Tip content={a.is_active ? 'Enabled' : 'Disabled'}>
-									<span>
-										<Switch
-											size="sm"
-											aria-label={`${a.is_active ? 'Pause' : 'Resume'} ${a.name}`}
-											checked={a.is_active}
-											onCheckedChange={() => toggle(a)}
-										/>
-									</span>
-								</Tip>
-							</li>
+							<AutomationRow
+								key={a.id}
+								a={a}
+								destination={destinationLabel(a, folders, channels)}
+								onOpen={() => navigate(`/automations/${a.id}`)}
+								onClone={() => setDialog({ cloneFrom: a })}
+								onRun={() => runNow(a)}
+								onDelete={() => setDeleting(a)}
+								onToggle={() => toggle(a)}
+							/>
 						))}
 					</ul>
 				)}

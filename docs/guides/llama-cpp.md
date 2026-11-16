@@ -340,6 +340,12 @@ thinking model, so its chain of thought arrives in a separate
 notes, 480 completion tokens (most of them reasoning) took ~92 s, i.e. ~5.2
 tokens/s end to end, with a 24-token prompt taking ~1.3 s to prefill.
 
+The Playground's Completions tab calls the backend's `POST /openai/completions`,
+which forwards to the connection's OpenAI-compatible `/v1/completions`
+(llama-server has one; OpenRouter's is unverified). Responses-API and Azure
+connections are refused with a 400, as is a model on no OpenAI-compatible
+connection; the tab lists only models on one.
+
 ## Measurement: qwen38 with MTP speculative decoding
 
 > **Prompt source changed 2026-08-30; these numbers still stand.** The runs

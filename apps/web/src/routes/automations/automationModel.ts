@@ -1,3 +1,4 @@
+import { RRule } from 'rrule';
 import type { AutomationForm, AutomationResponse } from '@/lib/apis/automations';
 import { errorMessage } from '@/lib/apis/errors';
 import { routePaths } from '@/routes/routePaths';
@@ -7,7 +8,10 @@ import { routePaths } from '@/routes/routePaths';
 // schedule and destination summaries (the list page and AutomationEditor
 // each carry their own copy of the formatter), the form, and import/export.
 
-export type Frequency = 'ONCE' | 'HOURLY' | 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'CUSTOM';
+export type Frequency = 'ONCE' | 'MINUTELY' | 'HOURLY' | 'DAILY' | 'WEEKDAYS' | 'WEEKLY' | 'MONTHLY' | 'CUSTOM';
+
+/** The frequencies whose rule repeats every `interval` steps (#1032). */
+export const HAS_INTERVAL: Frequency[] = ['MINUTELY', 'HOURLY', 'DAILY'];
 
 export type Schedule = {
 	frequency: Frequency;
@@ -22,6 +26,10 @@ export type Schedule = {
 };
 
 export const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const WORKDAYS = WEEKDAYS.slice(0, 5);
+
+/** Today's weekday code, which Weekly starts on (#1104). */
+export const weekdayOf = (d: Date) => WEEKDAYS[(d.getDay() + 6) % 7];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 /** Local `YYYY-MM-DD` (the Svelte picker used `toISOString`, which is the UTC date and is a day off in the evening west of Greenwich). */
@@ -66,7 +74,7 @@ function ruleParts(rrule: string): Record<string, string> {
 function canonical(parts: Record<string, string>): string {
 	return Object.entries(parts)
 		.filter(([k, v]) => !(k === 'INTERVAL' && Number(v) === 1))
-		.map(([k, v]) => `${k}=${/^\d+$/.test(v) ? String(Number(v)) : v}`)
+		.map(([k, v]) => `${k}=${/^\d+$/.test(v) ? String(Number(v)) : k === 'BYDAY' ? v.split(',').sort().join(',') : v}`)
 		.sort()
 		.join(';');
 }
@@ -80,18 +88,20 @@ export function buildRrule(s: Schedule, frequency: Frequency = s.frequency): str
 	if (frequency === 'CUSTOM') return s.custom;
 	if (frequency === 'ONCE')
 		return `DTSTART:${s.onceDate.replace(/-/g, '')}T${s.onceTime.replace(/:/g, '')}00\nRRULE:FREQ=DAILY;COUNT=1`;
-	const parts = [`FREQ=${frequency}`];
-	if (s.interval > 1) parts.push(`INTERVAL=${s.interval}`);
-	if (frequency === 'WEEKLY' && s.days.length) parts.push(`BYDAY=${s.days.join(',')}`);
+	const parts = [`FREQ=${frequency === 'WEEKDAYS' ? 'WEEKLY' : frequency}`];
+	if (s.interval > 1 && HAS_INTERVAL.includes(frequency)) parts.push(`INTERVAL=${s.interval}`);
+	const days = frequency === 'WEEKDAYS' ? WORKDAYS : frequency === 'WEEKLY' ? s.days : [];
+	if (days.length) parts.push(`BYDAY=${[...days].sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b)).join(',')}`);
 	if (frequency === 'MONTHLY') parts.push(`BYMONTHDAY=${s.monthDay}`);
-	if (frequency === 'DAILY' || frequency === 'WEEKLY' || frequency === 'MONTHLY') parts.push(`BYHOUR=${s.hour}`);
-	parts.push(`BYMINUTE=${s.minute}`);
+	if (['DAILY', 'WEEKDAYS', 'WEEKLY', 'MONTHLY'].includes(frequency)) parts.push(`BYHOUR=${s.hour}`);
+	// Every few minutes runs on the clock's grid (:00, :15, ...), so it states no minute.
+	if (frequency !== 'MINUTELY') parts.push(`BYMINUTE=${s.minute}`);
 	return `RRULE:${parts.join(';')}`;
 }
 
 /**
  * Reads an RRULE back into the picker. A rule it cannot show exactly becomes
- * CUSTOM with the text kept: MINUTELY or YEARLY, and also any rule saving
+ * CUSTOM with the text kept: SECONDLY or YEARLY, and also any rule saving
  * from the picker would change (a run count or end date, several hours, an
  * nth weekday of the month), since the picker rebuilds the rule on save (#159).
  */
@@ -108,24 +118,29 @@ export function parseRrule(rrule: string, now = new Date()): Schedule {
 	const p = ruleParts(rrule);
 	const freq = p.FREQ || 'DAILY';
 	const custom: Schedule = { ...s, frequency: 'CUSTOM', custom: rrule };
-	if (!['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) return custom;
+	if (!['MINUTELY', 'HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) return custom;
 	// The picker writes a DTSTART only for a one-time run, so saving would
 	// drop this rule's start (its first date, weekday or hour) (#159).
 	if (DTSTART_LINE.test(rrule)) return custom;
+	const days = p.BYDAY ? p.BYDAY.split(',') : [];
+	const workdays = freq === 'WEEKLY' && [...days].sort().join(',') === [...WORKDAYS].sort().join(',');
 	const shown: Schedule = {
 		...s,
-		frequency: freq as Frequency,
+		frequency: workdays ? 'WEEKDAYS' : (freq as Frequency),
 		interval: Number.parseInt(p.INTERVAL || '1'),
 		hour: Number.parseInt(p.BYHOUR || '9'),
 		minute: Number.parseInt(p.BYMINUTE || '0'),
-		days: p.BYDAY ? p.BYDAY.split(',') : [],
+		days: workdays ? [] : days,
 		monthDay: Number.parseInt(p.BYMONTHDAY || '1')
 	};
-	// No interval control, and a value the inputs cannot hold, mean the
-	// picker cannot show it either, even when it would rebuild the text.
+	// An interval where the picker has no box for one, and a value the inputs
+	// cannot hold, mean the picker cannot show it either, even when it would
+	// rebuild the text.
 	const representable =
-		shown.interval === 1 &&
-		shown.days.every((d) => WEEKDAYS.includes(d)) &&
+		Number.isInteger(shown.interval) &&
+		shown.interval >= 1 &&
+		(shown.interval === 1 || HAS_INTERVAL.includes(shown.frequency)) &&
+		days.every((d) => WEEKDAYS.includes(d)) &&
 		shown.hour >= 0 &&
 		shown.hour <= 23 &&
 		shown.minute >= 0 &&
@@ -139,73 +154,230 @@ export function parseRrule(rrule: string, now = new Date()): Schedule {
 
 /**
  * Switching the picker to Custom starts the text from the schedule that was
- * showing, so it can be tweaked rather than typed from scratch.
+ * showing, so it can be tweaked rather than typed from scratch. Every few
+ * minutes starts at 15; Weekly with no day chosen starts on today (#1104).
  */
-export function withFrequency(s: Schedule, next: Frequency): Schedule {
-	if (next === 'CUSTOM' && s.frequency !== 'CUSTOM') return { ...s, frequency: next, custom: buildRrule(s) };
-	return { ...s, frequency: next };
+export function withFrequency(s: Schedule, next: Frequency, now = new Date()): Schedule {
+	if (next === s.frequency) return s;
+	if (next === 'CUSTOM') return { ...s, frequency: next, custom: buildRrule(s) };
+	const interval = next === 'MINUTELY' ? 15 : 1;
+	const days = next === 'WEEKLY' && !s.days.length ? [weekdayOf(now)] : s.days;
+	return { ...s, frequency: next, interval, days };
 }
 
 const ordinal = (n: number) =>
 	n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 
-/**
- * The keys each frequency's summary describes. A rule with any other key, or
- * several values where the summary shows one, is shown as itself rather than
- * as a summary that leaves part of it out (#159).
- */
-const REQUIRED: Record<string, string[]> = {
-	DAILY: ['BYHOUR', 'BYMINUTE'],
-	WEEKLY: ['BYHOUR', 'BYMINUTE'],
-	MONTHLY: ['BYMONTHDAY', 'BYHOUR', 'BYMINUTE']
-};
-const SUMMARISED: Record<string, string[]> = {
-	MINUTELY: ['FREQ', 'INTERVAL'],
-	HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE'],
-	DAILY: ['FREQ', 'BYHOUR', 'BYMINUTE'],
-	WEEKLY: ['FREQ', 'BYDAY', 'BYHOUR', 'BYMINUTE'],
-	MONTHLY: ['FREQ', 'BYMONTHDAY', 'BYHOUR', 'BYMINUTE']
-};
-// A missing hour or day would read as midnight or the 1st; it comes from the
-// rule's DTSTART, which the summary does not show.
-const summarisable = (p: Record<string, string>) =>
-	(REQUIRED[p.FREQ] ?? []).every((k) => p[k] !== undefined) &&
-	Object.entries(p).every(
-		([k, v]) =>
-			(k === 'INTERVAL' && Number(v) === 1) ||
-			(SUMMARISED[p.FREQ]?.includes(k) &&
-				(k === 'BYDAY' ? v.split(',').every((d) => WEEKDAYS.includes(d)) : k === 'FREQ' || /^\d+$/.test(v)))
-	);
+/** A time of day in the reader's own format ("9:00 AM", "09:00"). */
+export function timeText(hour: number, minute: number): string {
+	return new Date(2000, 0, 1, hour, minute)
+		.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+		.replace(/ /g, ' ');
+}
 
-/** "Daily at 9:00 AM", "MO,WE at 6:30 PM", "Once · Sep 30 9:00 AM", or the rule itself if it is none of those. */
-export function formatSchedule(rrule: string): string {
-	if (ONCE.test(rrule)) {
-		const m = rrule.match(DTSTART);
-		if (!m) return 'Once';
-		const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`);
-		return `Once · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
-	}
-	const p = ruleParts(rrule);
-	if (DTSTART_LINE.test(rrule) || !summarisable(p)) return rrule;
-	const hour = Number.parseInt(p.BYHOUR || '0');
-	const iv = Number.parseInt(p.INTERVAL || '1');
-	const time = `${hour % 12 || 12}:${(p.BYMINUTE || '0').padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
-	switch (p.FREQ) {
-		case 'MINUTELY':
-			return iv === 1 ? 'Every minute' : `Every ${iv} minutes`;
-		case 'HOURLY':
-			return iv === 1 ? 'Hourly' : `Every ${iv} hours`;
-		case 'DAILY':
-			return `Daily at ${time}`;
-		case 'WEEKLY':
-			return p.BYDAY ? `${p.BYDAY} at ${time}` : `Weekly at ${time}`;
-		case 'MONTHLY': {
-			const day = Number.parseInt(p.BYMONTHDAY || '1');
-			return `Monthly on the ${day}${ordinal(day)} at ${time}`;
+/** A weekday's name from its RRULE code, in the reader's language ("Mon", "Monday"). */
+const dayName = (code: string, weekday: 'short' | 'long') =>
+	new Date(2024, 0, 1 + WEEKDAYS.indexOf(code)).toLocaleDateString(undefined, { weekday });
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** What a rule the picker cannot show is called where it cannot be spelled out either. */
+export const CUSTOM_SCHEDULE = 'Custom schedule';
+
+/** The DTSTART a rule states, as a local date: a `Z` time is UTC, any other the reader's wall clock. */
+function ruleStart(rrule: string): Date | null {
+	const m = rrule.match(/DTSTART(?:;[^:]*)?:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z?)/i);
+	if (!m) return null;
+	const [y, mo, d, h, mi, sec] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? '0'].map(Number);
+	return m[7] ? new Date(Date.UTC(y, mo - 1, d, h, mi, sec)) : new Date(y, mo - 1, d, h, mi, sec);
+}
+
+/** The rule's options, its DTSTART left aside; throws on a rule rrule.js cannot read. */
+function ruleOptions(rrule: string) {
+	const body = rrule
+		.split(/\s+/)
+		.filter((line) => line && !/^DTSTART/i.test(line))
+		.join(';')
+		.replace(/RRULE:/gi, '');
+	if (/EXRULE|RDATE|EXDATE/i.test(body)) throw new Error('not one rule');
+	const options = RRule.parseString(body);
+	if (options.freq === undefined) throw new Error('no FREQ');
+	return options;
+}
+
+const list = (v: number | number[] | null | undefined) =>
+	v === null || v === undefined ? [] : Array.isArray(v) ? v : [v];
+
+/**
+ * Spells out a rule the picker does not make ("Every month on the last
+ * Friday at 5:00 PM"), through rrule.js's `toText` with the times added,
+ * which it leaves out. A rule it cannot describe whole is "Custom schedule",
+ * never a summary that drops part of it (#159), and never the rule's own text
+ * (WRD-2).
+ */
+function describeRule(rrule: string, now: Date): string {
+	try {
+		const { byhour, byminute, bysecond, ...rest } = ruleOptions(rrule);
+		if (list(bysecond).some((x) => x !== 0)) return CUSTOM_SCHEDULE;
+		const rule = new RRule(rest);
+		if (!rule.isFullyConvertibleToText()) return CUSTOM_SCHEDULE;
+		let text = rule.toText();
+		const hours = list(byhour);
+		const minutes = list(byminute);
+		const start = ruleStart(rrule);
+		const subDaily = rest.freq !== undefined && rest.freq >= RRule.HOURLY;
+		if (hours.length && minutes.length && hours.length * minutes.length <= 4) {
+			text += ` at ${hours.flatMap((h) => minutes.map((m) => timeText(h, m))).join(' and ')}`;
+		} else if (!hours.length && minutes.length === 1 && rest.freq === RRule.HOURLY) {
+			if (minutes[0] !== 0) text += ` at ${plural(minutes[0], 'minute')} past`;
+		} else if (hours.length || minutes.length) {
+			return CUSTOM_SCHEDULE;
+		} else if (!subDaily) {
+			// The time of day comes from the start, or, without one, from when it is saved.
+			text += start ? ` at ${timeText(start.getHours(), start.getMinutes())}` : ', at the time it is saved';
 		}
-		default:
-			return rrule;
+		if (start && start > now)
+			text += `, starting ${start.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+		return text.charAt(0).toUpperCase() + text.slice(1);
+	} catch {
+		return CUSTOM_SCHEDULE;
 	}
+}
+
+/**
+ * A schedule in words (#1032): "Daily at 9:00 AM", "Mon, Wed, Fri at 7:30 AM",
+ * "Every 15 minutes", "Once · Sep 30 9:00 AM", or, for a rule the picker does
+ * not make, the rule spelled out ("Every month on the last Friday at 5:00 PM").
+ */
+export function formatSchedule(rrule: string, now = new Date()): string {
+	const s = parseRrule(rrule, now);
+	const at = timeText(s.hour, s.minute);
+	switch (s.frequency) {
+		case 'ONCE': {
+			if (!DTSTART.test(rrule)) return 'Once';
+			const d = new Date(`${s.onceDate}T${s.onceTime}`);
+			return `Once · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${timeText(d.getHours(), d.getMinutes())}`;
+		}
+		case 'MINUTELY':
+			return s.interval === 1 ? 'Every minute' : `Every ${s.interval} minutes`;
+		case 'HOURLY': {
+			const base = s.interval === 1 ? 'Hourly' : `Every ${s.interval} hours`;
+			return s.minute ? `${base} at ${plural(s.minute, 'minute')} past` : base;
+		}
+		case 'DAILY':
+			return s.interval === 1 ? `Daily at ${at}` : `Every ${s.interval} days at ${at}`;
+		case 'WEEKDAYS':
+			return `Weekdays at ${at}`;
+		case 'WEEKLY':
+			if (s.days.length === 1) return `Every ${dayName(s.days[0], 'long')} at ${at}`;
+			if (s.days.length === 7) return `Every day at ${at}`;
+			return `${s.days.map((d) => dayName(d, 'short')).join(', ')} at ${at}`;
+		case 'MONTHLY':
+			return `Monthly on the ${s.monthDay}${ordinal(s.monthDay)} at ${at}`;
+		default:
+			return describeRule(rrule, now);
+	}
+}
+
+/** The schedule picker's chip: the frequency's name, with its time where it has one ("Daily at 9:00 AM"). */
+export const scheduleChipLabel = (s: Schedule, now = new Date()) =>
+	s.frequency === 'CUSTOM' ? 'Custom rule' : formatSchedule(buildRrule(s), now);
+
+const toWall = (d: Date) =>
+	new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()));
+const fromWall = (w: Date) =>
+	new Date(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate(), w.getUTCHours(), w.getUTCMinutes(), w.getUTCSeconds());
+
+/**
+ * The next `count` runs of a rule, worked out as the scheduler does
+ * (utils/automations.py `_parse_rule`): a rule repeating more often than
+ * daily without a DTSTART runs on the clock's grid from 2000-01-01, a longer
+ * one takes the time it does not state from now (on the minute), and a
+ * DTSTART is the reader's wall clock unless it ends in `Z`. rrule.js counts
+ * in UTC, so wall-clock times go in and come out as UTC dates. Empty for a
+ * rule that cannot be read or has no runs left. The detail page shows the
+ * server's own `next_runs` instead.
+ */
+export function previewRuns(rrule: string, count = 3, now = new Date()): Date[] {
+	try {
+		const options = ruleOptions(rrule);
+		const start = ruleStart(rrule);
+		const wallNow = toWall(now);
+		const steps: Partial<Record<number, number>> = {
+			[RRule.MINUTELY]: 60_000,
+			[RRule.HOURLY]: 3_600_000,
+			[RRule.SECONDLY]: 1_000
+		};
+		const step = steps[options.freq ?? -1];
+		let dtstart: Date;
+		if (start) dtstart = toWall(start);
+		else if (step) {
+			const unit = step * (options.interval ?? 1);
+			const epoch = Date.UTC(2000, 0, 1);
+			dtstart = new Date(epoch + Math.floor((wallNow.getTime() - epoch) / unit) * unit);
+		} else dtstart = new Date(Math.floor(wallNow.getTime() / 60_000) * 60_000);
+		const rule = new RRule({ ...options, dtstart });
+		const runs: Date[] = [];
+		let after = wallNow;
+		for (let i = 0; i < count; i++) {
+			const next = rule.after(after, false);
+			if (!next) break;
+			runs.push(fromWall(next));
+			after = next;
+		}
+		return runs;
+	} catch {
+		return [];
+	}
+}
+
+/** "Mon, Nov 16, 9:00 AM": a run's time in the reader's format. */
+export const runTimeText = (d: Date) =>
+	d
+		.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+		.replace(/ /g, ' ');
+
+/** The reader's time zone, which the server reads schedules in. */
+export const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const RULE_EXAMPLE = 'RRULE:FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0';
+export const RULE_HELP = `An iCalendar rule, for example ${RULE_EXAMPLE} for Mondays at 9:00 AM.`;
+const RULE_UNREADABLE = `The scheduler can't read this rule. Write it like ${RULE_EXAMPLE}.`;
+const RULE_COUNT = 'A rule with COUNT needs a DTSTART line before it, saying when the first run is.';
+const RULE_NO_RUNS = 'This rule has no runs left. Move its start, or change its UNTIL or COUNT.';
+
+/**
+ * What is wrong with a custom rule, in words, or null (#1032, FRM-2). The
+ * server checks again on save; `ruleProblemFromServer` words its refusals.
+ */
+export function customRuleProblem(rrule: string, now = new Date()): string | null {
+	if (!rrule.trim()) return `Enter a rule, for example ${RULE_EXAMPLE}.`;
+	if (/COUNT=/i.test(rrule) && !/DTSTART/i.test(rrule)) return RULE_COUNT;
+	try {
+		ruleOptions(rrule);
+	} catch {
+		return RULE_UNREADABLE;
+	}
+	return previewRuns(rrule, 1, now).length ? null : RULE_NO_RUNS;
+}
+
+/**
+ * The server's refusal of a schedule (routers/automations.py, constants.py),
+ * in the words the field shows, or null when the error is not about the
+ * schedule. Its own text ("Invalid RRULE: not enough values to unpack") is
+ * never shown as the message (FBK-4).
+ */
+export function ruleProblemFromServer(detail: string): string | null {
+	if (/^Invalid RRULE/i.test(detail)) return RULE_UNREADABLE;
+	if (/no future occurrences/i.test(detail)) return RULE_NO_RUNS;
+	if (/COUNT requires/i.test(detail)) return RULE_COUNT;
+	const often = detail.match(/too frequent\. Minimum interval is (\d+) seconds/i);
+	if (often) {
+		const seconds = Number(often[1]);
+		const gap = seconds % 60 ? plural(seconds, 'second') : plural(seconds / 60, 'minute');
+		return `This runs too often. Runs must be at least ${gap} apart (Admin Settings > Automations).`;
+	}
+	return null;
 }
 
 /** A one-time run must be in the future. */
@@ -273,14 +445,28 @@ export function destinationLabel(
 		const channel = channels.find((c) => c.id === a.data.target?.channel_id);
 		return channel?.name ? `#${channel.name}` : 'Channel';
 	}
-	if (!a.folder_id) return 'New chat';
-	if (!detailed) return 'Folder';
-	return `Folder: ${folders.find((f) => f.id === a.folder_id)?.name ?? 'None'}`;
+	const same = Boolean(a.data.target?.same_chat);
+	if (!a.folder_id) return same ? 'Same chat' : 'New chat';
+	const folder = detailed ? `Folder: ${folders.find((f) => f.id === a.folder_id)?.name ?? 'None'}` : 'Folder';
+	return same ? `${folder}, same chat` : folder;
 }
 
 /** Where a run links to: its channel, or its chat. */
 export const runTarget = (chatId: string) =>
 	chatId.startsWith('channel:') ? `${routePaths.channels}/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
+
+/** The last run: its status and error when the server has the run, else only when the scheduler last ran it (#915). */
+export function lastRun(
+	a: Pick<AutomationResponse, 'last_run' | 'last_run_at'>
+): { at: number; status: 'success' | 'error' | null; error: string | null } | null {
+	if (a.last_run)
+		return {
+			at: a.last_run.created_at,
+			status: a.last_run.status === 'success' ? 'success' : 'error',
+			error: a.last_run.error
+		};
+	return a.last_run_at ? { at: a.last_run_at, status: null, error: null } : null;
+}
 
 /** When an automation runs next, or null when it will not: a paused one does not run, whatever its rule says (#324). */
 export const nextRunAt = (a: Pick<AutomationResponse, 'is_active' | 'next_runs' | 'next_run_at'>): number | null =>
@@ -295,6 +481,8 @@ export type AutomationFields = {
 	folderId: string;
 	targetType: 'chat' | 'channel';
 	channelId: string;
+	/** Every run goes into the chat the last one used (S6-D13). */
+	sameChat: boolean;
 	isActive: boolean;
 	schedule: Schedule;
 };
@@ -316,6 +504,7 @@ export function automationFields(
 			folderId: '',
 			targetType: 'chat',
 			channelId: '',
+			sameChat: false,
 			isActive: true,
 			schedule: defaultSchedule(now)
 		};
@@ -327,6 +516,7 @@ export function automationFields(
 		folderId: source.folder_id ?? '',
 		targetType: source.data.target?.type === 'channel' ? 'channel' : 'chat',
 		channelId,
+		sameChat: Boolean(source.data.target?.same_chat),
 		isActive: clone ? true : source.is_active,
 		schedule: parseRrule(source.data.rrule, now)
 	};
@@ -345,19 +535,38 @@ export function withoutMissingDestinations(
 	};
 }
 
-/** The automation to send, or the message to show. A channel target has no folder. */
-export function automationPayload(f: AutomationFields, now = new Date()): { error: string } | { form: AutomationForm } {
-	if (!f.name.trim() || !f.prompt.trim() || !f.modelId.trim()) return { error: 'Name, prompt, and model are required' };
-	if (f.targetType === 'channel' && !f.channelId) return { error: 'Channel is required' };
-	if (onceIncomplete(f.schedule)) return { error: 'Pick a date and time for the one-time run' };
-	if (oncePassed(f.schedule, now)) return { error: 'Scheduled time must be in the future' };
+/** The form's fields that can be wrong, in the order they are on the page. */
+export const AUTOMATION_FIELDS = ['name', 'prompt', 'schedule', 'model', 'channel'] as const;
+export type AutomationField = (typeof AUTOMATION_FIELDS)[number];
+export type AutomationProblems = Partial<Record<AutomationField, string>>;
+
+/** What is wrong with the form, by field (FRM-2, #1033): each says what to put right. */
+export function automationProblems(f: AutomationFields, now = new Date()): AutomationProblems {
+	const problems: AutomationProblems = {};
+	if (!f.name.trim()) problems.name = 'Enter a name for the automation.';
+	if (!f.prompt.trim()) problems.prompt = 'Enter the instructions the model follows on each run.';
+	if (!f.modelId.trim()) problems.model = 'Choose the model that runs it.';
+	if (f.targetType === 'channel' && !f.channelId) problems.channel = 'Choose a channel, or post to a chat instead.';
+	const s = f.schedule;
+	if (onceIncomplete(s)) problems.schedule = 'Pick a date and time for the one-time run.';
+	else if (oncePassed(s, now)) problems.schedule = 'Pick a time in the future for the one-time run.';
+	// Saving with no day used to take the weekday of the save, silently (#1104).
+	else if (s.frequency === 'WEEKLY' && !s.days.length) problems.schedule = 'Choose at least one day.';
+	else if (s.frequency === 'CUSTOM') {
+		const problem = customRuleProblem(s.custom, now);
+		if (problem) problems.schedule = problem;
+	}
+	return problems;
+}
+
+/** The automation to send, or what is wrong with it. A channel target has no folder. */
+export function automationPayload(
+	f: AutomationFields,
+	now = new Date()
+): { problems: AutomationProblems } | { form: AutomationForm } {
+	const problems = automationProblems(f, now);
+	if (Object.keys(problems).length) return { problems };
 	const channel = f.targetType === 'channel';
-	// A weekly rule with no day chosen would take its weekday from the moment
-	// it is switched back on, so it states the weekday of this save (#670).
-	const schedule: Schedule =
-		f.schedule.frequency === 'WEEKLY' && !f.schedule.days.length
-			? { ...f.schedule, days: [WEEKDAYS[(now.getDay() + 6) % 7]] }
-			: f.schedule;
 	return {
 		form: {
 			name: f.name.trim(),
@@ -365,8 +574,12 @@ export function automationPayload(f: AutomationFields, now = new Date()): { erro
 			data: {
 				prompt: f.prompt.trim(),
 				model_id: f.modelId.trim(),
-				rrule: buildRrule(schedule),
-				target: channel ? { type: 'channel', channel_id: f.channelId } : { type: 'chat' }
+				rrule: buildRrule(f.schedule),
+				target: channel
+					? { type: 'channel', channel_id: f.channelId }
+					: f.sameChat
+						? { type: 'chat', same_chat: true }
+						: { type: 'chat' }
 			},
 			is_active: f.isActive
 		}
@@ -415,7 +628,9 @@ export function parseAutomationImport(
 		const target =
 			data?.target?.type === 'channel' && typeof data.target.channel_id === 'string'
 				? { type: 'channel' as const, channel_id: data.target.channel_id.slice(0, 200) }
-				: { type: 'chat' as const };
+				: data?.target?.same_chat === true
+					? { type: 'chat' as const, same_chat: true }
+					: { type: 'chat' as const };
 		const meta = item?.meta && typeof item.meta === 'object' ? item.meta : undefined;
 		forms.push({
 			name: str(item?.name, 500) || 'Imported automation',
@@ -485,8 +700,6 @@ function pickerOncePassed(rrule: string, now: Date): boolean {
 }
 
 const MAX_NAMED_FAILURES = 3;
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** What an import did, for its toast: an error when any automation could not be created. */
 export function importMessage(o: ImportOutcome): { ok: boolean; message: string } {

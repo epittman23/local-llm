@@ -1,18 +1,19 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Hash, Lock, Plus, Settings, User, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, List, Lock, Plus, Settings, User, X } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { toast } from 'sonner';
+import { toastFailure } from '@/components/common/failureToast';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { createNewChannel, updateChannelById } from '@/lib/apis/channels';
+import { updateChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { rowClass, rowMenuButtonClass } from '@/routes/chat/sidebar/ChatItem';
 import { DISCLOSURE } from '@/routes/chat/sidebar/ChatSidebar';
+import { routePaths } from '@/routes/routePaths';
 import { ChannelFormDialog } from './ChannelDialogs';
 import { type Channel, channelTitle, formatUnread, isPublicChannel } from './channelModel';
 import { CHANNELS_KEY, hideConversation, useChannelList, useChannelsEnabled, useMarkChannelRead } from './useChannels';
@@ -28,31 +29,14 @@ import { CHANNELS_KEY, hideConversation, useChannelList, useChannelsEnabled, use
  */
 export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 	const enabled = useChannelsEnabled();
-	const token = useAuthStore((s) => s.token) ?? '';
-	const { socket } = useSocket();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const channels = useChannelList();
 	const [open, setOpen] = useState(true);
-	const [creating, setCreating] = useState(false);
 
 	if (!enabled) return null;
 	const list = channels.data ?? [];
 	const refresh = () => queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
-
-	const create = async (payload: Record<string, unknown>) => {
-		const res = await createNewChannel(token, payload as never).catch((e) => {
-			toast.error(`${e}`);
-			return null;
-		});
-		if (!res) return false;
-		socket?.emit('join-channels', { auth: { token } });
-		await refresh();
-		setOpen(true);
-		navigate(`/channels/${res.id}`);
-		onNavigate?.();
-		return true;
-	};
 
 	return (
 		<div className="mt-3">
@@ -69,14 +53,26 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 					{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
 					Channels
 				</Button>
-				<Tip content="Create Channel">
+				<Tip content="Channels">
+					<Button asChild variant="ghost" size="icon-xs" aria-label="All channels" className="mr-0.5">
+						<NavLink to={routePaths.channels} end onClick={onNavigate}>
+							<List className="size-3.5" />
+						</NavLink>
+					</Button>
+				</Tip>
+				<Tip content="New channel">
 					<Button
 						type="button"
 						variant="ghost"
 						size="icon-xs"
-						aria-label="Create Channel"
+						aria-label="New channel"
 						className="mr-1"
-						onClick={() => setCreating(true)}
+						onClick={() => {
+							// The new-channel dialog opens on the channels page, so on a
+							// phone the navigation sheet closes first, not behind it (#967).
+							navigate(`${routePaths.channels}?new=1`);
+							onNavigate?.();
+						}}
 					>
 						<Plus className="size-3.5" />
 					</Button>
@@ -92,7 +88,6 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 					))}
 				</ul>
 			)}
-			<ChannelFormDialog open={creating} onOpenChange={setCreating} onSubmit={create} />
 		</div>
 	);
 }
@@ -127,10 +122,10 @@ function ChannelItem({
 			group_ids,
 			user_ids
 		} as never).catch((e) => {
-			toast.error(`${e}`);
+			toastFailure("Couldn't save the channel", e);
 			return null;
 		});
-		if (res) toast.success('Channel updated successfully');
+		if (res) toast.success('Channel saved');
 		onChanged();
 		queryClient.invalidateQueries({ queryKey: ['channel', channel.id] });
 		return Boolean(res);

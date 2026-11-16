@@ -234,13 +234,16 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/tune` | Tuning |
 | `/benchmarks/prescreen` | Pre-screen: llama-bench over a grid of offload and batch flags, as an Optuna study, and the switch for its dashboard |
 | `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/`. With `?title=&content=`, creates that note and opens it, as `/notes/new` does; if the create fails, says so and shows the list |
-| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it; if the create fails, says so and shows the list |
-| `/notes/<id>` | Note editor (TipTap, autosave) |
+| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it; if the create fails, says so and shows the list. A note made without `?title=`/`?content=` starts as "Untitled" with its title selected, and is dropped if left empty |
+| `/notes/<id>` | Note editor (TipTap, autosave, save status); a note that no longer exists says so in place, with Back to notes |
 | `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
 | `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
 | `/automations/<id>` | Detail and runs |
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
-| `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
+| `/playground/completions` | *Admin.* A text completion (the model continues your text) through the backend's `/openai/completions`; lists only models on an OpenAI-compatible connection |
+| `/playground/images` | *Admin.* Image generation. The tab shows only while image generation is on (Admin Settings > Images); a direct link while it's off explains why and cannot run |
+| `/channels` | Every channel you can open, with its unread count and description, and New channel; `?new=1` opens the new-channel dialog. Shown only while the server has more than one account; with one, `/channels` and `/channels/<id>` are not found |
+| `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission) and more than one account. The sidebar lists channels and creates them |
 | `/home` | Start page: New chat, quick actions (Search chats always; New note and Calendar only when that feature is available), pinned chats then the 8 most recent outside folders, and today's calendar events. Linked from the sidebar as Home |
 | `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent once the models load, with any `?load-url=` page attached, unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
 | `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id. A chat that no longer exists says so in place and keeps the address |

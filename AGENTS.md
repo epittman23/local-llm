@@ -85,6 +85,10 @@ been measured on either build yet.
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and
   request timing into the app's own Postgres.
+- **Text completion**: the Playground's Completions tab goes through the
+  backend's `POST /openai/completions` to the connection's OpenAI-compatible
+  `/v1/completions`. llama-server has one; OpenRouter's is unverified, so on
+  the default connection Completions may not work.
 - **Measuring**: the Tests page runs scored items from HumanEval+, MBPP+
   and DS-1000 (vendored under `benchmarks/data/datasets/`, graded as EvalPlus
   grades them), and from LiveCodeBench (fetched by increment, drawn from a

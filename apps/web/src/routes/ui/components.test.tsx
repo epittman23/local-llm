@@ -156,6 +156,14 @@ describe('/ui components', () => {
 		expect(heldOff).toHaveAttribute('data-state', 'unchecked');
 	});
 
+	it('shows a page header with its count as a secondary badge after the name (LAY-5)', () => {
+		inProvider(<NavigationSection />);
+		const heading = screen.getByRole('heading', { level: 4, name: 'Knowledge' });
+		const badge = heading.nextElementSibling as HTMLElement;
+		expect(badge).toHaveAttribute('data-variant', 'secondary');
+		expect(badge).toHaveTextContent('3 collections');
+	});
+
 	it('demonstrates a section’s sub-tabs: a named landmark of links, the open one current, counts as badges (NAV-2)', async () => {
 		const router = inProvider(<NavigationSection />);
 		const strip = screen.getByRole('navigation', { name: 'Users sections' });

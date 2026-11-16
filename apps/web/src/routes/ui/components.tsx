@@ -90,6 +90,7 @@ import {
 	StatusNoticeDemo,
 	TallDialogDemo
 } from './adminDemos';
+import { DayGridDemo, HighlightDemo, TimeGridDemo, ToolbarDemo, WeekdayTogglesDemo } from './notesDemos';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
@@ -138,7 +139,7 @@ export function ActionsSection() {
 			id="actions"
 			title="Actions"
 			lead="A view has one filled button: the thing you most likely came to do. Everything else is quieter. A button's label says what will happen, and the confirmation that follows uses the same word."
-			rules={['ACT-1', 'ACT-2', 'ACT-4', 'ACT-5', 'ACT-6', 'ACT-7', 'ACT-8', 'A11Y-1', 'FBK-3']}
+			rules={['ACT-1', 'ACT-2', 'ACT-4', 'ACT-5', 'ACT-6', 'ACT-7', 'ACT-8', 'A11Y-1', 'FBK-3', 'COL-4']}
 		>
 			<Example
 				title="The five kinds"
@@ -269,6 +270,12 @@ export function ActionsSection() {
 						<ProfileAvatar name="Ada Lovelace" className="text-title size-full" />
 					</ImageButton>
 				</div>
+			</Example>
+			<Example
+				title="A toggle group"
+				note="An automation's weekdays: each day is a button that stays pressed. A pressed one is the brand fill, an unpressed one the outline button, and a screen reader hears pressed or not pressed."
+			>
+				<WeekdayTogglesDemo />
 			</Example>
 		</Section>
 	);
@@ -530,7 +537,20 @@ export function DataSection() {
 			id="data"
 			title="Tables and figures"
 			lead="Numbers are right-aligned in tabular figures with one precision per column, the unit lives in the column heading, and a missing value is a dash, not a blank or a zero. Identifiers are monospaced and can be copied."
-			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'NAV-5', 'TYP-6', 'COL-2', 'COL-8', 'A11Y-2', 'A11Y-4']}
+			rules={[
+				'DAT-1',
+				'DAT-2',
+				'DAT-3',
+				'DAT-4',
+				'DAT-6',
+				'DAT-7',
+				'NAV-5',
+				'TYP-6',
+				'COL-2',
+				'COL-8',
+				'A11Y-2',
+				'A11Y-4'
+			]}
 		>
 			<Example
 				title="A results table"
@@ -620,6 +640,12 @@ export function DataSection() {
 			>
 				<ChartDemo />
 			</Example>
+			<Example
+				title="A time grid"
+				note="The calendar's week and day: each event is as tall as it is long, never under 24 px; two that overlap share the width; today's column is tinted and the now-line is the brand colour."
+			>
+				<TimeGridDemo />
+			</Example>
 		</Section>
 	);
 }
@@ -704,11 +730,15 @@ export function NavigationSection() {
 					</span>
 				</div>
 			</Example>
-			<Example title="Page header and tabs">
+			<Example
+				title="Page header and tabs"
+				note="A page that lists things may show how many there are as a secondary badge after its name: the whole count, which a filter does not change, read with its noun."
+			>
 				<Panel>
 					<PageHeader
 						as="h4"
 						title="Knowledge"
+						count={{ value: 3, noun: 'collections' }}
 						description="Collections of files a model can search while it answers."
 						action={
 							<Button>
@@ -788,6 +818,18 @@ export function NavigationSection() {
 						</CommandList>
 					</Command>
 				</Panel>
+			</Example>
+			<Example
+				title="A toolbar"
+				note="The note editor's formatting bar is one tab stop: Tab reaches the tool last used, the arrow keys, Home and End move between tools, and Escape returns to the text they act on. Each tool's Tip gives its name and its shortcut."
+			>
+				<ToolbarDemo />
+			</Example>
+			<Example
+				title="A grid of days"
+				note="The calendar's month and mini month are one tab stop: the arrow keys move a day or a week, Home and End go to the ends of the week, and moving past the edge pages the month."
+			>
+				<DayGridDemo />
 			</Example>
 			<Example
 				title="The model picker's rows"
@@ -1202,6 +1244,12 @@ export function ContentSection() {
 				<Panel>
 					<CodeEditorFieldDemo />
 				</Panel>
+			</Example>
+			<Example
+				title="A highlight"
+				note="Text the writer highlighted, in a note or an answer, reads like the words around it in every theme: at least 7:1, as body text is."
+			>
+				<HighlightDemo />
 			</Example>
 		</Section>
 	);

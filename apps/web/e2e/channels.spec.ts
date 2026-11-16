@@ -119,8 +119,9 @@ async function mockChannels(
 		return json(route, []);
 	});
 	await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'qwen', name: 'Qwen' }] }));
+	// Channels are shown with more than one account (S6-D1): the count is the search's total.
 	await page.route('**/api/v1/users/search*', (route) =>
-		json(route, { users: [{ id: 'u3', name: 'Annika' }], total: 1 })
+		json(route, { users: [{ id: 'u3', name: 'Annika' }], total: 3 })
 	);
 	return seen;
 }
@@ -133,6 +134,46 @@ test('channels are hidden, and the page sends you home, when the feature is off 
 	await page.goto('/channels/c1');
 	await expect(page).toHaveURL(/localhost:5174\/$/);
 	await expect(page.getByRole('list', { name: 'Channels' })).toHaveCount(0);
+});
+
+test('channels are hidden, and their pages not found, while the install has one account (S6-D1)', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'admin', ...enabled });
+	await mockChannels(page);
+	await page.route('**/api/v1/users/search*', (route) => json(route, { users: [me], total: 1 }));
+	await page.goto('/channels/c1');
+	await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+	await expect(page.getByRole('list', { name: 'Channels' })).toHaveCount(0);
+	await page.goto('/channels');
+	await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+});
+
+test('/channels lists the channels and opens one (#971)', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	await mockChannels(page, { channels: [channel('c1', 'general', { description: 'Everything else' })] });
+	await page.goto('/channels');
+	await expect(page.getByRole('heading', { level: 1, name: 'Channels' })).toBeVisible();
+	const row = page
+		.getByRole('main')
+		.getByRole('list', { name: 'Channels' })
+		.getByRole('button', { name: /general/ });
+	await expect(row).toContainText('Everything else');
+	await row.click();
+	await expect(page).toHaveURL(/\/channels\/c1$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'general' })).toBeAttached();
+});
+
+test.describe('on a phone', () => {
+	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+	test("a message's actions are in its Message actions menu (#914)", async ({ page }) => {
+		await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+		await mockChannels(page, { messages: [message('m1', 'hello', { user_id: me.id, user: me })] });
+		await page.goto('/channels/c1');
+		await page.getByRole('button', { name: 'Message actions' }).tap();
+		for (const name of ['Add reaction', 'Reply', 'Reply in thread', 'Pin', 'Edit', 'Delete'])
+			await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
+		await page.getByRole('menuitem', { name: 'Add reaction' }).tap();
+		await expect(page.getByRole('textbox', { name: 'Search emojis' })).toBeVisible();
+	});
 });
 
 test('the sidebar lists channels by type with unread badges, and opening one clears its badge', async ({ page }) => {
@@ -448,8 +489,8 @@ test('pinned messages and the member list', async ({ page }) => {
 		pinned: [message('p1', 'an important note', { is_pinned: true })]
 	});
 	await page.goto('/channels/c1');
-	await page.getByRole('button', { name: 'Pinned Messages' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
+	await page.getByRole('button', { name: 'Pinned messages' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Pinned messages' });
 	await expect(dialog.getByText('an important note')).toBeVisible();
 	await dialog.getByTestId('channel-message').hover();
 	await expect(dialog.getByRole('button', { name: 'Reply' })).toHaveCount(0);
@@ -458,7 +499,7 @@ test('pinned messages and the member list', async ({ page }) => {
 	expect(seen.pins).toEqual([{ mid: 'p1', is_pinned: false }]);
 	await page.keyboard.press('Escape');
 
-	await page.getByRole('button', { name: 'User Count' }).click();
+	await page.getByRole('button', { name: 'Members, 3' }).click();
 	const info = page.getByRole('dialog', { name: '#general' });
 	await expect(info.getByRole('list', { name: 'Members' }).getByRole('listitem')).toHaveCount(2);
 	await info.getByRole('textbox', { name: 'Search members' }).fill('ann');
@@ -487,8 +528,8 @@ test('a refused unpin puts the message back, and a failed load is not shown as n
 				);
 	});
 	await page.goto('/channels/c1');
-	await page.getByRole('button', { name: 'Pinned Messages' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
+	await page.getByRole('button', { name: 'Pinned messages' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Pinned messages' });
 	await expect(dialog.getByText('Pinned messages could not be loaded.')).toBeVisible();
 	await expect(dialog.getByText('No pinned messages')).toHaveCount(0);
 	await dialog.getByRole('button', { name: 'Retry' }).click();
@@ -523,7 +564,7 @@ test('a read-only channel disables the composer and the message tools', async ({
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeDisabled();
 	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveAttribute(
 		'placeholder',
-		'You do not have permission to send messages in this channel.'
+		'You can read this channel, but not write in it.'
 	);
 	await page.getByTestId('channel-message').hover();
 	await expect(page.getByRole('button', { name: 'Pin', exact: true })).toHaveCount(0);
@@ -534,23 +575,26 @@ test('creates a group channel from the sidebar and opens it; an admin edits one'
 	await mockWorkspaceBackend(page, { role: 'admin', ...enabled });
 	const seen = await mockChannels(page);
 	await page.goto('/');
-	await page.getByRole('button', { name: 'Create Channel' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Create Channel' });
-	await expect(dialog.getByLabel('Channel Type')).toHaveValue('');
-	await dialog.getByLabel('Channel Type').selectOption('group');
-	await dialog.getByLabel('Channel Name').fill('My Team');
-	await expect(dialog.getByLabel('Channel Name')).toHaveValue('my-team');
-	await dialog.getByRole('button', { name: 'Create' }).click();
+	// The sidebar's + opens the dialog on /channels (#967, #971).
+	await page.getByRole('button', { name: 'New channel' }).click();
+	await expect(page).toHaveURL(/\/channels\?new=1$/);
+	const dialog = page.getByRole('dialog', { name: 'New channel' });
+	await expect(dialog.getByRole('radio', { name: 'Channel' })).toBeChecked();
+	await dialog.getByRole('radio', { name: 'Group' }).click();
+	// S6-D2: the name is kept as typed.
+	await dialog.getByRole('textbox', { name: 'Name' }).fill('My Team');
+	await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('My Team');
+	await dialog.getByRole('button', { name: 'Create channel' }).click();
 	await expect(page).toHaveURL(/\/channels\/new1$/);
-	expect(seen.created[0]).toMatchObject({ type: 'group', name: 'my-team', is_private: true, access_grants: [] });
+	expect(seen.created[0]).toMatchObject({ type: 'group', name: 'My Team', is_private: true, access_grants: [] });
 
 	await page.getByRole('list', { name: 'Channels' }).getByRole('link', { name: 'general' }).hover();
 	await page.getByRole('button', { name: 'Edit general' }).click();
-	const edit = page.getByRole('dialog', { name: 'Edit Channel' });
-	await edit.getByLabel('Channel Name').fill('general-chat');
-	await edit.getByRole('button', { name: 'Update' }).click();
+	const edit = page.getByRole('dialog', { name: 'Edit channel' });
+	await edit.getByRole('textbox', { name: 'Name' }).fill('General chat');
+	await edit.getByRole('button', { name: 'Save changes' }).click();
 	await expect.poll(() => seen.channelUpdates.length).toBe(1);
-	expect(seen.channelUpdates[0]).toMatchObject({ name: 'general-chat' });
+	expect(seen.channelUpdates[0]).toMatchObject({ name: 'General chat' });
 });
 
 test('hiding a DM removes it from the sidebar', async ({ page }) => {

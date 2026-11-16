@@ -16,6 +16,13 @@ const { getChannelById, joinChannelById, toast } = vi.hoisted(() => ({
 }));
 
 // A relative image URL would be fetched from the test server; a data: URL is not.
+// Channels show with more than one account (S6-D1).
+const accounts = vi.hoisted(() => ({ single: false, pending: false }));
+vi.mock('@/routes/workspace/workspaceAccess', () => ({ useSingleUser: () => accounts.single }));
+vi.mock('./useChannels', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	useChannelsAccess: () => (accounts.pending ? 'unknown' : accounts.single ? 'hidden' : 'shown')
+}));
 vi.mock('@/lib/constants', async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	WEBUI_API_BASE_URL: 'data:,api'
@@ -118,5 +125,58 @@ describe('a direct message header', () => {
 		open(dm(false));
 		const dot = await screen.findByLabelText('Away');
 		expect(dot.className).toContain('bg-foreground-muted');
+	});
+});
+
+describe('the channel header (LAY-5, #1040)', () => {
+	it('names the channel in its h1, with what it is, and names its buttons', async () => {
+		accounts.single = false;
+		open(channel({ description: 'Notes on regressions', user_count: 3 }));
+		expect(await screen.findByRole('heading', { level: 1, name: 'lobby' })).toBeInTheDocument();
+		expect(screen.getByText('Notes on regressions')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Pinned messages' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Members, 3' })).toBeInTheDocument();
+	});
+
+	it('says what a channel is when it has no description', async () => {
+		open(channel({ is_private: true }));
+		expect(await screen.findByText('A private group.')).toBeInTheDocument();
+	});
+});
+
+describe('a channel that is not there (NAV-3, S6-D1)', () => {
+	it('says so in place when it is gone', async () => {
+		getChannelById.mockRejectedValue("We could not find what you're looking for :/");
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<MemoryRouter initialEntries={['/channels/c1']}>
+						<Routes>
+							<Route path="/channels/:id" element={<ChannelPage />} />
+						</Routes>
+					</MemoryRouter>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		expect(await screen.findByRole('heading', { name: 'This channel no longer exists' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Back to channels' })).toHaveAttribute('href', '/channels');
+	});
+
+	it('is not found while the install has one account', () => {
+		accounts.single = true;
+		open(channel({}));
+		expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+		expect(getChannelById).not.toHaveBeenCalled();
+		accounts.single = false;
+	});
+});
+
+describe('while the account count loads (STA-2)', () => {
+	it('waits, rather than saying the channel is not found', () => {
+		accounts.pending = true;
+		open(channel({}));
+		expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+		expect(getChannelById).not.toHaveBeenCalled();
+		accounts.pending = false;
 	});
 });

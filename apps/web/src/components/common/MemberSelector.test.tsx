@@ -61,8 +61,11 @@ describe('MemberSelector', () => {
 		fireEvent.click(row);
 		expect(onUsers).toHaveBeenLastCalledWith(['u1']);
 		expect(row).toHaveAttribute('aria-checked', 'true');
-		await waitFor(() => expect(screen.getByText('1 users')).toBeInTheDocument());
-		fireEvent.click(screen.getByRole('button', { name: /Ada/ }));
+		await waitFor(() => expect(screen.getByText('1 person')).toBeInTheDocument());
+		// A long name shortens in its chip instead of widening the dialog (#967).
+		const chip = screen.getByRole('button', { name: 'Remove Ada' });
+		expect(chip).toHaveClass('max-w-full', 'shrink');
+		fireEvent.click(chip);
 		expect(onUsers).toHaveBeenLastCalledWith([]);
 	});
 

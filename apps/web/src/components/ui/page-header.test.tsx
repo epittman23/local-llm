@@ -28,4 +28,19 @@ describe('PageHeader (LAY-5)', () => {
 		// Nested inside another page (/ui), it is not that page's top.
 		expect(document.querySelector('[data-page-top]')).toBeNull();
 	});
+
+	it('shows a count as a secondary badge after the title, outside the heading, with its noun for a screen reader', () => {
+		render(<PageHeader title="Automations" description="Runs on a schedule." count={{ value: 1234, noun: 'automations' }} />);
+		const heading = screen.getByRole('heading', { level: 1, name: 'Automations' });
+		const badge = heading.nextElementSibling as HTMLElement;
+		expect(badge).toHaveAttribute('data-slot', 'badge');
+		expect(badge).toHaveAttribute('data-variant', 'secondary');
+		expect(badge).toHaveTextContent('1,234 automations');
+		expect(badge.querySelector('.sr-only')).toHaveTextContent('automations');
+	});
+
+	it('shows no badge without a count', () => {
+		render(<PageHeader title="Automations" description="Runs on a schedule." />);
+		expect(document.querySelector('[data-slot="badge"]')).toBeNull();
+	});
 });

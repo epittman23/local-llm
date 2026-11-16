@@ -353,7 +353,7 @@ class ChannelTable:
                 **{
                     **form_data.model_dump(exclude={'access_grants'}),
                     'type': form_data.type if form_data.type else None,
-                    'name': form_data.name.lower(),
+                    'name': form_data.name,
                     'id': str(uuid.uuid4()),
                     'user_id': user_id,
                     'created_at': int(time.time_ns()),

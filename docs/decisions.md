@@ -7,6 +7,80 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-16** (latest, 3): **Notes, Calendar, Automations, Channels and
+  the Playground: the owner's decisions for the UX review's section 6 (#1116).**
+  - **A note opened is never re-saved (#1132),** fixed in its own pull request
+    (#1134) ahead of this section. A note no editor has saved now loads from
+    its Markdown, not its stored HTML, so imported notes keep their ticks.
+  - **Channels are a multi-account feature (#1035, S6-D1 A),** hidden (the
+    sidebar section, `/channels`, `/channels/<id>`) while the server has one
+    account, by the rule Admin follows (S5-D2). While they are hidden an
+    automation's "Post to" offers no channel; one already posting to a
+    channel still names it, and its runs say the channel can't be opened
+    instead of linking to Not found.
+  - **Channel names are stored as typed (#1109, S6-D2 A):** trimmed, at most
+    60 characters, no longer lower-cased (on create as on rename) or
+    hyphenated. The limit is enforced by the client only, not the server; it
+    applies to new and changed names, and a longer name saved before it keeps
+    saving until it is changed.
+  - **Pinned notes get a sidebar group (#963, S6-D3 A),** above the pinned
+    chats, and lead the Notes list.
+  - **New note starts as "Untitled" with the title selected (#1037, S6-D4
+    B).** A note New note just made is deleted on leaving it, on that visit
+    (for another page or another note), when it is still untitled and empty
+    and was not pinned, shared or its link copied; the server's copy is read
+    again first, and a note saved since (another tab) is kept. A note only
+    opened is never deleted.
+  - **Notes and chat (#1039, S6-D5 A)** is a follow-up issue; "Attach notes"
+    in the chat already covers part of it.
+  - **The Playground's Completions calls a real text completion (#1108, S6-D6
+    B):** a new `POST /openai/completions` forwards to the connection's
+    OpenAI-compatible `/completions`, streamed, with the chat completion's
+    checks; a workspace model's base model and parameters apply, not its
+    system prompt; the request's own parameters win over the workspace
+    model's, as in a chat. A Responses-API or Azure connection is a 400, and
+    so is a model on no OpenAI-compatible connection (Ollama, a function, an
+    arena), which the Completions tab does not list.
+  - **The Playground's Images tab is hidden while image generation is off
+    (#970, S6-D7 A);** a direct link says so, says where to turn it on, and
+    disables Run.
+  - **A Playground reply shows its time to the first token, and its tokens
+    and tokens per second when the provider reports usage (#934, S6-D8 A),**
+    with no change to the request. Tokens per second is shown only when the
+    generation took at least 100 ms: a reply that arrives at once would
+    otherwise show a meaningless rate.
+  - **Calendars can be hidden, and are shown by default (#936, S6-D9 A);**
+    which are hidden is remembered in this browser (localStorage
+    `calendar.hidden`). Each automation's runs on a day are one item with a
+    count.
+  - **The server's virtual calendar of automation runs is named
+    "Automations" (S6-D10 A),** with no stored colour; the client draws it in
+    `--series-6`. Its id is unchanged.
+  - **Below 768 px the calendar opens in Day view (#965, S6-D11 A);** the
+    month shows dots and a count, with the chosen day's agenda below.
+  - **The first day of the week, day names and times come from the browser's
+    locale through Intl (#1107, S6-D12 A),** with no setting.
+  - **An automation run shows a status badge, its time, the whole error with
+    Run again, and Open chat (#1034, S6-D13 C),** and a chat destination may
+    post every run into the chat the last run used ("Same chat every time").
+    It is stored as `data.target.same_chat` in the existing JSON, with no
+    migration. The model is sent only the run's prompt, not the earlier
+    runs; a deleted or archived chat starts a new one. An automation runs
+    once at a time, in this backend process: Run now during a run is a 409,
+    and a scheduled run that comes due during one is skipped, not queued, so
+    two runs never share or both create the same chat.
+  - **A new event starts at the next :00 or :30, for one hour (#1105, S6-D14
+    A).**
+  - **Behaviour changes without a decision.** Note math is a KaTeX decoration
+    over the stored source, not TipTap math nodes, so saved notes render
+    without conversion and nothing is re-saved on open; the mathematics
+    extension was not added (its katex peer stops at 0.18). New web
+    dependencies: `@tiptap/extension-code-block-lowlight` and `lowlight`
+    (note code blocks) and `rrule` (schedules are spelled out and preview
+    their next runs; custom rules are checked in the browser). `/channels` is
+    a new index page. The Playground keeps each tab's work for the session,
+    until sign-out.
+    A page header may show its count as a badge (Automations).
 - **2026-11-16** (latest): **Admin: the owner's decisions for the UX review's section 5
   (#1116), and server settings that are pages.**
   - **The server's settings are pages under Admin (#932, S5-D1 A).**

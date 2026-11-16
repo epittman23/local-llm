@@ -25,3 +25,28 @@ describe('EmojiPicker', () => {
 		expect(onSubmit).toHaveBeenCalledWith('smile');
 	});
 });
+
+describe('an EmojiPicker its owner opens (A11Y-4, #914)', () => {
+	it('opens from its owner, not from its child, and says when it closes', () => {
+		const onOpenChange = vi.fn();
+		const onSubmit = vi.fn();
+		const { rerender } = render(
+			<QueryClientProvider client={new QueryClient()}>
+				<EmojiPicker open={false} onOpenChange={onOpenChange} onSubmit={onSubmit}>
+					<span>anchor</span>
+				</EmojiPicker>
+			</QueryClientProvider>
+		);
+		expect(screen.queryByRole('option', { name: 'smile' })).toBeNull();
+		rerender(
+			<QueryClientProvider client={new QueryClient()}>
+				<EmojiPicker open onOpenChange={onOpenChange} onSubmit={onSubmit}>
+					<span>anchor</span>
+				</EmojiPicker>
+			</QueryClientProvider>
+		);
+		fireEvent.click(screen.getByRole('option', { name: 'smile' }));
+		expect(onSubmit).toHaveBeenCalledWith('smile');
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+});

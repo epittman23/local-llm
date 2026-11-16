@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useStreamRunner } from './useStreamRunner';
+import { type RunResult, speed, useStreamRunner } from './useStreamRunner';
 
 // #207: the request's AbortController only reached the hook once the
 // response's headers had arrived, so until then Stop and leaving the page
@@ -33,7 +33,7 @@ describe('useStreamRunner (#207)', () => {
 	it('Stop aborts a request still waiting for its response, and says nothing', async () => {
 		const signals = pendingFetch();
 		const { result } = renderHook(() => useStreamRunner());
-		let done: Promise<void> | undefined;
+		let done: Promise<unknown> | undefined;
 		act(() => {
 			done = result.current.run({ model: 'm' }, vi.fn());
 		});
@@ -63,23 +63,56 @@ describe('useStreamRunner (#207)', () => {
 		expect(signals[0]?.aborted).toBe(true);
 	});
 
-	it('streams the reply, and a failed request still shows its error', async () => {
+	it("streams the reply, and returns a failed request's error for the page to show in place (#968)", async () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(async () => new Response(event('Hel') + event('lo')))
 		);
 		const { result } = renderHook(() => useStreamRunner());
 		const text: string[] = [];
-		await act(() => result.current.run({ model: 'm' }, (t) => text.push(t)));
+		let outcome: RunResult | undefined;
+		await act(async () => {
+			outcome = await result.current.run({ model: 'm' }, (t) => text.push(t));
+		});
 		expect(text.join('')).toBe('Hello');
+		expect(outcome?.error).toBeNull();
+		expect(outcome?.stats.ttftMs).toBeGreaterThanOrEqual(0);
 
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(async () => new Response(JSON.stringify({ detail: 'Model not found' }), { status: 404 }))
 		);
-		await act(() => result.current.run({ model: 'nope' }, vi.fn()));
-		expect(toast.error).toHaveBeenCalledWith('Model not found');
+		await act(async () => {
+			outcome = await result.current.run({ model: 'nope' }, vi.fn());
+		});
+		expect(outcome).toEqual({ error: 'Model not found', stats: {} });
+		expect(toast.error).not.toHaveBeenCalled();
 		expect(result.current.running).toBe(false);
+	});
+
+	it('reports the tokens a provider sends in its usage chunk (D8)', async () => {
+		const usage = `data: ${JSON.stringify({ choices: [], usage: { completion_tokens: 12 } })}\n`;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(event('Hi') + usage))
+		);
+		const { result } = renderHook(() => useStreamRunner());
+		let outcome: RunResult | undefined;
+		await act(async () => {
+			outcome = await result.current.run({ model: 'm' }, vi.fn());
+		});
+		expect(outcome?.stats.tokens).toBe(12);
+	});
+
+	it('sends through the request it is given: a text completion for the Completions tab', async () => {
+		const send = vi.fn(
+			async (_t: string, _b: object, c: AbortController) => [new Response(event('x')), c] as [Response, AbortController]
+		);
+		const { result } = renderHook(() => useStreamRunner(send));
+		await act(async () => {
+			await result.current.run({ model: 'm', prompt: 'p' }, vi.fn());
+		});
+		expect(send).toHaveBeenCalledWith('', { model: 'm', prompt: 'p' }, expect.any(AbortController));
 	});
 
 	it('a new run stops one still waiting, and Stop then reaches the new one', async () => {
@@ -106,7 +139,7 @@ describe('useStreamRunner (#207)', () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const signals = pendingFetch();
 		const { result } = renderHook(() => useStreamRunner());
-		let done: Promise<void> | undefined;
+		let done: Promise<unknown> | undefined;
 		act(() => {
 			done = result.current.run({ model: 'm' }, vi.fn());
 		});
@@ -117,5 +150,18 @@ describe('useStreamRunner (#207)', () => {
 		});
 		expect(error).not.toHaveBeenCalled();
 		error.mockRestore();
+	});
+});
+
+describe('speed (D8)', () => {
+	it('is nothing until a first token arrived', () => {
+		expect(speed(0, undefined, 500)).toEqual({});
+	});
+	it('is the time to the first token, then tokens over the time after it when usage was reported', () => {
+		expect(speed(100, 600, 600)).toEqual({ ttftMs: 500 });
+		expect(speed(100, 600, 2600, { completion_tokens: 50 })).toEqual({ ttftMs: 500, tokens: 50, tokensPerSecond: 25 });
+		// A reply that came in one piece, or nearly, has a count but no rate.
+		expect(speed(100, 600, 600, { completion_tokens: 3 })).toEqual({ ttftMs: 500, tokens: 3 });
+		expect(speed(100, 600, 690, { completion_tokens: 3 })).toEqual({ ttftMs: 500, tokens: 3 });
 	});
 });

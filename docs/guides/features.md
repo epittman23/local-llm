@@ -128,10 +128,10 @@ permission.
 
 | Page | What it does |
 |---|---|
-| `/notes` | A TipTap editor with autosave; a chat about a note sees the note |
-| `/calendar` | Month, week and day views; event alerts come from the backend's scheduler |
-| `/automations` | Prompts run on a schedule (an RRULE), with each run listed |
-| `/channels/<id>` | Live messages, threads, reactions, pins and members |
+| `/notes` | A TipTap editor with autosave and a save status; math typeset with KaTeX and code highlighted, the Markdown kept as written; pinned notes lead the list and the sidebar; a new note left empty is dropped; a chat about a note sees the note |
+| `/calendar` | Month, week and day views, events placed by their times; automation runs on the "Automations" calendar, one item per automation a day; event alerts come from the backend's scheduler |
+| `/automations` | Prompts run on a schedule (an RRULE, spelled out, with its next runs), with each run listed, one at a time; a run can post into the same chat every time |
+| `/channels`, `/channels/<id>` | Live messages, threads, reactions, pins and members; shown only while the server has more than one account |
 
 The assistant can also reach these through its builtin tools (search
 notes, create an automation, look up calendar events, and so on).
@@ -156,7 +156,7 @@ images, audio, subagents and more; Analytics is its own Admin page,
 | Users | Users and groups, their permissions, CSV import |
 | Evaluations | The leaderboard built from chat ratings, and the feedback table with export |
 | Functions | Filters and pipes that run inside the chat pipeline; plugins on only |
-| Playground | Chat, completions and image generation against any model, outside a saved chat |
+| Playground | Chat, text completion (`/openai/completions`, models on an OpenAI-compatible connection only) and image generation against any model, outside a saved chat; Images shows only while image generation is on |
 
 ### Benchmarks (`/benchmarks`)
 

@@ -1501,8 +1501,13 @@ def convert_responses_result(response: dict) -> dict:
     }
 
 
-async def _apply_model_info(request: Request, payload: dict, metadata, user, bypass_filter: bool) -> tuple[dict, str]:
-    """Apply a workspace model's base model, params and system prompt, and check access; returns (payload, model id)."""
+async def _apply_model_info(
+    request: Request, payload: dict, metadata, user, bypass_filter: bool, *, system_prompt: bool = True
+) -> tuple[dict, str]:
+    """Apply a workspace model's base model, params and system prompt, and check access; returns (payload, model id).
+
+    `system_prompt=False` leaves the system prompt out, for a text completion, which has no messages to put it in.
+    """
     model_id = payload.get('model')
     model_info = await Models.get_model_by_id(model_id)
     if not model_info:
@@ -1519,7 +1524,7 @@ async def _apply_model_info(request: Request, payload: dict, metadata, user, byp
     if params:
         system = params.pop('system', None)
         payload = apply_model_params_to_body_openai(params, payload)
-        if not getattr(request.state, 'bypass_system_prompt', False):
+        if system_prompt and not getattr(request.state, 'bypass_system_prompt', False):
             payload = await apply_system_prompt_to_body(system, payload, metadata, user)
 
     await check_model_access(user, model_info, bypass_filter)
@@ -1553,6 +1558,11 @@ def _adapt_payload_for_provider(payload: dict, model: dict, url: str, user) -> d
     if 'max_tokens' in payload and 'max_completion_tokens' in payload:
         del payload['max_tokens']
 
+    return _decode_logit_bias(payload)
+
+
+def _decode_logit_bias(payload: dict) -> dict:
+    """A request's logit_bias as the provider takes it: an object of token ids to biases (400 if malformed)."""
     if 'logit_bias' in payload and payload['logit_bias']:
         try:
             logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
@@ -1726,6 +1736,121 @@ async def generate_chat_completion(
             return await _non_streaming_result(r, is_responses, report_failure)
         # An error status with an SSE content type is read and returned as an
         # error, rather than streamed back where it would be hidden from logs.
+        if r.status >= 400:
+            return await _sse_error_response(r, report_failure)
+        streaming = True
+        return StreamingResponse(stream_wrapper(r), status_code=r.status, headers=_clean_proxy_headers(r.headers))
+    except ClientDisconnected:
+        log.info('The client left before %s answered; its request was cancelled', url)
+        raise HTTPException(status_code=499, detail='The client disconnected before the model answered')
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=_upstream_error_status(r),
+            detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR,
+        )
+    finally:
+        if not streaming:
+            await cleanup_response(r)
+
+
+@router.post('/completions')
+async def generate_completion(
+    request: Request,
+    form_data: dict,
+    user=Depends(get_verified_user),
+):
+    """A text completion: the model continues `prompt` (the connection's OpenAI-compatible `/completions`).
+
+    The Playground's Completions tab uses it. Access is checked as for a chat
+    completion. A workspace model's base model and parameters apply, but not
+    its system prompt, which needs messages. The request's own parameters come
+    under `params` and are applied first, so they win over the workspace
+    model's, as a chat's do (#208). Only a model on an OpenAI-compatible
+    connection can answer: any other model the app knows is a 400.
+    """
+    if not await Config.get('openai.enable'):
+        raise HTTPException(status_code=503, detail='OpenAI API is disabled')
+    if not isinstance(form_data.get('prompt'), str):
+        raise HTTPException(status_code=400, detail='A text completion needs a prompt: the text to continue.')
+
+    bypass_filter = getattr(request.state, 'bypass_filter', False) or BYPASS_MODEL_ACCESS_CONTROL
+    payload = {**form_data}
+    payload.pop('metadata', None)
+    params = payload.pop('params', None)
+    # Both steps only fill what is unset, so the request's own parameters go first.
+    if isinstance(params, dict) and params:
+        payload = apply_model_params_to_body_openai(dict(params), payload)
+
+    payload, model_id = await _apply_model_info(request, payload, None, user, bypass_filter, system_prompt=False)
+    try:
+        model = await _find_openai_model(request, model_id, user)
+    except HTTPException as e:
+        # An Ollama, function or arena model: known to the app, but with no /completions to call.
+        if e.status_code == 404 and model_id in (getattr(request.app.state, 'MODELS', None) or {}):
+            raise HTTPException(
+                status_code=400,
+                detail="This model can't continue text: it isn't on an OpenAI-compatible connection. "
+                "Choose a model from one, such as llama-server's.",
+            ) from e
+        raise
+
+    url, key, api_config = await get_openai_connection(model['urlIdx'])
+    if api_config.get('api_type') == 'responses' or api_config.get('azure') or api_config.get('provider') == 'azure':
+        raise HTTPException(
+            status_code=400,
+            detail="This model's connection doesn't offer text completion: "
+            "it needs an OpenAI-compatible /completions endpoint, such as llama-server's.",
+        )
+    payload['model'] = strip_provider_model_prefix(payload['model'], api_config.get('prefix_id', None))
+    # What _adapt_payload_for_provider does for a chat, less the reasoning-model
+    # changes, which need messages: a pipeline is told who is asking, and the
+    # legacy /completions takes max_tokens, never max_completion_tokens.
+    if model.get('pipeline'):
+        payload['user'] = {'name': user.name, 'id': user.id, 'email': user.email, 'role': user.role}
+    if 'max_completion_tokens' in payload:
+        payload['max_tokens'] = payload.pop('max_completion_tokens')
+    payload = _decode_logit_bias(payload)
+
+    headers, cookies = await get_headers_and_cookies(request, url, key, api_config, None, user=user)
+    request_url = f'{url}/completions'
+    requested_model = payload.get('model')
+    is_streaming_request = bool(payload.get('stream', False))
+    if not is_streaming_request:
+        payload.pop('stream_options', None)
+    body = JSONCodec.dumps(payload)
+
+    async def report_failure(upstream_error):
+        await publish_model_provider_request_failed(
+            request,
+            actor=user,
+            provider='openai-compatible',
+            base_url=url,
+            api_key=key,
+            status=r.status if r is not None else 500,
+            requested_model=requested_model,
+            upstream_error=upstream_error,
+        )
+
+    r = None
+    streaming = False
+    watched = watched_request(request, generate_completion)
+    try:
+        session = await get_session()
+        r = await unless_client_leaves(
+            watched,
+            session.request(
+                method='POST',
+                url=request_url,
+                data=body,
+                headers=headers,
+                cookies=cookies,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                timeout=get_client_timeout(stream=is_streaming_request),
+            ),
+        )
+        if 'text/event-stream' not in r.headers.get('Content-Type', ''):
+            return await _non_streaming_result(r, False, report_failure)
         if r.status >= 400:
             return await _sse_error_response(r, report_failure)
         streaming = True

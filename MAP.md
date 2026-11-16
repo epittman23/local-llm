@@ -466,8 +466,15 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   unit test. Phase 9's surfaces sit beside them, each gated by
   `common/FeatureGate` on the rules in `lib/access/features.ts`: `notes/`
   (list, TipTap editor with autosave; the editor is
-  `components/common/RichTextEditor`), `calendar/`, `automations/`,
-  `playground/` and `channels/`, the first Socket.IO consumer: the page,
+  `components/common/RichTextEditor`; pinned notes in the sidebar
+  (`notes/SidebarPinnedNotes`); math is a decoration
+  (`lib/editor/mathPreview`) and code blocks are
+  `components/common/RichTextCodeBlock` (lowlight)), `calendar/`
+  (`calendarModel.ts`'s `layoutDay` places the time grid), `automations/`,
+  `playground/` (`playgroundStore.ts`: each tab's work, Chat, Completions and
+  the Images prompt, kept in sessionStorage) and `channels/`, the first
+  Socket.IO consumer: `ChannelsPage` (the `/channels` index: the list, an
+  empty state, the new-channel dialog at `?new=1`), the page,
   `MessageList`/`ChannelMessageView`, `MessageComposer` (mentions,
   attachments), `ThreadPanel`, `ChannelDialogs` (pinned, members, webhooks,
   create/edit), `SidebarChannels`, `useMessageFeed` (one feed for a channel

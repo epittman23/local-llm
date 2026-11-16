@@ -75,7 +75,7 @@ test('a 404 sits inside the app shell, centred, with one h1 and a way on (#1069)
 
 test('the first Tab press shows the skip link, and Enter moves focus to the page (A11Y-3)', async ({ page }) => {
 	await page.goto(routePaths.notes);
-	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Notes', exact: true })).toBeVisible();
 	await page.keyboard.press('Tab');
 	const skip = page.getByRole('link', { name: 'Skip to content' });
 	await expect(skip).toBeFocused();

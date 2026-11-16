@@ -49,6 +49,7 @@ import { useUIStore } from '@/lib/stores/uiStore';
 import { isThemeId, THEMES } from '@/lib/theme';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
+import { SidebarPinnedNotes } from '@/routes/notes/SidebarPinnedNotes';
 import { routePaths } from '@/routes/routePaths';
 
 /**
@@ -298,6 +299,7 @@ export function SidebarContent({
 
 			<div data-slot="sidebar-list" className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-2">
 				<SidebarChannels onNavigate={onNavigate} />
+				<SidebarPinnedNotes onNavigate={onNavigate} />
 				<ChatSidebar onNavigate={onNavigate} />
 			</div>
 
