@@ -324,9 +324,7 @@ test.describe('admin groups', () => {
 		await expect(page.getByRole('link', { name: /^Groups/ })).toContainText('1');
 	});
 
-	test("?id= opens that group's editor, and Import/Export appear only once the parent switch is on", async ({
-		page
-	}) => {
+	test("?id= opens that group's editor, and Import/Export appear only once the parent is ticked", async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { groups: [group(1), group(2)] });
 		await page.goto('/admin/users/groups?id=group_2');
@@ -336,14 +334,14 @@ test.describe('admin groups', () => {
 
 		await dialog.getByRole('tab', { name: 'Permissions' }).click();
 		await dialog.getByRole('button', { name: /^Workspace/ }).click();
-		await expect(dialog.getByRole('switch', { name: 'Import models' })).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Models', exact: true }).click();
-		await expect(dialog.getByRole('switch', { name: 'Import models' })).toBeVisible();
+		await expect(dialog.getByRole('checkbox', { name: 'Import models' })).toHaveCount(0);
+		await dialog.getByRole('checkbox', { name: 'Models', exact: true }).click();
+		await expect(dialog.getByRole('checkbox', { name: 'Import models' })).toBeVisible();
 		// Sharing with everyone needs sharing first; the filter finds both.
 		await dialog.getByLabel('Filter permissions').fill('notes');
-		await expect(dialog.getByRole('switch', { name: 'Share notes with everyone' })).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Share notes', exact: true }).click();
-		await expect(dialog.getByRole('switch', { name: 'Share notes with everyone' })).toBeVisible();
+		await expect(dialog.getByRole('checkbox', { name: 'Share notes with everyone' })).toHaveCount(0);
+		await dialog.getByRole('checkbox', { name: 'Share notes', exact: true }).click();
+		await expect(dialog.getByRole('checkbox', { name: 'Share notes with everyone' })).toBeVisible();
 	});
 
 	test('saving a group sends name, description and the full permission set', async ({ page }) => {
@@ -355,7 +353,7 @@ test.describe('admin groups', () => {
 		await dialog.getByRole('textbox', { name: 'Name' }).fill('Renamed');
 		await dialog.getByRole('tab', { name: 'Permissions' }).click();
 		await dialog.getByLabel('Filter permissions').fill('edit messages');
-		await dialog.getByRole('switch', { name: 'Edit messages' }).click();
+		await dialog.getByRole('checkbox', { name: 'Edit messages' }).click();
 		await expect(dialog.getByRole('button', { name: /^Chat/ })).toContainText('1 changed');
 		await dialog.getByRole('button', { name: 'Save group' }).click();
 		await expect
@@ -377,7 +375,7 @@ test.describe('admin groups', () => {
 		await dialog.getByLabel('Filter permissions').fill('edit messages');
 		const hint = dialog.getByText("On for every account by default, so this group's members keep it.");
 		await expect(hint).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Edit messages' }).click();
+		await dialog.getByRole('checkbox', { name: 'Edit messages' }).click();
 		await expect(hint).toHaveCount(1);
 	});
 
@@ -391,7 +389,7 @@ test.describe('admin groups', () => {
 		await dialog.getByRole('textbox', { name: 'Name' }).fill('Fresh');
 		await dialog.getByRole('tab', { name: 'Permissions' }).click();
 		await dialog.getByRole('button', { name: /^Workspace/ }).click();
-		await expect(dialog.getByRole('switch', { name: 'Models', exact: true })).toBeChecked();
+		await expect(dialog.getByRole('checkbox', { name: 'Models', exact: true })).toBeChecked();
 		await dialog.getByRole('button', { name: 'Create group' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/groups/create')?.body)
@@ -410,7 +408,7 @@ test.describe('admin groups', () => {
 		await expect(dialog.getByRole('heading', { name: 'Default permissions' })).toBeVisible();
 		await expect(dialog.getByRole('tablist')).toHaveCount(0);
 		await dialog.getByRole('button', { name: /^Workspace/ }).click();
-		await dialog.getByRole('switch', { name: 'Knowledge', exact: true }).click();
+		await dialog.getByRole('checkbox', { name: 'Knowledge', exact: true }).click();
 		await dialog.getByRole('button', { name: 'Save permissions' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/users/default/permissions')?.body)

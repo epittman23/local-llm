@@ -1,13 +1,12 @@
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { useId, useState } from 'react';
 import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
-import { SettingRow } from '@/components/settings/controls';
+import { Disclosure } from '@/components/settings/formFields';
 import { Badge } from '@/components/ui/badge';
-import { RowButton } from '@/components/ui/row-button';
-import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { type Permissions as PermissionsShape, setPermission } from '@/lib/access/permissions';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { cn } from '@/lib/utils';
 import {
 	changedRows,
 	layoutRows,
@@ -20,13 +19,15 @@ import {
 
 /**
  * Ports admin/Users/Groups/Permissions.svelte. The rows themselves live in
- * permissionRows.ts; this only lays them out. A switch that is off but on in
- * the all-users defaults says so underneath, because group permissions only
- * ever add to the defaults.
+ * permissionRows.ts; this only lays them out. Each is a checkbox with its
+ * label and a one-line description, since the form is saved (FRM-5). One that
+ * is off but on in the all-users defaults says so underneath, because group
+ * permissions only ever add to the defaults.
  *
- * #1099: the six groups fold, each heading saying how many of its switches
- * differ from `baseline` (what Reset restores), and a filter box finds a
- * switch by its label or description, opening every group that holds one.
+ * #1099: the six groups fold (the shared disclosure row, FRM-6), each heading
+ * saying how many of its permissions differ from `baseline` (what Reset
+ * restores), and a filter box finds one by its label or description, opening
+ * every group that holds one.
  */
 export function Permissions({
 	permissions,
@@ -61,34 +62,43 @@ export function Permissions({
 			return next;
 		});
 
-	const renderRow = (row: PermissionRow) => (
-		<>
-			<SettingRow
-				label={row.label}
-				labelClassName={row.nested ? 'font-normal' : undefined}
-				description={row.description}
-			>
-				{(labelId) => (
-					<Switch
-						aria-labelledby={labelId}
+	const renderRow = (row: PermissionRow) => {
+		const boxId = `${id}-${row.group}-${row.key}`;
+		return (
+			<>
+				<div className="flex min-w-0 items-start gap-2.5 py-1.5">
+					<Checkbox
+						id={boxId}
+						className="mt-0.5"
+						aria-describedby={row.description ? `${boxId}-description` : undefined}
 						checked={Boolean(permissions[row.group][row.key])}
-						onCheckedChange={(checked) => onChange(setPermission(permissions, row.group, row.key, checked))}
+						onCheckedChange={(checked) => onChange(setPermission(permissions, row.group, row.key, checked === true))}
 					/>
+					<div className="min-w-0 flex-1">
+						<Label htmlFor={boxId} className="text-body text-foreground-strong font-normal">
+							{row.label}
+						</Label>
+						{row.description && (
+							<p id={`${boxId}-description`} className="text-foreground-muted mt-0.5 text-dense">
+								{row.description}
+							</p>
+						)}
+					</div>
+				</div>
+				{row.warning && (
+					<p className="text-warning text-dense flex items-start gap-1.5 ps-6.5 pb-1">
+						<TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+						<span>{row.warning}</span>
+					</p>
 				)}
-			</SettingRow>
-			{row.warning && (
-				<p className="text-warning text-dense flex items-start gap-1.5 pb-1">
-					<TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-					<span>{row.warning}</span>
-				</p>
-			)}
-			{showsDefaultHint(row, permissions, defaultPermissions) && (
-				<p className="text-foreground-muted text-dense pb-1">
-					On for every account by default, so this group's members keep it.
-				</p>
-			)}
-		</>
-	);
+				{showsDefaultHint(row, permissions, defaultPermissions) && (
+					<p className="text-foreground-muted text-dense ps-6.5 pb-1">
+						On for every account by default, so this group's members keep it.
+					</p>
+				)}
+			</>
+		);
+	};
 
 	const sections = permissionSections
 		.map((section) => {
@@ -111,36 +121,27 @@ export function Permissions({
 				<div className="flex flex-col">
 					{sections.map(({ section, rows, visible, changed }) => {
 						const expanded = open.has(section.title);
-						const panelId = `${id}-${section.title.replace(/\W+/g, '-')}`;
 						return (
-							<section key={section.title} aria-label={section.title} className="border-b last:border-b-0">
-								<h3>
-									<RowButton
-										className="flex items-center gap-2 px-2 py-2.5"
-										aria-expanded={expanded}
-										aria-controls={panelId}
-										onClick={() => toggle(section.title)}
-									>
-										<ChevronRight
-											aria-hidden
-											className={cn('size-4 shrink-0 transition-transform', expanded && 'rotate-90')}
-										/>
-										<span className="text-foreground-strong font-strong min-w-0 flex-1 truncate">{section.title}</span>
-										<span className="text-foreground-muted text-dense shrink-0">
-											{filtering ? `${rows.length} of ${visible.length}` : visible.length}
-										</span>
-										{changed > 0 && (
-											<Badge variant="secondary" className="shrink-0">
-												{changed} changed
-											</Badge>
-										)}
-									</RowButton>
-								</h3>
-								{expanded && (
-									<div id={panelId} className="flex flex-col gap-1 px-2 pb-3">
+							<section key={section.title} aria-label={section.title} className="border-b py-1 last:border-b-0">
+								<Disclosure
+									level={3}
+									title={section.title}
+									meta={
+										<>
+											<span className="text-foreground-muted text-dense">
+												{filtering ? `${rows.length} of ${visible.length}` : visible.length}
+											</span>
+											{changed > 0 && <Badge variant="secondary">{changed} changed</Badge>}
+										</>
+									}
+									open={expanded}
+									onOpenChange={() => toggle(section.title)}
+									className="mb-2"
+								>
+									<div className="flex flex-col">
 										{layoutRows(rows).map((block) =>
 											Array.isArray(block) ? (
-												<div key={block[0].key} className="ms-3 flex flex-col gap-1 border-s ps-3">
+												<div key={block[0].key} className="ms-2 flex flex-col border-s ps-4">
 													{block.map((row) => (
 														<div key={row.key}>{renderRow(row)}</div>
 													))}
@@ -150,7 +151,7 @@ export function Permissions({
 											)
 										)}
 									</div>
-								)}
+								</Disclosure>
 							</section>
 						);
 					})}
