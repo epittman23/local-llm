@@ -1656,7 +1656,11 @@ test.describe('settings: Audio', () => {
 		const before = updates(calls).length;
 		await tts.getByLabel('Additional Parameters').fill('[1,2]');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format for Parameters')).toBeVisible();
+		// FRM-2: said under the field, which gets focus, not in a toast.
+		const params = tts.getByLabel('Additional Parameters');
+		await expect(params).toHaveAttribute('aria-invalid', 'true');
+		await expect(params).toHaveAccessibleDescription('Invalid JSON format for Parameters');
+		await expect(params).toBeFocused();
 		expect(updates(calls)).toHaveLength(before);
 		await tts.getByLabel('Additional Parameters').fill('{"speed":1.25}');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -1858,7 +1862,10 @@ test.describe('settings: Images', () => {
 		await page.goto('/?settings=admin:images');
 		await create(page).getByLabel('Additional Parameters').fill('{oops');
 		await create(page).getByRole('button', { name: 'Verify connection' }).click();
-		await expect(page.getByText('Invalid JSON format for AUTOMATIC1111 Additional Parameters.')).toBeVisible();
+		await expect(create(page).getByLabel('Additional Parameters')).toHaveAccessibleDescription(
+			'Invalid JSON format for AUTOMATIC1111 Additional Parameters.'
+		);
+		await expect(create(page).getByLabel('Additional Parameters')).toBeFocused();
 		expect(calls.some((c) => c.path === '/config/url/verify')).toBe(false);
 		expect(updates(calls)).toHaveLength(0);
 	});
@@ -1900,7 +1907,10 @@ test.describe('settings: Images', () => {
 			.locator('input[type=file]')
 			.setInputFiles({ name: 'w.json', mimeType: 'application/json', buffer: Buffer.from('[1,2]') });
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format for ComfyUI Workflow.')).toBeVisible();
+		// Under the workflow's row, with focus on its Edit button (FRM-2).
+		const edit = create(page).getByRole('button', { name: 'Edit workflow.json content' });
+		await expect(edit).toHaveAccessibleDescription('Invalid JSON format for ComfyUI Workflow.');
+		await expect(edit).toBeFocused();
 		expect(updates(calls)).toHaveLength(0);
 	});
 
@@ -2089,7 +2099,11 @@ test.describe('settings: Documents', () => {
 		await m.getByLabel('Content Extraction Engine').selectOption('tika');
 		await expect(m.getByLabel('Tika Server Version')).toHaveValue('3');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Tika Server URL required.')).toBeVisible();
+		// FRM-2: said under the URL, which gets focus, not in a toast.
+		const url = m.getByLabel('Tika Server URL');
+		await expect(url).toHaveAttribute('aria-invalid', 'true');
+		await expect(url).toHaveAccessibleDescription('Tika Server URL required.');
+		await expect(url).toBeFocused();
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
 		await m.getByLabel('Tika Server URL').fill('http://tika:9998');
 		await m.getByRole('button', { name: 'Save' }).click();
@@ -2109,7 +2123,10 @@ test.describe('settings: Documents', () => {
 		await m.getByLabel('Document Loader URL').fill('http://loader');
 		await m.getByLabel('Headers').fill('["x"]');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Headers must be a valid JSON object')).toBeVisible();
+		await expect(m.getByLabel('Headers')).toHaveAccessibleDescription(
+			'External Document Loader Headers must be a valid JSON object'
+		);
+		await expect(m.getByLabel('Headers')).toBeFocused();
 		await m.getByLabel('Headers').fill('{"X-Id":"{{FILE_ID}}"}');
 		await expect(m.getByText('Available variables')).toHaveCount(0);
 		await m.getByRole('button', { name: 'Header variables' }).click();
@@ -2189,7 +2206,10 @@ test.describe('settings: Documents', () => {
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Embedding').getByLabel('Embedding Model', { exact: true }).fill('/models/hf/all-MiniLM');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText(/Model filesystem path detected/)).toBeVisible();
+		const model = region(page, 'Embedding').getByLabel('Embedding Model', { exact: true });
+		await expect(model).toHaveAttribute('aria-invalid', 'true');
+		await expect(model).toHaveAccessibleDescription(/Model filesystem path detected/);
+		await expect(model).toBeFocused();
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
 	});
 
@@ -2266,9 +2286,10 @@ test.describe('settings: Documents', () => {
 		await expect(m.getByLabel('Chunk Size')).toHaveValue('1000');
 		await m.getByLabel('Chunk Overlap').fill('2000');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(
-			page.getByText('Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).')
-		).toBeVisible();
+		await expect(m.getByLabel('Chunk Overlap')).toHaveAccessibleDescription(
+			'Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).'
+		);
+		await expect(m.getByLabel('Chunk Overlap')).toBeFocused();
 		expect(sent(calls, '/retrieval/embedding/update')).toHaveLength(0);
 		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
 		await m.getByLabel('Chunk Overlap').fill('200');
@@ -2516,7 +2537,9 @@ test.describe('settings: Web Search', () => {
 		await s.getByLabel('Web Search Engine').selectOption('linkup');
 		await s.getByLabel('Parameters').fill('{depth');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format in Linkup Parameters')).toBeVisible();
+		await expect(s.getByLabel('Parameters')).toHaveAttribute('aria-invalid', 'true');
+		await expect(s.getByLabel('Parameters')).toHaveAccessibleDescription('Invalid JSON format in Linkup Parameters');
+		await expect(s.getByLabel('Parameters')).toBeFocused();
 		expect(update(calls)).toBeUndefined();
 		await s.getByLabel('Parameters').fill('{"depth":"deep"}');
 		await modal(page).getByRole('button', { name: 'Save' }).click();

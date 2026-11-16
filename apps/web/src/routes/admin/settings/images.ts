@@ -81,23 +81,27 @@ const blank = (v: unknown) => String(v ?? '').trim() === '';
  * it on, and an unrelated edit (say, to Image Edit) should not be refused
  * because a generation engine nobody uses has no key.
  */
-export function missingGenerationSetting(config: Rec): string | null {
+export function missingGenerationSetting(config: Rec): { field: string; error: string } | null {
 	if (!config.ENABLE_IMAGE_GENERATION) return null;
+	const needs = (field: string, error: string) => (blank(config[field]) ? { field, error } : null);
 	switch (config.IMAGE_GENERATION_ENGINE) {
 		case 'automatic1111':
-			return blank(config.AUTOMATIC1111_BASE_URL) ? 'AUTOMATIC1111 Base URL is required.' : null;
+			return needs('AUTOMATIC1111_BASE_URL', 'AUTOMATIC1111 Base URL is required.');
 		case 'comfyui':
-			return blank(config.COMFYUI_BASE_URL) ? 'ComfyUI Base URL is required.' : null;
+			return needs('COMFYUI_BASE_URL', 'ComfyUI Base URL is required.');
 		case 'openai':
-			return blank(config.IMAGES_OPENAI_API_KEY) ? 'OpenAI API Key is required.' : null;
+			return needs('IMAGES_OPENAI_API_KEY', 'OpenAI API Key is required.');
 		case 'gemini':
-			return blank(config.IMAGES_GEMINI_API_KEY) ? 'Gemini API Key is required.' : null;
+			return needs('IMAGES_GEMINI_API_KEY', 'Gemini API Key is required.');
 		default:
 			return null;
 	}
 }
 
-export type Prepared = { ok: true; payload: Rec } | { ok: false; error: string; disableGeneration?: boolean };
+/** The payload, or what is wrong and the key of the field it is about (FRM-2). */
+export type Prepared =
+	| { ok: true; payload: Rec }
+	| { ok: false; field: string; error: string; disableGeneration?: boolean };
 
 /**
  * The body of `POST /images/config/update`, or the reason it cannot be sent.
@@ -109,22 +113,36 @@ export function prepareImagesConfig(config: Rec, nodes: NodeRow[], editNodes: No
 
 	if (config.COMFYUI_WORKFLOW) {
 		if (!isJsonObject(config.COMFYUI_WORKFLOW))
-			return { ok: false, error: 'Invalid JSON format for ComfyUI Workflow.' };
+			return { ok: false, field: 'COMFYUI_WORKFLOW', error: 'Invalid JSON format for ComfyUI Workflow.' };
 		payload.COMFYUI_WORKFLOW_NODES = fromNodeRows(nodes);
 	}
 	if (config.IMAGES_EDIT_COMFYUI_WORKFLOW) {
 		if (!isJsonObject(config.IMAGES_EDIT_COMFYUI_WORKFLOW))
-			return { ok: false, error: 'Invalid JSON format for ComfyUI Edit Workflow.' };
+			return {
+				ok: false,
+				field: 'IMAGES_EDIT_COMFYUI_WORKFLOW',
+				error: 'Invalid JSON format for ComfyUI Edit Workflow.'
+			};
 		payload.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES = fromNodeRows(editNodes);
 	}
 
 	const missing = missingGenerationSetting(config);
-	if (missing) return { ok: false, error: missing, disableGeneration: true };
+	if (missing) return { ok: false, ...missing, disableGeneration: true };
 
 	const automatic1111 = parseParams(config.AUTOMATIC1111_PARAMS);
-	if (!automatic1111) return { ok: false, error: 'Invalid JSON format for AUTOMATIC1111 Additional Parameters.' };
+	if (!automatic1111)
+		return {
+			ok: false,
+			field: 'AUTOMATIC1111_PARAMS',
+			error: 'Invalid JSON format for AUTOMATIC1111 Additional Parameters.'
+		};
 	const openai = parseParams(config.IMAGES_OPENAI_API_PARAMS);
-	if (!openai) return { ok: false, error: 'Invalid JSON format for OpenAI Additional Parameters.' };
+	if (!openai)
+		return {
+			ok: false,
+			field: 'IMAGES_OPENAI_API_PARAMS',
+			error: 'Invalid JSON format for OpenAI Additional Parameters.'
+		};
 	payload.AUTOMATIC1111_PARAMS = automatic1111;
 	payload.IMAGES_OPENAI_API_PARAMS = openai;
 	// A cleared Steps box is no step count (the engine's default), not '' (#237).

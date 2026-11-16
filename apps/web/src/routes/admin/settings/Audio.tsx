@@ -11,7 +11,8 @@ import {
 	SettingSwitch,
 	SettingsForm,
 	SettingsSection,
-	SettingTextarea
+	SettingTextarea,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { getAudioConfig, getModels, getVoices, updateAudioConfig } from '@/lib/apis/audio';
@@ -37,6 +38,9 @@ type Section = 'tts' | 'stt';
 const helpClass = 'text-foreground-muted [&_a]:text-foreground mt-1 text-caption [&_a]:hover:underline';
 const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
+/** FRM-2: said under Additional Parameters (`tts-params`) when they are not a JSON object. */
+const PARAMS_PROBLEM = { 'tts-params': 'Invalid JSON format for Parameters' };
+const NO_PROBLEMS = {};
 
 const Help = ({ href, children }: { href: string; children: ReactNode }) => (
 	<div className={helpClass}>
@@ -78,6 +82,9 @@ export default function Audio() {
 	const [providerVoices, setProviderVoices] = useState<Voice[]>([]);
 	const [models, setModels] = useState<{ id: string }[]>([]);
 	const listRequest = useRef(0);
+	const { errors, check, reset } = useSettingErrors(
+		draft && !parseOpenAiParams(draft.paramsText).ok ? PARAMS_PROBLEM : NO_PROBLEMS
+	);
 
 	const setTts = (p: Rec) => setDraft((d) => d && { ...d, tts: { ...d.tts, ...p } });
 	const setStt = (p: Rec) => setDraft((d) => d && { ...d, stt: { ...d.stt, ...p } });
@@ -112,15 +119,13 @@ export default function Audio() {
 	const browserVoices = useBrowserVoices(draft?.tts.ENGINE === '');
 
 	/**
-	 * Saves `next`; false (after saying why) when the parameters are not valid JSON or the server refuses.
+	 * Saves `next`; false (after saying why, under the field) when the parameters are not a JSON object, or when
+	 * the server refuses.
 	 * `loadWhisperModel` has the server load the local Whisper model even when its name is unchanged.
 	 */
 	const persist = async (next: Draft, loadWhisperModel = false) => {
 		const params = parseOpenAiParams(next.paramsText);
-		if (!params.ok) {
-			toast.error('Invalid JSON format for Parameters');
-			return false;
-		}
+		if (!check(params.ok ? NO_PROBLEMS : PARAMS_PROBLEM) || !params.ok) return false;
 		try {
 			const res = await updateAudioConfig(token, {
 				...buildAudioPayload(next.tts, next.stt, params.value, next.mimeText),
@@ -215,7 +220,18 @@ export default function Audio() {
 	};
 
 	return (
-		<SettingsForm title="Audio" loading={isLoading} onSubmit={save} saving={saving} dirty={dirty} onDiscard={discard}>
+		<SettingsForm
+			title="Audio"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
+		>
 			{draft && tts && stt && (
 				<>
 					<SettingsSection title="Speech-to-Text" first>

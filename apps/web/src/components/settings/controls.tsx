@@ -12,8 +12,10 @@ import {
 	useRef,
 	useState
 } from 'react';
+import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { SaveBar } from '@/components/ui/save-bar';
 import { Switch } from '@/components/ui/switch';
@@ -109,6 +111,59 @@ export function SettingsPageHost({
 }
 
 /**
+ * FRM-2 in a settings tab: what is wrong with each field, by the field's
+ * element id. `SettingsForm` provides it (`errors`); `SettingField` shows a
+ * field's error under it in place of its help, `SettingRow` under the row
+ * (`fieldId`), and the Setting* controls mark themselves `aria-invalid`.
+ */
+const SettingErrorsContext = createContext<Readonly<Record<string, string>>>({});
+const NO_ERRORS: Readonly<Record<string, string>> = {};
+
+/** The id of the line that says what is wrong with the field `id`. */
+export const settingErrorId = (id: string) => `${id}-error`;
+
+/** The error for the field with element id `id`, and the attributes that tie the field to it. */
+export function useSettingError(id: string | undefined) {
+	const error = useContext(SettingErrorsContext)[id ?? ''];
+	return { error, props: id && error ? fieldProps(settingErrorId(id), { error }) : {} };
+}
+
+/**
+ * Checks a settings tab before it saves (FRM-2). `problems` is what is wrong
+ * now, by the element id of the field it is about, in page order. `check()`
+ * (or `check(some)`, for a part of the tab) shows the errors under their
+ * fields, moves focus to the first wrong field on the page, and says whether
+ * the save may go ahead. An error goes as soon as it is put right; a passed
+ * check or `reset()` (Discard changes) stops showing them. A wrong field that
+ * is not on the page (another engine's) is said in a toast instead, since
+ * there is nothing to show it under. Pass `errors` to `SettingsForm`.
+ */
+export function useSettingErrors(problems: Readonly<Record<string, string>>) {
+	const [checked, setChecked] = useState(false);
+	return {
+		errors: checked ? problems : NO_ERRORS,
+		check: (some: Readonly<Record<string, string>> = problems): boolean => {
+			const ids = Object.keys(some);
+			setChecked(ids.length > 0);
+			if (ids.length === 0) return true;
+			// After the render this causes: the change that started the save (another engine) may remove the field.
+			setTimeout(() => {
+				const field = ids.map((id) => document.getElementById(id)).find((element) => element !== null);
+				if (!field) {
+					toast.error(some[ids[0]]);
+					return;
+				}
+				// Its whole row, so its label shows too.
+				(field.closest('[data-setting]') ?? field).scrollIntoView?.({ block: 'nearest' });
+				field.focus();
+			});
+			return false;
+		},
+		reset: () => setChecked(false)
+	};
+}
+
+/**
  * A settings tab: heading, scrolling body, and a footer, in one of FRM-3's two
  * ways of saving.
  *
@@ -136,6 +191,7 @@ export function SettingsForm({
 	dirty,
 	onDiscard,
 	savesAtOnce = false,
+	errors = NO_ERRORS,
 	after,
 	children
 }: {
@@ -150,6 +206,8 @@ export function SettingsForm({
 	onDiscard?: () => void;
 	/** Every control saves as it changes. */
 	savesAtOnce?: boolean;
+	/** What is wrong with each field, by its element id (`useSettingErrors`). */
+	errors?: Readonly<Record<string, string>>;
 	/** Rendered after the form, outside it: another form whose fields sit in this one and name it with `form=`. */
 	after?: ReactNode;
 	children: ReactNode;
@@ -236,12 +294,11 @@ export function SettingsForm({
 			)}
 		</form>
 	);
-	if (!after) return form;
 	return (
-		<>
+		<SettingErrorsContext.Provider value={errors}>
 			{form}
 			{after}
-		</>
+		</SettingErrorsContext.Provider>
 	);
 }
 
@@ -307,15 +364,19 @@ export function SettingRow({
 	description,
 	className,
 	labelClassName,
+	fieldId,
 	children
 }: {
 	label: ReactNode;
 	description?: string;
 	className?: string;
 	labelClassName?: string;
+	/** The element id of the row's field, whose error (FRM-2) shows under the row. */
+	fieldId?: string;
 	children: ReactNode | ((labelId: string) => ReactNode);
 }) {
 	const labelId = useId();
+	const { error } = useSettingError(fieldId);
 	return (
 		<div
 			data-setting={typeof label === 'string' ? settingSlug(label) : undefined}
@@ -331,6 +392,7 @@ export function SettingRow({
 				{description && <p className="text-foreground-muted mt-0.5 text-dense">{description}</p>}
 			</div>
 			<div className="max-w-full min-w-0 shrink-0">{typeof children === 'function' ? children(labelId) : children}</div>
+			{fieldId && error && <FieldMessage id={settingErrorId(fieldId)} error={error} className="basis-full" />}
 		</div>
 	);
 }
@@ -355,6 +417,7 @@ export function SettingField({
 	className?: string;
 	children: ReactNode;
 }) {
+	const { error } = useSettingError(htmlFor);
 	return (
 		<div
 			data-setting={label ? settingSlug(label) : undefined}
@@ -367,10 +430,14 @@ export function SettingField({
 				</label>
 			)}
 			<div className={label ? 'mt-1.5' : ''}>{children}</div>
-			{description && (
-				<p id={descriptionId} className="text-foreground-muted mt-1 text-dense">
-					{description}
-				</p>
+			{htmlFor && error ? (
+				<FieldMessage id={settingErrorId(htmlFor)} error={error} className="mt-1" />
+			) : (
+				description && (
+					<p id={descriptionId} className="text-foreground-muted mt-1 text-dense">
+						{description}
+					</p>
+				)
 			)}
 		</div>
 	);
@@ -434,7 +501,7 @@ export function SettingSelect({
 
 /** A text/number/url input: the shared `Input`. */
 export function SettingInput(props: ComponentProps<'input'>) {
-	return <Input {...props} />;
+	return <Input {...props} {...useSettingError(props.id).props} />;
 }
 
 /** A number field that keeps '' as '' (an empty box means "unset"), otherwise a number. */
@@ -446,9 +513,11 @@ export function SettingNumber({
 	value: number | string | null | undefined;
 	onChange: (value: number | '') => void;
 }) {
+	const invalid = useSettingError(rest.id).props;
 	return (
 		<Input
 			{...rest}
+			{...invalid}
 			type="number"
 			value={value ?? ''}
 			onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
@@ -457,7 +526,7 @@ export function SettingNumber({
 }
 
 export function SettingTextarea(props: ComponentProps<'textarea'>) {
-	return <Textarea {...props} />;
+	return <Textarea {...props} {...useSettingError(props.id).props} />;
 }
 
 /** DAT-5: relative while recent (under a week), else the absolute record time; the exact time on hover. */

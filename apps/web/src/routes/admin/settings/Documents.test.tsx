@@ -198,3 +198,52 @@ describe('Documents: switch help and the reindex warning (#1023, FRM-5)', () => 
 		expect(screen.queryByText(warning)).toBeNull();
 	});
 });
+
+describe('Documents: what is wrong is said under its field (FRM-2)', () => {
+	it('an extraction engine that needs a URL: under the URL, focused, and nothing sent until it is given', async () => {
+		await saveWith({ CONTENT_EXTRACTION_ENGINE: 'tika', TIKA_SERVER_URL: '' });
+
+		const url = screen.getByLabelText('Tika Server URL');
+		expect(url).toHaveAttribute('aria-invalid', 'true');
+		expect(url).toHaveAccessibleDescription('Tika Server URL required.');
+		await waitFor(() => expect(url).toHaveFocus());
+		expect(toastError).not.toHaveBeenCalled();
+		expect(posted).toEqual([]);
+
+		fireEvent.change(url, { target: { value: 'http://tika:9998' } });
+		expect(url).not.toHaveAttribute('aria-invalid');
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(posted).toEqual(['/embedding/update', '/config/update']));
+		expect(bodies['/config/update']).toMatchObject({ TIKA_SERVER_URL: 'http://tika:9998' });
+	});
+
+	it("the chosen engine's JSON box: under the box, in place of its help", async () => {
+		await saveWith({ CONTENT_EXTRACTION_ENGINE: 'docling', DOCLING_SERVER_URL: 'http://docling', DOCLING_PARAMS: [] });
+
+		const params = screen.getByLabelText('Parameters');
+		expect(params).toHaveAttribute('aria-invalid', 'true');
+		expect(params).toHaveAccessibleDescription('Docling Parameters must be a JSON object');
+		await waitFor(() => expect(params).toHaveFocus());
+		expect(toastError).not.toHaveBeenCalled();
+		expect(posted).toEqual([]);
+	});
+
+	it('Update embedding model checks only the embedding: a missing model is said under it', async () => {
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<Documents />
+			</QueryClientProvider>
+		);
+		const model = await screen.findByLabelText('Embedding Model');
+		fireEvent.change(model, { target: { value: '' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Update embedding model' }));
+
+		expect(model).toHaveAttribute('aria-invalid', 'true');
+		expect(model).toHaveAccessibleDescription('Embedding model is required.');
+		await waitFor(() => expect(model).toHaveFocus());
+		expect(posted).toEqual([]);
+
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Embedding Model')).not.toHaveAttribute('aria-invalid');
+	});
+});

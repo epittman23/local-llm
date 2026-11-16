@@ -322,7 +322,8 @@ export function toWebForm(web: Rec): Rec {
 	};
 }
 
-export type Prepared = { ok: true; payload: Rec } | { ok: false; error: string };
+/** The payload, or what is wrong and the key of the field it is about (FRM-2). */
+export type Prepared = { ok: true; payload: Rec } | { ok: false; field: string; error: string };
 
 /** The body of `POST /retrieval/config/update` for this tab: only the `web` block, in the shapes the backend takes. */
 export function prepareWebConfig(form: Rec): Prepared {
@@ -333,10 +334,10 @@ export function prepareWebConfig(form: Rec): Prepared {
 			try {
 				linkup = JSON.parse(linkup);
 			} catch {
-				return { ok: false, error: 'Invalid JSON format in Linkup Parameters' };
+				return { ok: false, field: 'LINKUP_SEARCH_PARAMS', error: 'Invalid JSON format in Linkup Parameters' };
 			}
 			if (linkup === null || typeof linkup !== 'object' || Array.isArray(linkup))
-				return { ok: false, error: 'Invalid JSON format in Linkup Parameters' };
+				return { ok: false, field: 'LINKUP_SEARCH_PARAMS', error: 'Invalid JSON format in Linkup Parameters' };
 		}
 	}
 	return {

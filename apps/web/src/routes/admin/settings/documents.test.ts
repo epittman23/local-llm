@@ -78,7 +78,8 @@ describe('ragFormError', () => {
 				'MinerU API Key required for Cloud API mode.'
 			]
 		];
-		for (const [cfg, message] of cases) expect(ragFormError(cfg)).toBe(message);
+		// The box left empty is the last key of each case, and the problem names it (FRM-2).
+		for (const [cfg, message] of cases) expect(ragFormError(cfg)).toEqual({ field: Object.keys(cfg).at(-1), message });
 	});
 	it('MinerU local mode needs no key', () => {
 		expect(
@@ -87,19 +88,22 @@ describe('ragFormError', () => {
 	});
 	it('rejects headers that are not a JSON object, and bad JSON in the other boxes', () => {
 		const external = { CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: 'http://x' };
-		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toBe(
-			'External Document Loader Headers must be a valid JSON object'
-		);
+		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toEqual({
+			field: 'EXTERNAL_DOCUMENT_LOADER_HEADERS',
+			message: 'External Document Loader Headers must be a valid JSON object'
+		});
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '{"a":"b"}' })).toBeNull();
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })).toBe(
-			'Invalid JSON format in Additional Config'
-		);
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', DOCLING_PARAMS: '{x' })).toBe(
-			'Invalid JSON format in Docling Parameters'
-		);
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', MINERU_PARAMS: '{x' })).toBe(
-			'Invalid JSON format in MinerU Parameters'
-		);
+		expect(
+			ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })
+		).toEqual({ field: 'DATALAB_MARKER_ADDITIONAL_CONFIG', message: 'Invalid JSON format in Additional Config' });
+		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', DOCLING_PARAMS: '{x' })).toEqual({
+			field: 'DOCLING_PARAMS',
+			message: 'Invalid JSON format in Docling Parameters'
+		});
+		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', MINERU_PARAMS: '{x' })).toEqual({
+			field: 'MINERU_PARAMS',
+			message: 'Invalid JSON format in MinerU Parameters'
+		});
 	});
 });
 
@@ -187,29 +191,45 @@ describe('embedding', () => {
 		expect(p.RAG_EMBEDDING_CONCURRENT_REQUESTS).toBe(0);
 	});
 	it('refuses a filesystem path for the local model, a missing hosted model, or a half-filled Azure connection', () => {
-		expect(embeddingError({ ...e, engine: '', model: '/models/all-MiniLM' })).toMatch(/filesystem path/);
+		expect(embeddingError({ ...e, engine: '', model: '/models/all-MiniLM' })).toEqual({
+			field: 'model',
+			message: expect.stringMatching(/filesystem path/)
+		});
 		expect(embeddingError({ ...e, engine: '', model: 'sentence-transformers/all-MiniLM-L6-v2' })).toBeNull();
-		expect(embeddingError({ ...e, engine: '', model: ' ' })).toBe('Embedding model is required.');
-		expect(embeddingError({ ...e, engine: 'ollama', model: '' })).toBe('Embedding model is required.');
-		expect(embeddingError({ ...e, engine: 'openai', model: '' })).toBe('Embedding model is required.');
-		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toMatch(
-			/Azure/
-		);
+		const modelRequired = { field: 'model', message: 'Embedding model is required.' };
+		expect(embeddingError({ ...e, engine: '', model: ' ' })).toEqual(modelRequired);
+		expect(embeddingError({ ...e, engine: 'ollama', model: '' })).toEqual(modelRequired);
+		expect(embeddingError({ ...e, engine: 'openai', model: '' })).toEqual(modelRequired);
+		// Each Azure box left empty is named on its own, in page order (FRM-2).
+		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toEqual({
+			field: 'azure-version',
+			message: 'Azure OpenAI Version is required.'
+		});
+		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: '', key: '', version: '' } })).toEqual({
+			field: 'azure-url',
+			message: 'Azure OpenAI API Base URL is required.'
+		});
+		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: ' ', version: 'v' } })).toEqual({
+			field: 'azure-key',
+			message: 'Azure OpenAI API Key is required.'
+		});
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: 'v' } })).toBeNull();
 	});
 	it('refuses an embedding batch size below 1, and accepts 1 or more or a cleared box (#353)', () => {
 		for (const batchSize of [0, -1, -2, 1.5])
-			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBe(
-				'Embedding Batch Size must be a whole number of at least 1.'
-			);
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toEqual({
+				field: 'batchSize',
+				message: 'Embedding Batch Size must be a whole number of at least 1.'
+			});
 		for (const batchSize of [1, 64, null])
 			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBeNull();
 	});
 	it('refuses negative concurrent requests, and accepts 0 or more or a cleared box (#638)', () => {
 		for (const concurrent of [-1, -5, 1.5])
-			expect(embeddingError({ ...e, engine: 'openai', model: 'm', concurrent })).toBe(
-				'Embedding Concurrent Requests must be a whole number of at least 0.'
-			);
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', concurrent })).toEqual({
+				field: 'concurrent',
+				message: 'Embedding Concurrent Requests must be a whole number of at least 0.'
+			});
 		for (const concurrent of [0, 4, null])
 			expect(embeddingError({ ...e, engine: 'openai', model: 'm', concurrent })).toBeNull();
 		// The local engine does not use it, and the field is hidden then.
@@ -254,15 +274,21 @@ describe('contextPlaceholders', () => {
 
 describe('chunkSettingsError', () => {
 	it('refuses what the text splitters cannot use (#235)', () => {
-		expect(chunkSettingsError(0, 0)).toBe('Chunk Size must be at least 1.');
-		expect(chunkSettingsError(1.5, 0)).toBe('Chunk Size must be at least 1.');
-		expect(chunkSettingsError(100, -1)).toBe('Chunk Overlap cannot be negative.');
-		expect(chunkSettingsError(100, 200)).toBe(
-			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
-		);
-		expect(chunkSettingsError(100, 100)).toBe(
-			'Chunk Overlap must be smaller than Chunk Size (100 is not smaller than 100).'
-		);
+		const size = { field: 'CHUNK_SIZE', message: 'Chunk Size must be at least 1.' };
+		expect(chunkSettingsError(0, 0)).toEqual(size);
+		expect(chunkSettingsError(1.5, 0)).toEqual(size);
+		expect(chunkSettingsError(100, -1)).toEqual({
+			field: 'CHUNK_OVERLAP',
+			message: 'Chunk Overlap cannot be negative.'
+		});
+		expect(chunkSettingsError(100, 200)).toEqual({
+			field: 'CHUNK_OVERLAP',
+			message: 'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		});
+		expect(chunkSettingsError(100, 100)).toEqual({
+			field: 'CHUNK_OVERLAP',
+			message: 'Chunk Overlap must be smaller than Chunk Size (100 is not smaller than 100).'
+		});
 	});
 
 	it('accepts working settings, and leaves a cleared box to the server', () => {
@@ -273,9 +299,10 @@ describe('chunkSettingsError', () => {
 	});
 
 	it('is part of the form check, so the embedding model is not applied first', () => {
-		expect(ragFormError({ CHUNK_SIZE: 100, CHUNK_OVERLAP: 200 })).toBe(
-			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
-		);
+		expect(ragFormError({ CHUNK_SIZE: 100, CHUNK_OVERLAP: 200 })).toEqual({
+			field: 'CHUNK_OVERLAP',
+			message: 'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		});
 	});
 });
 
@@ -284,9 +311,10 @@ describe('reranking batch size', () => {
 		// Hybrid search off too: the field is shown then.
 		for (const hybrid of [true, false])
 			for (const size of [0, -5, 1.5])
-				expect(ragFormError({ ENABLE_RAG_HYBRID_SEARCH: hybrid, RAG_RERANKING_BATCH_SIZE: size })).toBe(
-					'Reranking Batch Size must be a whole number of at least 1.'
-				);
+				expect(ragFormError({ ENABLE_RAG_HYBRID_SEARCH: hybrid, RAG_RERANKING_BATCH_SIZE: size })).toEqual({
+					field: 'RAG_RERANKING_BATCH_SIZE',
+					message: 'Reranking Batch Size must be a whole number of at least 1.'
+				});
 		for (const size of [1, 32, null, undefined]) expect(ragFormError({ RAG_RERANKING_BATCH_SIZE: size })).toBeNull();
 	});
 	it('does not check it where the field is hidden: full context on, or retrieval bypassed', () => {

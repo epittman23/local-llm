@@ -383,8 +383,13 @@ picker instead of a toast. The line under a field is
 A form is `noValidate` and never shows the browser's bubbles; one without
 validation of its own uses `lib/ui/useFieldErrors(problems, order)`, which
 shows a field's error once it is left or the form submitted, clears it when
-put right, and on submit focuses the first wrong field. A field the API does
-not require is marked '(optional)', never `required`.
+put right, and on submit focuses the first wrong field. A settings tab checks
+on Save with `useSettingErrors(problems)` (`components/settings/controls.tsx`,
+problems by the field's element id) and passes its `errors` to
+`SettingsForm`: `SettingField`, or `SettingRow` with `fieldId`, shows the
+error in place of the help and the control is `aria-invalid`. A wrong field
+that is not on the page (another engine's) is said in a toast instead. A
+field the API does not require is marked '(optional)', never `required`.
 
 **FRM-3. A view saves in one of two ways and says which.** *On request:* a
 Save button that is disabled until something changed, a line that reads

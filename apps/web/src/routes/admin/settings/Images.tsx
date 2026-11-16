@@ -13,7 +13,10 @@ import {
 	SettingSwitch,
 	SettingsForm,
 	SettingsSection,
-	SettingTextarea
+	SettingTextarea,
+	settingErrorId,
+	useSettingError,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,7 +26,7 @@ import { toastSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { type NodeRow, prepareImagesConfig, prettyJson, toFormState } from './images';
+import { type NodeRow, type Prepared, prepareImagesConfig, prettyJson, toFormState } from './images';
 
 const CodeEditor = lazy(() => import('@/components/common/CodeEditor'));
 
@@ -31,6 +34,17 @@ type Rec = Record<string, any>;
 type Draft = ReturnType<typeof toFormState>;
 
 const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
+
+/** FRM-2: the element id of the field a problem is about (a workflow's is its Edit button). */
+const WORKFLOW_IDS: Record<string, string> = {
+	COMFYUI_WORKFLOW: 'comfyui-workflow',
+	IMAGES_EDIT_COMFYUI_WORKFLOW: 'comfyui-edit-workflow'
+};
+/** A problem to show under its field; not a missing engine setting, which turns generation off instead. */
+const problemOf = (prepared: Prepared | null): Record<string, string> =>
+	prepared && !prepared.ok && !prepared.disableGeneration
+		? { [WORKFLOW_IDS[prepared.field] ?? `img-${prepared.field}`]: prepared.error }
+		: {};
 
 /** A URL box with a button that saves, then asks the backend to reach the server. */
 function VerifiedUrl({
@@ -94,6 +108,7 @@ function ComfyWorkflow({
 }) {
 	const file = useRef<HTMLInputElement>(null);
 	const [editing, setEditing] = useState(false);
+	const { error } = useSettingError(id);
 
 	const upload = async (input: HTMLInputElement) => {
 		const chosen = input.files?.[0];
@@ -113,13 +128,16 @@ function ComfyWorkflow({
 			<SettingRow
 				label="ComfyUI Workflow"
 				description="Upload a workflow.json file exported as API format from ComfyUI."
+				fieldId={id}
 			>
 				<div className="flex items-center justify-end gap-2">
 					{workflow && (
 						<Button
+							id={id}
 							variant="ghost"
 							size="sm"
 							type="button"
+							aria-describedby={error ? settingErrorId(id) : undefined}
 							aria-label="Edit workflow.json content"
 							onClick={() => setEditing(true)}
 						>
@@ -218,6 +236,9 @@ export default function Images() {
 		return config ? toFormState(config) : null;
 	});
 	const [saving, setSaving] = useState(false);
+	const { errors, check, reset } = useSettingErrors(
+		problemOf(draft ? prepareImagesConfig(draft.config, draft.nodes, draft.editNodes) : null)
+	);
 
 	const loadModels = async () => {
 		const res = await getImageGenerationModels(token).catch((e) => void toast.error(`${e}`));
@@ -236,15 +257,17 @@ export default function Images() {
 	const setNodes = (nodes: NodeRow[]) => setDraft((d) => d && { ...d, nodes });
 	const setEditNodes = (editNodes: NodeRow[]) => setDraft((d) => d && { ...d, editNodes });
 
-	/** Saves the form; false (after saying why) if it is not valid or the server refuses. */
+	/** Saves the form; false (after saying why, under the field) if it is not valid, or if the server refuses. */
 	const persist = async (): Promise<boolean> => {
 		if (!draft) return false;
 		const prepared = prepareImagesConfig(draft.config, draft.nodes, draft.editNodes);
-		if (!prepared.ok) {
+		if (!prepared.ok && prepared.disableGeneration) {
+			// Not left as the field's error: generation is turned off instead, which a second Save then stores.
 			toast.error(prepared.error);
-			if (prepared.disableGeneration) set({ ENABLE_IMAGE_GENERATION: false });
+			set({ ENABLE_IMAGE_GENERATION: false });
 			return false;
 		}
+		if (!check(problemOf(prepared)) || !prepared.ok) return false;
 		try {
 			const res = await updateConfig(token, prepared.payload);
 			if (!res) return false;
@@ -339,7 +362,18 @@ export default function Images() {
 	const editEngine = c?.IMAGE_EDIT_ENGINE;
 
 	return (
-		<SettingsForm title="Images" loading={isLoading} onSubmit={save} saving={saving} dirty={dirty} onDiscard={discard}>
+		<SettingsForm
+			title="Images"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
+		>
 			{draft && c && (
 				<>
 					<SettingsSection first>

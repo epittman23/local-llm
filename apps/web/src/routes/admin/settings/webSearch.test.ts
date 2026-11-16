@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
 	BUNDLED_SEARXNG_URL,
 	bundledSearxngPrefill,
-	LOADER_ENGINES,
-	loaderLabel,
-	SEARCH_ENGINE_ORDER,
-	SEARCH_ENGINES,
-	SEARCH_ENGINE_FIELDS,
 	engineLabel,
 	isDefaultLoader,
+	LOADER_ENGINES,
 	loaderFields,
+	loaderLabel,
 	prepareWebConfig,
+	SEARCH_ENGINE_FIELDS,
+	SEARCH_ENGINE_ORDER,
+	SEARCH_ENGINES,
 	toWebForm
 } from './webSearch';
 
@@ -155,6 +155,7 @@ describe('prepareWebConfig', () => {
 		for (const bad of ['{depth', '[1]', '"x"', 'null'])
 			expect(prepareWebConfig({ LINKUP_SEARCH_PARAMS: bad })).toEqual({
 				ok: false,
+				field: 'LINKUP_SEARCH_PARAMS',
 				error: 'Invalid JSON format in Linkup Parameters'
 			});
 	});

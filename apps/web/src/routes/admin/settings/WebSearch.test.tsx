@@ -100,3 +100,24 @@ describe('Web Search: switch help and units (#1023, #1025)', () => {
 		expect(config).toHaveValue('{}');
 	});
 });
+
+describe('Web Search: Linkup parameters must be a JSON object (FRM-2)', () => {
+	it('says so under the field and focuses it, and sends nothing', async () => {
+		await renderTab(web({ WEB_SEARCH_ENGINE: 'linkup', LINKUP_SEARCH_PARAMS: {} }));
+		const params = screen.getByLabelText('Parameters');
+		fireEvent.change(params, { target: { value: '[1]' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		expect(params).toHaveAttribute('aria-invalid', 'true');
+		expect(params).toHaveAccessibleDescription('Invalid JSON format in Linkup Parameters');
+		await waitFor(() => expect(params).toHaveFocus());
+		expect(updateRAGConfig).not.toHaveBeenCalled();
+
+		fireEvent.change(params, { target: { value: '{"depth":"deep"}' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(updateRAGConfig).toHaveBeenCalledOnce());
+		expect(vi.mocked(updateRAGConfig).mock.calls[0][1]).toMatchObject({
+			web: { LINKUP_SEARCH_PARAMS: { depth: 'deep' } }
+		});
+	});
+});

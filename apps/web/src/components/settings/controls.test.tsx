@@ -3,6 +3,10 @@ import { useState } from 'react';
 import { createMemoryRouter, Link, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+
 import {
 	SavedNote,
 	SettingField,
@@ -17,6 +21,7 @@ import {
 	SettingTextarea,
 	settingSlug,
 	useSavedFlash,
+	useSettingErrors,
 	useSettingsHost
 } from './controls';
 
@@ -302,5 +307,100 @@ describe('settings hosts (#951, FRM-3)', () => {
 		await act(() => router.navigate('/b'));
 		expect(await screen.findByText('Page B')).toBeInTheDocument();
 		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+});
+
+/**
+ * A tab checked on Save (FRM-2): Name must not be blank; Size is a number in a
+ * row; Extra's field is shown only while `Show extra` is ticked.
+ */
+function Checked({ onSave }: { onSave: () => void }) {
+	const [name, setName] = useState('');
+	const [size, setSize] = useState<number | ''>(1);
+	const [extra, setExtra] = useState(false);
+	const problems: Record<string, string> = {};
+	if (!name.trim()) problems.name = 'Enter a name.';
+	if (size !== '' && size < 1) problems.size = 'Size must be at least 1.';
+	if (!extra) problems.extra = 'Extra is wrong.';
+	const { errors, check, reset } = useSettingErrors(problems);
+	return (
+		<SettingsForm
+			title="Checked"
+			dirty
+			errors={errors}
+			onDiscard={reset}
+			onSubmit={() => {
+				if (check()) onSave();
+			}}
+		>
+			<SettingField label="Name" description="What to call it." descriptionId="name-help" htmlFor="name">
+				<SettingInput id="name" aria-describedby="name-help" value={name} onChange={(e) => setName(e.target.value)} />
+			</SettingField>
+			<SettingRow label="Size" fieldId="size">
+				<SettingNumber id="size" aria-label="Size" value={size} onChange={setSize} />
+			</SettingRow>
+			<label>
+				<input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} />
+				Show extra
+			</label>
+			<button type="button" onClick={() => check({ extra: 'Extra is wrong.' })}>
+				Check extra
+			</button>
+		</SettingsForm>
+	);
+}
+
+describe('field errors on Save (FRM-2)', () => {
+	it('shows nothing before Save, then each error under its field, and focuses the first', async () => {
+		vi.useFakeTimers();
+		const onSave = vi.fn();
+		render(<Checked onSave={onSave} />);
+		const name = screen.getByLabelText('Name');
+		expect(name).not.toHaveAttribute('aria-invalid');
+		expect(name).toHaveAttribute('aria-describedby', 'name-help');
+		expect(screen.getByText('What to call it.')).toBeInTheDocument();
+
+		fireEvent.change(screen.getByLabelText('Size'), { target: { value: '0' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(onSave).not.toHaveBeenCalled();
+		// The error replaces the help, and the field names it.
+		expect(name).toHaveAttribute('aria-invalid', 'true');
+		expect(name).toHaveAccessibleDescription('Enter a name.');
+		expect(screen.queryByText('What to call it.')).toBeNull();
+		const size = screen.getByLabelText('Size');
+		expect(size).toHaveAttribute('aria-invalid', 'true');
+		expect(size).toHaveAccessibleDescription('Size must be at least 1.');
+		act(() => vi.runAllTimers());
+		expect(name).toHaveFocus();
+		expect(toastError).not.toHaveBeenCalled();
+
+		// Put right, an error goes at once; the rest stay.
+		fireEvent.change(name, { target: { value: 'Ada' } });
+		expect(name).not.toHaveAttribute('aria-invalid');
+		expect(name).toHaveAttribute('aria-describedby', 'name-help');
+		expect(size).toHaveAttribute('aria-invalid', 'true');
+	});
+
+	it('says a wrong field that is not on the page in a toast, and saves once all is right', () => {
+		vi.useFakeTimers();
+		toastError.mockReset();
+		const onSave = vi.fn();
+		render(<Checked onSave={onSave} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Check extra' }));
+		act(() => vi.runAllTimers());
+		expect(toastError).toHaveBeenCalledWith('Extra is wrong.');
+
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ada' } });
+		fireEvent.click(screen.getByLabelText('Show extra'));
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(onSave).toHaveBeenCalledOnce();
+	});
+
+	it('Discard changes stops showing them', () => {
+		render(<Checked onSave={() => {}} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Name')).not.toHaveAttribute('aria-invalid');
 	});
 });

@@ -15,7 +15,8 @@ import {
 	SettingSelect,
 	SettingsForm,
 	SettingsSection,
-	SettingTextarea
+	SettingTextarea,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { getRAGConfig, updateRAGConfig } from '@/lib/apis/retrieval';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
@@ -126,6 +127,10 @@ export default function WebSearch() {
 		}
 	);
 	const [saving, setSaving] = useState(false);
+	const prepared = draft ? prepareWebConfig(draft.web) : null;
+	const { errors, check, reset } = useSettingErrors(
+		prepared && !prepared.ok ? { [`web-${prepared.field}`]: prepared.error } : {}
+	);
 
 	const set = (changes: Rec) => setDraft((d) => d && { web: { ...d.web, ...changes } });
 
@@ -144,12 +149,7 @@ export default function WebSearch() {
 	}, [draft, setDraft]);
 
 	const save = async () => {
-		if (!draft) return;
-		const prepared = prepareWebConfig(draft.web);
-		if (!prepared.ok) {
-			toast.error(prepared.error);
-			return;
-		}
+		if (!draft || !prepared || !check() || !prepared.ok) return;
 		setSaving(true);
 		try {
 			const res = await updateRAGConfig(token, prepared.payload);
@@ -177,7 +177,11 @@ export default function WebSearch() {
 			onSubmit={save}
 			saving={saving}
 			dirty={dirty}
-			onDiscard={discard}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
 		>
 			{web && (
 				<>

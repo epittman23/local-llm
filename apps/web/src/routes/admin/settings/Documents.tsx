@@ -17,9 +17,12 @@ import {
 	SettingRow,
 	SettingSwitch,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	settingErrorId,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
+import { fieldProps } from '@/components/ui/field-message';
 import { deleteAllFiles } from '@/lib/apis/files';
 import { reindexKnowledgeFiles, reindexKnowledgeMetadata } from '@/lib/apis/knowledge';
 import { reindexMemoryVectors } from '@/lib/apis/memories';
@@ -144,18 +147,23 @@ export default function Documents() {
 	const setCredentials = (section: 'openai' | 'ollama' | 'azure') => (changes: Rec) =>
 		setDraft((d) => d && { ...d, embedding: { ...d.embedding, [section]: { ...d.embedding[section], ...changes } } });
 
+	// FRM-2: what is wrong is said under its field. The embedding fields are hidden, and not sent, while retrieval is bypassed.
+	const ragProblem = draft ? ragFormError(draft.rag) : null;
+	const embeddingProblem = draft && !draft.rag.BYPASS_EMBEDDING_AND_RETRIEVAL ? embeddingError(draft.embedding) : null;
+	const embeddingProblems = embeddingProblem ? { [`emb-${embeddingProblem.field}`]: embeddingProblem.message } : {};
+	const { errors, check, reset } = useSettingErrors({
+		...(ragProblem && { [`field-${ragProblem.field}`]: ragProblem.message }),
+		...embeddingProblems
+	});
+
 	/**
-	 * Applies the embedding model; false (after saying why) if it cannot be, in
-	 * which case the form is put back to what the server has. `forceReload`
-	 * loads it even when unchanged, as the Update button asks (#532).
+	 * Applies the embedding model (`check` it first); false (after saying why)
+	 * if the server refuses it, in which case the form is put back to what the
+	 * server has. `forceReload` loads it even when unchanged, as the Update
+	 * button asks (#532).
 	 */
 	const applyEmbedding = async (forceReload: boolean): Promise<boolean> => {
 		if (!draft) return false;
-		const invalid = embeddingError(draft.embedding);
-		if (invalid) {
-			toast.error(invalid);
-			return false;
-		}
 		try {
 			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding, { forceReload }));
 			return true;
@@ -168,6 +176,7 @@ export default function Documents() {
 	};
 
 	const updateEmbeddingModel = async () => {
+		if (!check(embeddingProblems)) return;
 		setEmbeddingLoading(true);
 		try {
 			if (await applyEmbedding(true)) toast.success('Embedding model updated');
@@ -179,11 +188,7 @@ export default function Documents() {
 	const save = async () => {
 		if (!draft) return;
 		const { rag } = draft;
-		const invalid = ragFormError(rag);
-		if (invalid) {
-			toast.error(invalid);
-			return;
-		}
+		if (!check()) return;
 		setSaving(true);
 		try {
 			// Built first: what cannot be sent stops the save before the embedding changes (#234).
@@ -241,7 +246,11 @@ export default function Documents() {
 			onSubmit={save}
 			saving={saving}
 			dirty={dirty}
-			onDiscard={discard}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
 		>
 			{draft && rag && emb && (
 				<>
@@ -435,7 +444,8 @@ export default function Documents() {
 								<div className="flex w-full items-center gap-2">
 									<input
 										id="emb-model"
-										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring h-7 w-full rounded-lg border px-2 text-xs transition-colors"
+										{...fieldProps(settingErrorId('emb-model'), { error: errors['emb-model'] })}
+										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring aria-invalid:border-danger h-7 w-full rounded-lg border px-2 text-xs transition-colors"
 										placeholder={
 											emb.engine === 'ollama'
 												? 'Set embedding model'
@@ -468,9 +478,14 @@ export default function Documents() {
 								)}
 							</SettingField>
 
-							<SettingRow label="Embedding Batch Size" description="Number of items processed per embedding batch.">
+							<SettingRow
+								label="Embedding Batch Size"
+								description="Number of items processed per embedding batch."
+								fieldId="emb-batchSize"
+							>
 								<div className="w-16">
 									<SettingNumber
+										id="emb-batchSize"
 										aria-label="Embedding Batch Size"
 										min={1}
 										max={16000}
@@ -494,9 +509,11 @@ export default function Documents() {
 									<SettingRow
 										label="Embedding Concurrent Requests"
 										description="Maximum concurrent embedding requests. Set to 0 for unlimited."
+										fieldId="emb-concurrent"
 									>
 										<div className="w-16">
 											<SettingNumber
+												id="emb-concurrent"
 												aria-label="Embedding Concurrent Requests"
 												min={0}
 												step={1}
@@ -583,9 +600,11 @@ export default function Documents() {
 										<SettingRow
 											label="Reranking Batch Size"
 											description="Number of results processed per reranking batch."
+											fieldId="field-RAG_RERANKING_BATCH_SIZE"
 										>
 											<div className="w-16">
 												<SettingNumber
+													id="field-RAG_RERANKING_BATCH_SIZE"
 													aria-label="Reranking Batch Size"
 													min={1}
 													max={16000}
