@@ -127,6 +127,12 @@ describe('day and week grids', () => {
 		expect(block(/Short/).style.height).toBe('47px');
 	});
 
+	it('draws a short event at the least target height, not a pixel under it (#983, LAY-3)', () => {
+		const standup = event('c', 'Stand-up', new Date(2026, 9, 20, 9), new Date(2026, 9, 20, 9, 15));
+		show('day', new Date(2026, 9, 20), [standup]);
+		expect((screen.getByRole('button', { name: /Stand-up/ }) as HTMLElement).style.height).toBe('24px');
+	});
+
 	it('puts overlapping events side by side', () => {
 		const a = event('a', 'A', new Date(2026, 9, 20, 9), new Date(2026, 9, 20, 11));
 		const b = event('b', 'B', new Date(2026, 9, 20, 10), new Date(2026, 9, 20, 12));

@@ -133,7 +133,7 @@ export function TimeGridDemo() {
 							className={`text-foreground-strong absolute flex overflow-hidden border-l-4 px-1.5 py-0.5 text-dense ${short ? 'items-center gap-1.5' : 'flex-col'}`}
 							style={{
 								top: top(p.top),
-								height: p.height * (HOUR_PX / 60) - 1,
+								height: Math.max(p.height * (HOUR_PX / 60) - 1, 24),
 								left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
 								width: `calc(${100 / p.cols}% - 4px)`,
 								backgroundColor: 'color-mix(in srgb, var(--series-1) 24%, var(--surface-1))',

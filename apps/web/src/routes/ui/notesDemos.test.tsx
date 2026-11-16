@@ -38,7 +38,7 @@ describe('/ui section 6 demos', () => {
 		expect(reading.style.width).toBe('calc(50% - 4px)');
 		expect(review.style.left).toBe('calc(50% + 2px)');
 		// A quarter of an hour is drawn at the 24 px floor.
-		expect(standup.style.height).toBe('23px');
+		expect(standup.style.height).toBe('24px');
 		expect(standup.style.width).toBe('calc(100% - 4px)');
 		expect(document.querySelector('[data-now]')).not.toBeNull();
 	});

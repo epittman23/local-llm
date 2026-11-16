@@ -506,7 +506,8 @@ function TimeGrid({ view, date, weekStart, byDay, colour, open, onCreate, onOpen
 	const coarse = useCoarsePointer();
 	const hour = coarse ? 64 : 48;
 	// A block is at least 24 px tall, 44 on touch (LAY-3): that many minutes on this grid.
-	const minMinutes = Math.ceil(((coarse ? 44 : 24) / hour) * 60);
+	const minPx = coarse ? 44 : 24;
+	const minMinutes = Math.ceil((minPx / hour) * 60);
 	const days = useMemo(() => (view === 'week' ? weekDays(date, weekStart) : [date]), [view, date, weekStart]);
 	const now = useNow();
 	const scroller = useRef<HTMLDivElement>(null);
@@ -623,7 +624,8 @@ function TimeGrid({ view, date, weekStart, byDay, colour, open, onCreate, onOpen
 													)}
 													style={{
 														top: p.top * (hour / 60),
-														height: p.height * (hour / 60) - 1,
+														// A 1 px gap under a block, but never below the least height.
+														height: Math.max(p.height * (hour / 60) - 1, minPx),
 														left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
 														width: `calc(${100 / p.cols}% - 4px)`,
 														backgroundColor: tint(c),
