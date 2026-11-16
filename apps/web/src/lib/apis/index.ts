@@ -747,6 +747,17 @@ export const getTaskConfig = async (token: string = '') => {
 	return res;
 };
 
+/** The built-in task prompts, keyed like `getTaskConfig`'s templates; an empty stored template means these (#1101). */
+export const getTaskConfigDefaults = async (token: string = ''): Promise<Record<string, string>> => {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/config/defaults`, {
+		headers: { Accept: 'application/json', ...(token && { authorization: `Bearer ${token}` }) }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw await errorBody(res);
+	return res.json();
+};
+
 export const updateTaskConfig = async (token: string, config: object) => {
 	let error = null;
 

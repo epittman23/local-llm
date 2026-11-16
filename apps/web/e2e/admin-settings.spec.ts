@@ -1184,6 +1184,8 @@ test.describe('settings: Interface', () => {
 				/* none */
 			}
 			calls.push({ method: req.method(), path, body });
+			if (path.endsWith('/defaults'))
+				return json(route, { TITLE_GENERATION_PROMPT_TEMPLATE: 'Built-in title prompt.' });
 			return json(route, req.method() === 'GET' ? taskCfg() : body);
 		});
 		await page.route('**/api/v1/chats/config', (route) => {
@@ -1271,6 +1273,26 @@ test.describe('settings: Interface', () => {
 			.poll(() => post(calls, '/api/v1/chats/config'))
 			.toEqual({ ...chatCfg(), ENABLE_CONTEXT_COMPACTION: true, CONTEXT_COMPACTION_RETENTION_PERCENTAGE: 25 });
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
+	test('a prompt can start from the default and go back to it (#1101)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		const title = m.getByRole('textbox', { name: 'Title Generation Prompt' });
+		await expect(title).toHaveValue('');
+		await m.getByRole('button', { name: 'Show default' }).click();
+		await expect(m.getByLabel('Default title generation prompt')).toHaveText('Built-in title prompt.');
+		await m.getByRole('button', { name: 'Start from default' }).click();
+		await expect(title).toHaveValue('Built-in title prompt.');
+		await title.fill('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => post(calls, '/api/v1/tasks/config/update')?.TITLE_GENERATION_PROMPT_TEMPLATE)
+			.toBe('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Reset to default' }).click();
+		await expect(title).toHaveValue('');
 	});
 });
 
