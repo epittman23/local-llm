@@ -72,19 +72,21 @@ const DISPLAY_MATH = [
 	['\\[', '\\]'],
 	['\\begin{equation}', '\\end{equation}']
 ];
+/** The formula, when a paragraph's whole text is one display-math block; else null. */
+export function displayMath(text: string): string | null {
+	const t = text.trim();
+	for (const [open, close] of DISPLAY_MATH) {
+		const inner = t.slice(open.length, -close.length);
+		if (t.length > open.length + close.length && t.startsWith(open) && t.endsWith(close) && !inner.includes(close))
+			return inner;
+	}
+	return null;
+}
 turndown.addRule('displayMath', {
-	filter: (node) => {
-		if (node.nodeName !== 'P') return false;
-		if (!Array.from(node.childNodes).every((c) => c.nodeType === 3 || c.nodeName === 'BR')) return false;
-		const text = (node.textContent ?? '').trim();
-		return DISPLAY_MATH.some(
-			([open, close]) =>
-				text.length > open.length + close.length &&
-				text.startsWith(open) &&
-				text.endsWith(close) &&
-				!text.slice(open.length, -close.length).includes(close)
-		);
-	},
+	filter: (node) =>
+		node.nodeName === 'P' &&
+		Array.from(node.childNodes).every((c) => c.nodeType === 3 || c.nodeName === 'BR') &&
+		displayMath(node.textContent ?? '') !== null,
 	replacement: (_content, node) =>
 		`\n\n${Array.from(node.childNodes, (c) => (c.nodeName === 'BR' ? '\n' : c.textContent))
 			.join('')

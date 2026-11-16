@@ -6,14 +6,17 @@ import type { SessionUser, UserPermissions } from '@/lib/stores/authStore';
 import {
 	contentFromMarkdown,
 	editorContent,
+	fullTime,
 	groupNotes,
 	importableNote,
 	nextSort,
 	noteAccessProps,
+	notePreview,
 	openLinkedNote,
 	parseGeneratedTitle,
 	safeFileName,
 	saveNoteAccess,
+	shortTime,
 	withServerGrants,
 	wordCount
 } from './notesModel';
@@ -58,11 +61,64 @@ describe('content', () => {
 		});
 		expect(contentFromMarkdown()).toEqual({ json: null, html: '', md: '' });
 	});
-	it('the editor loads json, else html, else rendered markdown', () => {
+	it('the editor loads json, else rendered markdown, else html', () => {
 		expect(editorContent({ json: { type: 'doc' }, html: '<p>x</p>' })).toEqual({ type: 'doc' });
-		expect(editorContent({ html: '<p>x</p>', md: 'y' })).toBe('<p>x</p>');
 		expect(editorContent({ md: '**y**' })).toContain('<strong>y</strong>');
+		expect(editorContent({ md: '', html: '<p>x</p>' })).toBe('<p>x</p>');
 		expect(editorContent(null)).toBe('');
+	});
+	it('loads a note imported before #1134 from its Markdown, not its lossy html', () => {
+		// What Import stored then: the ticks gone from the html, kept in the Markdown.
+		const stored = {
+			json: null,
+			html: '<ul><li>residual plot</li><li>QQ plot</li></ul>',
+			md: '- [ ] residual plot\n- [x] QQ plot'
+		};
+		const html = editorContent(stored) as string;
+		expect(html).toContain('data-type="taskList"');
+		expect(html).toContain('data-checked="true"');
+	});
+	it('previews a note as the words a reader sees (#935)', () => {
+		const md = [
+			'# Posterior',
+			'',
+			'The **posterior** is $p(\\theta|x)$, and the <mark>highlighted</mark> part is *the* prior.',
+			'',
+			'- [ ] residual plot',
+			'- [x] QQ plot',
+			'1. first',
+			'> quoted',
+			'```python',
+			'x = 1',
+			'```',
+			'| arm | conv |',
+			'| --- | --- |',
+			'| A | 0.12 |',
+			'See [docs](https://x.org) and ![chart](c.png), `code`, ~~old~~, a*b*c.'
+		].join('\n');
+		expect(notePreview(md).split('\n')).toEqual([
+			'Posterior',
+			'The posterior is $p(\\theta|x)$, and the highlighted part is the prior.',
+			'residual plot',
+			'QQ plot',
+			'first',
+			'quoted',
+			'x = 1',
+			'arm  conv',
+			'A  0.12',
+			'See docs and chart, code, old, a*b*c.'
+		]);
+		expect(notePreview(null)).toBe('');
+	});
+	it('says when a note changed in a few characters, with the exact time behind it (DAT-5)', () => {
+		const now = new Date(2026, 10, 16, 15, 0);
+		const at = (d: Date) => d.getTime() * 1_000_000;
+		expect(shortTime(at(new Date(2026, 10, 16, 14, 59, 40)), now)).toBe('now');
+		expect(shortTime(at(new Date(2026, 10, 16, 14, 47)), now)).toBe('13 min');
+		expect(shortTime(at(new Date(2026, 10, 16, 9, 5)), now)).toBe('9:05 AM');
+		expect(shortTime(at(new Date(2026, 10, 14, 9, 5)), now)).toBe('14 Nov');
+		expect(shortTime(at(new Date(2025, 10, 14, 9, 5)), now)).toBe('14 Nov 2025');
+		expect(fullTime(at(new Date(2026, 10, 14, 9, 5)))).toBe('Saturday, November 14, 2026 9:05 AM');
 	});
 	it('imports only md/txt; names files safely; counts words', () => {
 		expect(importableNote({ name: 'Plan.MD', type: '' })).toEqual({ title: 'Plan' });
@@ -255,5 +311,14 @@ describe('openLinkedNote (#210)', () => {
 			expect(await run(async () => id)).toEqual([['/notes']]);
 			expect(toast.error.mock.calls).toEqual([['The note could not be created']]);
 		}
+	});
+});
+
+describe('pinnedList', () => {
+	it('takes a list, and treats anything else as none', async () => {
+		const { pinnedList } = await import('./notesModel');
+		expect(pinnedList([{ id: 'a' }])).toEqual([{ id: 'a' }]);
+		expect(pinnedList({ detail: 'x' })).toEqual([]);
+		expect(pinnedList(null)).toEqual([]);
 	});
 });

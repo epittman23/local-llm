@@ -128,7 +128,7 @@ permission.
 
 | Page | What it does |
 |---|---|
-| `/notes` | A TipTap editor with autosave; a chat about a note sees the note |
+| `/notes` | A TipTap editor with autosave and a save status; math typeset with KaTeX and code highlighted, the Markdown kept as written; pinned notes lead the list and the sidebar; a new note left empty is dropped; a chat about a note sees the note |
 | `/calendar` | Month, week and day views; event alerts come from the backend's scheduler |
 | `/automations` | Prompts run on a schedule (an RRULE), with each run listed |
 | `/channels/<id>` | Live messages, threads, reactions, pins and members |

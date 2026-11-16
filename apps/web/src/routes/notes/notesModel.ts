@@ -5,12 +5,33 @@ import { updateNoteAccessGrants } from '@/lib/apis/notes';
 import { markdownToHtml } from '@/lib/editor/markdown';
 import type { SessionUser } from '@/lib/stores/authStore';
 import { getTimeRange } from '@/lib/utils/api-helpers';
+import { dayjs } from '@/lib/utils/dates';
 
 // The rules behind the Notes surface (components/notes/Notes.svelte,
 // NoteEditor.svelte, utils.ts). A note's body is stored three ways at once --
 // TipTap JSON, HTML and Markdown -- under `data.content`.
 
 export type NoteContent = { json: unknown; html: string; md: string };
+
+/** A new note's title (#1037, S6-D4): the editor opens on it, selected, so typing replaces it. */
+export const NEW_NOTE_TITLE = 'Untitled';
+
+/**
+ * What the editor is told about a note it opens: `fresh` when "New note" just
+ * made it empty, so the editor focuses the title and, if nothing is ever
+ * typed, deletes it on the way out (S6-D4).
+ */
+export type NoteOpenState = { fresh?: boolean };
+
+/** Whether a note still holds nothing anyone wrote: the new-note title, or none, and no text. */
+export const isUntouchedNote = (n: { title?: string | null; data?: { content?: Partial<NoteContent> } | null }) =>
+	(!n.title?.trim() || n.title.trim() === NEW_NOTE_TITLE) && !n.data?.content?.md?.trim();
+
+/** The pinned notes (GET /notes/pinned), shared by the list and the sidebar's Pinned notes (#963). */
+export const PINNED_NOTES_KEY = ['pinned-notes'];
+
+/** GET /notes/pinned's list; anything but a list (a proxy's error page, an older server) is none. */
+export const pinnedList = (res: unknown): NoteListItem[] => (Array.isArray(res) ? res : []);
 export type NoteListItem = {
 	id: string;
 	title: string;
@@ -46,12 +67,66 @@ export const contentFromMarkdown = (md = '', html?: string): NoteContent => ({
 	md
 });
 
-/** What the editor loads: the JSON if there is any, else the HTML, else the Markdown rendered. */
+/**
+ * What the editor loads: the JSON the editor saved, if there is any; else the
+ * Markdown rendered; else the HTML. A note no editor has saved yet (Import, a
+ * `?content=` link) has no JSON, and its HTML was rendered from its Markdown
+ * when it was made. Before #1134 that rendering dropped task-list ticks, so
+ * the Markdown it came from is the copy to trust.
+ */
 export function editorContent(c: Partial<NoteContent> | null | undefined): unknown {
 	if (c?.json) return c.json;
-	if (c?.html) return c.html;
-	return c?.md ? markdownToHtml(c.md) : '';
+	if (c?.md) return markdownToHtml(c.md);
+	return c?.html ?? '';
 }
+
+/**
+ * A note's Markdown as the words a reader sees, for a list row's preview and
+ * a grid card (#935): no heading, list, task or quote markers, no fences,
+ * emphasis or HTML tags, links as their text, and no table rules. Formulas
+ * keep their source. Lines stay lines; blank ones go.
+ */
+export function notePreview(md: string | null | undefined): string {
+	return (md ?? '')
+		.replace(/^[ \t]*(```|~~~).*$/gm, '')
+		.replace(/^[ \t]*\|?[ \t]*:?-{3,}.*$/gm, '')
+		.replace(/<\/?[a-z][^>]*>/gi, '')
+		.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+		.replace(/^[ \t]*>[ \t]?/gm, '')
+		.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm, '')
+		.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+		.replace(/(\*\*|__|~~|==)(\S(?:.*?\S)?)\1/g, '$2')
+		.replace(/(^|[^\w*])\*(\S(?:.*?\S)?)\*(?!\w)/g, '$1$2')
+		.replace(/`([^`]+)`/g, '$1')
+		.replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, cells: string) =>
+			cells
+				.split('|')
+				.map((c) => c.trim())
+				.join('  ')
+		)
+		.split('\n')
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.join('\n');
+}
+
+/**
+ * When a note changed, short enough to stay on one line (DAT-5, #1073):
+ * "now", "13 min", the time today, "14 Nov" this year, "14 Nov 2025" before.
+ * `ns` is the server's nanoseconds.
+ */
+export function shortTime(ns: number, now = new Date()): string {
+	const t = dayjs(ns / 1_000_000);
+	const minutes = dayjs(now).diff(t, 'minute');
+	if (minutes < 1) return 'now';
+	if (minutes < 60) return `${minutes} min`;
+	if (t.isSame(now, 'day')) return t.format('LT');
+	return t.format(t.isSame(now, 'year') ? 'D MMM' : 'D MMM YYYY');
+}
+
+/** The exact time behind `shortTime`, for its Tip. */
+export const fullTime = (ns: number) => dayjs(ns / 1_000_000).format('LLLL');
 
 /** Only .md and .txt become notes; the title is the file name without its extension. */
 export function importableNote(file: { name: string; type: string }): { title: string } | null {

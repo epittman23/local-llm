@@ -70,7 +70,10 @@ async function mockNotes(page: Page, notes: Rec[] = []) {
 			seen.deleted.push(id);
 			return json(route, true);
 		}
-		return byId.has(id) ? json(route, byId.get(id)) : json(route, { detail: 'Not found' }, 404);
+		// The server's own words for a note that is not there (ERROR_MESSAGES.NOT_FOUND).
+		return byId.has(id)
+			? json(route, byId.get(id))
+			: json(route, { detail: "We could not find what you're looking for :/" }, 404);
 	});
 	await page.route('**/api/chat/completions', (route) => {
 		seen.completions.push(route.request().postDataJSON());
@@ -96,9 +99,9 @@ test('lists notes grouped by time; search and sort go to the server; grid shows 
 		note('b', 'Old idea', { updated_at: new Date('2025-02-01').getTime() * 1_000_000 })
 	]);
 	await page.goto('/notes');
-	await expect(page.getByRole('region', { name: 'Today' }).getByRole('link', { name: /Groceries/ })).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Today' }).getByRole('button', { name: /^Groceries/ })).toBeVisible();
 	await expect(page.getByRole('region', { name: '2025' })).toBeVisible();
-	await page.getByLabel('Search Notes').fill('groc');
+	await page.getByLabel('Search notes').fill('groc');
 	await expect.poll(() => seen.searches.some((q) => new URLSearchParams(q).get('query') === 'groc')).toBe(true);
 	await page.getByRole('button', { name: 'Title' }).click();
 	await expect
@@ -108,18 +111,24 @@ test('lists notes grouped by time; search and sort go to the server; grid shows 
 			)
 		)
 		.toBe(true);
-	await page.getByLabel('Display').selectOption('grid');
+	await page.getByRole('radio', { name: 'Grid' }).click();
 	await expect(page.getByText('Body of Groceries')).toBeVisible();
 });
 
-test('Create makes a dated note and opens it; ?title= makes one from a link', async ({ page }) => {
+test('New note makes an Untitled note, opens it on its title, and drops it if left empty; ?title= makes one from a link (S6-D4)', async ({
+	page
+}) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page);
 	await page.goto('/notes');
-	await page.getByRole('button', { name: 'Create', exact: true }).click();
+	await page.getByRole('button', { name: 'New note', exact: true }).first().click();
 	await expect(page).toHaveURL(/\/notes\/n11$/);
+	await expect(page.getByLabel('Title', { exact: true })).toBeFocused();
+	await page.getByRole('link', { name: 'Back to notes' }).click();
+	await expect.poll(() => seen.deleted).toEqual(['n11']);
+	expect(seen.updates).toEqual([]);
 	expect(seen.created[0]).toMatchObject({
-		title: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+		title: 'Untitled',
 		data: { content: { json: null, html: '', md: '' } },
 		access_grants: []
 	});
@@ -141,7 +150,7 @@ test('a ?title= link whose create fails says so and shows the list, not an endle
 		await page.goto(link);
 		await expect(page.getByText('Notes are not allowed')).toBeVisible();
 		await expect(page).toHaveURL(/\/notes$/);
-		await expect(page.getByText('Groceries')).toBeVisible();
+		await expect(page.getByText('Groceries', { exact: true })).toBeVisible();
 	}
 });
 
@@ -152,7 +161,7 @@ test('a ?title= link whose create returns no note says so and shows the list (#2
 	await page.goto('/notes?content=%23%20Hello');
 	await expect(page.getByText('The note could not be created')).toBeVisible();
 	await expect(page).toHaveURL(/\/notes$/);
-	await expect(page.getByText('Groceries')).toBeVisible();
+	await expect(page.getByText('Groceries', { exact: true })).toBeVisible();
 });
 
 test('importing: md/txt become notes, anything else is refused', async ({ page }) => {
@@ -167,7 +176,7 @@ test('importing: md/txt become notes, anything else is refused', async ({ page }
 	await page
 		.getByLabel('Import note files')
 		.setInputFiles([{ name: 'x.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF') }]);
-	await expect(page.getByText('Only txt and md files are allowed')).toBeVisible();
+	await expect(page.getByText("“x.pdf” is not a .md or .txt file, so it wasn't imported.")).toBeVisible();
 });
 
 test('an open note has one h1, named for the note (A11Y-3)', async ({ page }) => {
@@ -262,7 +271,7 @@ test('pinning keeps an unsaved title edit, and the save sends it', async ({ page
 	const title = page.getByLabel('Title', { exact: true });
 	await title.fill('Weekly groceries');
 	await page.getByRole('button', { name: 'Note menu' }).click();
-	await page.getByRole('menuitem', { name: 'Pin to Sidebar' }).click();
+	await page.getByRole('menuitem', { name: 'Pin to sidebar' }).click();
 	await expect.poll(() => seen.pinned).toEqual(['a']);
 	await expect(title).toHaveValue('Weekly groceries');
 	await expect.poll(() => seen.updates.at(-1)?.title).toBe('Weekly groceries');
@@ -286,16 +295,16 @@ test('generate title uses the chosen model; the menu pins and deletes', async ({
 	expect(seen.completions[0]).toMatchObject({ model: 'qwen', stream: false });
 	expect(seen.completions[0].messages[0].content).toContain('Body of Untitled');
 	await page.getByRole('button', { name: 'Note menu' }).click();
-	await page.getByRole('menuitem', { name: 'Pin to Sidebar' }).click();
+	await page.getByRole('menuitem', { name: 'Pin to sidebar' }).click();
 	await expect.poll(() => seen.pinned).toEqual(['a']);
 	await page.getByRole('button', { name: 'Note menu' }).click();
 	await page.getByRole('menuitem', { name: 'Delete' }).click();
-	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete note' }).click();
 	await expect(page).toHaveURL(/\/notes$/);
 	expect(seen.deleted).toEqual(['a']);
 });
 
-test('a note without write access is read-only; an unknown note goes back to the list', async ({ page }) => {
+test('a note without write access is read-only; an unknown note says so in place (#1110)', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	await mockNotes(page, [note('r', 'Shared', { write_access: false })]);
 	await page.goto('/notes/r');
@@ -303,5 +312,8 @@ test('a note without write access is read-only; an unknown note goes back to the
 	await expect(page.getByRole('textbox', { name: 'Note content' })).toHaveAttribute('contenteditable', 'false');
 	await expect(page.getByRole('button', { name: 'Generate title' })).toHaveCount(0);
 	await page.goto('/notes/missing');
+	await expect(page.getByRole('heading', { name: 'This note no longer exists' })).toBeVisible();
+	await expect(page).toHaveURL(/\/notes\/missing$/);
+	await page.getByRole('link', { name: 'Back to notes' }).click();
 	await expect(page).toHaveURL(/\/notes$/);
 });

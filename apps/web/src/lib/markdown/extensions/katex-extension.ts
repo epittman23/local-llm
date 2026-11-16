@@ -20,6 +20,9 @@ const ALLOWED_SURROUNDING_CHARS =
 // markdown rendering time to be spent in KaTeX regex compilation.
 const ALLOWED_SURROUNDING_CHARS_REGEX = new RegExp(`[${ALLOWED_SURROUNDING_CHARS}]`, 'u');
 
+/** Whether math may start or end next to this character (so `$5 and $10` is no formula). */
+export const isMathBoundary = (ch: string): boolean => ALLOWED_SURROUNDING_CHARS_REGEX.test(ch);
+
 // const DELIMITER_LIST = [
 //     { left: '$$', right: '$$', display: false },
 //     { left: '$', right: '$', display: false },
@@ -32,7 +35,7 @@ const inlinePatterns = [];
 const blockPatterns = [];
 
 function escapeRegex(string) {
-	return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+	return string.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
 function generateRegexRules(delimiters) {
