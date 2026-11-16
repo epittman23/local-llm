@@ -119,6 +119,20 @@
 	.rich-text :where(pre code) {
 		@apply bg-transparent p-0;
 	}
+	/* A note's code block (components/common/RichTextCodeBlock): the frame and header are the view's. */
+	.rich-text :where([data-slot="note-code-block"] pre) {
+		@apply my-0 rounded-none;
+	}
+	/* Math in a note (lib/editor/mathPreview): the typeset formula stands in for its source, hidden here. */
+	.rich-text :where(.math-source, .math-block br) {
+		display: none;
+	}
+	.rich-text :where(.math-render-display) {
+		@apply block overflow-x-auto py-1 text-center;
+	}
+	.rich-text[contenteditable="true"] :where(.math-render) {
+		@apply hover:bg-surface-3 cursor-text rounded;
+	}
 	.rich-text :where(a) {
 		@apply underline;
 	}

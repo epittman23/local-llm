@@ -8,20 +8,50 @@ import { type Editor, EditorContent, useEditor, useEditorState } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import {
 	Bold,
-	Code2,
+	Code,
 	Heading1,
 	Heading2,
+	Heading3,
+	Highlighter,
 	Italic,
+	Link2,
 	List,
 	ListChecks,
 	ListOrdered,
 	Quote,
-	Strikethrough
+	Redo2,
+	Sigma,
+	SquareCode,
+	Strikethrough,
+	Table,
+	Undo2
 } from 'lucide-react';
-import { type ReactNode, useEffect, useRef } from 'react';
+import {
+	type ComponentProps,
+	type FormEvent,
+	type KeyboardEvent,
+	type ReactNode,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState
+} from 'react';
+import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { htmlToMarkdown } from '@/lib/editor/markdown';
+import { MathPreview } from '@/lib/editor/mathPreview';
+import { formatChord } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
+import { RichTextCodeBlock } from './RichTextCodeBlock';
 
 export type EditorContentValue = { html: string; json: unknown; md: string };
 
@@ -65,7 +95,10 @@ export function RichTextEditor({
 		immediatelyRender: false,
 		editable,
 		extensions: [
-			StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
+			// The code block is RichTextCodeBlock: highlighted, with its language and Copy (CNT-2).
+			StarterKit.configure({ codeBlock: false, link: { openOnClick: false, autolink: true } }),
+			RichTextCodeBlock,
+			MathPreview,
 			TaskList,
 			TaskItem.configure({ nested: true }),
 			TableKit.configure({ table: { resizable: true } }),
@@ -124,84 +157,309 @@ export function RichTextEditor({
 	);
 }
 
+/** A tool's hint: its name, and its shortcut when it has one ("Bold, Ctrl+B"). */
+export const toolHint = (label: string, chord?: string) => (chord ? `${label}, ${formatChord(chord)}` : label);
+
+/**
+ * One tool: an icon button named for what it does, with its name and shortcut
+ * in a Tip (ACT-4). `active` marks a format that is on at the caret. `blocked`
+ * keeps a tool that cannot act now (Undo with nothing to undo) focusable and
+ * says so, rather than dropping it from the arrow-key order (ACT-5).
+ */
 function ToolButton({
 	label,
+	chord,
 	active,
+	blocked = false,
 	onClick,
-	children
+	children,
+	...props
 }: {
 	label: string;
-	active: boolean;
-	onClick: () => void;
+	chord?: string;
+	active?: boolean;
+	blocked?: boolean;
+	onClick?: () => void;
 	children: ReactNode;
-}) {
+} & Omit<ComponentProps<typeof Button>, 'onClick' | 'children'>) {
 	return (
-		<Button
-			variant={active ? 'secondary' : 'ghost'}
-			size="icon-xs"
-			type="button"
-			aria-label={label}
-			aria-pressed={active}
-			title={label}
-			onMouseDown={(e) => e.preventDefault()}
-			onClick={onClick}
-		>
-			{children}
-		</Button>
+		<Tip content={toolHint(label, chord)}>
+			<Button
+				variant={active ? 'secondary' : 'ghost'}
+				size="icon-sm"
+				type="button"
+				data-tool=""
+				aria-label={label}
+				aria-pressed={active}
+				aria-disabled={blocked || undefined}
+				className={cn(blocked && 'text-foreground-disabled hover:text-foreground-disabled cursor-not-allowed')}
+				// The editor keeps its selection while a tool is pressed.
+				onMouseDown={(e) => e.preventDefault()}
+				onClick={() => !blocked && onClick?.()}
+				{...props}
+			>
+				{children}
+			</Button>
+		</Tip>
 	);
 }
 
-/** A compact formatting bar (the Svelte editor's FormattingButtons, as a row rather than a bubble menu). */
+const Divider = () => <div aria-hidden className="bg-border-divider mx-1 h-4 w-px shrink-0" />;
+
+/** Link: the address for the selection or the link at the caret; an empty address removes the link. */
+function LinkTool({ editor, active }: { editor: Editor; active: boolean }) {
+	const [open, setOpen] = useState(false);
+	const [href, setHref] = useState('');
+	const apply = (e: FormEvent) => {
+		e.preventDefault();
+		const url = href.trim();
+		const chain = editor.chain().focus().extendMarkRange('link');
+		if (!url) chain.unsetLink().run();
+		else if (editor.state.selection.empty && !active)
+			chain.insertContent({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] }).run();
+		else chain.setLink({ href: url }).run();
+		setOpen(false);
+	};
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				if (next) setHref((editor.getAttributes('link').href as string | undefined) ?? '');
+				setOpen(next);
+			}}
+		>
+			<PopoverTrigger asChild>
+				<ToolButton label="Link" active={active}>
+					<Link2 />
+				</ToolButton>
+			</PopoverTrigger>
+			<PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)]">
+				<form onSubmit={apply} className="flex flex-col gap-2">
+					<Input
+						aria-label="Link address"
+						placeholder="https://"
+						value={href}
+						onChange={(e) => setHref(e.target.value)}
+						autoFocus
+					/>
+					<div className="flex justify-end gap-2">
+						{active && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									editor.chain().focus().extendMarkRange('link').unsetLink().run();
+									setOpen(false);
+								}}
+							>
+								Remove link
+							</Button>
+						)}
+						<Button type="submit" size="sm">
+							{active ? 'Update link' : 'Add link'}
+						</Button>
+					</div>
+				</form>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/** Table: inserts a 3 by 3 table, or, with the caret in one, the row, column and table actions. */
+function TableTool({ editor, inTable }: { editor: Editor; inTable: boolean }) {
+	const c = () => editor.chain().focus();
+	if (!inTable)
+		return (
+			<ToolButton label="Table" onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+				<Table />
+			</ToolButton>
+		);
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<ToolButton label="Table" active>
+					<Table />
+				</ToolButton>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="min-w-44">
+				<DropdownMenuItem onSelect={() => c().addRowAfter().run()}>Add row below</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => c().addColumnAfter().run()}>Add column right</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => c().deleteRow().run()}>Delete row</DropdownMenuItem>
+				<DropdownMenuItem onSelect={() => c().deleteColumn().run()}>Delete column</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem variant="destructive" onSelect={() => c().deleteTable().run()}>
+					Delete table
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/** Formula: the selection, or a placeholder `x`, written as inline math with the formula selected (CNT-3). */
+export function insertFormula(editor: Editor) {
+	const { from, to } = editor.state.selection;
+	const latex = editor.state.doc.textBetween(from, to) || 'x';
+	editor
+		.chain()
+		.focus()
+		.insertContentAt({ from, to }, `$${latex}$`)
+		.setTextSelection({ from: from + 1, to: from + 1 + latex.length })
+		.run();
+}
+
+/**
+ * The formatting bar (#1038): history, headings, inline formats, lists and
+ * blocks, each a Tip-named icon button with its shortcut. It is one tab stop:
+ * the arrow keys, Home and End move between tools, and Escape returns to the
+ * text (NAV-5). On a narrow screen it scrolls in its own row instead of
+ * wrapping (LAY-7).
+ */
 function Toolbar({ editor }: { editor: Editor }) {
 	const s = useEditorState({
 		editor,
 		selector: ({ editor: e }) => ({
+			undo: e.can().undo(),
+			redo: e.can().redo(),
 			bold: e.isActive('bold'),
 			italic: e.isActive('italic'),
 			strike: e.isActive('strike'),
+			code: e.isActive('code'),
+			highlight: e.isActive('highlight'),
+			link: e.isActive('link'),
 			h1: e.isActive('heading', { level: 1 }),
 			h2: e.isActive('heading', { level: 2 }),
+			h3: e.isActive('heading', { level: 3 }),
 			bullet: e.isActive('bulletList'),
 			ordered: e.isActive('orderedList'),
 			task: e.isActive('taskList'),
-			code: e.isActive('codeBlock'),
-			quote: e.isActive('blockquote')
+			codeBlock: e.isActive('codeBlock'),
+			quote: e.isActive('blockquote'),
+			table: e.isActive('table')
 		})
 	});
+	const bar = useRef<HTMLDivElement>(null);
+	const [current, setCurrent] = useState(0);
+	const tools = () => Array.from(bar.current?.querySelectorAll<HTMLElement>('[data-tool]') ?? []);
+	// Only the current tool is in the page's tab order.
+	useLayoutEffect(() => {
+		tools().forEach((tool, i) => {
+			tool.tabIndex = i === current ? 0 : -1;
+		});
+	});
+	const onKeyDown = (e: KeyboardEvent) => {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			editor.commands.focus();
+			return;
+		}
+		const list = tools();
+		const at = list.indexOf(document.activeElement as HTMLElement);
+		if (at < 0) return;
+		const next = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: list.length - 1 }[e.key];
+		if (next === undefined) return;
+		e.preventDefault();
+		const to = (next + list.length) % list.length;
+		list[to].focus();
+		setCurrent(to);
+	};
 	const c = () => editor.chain().focus();
-	const icon = 'size-3.5';
 	return (
-		<div role="toolbar" aria-label="Formatting" className="mb-1 flex flex-wrap items-center gap-0.5">
-			<ToolButton label="Bold" active={s.bold} onClick={() => c().toggleBold().run()}>
-				<Bold className={icon} />
+		<div
+			ref={bar}
+			role="toolbar"
+			aria-label="Formatting"
+			onKeyDown={onKeyDown}
+			onFocus={(e) => {
+				const at = tools().indexOf(e.target as HTMLElement);
+				if (at >= 0) setCurrent(at);
+			}}
+			className="scroll-region mb-1 flex shrink-0 items-center gap-0.5 overflow-x-auto pb-0.5 [&_svg]:size-4"
+		>
+			<ToolButton label="Undo" chord="Cmd+Z" blocked={!s.undo} onClick={() => c().undo().run()}>
+				<Undo2 />
 			</ToolButton>
-			<ToolButton label="Italic" active={s.italic} onClick={() => c().toggleItalic().run()}>
-				<Italic className={icon} />
+			<ToolButton label="Redo" chord="Cmd+Shift+Z" blocked={!s.redo} onClick={() => c().redo().run()}>
+				<Redo2 />
 			</ToolButton>
-			<ToolButton label="Strikethrough" active={s.strike} onClick={() => c().toggleStrike().run()}>
-				<Strikethrough className={icon} />
+			<Divider />
+			<ToolButton
+				label="Heading 1"
+				chord="Cmd+Alt+1"
+				active={s.h1}
+				onClick={() => c().toggleHeading({ level: 1 }).run()}
+			>
+				<Heading1 />
 			</ToolButton>
-			<ToolButton label="Heading 1" active={s.h1} onClick={() => c().toggleHeading({ level: 1 }).run()}>
-				<Heading1 className={icon} />
+			<ToolButton
+				label="Heading 2"
+				chord="Cmd+Alt+2"
+				active={s.h2}
+				onClick={() => c().toggleHeading({ level: 2 }).run()}
+			>
+				<Heading2 />
 			</ToolButton>
-			<ToolButton label="Heading 2" active={s.h2} onClick={() => c().toggleHeading({ level: 2 }).run()}>
-				<Heading2 className={icon} />
+			<ToolButton
+				label="Heading 3"
+				chord="Cmd+Alt+3"
+				active={s.h3}
+				onClick={() => c().toggleHeading({ level: 3 }).run()}
+			>
+				<Heading3 />
 			</ToolButton>
-			<ToolButton label="Bullet list" active={s.bullet} onClick={() => c().toggleBulletList().run()}>
-				<List className={icon} />
+			<Divider />
+			<ToolButton label="Bold" chord="Cmd+B" active={s.bold} onClick={() => c().toggleBold().run()}>
+				<Bold />
 			</ToolButton>
-			<ToolButton label="Numbered list" active={s.ordered} onClick={() => c().toggleOrderedList().run()}>
-				<ListOrdered className={icon} />
+			<ToolButton label="Italic" chord="Cmd+I" active={s.italic} onClick={() => c().toggleItalic().run()}>
+				<Italic />
 			</ToolButton>
-			<ToolButton label="Task list" active={s.task} onClick={() => c().toggleTaskList().run()}>
-				<ListChecks className={icon} />
+			<ToolButton label="Strikethrough" chord="Cmd+Shift+S" active={s.strike} onClick={() => c().toggleStrike().run()}>
+				<Strikethrough />
 			</ToolButton>
-			<ToolButton label="Code block" active={s.code} onClick={() => c().toggleCodeBlock().run()}>
-				<Code2 className={icon} />
+			<ToolButton
+				label="Highlight"
+				chord="Cmd+Shift+H"
+				active={s.highlight}
+				onClick={() => c().toggleHighlight().run()}
+			>
+				<Highlighter />
 			</ToolButton>
-			<ToolButton label="Quote" active={s.quote} onClick={() => c().toggleBlockquote().run()}>
-				<Quote className={icon} />
+			<ToolButton label="Inline code" chord="Cmd+E" active={s.code} onClick={() => c().toggleCode().run()}>
+				<Code />
 			</ToolButton>
+			<ToolButton label="Formula" onClick={() => insertFormula(editor)}>
+				<Sigma />
+			</ToolButton>
+			<LinkTool editor={editor} active={s.link} />
+			<Divider />
+			<ToolButton
+				label="Bullet list"
+				chord="Cmd+Shift+8"
+				active={s.bullet}
+				onClick={() => c().toggleBulletList().run()}
+			>
+				<List />
+			</ToolButton>
+			<ToolButton
+				label="Numbered list"
+				chord="Cmd+Shift+7"
+				active={s.ordered}
+				onClick={() => c().toggleOrderedList().run()}
+			>
+				<ListOrdered />
+			</ToolButton>
+			<ToolButton label="Task list" chord="Cmd+Shift+9" active={s.task} onClick={() => c().toggleTaskList().run()}>
+				<ListChecks />
+			</ToolButton>
+			<Divider />
+			<ToolButton label="Quote" chord="Cmd+Shift+B" active={s.quote} onClick={() => c().toggleBlockquote().run()}>
+				<Quote />
+			</ToolButton>
+			<ToolButton label="Code block" chord="Cmd+Alt+C" active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()}>
+				<SquareCode />
+			</ToolButton>
+			<TableTool editor={editor} inTable={s.table} />
 		</div>
 	);
 }
