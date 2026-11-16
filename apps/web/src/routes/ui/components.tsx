@@ -16,6 +16,7 @@ import {
 	TriangleAlertIcon
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
@@ -75,6 +76,7 @@ import { ServerUnreachableError } from '@/lib/apis/errors';
 import type { History, Message } from '@/lib/chat/history';
 import { THEMES, type ThemeId } from '@/lib/theme';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
+import { SubTabs } from '@/routes/admin/AdminLayout';
 import { ResponseMessage } from '@/routes/chat/ChatMessages';
 import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { ModelRow } from '@/routes/chat/ModelSelector';
@@ -163,6 +165,36 @@ export function ActionsSection() {
 						Nothing is being served, so there is nothing to test.
 					</span>
 				</div>
+			</Example>
+			<Example
+				title="Disabled switches"
+				note="A disabled switch still shows whether it is on: its edge turns to a divider, and the on track or the off knob turns the disabled grey. The same happens inside a disabled fieldset, which is how a tab that saves at once holds its controls while a save is in flight."
+			>
+				<Panel className="flex max-w-[40rem] flex-col gap-4">
+					<DemoSwitchRow
+						id="ui-demo-switch-off"
+						label="Image generation"
+						help="Off on this install. Turn it on in Admin > Settings > Images."
+						checked={false}
+						disabled
+					/>
+					<DemoSwitchRow
+						id="ui-demo-switch-on"
+						label="Code interpreter"
+						help="On for everyone. The server's configuration sets it, so it can't be changed here."
+						checked
+						disabled
+					/>
+					<fieldset disabled aria-busy className="flex flex-col gap-4 border-t pt-4">
+						<legend className="sr-only">Connections, while a change saves</legend>
+						<p className="text-foreground-muted flex items-center gap-2 text-dense">
+							<Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+							Saving…
+						</p>
+						<DemoSwitchRow id="ui-demo-fieldset-on" label="OpenAI-compatible connections" checked />
+						<DemoSwitchRow id="ui-demo-fieldset-off" label="Ollama" checked={false} />
+					</fieldset>
+				</Panel>
 			</Example>
 			<Example
 				title="Icon buttons"
@@ -593,8 +625,48 @@ const DEMO_CHATS = [
 	{ group: 'Previous 7 days', titles: ['Bootstrap confidence interval', 'Refactor the CSV reader'] }
 ];
 
+/** A labelled switch with its help line, for the disabled states (ACT-5). */
+function DemoSwitchRow({
+	id,
+	label,
+	help,
+	checked,
+	disabled
+}: {
+	id: string;
+	label: string;
+	help?: string;
+	checked: boolean;
+	disabled?: boolean;
+}) {
+	return (
+		<div className="flex items-start justify-between gap-6">
+			<div>
+				<Label htmlFor={id} className="text-body font-strong">
+					{label}
+				</Label>
+				{help && (
+					<p id={`${id}-help`} className="text-foreground-muted mt-1 text-dense">
+						{help}
+					</p>
+				)}
+			</div>
+			<Switch id={id} checked={checked} disabled={disabled} aria-describedby={help ? `${id}-help` : undefined} />
+		</div>
+	);
+}
+
+const DEMO_SUB_TABS = [
+	{ id: 'overview', label: 'Overview', count: '12' },
+	{ id: 'groups', label: 'Groups', count: '3' },
+	{ id: 'permissions', label: 'Default permissions' }
+];
+
 export function NavigationSection() {
 	const [settingsTab, setSettingsTab] = useState('general');
+	// The sub-tabs demo opens its tabs by the address's hash, so the page neither moves nor leaves.
+	const { hash } = useLocation();
+	const subTab = DEMO_SUB_TABS.find((t) => hash === `#ui-subtab-${t.id}`)?.id ?? 'overview';
 	const [picked, setPicked] = useState('demo-coder');
 	const settingsTitle = DEMO_SETTINGS_TABS.find((t) => t.id === settingsTab)?.title ?? '';
 	return (
@@ -647,6 +719,21 @@ export function NavigationSection() {
 							Every upload and deletion.
 						</TabsContent>
 					</Tabs>
+				</Panel>
+			</Example>
+			<Example
+				title="A section's sub-tabs"
+				note="Admin > Users and Evaluations: a strip of links above the section's content, a navigation landmark named for its section, the open one marked as the current page, and counts as secondary badges. A strip too wide for the screen scrolls sideways, with a fade at the edge that hides more."
+			>
+				<Panel className="max-w-[40rem] px-0">
+					<SubTabs
+						label="Users sections"
+						active={subTab}
+						tabs={DEMO_SUB_TABS.map((t) => ({ ...t, to: `#ui-subtab-${t.id}` }))}
+					/>
+					<p className="text-foreground-muted px-4 pt-4">
+						The {DEMO_SUB_TABS.find((t) => t.id === subTab)?.label} section.
+					</p>
 				</Panel>
 			</Example>
 			<Example
