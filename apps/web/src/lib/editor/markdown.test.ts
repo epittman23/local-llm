@@ -37,6 +37,21 @@ describe('htmlToMarkdown', () => {
 		);
 		expect(htmlToMarkdown('<p>Before</p><p>$$</p><p>After</p>')).toBe('Before\n$$\nAfter');
 	});
+	it('\\[...\\] and equation environments are display math too', () => {
+		expect(htmlToMarkdown('<p>a</p><p>\\[<br>x^2<br>\\]</p>')).toBe('a\n\n\\[\nx^2\n\\]');
+		expect(htmlToMarkdown('<p>\\begin{equation}<br>a = b<br>\\end{equation}</p><p>c</p>')).toBe(
+			'\\begin{equation}\na = b\n\\end{equation}\n\nc'
+		);
+	});
+	it('a $$ paragraph holding formatting, or more than one formula, stays an ordinary paragraph', () => {
+		const md = '$$E=mc^2$$ versus the **Newtonian** [form](https://x.y) $$E=\\tfrac12 mv^2$$';
+		expect(htmlToMarkdown(markdownToHtml(md))).toBe(md);
+		expect(htmlToMarkdown('<p>$$a$$ is <strong>not</strong> <mark>hi</mark> $$b$$</p>')).toBe(
+			'$$a$$ is **not** <mark>hi</mark> $$b$$'
+		);
+		expect(htmlToMarkdown('<p>$$ <a href="http://x">l</a> $$</p>')).toBe('$$ [l](http://x) $$');
+		expect(htmlToMarkdown('<p>$$a$$ and $$b$$</p>')).toBe('$$a$$ and $$b$$');
+	});
 });
 
 describe('markdownToHtml', () => {

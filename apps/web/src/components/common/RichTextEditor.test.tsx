@@ -23,6 +23,14 @@ const NOTE = [
 	'\\hat\\beta = (X^TX)^{-1}X^Ty \\\\ a*b*c',
 	'$$',
 	'',
+	'\\[',
+	'x^2 + y^2',
+	'\\]',
+	'',
+	'\\begin{equation}',
+	'a = b',
+	'\\end{equation}',
+	'',
 	'- [ ] residual plot',
 	'- [x] QQ plot'
 ].join('\n');
@@ -49,9 +57,15 @@ describe('RichTextEditor', () => {
 		const { onChange, editor, view } = await mount(editorContent({ md: NOTE + table }));
 		const rerender = (editable: boolean) =>
 			view.rerender(<RichTextEditor content={null} contentKey="n1" editable={editable} onChange={onChange} />);
+		// TipTap's own update event, under RichTextEditor's edits-only filter: making the editor
+		// read-only and editable again must not announce an update at all.
+		const updates = vi.fn();
+		editor.on('update', updates);
 		rerender(false);
+		expect(editor.isEditable).toBe(false);
 		rerender(true);
 		expect(editor.isEditable).toBe(true);
+		expect(updates).not.toHaveBeenCalled();
 		// The first click into it: TipTap appends a trailing paragraph after the table, which is no edit either.
 		const before = editor.state.doc.childCount;
 		act(() => {

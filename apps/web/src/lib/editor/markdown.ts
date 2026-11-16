@@ -63,13 +63,27 @@ turndown.addRule('underline', { filter: 'u', replacement: (content) => `<u>${con
 // A highlight is stored as the HTML it came from: Markdown has no syntax for it.
 turndown.addRule('highlight', { filter: 'mark', replacement: (content) => `<mark>${content}</mark>` });
 
-// A paragraph that is display math (`$$...$$`, its lines as hard breaks) is a
-// Markdown block of its own: blank lines around it, line breaks as written.
-// Without the blank line before it, `$$` would join the paragraph above.
+// A paragraph that is display math alone (`$$...$$`, `\[...\]` or an equation
+// environment, its lines as hard breaks, nothing but text inside) is a Markdown
+// block of its own: blank lines around it, line breaks as written. Without the
+// blank line before it, `$$` would join the paragraph above.
+const DISPLAY_MATH = [
+	['$$', '$$'],
+	['\\[', '\\]'],
+	['\\begin{equation}', '\\end{equation}']
+];
 turndown.addRule('displayMath', {
 	filter: (node) => {
-		const text = node.nodeName === 'P' ? (node.textContent ?? '').trim() : '';
-		return text.length > 4 && text.startsWith('$$') && text.endsWith('$$');
+		if (node.nodeName !== 'P') return false;
+		if (!Array.from(node.childNodes).every((c) => c.nodeType === 3 || c.nodeName === 'BR')) return false;
+		const text = (node.textContent ?? '').trim();
+		return DISPLAY_MATH.some(
+			([open, close]) =>
+				text.length > open.length + close.length &&
+				text.startsWith(open) &&
+				text.endsWith(close) &&
+				!text.slice(open.length, -close.length).includes(close)
+		);
 	},
 	replacement: (_content, node) =>
 		`\n\n${Array.from(node.childNodes, (c) => (c.nodeName === 'BR' ? '\n' : c.textContent))
