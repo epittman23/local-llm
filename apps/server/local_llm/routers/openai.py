@@ -1076,12 +1076,60 @@ class ConnectionVerificationForm(BaseModel):
     config: dict | None = None
 
 
+def _verify_target(url: str) -> str:
+    """`host:port` of `url`, for an error message: never the whole URL, which can carry a key."""
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        return url
+    port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    return f'{parsed.hostname}:{port}'
+
+
+def _verify_failure(url: str, error: BaseException) -> str:
+    """Why a connection test failed, in words the admin can act on (#1018)."""
+    if isinstance(error, (aiohttp.InvalidURL, aiohttp.NonHttpUrlClientError)) or not urlparse(url).hostname:
+        return 'This is not a web address. Enter one that starts with http:// or https://.'
+    if isinstance(error, TimeoutError):
+        seconds = AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST
+        return f'Timed out after {seconds} s waiting for {_verify_target(url)}.' if seconds else 'Timed out.'
+    if isinstance(error, aiohttp.ClientConnectorDNSError):
+        return f"Couldn't find the host {urlparse(url).hostname}. Check the address."
+    if isinstance(error, aiohttp.ClientConnectorError):
+        return f'Connection refused at {_verify_target(url)}. Check that the server is running.'
+    if isinstance(error, aiohttp.ClientError):
+        return f'Lost the connection to {_verify_target(url)} before it answered.'
+    return f"Couldn't test the connection to {_verify_target(url)}."
+
+
+def _verify_status(status: int, path: str) -> str:
+    """An upstream's refusal of the model list, with what to check (#1018)."""
+    hint = {
+        401: 'check the API key',
+        403: 'check the API key and what it is allowed to do',
+        404: 'check the URL; an OpenAI-compatible base URL usually ends in /v1',
+    }.get(status)
+    return f'HTTP {status} from {path}: {hint}' if hint else f'HTTP {status} from {path}'
+
+
+async def _verify_models_answer(r: aiohttp.ClientResponse, path: str):
+    """The upstream's model list, or its refusal with the same status and the cause as `detail`."""
+    try:
+        response_data = await r.json(loads=JSONCodec.loads)
+    except Exception:
+        response_data = await r.text()
+    if r.status != 200:
+        return JSONResponse(status_code=r.status, content={'detail': _verify_status(r.status, path)})
+    return response_data
+
+
 @router.post('/verify')
 async def verify_connection(
     request: Request,
     form_data: ConnectionVerificationForm,
     user=Depends(get_admin_user),
 ):
+    """Tests a connection by fetching its model list. A failure keeps its status code
+    (500 when nothing answered, the upstream's own otherwise) and says why in `detail`."""
     url = form_data.url
     key = form_data.key
 
@@ -1116,22 +1164,13 @@ async def verify_connection(
                     cookies=cookies,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as r:
-                    try:
-                        response_data = await r.json(loads=JSONCodec.loads)
-                    except Exception:
-                        response_data = await r.text()
-
-                    if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
-                            return JSONResponse(status_code=r.status, content=response_data)
-                        else:
-                            return PlainTextResponse(status_code=r.status, content=response_data)
-
-                    return response_data
+                    return await _verify_models_answer(r, '/models' if is_azure_v1 else '/openai/models')
             elif is_anthropic_url(url):
                 result = await get_anthropic_models(url, key)
                 if result is None:
-                    raise HTTPException(status_code=500, detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR)
+                    raise HTTPException(
+                        status_code=500, detail=f"Couldn't get a model list from {_verify_target(url)}."
+                    )
                 if 'error' in result:
                     raise HTTPException(status_code=500, detail=result['error'])
                 return result
@@ -1142,26 +1181,13 @@ async def verify_connection(
                     cookies=cookies,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as r:
-                    try:
-                        response_data = await r.json(loads=JSONCodec.loads)
-                    except Exception:
-                        response_data = await r.text()
+                    return await _verify_models_answer(r, '/models')
 
-                    if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
-                            return JSONResponse(status_code=r.status, content=response_data)
-                        else:
-                            return PlainTextResponse(status_code=r.status, content=response_data)
-
-                    return response_data
-
-        except aiohttp.ClientError as e:
-            # ClientError covers all aiohttp requests issues
-            log.exception(f'Client error: {str(e)}')
-            raise HTTPException(status_code=500, detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR)
+        except HTTPException:
+            raise
         except Exception as e:
-            log.exception(f'Unexpected error: {e}')
-            raise HTTPException(status_code=500, detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR)
+            log.exception('Connection test failed')
+            raise HTTPException(status_code=500, detail=_verify_failure(url, e)) from e
 
 
 def get_azure_allowed_params(api_version: str) -> set[str]:
