@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { getChannelMembersById } from '@/lib/apis/channels';
+import { useAuthStore } from '@/lib/stores/authStore';
 import type { Channel } from './channelModel';
 import { MessageComposer } from './MessageComposer';
 
@@ -120,5 +121,31 @@ describe('MessageComposer mentions (#256)', () => {
 		fireEvent.change(box, { target: { value: '@Ada w', selectionStart: 6 } });
 		await act(() => new Promise<void>((done) => requestAnimationFrame(() => done())));
 		expect(box.selectionStart).toBe(6);
+	});
+});
+
+describe('the @ list (#1035)', () => {
+	it('leaves out the person writing', async () => {
+		useAuthStore.setState({ user: { id: 'u2', name: 'Alan' } as never });
+		vi.mocked(getChannelMembersById).mockResolvedValue({ users: [user('u1', 'Ada'), user('u2', 'Alan')] });
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<MessageComposer
+					channel={channel}
+					placeholder="Message"
+					typingUsers={[]}
+					replyTo={null}
+					onCancelReply={vi.fn()}
+					onTyping={vi.fn()}
+					onSubmit={vi.fn()}
+				/>
+			</QueryClientProvider>
+		);
+		const box = screen.getByPlaceholderText('Message') as HTMLTextAreaElement;
+		fireEvent.change(box, { target: { value: '@a', selectionStart: 2 } });
+		fireEvent.select(box, { target: { selectionStart: 2 } });
+		await screen.findByRole('option', { name: /Ada/ }, { timeout: 2000 });
+		expect(screen.queryByRole('option', { name: /Alan/ })).toBeNull();
+		useAuthStore.setState({ user: null });
 	});
 });

@@ -41,7 +41,6 @@
 			"src/routes/admin/users/GroupGeneral.tsx": 2,
 			"src/routes/calendar/CalendarDialogs.tsx": 3,
 			"src/routes/calendar/CalendarPage.tsx": 1,
-			"src/routes/channels/ChannelDialogs.tsx": 2,
 			"src/routes/chat/InputVariablesDialog.tsx": 1,
 			"src/routes/chat/PendingWorkspacesDialog.tsx": 3,
 			"src/routes/chat/ServerDialogs.tsx": 1,

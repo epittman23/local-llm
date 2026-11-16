@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { Channel } from './channelModel';
@@ -13,7 +13,8 @@ import { SidebarChannels } from './SidebarChannels';
 // join, who may post, the permission) is in
 // apps/server/tests/test_channel_public_groups.py.
 
-const { createNewChannel, updateChannelById, toast, list, me } = vi.hoisted(() => ({
+const { createNewChannel, updateChannelById, toast, list, me, enabled } = vi.hoisted(() => ({
+	enabled: { current: true },
 	toast: { error: vi.fn(), success: vi.fn() },
 	createNewChannel: vi.fn(async () => ({ id: 'new' })),
 	updateChannelById: vi.fn(async () => ({ id: 'team' })),
@@ -38,7 +39,7 @@ vi.mock('@/lib/apis/channels', async (importOriginal) => ({
 }));
 vi.mock('./useChannels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	useChannelsEnabled: () => true,
+	useChannelsEnabled: () => enabled.current,
 	useChannelList: () => ({ data: list.current }),
 	useMarkChannelRead: () => () => {}
 }));
@@ -52,12 +53,20 @@ const group = (id: string, extra: Partial<Channel>): Channel => ({
 	...extra
 });
 
-const show = () =>
+function Where() {
+	const location = useLocation();
+	return <p data-testid="where">{`${location.pathname}${location.search}`}</p>;
+}
+
+const show = (onNavigate?: () => void) =>
 	render(
 		<QueryClientProvider client={new QueryClient()}>
 			<TooltipProvider>
 				<MemoryRouter>
-					<SidebarChannels />
+					<SidebarChannels onNavigate={onNavigate} />
+					<Routes>
+						<Route path="*" element={<Where />} />
+					</Routes>
 				</MemoryRouter>
 			</TooltipProvider>
 		</QueryClientProvider>
@@ -82,7 +91,26 @@ describe('the Channels header', () => {
 		expect(toggle).toHaveAttribute('aria-expanded');
 		expect(toggle.parentElement).toHaveClass('flex', 'items-center');
 		expect(toggle.parentElement).not.toHaveClass('px-2');
-		expect(screen.getByRole('button', { name: 'Create Channel' })).toHaveClass('mr-1');
+		expect(screen.getByRole('button', { name: 'New channel' })).toHaveClass('mr-1');
+	});
+
+	it('opens New channel on the channels page and closes the phone sheet first (#967)', () => {
+		list.current = [];
+		const onNavigate = vi.fn();
+		show(onNavigate);
+		fireEvent.click(screen.getByRole('button', { name: 'New channel' }));
+		expect(screen.getByTestId('where')).toHaveTextContent('/channels?new=1');
+		expect(onNavigate).toHaveBeenCalled();
+		expect(screen.getByRole('link', { name: 'All channels' })).toHaveAttribute('href', '/channels');
+	});
+
+	it('is not shown while the install has one account (S6-D1)', () => {
+		list.current = [group('team', {})];
+		enabled.current = false;
+		show();
+		expect(screen.queryByRole('button', { name: 'Channels' })).toBeNull();
+		expect(screen.queryByRole('link', { name: /team/ })).toBeNull();
+		enabled.current = true;
 	});
 });
 
@@ -110,44 +138,13 @@ describe('public group channels in the sidebar', () => {
 		expect(screen.getByRole('link', { name: /lobby/ }).textContent).not.toContain('Join');
 	});
 
-	it('creates a group channel as Public when that is chosen and permitted', async () => {
-		list.current = [];
-		permitted(true);
-		show();
-		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
-
-		fireEvent.change(await screen.findByLabelText(/Channel Name/), { target: { value: 'lobby' } });
-		const visibility = screen.getByLabelText('Visibility');
-		expect((visibility as HTMLSelectElement).value).toBe('private');
-		fireEvent.change(visibility, { target: { value: 'public' } });
-		expect(screen.getByText('Visible to all users')).toBeTruthy();
-		fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
-
-		await waitFor(() => expect(createNewChannel).toHaveBeenCalled());
-		expect(createNewChannel.mock.calls[0]).toEqual([
-			't',
-			expect.objectContaining({ type: 'group', name: 'lobby', is_private: false })
-		]);
-	});
-
-	it('offers Public only to those with sharing.public_channels', async () => {
-		list.current = [];
-		permitted(false);
-		show();
-		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
-		await screen.findByLabelText(/Channel Name/);
-		const option = screen.getByRole('option', { name: 'Public' }) as HTMLOptionElement;
-		expect(option.disabled).toBe(true);
-		expect(screen.getByText('Making a channel public needs a permission from an admin.')).toBeTruthy();
-	});
-
 	it('asks before turning a private channel public, and saves only once confirmed', async () => {
 		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
 		permitted(true);
 		show();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
-		fireEvent.change(await screen.findByLabelText('Visibility'), { target: { value: 'public' } });
-		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+		fireEvent.click(await screen.findByRole('radio', { name: 'Anyone' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
 		expect(await screen.findByText(/read its whole history/)).toBeTruthy();
 		expect(updateChannelById).not.toHaveBeenCalled();
@@ -162,8 +159,8 @@ describe('public group channels in the sidebar', () => {
 		permitted(true);
 		show();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
-		await screen.findByLabelText('Visibility');
-		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+		await screen.findByRole('radiogroup', { name: 'Who can join' });
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 		await waitFor(() => expect(updateChannelById).toHaveBeenCalled());
 		expect(screen.queryByText(/read its whole history/)).toBeNull();
 	});
@@ -173,26 +170,13 @@ describe('public group channels in the sidebar', () => {
 		permitted(true);
 		show();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit team' }));
-		fireEvent.change(await screen.findByLabelText('Visibility'), { target: { value: 'public' } });
-		fireEvent.click(screen.getByRole('button', { name: /^Update$/ }));
+		fireEvent.click(await screen.findByRole('radio', { name: 'Anyone' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
 		await screen.findByText(/read its whole history/);
-		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1) as HTMLElement);
 		await waitFor(() => expect(screen.queryByText(/read its whole history/)).toBeNull());
 		expect(updateChannelById).not.toHaveBeenCalled();
-	});
-
-	it('refuses a direct message with nobody in it', async () => {
-		list.current = [];
-		permitted(true);
-		show();
-		fireEvent.click(screen.getByRole('button', { name: 'Create Channel' }));
-		fireEvent.change(await screen.findByLabelText('Channel Type'), { target: { value: 'dm' } });
-		fireEvent.click(screen.getByRole('button', { name: /^Create$/ }));
-		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith('Please select at least one user for Direct Message channel.')
-		);
-		expect(createNewChannel).not.toHaveBeenCalled();
 	});
 
 	it('warns that saving makes a public channel private for someone without the permission', async () => {
@@ -200,7 +184,7 @@ describe('public group channels in the sidebar', () => {
 		permitted(false);
 		show();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit lobby' }));
-		await screen.findByLabelText('Visibility');
+		await screen.findByRole('radiogroup', { name: 'Who can join' });
 		expect(screen.getByText('You may not keep this channel public: saving makes it private.')).toBeTruthy();
 	});
 });
@@ -216,7 +200,7 @@ describe('direct messages in the sidebar', () => {
 			{ id: 'u2', name: 'Quinn', is_active: active }
 		] as Channel['users']
 	});
-	const dot = () => screen.getByRole('link').querySelector('span.absolute.rounded-full');
+	const dot = () => screen.getByRole('link', { name: /dm1/ }).querySelector('span.absolute.rounded-full');
 
 	it('marks an active partner with the success colour', () => {
 		list.current = [dm(true)];

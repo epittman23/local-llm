@@ -23,6 +23,7 @@ import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { TunePage } from '@/routes/benchmarks/TunePage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { ChannelPage } from '@/routes/channels/ChannelPage';
+import { ChannelsPage } from '@/routes/channels/ChannelsPage';
 import { ChatPage } from '@/routes/chat/ChatPage';
 import { HomePage } from '@/routes/home/HomePage';
 import { NotFound } from '@/routes/NotFound';
@@ -162,6 +163,7 @@ const router = createBrowserRouter(
 								{ path: 'images', element: <PlaygroundImages />, handle: layout('Images') }
 							]
 						},
+						{ path: routePaths.channels, element: <ChannelsPage />, handle: page('Channels') },
 						{ path: `${routePaths.channels}/:id`, element: <ChannelPage />, handle: page('Channel') },
 						{ path: routePaths.homePage, element: <HomePage />, handle: page('Home') },
 						{ path: routePaths.notes, element: <NotesPage />, handle: page('Notes') },

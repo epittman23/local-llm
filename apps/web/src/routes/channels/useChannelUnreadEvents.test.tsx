@@ -14,6 +14,9 @@ import { CHANNELS_KEY, useChannelUnreadEvents } from './useChannels';
 // count it; a model's reply is not announced while it is still empty.
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
+// Channels show with more than one account (S6-D1).
+const accounts = vi.hoisted(() => ({ single: false }));
+vi.mock('@/routes/workspace/workspaceAccess', () => ({ useSingleUser: () => accounts.single }));
 vi.mock('sonner', () => ({ toast }));
 const handlers = vi.hoisted(() => new Map<string, (event: unknown) => void>());
 vi.mock('@/lib/socket/SocketProvider', () => ({
