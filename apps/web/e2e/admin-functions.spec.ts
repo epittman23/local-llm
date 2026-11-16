@@ -92,7 +92,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 1', { exact: true })).toHaveCount(0);
 
-		await page.getByRole('button', { name: 'Clear tag' }).click();
+		await page.getByRole('button', { name: 'Clear tag filter' }).click();
 		await page.getByLabel('Search Functions').fill('zedzed');
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 3', { exact: true })).toHaveCount(0);

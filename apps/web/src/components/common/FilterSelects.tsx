@@ -35,16 +35,24 @@ export function FilterMenu({
 			<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align="end"
-				className={asWritten ? 'max-w-[min(28rem,calc(100vw-2rem))] min-w-40' : 'min-w-40'}
+				// An id list sizes to its longest id up to the cap, and an id past it ends in an ellipsis (TYP-7).
+				className={asWritten ? 'w-max max-w-[min(28rem,calc(100vw-2rem))] min-w-40' : 'min-w-40'}
 			>
 				<DropdownMenuRadioGroup value={value} onValueChange={onChange}>
 					{items.map((item) => (
 						<DropdownMenuRadioItem
 							key={item.value}
 							value={item.value}
-							className={asWritten ? 'font-mono [overflow-wrap:anywhere]' : 'capitalize'}
+							className={asWritten ? 'font-mono' : 'capitalize'}
+							title={asWritten ? item.label : undefined}
 						>
-							{asWritten || item.label.length <= 32 ? item.label : `${item.label.slice(0, 32)}...`}
+							{asWritten ? (
+								<span className="min-w-0 truncate">{item.label}</span>
+							) : item.label.length <= 32 ? (
+								item.label
+							) : (
+								`${item.label.slice(0, 32)}...`
+							)}
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -104,14 +112,15 @@ export function TagSelector({
 	asWritten?: boolean;
 }) {
 	return (
-		<div className="flex items-center">
+		// `min-w-0` on both: a long chosen value truncates, so the clear button stays on screen at 390.
+		<div className="flex min-w-0 items-center">
 			<FilterMenu
 				value={value}
 				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
 				asWritten={asWritten}
 				trigger={
-					<Button variant="ghost" size="sm" className="max-w-full shrink" title={value || undefined}>
+					<Button variant="ghost" size="sm" className="min-w-0 max-w-full shrink" title={value || undefined}>
 						<span className="sr-only">{name}: </span>
 						{/* A tag reads as written but capitalised, an id exactly as written; the placeholder is a sentence (WRD-1). */}
 						<span className={!value ? 'truncate' : asWritten ? 'truncate font-mono' : 'truncate capitalize'}>
@@ -122,7 +131,12 @@ export function TagSelector({
 				}
 			/>
 			{value && (
-				<Button variant="ghost" size="icon-xs" aria-label="Clear tag" onClick={() => onChange('')}>
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					aria-label={`Clear ${name.toLowerCase()} filter`}
+					onClick={() => onChange('')}
+				>
 					<X />
 				</Button>
 			)}

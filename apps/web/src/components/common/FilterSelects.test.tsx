@@ -17,7 +17,24 @@ describe('TagSelector', () => {
 		render(<TagSelector value="stats" tags={['stats']} onChange={vi.fn()} />);
 		expect(screen.getByRole('button', { name: 'Tag: stats' })).toBeVisible();
 		expect(screen.getByText('stats')).toHaveClass('capitalize');
-		expect(screen.getByRole('button', { name: 'Clear tag' })).toBeVisible();
+		expect(screen.getByRole('button', { name: 'Clear tag filter' })).toBeVisible();
+	});
+
+	it('names its clear button by what it filters, and clears it', () => {
+		const onChange = vi.fn();
+		render(
+			<TagSelector value="qwen/qwen3.6-27b" tags={['qwen/qwen3.6-27b']} name="Model" asWritten onChange={onChange} />
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Clear model filter' }));
+		expect(onChange).toHaveBeenCalledWith('');
+	});
+
+	it('lets a long chosen value shrink, so the clear button keeps its place (#1027)', () => {
+		render(<TagSelector value="a-long-value" tags={['a-long-value']} onChange={vi.fn()} />);
+		const trigger = screen.getByRole('button', { name: 'Tag: a-long-value' });
+		// A flex child cannot shrink below its content without min-w-0, on itself and on the row it sits in.
+		expect(trigger).toHaveClass('min-w-0', 'shrink');
+		expect(trigger.parentElement).toHaveClass('min-w-0');
 	});
 });
 
@@ -39,6 +56,11 @@ describe('TagSelector of identifiers (asWritten, #1027)', () => {
 		});
 		const item = await screen.findByRole('menuitemradio', { name: ID });
 		expect(item).not.toHaveClass('capitalize');
+		// Sized to the ids up to a cap; one past it ends in an ellipsis, whole in its title (TYP-7).
+		expect(item).toHaveAttribute('title', ID);
+		expect(item.querySelector('.truncate')).toHaveTextContent(ID);
+		expect(screen.getByRole('menu')).toHaveClass('w-max');
+		expect(screen.getByRole('menu')).not.toHaveClass('w-(--radix-dropdown-menu-trigger-width)');
 		fireEvent.click(item);
 		expect(onChange).toHaveBeenCalledWith(ID);
 	});
