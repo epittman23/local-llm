@@ -7,7 +7,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-11-16**: **Admin: the owner's decisions for the UX review's section 5
+- **2026-11-16** (latest): **Admin: the owner's decisions for the UX review's section 5
   (#1116), and server settings that are pages.**
   - **The server's settings are pages under Admin (#932, S5-D1 A).**
     `/admin/settings/<tab>` shows one tab beside the list of tabs, with its
