@@ -52,6 +52,18 @@ describe('ChartLine', () => {
 		expect(screen.getByText('1/3')).toBeTruthy();
 	});
 
+	it('labels the day before the last of eight, each date under its own point (#1028)', () => {
+		const days = Array.from({ length: 8 }, (_, i) => ({ date: `2026-11-0${i + 1}`, models: { alpha: i } }));
+		renderChart(days);
+		expect(screen.getByText('11/7')).toBeTruthy();
+		expect(screen.getByText('11/8')).toBeTruthy();
+		const labels = screen.getAllByText(/^11\/\d$/);
+		expect(labels).toHaveLength(7);
+		const indices = labels.map((l) => Number(l.dataset.index));
+		expect(indices).toEqual([0, 1, 2, 4, 5, 6, 7]);
+		for (const label of labels) expect(label.style.left).toBe(`${(Number(label.dataset.index) / 7) * 100}%`);
+	});
+
 	it('shows no tooltip until the chart is hovered', () => {
 		renderChart();
 		expect(screen.queryByText('Jan 1, 2026')).toBeNull();

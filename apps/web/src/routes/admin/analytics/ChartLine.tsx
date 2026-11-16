@@ -82,8 +82,12 @@ export function ChartLine({
 	const dateFormat = isHourly ? 'h A' : period === 'year' || period === 'all' ? 'M/D/YY' : 'M/D';
 	const longDate = (date: string) =>
 		date.includes(':') ? dayjs(date).format('MMM D, h A') : dayjs(date).format('MMM D, YYYY');
+	// At most seven dates, spread over the whole range and each placed under its own point: a skipped
+	// day shows as a gap where it is, never as a missing step between evenly spaced labels.
 	const labelCount = Math.min(7, data.length);
-	const step = labelCount > 1 ? Math.floor((data.length - 1) / (labelCount - 1)) || 1 : 1;
+	const labelIdx = Array.from({ length: labelCount }, (_, i) =>
+		labelCount === 1 ? 0 : Math.round((i * (data.length - 1)) / (labelCount - 1))
+	);
 	const total = hovered ? Object.values(hovered.models || {}).reduce((a, b) => a + b, 0) : 0;
 	const allMessages = data.reduce((sum, d) => sum + Object.values(d.models || {}).reduce((a, b) => a + b, 0), 0);
 	// The tooltip opens away from the nearer edge, so it stays inside the chart.
@@ -181,15 +185,20 @@ export function ChartLine({
 					</svg>
 
 					{data.length > 1 && (
-						<div className="text-foreground-muted absolute inset-x-0 bottom-0 flex justify-between px-0.5 text-caption">
-							{Array.from({ length: labelCount }, (_, i) => {
-								const idx = i === labelCount - 1 ? data.length - 1 : Math.min(i * step, data.length - 1);
-								return data[idx] ? (
-									<span key={i} className={i === 0 ? 'text-left' : i === labelCount - 1 ? 'text-right' : 'text-center'}>
-										{dayjs(data[idx].date).format(dateFormat)}
-									</span>
-								) : null;
-							})}
+						<div className="text-foreground-muted absolute inset-x-0 bottom-0 h-4 text-caption">
+							{labelIdx.map((idx, i) => (
+								<span
+									key={idx}
+									data-index={idx}
+									className="absolute top-0 whitespace-nowrap"
+									style={{
+										left: `${(getX(idx) / W) * 100}%`,
+										transform: `translateX(${i === 0 ? '0' : i === labelCount - 1 ? '-100%' : '-50%'})`
+									}}
+								>
+									{dayjs(data[idx].date).format(dateFormat)}
+								</span>
+							))}
 						</div>
 					)}
 
