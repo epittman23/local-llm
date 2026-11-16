@@ -18,8 +18,9 @@ async function mockPlayground(page: Page, reply: string[] = ['Hel', 'lo!']) {
 	await page.route('**/api/models*', (route) =>
 		json(route, {
 			data: [
-				{ id: 'qwen', name: 'Qwen' },
-				{ id: 'coder', name: 'Coder' }
+				{ id: 'qwen', name: 'Qwen', owned_by: 'openai' },
+				{ id: 'coder', name: 'Coder', owned_by: 'openai' },
+				{ id: 'llama3', name: 'Llama 3', owned_by: 'ollama' }
 			]
 		})
 	);
@@ -153,6 +154,8 @@ test('completions: the model continues the text, through a text completion (#110
 	const seen = await mockPlayground(page, [' world']);
 	await page.goto('/playground/completions');
 	await page.getByRole('combobox', { name: 'Model' }).click();
+	// Only a model on an OpenAI-compatible connection can continue text (S6-D6).
+	await expect(page.getByRole('option')).toHaveText(['Qwen', 'Coder']);
 	await page.getByRole('option', { name: 'Qwen' }).click();
 	await page.getByLabel('Text to continue').fill('Hello');
 	await page.getByRole('button', { name: 'Run' }).click();

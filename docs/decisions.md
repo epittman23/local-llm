@@ -37,7 +37,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     B):** a new `POST /openai/completions` forwards to the connection's
     OpenAI-compatible `/completions`, streamed, with the chat completion's
     checks; a workspace model's base model and parameters apply, not its
-    system prompt. A Responses-API or Azure connection is a 400.
+    system prompt; the request's own parameters win over the workspace
+    model's, as in a chat. A Responses-API or Azure connection is a 400, and
+    so is a model on no OpenAI-compatible connection (Ollama, a function, an
+    arena), which the Completions tab does not list.
   - **The Playground's Images tab is hidden while image generation is off
     (#970, S6-D7 A);** a direct link says so, says where to turn it on, and
     disables Run.

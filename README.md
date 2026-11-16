@@ -240,7 +240,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
 | `/automations/<id>` | Detail and runs |
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
-| `/playground/completions` | *Admin.* A text completion (the model continues your text) through the backend's `/openai/completions` |
+| `/playground/completions` | *Admin.* A text completion (the model continues your text) through the backend's `/openai/completions`; lists only models on an OpenAI-compatible connection |
 | `/playground/images` | *Admin.* Image generation. The tab shows only while image generation is on (Admin Settings > Images); a direct link while it's off explains why and cannot run |
 | `/channels` | Every channel you can open, with its unread count and description, and New channel; `?new=1` opens the new-channel dialog. Shown only while the server has more than one account; with one, `/channels` and `/channels/<id>` are not found |
 | `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission) and more than one account. The sidebar lists channels and creates them |

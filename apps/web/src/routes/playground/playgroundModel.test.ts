@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
 	appendAssistant,
+	canCompleteText,
 	chatRequest,
 	chatToExport,
 	chatToText,
+	completionModel,
 	completionRequest,
 	deltaFromLine,
 	formatStats,
@@ -170,5 +172,28 @@ describe('messages', () => {
 		expect(initialModel(['a', 'b'], 'x,y')).toBe('a');
 		expect(initialModel(undefined, 'x,y')).toBe('x');
 		expect(initialModel([], null)).toBe('');
+	});
+});
+
+describe('the models that can continue text (S6-D6)', () => {
+	const models = [
+		{ id: 'qwen', name: 'Qwen', owned_by: 'openai' },
+		{ id: 'llama3', name: 'Llama 3', owned_by: 'ollama' },
+		{ id: 'fn.pipe', name: 'A pipe', owned_by: 'openai', pipe: { type: 'pipe' } },
+		{ id: 'mine', name: 'Direct', owned_by: 'openai', direct: true },
+		{ id: 'arena', name: 'Arena', owned_by: 'arena', arena: true },
+		{ id: 'coder', name: 'Coder', owned_by: 'openai' }
+	];
+
+	it('are those on an OpenAI-compatible connection, not a pipe, a direct connection or an arena', () => {
+		expect(models.filter(canCompleteText).map((m) => m.id)).toEqual(['qwen', 'coder']);
+	});
+
+	it('keep a usable or unknown choice, and move off one that cannot continue text', () => {
+		expect(completionModel(models, 'coder', 'qwen')).toBe('coder');
+		expect(completionModel(models, 'gone', 'qwen')).toBe('gone');
+		expect(completionModel(models, 'llama3', 'coder')).toBe('coder');
+		expect(completionModel(models, '', 'llama3')).toBe('qwen');
+		expect(completionModel(models.slice(1, 5), '', 'qwen')).toBe('');
 	});
 });

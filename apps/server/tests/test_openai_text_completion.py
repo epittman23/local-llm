@@ -68,6 +68,8 @@ def call(monkeypatch):
         model_info=None,
         response=None,
         user=ADMIN,
+        openai_models=None,
+        app_models=None,
     ):
         log = {'access_checks': [], 'request': None, 'failures': []}
 
@@ -84,7 +86,10 @@ def call(monkeypatch):
                 raise HTTPException(status_code=403, detail='Model not found')
 
         async def get_all_models(request, user=None):
-            request.app.state.OPENAI_MODELS = {'base': {'id': 'base', 'urlIdx': 0}, 'm1': {'id': 'm1', 'urlIdx': 0}}
+            request.app.state.OPENAI_MODELS = openai_models or {
+                'base': {'id': 'base', 'urlIdx': 0},
+                'm1': {'id': 'm1', 'urlIdx': 0},
+            }
 
         async def connection(idx):
             return 'http://upstream.invalid/v1', 'k', dict(api_config or {})
@@ -116,7 +121,8 @@ def call(monkeypatch):
         monkeypatch.setattr(openai_router, 'stream_wrapper', stream_wrapper)
         monkeypatch.setattr(openai_router, 'BYPASS_MODEL_ACCESS_CONTROL', False)
 
-        request = SimpleNamespace(state=SimpleNamespace(), app=SimpleNamespace(state=SimpleNamespace(OPENAI_MODELS={})))
+        app_state = SimpleNamespace(OPENAI_MODELS={}, MODELS=app_models or {})
+        request = SimpleNamespace(state=SimpleNamespace(), app=SimpleNamespace(state=app_state))
         try:
             outcome = asyncio.run(openai_router.generate_completion(request, form_data, user=user))
         except HTTPException as e:
@@ -168,6 +174,42 @@ def test_a_workspace_model_brings_its_base_model_and_params_but_not_its_system_p
     _, log = call({'model': 'm1', 'prompt': 'x'}, model_info=info)
     assert log['request']['body'] == {'model': 'base', 'prompt': 'x', 'temperature': 0.1}
     assert log['access_checks'] == ['m1']
+
+
+def test_the_requests_params_win_over_the_workspace_models_as_in_a_chat(call):
+    info = SimpleNamespace(
+        id='m1',
+        base_model_id='base',
+        user_id='a1',
+        params=SimpleNamespace(model_dump=lambda: {'temperature': 0.1, 'top_p': 0.9}),
+    )
+    _, log = call({'model': 'm1', 'prompt': 'x', 'params': {'temperature': 0.7}}, model_info=info)
+    assert log['request']['body'] == {'model': 'base', 'prompt': 'x', 'temperature': 0.7, 'top_p': 0.9}
+
+
+def test_a_pipeline_is_told_who_is_asking(call):
+    models = {'m1': {'id': 'm1', 'urlIdx': 0, 'pipeline': {'type': 'pipe'}}}
+    _, log = call({'model': 'm1', 'prompt': 'x'}, openai_models=models)
+    assert log['request']['body']['user'] == {
+        'name': 'Ada',
+        'id': 'a1',
+        'email': 'ada@example.invalid',
+        'role': 'admin',
+    }
+
+
+def test_max_completion_tokens_goes_as_max_tokens_even_for_a_reasoning_model_id(call):
+    # A chat would hand gpt-5 to the reasoning-model handler, which needs messages.
+    models = {'gpt-5': {'id': 'gpt-5', 'urlIdx': 0}}
+    _, log = call({'model': 'gpt-5', 'prompt': 'x', 'max_tokens': 8, 'max_completion_tokens': 32}, openai_models=models)
+    assert log['request']['body'] == {'model': 'gpt-5', 'prompt': 'x', 'max_tokens': 32}
+
+
+def test_a_model_the_app_knows_off_an_openai_connection_is_a_clear_400(call):
+    outcome, log = call({'model': 'llama3:8b', 'prompt': 'x'}, app_models={'llama3:8b': {'owned_by': 'ollama'}})
+    assert isinstance(outcome, HTTPException) and outcome.status_code == 400
+    assert "isn't on an OpenAI-compatible connection" in outcome.detail
+    assert log['request'] is None
 
 
 def test_a_user_without_access_to_the_model_is_refused_before_anything_is_sent(call):

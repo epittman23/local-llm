@@ -1765,7 +1765,9 @@ async def generate_completion(
     The Playground's Completions tab uses it. Access is checked as for a chat
     completion. A workspace model's base model and parameters apply, but not
     its system prompt, which needs messages. The request's own parameters come
-    under `params`, as from the chat page (#208).
+    under `params` and are applied first, so they win over the workspace
+    model's, as a chat's do (#208). Only a model on an OpenAI-compatible
+    connection can answer: any other model the app knows is a 400.
     """
     if not await Config.get('openai.enable'):
         raise HTTPException(status_code=503, detail='OpenAI API is disabled')
@@ -1776,11 +1778,22 @@ async def generate_completion(
     payload = {**form_data}
     payload.pop('metadata', None)
     params = payload.pop('params', None)
-
-    payload, model_id = await _apply_model_info(request, payload, None, user, bypass_filter, system_prompt=False)
+    # Both steps only fill what is unset, so the request's own parameters go first.
     if isinstance(params, dict) and params:
         payload = apply_model_params_to_body_openai(dict(params), payload)
-    model = await _find_openai_model(request, model_id, user)
+
+    payload, model_id = await _apply_model_info(request, payload, None, user, bypass_filter, system_prompt=False)
+    try:
+        model = await _find_openai_model(request, model_id, user)
+    except HTTPException as e:
+        # An Ollama, function or arena model: known to the app, but with no /completions to call.
+        if e.status_code == 404 and model_id in (getattr(request.app.state, 'MODELS', None) or {}):
+            raise HTTPException(
+                status_code=400,
+                detail="This model can't continue text: it isn't on an OpenAI-compatible connection. "
+                "Choose a model from one, such as llama-server's.",
+            ) from e
+        raise
 
     url, key, api_config = await get_openai_connection(model['urlIdx'])
     if api_config.get('api_type') == 'responses' or api_config.get('azure') or api_config.get('provider') == 'azure':
@@ -1790,6 +1803,13 @@ async def generate_completion(
             "it needs an OpenAI-compatible /completions endpoint, such as llama-server's.",
         )
     payload['model'] = strip_provider_model_prefix(payload['model'], api_config.get('prefix_id', None))
+    # What _adapt_payload_for_provider does for a chat, less the reasoning-model
+    # changes, which need messages: a pipeline is told who is asking, and the
+    # legacy /completions takes max_tokens, never max_completion_tokens.
+    if model.get('pipeline'):
+        payload['user'] = {'name': user.name, 'id': user.id, 'email': user.email, 'role': user.role}
+    if 'max_completion_tokens' in payload:
+        payload['max_tokens'] = payload.pop('max_completion_tokens')
     payload = _decode_logit_bias(payload)
 
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, None, user=user)

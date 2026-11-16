@@ -156,7 +156,7 @@ images, audio, subagents and more; Analytics is its own Admin page,
 | Users | Users and groups, their permissions, CSV import |
 | Evaluations | The leaderboard built from chat ratings, and the feedback table with export |
 | Functions | Filters and pipes that run inside the chat pipeline; plugins on only |
-| Playground | Chat, text completion (`/openai/completions`) and image generation against any model, outside a saved chat; Images shows only while image generation is on |
+| Playground | Chat, text completion (`/openai/completions`, models on an OpenAI-compatible connection only) and image generation against any model, outside a saved chat; Images shows only while image generation is on |
 
 ### Benchmarks (`/benchmarks`)
 

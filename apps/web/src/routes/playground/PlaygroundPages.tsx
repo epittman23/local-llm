@@ -49,18 +49,19 @@ import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import {
 	appendAssistant,
+	canCompleteText,
 	chatRequest,
 	chatToExport,
 	chatToText,
+	completionModel,
 	completionRequest,
 	formatStats,
 	initialModel,
-	type PlaygroundMessage
+	type PlaygroundMessage,
+	type PlaygroundModelInfo
 } from './playgroundModel';
 import { usePlaygroundStore } from './playgroundStore';
 import { useStreamRunner } from './useStreamRunner';
-
-type ModelInfo = { id: string; name: string };
 
 /** Ctrl+Enter, or ⌘↩ on a Mac: runs in all three tabs (#1031, NAV-5). */
 const RUN_KEYS = formatChord('Cmd+Enter');
@@ -98,6 +99,8 @@ export function PlaygroundLayout() {
 /**
  * The models to pick from, and the tab's chosen one, kept with the tab's work
  * (#969). A tab starts on the user's first chosen model, else the admin default.
+ * Completions lists only the models that can continue text (S6-D6), and moves
+ * off a chosen one that can't once the list has loaded.
  */
 function usePlaygroundModel(tab: 'chat' | 'completions') {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -105,17 +108,29 @@ function usePlaygroundModel(tab: 'chat' | 'completions') {
 	const settings = useUserSettings();
 	const models = useQuery({
 		queryKey: ['models-all'],
-		queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[]
+		queryFn: async () => ((await getModels(token)) ?? []) as PlaygroundModelInfo[]
 	});
 	const modelId = usePlaygroundStore((s) => s[tab].modelId);
 	const setChat = usePlaygroundStore((s) => s.setChat);
 	const setCompletions = usePlaygroundStore((s) => s.setCompletions);
 	const setModelId = (id: string) => (tab === 'chat' ? setChat({ modelId: id }) : setCompletions({ modelId: id }));
 	const start = initialModel(settings.settings?.models, defaults);
+	const all = models.data ?? [];
 	useEffect(() => {
-		if (!modelId && start) setModelId(start);
+		if (tab === 'chat') {
+			if (!modelId && start) setModelId(start);
+			return;
+		}
+		if (!models.data) return;
+		const next = completionModel(models.data, modelId, start);
+		if (next !== modelId) setModelId(next);
 	});
-	return { models: models.data ?? [], modelId, setModelId };
+	return {
+		models: tab === 'completions' ? all.filter(canCompleteText) : all,
+		loaded: models.data !== undefined,
+		modelId,
+		setModelId
+	};
 }
 
 function ModelSelect({
@@ -123,7 +138,7 @@ function ModelSelect({
 	value,
 	onChange
 }: {
-	models: ModelInfo[];
+	models: PlaygroundModelInfo[];
 	value: string;
 	onChange: (id: string) => void;
 }) {
@@ -560,7 +575,7 @@ export function PlaygroundChat() {
 export function PlaygroundCompletions() {
 	const state = usePlaygroundStore((s) => s.completions);
 	const setCompletions = usePlaygroundStore((s) => s.setCompletions);
-	const { models, modelId, setModelId } = usePlaygroundModel('completions');
+	const { models, loaded, modelId, setModelId } = usePlaygroundModel('completions');
 	const { running, run, stop } = useStreamRunner(textCompletion);
 	const { prompt, output, params, stats, failure } = state;
 	const [showControls, setShowControls] = useState(false);
@@ -589,6 +604,13 @@ export function PlaygroundCompletions() {
 			/>
 			<p className="text-foreground-muted text-body px-1">
 				The model continues your text. It is sent as a text completion, with no roles and no system prompt.
+				{loaded && models.length === 0 && (
+					<>
+						{' '}
+						None of your models can: text completion needs a model on an OpenAI-compatible connection, such as
+						llama-server&apos;s.
+					</>
+				)}
 			</p>
 			<div data-composite-field className="flex min-h-0 flex-1 flex-col rounded-2xl border px-3 py-2">
 				{/* Your text, then the continuation right after it, scrolling together. */}

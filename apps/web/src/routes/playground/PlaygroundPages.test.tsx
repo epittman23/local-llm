@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getModels } from '@/lib/apis';
 import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from './PlaygroundPages';
 import { emptyChat, emptyCompletions, usePlaygroundStore } from './playgroundStore';
 
@@ -429,6 +430,29 @@ describe('the completions playground (#1108, S6-D6)', () => {
 		expect(within(row).getByText("This model's connection doesn't offer text completion")).toBeInTheDocument();
 		fireEvent.click(within(row).getByRole('button', { name: 'Retry' }));
 		await waitFor(() => expect(textCompletion).toHaveBeenCalledTimes(2));
+	});
+
+	it('lists only the models that can continue text, and moves off one that cannot (S6-D6)', async () => {
+		vi.mocked(getModels).mockResolvedValue([
+			{ id: 'llama3', name: 'Llama 3', owned_by: 'ollama' },
+			{ id: 'qwen', name: 'Qwen', owned_by: 'openai' },
+			{ id: 'fn.pipe', name: 'A pipe', owned_by: 'openai', pipe: { type: 'pipe' } }
+		] as never);
+		usePlaygroundStore.setState((s) => ({ completions: { ...s.completions, modelId: 'llama3' } }));
+		wrap(<PlaygroundCompletions />);
+		await waitFor(() => expect(usePlaygroundStore.getState().completions.modelId).toBe('qwen'));
+		const model = screen.getByRole('combobox', { name: 'Model' });
+		fireEvent.keyDown(model, { key: 'ArrowDown' });
+		expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Qwen']);
+		expect(screen.queryByText(/None of your models can/)).toBeNull();
+	});
+
+	it('says so when no model can continue text', async () => {
+		vi.mocked(getModels).mockResolvedValue([{ id: 'llama3', name: 'Llama 3', owned_by: 'ollama' }] as never);
+		wrap(<PlaygroundCompletions />);
+		expect(
+			await screen.findByText(/None of your models can: text completion needs a model on an OpenAI-compatible/)
+		).toBeInTheDocument();
 	});
 
 	it('asks for a model before running when none is chosen', () => {

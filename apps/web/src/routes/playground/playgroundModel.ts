@@ -230,6 +230,34 @@ export function chatToExport(
 }
 
 /** The model a playground starts on: the user's first chosen model, else the admin default, else none. */
+/** What the Playground reads of a model from /api/models. */
+export type PlaygroundModelInfo = {
+	id: string;
+	name: string;
+	owned_by?: string;
+	pipe?: unknown;
+	direct?: boolean;
+	arena?: boolean;
+};
+
+/**
+ * Whether a model can continue text (S6-D6): only one on an OpenAI-compatible
+ * connection has a /completions to call. A function's pipe reports itself as
+ * `openai` too, and a direct connection is the browser's own, so both are out.
+ */
+export const canCompleteText = (m: PlaygroundModelInfo) => m.owned_by === 'openai' && !m.pipe && !m.direct && !m.arena;
+
+/**
+ * The Completions tab's model: the one chosen, unless it is a model that can't
+ * continue text, else `start` if it can, else the first that can. An id no
+ * model has is kept, as the Chat tab keeps it.
+ */
+export function completionModel(models: PlaygroundModelInfo[], chosen: string, start: string): string {
+	const usable = (id: string) => models.some((m) => m.id === id && canCompleteText(m));
+	if (chosen && (usable(chosen) || !models.some((m) => m.id === chosen))) return chosen;
+	return usable(start) ? start : (models.find(canCompleteText)?.id ?? '');
+}
+
 export function initialModel(settingsModels: unknown, defaultModels: string | null | undefined): string {
 	if (Array.isArray(settingsModels) && typeof settingsModels[0] === 'string' && settingsModels[0])
 		return settingsModels[0];
