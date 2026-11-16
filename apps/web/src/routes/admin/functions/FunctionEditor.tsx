@@ -11,6 +11,7 @@ import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SaveBar } from '@/components/ui/save-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { LineTextarea, Textarea } from '@/components/ui/textarea';
 import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
@@ -266,19 +267,21 @@ export function FunctionEditor({
 							/>
 						</div>
 					</div>
-					<div className="order-first flex shrink-0 items-center gap-1 self-end sm:order-none sm:mt-6 sm:self-auto">
-						{!edit && (
-							<select
-								className="h-7 rounded-lg border bg-transparent px-2 text-xs"
+					{!edit && (
+						// #1029: a visible label, and a control that applies at once (FRM-4): picking a starter replaces the code.
+						<div className="flex shrink-0 flex-col gap-1.5">
+							<Label id="function-starter">Start from</Label>
+							<SegmentedControl
+								aria-labelledby="function-starter"
 								value={starter}
-								onChange={(e) => chooseStarter(e.target.value)}
-								aria-label="Function starter"
-							>
-								<option value="filter">Filter</option>
-								<option value="event">Event</option>
-							</select>
-						)}
-					</div>
+								onValueChange={chooseStarter}
+								options={[
+									{ value: 'filter', label: 'Filter' },
+									{ value: 'event', label: 'Event' }
+								]}
+							/>
+						</div>
+					)}
 				</div>
 
 				<span className="px-1 pb-1.5 text-sm leading-none font-medium">Function code</span>

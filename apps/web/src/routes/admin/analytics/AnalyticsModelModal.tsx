@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ChatList, type ChatListSort, type ChatRow } from '@/components/common/ChatList';
-import { Tip } from '@/components/common/Tip';
-import { Button } from '@/components/ui/button';
+import { LoadFailed } from '@/components/common/LoadFailed';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getModelChats, getModelOverview } from '@/lib/apis/analytics';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -11,10 +13,10 @@ import type { ActivityDay } from '../evaluations/activityChart';
 import { ModelActivityChart } from '../evaluations/ModelActivityChart';
 
 type Range = '30d' | '1y' | 'all';
-const RANGES: { key: Range; label: string; days: number }[] = [
-	{ key: '30d', label: '30D', days: 30 },
-	{ key: '1y', label: '1Y', days: 365 },
-	{ key: 'all', label: 'All', days: 0 }
+const RANGES: { value: Range; label: string; days: number }[] = [
+	{ value: '30d', label: '30 days', days: 30 },
+	{ value: '1y', label: '1 year', days: 365 },
+	{ value: 'all', label: 'All time', days: 0 }
 ];
 const PAGE_SIZE = 50;
 
@@ -32,6 +34,10 @@ const toRow = (c: ServerChat): ChatRow => ({
  * its feedback activity chart (the Evaluations chart) and tags; Chats (only when
  * admins may read chats) lists the conversations that used it within the
  * dashboard's date window, fifty at a time, sortable.
+ *
+ * #1028: the shared tabs and period control, the full name and id under the
+ * title (no tooltip to take the first Escape), a failed load said in place,
+ * and the tags as badges.
  */
 export function AnalyticsModelModal({
 	open,
@@ -68,7 +74,7 @@ export function AnalyticsModelModal({
 		setDirection('desc');
 	}, [open, model?.id]);
 
-	const days = RANGES.find((r) => r.key === range)!.days;
+	const days = RANGES.find((r) => r.value === range)?.days ?? 30;
 	const overview = useQuery({
 		queryKey: ['admin', 'analytics-overview', model?.id, days],
 		queryFn: async () => {
@@ -120,98 +126,90 @@ export function AnalyticsModelModal({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<Tip content={`${model.name} (${model.id})`} side="top">
-						<DialogTitle className="line-clamp-1 text-sm font-medium">{model.name}</DialogTitle>
-					</Tip>
-					<DialogDescription className="sr-only">Usage of {model.name}.</DialogDescription>
+					<DialogTitle className="truncate pe-8" title={model.name}>
+						{model.name}
+					</DialogTitle>
+					{/* The id under the name, unless they are the same words. */}
+					<DialogDescription className={model.name === model.id ? 'sr-only' : 'truncate'} title={model.id}>
+						{model.name === model.id ? `Usage of ${model.name}` : model.id}
+					</DialogDescription>
 				</DialogHeader>
 
-				<div className="flex gap-3 border-b">
-					<Button
-						variant={tab === 'overview' ? 'secondary' : 'ghost'}
-						size="sm"
-						type="button"
-						onClick={() => selectTab('overview')}
-					>
-						Overview
-					</Button>
+				<Tabs value={tab} onValueChange={(v) => selectTab(v as 'overview' | 'chats')} className="min-w-0 gap-4">
 					{chatAccess && (
-						<Button
-							variant={tab === 'chats' ? 'secondary' : 'ghost'}
-							size="sm"
-							type="button"
-							onClick={() => selectTab('chats')}
-						>
-							Chats
-						</Button>
+						<TabsList variant="line" className="justify-start">
+							<TabsTrigger value="overview" className="flex-none">
+								Overview
+							</TabsTrigger>
+							<TabsTrigger value="chats" className="flex-none">
+								Chats
+							</TabsTrigger>
+						</TabsList>
 					)}
-				</div>
 
-				{tab === 'overview' ? (
-					<>
-						<div>
-							<div className="mb-2 flex items-center justify-between">
-								<Tip content="Thumbs up/down ratings from users on model responses">
-									<div className="text-muted-foreground text-xs font-normal tracking-wide uppercase">
-										Feedback Activity
-									</div>
-								</Tip>
-								<div className="bg-muted inline-flex rounded-full p-0.5">
-									{RANGES.map((r) => (
-										<Button
-											variant={range === r.key ? 'secondary' : 'ghost'}
-											size="sm"
-											key={r.key}
-											type="button"
-											aria-pressed={range === r.key}
-											onClick={() => setRange(r.key)}
-										>
-											{r.label}
-										</Button>
-									))}
-								</div>
+					<TabsContent value="overview" className="flex flex-col gap-4">
+						<section aria-labelledby="model-feedback" className="flex flex-col gap-2">
+							<div className="flex flex-wrap items-center justify-between gap-2">
+								<h3 id="model-feedback" className="text-foreground-strong font-strong">
+									Feedback
+								</h3>
+								<SegmentedControl aria-label="Period" value={range} onValueChange={setRange} options={RANGES} />
 							</div>
-							<ModelActivityChart
-								history={overview.data?.history ?? []}
-								loading={overview.isPending}
-								weekly={range === '1y' || range === 'all'}
-							/>
-						</div>
-						<div>
-							<div className="text-muted-foreground mb-2 text-xs font-normal tracking-wide uppercase">Tags</div>
-							{overview.data?.tags.length ? (
-								<div className="-mx-1 flex flex-wrap gap-1">
-									{overview.data.tags.map((t) => (
-										<span key={t.tag} className="bg-muted rounded-full px-2 py-0.5 text-xs">
-											{t.tag} <span className="text-muted-foreground font-normal">{t.count}</span>
-										</span>
-									))}
-								</div>
+							<p className="text-foreground-muted text-dense">
+								Replies rated up or down, and arena comparisons won or lost.
+							</p>
+							{overview.isError ? (
+								<LoadFailed
+									what="feedback"
+									error={overview.error}
+									onRetry={() => overview.refetch()}
+									retrying={overview.isFetching}
+								/>
 							) : (
-								<span className="text-muted-foreground text-sm">-</span>
+								<ModelActivityChart
+									history={overview.data?.history ?? []}
+									loading={overview.isPending}
+									weekly={range === '1y' || range === 'all'}
+								/>
 							)}
-						</div>
-					</>
-				) : (
-					<ChatList
-						chatList={chats}
-						loading={chatsLoading}
-						allLoaded={allLoaded}
-						showUserInfo
-						shareUrl
-						orderBy={orderBy}
-						direction={direction}
-						onSort={sort}
-						onLoadMore={() => !chatsLoading && !allLoaded && load(chats.length, orderBy, direction)}
-						onChatClick={() => onOpenChange(false)}
-					/>
-				)}
+						</section>
+						<section aria-labelledby="model-tags" className="flex flex-col gap-2">
+							<h3 id="model-tags" className="text-foreground-strong font-strong">
+								Tags
+							</h3>
+							{overview.data?.tags.length ? (
+								<ul className="flex flex-wrap gap-1.5">
+									{overview.data.tags.map((t) => (
+										<li key={t.tag}>
+											<Badge variant="secondary">
+												{t.tag} <span className="text-foreground-muted tabular-nums">{t.count}</span>
+											</Badge>
+										</li>
+									))}
+								</ul>
+							) : (
+								<p className="text-foreground-muted">No tags in its chats.</p>
+							)}
+						</section>
+					</TabsContent>
 
-				<div className="flex justify-end pt-2">
-					<Button size="sm" onClick={() => onOpenChange(false)}>
-						Close
-					</Button>
-				</div>
+					{chatAccess && (
+						<TabsContent value="chats">
+							<ChatList
+								chatList={chats}
+								loading={chatsLoading}
+								allLoaded={allLoaded}
+								showUserInfo
+								shareUrl
+								orderBy={orderBy}
+								direction={direction}
+								onSort={sort}
+								onLoadMore={() => !chatsLoading && !allLoaded && load(chats.length, orderBy, direction)}
+								onChatClick={() => onOpenChange(false)}
+							/>
+						</TabsContent>
+					)}
+				</Tabs>
 			</DialogContent>
 		</Dialog>
 	);

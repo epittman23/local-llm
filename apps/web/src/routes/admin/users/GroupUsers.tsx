@@ -1,11 +1,12 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Download, Search, Upload } from 'lucide-react';
+import { ChevronDown, Download, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { SortHeaderButton } from '@/components/common/ListChrome';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,15 +14,19 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuLabel,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Table, TableSortHead } from '@/components/ui/table';
 import { addUserToGroup, removeUserFromGroup } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { dayjs } from '@/lib/utils/dates';
+import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { TableSkeleton } from '../TableSkeleton';
 import { chunk, parseGroupCsv } from './groupCsv';
+import { lastActive } from './UserList';
 
 type GroupUser = {
 	id: string;
@@ -36,22 +41,27 @@ type GroupUpdate = { member_count?: number };
 const BATCH_SIZE = 10;
 const PER_PAGE = 30;
 
-const roleClass = (role: string) =>
-	role === 'admin' ? 'text-brand' : role === 'user' ? 'text-foreground' : 'text-muted-foreground';
+const ROLE_NAMES: Record<string, string> = { admin: 'Admin', user: 'User', pending: 'Pending' };
 
 /**
  * Ports admin/Users/Groups/Users.svelte: tick users in or out of a group, with
  * a CSV importer (Name, Email -- matched on email, exactly). Membership changes
  * go to the server one click at a time and the server's answer (the updated
  * group, with its new member_count) is handed up so the parent list stays live.
+ *
+ * #1099: the shared table and search, "Member" for the tick column, Import
+ * named by its text (#987), "Never" for an account never active, and removing
+ * someone says so above the table, with Undo (ACT-3).
  */
 export function GroupUsers({
 	groupId,
+	groupName,
 	userCount,
 	onUserCountChange,
 	onMemberChange
 }: {
 	groupId: string;
+	groupName: string;
 	userCount: number;
 	onUserCountChange: (count: number) => void;
 	onMemberChange: (group: GroupUpdate & { id?: string }) => void;
@@ -84,15 +94,21 @@ export function GroupUsers({
 		setPage(1);
 	};
 
-	const toggleMember = async (userId: string, checked: boolean) => {
+	const [removed, setRemoved] = useState<GroupUser | null>(null);
+	const toggleMember = async (user: GroupUser, checked: boolean, undo = false) => {
 		const call = checked ? addUserToGroup : removeUserFromGroup;
-		const res = await call(token, groupId, [userId]).catch((error) => {
-			toast.error(`${error}`);
+		const res = await call(token, groupId, [user.id]).catch((error) => {
+			toastFailure(
+				checked ? `Couldn't add “${user.name}” to ${groupName}.` : `Couldn't remove “${user.name}” from ${groupName}.`,
+				error
+			);
 			return null;
 		});
 		if (res) {
 			onUserCountChange(res.member_count ?? userCount);
 			onMemberChange(res);
+			// Said in the panel, not a toast: a toast sits under the dialog's overlay, so its Undo can't be pressed.
+			setRemoved(!checked && !undo ? user : null);
 		}
 		await refetch();
 	};
@@ -102,7 +118,7 @@ export function GroupUsers({
 		setImporting(true);
 		try {
 			const { validRows, invalidRows } = parseGroupCsv(await file.text());
-			invalidRows.forEach((idx) => toast.error(`Row ${idx + 1}: Invalid format.`));
+			invalidRows.forEach((idx) => toast.error(`Row ${idx + 1}: not a name and an email.`));
 
 			// Resolve each email to an exact user, ten lookups at a time.
 			const ids: string[] = [];
@@ -115,7 +131,7 @@ export function GroupUsers({
 									(u) => u.email?.toLowerCase() === email
 								);
 								if (found?.id) return found.id;
-								toast.error(`Row ${idx + 1}: User not found.`);
+								toast.error(`Row ${idx + 1}: no account with ${email}.`);
 								return null;
 							})
 							.catch((error) => {
@@ -133,7 +149,7 @@ export function GroupUsers({
 			let last: GroupUpdate | null = null;
 			for (const id of new Set(ids)) {
 				const group = await addUserToGroup(token, groupId, [id]).catch((error) => {
-					toast.error(`${error}`);
+					toastFailure(`Couldn't add an account to ${groupName}.`, error);
 					return null;
 				});
 				if (!group) continue;
@@ -142,7 +158,8 @@ export function GroupUsers({
 			}
 			onUserCountChange(count);
 			if (last) onMemberChange(last);
-			if (count - initialCount > 0) toast.success(`Successfully imported ${count - initialCount} users.`);
+			const added = count - initialCount;
+			if (added > 0) toast.success(added === 1 ? 'Added 1 member' : `Added ${added} members`);
 			await refetch();
 		} catch (error) {
 			toast.error(`${error}`);
@@ -163,150 +180,136 @@ export function GroupUsers({
 
 	const users = list.data?.users ?? null;
 	const total = list.data?.total ?? null;
-	const th = 'cursor-pointer px-2.5 py-1.5 select-none';
-	const thInner = 'flex items-center gap-1.5';
+	const columns = [
+		{ key: `group_id:${groupId}`, label: 'Member', className: 'w-24' },
+		{ key: 'name', label: 'Name', className: '' },
+		{ key: 'role', label: 'Role', className: 'w-24 max-sm:hidden' },
+		{ key: 'last_active_at', label: 'Last active', className: 'w-32 max-sm:hidden' }
+	];
 
 	return (
-		<div className="flex h-full max-h-full w-full flex-col overflow-y-hidden">
-			<div className="mb-1.5 h-fit w-full">
-				<input
-					ref={fileInput}
-					hidden
-					type="file"
-					accept=".csv"
-					aria-label="Import CSV file"
-					disabled={importing}
-					onChange={(e) => e.target.files?.[0] && importCsv(e.target.files[0])}
-				/>
-				<div className="flex h-fit flex-1 items-center gap-2">
-					<div className="flex min-w-0 flex-1 items-center">
-						<Search className="mr-3 size-4 self-center" />
-						<input
-							className="w-full rounded-r-xl bg-transparent pr-4 text-sm"
-							value={query}
-							onChange={(e) => {
-								setQuery(e.target.value);
-								setPage(1);
-							}}
-							aria-label="Search"
-							placeholder="Search"
-						/>
-					</div>
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								className="ml-1 shrink-0"
-								type="button"
-								disabled={importing || !groupId}
-								aria-label="Import CSV"
-							>
-								{importing ? (
-									<>
-										<Spinner className="size-3" />
-										<span className="truncate">Importing...</span>
-									</>
-								) : (
-									<>
-										<span className="truncate">Import</span>
-										<ChevronDown className="size-2.5" strokeWidth={2.5} />
-									</>
-								)}
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="min-w-[12rem]">
-							<DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-								<Upload />
-								Import CSV
-							</DropdownMenuItem>
-							<DropdownMenuItem onSelect={downloadTemplate}>
-								<Download />
-								Download CSV Template
-							</DropdownMenuItem>
-							<div className="text-muted-foreground px-2 py-0.5 text-caption leading-3">CSV: Name,Email</div>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
-			</div>
+		<div className="flex w-full flex-col gap-2">
+			<input
+				ref={fileInput}
+				hidden
+				type="file"
+				accept=".csv"
+				aria-label="CSV file of members"
+				disabled={importing}
+				onChange={(e) => e.target.files?.[0] && importCsv(e.target.files[0])}
+			/>
+			<ListSearchBar
+				value={query}
+				onChange={(value) => {
+					setQuery(value);
+					setPage(1);
+				}}
+				placeholder="Search users"
+			>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="outline" type="button" disabled={importing || !groupId}>
+							{importing ? <Spinner className="size-3.5" /> : <Upload aria-hidden data-icon="inline-start" />}
+							{importing ? 'Importing…' : 'Import CSV'}
+							<ChevronDown aria-hidden data-icon="inline-end" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuLabel className="text-foreground-muted font-normal">
+							Two columns: name, email
+						</DropdownMenuLabel>
+						<DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+							<Upload />
+							Choose CSV file
+						</DropdownMenuItem>
+						<DropdownMenuItem onSelect={downloadTemplate}>
+							<Download />
+							Download template
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</ListSearchBar>
 
-			{users === null || total === null ? (
-				<div className="my-10 flex justify-center">
-					<Spinner />
+			{removed && (
+				<div
+					role="status"
+					className="bg-surface-2 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-1.5"
+				>
+					<span className="min-w-0">
+						Removed “{removed.name}” from {groupName}
+					</span>
+					<Button variant="outline" size="sm" type="button" onClick={() => toggleMember(removed, true, true)}>
+						Undo
+					</Button>
 				</div>
+			)}
+
+			{list.isError && !list.data ? (
+				<LoadFailed what="users" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+			) : users === null || total === null ? (
+				<TableSkeleton label="users" />
+			) : users.length === 0 ? (
+				<ListEmptyState
+					title="No users yet"
+					query={debouncedQuery}
+					onClear={() => {
+						setQuery('');
+						setPage(1);
+					}}
+				/>
 			) : (
 				<>
-					{users.length > 0 ? (
-						<div className="relative max-w-full overflow-x-auto whitespace-nowrap">
-							<table className="text-muted-foreground w-full max-w-full table-auto text-left text-sm">
-								<thead className="text-foreground bg-transparent text-xs uppercase">
-									<tr className="border-b">
-										<th scope="col" className={`${th} w-8`}>
-											<SortHeaderButton
-												label="MBR"
-												active={orderBy === `group_id:${groupId}`}
-												direction={direction}
-												className={thInner}
-												onClick={() => setSortKey(`group_id:${groupId}`)}
+					<Table aria-label={`Members of ${groupName}`} className="text-dense table-fixed text-left">
+						<thead>
+							<tr className="border-b">
+								{columns.map(({ key, label, className }) => (
+									<TableSortHead
+										key={key}
+										label={label}
+										active={orderBy === key}
+										direction={direction}
+										onSort={() => setSortKey(key)}
+										className={cn('h-auto py-1 font-normal', className)}
+										buttonClassName="text-foreground-muted"
+									/>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{users.map((user) => (
+								<tr key={user.id} className="border-b last:border-0">
+									<td className="px-2 py-1.5">
+										<Checkbox
+											aria-label={user.name}
+											checked={(user.group_ids ?? []).includes(groupId)}
+											onCheckedChange={(checked) => toggleMember(user, checked === true)}
+										/>
+									</td>
+									<td className="px-2 py-1.5">
+										<div className="flex min-w-0 items-center gap-2">
+											<ProfileAvatar
+												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
+												name={user.name}
+												size="sm"
 											/>
-										</th>
-										{(
-											[
-												['name', 'Name'],
-												['role', 'Role'],
-												['last_active_at', 'Last Active']
-											] as const
-										).map(([key, label]) => (
-											<th key={key} scope="col" className={th}>
-												<SortHeaderButton
-													label={label}
-													active={orderBy === key}
-													direction={direction}
-													className={thInner}
-													onClick={() => setSortKey(key)}
-												/>
-											</th>
-										))}
-									</tr>
-								</thead>
-								<tbody>
-									{users.map((user) => (
-										<tr key={user.id} className="text-xs">
-											<td className="w-8 px-3 py-1">
-												<div className="flex w-full justify-center">
-													<Checkbox
-														aria-label={user.name}
-														checked={(user.group_ids ?? []).includes(groupId)}
-														onCheckedChange={(checked) => toggleMember(user.id, checked === true)}
-													/>
-												</div>
-											</td>
-											<td className="text-foreground max-w-48 px-3 py-1 font-normal">
-												<Tip content={user.email} side="top">
-													<div className="flex items-center gap-2">
-														<ProfileAvatar
-															src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-															name={user.name}
-															size="sm"
-														/>
-														<div className="truncate font-normal">{user.name}</div>
-													</div>
-												</Tip>
-											</td>
-											<td className="w-20 min-w-[5rem] px-3 py-1">
-												<span className={`text-xs leading-4 font-normal capitalize ${roleClass(user.role)}`}>
-													{user.role}
+											<div className="flex min-w-0 flex-col">
+												<span className="text-foreground font-strong truncate" title={user.name}>
+													{user.name}
 												</span>
-											</td>
-											<td className="px-3 py-1">{dayjs(user.last_active_at * 1000).fromNow()}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					) : (
-						<div className="text-muted-foreground px-10 py-2 text-center text-xs">No users were found.</div>
-					)}
+												<span className="text-foreground-muted text-caption truncate" title={user.email}>
+													{user.email}
+												</span>
+											</div>
+										</div>
+									</td>
+									<td className="text-foreground-muted px-2 py-1.5 max-sm:hidden">
+										{ROLE_NAMES[user.role] ?? user.role}
+									</td>
+									<td className="text-foreground-muted px-2 py-1.5 max-sm:hidden">{lastActive(user.last_active_at)}</td>
+								</tr>
+							))}
+						</tbody>
+					</Table>
 					{total > PER_PAGE && <PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />}
 				</>
 			)}

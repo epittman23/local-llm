@@ -1,11 +1,12 @@
-import { Eye, Settings, UserPlus, Wrench } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Permissions as PermissionsShape, withDefaults } from '@/lib/access/permissions';
 import { getUserDefaultPermissions, getUserDefaultPermissionsDefaults } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -31,11 +32,11 @@ export type GroupFormValue = {
 };
 type TabId = 'general' | 'permissions' | 'users' | 'preview';
 
-const tabMeta: Record<TabId, { label: string; icon: typeof Settings }> = {
-	general: { label: 'General', icon: Settings },
-	permissions: { label: 'Permissions', icon: Wrench },
-	users: { label: 'Users', icon: UserPlus },
-	preview: { label: 'Preview', icon: Eye }
+const tabLabels: Record<TabId, string> = {
+	general: 'General',
+	permissions: 'Permissions',
+	users: 'Members',
+	preview: 'Preview'
 };
 
 /**
@@ -48,6 +49,10 @@ const tabMeta: Record<TabId, { label: string; icon: typeof Settings }> = {
  * in its `name`/`description`/`permissions` variables, so "New Group" reopens
  * showing the last group you created. Here every open starts from the group,
  * or (adding) from the default permissions.
+ *
+ * #1099: the tabs are a strip across the top (none for one tab), the dialog
+ * keeps one height whichever tab is open, Reset is a button that asks first,
+ * and deleting says what happens to the members (ACT-3).
  */
 export function EditGroupModal({
 	open,
@@ -79,6 +84,7 @@ export function EditGroupModal({
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [tab, setTab] = useState<TabId>(tabs[0]);
 	const [name, setName] = useState('');
+	const [nameError, setNameError] = useState<string | null>(null);
 	const [description, setDescription] = useState('');
 	const [data, setData] = useState<Record<string, unknown>>({});
 	const [permissions, setPermissions] = useState<PermissionsShape>(() => withDefaults(null));
@@ -86,11 +92,13 @@ export function EditGroupModal({
 	const [loading, setLoading] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [confirmReset, setConfirmReset] = useState(false);
+	const nameId = useId();
 
 	useEffect(() => {
 		if (!open) return;
 		setTab(tabs[0]);
 		setName(group?.name ?? '');
+		setNameError(null);
 		setDescription(group?.description ?? '');
 		setData(structuredClone(group?.data ?? {}));
 		setPermissions(withDefaults(group ? group.permissions : initialPermissions));
@@ -100,9 +108,15 @@ export function EditGroupModal({
 	}, [open]);
 
 	const submit = async () => {
+		if (custom && !name.trim()) {
+			setNameError('Enter a name for the group.');
+			setTab('general');
+			setTimeout(() => document.getElementById(nameId)?.focus());
+			return;
+		}
 		setLoading(true);
 		try {
-			await onSubmit({ name, description, data, permissions });
+			await onSubmit({ name: name.trim(), description, data, permissions });
 		} finally {
 			setLoading(false);
 		}
@@ -116,82 +130,92 @@ export function EditGroupModal({
 			const defaults = custom ? await getUserDefaultPermissions(token) : await getUserDefaultPermissionsDefaults(token);
 			if (defaults) {
 				setPermissions(withDefaults(defaults));
-				toast.success('Permissions reset to defaults');
+				toast.success('Permissions reset to defaults. Save to keep them.');
 			}
 		} catch (error) {
-			toast.error(`${error}`);
+			toastFailure("Couldn't load the default permissions.", error);
 		}
 	};
 
-	const title = custom ? (edit ? 'Edit User Group' : 'Add User Group') : 'Edit Default Permissions';
+	const title = custom ? (edit ? 'Edit group' : 'New group') : 'Default permissions';
+	const saveLabel = custom ? (edit ? 'Save group' : 'Create group') : 'Save permissions';
+	// The changed counts compare with what Reset restores: the all-users defaults
+	// for a group, the stock configuration for the defaults themselves.
+	const baseline = withDefaults(custom ? (defaultPermissions ?? initialPermissions) : null);
+	const footer = tab === 'general' || tab === 'permissions';
 
 	return (
 		<>
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete group?"
-				confirmLabel="Delete"
+				title={`Delete “${group?.name ?? name}”?`}
+				confirmLabel="Delete group"
+				destructive
 				onConfirm={async () => {
 					setConfirmDelete(false);
 					await onDelete?.();
 					onOpenChange(false);
 				}}
 			>
-				This will delete <span className="font-normal">{name}</span>.
+				Its members keep their accounts and lose the permissions this group gives them.
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={confirmReset}
 				onOpenChange={setConfirmReset}
-				title="Reset to Defaults"
+				title="Reset permissions to defaults?"
+				confirmLabel="Reset permissions"
+				destructive
 				onConfirm={() => {
 					setConfirmReset(false);
 					resetToDefaults();
 				}}
 			>
-				Are you sure you want to reset all permissions to their default values? You will still need to save to apply the
-				changes.
+				{custom
+					? 'Every switch goes back to the permissions every account has by default.'
+					: "Every switch goes back to the server's starting configuration."}{' '}
+				Nothing changes until you press {saveLabel}.
 			</ConfirmDialog>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="sm:max-w-3xl">
+				<DialogContent className="flex h-[min(44rem,calc(100dvh-2rem))] flex-col overflow-hidden sm:max-w-3xl">
 					<DialogHeader>
-						<DialogTitle className="text-sm font-medium">{title}</DialogTitle>
-						<DialogDescription className="sr-only">{title}</DialogDescription>
+						<DialogTitle>{title}</DialogTitle>
+						<DialogDescription className={custom ? 'sr-only' : undefined}>
+							{custom
+								? 'Name the group, choose what its members may do, and choose who is in it.'
+								: 'What every account with the User role may do. A group can give its members more.'}
+						</DialogDescription>
 					</DialogHeader>
 					<form
-						className="flex w-full flex-col"
+						noValidate
+						className="flex min-h-0 flex-1 flex-col"
 						onSubmit={(e) => {
 							e.preventDefault();
 							submit();
 						}}
 					>
-						<div className="flex h-full w-full flex-col pb-2 lg:flex-row lg:space-x-4">
-							<div className="tabs flex max-w-full flex-row gap-2.5 overflow-x-auto text-left text-sm font-normal lg:w-40 lg:flex-none lg:flex-col lg:gap-1">
-								{tabs.map((id) => {
-									const { label, icon: Icon } = tabMeta[id];
-									return (
-										<Button
-											variant={tab === id ? 'secondary' : 'ghost'}
-											size="sm"
-											className="flex-1 lg:flex-none shrink"
-											key={id}
-											type="button"
-											onClick={() => setTab(id)}
-										>
-											<Icon className="size-4" />
-											<span>{label}</span>
-										</Button>
-									);
-								})}
-							</div>
-
-							<div className="mt-1 flex flex-1 flex-col lg:h-[30rem] lg:max-h-[30rem]">
-								<div className="h-full w-full overflow-y-auto">
-									{tab === 'general' && (
+						<Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="min-h-0 flex-1 gap-3">
+							{tabs.length > 1 && (
+								<TabsList variant="line" className="max-w-full shrink-0 justify-start overflow-x-auto">
+									{tabs.map((id) => (
+										<TabsTrigger key={id} value={id} className="flex-none">
+											{tabLabels[id]}
+										</TabsTrigger>
+									))}
+								</TabsList>
+							)}
+							<div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4">
+								{tabs.includes('general') && (
+									<TabsContent value="general">
 										<GroupGeneral
+											nameId={nameId}
 											name={name}
-											onNameChange={setName}
+											nameError={nameError}
+											onNameChange={(value) => {
+												setName(value);
+												if (value.trim()) setNameError(null);
+											}}
 											description={description}
 											onDescriptionChange={setDescription}
 											data={data}
@@ -199,50 +223,56 @@ export function EditGroupModal({
 											edit={edit}
 											onDelete={() => setConfirmDelete(true)}
 										/>
-									)}
-									{tab === 'permissions' && (
-										<Permissions
-											permissions={permissions}
-											onChange={setPermissions}
-											defaultPermissions={defaultPermissions}
-										/>
-									)}
-									{tab === 'users' && group && (
+									</TabsContent>
+								)}
+								<TabsContent value="permissions">
+									<Permissions
+										permissions={permissions}
+										onChange={setPermissions}
+										defaultPermissions={defaultPermissions}
+										baseline={baseline}
+									/>
+								</TabsContent>
+								{group && tabs.includes('users') && (
+									<TabsContent value="users">
 										<GroupUsers
 											groupId={group.id}
+											groupName={group.name}
 											userCount={userCount}
 											onUserCountChange={setUserCount}
 											onMemberChange={(g) => onMemberChange?.(g as Group)}
 										/>
-									)}
-									{tab === 'preview' && group && <GroupPreviewPanel groupId={group.id} />}
-								</div>
-
-								{(tab === 'general' || tab === 'permissions') && (
-									<div className="flex items-center justify-between gap-1.5 pt-3 text-sm font-normal">
-										<div>
-											{tab === 'permissions' && (
-												<Tip
-													content={
-														custom
-															? 'Reset group permissions to match the current default user permissions'
-															: 'Reset all permissions to their initial configuration values'
-													}
-												>
-													<Button variant="ghost" size="sm" type="button" onClick={() => setConfirmReset(true)}>
-														Reset to Defaults
-													</Button>
-												</Tip>
-											)}
-										</div>
-										<Button type="submit" size="sm" disabled={loading}>
-											Save
-											{loading && <Spinner className="size-3.5" />}
-										</Button>
-									</div>
+									</TabsContent>
+								)}
+								{group && tabs.includes('preview') && (
+									<TabsContent value="preview">
+										<GroupPreviewPanel groupId={group.id} />
+									</TabsContent>
 								)}
 							</div>
-						</div>
+						</Tabs>
+
+						{footer && (
+							<div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t pt-3">
+								<div>
+									{tab === 'permissions' && (
+										<Button variant="outline" type="button" onClick={() => setConfirmReset(true)}>
+											<RotateCcw aria-hidden data-icon="inline-start" />
+											Reset to defaults
+										</Button>
+									)}
+								</div>
+								<div className="flex gap-2">
+									<Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+										Cancel
+									</Button>
+									<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
+										{loading && <Spinner className="size-3.5" />}
+										{saveLabel}
+									</Button>
+								</div>
+							</div>
+						)}
 					</form>
 				</DialogContent>
 			</Dialog>

@@ -33,6 +33,10 @@ export type BackendConfig = {
 		enable_signup_password_confirmation?: boolean;
 		enable_signup?: boolean;
 		enable_login_form?: boolean;
+		/** The server's password rule (ENABLE_PASSWORD_VALIDATION); signed-in clients only. */
+		enable_password_validation?: boolean;
+		/** The rule in words (PASSWORD_VALIDATION_HINT); may be empty. */
+		password_validation_hint?: string;
 		[key: string]: unknown;
 	};
 	[key: string]: unknown;
