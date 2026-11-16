@@ -534,7 +534,7 @@ function TimeGrid({ view, date, weekStart, byDay, colour, open, onCreate, onOpen
 					<div className="bg-background sticky top-0 z-10">
 						{view === 'week' && (
 							<div className={cn('grid border-b', columns)}>
-								<div />
+								<div className="bg-background sticky left-0 z-1" />
 								{days.map((day, i) => (
 									<div key={dayKey(day)} className={cn('py-2 text-center', i > 0 && 'border-l')}>
 										<div className="text-foreground-muted text-caption">{weekdayName(day, 'short')}</div>
@@ -552,7 +552,9 @@ function TimeGrid({ view, date, weekStart, byDay, colour, open, onCreate, onOpen
 						)}
 						{bands.some((band) => band.length > 0) && (
 							<section aria-label="All-day events and runs" className={cn('grid border-b', columns)}>
-								<div className="text-foreground-muted pt-1.5 pr-2 text-right text-caption select-none">All day</div>
+								<div className="text-foreground-muted bg-background sticky left-0 z-1 pt-1.5 pr-2 text-right text-caption select-none">
+									All day
+								</div>
 								{days.map((day, i) => {
 									const shown = view === 'week' ? bands[i].slice(0, 3) : bands[i];
 									return (
@@ -578,7 +580,13 @@ function TimeGrid({ view, date, weekStart, byDay, colour, open, onCreate, onOpen
 						)}
 					</div>
 					<div className={cn('grid', columns)}>
-						<div aria-hidden className="relative" style={{ height: 24 * hour }}>
+						{/* The hours stay in view while a week wider than the screen scrolls sideways (a phone). */}
+						<div
+							aria-hidden
+							data-testid="hour-column"
+							className="bg-background sticky left-0 z-1"
+							style={{ height: 24 * hour }}
+						>
 							{HOURS.map((h) => (
 								<div
 									key={h}

@@ -133,6 +133,11 @@ describe('day and week grids', () => {
 		expect((screen.getByRole('button', { name: /Stand-up/ }) as HTMLElement).style.height).toBe('24px');
 	});
 
+	it('keeps the hours in view while a week scrolls sideways (#965)', () => {
+		show('week', new Date(2026, 9, 20), []);
+		expect(screen.getByTestId('hour-column')).toHaveClass('sticky', 'left-0', 'bg-background');
+	});
+
 	it('puts overlapping events side by side', () => {
 		const a = event('a', 'A', new Date(2026, 9, 20, 9), new Date(2026, 9, 20, 11));
 		const b = event('b', 'B', new Date(2026, 9, 20, 10), new Date(2026, 9, 20, 12));
