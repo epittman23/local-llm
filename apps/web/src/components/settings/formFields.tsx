@@ -1,4 +1,4 @@
-import { ChevronRight, CircleCheck } from 'lucide-react';
+import { ChevronDown, CircleCheck } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RowButton } from '@/components/ui/row-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
@@ -15,7 +16,7 @@ import type { TestResult } from './connectionModel';
 // (#933): Add/Edit connection, Ollama, tool server, terminal server and
 // knowledge source. Every field is the shared control with its label above and
 // its line under (FRM-1, FRM-2); a rarely used group sits behind a closed
-// disclosure (FRM-6), drawn as the model editor draws its Advanced.
+// disclosure row (FRM-6), the one every settings form and the model editor use.
 
 /** A field's label, with "(optional)" where the server does not need it (FRM-6). */
 export function FieldLabel({
@@ -163,12 +164,24 @@ export function SwitchField({
 }
 
 /**
- * FRM-6: a closed-by-default group, opened by a chevron button that says
- * whether it is open (`aria-expanded`). Opening it brings it into view in the
- * scroller around it (#960: it used to open below the fold, unseen).
+ * FRM-6: a folded group of settings. One full-width row holds its name, an
+ * optional second line, optional `meta` (a count, a badge) and a chevron that
+ * turns while open; it says whether it is open (`aria-expanded`) and which
+ * panel it opens (`aria-controls`, a panel that is always in the document).
+ * Opened, the panel grows in the scroller around it inside a `rounded-lg
+ * border` frame, never an inner max-height, and the row and its panel scroll
+ * into view together (#960: it used to open below the fold, unseen), with
+ * `scroll-mt-3` so the focus outline shows and no smooth scrolling (MOT-2).
+ * Only a click scrolls: a caller that opens it itself (a filter opening every
+ * group that matches, a form opening Advanced at an error) keeps its place.
+ * `level` puts the row in a heading of that level, for groups that are the
+ * sections of what holds them.
  */
 export function Disclosure({
 	title,
+	description,
+	meta,
+	level,
 	defaultOpen = false,
 	open: openProp,
 	onOpenChange,
@@ -176,6 +189,9 @@ export function Disclosure({
 	children
 }: {
 	title: ReactNode;
+	description?: ReactNode;
+	meta?: ReactNode;
+	level?: 3 | 4;
 	defaultOpen?: boolean;
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
@@ -185,29 +201,57 @@ export function Disclosure({
 	const [own, setOwn] = useState(defaultOpen);
 	const open = openProp ?? own;
 	const id = useId();
-	const body = useRef<HTMLDivElement>(null);
-	const opened = useRef(false);
+	const wrapper = useRef<HTMLDivElement>(null);
+	const clicked = useRef(false);
 	useEffect(() => {
-		if (open && opened.current) body.current?.scrollIntoView?.({ block: 'nearest' });
-		opened.current = true;
+		if (open && clicked.current) wrapper.current?.scrollIntoView?.({ block: 'nearest' });
+		clicked.current = false;
 	}, [open]);
+	const Heading = level ? (`h${level}` as const) : null;
+	const row = (
+		<RowButton
+			className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-3 px-2 py-2"
+			aria-expanded={open}
+			aria-controls={id}
+			// Named by its title alone; the second line and the meta describe it.
+			aria-labelledby={`${id}-title`}
+			aria-describedby={
+				[description && `${id}-description`, meta && `${id}-meta`].filter(Boolean).join(' ') || undefined
+			}
+			onClick={() => {
+				clicked.current = !open;
+				setOwn(!open);
+				onOpenChange?.(!open);
+			}}
+		>
+			<span className="min-w-0 flex-1">
+				<span id={`${id}-title`} className="text-foreground-strong font-strong block">
+					{title}
+				</span>
+				{description && (
+					<span id={`${id}-description`} className="text-foreground-muted mt-1 block text-dense">
+						{description}
+					</span>
+				)}
+			</span>
+			{meta && (
+				<span id={`${id}-meta`} className="flex shrink-0 items-center gap-2">
+					{meta}
+				</span>
+			)}
+			<ChevronDown
+				aria-hidden
+				className={cn(
+					'text-foreground-muted mt-0.5 size-4 shrink-0 transition-transform duration-(--motion-fast)',
+					open && 'rotate-180'
+				)}
+			/>
+		</RowButton>
+	);
 	return (
-		<div className={className}>
-			<Button
-				variant="ghost"
-				type="button"
-				className="text-body -ms-2"
-				aria-expanded={open}
-				aria-controls={id}
-				onClick={() => {
-					setOwn(!open);
-					onOpenChange?.(!open);
-				}}
-			>
-				<ChevronRight aria-hidden className={cn('transition-transform', open && 'rotate-90')} />
-				{title}
-			</Button>
-			<div id={id} ref={body} hidden={!open} className="mt-3">
+		<div ref={wrapper} className={cn('scroll-mt-3', className)}>
+			{Heading ? <Heading>{row}</Heading> : row}
+			<div id={id} hidden={!open} className="mt-2 min-w-0 rounded-lg border p-3">
 				{open && children}
 			</div>
 		</div>

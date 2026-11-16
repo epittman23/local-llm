@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDownIcon, Plus } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import {
@@ -14,10 +14,10 @@ import {
 	SettingsSection,
 	SettingTextarea
 } from '@/components/settings/controls';
+import { Disclosure } from '@/components/settings/formFields';
 import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
 import { FORKED_FROM } from '@/components/settings/personal/About';
 import { Button } from '@/components/ui/button';
-import { RowButton } from '@/components/ui/row-button';
 import { getAdminConfig, updateAdminConfig } from '@/lib/apis/auths';
 import { getBanners, setBanners } from '@/lib/apis/configs';
 import { WEBUI_BUILD_HASH } from '@/lib/constants';
@@ -26,7 +26,6 @@ import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import type { Banner } from '@/lib/types';
-import { cn } from '@/lib/utils';
 import { useAdminSingleUser } from '../adminVisibility';
 import { Banners } from './Banners';
 import { canAddBanner, newBanner } from './banners';
@@ -99,41 +98,21 @@ export function DefaultInterfaceSettings({
 	// Bumped by Clear, to start the rows' own state (an open font box and what
 	// was typed in it) over with the cleared values.
 	const [cleared, setCleared] = useState(0);
-	const panelId = useId();
-	const panel = useRef<HTMLDivElement>(null);
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const autocompleteEnabled = useConfigStore((s) => Boolean(s.config?.features?.enable_autocomplete_generation));
 	const defaults = interfaceDefaults(value);
 	const count = Object.keys(defaults).length;
 	const counted = `${count} ${count === 1 ? 'setting' : 'settings'}`;
-	// #960: the panel opens below the last row of the tab, so bring the row and its panel into view.
-	useEffect(() => {
-		if (open) panel.current?.scrollIntoView?.({ block: 'nearest' });
-	}, [open]);
+	// #960: the panel opens below the last row of the tab; the Disclosure brings it into view.
 	return (
-		<div ref={panel} className="scroll-mt-3">
-			<RowButton
-				className="-mx-2 flex items-start justify-between gap-4 px-2 py-2"
-				aria-expanded={open}
-				aria-controls={panelId}
-				onClick={() => setOpen((v) => !v)}
+		<>
+			<Disclosure
+				title="Default interface settings"
+				description="What every account starts from. A personal setting overrides its default."
+				open={open}
+				onOpenChange={setOpen}
 			>
-				<span className="min-w-0">
-					<span className="text-foreground-strong font-strong block">Default interface settings</span>
-					<span className="text-foreground-muted mt-1 block text-dense">
-						What every account starts from. A personal setting overrides its default.
-					</span>
-				</span>
-				<ChevronDownIcon
-					aria-hidden
-					className={cn(
-						'text-foreground-muted mt-0.5 size-4 shrink-0 transition-transform duration-(--motion-fast)',
-						open && 'rotate-180'
-					)}
-				/>
-			</RowButton>
-			{open && (
-				<div id={panelId} className="mt-2 space-y-2 rounded-lg border p-3">
+				<div className="space-y-2">
 					<div className="flex items-center justify-between gap-4">
 						<div className="text-foreground-muted text-dense">{counted} configured</div>
 						{count > 0 && (
@@ -152,7 +131,7 @@ export function DefaultInterfaceSettings({
 						autocompleteEnabled={autocompleteEnabled}
 					/>
 				</div>
-			)}
+			</Disclosure>
 			<ConfirmDialog
 				open={confirmClear}
 				onOpenChange={setConfirmClear}
@@ -167,7 +146,7 @@ export function DefaultInterfaceSettings({
 			>
 				Removes the {counted} set here. Once you save, every account without its own setting uses the app's defaults.
 			</ConfirmDialog>
-		</div>
+		</>
 	);
 }
 

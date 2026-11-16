@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDownIcon } from 'lucide-react';
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
@@ -14,8 +13,8 @@ import {
 	SettingsSection,
 	SettingTextarea
 } from '@/components/settings/controls';
+import { Disclosure } from '@/components/settings/formFields';
 import { Button } from '@/components/ui/button';
-import { RowButton } from '@/components/ui/row-button';
 import { getModels, getTaskConfig, getTaskConfigDefaults, updateTaskConfig } from '@/lib/apis';
 import { getChatConfig, updateChatConfig } from '@/lib/apis/chats';
 import { errorMessage } from '@/lib/apis/errors';
@@ -24,7 +23,6 @@ import { toastSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { cn } from '@/lib/utils';
 import { configuredParams, type ModelOption, mergeModelOptions, normalizeModelSelection } from './interfaceTasks';
 
 type Cfg = Record<string, any>;
@@ -210,12 +208,6 @@ export default function Interface() {
 	}, [models.isError, models.error]);
 
 	const [showTaskParameters, setShowTaskParameters] = useState(false);
-	const taskParametersId = useId();
-	const taskParameters = useRef<HTMLDivElement>(null);
-	// #960: the panel opens below its row, so bring it into view in the tab's own scroller.
-	useEffect(() => {
-		if (showTaskParameters) taskParameters.current?.scrollIntoView?.({ block: 'nearest' });
-	}, [showTaskParameters]);
 	const [saving, setSaving] = useState(false);
 	const options = models.data ?? [];
 	const task = draft?.task;
@@ -327,33 +319,19 @@ export default function Interface() {
 									onChange={(v) => patchTask({ TASK_MODEL_EXTERNAL: v })}
 								/>
 							</div>
-							<div className="mt-2.5 scroll-mt-3" ref={taskParameters}>
-								<RowButton
-									className="-mx-2 flex items-center justify-between gap-4 px-2 py-2"
-									aria-expanded={showTaskParameters}
-									aria-controls={taskParametersId}
-									onClick={() => setShowTaskParameters((v) => !v)}
-								>
-									<span className="text-foreground-strong font-strong">Task model parameters</span>
-									<ChevronDownIcon
-										aria-hidden
-										className={cn(
-											'text-foreground-muted size-4 shrink-0 transition-transform duration-(--motion-fast)',
-											showTaskParameters && 'rotate-180'
-										)}
-									/>
-								</RowButton>
-								{showTaskParameters && (
-									<div id={taskParametersId} className="mt-2 rounded-lg border p-3">
-										<AdvancedParams
-											admin
-											custom
-											params={task.TASK_MODEL_PARAMS}
-											onChange={(p) => patchTask({ TASK_MODEL_PARAMS: p })}
-										/>
-									</div>
-								)}
-							</div>
+							<Disclosure
+								title="Task model parameters"
+								className="mt-2.5"
+								open={showTaskParameters}
+								onOpenChange={setShowTaskParameters}
+							>
+								<AdvancedParams
+									admin
+									custom
+									params={task.TASK_MODEL_PARAMS}
+									onChange={(p) => patchTask({ TASK_MODEL_PARAMS: p })}
+								/>
+							</Disclosure>
 						</div>
 					</SettingsSection>
 

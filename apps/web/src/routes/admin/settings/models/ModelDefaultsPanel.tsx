@@ -32,9 +32,12 @@ export function ModelDefaultsPanel({
 	const features = availableFeatures(value.capabilities);
 
 	return (
-		<Disclosure title="Model defaults" className="shrink-0">
-			<p className="text-foreground-muted text-dense">What a new model starts with until its own settings change it.</p>
-			<div className="mt-2 flex flex-col gap-1 ps-4">
+		<Disclosure
+			title="Model defaults"
+			description="What a new model starts with until its own settings change it."
+			className="shrink-0"
+		>
+			<div className="flex flex-col gap-1">
 				<Disclosure title="Capabilities">
 					<CheckboxGrid
 						title="What a new model can do"

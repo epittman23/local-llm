@@ -1,5 +1,4 @@
-import { ChevronDownIcon } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
 import {
@@ -10,13 +9,12 @@ import {
 	SettingsSection,
 	SettingTextarea
 } from '@/components/settings/controls';
-import { RowButton } from '@/components/ui/row-button';
+import { Disclosure } from '@/components/settings/formFields';
 import { getAdminConfig, getOAuthConfig, updateAdminConfig, updateOAuthConfig } from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { cn } from '@/lib/utils';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { isOAuthEditable } from './authentication';
 
@@ -194,7 +192,6 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	const editable = isOAuthEditable(oauth);
 	// S5-D2: folded to one line; the details are rarely needed on a one-owner install.
 	const [open, setOpen] = useState(false);
-	const detailsId = useId();
 	const state = oauth.ENABLE_OAUTH ? 'on' : editable ? 'off' : 'not configured';
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
 		<Text config={oauth} set={set} name={name} label={label} description={description} placeholder={placeholder} />
@@ -205,29 +202,13 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 
 	return (
 		<SettingsSection title="OAuth / OIDC">
-			<RowButton
-				className="-mx-2 flex items-start justify-between gap-4 px-2 py-2"
-				aria-expanded={open}
-				aria-controls={detailsId}
-				onClick={() => setOpen((v) => !v)}
+			<Disclosure
+				title="Sign-in with an identity provider"
+				description={`${state[0].toUpperCase() + state.slice(1)}${editable ? '' : ' (set by environment variables)'}`}
+				open={open}
+				onOpenChange={setOpen}
 			>
-				<span className="min-w-0">
-					<span className="text-foreground-strong font-strong block">Sign-in with an identity provider</span>
-					<span className="text-foreground-muted mt-1 block text-dense">
-						{state[0].toUpperCase() + state.slice(1)}
-						{editable ? '' : ' (set by environment variables)'}
-					</span>
-				</span>
-				<ChevronDownIcon
-					aria-hidden
-					className={cn(
-						'text-foreground-muted mt-0.5 size-4 shrink-0 transition-transform duration-(--motion-fast)',
-						open && 'rotate-180'
-					)}
-				/>
-			</RowButton>
-			{open && (
-				<div id={detailsId} className="flex min-w-0 flex-col gap-2.5">
+				<div className="flex min-w-0 flex-col gap-2.5">
 					<div className={noteClass} data-testid="oauth-env-note">
 						The OAuth / OIDC provider (its name, discovery URL, client ID and secret, redirect URI, scopes, timeouts and
 						logout address) is configured through environment variables, not here. See docs/guides/oauth.md for the
@@ -320,7 +301,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 						)}
 					</fieldset>
 				</div>
-			)}
+			</Disclosure>
 		</SettingsSection>
 	);
 }

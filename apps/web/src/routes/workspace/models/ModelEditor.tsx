@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Camera, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react';
+import { Camera, ChevronLeft, CircleAlert } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { failureCause } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { useSettingsHost } from '@/components/settings/controls';
+import { Disclosure } from '@/components/settings/formFields';
 import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
@@ -122,30 +123,6 @@ function FieldLabel({
 			{children}
 			{optional && <span className="text-foreground-muted font-normal">(optional)</span>}
 		</Label>
-	);
-}
-
-/** A closed-by-default part of the form, opened by a disclosure button (FRM-6). */
-function Disclosure({ title, children }: { title: string; children: ReactNode }) {
-	const [open, setOpen] = useState(false);
-	const id = useId();
-	return (
-		<div>
-			<Button
-				variant="ghost"
-				type="button"
-				className="-ms-2"
-				aria-expanded={open}
-				aria-controls={id}
-				onClick={() => setOpen((v) => !v)}
-			>
-				<ChevronRight aria-hidden className={cn('transition-transform', open && 'rotate-90')} />
-				{title}
-			</Button>
-			<div id={id} hidden={!open} className="mt-3">
-				{open && children}
-			</div>
-		</div>
 	);
 }
 
@@ -824,7 +801,7 @@ function EditorForm({
 										</datalist>
 										<FieldMessage
 											id={fieldId('voice-note')}
-											help="Empty uses the voice set in Admin Settings > Audio."
+											help="Empty uses the voice set in Admin > Settings > Audio."
 										/>
 									</div>
 									<div>

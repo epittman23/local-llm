@@ -21,6 +21,20 @@ function Held({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 	);
 }
 
+function Opener() {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<button type="button" onClick={() => setOpen(true)}>
+				Open from outside
+			</button>
+			<Disclosure title="Advanced" open={open} onOpenChange={setOpen}>
+				<p>Inside</p>
+			</Disclosure>
+		</>
+	);
+}
+
 function Field({ onTest, error }: { onTest: () => Promise<TestResult | null>; error?: string | null }) {
 	const [value, setValue] = useState('http://127.0.0.1:9');
 	return <ConnectionUrlField id="url" value={value} onChange={setValue} onTest={onTest} error={error} />;
@@ -74,6 +88,33 @@ describe('Disclosure', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Orchestrator' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 		expect(screen.queryByText('Inside')).toBeNull();
+	});
+
+	it('is named by its title and described by its second line and meta, in a heading when asked', () => {
+		render(
+			<Disclosure title="Chat" description="What members can do in a chat." meta={<span>2 changed</span>} level={3}>
+				<p>Inside</p>
+			</Disclosure>
+		);
+		const button = screen.getByRole('button', { name: 'Chat' });
+		expect(button).toHaveAccessibleDescription('What members can do in a chat. 2 changed');
+		expect(screen.getByRole('heading', { level: 3, name: 'Chat' })).toContainElement(button);
+		const panel = document.getElementById(button.getAttribute('aria-controls') ?? '') as HTMLElement;
+		expect(panel.hidden).toBe(true);
+		expect(panel.className).toContain('rounded-lg border p-3');
+	});
+
+	it('brings itself into view when clicked open, but not when its holder opens it or on mount', () => {
+		const scrolled = vi.fn();
+		Element.prototype.scrollIntoView = scrolled;
+		render(<Opener />);
+		fireEvent.click(screen.getByRole('button', { name: 'Open from outside' }));
+		expect(screen.getByText('Inside')).toBeTruthy();
+		expect(scrolled).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+		expect(scrolled).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+		expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
 	});
 });
 
