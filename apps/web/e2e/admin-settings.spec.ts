@@ -1405,6 +1405,10 @@ test.describe('settings: Authentication', () => {
 		});
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		// S5-D2: the block is folded to one line that says where it is set.
+		const fold = m.getByRole('button', { name: /^Sign-in with an identity provider/ });
+		await expect(fold).toContainText('On (set by environment variables)');
+		await fold.click();
 		await expect(m.getByText(/read from environment variables/)).toBeVisible();
 		await expect(m.getByLabel('Email Claim')).toBeDisabled();
 		await m.getByLabel('JWT Expiration').fill('2w');
@@ -1419,6 +1423,7 @@ test.describe('settings: Authentication', () => {
 		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		await m.getByRole('button', { name: /^Sign-in with an identity provider/ }).click();
 		await expect(m.getByLabel('Email Claim')).toHaveValue('email');
 		await expect(m.getByTestId('oauth-env-note')).toContainText('environment variables');
 		await expect(m.getByLabel('Client ID')).toHaveCount(0);

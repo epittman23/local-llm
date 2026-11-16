@@ -228,12 +228,12 @@ export default function Audio() {
 								onChange={(v) => setStt({ ENGINE: v })}
 								aria-label="Speech-to-Text Engine"
 							>
-								<option value="">Whisper (Local)</option>
-								<option value="openai">OpenAI</option>
-								<option value="web">Web API</option>
-								<option value="deepgram">Deepgram</option>
-								<option value="azure">Azure AI Speech</option>
-								<option value="mistral">MistralAI</option>
+								<option value="">Whisper (on this machine)</option>
+								<option value="openai">OpenAI-compatible API</option>
+								<option value="web">The browser's speech recognition</option>
+								<option value="deepgram">Deepgram (cloud)</option>
+								<option value="azure">Azure AI Speech (cloud)</option>
+								<option value="mistral">Mistral AI (cloud)</option>
 							</SettingSelect>
 						</SettingRow>
 
@@ -391,12 +391,12 @@ export default function Audio() {
 							description="Choose the speech provider used for assistant audio output."
 						>
 							<SettingSelect value={tts.ENGINE} onChange={changeTtsEngine} aria-label="Text-to-Speech Engine">
-								<option value="">Web API</option>
-								<option value="transformers">Transformers (Local)</option>
-								<option value="openai">OpenAI</option>
-								<option value="elevenlabs">ElevenLabs</option>
-								<option value="azure">Azure AI Speech</option>
-								<option value="mistral">MistralAI</option>
+								<option value="">The browser's voices</option>
+								<option value="transformers">Transformers (on this machine)</option>
+								<option value="openai">OpenAI-compatible API</option>
+								<option value="elevenlabs">ElevenLabs (cloud)</option>
+								<option value="azure">Azure AI Speech (cloud)</option>
+								<option value="mistral">Mistral AI (cloud)</option>
 							</SettingSelect>
 						</SettingRow>
 

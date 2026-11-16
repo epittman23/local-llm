@@ -343,7 +343,7 @@ export default function Images() {
 			{draft && c && (
 				<>
 					<SettingsSection first>
-						{toggle('ENABLE_IMAGE_GENERATION', 'Image Generation', 'Allow users to generate images from prompts.')}
+						{toggle('ENABLE_IMAGE_GENERATION', 'Image Generation', 'Generate images from a description in a chat.')}
 					</SettingsSection>
 
 					<SettingsSection title="Create Image">
@@ -469,7 +469,7 @@ export default function Images() {
 					</SettingsSection>
 
 					<SettingsSection title="Edit Image">
-						{toggle('ENABLE_IMAGE_EDIT', 'Image Edit', 'Allow users to edit existing images.')}
+						{toggle('ENABLE_IMAGE_EDIT', 'Image Edit', 'Edit an image attached to a chat.')}
 						<SettingRow label="Image Edit Engine" description="Choose the provider used for image edits.">
 							<SettingSelect
 								value={editEngine}

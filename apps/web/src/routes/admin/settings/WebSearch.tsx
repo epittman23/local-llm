@@ -172,13 +172,13 @@ export default function WebSearch() {
 							{...bound}
 							name="ENABLE_WEB_SEARCH"
 							label="Web Search"
-							description="Allow users to search the web from chats."
+							description="Let chats search the web."
 						/>
 						<BoundToggle
 							{...bound}
 							name="ENABLE_WEB_SEARCH_CONFIRMATION"
 							label="Web Search Confirmation"
-							description="Require users to confirm before using Web Search."
+							description="Ask before a chat searches the web."
 						/>
 						{web.ENABLE_WEB_SEARCH_CONFIRMATION && (
 							<BoundTextarea

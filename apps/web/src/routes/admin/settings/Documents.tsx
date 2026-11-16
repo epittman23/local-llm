@@ -684,13 +684,13 @@ export default function Documents() {
 							{...bound}
 							name="ENABLE_GOOGLE_DRIVE_INTEGRATION"
 							label="Google Drive"
-							description="Allow Google Drive as a document source."
+							description="Attach files from Google Drive."
 						/>
 						<BoundToggle
 							{...bound}
 							name="ENABLE_ONEDRIVE_INTEGRATION"
 							label="OneDrive"
-							description="Allow OneDrive as a document source."
+							description="Attach files from OneDrive."
 						/>
 					</SettingsSection>
 
