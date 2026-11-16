@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { toastFailure } from '@/components/common/failureToast';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Tip } from '@/components/common/Tip';
@@ -20,7 +20,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Table } from '@/components/ui/table';
+import { Table, TableSortHead } from '@/components/ui/table';
 import { deleteUserById, getUsers, updateUserById } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -190,7 +190,6 @@ export function UserList() {
 			setDirection('asc');
 		}
 	};
-	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
 	const act = (user: UserRow, show: (open: boolean) => void) => {
 		setSelected(user);
 		show(true);
@@ -261,15 +260,15 @@ export function UserList() {
 						<thead>
 							<tr className="border-b">
 								{COLUMNS.map(({ key, label, className }) => (
-									<th key={key} scope="col" className={cn('py-1 font-normal', className)} aria-sort={sortState(key)}>
-										<SortHeaderButton
-											label={label}
-											active={orderBy === key}
-											direction={direction}
-											className="text-foreground-muted"
-											onClick={() => setSortKey(key)}
-										/>
-									</th>
+									<TableSortHead
+										key={key}
+										label={label}
+										active={orderBy === key}
+										direction={direction}
+										onSort={() => setSortKey(key)}
+										className={cn('h-auto py-1 font-normal', className)}
+										buttonClassName="text-foreground-muted"
+									/>
 								))}
 								<th scope="col" className="w-20 px-2 py-1.5">
 									<span className="sr-only">Actions</span>

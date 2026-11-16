@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
-import { toastFailure } from '@/components/common/failureToast';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toastFailure } from '@/components/common/failureToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { addUserToGroup, removeUserFromGroup } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';

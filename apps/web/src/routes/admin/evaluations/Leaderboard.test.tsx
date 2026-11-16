@@ -72,7 +72,8 @@ describe('Leaderboard table (#1062, #1027)', () => {
 		show();
 		const table = await screen.findByRole('table');
 		const model = within(table).getByRole('columnheader', { name: 'Model' });
-		expect(model).toHaveAttribute('aria-sort', 'none');
+		// aria-sort only on the open sort's heading (the shared TableSortHead).
+		expect(model).not.toHaveAttribute('aria-sort');
 		expect(within(table).getByRole('columnheader', { name: 'Elo' })).toHaveAttribute('aria-sort', 'descending');
 		fireEvent.click(within(model).getByRole('button', { name: 'Model' }));
 		expect(model).toHaveAttribute('aria-sort', 'ascending');

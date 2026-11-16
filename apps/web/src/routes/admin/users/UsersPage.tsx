@@ -60,6 +60,7 @@ export function UsersPage() {
 	return (
 		<div className="flex w-full flex-col pb-2">
 			<SubTabs
+				label="Users sections"
 				active={tab}
 				tabs={[
 					{

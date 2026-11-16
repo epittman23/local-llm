@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Table } from '@/components/ui/table';
+import { Table, TableRow, TableSortHead } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
 import { getLeaderboard } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -15,7 +15,6 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
-import { openRow } from '../rowOpen';
 import { TableSkeleton } from '../TableSkeleton';
 import { LeaderboardModal } from './LeaderboardModal';
 import {
@@ -93,8 +92,6 @@ export function Leaderboard() {
 			setDirection(key === 'name' ? 'asc' : 'desc');
 		}
 	};
-	const sortState = (key: LeaderboardSort) =>
-		orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none';
 	const open = (model: RankedModel) => {
 		setSelected(model);
 		setShowModal(true);
@@ -153,40 +150,30 @@ export function Leaderboard() {
 								<th scope="col" className="text-foreground-muted w-14 px-2 py-1.5 font-normal">
 									Rank
 								</th>
-								<th scope="col" aria-sort={sortState('name')} className="py-1 font-normal">
-									<SortHeaderButton
-										label="Model"
-										active={orderBy === 'name'}
-										direction={direction}
-										className="text-foreground-muted"
-										onClick={() => toggleSort('name')}
-									/>
-								</th>
+								<TableSortHead
+									label="Model"
+									active={orderBy === 'name'}
+									direction={direction}
+									onSort={() => toggleSort('name')}
+									className="h-auto py-1 font-normal"
+									buttonClassName="text-foreground-muted"
+								/>
 								{FIGURES.map((col) => (
-									<th
+									<TableSortHead
 										key={col.key}
-										scope="col"
-										aria-sort={sortState(col.key)}
-										className={cn('hidden py-1 text-right font-normal sm:table-cell', col.className)}
-									>
-										<SortHeaderButton
-											label={col.label}
-											active={orderBy === col.key}
-											direction={direction}
-											className="text-foreground-muted ms-auto"
-											onClick={() => toggleSort(col.key)}
-										/>
-									</th>
+										label={col.label}
+										active={orderBy === col.key}
+										direction={direction}
+										onSort={() => toggleSort(col.key)}
+										className={cn('hidden h-auto py-1 text-right font-normal sm:table-cell', col.className)}
+										buttonClassName="text-foreground-muted ms-auto"
+									/>
 								))}
 							</tr>
 						</thead>
 						<tbody>
 							{sorted.map((model) => (
-								<tr
-									key={model.id}
-									className="hover:bg-muted/50 cursor-pointer border-b last:border-0"
-									onClick={openRow(() => open(model))}
-								>
+								<TableRow key={model.id} className="last:border-0" onOpen={() => open(model)}>
 									<td className="text-foreground-muted px-2 py-1.5 tabular-nums">{ranks.get(model.id)}</td>
 									<td className="py-1.5">
 										<div className="flex min-w-0 items-center gap-2">
@@ -224,7 +211,7 @@ export function Leaderboard() {
 									<td className="text-foreground hidden px-2 py-1.5 text-right tabular-nums sm:table-cell">
 										<Record value={model.stats.lost} count={model.stats.count} />
 									</td>
-								</tr>
+								</TableRow>
 							))}
 						</tbody>
 					</Table>

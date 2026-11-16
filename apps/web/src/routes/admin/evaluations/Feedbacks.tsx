@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector } from '@/components/common/FilterSelects';
 import { toastFailure } from '@/components/common/failureToast';
-import { ListEmptyState, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Tip } from '@/components/common/Tip';
@@ -18,7 +18,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Table } from '@/components/ui/table';
+import { Table, TableRow, TableSortHead } from '@/components/ui/table';
 import { deleteFeedbackById, exportAllFeedbacks, getFeedbackItems, getFeedbackModelIds } from '@/lib/apis/evaluations';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -26,7 +26,6 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
-import { openRow } from '../rowOpen';
 import { TableSkeleton } from '../TableSkeleton';
 import { type FeedbackItem, FeedbackModal } from './FeedbackModal';
 import { feedbacksToCsv } from './feedbackCsv';
@@ -87,7 +86,6 @@ export function Feedbacks() {
 			setDirection('asc');
 		}
 	};
-	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
 	const open = (feedback: FeedbackItem) => {
 		setSelected(feedback);
 		setShowModal(true);
@@ -200,20 +198,15 @@ export function Feedbacks() {
 								</th>
 							)}
 							{SORTS.map((col) => (
-								<th
+								<TableSortHead
 									key={col.key}
-									scope="col"
-									aria-sort={sortState(col.key)}
-									className={cn('py-1 font-normal', col.align === 'end' && 'text-right', col.className)}
-								>
-									<SortHeaderButton
-										label={col.label}
-										active={orderBy === col.key}
-										direction={direction}
-										className="text-foreground-muted"
-										onClick={() => setSortKey(col.key)}
-									/>
-								</th>
+									label={col.label}
+									active={orderBy === col.key}
+									direction={direction}
+									onSort={() => setSortKey(col.key)}
+									className={cn('h-auto py-1 font-normal', col.align === 'end' && 'text-right', col.className)}
+									buttonClassName="text-foreground-muted"
+								/>
 							))}
 							<th scope="col" className="w-10">
 								<span className="sr-only">Actions</span>
@@ -226,11 +219,7 @@ export function Feedbacks() {
 							const when = dayjs(feedback.updated_at * 1000);
 							const model = feedback.data?.model_id ?? 'Unknown model';
 							return (
-								<tr
-									key={feedback.id}
-									className="hover:bg-muted/50 cursor-pointer border-b last:border-0"
-									onClick={openRow(() => open(feedback))}
-								>
+								<TableRow key={feedback.id} className="last:border-0" onOpen={() => open(feedback)}>
 									{!singleUser && (
 										<td className="hidden px-2 py-1.5 md:table-cell">
 											{feedback.user && (
@@ -299,7 +288,7 @@ export function Feedbacks() {
 											</DropdownMenuContent>
 										</DropdownMenu>
 									</td>
-								</tr>
+								</TableRow>
 							);
 						})}
 					</tbody>

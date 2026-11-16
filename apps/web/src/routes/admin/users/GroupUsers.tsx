@@ -3,7 +3,7 @@ import { ChevronDown, Download, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -17,7 +17,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { Table } from '@/components/ui/table';
+import { Table, TableSortHead } from '@/components/ui/table';
 import { addUserToGroup, removeUserFromGroup } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -186,7 +186,6 @@ export function GroupUsers({
 		{ key: 'role', label: 'Role', className: 'w-24 max-sm:hidden' },
 		{ key: 'last_active_at', label: 'Last active', className: 'w-32 max-sm:hidden' }
 	];
-	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : undefined);
 
 	return (
 		<div className="flex w-full flex-col gap-2">
@@ -264,15 +263,15 @@ export function GroupUsers({
 						<thead>
 							<tr className="border-b">
 								{columns.map(({ key, label, className }) => (
-									<th key={key} scope="col" className={cn('py-1 font-normal', className)} aria-sort={sortState(key)}>
-										<SortHeaderButton
-											label={label}
-											active={orderBy === key}
-											direction={direction}
-											className="text-foreground-muted"
-											onClick={() => setSortKey(key)}
-										/>
-									</th>
+									<TableSortHead
+										key={key}
+										label={label}
+										active={orderBy === key}
+										direction={direction}
+										onSort={() => setSortKey(key)}
+										className={cn('h-auto py-1 font-normal', className)}
+										buttonClassName="text-foreground-muted"
+									/>
 								))}
 							</tr>
 						</thead>

@@ -34,6 +34,7 @@ describe('UsersPage (S5-D2, #1022)', () => {
 	it('shows Overview and Groups with more than one account', async () => {
 		vi.mocked(useAdminSingleUser).mockReturnValue(false);
 		renderAt(routePaths.adminUsersGroups);
+		expect(screen.getByRole('navigation', { name: 'Users sections' })).toBeTruthy();
 		expect(screen.getByRole('link', { name: /Overview/ })).toBeTruthy();
 		expect(screen.getByRole('link', { name: /Groups/ })).toBeTruthy();
 		expect(await screen.findByText('groups panel')).toBeTruthy();

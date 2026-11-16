@@ -114,6 +114,23 @@ describe('Feedbacks table (#1027, #1062)', () => {
 		expect(screen.getByTestId('detail')).toHaveTextContent('f1');
 	});
 
+	it('opens a rating from a plain cell of its row', async () => {
+		renderFeedbacks();
+		const row = (await screen.findByRole('button', { name: 'qwen/qwen3.6-27b' })).closest('tr') as HTMLElement;
+		fireEvent.click(within(row).getByText('Up'));
+		expect(screen.getByTestId('detail')).toHaveTextContent('f1');
+	});
+
+	it("leaves a click on the row's menu, or in the menu it opens, to the menu", async () => {
+		renderFeedbacks();
+		const row = (await screen.findByRole('button', { name: 'qwen/qwen3.6-27b' })).closest('tr') as HTMLElement;
+		const more = within(row).getByRole('button', { name: 'More actions' });
+		fireEvent.click(more);
+		fireEvent.pointerDown(more, { button: 0, pointerType: 'mouse' });
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete rating' }));
+		expect(screen.queryByTestId('detail')).toBeNull();
+	});
+
 	it('sorts from a heading and says so with aria-sort', async () => {
 		renderFeedbacks();
 		const table = await screen.findByRole('table');

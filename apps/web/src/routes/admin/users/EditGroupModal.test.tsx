@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { toastFailure } from '@/components/common/failureToast';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { getUserDefaultPermissions, getUserDefaultPermissionsDefaults } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { EditGroupModal } from './EditGroupModal';

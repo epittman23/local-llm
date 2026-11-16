@@ -40,6 +40,7 @@ export function EvaluationsPage() {
 	return (
 		<div className="flex w-full flex-col pb-2">
 			<SubTabs
+				label="Evaluations sections"
 				active={tab}
 				tabs={[
 					{

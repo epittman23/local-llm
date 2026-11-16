@@ -31,6 +31,7 @@ describe('EvaluationsPage', () => {
 	it('shows the Leaderboard tab by default, with both sub-tabs', () => {
 		renderAt(routePaths.adminEvaluationsLeaderboard);
 		expect(screen.getByText('leaderboard panel')).toBeTruthy();
+		expect(screen.getByRole('navigation', { name: 'Evaluations sections' })).toBeTruthy();
 		expect(screen.getByRole('link', { name: /Leaderboard/ })).toBeTruthy();
 		expect(screen.getByRole('link', { name: /Feedback/ })).toBeTruthy();
 	});

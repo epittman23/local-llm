@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Table } from '@/components/ui/table';
+import { Table, TableRow, TableSortHead } from '@/components/ui/table';
 import { getModels } from '@/lib/apis';
 import { getDailyStats, getModelAnalytics, getSummary, getTokenUsage, getUserAnalytics } from '@/lib/apis/analytics';
 import { getGroups } from '@/lib/apis/groups';
@@ -21,7 +20,6 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, formatNumber } from '@/lib/utils';
 import { useAdminSingleUser } from '../adminVisibility';
-import { openRow } from '../rowOpen';
 import { TableSkeleton } from '../TableSkeleton';
 import { AnalyticsModelModal } from './AnalyticsModelModal';
 import {
@@ -63,10 +61,7 @@ const store = {
 	}
 };
 
-const ariaSort = (active: boolean, dir: 'asc' | 'desc') =>
-	active ? (dir === 'asc' ? 'ascending' : 'descending') : undefined;
-
-/** A sortable column heading: `aria-sort` on the cell, the shared header button inside it. */
+/** A sortable column heading on the shared `TableSortHead`; the figures' columns sit right. */
 function Head<K extends string>({
 	label,
 	by,
@@ -82,19 +77,14 @@ function Head<K extends string>({
 }) {
 	const numeric = by !== 'name';
 	return (
-		<th
-			scope="col"
-			aria-sort={ariaSort(sort.by === by, sort.dir)}
-			className={cn('py-1 font-normal', numeric && 'text-right', className)}
-		>
-			<SortHeaderButton
-				label={label}
-				active={sort.by === by}
-				direction={sort.dir}
-				className={cn('text-foreground-muted', numeric && 'ms-auto')}
-				onClick={() => onSort(by)}
-			/>
-		</th>
+		<TableSortHead
+			label={label}
+			active={sort.by === by}
+			direction={sort.dir}
+			onSort={() => onSort(by)}
+			className={cn('h-auto py-1 font-normal', numeric && 'text-right', className)}
+			buttonClassName={cn('text-foreground-muted', numeric && 'ms-auto')}
+		/>
 	);
 }
 
@@ -379,11 +369,7 @@ export default function Analytics() {
 											const title = model.name === model.model_id ? model.name : `${model.name} (${model.model_id})`;
 											const shown = prefix ? model.name.slice(prefix.length) : model.name;
 											return (
-												<tr
-													key={model.model_id}
-													className="hover:bg-muted/50 cursor-pointer border-b last:border-0"
-													onClick={openRow(() => openModel(model))}
-												>
+												<TableRow key={model.model_id} className="last:border-0" onOpen={() => openModel(model)}>
 													<td className="py-1">
 														<div className="flex min-w-0 items-center gap-2 ps-2">
 															<ProfileAvatar
@@ -418,7 +404,7 @@ export default function Analytics() {
 													<td className="px-2 py-1 text-right tabular-nums">
 														{sharePercent(model.count, totalModelMessages)}%
 													</td>
-												</tr>
+												</TableRow>
 											);
 										})}
 									</tbody>
