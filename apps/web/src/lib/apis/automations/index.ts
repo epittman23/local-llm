@@ -1,5 +1,5 @@
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
 export type AutomationTerminalConfig = {
 	server_id: string;
@@ -9,6 +9,8 @@ export type AutomationTerminalConfig = {
 export type AutomationTarget = {
 	type: 'chat' | 'channel';
 	channel_id?: string | null;
+	/** A chat target: every run goes into the chat the last one used. */
+	same_chat?: boolean;
 };
 
 export type AutomationData = {
