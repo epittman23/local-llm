@@ -1,16 +1,27 @@
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
 type GroupData = { config?: { share?: boolean | string } } & Record<string, unknown>;
 
 const toSelectValue = (share: unknown) => (share === undefined || share === null ? 'members' : String(share));
-// The <select> speaks strings; the group stores false / 'members' / true.
+// The select speaks strings; the group stores false / 'members' / true.
 const fromSelectValue = (value: string): boolean | string =>
 	value === 'false' ? false : value === 'true' ? true : value;
 
-/** Ports admin/Users/Groups/General.svelte: name, description, who may share to the group, delete. */
+/**
+ * Ports admin/Users/Groups/General.svelte: name, description, who may share to
+ * the group, delete. #1099/#933: labelled, edged fields; a missing name shows
+ * under Name (FRM-2); Delete group names what it deletes (ACT-2).
+ */
 export function GroupGeneral({
+	nameId,
 	name,
+	nameError,
 	onNameChange,
 	description,
 	onDescriptionChange,
@@ -19,7 +30,9 @@ export function GroupGeneral({
 	edit,
 	onDelete
 }: {
+	nameId: string;
 	name: string;
+	nameError?: string | null;
 	onNameChange: (name: string) => void;
 	description: string;
 	onDescriptionChange: (description: string) => void;
@@ -28,75 +41,66 @@ export function GroupGeneral({
 	edit: boolean;
 	onDelete: () => void;
 }) {
+	const shareId = `${nameId}-share`;
 	return (
-		<>
-			<div className="flex gap-2">
-				<div className="flex w-full flex-col">
-					<label className="text-muted-foreground mb-0.5 text-xs" htmlFor="group-name">
-						Name
-					</label>
-					<input
-						id="group-name"
-						className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
-						type="text"
-						value={name}
-						onChange={(e) => onNameChange(e.target.value)}
-						placeholder="Group Name"
-						autoComplete="off"
-						required
-					/>
-				</div>
+		<div className="flex flex-col gap-4">
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor={nameId}>Name</Label>
+				<Input
+					id={nameId}
+					value={name}
+					onChange={(e) => onNameChange(e.target.value)}
+					placeholder="Analysts"
+					autoComplete="off"
+					{...fieldProps(`${nameId}-msg`, { error: nameError })}
+				/>
+				<FieldMessage id={`${nameId}-msg`} error={nameError} />
 			</div>
 
-			<div className="mt-2 flex w-full flex-col">
-				<label className="text-muted-foreground mb-1 text-xs" htmlFor="group-description">
-					Description
-				</label>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor={`${nameId}-description`}>
+					Description <span className="text-foreground-muted font-normal">(optional)</span>
+				</Label>
 				<Textarea
-					id="group-description"
-					className="placeholder:text-foreground-muted w-full resize-none border-0 bg-transparent px-0 text-sm shadow-none"
-					rows={4}
+					id={`${nameId}-description`}
+					rows={3}
 					value={description}
 					onChange={(e) => onDescriptionChange(e.target.value)}
-					placeholder="Group Description"
+					placeholder="Who is in this group, and why"
 				/>
 			</div>
 
-			<hr className="my-1" />
-
-			<div className="mt-2 flex w-full flex-col">
-				<div className="text-muted-foreground mb-1 text-xs">Setting</div>
-				<div className="flex w-full justify-between">
-					<label className="self-center text-xs" htmlFor="group-share">
-						Who can share to this group
-					</label>
-					<div className="flex items-center gap-2 p-1">
-						<select
-							id="group-share"
-							className="rounded-lg bg-transparent px-2 text-sm"
-							value={toSelectValue(data?.config?.share)}
-							onChange={(e) =>
-								onDataChange({ ...data, config: { ...(data?.config ?? {}), share: fromSelectValue(e.target.value) } })
-							}
-						>
-							<option value="false">No one</option>
-							<option value="members">Members</option>
-							<option value="true">Anyone</option>
-						</select>
-					</div>
-				</div>
+			<div className="flex flex-col gap-1.5">
+				<Label htmlFor={shareId}>Who can share with this group</Label>
+				<Select
+					value={toSelectValue(data?.config?.share)}
+					onValueChange={(value) =>
+						onDataChange({ ...data, config: { ...(data?.config ?? {}), share: fromSelectValue(value) } })
+					}
+				>
+					<SelectTrigger id={shareId} className="w-full sm:w-48" aria-describedby={`${shareId}-msg`}>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="false">No one</SelectItem>
+						<SelectItem value="members">Its members</SelectItem>
+						<SelectItem value="true">Anyone</SelectItem>
+					</SelectContent>
+				</Select>
+				<FieldMessage
+					id={`${shareId}-msg`}
+					help="Who may pick this group when sharing a model, prompt or other item."
+				/>
 			</div>
 
 			{edit && (
-				<div className="mt-2 flex w-full flex-col">
-					<div className="text-muted-foreground mb-0.5 text-xs">Actions</div>
-					<div className="flex-1">
-						<Button variant="destructive" size="sm" type="button" onClick={onDelete}>
-							Delete
-						</Button>
-					</div>
+				<div className="flex flex-col items-start gap-1.5 border-t pt-4">
+					<Button variant="destructive" type="button" onClick={onDelete}>
+						<Trash2 aria-hidden data-icon="inline-start" />
+						Delete group
+					</Button>
 				</div>
 			)}
-		</>
+		</div>
 	);
 }

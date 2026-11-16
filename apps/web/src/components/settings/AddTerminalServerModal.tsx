@@ -1,14 +1,25 @@
-import { RefreshCw, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Plus, X } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { SensitiveInput } from '@/components/common/SensitiveInput';
+import { toastFailure } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
+import { FieldMessage } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
 	getOrchestratorLifecycle,
 	getOrchestratorPolicy,
@@ -19,6 +30,10 @@ import {
 } from '@/lib/apis/configs';
 import { getTerminalConfig } from '@/lib/apis/terminal';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
+import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
+import { type TestResult, urlProblem } from './connectionModel';
+import { ConnectionUrlField, Disclosure, FieldLabel, FormField, SecretInput, SelectField } from './formFields';
 import {
 	blankPolicy,
 	buildPolicyData,
@@ -33,20 +48,45 @@ import {
 } from './terminalServerModel';
 import { specRequestUrl } from './toolServerModel';
 
-const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
-const mono = `${bare} font-mono`;
-const select = 'bg-transparent pr-5 text-sm';
-const label = 'text-muted-foreground text-xs';
+const AUTH_HELP: Record<string, string> = {
+	none: 'Requests go without credentials.',
+	session: "Sends the signed-in user's session credentials.",
+	system_oauth: "Sends the signed-in user's OAuth access token."
+};
+
+const UPLOADS = [
+	['default', 'Default'],
+	['filesystem', 'Filesystem']
+] as const;
+const CHAT_CONTEXT = [
+	['default', 'Shared'],
+	['chat_id', 'Per chat'],
+	['off', 'Off']
+] as const;
+const AUTOMATION_CONTEXT = [
+	['default', 'Shared'],
+	['automation_id', 'Per automation'],
+	['off', 'Off']
+] as const;
+const STORAGE = [
+	['ephemeral', 'Ephemeral'],
+	['persistent', 'Persistent']
+] as const;
 
 /**
  * Ports components/AddTerminalServerModal.svelte: add or edit an Open Terminal
- * connection. Verify asks the backend what the URL is (a plain terminal or an
- * Orchestrator); for an Orchestrator the admin can edit its provisioning policy
- * and lifecycle, which Save writes to the Orchestrator *before* handing the
- * connection to `onSubmit`, and can ask it to refresh running terminals.
- * With `direct` (Phase 10's personal terminals) there is no ID, access control
- * or policy, and verification happens from the browser. Rules in
+ * connection. Test connection asks the backend what the URL is (a plain
+ * terminal or an Orchestrator); for an Orchestrator the admin can edit its
+ * provisioning policy and lifecycle, which Save writes to the Orchestrator
+ * *before* handing the connection to `onSubmit`, and can ask it to refresh
+ * running terminals. With `direct` (Phase 10's personal terminals) there is no
+ * ID, access control or policy, and the test runs from the browser. Rules in
  * terminalServerModel.ts.
+ *
+ * #933: the connection dialogs' one form language (see AddConnectionModal):
+ * labelled shared fields, Orchestrator and Advanced behind chevron
+ * disclosures, problems said under their fields; #1018: the test's result
+ * under the URL.
  */
 export function AddTerminalServerModal({
 	open,
@@ -66,32 +106,59 @@ export function AddTerminalServerModal({
 	onDelete?: () => void | Promise<void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const ids = useId();
+	const id = (name: string) => `${ids}-${name}`;
 	const [f, setF] = useState<TerminalFields>(terminalFields(null));
 	const [p, setP] = useState<PolicyFields>(blankPolicy());
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [showOrchestrator, setShowOrchestrator] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
+	// S5-D2: who may use it says nothing while the install has one account and sign-ups are off.
+	const singleUser = useAdminSingleUser();
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const [verifying, setVerifying] = useState(false);
+	const [urlError, setUrlError] = useState<string | null>(null);
+	const [lifecycleError, setLifecycleError] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [loadingPolicy, setLoadingPolicy] = useState(false);
 	const [policyError, setPolicyError] = useState('');
 	const [refreshOnlyIdle, setRefreshOnlyIdle] = useState(true);
 	const [refreshReset, setRefreshReset] = useState(false);
-	const set = (patch: Partial<TerminalFields>) => setF((prev) => ({ ...prev, ...patch }));
-	const setPolicy = (patch: Partial<PolicyFields>) => setP((prev) => ({ ...prev, ...patch }));
+	// FRM-3: the connection and policy the dialog opened with (the policy once it
+	// has loaded); Escape, the scrim and × ask before losing a change to them.
+	const [initial, setInitial] = useState<{ f: string; p: string } | null>(null);
+	const dirty = open && initial !== null && (JSON.stringify(f) !== initial.f || JSON.stringify(p) !== initial.p);
+	const guard = useConfirmLeave(dirty, {
+		message: edit
+			? 'The changes to this terminal connection are not saved. They are lost if you close it.'
+			: 'This terminal connection is not added yet. What you entered is lost if you close it.'
+	});
+	const close = () => guard.confirmLeave(() => onOpenChange(false));
+	const set = (patch: Partial<TerminalFields>) => {
+		setF((prev) => ({ ...prev, ...patch }));
+		if ('url' in patch) setUrlError(null);
+	};
+	const setPolicy = (patch: Partial<PolicyFields>) => {
+		setP((prev) => ({ ...prev, ...patch }));
+		if ('lifecycleJson' in patch) setLifecycleError(null);
+	};
 	const orchestrator = f.serverType === 'orchestrator' && !direct;
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open) {
+			setInitial(null);
+			return;
+		}
 		const start = terminalFields(connection);
 		setF(start);
 		setP(blankPolicy());
+		setInitial({ f: JSON.stringify(start), p: JSON.stringify(blankPolicy()) });
 		setShowAdvanced(false);
 		setShowOrchestrator(false);
 		setRefreshOnlyIdle(true);
 		setRefreshReset(false);
+		setUrlError(null);
+		setLifecycleError(null);
 		setPolicyError('');
 		setSaving(false);
 		// An existing Orchestrator connection: read its policy and lifecycle back,
@@ -108,7 +175,10 @@ export function AddTerminalServerModal({
 					}
 				);
 				const lifecycle = await getOrchestratorLifecycle(token, start.url, start.key, start.policyId, start.authType);
-				if (!cancelled) setP(policyFromServer(policy?.data, lifecycle?.data));
+				if (cancelled) return;
+				const loaded = policyFromServer(policy?.data, lifecycle?.data);
+				setP(loaded);
+				setInitial((prev) => prev && { ...prev, p: JSON.stringify(loaded) });
 			} catch (error: any) {
 				if (!cancelled) setPolicyError(error?.message || String(error));
 			} finally {
@@ -122,40 +192,37 @@ export function AddTerminalServerModal({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	const verify = async () => {
-		const url = f.url.replace(/\/$/, '');
-		if (!url) return void toast.error('Please enter a valid URL');
-		setVerifying(true);
+	const test = async (): Promise<TestResult | null> => {
+		const url = f.url.trim().replace(/\/$/, '');
+		const problem = urlProblem(url);
+		if (problem) return { ok: false, text: problem };
+		const failed = (error?: unknown): TestResult => ({
+			ok: false,
+			text: typeof error === 'string' && error ? error : "Couldn't reach a terminal there. Check the URL and the key."
+		});
 		try {
 			if (direct) {
-				const res = await getTerminalConfig(url, f.key);
-				if (res) toast.success('Server connection verified');
-				else toast.error('Server connection failed');
-				return;
+				return (await getTerminalConfig(url, f.key)) ? { ok: true, text: 'Reachable' } : failed();
 			}
 			// A system connection is checked by the backend: no CORS, and the key stays server-side.
 			const result = await verifyTerminalServerConnection(token, { url, key: f.key, auth_type: f.authType });
 			const type = result?.type ?? null;
-			if (type) {
-				set({
-					serverType: type,
-					...(type === 'orchestrator' && !f.policyId ? { policyId: suggestPolicyId(f.id, f.name) } : {})
-				});
-				toast.success(`Connected (${type === 'orchestrator' ? 'Orchestrator' : 'Terminal'})`);
-			} else {
+			if (!type) {
 				set({ serverType: null });
-				toast.error('Server connection failed');
+				return failed();
 			}
-		} catch {
+			set({
+				serverType: type,
+				...(type === 'orchestrator' && !f.policyId ? { policyId: suggestPolicyId(f.id, f.name) } : {})
+			});
+			return { ok: true, text: `Reachable: ${type === 'orchestrator' ? 'an Orchestrator' : 'a terminal'}` };
+		} catch (error) {
 			set({ serverType: null });
-			toast.error('Server connection failed');
-		} finally {
-			setVerifying(false);
+			return failed(error);
 		}
 	};
 
 	const refreshTerminals = async () => {
-		if (!f.policyId) return void toast.error('Policy ID is required');
 		setRefreshing(true);
 		try {
 			const result = await refreshOrchestratorTerminals(
@@ -165,24 +232,34 @@ export function AddTerminalServerModal({
 				{ policy_id: f.policyId, only_idle: refreshOnlyIdle, reset: refreshReset },
 				f.authType
 			);
-			toast.success(`Refresh requested: ${(result as { refreshed?: number } | null)?.refreshed ?? 0} terminal(s)`);
-		} catch (err) {
-			toast.error(`Failed to refresh terminals: ${err}`);
+			const count = (result as { refreshed?: number } | null)?.refreshed ?? 0;
+			toast.success(`Refreshing ${count} terminal${count === 1 ? '' : 's'}`);
+		} catch (error) {
+			toastFailure("Couldn't refresh the terminals.", error);
 		} finally {
 			setRefreshing(false);
 		}
 	};
 
 	const submit = async () => {
-		if (!f.url) return void toast.error('Please enter a valid URL');
-		if (loadingPolicy) return void toast.error('Policy is still loading');
-		if (policyError) return void toast.error(`Failed to load policy: ${policyError}`);
+		const problem = urlProblem(f.url);
+		if (problem) {
+			setUrlError(problem);
+			setTimeout(() => document.getElementById(id('url'))?.focus());
+			return;
+		}
+		if (loadingPolicy || policyError) return;
 		const result = buildTerminalConnection(f, connection?.config, { direct });
 		setSaving(true);
 		try {
 			if (orchestrator && f.policyId) {
 				const lifecycle = parseLifecycle(p.lifecycleJson);
-				if ('error' in lifecycle) return void toast.error(lifecycle.error);
+				if ('error' in lifecycle) {
+					setShowOrchestrator(true);
+					setLifecycleError('Enter the lifecycle as a JSON object, or leave it empty.');
+					setTimeout(() => document.getElementById(id('lifecycle'))?.focus());
+					return;
+				}
 				try {
 					await putOrchestratorPolicy(
 						token,
@@ -200,31 +277,45 @@ export function AddTerminalServerModal({
 						lifecycle.value,
 						f.authType
 					);
-				} catch (err) {
-					return void toast.error(`Failed to save policy: ${err}`);
+				} catch (error) {
+					return void toastFailure("Couldn't save the Orchestrator's policy. The connection is not saved.", error);
 				}
 			}
 			await onSubmit(result);
 			onOpenChange(false);
+		} catch {
+			// The caller has said why; the dialog stays open with what was entered.
 		} finally {
 			setSaving(false);
 		}
 	};
+
+	const authOptions: [string, string][] = [
+		['none', 'None'],
+		['bearer', 'API key (Bearer)'],
+		...(direct
+			? []
+			: ([
+					['session', 'Session'],
+					['system_oauth', 'OAuth']
+				] as [string, string][]))
+	];
 
 	return (
 		<>
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete connection?"
-				confirmLabel="Delete"
+				title={`Delete “${f.name || f.url || 'this terminal'}”?`}
+				confirmLabel="Delete connection"
+				destructive
 				onConfirm={async () => {
 					setConfirmDelete(false);
 					await onDelete?.();
 					onOpenChange(false);
 				}}
 			>
-				Are you sure you want to delete this connection? This action cannot be undone.
+				Chats can no longer run commands on it. This can't be undone.
 			</ConfirmDialog>
 
 			<AccessControlModal
@@ -234,114 +325,94 @@ export function AddTerminalServerModal({
 				onChange={(accessGrants) => set({ accessGrants })}
 			/>
 
-			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+			<Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+				<DialogContent className="sm:max-w-lg">
+					{guard.dialog}
 					<DialogHeader>
-						<DialogTitle className="text-sm font-medium">
-							{edit ? 'Edit Terminal Connection' : 'Add Terminal Connection'}
-						</DialogTitle>
-						<DialogDescription className="sr-only">An Open Terminal instance or Orchestrator.</DialogDescription>
+						<DialogTitle>{edit ? 'Edit terminal connection' : 'Add terminal connection'}</DialogTitle>
+						<DialogDescription>An Open Terminal server, or an Orchestrator that starts one per chat.</DialogDescription>
 					</DialogHeader>
 					<form
-						className="flex flex-col gap-2.5"
+						noValidate
+						className="flex min-h-0 flex-1 flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
-							submit();
+							void submit();
 						}}
 					>
-						<div className="flex gap-2">
-							<div className="min-w-0 flex-1">
-								<label className={label} htmlFor="terminal-name">
-									Name
-								</label>
-								<input
-									id="terminal-name"
-									className={bare}
-									type="text"
-									value={f.name}
-									onChange={(e) => set({ name: e.target.value })}
-									placeholder="My Terminal"
-									autoComplete="off"
-								/>
+						<DialogBody>
+							<div className="grid gap-4 sm:grid-cols-2">
+								<FormField id={id('name')} label="Name" optional>
+									{(props) => (
+										<Input
+											{...props}
+											value={f.name}
+											onChange={(e) => set({ name: e.target.value })}
+											autoComplete="off"
+										/>
+									)}
+								</FormField>
+								{!direct && (
+									<FormField id={id('id')} label="ID" optional help="Empty: one is made for it.">
+										{(props) => (
+											<Input
+												{...props}
+												className="font-mono"
+												value={f.id}
+												onChange={(e) => set({ id: e.target.value })}
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
+								)}
 							</div>
-							{!direct && (
-								<div className="min-w-0 flex-1">
-									<label className={label} htmlFor="terminal-id">
-										ID <span className="opacity-50">(optional)</span>
-									</label>
-									<input
-										id="terminal-id"
-										className={mono}
-										type="text"
-										value={f.id}
-										onChange={(e) => set({ id: e.target.value })}
-										placeholder="auto"
-										autoComplete="off"
+
+							<ConnectionUrlField
+								id={id('url')}
+								value={f.url}
+								onChange={(url) => set({ url })}
+								placeholder="http://localhost:9900"
+								error={urlError}
+								onTest={test}
+							/>
+
+							<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
+								{(props) => (
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.authType}
+										onChange={(authType) => set({ authType })}
+										options={authOptions}
 									/>
-								</div>
+								)}
+							</FormField>
+							{f.authType === 'bearer' && (
+								<FormField id={id('key')} label="API key" optional>
+									{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+								</FormField>
 							)}
-						</div>
 
-						<div className="flex items-end gap-2">
-							<div className="min-w-0 flex-1">
-								<label className={label} htmlFor="terminal-url">
-									URL
-								</label>
-								<input
-									id="terminal-url"
-									className={bare}
-									type="text"
-									value={f.url}
-									onChange={(e) => set({ url: e.target.value })}
-									placeholder="http://localhost:9900"
-									required
-									autoComplete="off"
-								/>
-							</div>
-							<Tip content="Verify Connection">
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									className="mb-0.5"
-									type="button"
-									aria-label="Verify Connection"
-									disabled={verifying}
-									onClick={verify}
-								>
-									{verifying ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-								</Button>
-							</Tip>
-						</div>
-
-						<div>
-							<label className={label} htmlFor="terminal-chat-uploads">
-								Chat Uploads
-							</label>
-							<select
-								id="terminal-chat-uploads"
-								className={`${select} block`}
-								value={f.chatUploads}
-								onChange={(e) => set({ chatUploads: e.target.value as TerminalFields['chatUploads'] })}
+							<FormField
+								id={id('uploads')}
+								label="Chat uploads"
+								help="Filesystem puts the files a chat uploads into the terminal's files."
 							>
-								<option value="default">Default</option>
-								<option value="filesystem">Filesystem</option>
-							</select>
-						</div>
+								{(props) => (
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.chatUploads}
+										onChange={(chatUploads) => set({ chatUploads })}
+										options={UPLOADS}
+									/>
+								)}
+							</FormField>
 
-						{orchestrator && (
-							<>
-								<Button
-									variant="ghost"
-									size="xs"
-									className="w-fit"
-									type="button"
-									aria-expanded={showOrchestrator}
-									onClick={() => setShowOrchestrator((v) => !v)}
-								>
-									{showOrchestrator ? '▾' : '▸'} Orchestrator
-								</Button>
-								{showOrchestrator && (
+							{orchestrator && (
+								<Disclosure title="Orchestrator" open={showOrchestrator} onOpenChange={setShowOrchestrator}>
 									<OrchestratorFields
+										id={id}
 										f={f}
 										p={p}
 										set={set}
@@ -349,6 +420,7 @@ export function AddTerminalServerModal({
 										policyIdLocked={edit && Boolean(connection?.policy_id)}
 										loadingPolicy={loadingPolicy}
 										policyError={policyError}
+										lifecycleError={lifecycleError}
 										refreshOnlyIdle={refreshOnlyIdle}
 										setRefreshOnlyIdle={setRefreshOnlyIdle}
 										refreshReset={refreshReset}
@@ -356,97 +428,50 @@ export function AddTerminalServerModal({
 										refreshing={refreshing}
 										onRefresh={refreshTerminals}
 									/>
-								)}
-							</>
-						)}
+								</Disclosure>
+							)}
 
-						<div className="flex items-center justify-between">
-							<Button
-								variant="ghost"
-								size="xs"
-								className="w-fit"
-								type="button"
-								aria-expanded={showAdvanced}
-								onClick={() => setShowAdvanced((v) => !v)}
-							>
-								{showAdvanced ? '▾' : '▸'} Advanced
-							</Button>
-							{!direct && <AccessButton onClick={() => setShowAccess(true)} />}
-						</div>
-
-						{showAdvanced && (
-							<div>
-								<div className={label}>OpenAPI Spec</div>
-								<input
-									className={bare}
-									type="text"
-									aria-label="openapi.json URL or Path"
-									value={f.path}
-									onChange={(e) => set({ path: e.target.value })}
-									placeholder="openapi.json URL or Path"
-									autoComplete="off"
-									required
-								/>
-								<div className="text-muted-foreground mt-1 text-xs">
-									WebUI will make requests to "{specRequestUrl(f.url, f.path)}"
-								</div>
-							</div>
-						)}
-
-						<div>
-							<label className={label} htmlFor="terminal-auth">
-								Auth
-							</label>
-							<div className="flex gap-2">
-								<select
-									id="terminal-auth"
-									className={`${select} self-start`}
-									value={f.authType}
-									onChange={(e) => set({ authType: e.target.value })}
+							<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+								<FormField
+									id={id('path')}
+									label="Spec path or URL"
+									help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
 								>
-									<option value="none">None</option>
-									<option value="bearer">Bearer</option>
-									{!direct && (
-										<>
-											<option value="session">Session</option>
-											<option value="system_oauth">OAuth</option>
-										</>
-									)}
-								</select>
-								<div className="min-w-0 flex-1 text-sm">
-									{f.authType === 'bearer' ? (
-										<SensitiveInput
-											value={f.key}
-											onChange={(key) => set({ key })}
-											placeholder="API Key"
-											required={false}
+									{(props) => (
+										<Input
+											{...props}
+											value={f.path}
+											onChange={(e) => set({ path: e.target.value })}
+											autoComplete="off"
 										/>
-									) : f.authType === 'none' ? (
-										<div className="text-muted-foreground text-xs">No authentication</div>
-									) : f.authType === 'session' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user session credentials to authenticate
-										</div>
-									) : f.authType === 'system_oauth' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user OAuth access token to authenticate
-										</div>
-									) : null}
-								</div>
-							</div>
-						</div>
+									)}
+								</FormField>
+							</Disclosure>
 
-						<div className="flex items-center justify-between pt-1">
-							<div>
+							{loadingPolicy || policyError ? (
+								<FieldMessage
+									id={id('policy-state')}
+									error={policyError ? `Couldn't load the Orchestrator's policy, so Save is off: ${policyError}` : null}
+									help={loadingPolicy ? 'Loading the Orchestrator’s policy…' : undefined}
+								/>
+							) : null}
+						</DialogBody>
+						<div className="flex flex-wrap items-center justify-between gap-2 shrink-0 border-t pt-3">
+							<div className="flex flex-wrap gap-2">
 								{edit && (
-									<Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-										Delete
+									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>
+										Delete connection
 									</Button>
 								)}
+								{!direct && !singleUser && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
 							</div>
-							<Button type="submit" size="sm" disabled={saving || loadingPolicy || Boolean(policyError)}>
-								Save
+							<Button
+								type="submit"
+								disabled={saving || loadingPolicy || Boolean(policyError)}
+								aria-busy={saving || undefined}
+							>
 								{saving && <Spinner className="size-3.5" />}
+								{saving ? 'Saving…' : 'Save'}
 							</Button>
 						</div>
 					</form>
@@ -456,8 +481,9 @@ export function AddTerminalServerModal({
 	);
 }
 
-/** The Orchestrator block: terminal contexts, the policy, and Refresh Terminals. */
+/** The Orchestrator block: terminal contexts, the policy, and Refresh terminals. */
 function OrchestratorFields({
+	id,
 	f,
 	p,
 	set,
@@ -465,6 +491,7 @@ function OrchestratorFields({
 	policyIdLocked,
 	loadingPolicy,
 	policyError,
+	lifecycleError,
 	refreshOnlyIdle,
 	setRefreshOnlyIdle,
 	refreshReset,
@@ -472,6 +499,7 @@ function OrchestratorFields({
 	refreshing,
 	onRefresh
 }: {
+	id: (name: string) => string;
 	f: TerminalFields;
 	p: PolicyFields;
 	set: (patch: Partial<TerminalFields>) => void;
@@ -479,6 +507,7 @@ function OrchestratorFields({
 	policyIdLocked: boolean;
 	loadingPolicy: boolean;
 	policyError: string;
+	lifecycleError: string | null;
 	refreshOnlyIdle: boolean;
 	setRefreshOnlyIdle: (v: boolean) => void;
 	refreshReset: boolean;
@@ -488,174 +517,139 @@ function OrchestratorFields({
 }) {
 	const setEnv = (idx: number, patch: Partial<{ key: string; value: string }>) =>
 		setPolicy({ envPairs: p.envPairs.map((pair, i) => (i === idx ? { ...pair, ...patch } : pair)) });
+	const policyReady = !loadingPolicy && !policyError;
 	return (
-		<>
-			<div>
-				<div className={`${label} mb-1`}>Terminal Contexts</div>
-				<div className="text-muted-foreground grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 text-xs">
-					<label htmlFor="terminal-chat-context">Chat</label>
-					<select
-						id="terminal-chat-context"
-						className={`${select} text-xs`}
-						value={f.chatContext}
-						onChange={(e) => set({ chatContext: e.target.value as TerminalFields['chatContext'] })}
-					>
-						<option value="default">Shared</option>
-						<option value="chat_id">Per chat</option>
-						<option value="off">Off</option>
-					</select>
-					<label htmlFor="terminal-automation-context">Automation</label>
-					<select
-						id="terminal-automation-context"
-						className={`${select} text-xs`}
-						value={f.automationContext}
-						onChange={(e) => set({ automationContext: e.target.value as TerminalFields['automationContext'] })}
-					>
-						<option value="default">Shared</option>
-						<option value="automation_id">Per automation</option>
-						<option value="off">Off</option>
-					</select>
-				</div>
+		<div className="flex flex-col gap-4">
+			<div className="grid gap-4 sm:grid-cols-2">
+				<FormField id={id('chat-context')} label="Chat terminals">
+					{(props) => (
+						<SelectField
+							{...props}
+							value={f.chatContext}
+							onChange={(chatContext) => set({ chatContext })}
+							options={CHAT_CONTEXT}
+						/>
+					)}
+				</FormField>
+				<FormField id={id('automation-context')} label="Automation terminals">
+					{(props) => (
+						<SelectField
+							{...props}
+							value={f.automationContext}
+							onChange={(automationContext) => set({ automationContext })}
+							options={AUTOMATION_CONTEXT}
+						/>
+					)}
+				</FormField>
 			</div>
 
-			<div>
-				<label className={label} htmlFor="policy-id">
-					Policy ID
-				</label>
-				<input
-					id="policy-id"
-					className={mono}
-					type="text"
-					value={f.policyId}
-					onChange={(e) => set({ policyId: e.target.value })}
-					placeholder="python-ds"
-					autoComplete="off"
-					disabled={policyIdLocked}
-				/>
-			</div>
+			<FormField
+				id={id('policy-id')}
+				label="Policy ID"
+				help={policyIdLocked ? 'Fixed once saved: the Orchestrator keeps the policy under it.' : undefined}
+			>
+				{(props) => (
+					<Input
+						{...props}
+						className="font-mono"
+						value={f.policyId}
+						onChange={(e) => set({ policyId: e.target.value })}
+						placeholder="python-ds"
+						autoComplete="off"
+						disabled={policyIdLocked}
+					/>
+				)}
+			</FormField>
 
-			{loadingPolicy ? (
-				<div className="text-muted-foreground text-xs">Loading policy...</div>
-			) : policyError ? (
-				<div className="text-destructive text-xs">Failed to load policy: {policyError}</div>
-			) : null}
-
-			<div>
-				<label className={label} htmlFor="policy-image">
-					Image <span className="opacity-50">(optional)</span>
-				</label>
-				<input
-					id="policy-image"
-					className={mono}
-					type="text"
-					value={p.image}
-					onChange={(e) => setPolicy({ image: e.target.value })}
-					placeholder="ghcr.io/open-webui/open-terminal:latest"
-					autoComplete="off"
-				/>
-			</div>
-
-			<div className="flex gap-2">
-				<div className="min-w-0 flex-1">
-					<label className={label} htmlFor="policy-cpu">
-						CPU
-					</label>
-					<input
-						id="policy-cpu"
-						className={mono}
-						type="text"
-						value={p.cpu}
-						onChange={(e) => setPolicy({ cpu: e.target.value })}
-						placeholder="1"
+			<FormField id={id('image')} label="Image" optional>
+				{(props) => (
+					<Input
+						{...props}
+						className="font-mono"
+						value={p.image}
+						onChange={(e) => setPolicy({ image: e.target.value })}
+						placeholder="ghcr.io/open-webui/open-terminal:latest"
 						autoComplete="off"
 					/>
-				</div>
-				<div className="min-w-0 flex-1">
-					<label className={label} htmlFor="policy-memory">
-						Memory
-					</label>
-					<input
-						id="policy-memory"
-						className={mono}
-						type="text"
-						value={p.memory}
-						onChange={(e) => setPolicy({ memory: e.target.value })}
-						placeholder="1Gi"
-						autoComplete="off"
-					/>
-				</div>
-			</div>
+				)}
+			</FormField>
 
-			<div className="flex gap-2">
-				<div className="min-w-0 flex-1">
-					<label className={label} htmlFor="policy-storage">
-						Storage
-					</label>
-					<div className="flex gap-2">
-						<select
-							id="policy-storage"
-							className={`${select} self-start`}
+			<div className="grid gap-4 sm:grid-cols-2">
+				<FormField id={id('cpu')} label="CPU" optional>
+					{(props) => (
+						<Input
+							{...props}
+							className="font-mono"
+							value={p.cpu}
+							onChange={(e) => setPolicy({ cpu: e.target.value })}
+							placeholder="1"
+							autoComplete="off"
+						/>
+					)}
+				</FormField>
+				<FormField id={id('memory')} label="Memory" optional>
+					{(props) => (
+						<Input
+							{...props}
+							className="font-mono"
+							value={p.memory}
+							onChange={(e) => setPolicy({ memory: e.target.value })}
+							placeholder="1Gi"
+							autoComplete="off"
+						/>
+					)}
+				</FormField>
+				<FormField id={id('storage')} label="Storage">
+					{(props) => (
+						<SelectField
+							{...props}
 							value={p.storage}
-							onChange={(e) => setPolicy({ storage: e.target.value as PolicyFields['storage'] })}
-						>
-							<option value="ephemeral">Ephemeral</option>
-							<option value="persistent">Persistent</option>
-						</select>
-						{p.storage === 'persistent' && (
-							<input
-								className={mono}
-								type="text"
-								aria-label="Storage size"
+							onChange={(storage) => setPolicy({ storage })}
+							options={STORAGE}
+						/>
+					)}
+				</FormField>
+				{p.storage === 'persistent' && (
+					<FormField id={id('storage-size')} label="Storage size">
+						{(props) => (
+							<Input
+								{...props}
+								className="font-mono"
 								value={p.storageSize}
 								onChange={(e) => setPolicy({ storageSize: e.target.value })}
 								placeholder="5Gi"
 								autoComplete="off"
 							/>
 						)}
-					</div>
-				</div>
-				<div className="min-w-0 flex-1">
-					<label className={label} htmlFor="idle-timeout">
-						Idle Timeout <span className="opacity-50">(min)</span>
-					</label>
-					<input
-						id="idle-timeout"
-						className={mono}
-						type="number"
-						min={0}
-						value={p.idleTimeout}
-						onChange={(e) => setPolicy({ idleTimeout: e.target.value === '' ? 0 : Number(e.target.value) })}
-						placeholder="30"
-						autoComplete="off"
-					/>
-				</div>
+					</FormField>
+				)}
+				<FormField id={id('idle')} label="Idle timeout, minutes">
+					{(props) => (
+						<Input
+							{...props}
+							className="font-mono"
+							type="number"
+							min={0}
+							value={p.idleTimeout}
+							onChange={(e) => setPolicy({ idleTimeout: e.target.value === '' ? 0 : Number(e.target.value) })}
+						/>
+					)}
+				</FormField>
 			</div>
 
-			<div>
-				<div className="mb-0.5 flex items-center justify-between">
-					<div className={label}>Environment Variables</div>
-					<Button
-						variant="ghost"
-						size="xs"
-						type="button"
-						onClick={() => setPolicy({ envPairs: [...p.envPairs, { key: '', value: '' }] })}
-					>
-						+ Add
-					</Button>
-				</div>
+			<div className="flex flex-col gap-2">
+				<FieldLabel optional>Environment variables</FieldLabel>
 				{p.envPairs.map((pair, idx) => (
-					<div key={idx} className="mb-1 flex gap-1.5">
-						<input
-							className={`${mono} flex-1`}
-							type="text"
+					<div key={idx} className="flex items-center gap-2">
+						<Input
+							className="min-w-0 flex-1 font-mono"
 							aria-label={`Variable ${idx + 1} name`}
 							value={pair.key}
 							onChange={(e) => setEnv(idx, { key: e.target.value })}
 							placeholder="KEY"
 						/>
-						<input
-							className={`${mono} flex-[2]`}
-							type="text"
+						<Input
+							className="min-w-0 flex-[2] font-mono"
 							aria-label={`Variable ${idx + 1} value`}
 							value={pair.value}
 							onChange={(e) => setEnv(idx, { value: e.target.value })}
@@ -663,50 +657,82 @@ function OrchestratorFields({
 						/>
 						<Button
 							variant="ghost"
-							size="icon-xs"
+							size="icon-sm"
 							type="button"
 							aria-label={`Remove variable ${idx + 1}`}
 							onClick={() => setPolicy({ envPairs: p.envPairs.filter((_, i) => i !== idx) })}
 						>
-							<X className="size-3" />
+							<X aria-hidden />
 						</Button>
 					</div>
 				))}
-			</div>
-
-			<div>
-				<label className={label} htmlFor="lifecycle-json">
-					Lifecycle JSON
-				</label>
-				<textarea
-					id="lifecycle-json"
-					className="placeholder:text-foreground-muted min-h-24 w-full resize-y bg-transparent font-mono text-xs"
-					value={p.lifecycleJson}
-					onChange={(e) => setPolicy({ lifecycleJson: e.target.value })}
-					spellCheck={false}
-					placeholder={'{\n  "reset": {\n    "schedule": "@weekly",\n    "timezone": "UTC"\n  }\n}'}
-				/>
-			</div>
-
-			<div className="flex flex-wrap items-center justify-between gap-2">
-				<div className="text-muted-foreground flex items-center gap-3 text-xs">
-					<label className="flex items-center gap-1.5">
-						<input type="checkbox" checked={refreshOnlyIdle} onChange={(e) => setRefreshOnlyIdle(e.target.checked)} />
-						<span>Idle only</span>
-					</label>
-					<label className="flex items-center gap-1.5">
-						<input type="checkbox" checked={refreshReset} onChange={(e) => setRefreshReset(e.target.checked)} />
-						<span>Reset persisted files</span>
-					</label>
-				</div>
-				<div className="text-muted-foreground text-xs">
-					Policy changes apply to newly provisioned terminals. Refresh matching terminals to apply them to existing
-					terminals.
-				</div>
-				<Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={onRefresh}>
-					{refreshing ? 'Refreshing...' : 'Refresh Terminals'}
+				<Button
+					variant="outline"
+					size="sm"
+					type="button"
+					className="self-start"
+					onClick={() => setPolicy({ envPairs: [...p.envPairs, { key: '', value: '' }] })}
+				>
+					<Plus aria-hidden />
+					Add variable
 				</Button>
 			</div>
-		</>
+
+			<FormField
+				id={id('lifecycle')}
+				label="Lifecycle"
+				optional
+				help='A JSON object, such as {"reset": {"schedule": "@weekly", "timezone": "UTC"}}.'
+				error={lifecycleError}
+			>
+				{(props) => (
+					<Textarea
+						{...props}
+						className="font-mono"
+						rows={4}
+						value={p.lifecycleJson}
+						onChange={(e) => setPolicy({ lifecycleJson: e.target.value })}
+						spellCheck={false}
+					/>
+				)}
+			</FormField>
+
+			<div className="flex flex-col gap-2 border-t pt-3">
+				<p className="text-foreground-muted text-dense">
+					A policy change applies to terminals started after it. Refresh the running ones to apply it to them too.
+				</p>
+				<div className="flex flex-wrap items-center gap-4">
+					<div className="flex items-center gap-2">
+						<Checkbox
+							id={id('only-idle')}
+							checked={refreshOnlyIdle}
+							onCheckedChange={(v) => setRefreshOnlyIdle(v === true)}
+						/>
+						<Label htmlFor={id('only-idle')} className="text-body font-normal">
+							Only idle terminals
+						</Label>
+					</div>
+					<div className="flex items-center gap-2">
+						<Checkbox id={id('reset')} checked={refreshReset} onCheckedChange={(v) => setRefreshReset(v === true)} />
+						<Label htmlFor={id('reset')} className="text-body font-normal">
+							Reset their saved files
+						</Label>
+					</div>
+				</div>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="self-start"
+					disabled={refreshing || !f.policyId || !policyReady}
+					aria-busy={refreshing || undefined}
+					onClick={onRefresh}
+				>
+					{refreshing && <Spinner className="size-3.5" />}
+					{refreshing ? 'Refreshing…' : 'Refresh terminals'}
+				</Button>
+				{!f.policyId && <FieldMessage id={id('refresh-help')} help="Enter a policy ID to refresh its terminals." />}
+			</div>
+		</div>
 	);
 }

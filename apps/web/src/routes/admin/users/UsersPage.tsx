@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 import { getGroups } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -8,6 +8,7 @@ import { formatNumber } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { SubTabs } from '../AdminLayout';
 import { tabFromPath } from '../adminAccess';
+import { useAccountCountKnown, useAdminSingleUser } from '../adminVisibility';
 import { GroupsPanel } from './GroupsPanel';
 import { UserList } from './UserList';
 
@@ -15,6 +16,10 @@ const TABS = ['overview', 'groups'] as const;
 
 /**
  * Ports admin/Users.svelte: the Overview / Groups sub-tabs with their counts.
+ *
+ * S5-D2 (#1022): while there is one account and sign-ups are off, Groups and
+ * its Default permissions say nothing to anyone, so the sub-tabs go and either
+ * address shows the user list. They return with a second account.
  */
 export function UsersPage() {
 	const { pathname } = useLocation();
@@ -22,6 +27,8 @@ export function UsersPage() {
 	const counts = useAdminStore((s) => s.counts);
 	const setCount = useAdminStore((s) => s.setCount);
 	const tab = tabFromPath(pathname, TABS);
+	const singleUser = useAdminSingleUser();
+	const countKnown = useAccountCountKnown();
 
 	// Seeds both counts so the inactive tab is not blank; each panel then keeps its own current.
 	useEffect(() => {
@@ -41,9 +48,22 @@ export function UsersPage() {
 
 	const userCount = counts.users === null ? null : formatNumber(counts.users);
 
+	// Until the account count arrives the install counts as one account, and a
+	// Groups link must still open Groups once it does: the address is kept until
+	// then, and only a known one account sends /groups to /admin/users.
+	if (singleUser) {
+		if (countKnown && tab === 'groups') return <Navigate to={routePaths.adminUsers} replace />;
+		return (
+			<div className="flex w-full min-w-0 flex-col px-4 pt-3 pb-2">
+				<UserList />
+			</div>
+		);
+	}
+
 	return (
-		<div className="flex h-full w-full flex-col pb-2 lg:flex-row">
+		<div className="flex w-full flex-col pb-2">
 			<SubTabs
+				label="Users sections"
 				active={tab}
 				tabs={[
 					{
@@ -60,9 +80,7 @@ export function UsersPage() {
 					}
 				]}
 			/>
-			<div className="flex-1 overflow-y-scroll px-3.5 lg:pr-4 lg:pl-0">
-				{tab === 'overview' ? <UserList /> : <GroupsPanel />}
-			</div>
+			<div className="min-w-0 flex-1 px-4 pt-3">{tab === 'overview' ? <UserList /> : <GroupsPanel />}</div>
 		</div>
 	);
 }

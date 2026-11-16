@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
-import { Cloud, Plus, Settings, Wrench } from 'lucide-react';
+import { Cloud, Pencil, Plus, Wrench } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Tip } from '@/components/common/Tip';
+import { toastFailure } from '@/components/common/failureToast';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { AddTerminalServerModal } from '@/components/settings/AddTerminalServerModal';
 import { AddToolServerModal } from '@/components/settings/AddToolServerModal';
 import { SettingsForm, SettingsSection } from '@/components/settings/controls';
 import type { TerminalConnection } from '@/components/settings/terminalServerModel';
 import type { ToolServerConnection } from '@/components/settings/toolServerModel';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -20,13 +22,16 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { uuid } from '@/lib/utils/uuid';
 import { ExternalKnowledge } from './ExternalKnowledge';
 
-const hint = 'text-foreground-muted text-caption';
-
-/** A connection row: icon and label (dimmed when off), a configure cog, an enable switch. */
+/**
+ * A connection row: icon, name and detail, its state as badges (Off; never a
+ * faded row, DAT-3, COL-2), Edit, and the enable switch, outside any tooltip
+ * (#912).
+ */
 function ConnectionRow({
 	icon,
 	label,
 	detail,
+	kind,
 	enabled,
 	onConfigure,
 	onToggle
@@ -34,46 +39,38 @@ function ConnectionRow({
 	icon: ReactNode;
 	label: string;
 	detail?: string;
+	kind?: string;
 	enabled: boolean;
 	onConfigure: () => void;
 	onToggle: (on: boolean) => void;
 }) {
 	return (
-		<li className="flex w-full items-center gap-2 text-xs">
-			<div className={`flex min-w-0 flex-1 items-center gap-1.5 ${enabled ? '' : 'opacity-50'}`}>
-				{icon}
-				<div className="min-w-0 truncate">
-					{label} {detail && <span className="text-muted-foreground">{detail}</span>}
-				</div>
-			</div>
-			<div className="flex shrink-0 items-center gap-1">
-				<Tip content="Configure">
-					<Button variant="ghost" size="icon-sm" type="button" aria-label={`Configure ${label}`} onClick={onConfigure}>
-						<Settings className="size-4" />
-					</Button>
-				</Tip>
-				<Tip content={enabled ? 'Enabled' : 'Disabled'}>
-					<span>
-						<Switch
-							size="sm"
-							aria-label={`${enabled ? 'Disable' : 'Enable'} ${label}`}
-							checked={enabled}
-							onCheckedChange={onToggle}
-						/>
-					</span>
-				</Tip>
-			</div>
+		<li className="flex w-full min-w-0 items-center gap-2 text-body">
+			<span className="text-foreground-muted flex shrink-0">{icon}</span>
+			<span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5">
+				<span className="min-w-0 truncate">{label}</span>
+				{detail && <span className="text-foreground-muted min-w-0 truncate font-mono text-dense">{detail}</span>}
+				{kind && <Badge variant="secondary">{kind}</Badge>}
+				{!enabled && (
+					<Badge variant="secondary">
+						<span className="sr-only">, </span>Off
+					</Badge>
+				)}
+			</span>
+			<Button variant="ghost" size="icon-sm" type="button" aria-label={`Edit ${label}`} onClick={onConfigure}>
+				<Pencil aria-hidden />
+			</Button>
+			<Switch aria-label={`Enable ${label}`} checked={enabled} onCheckedChange={onToggle} />
 		</li>
 	);
 }
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
 	return (
-		<Tip content="Add Connection">
-			<Button variant="ghost" size="icon-sm" type="button" aria-label={label} onClick={onClick}>
-				<Plus className="size-4" />
-			</Button>
-		</Tip>
+		<Button variant="outline" size="sm" type="button" className="self-start" onClick={onClick}>
+			<Plus aria-hidden />
+			{label}
+		</Button>
 	);
 }
 
@@ -81,9 +78,11 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
  * Ports admin/Settings/Integrations.svelte: external tool servers (OpenAPI or
  * MCP), Open Terminal connections, and external knowledge sources.
  *
- * As in the original, every change saves at once -- adding, editing, toggling
- * or deleting a server writes that whole list -- and the Save button re-saves
- * the tool servers. Not ported: refreshing the app-wide `terminalServers`
+ * Every change saves at once (FRM-3, `savesAtOnce`) -- adding, editing,
+ * toggling or deleting a server writes that whole list -- and says what it
+ * saved in one toast, or why it couldn't, putting the old list back. While a
+ * save is in flight the tab's controls wait ("Saving…"), so a second change is
+ * never built on a list the server may yet refuse. Not ported: refreshing the app-wide `terminalServers`
  * store after a terminal save, since the chat that reads it is Phase 10; the
  * query key below is the hook for it.
  */
@@ -94,6 +93,8 @@ export default function Integrations() {
 	const [addingServer, setAddingServer] = useState(false);
 	const [editServerIdx, setEditServerIdx] = useState<number | null>(null);
 	const [terminalModal, setTerminalModal] = useState<{ idx: number | null } | null>(null);
+	// A save in flight: the tab's controls wait for it, so two saves of one list never overlap.
+	const [saving, setSaving] = useState(false);
 
 	const loaded = useQuery({
 		queryKey: ['admin-settings', 'integrations'],
@@ -106,6 +107,7 @@ export default function Integrations() {
 				terminals: (term?.TERMINAL_SERVER_CONNECTIONS ?? []) as TerminalConnection[]
 			};
 		},
+		retry: false,
 		gcTime: 0,
 		staleTime: Infinity,
 		refetchOnWindowFocus: false
@@ -115,41 +117,91 @@ export default function Integrations() {
 		setServers(loaded.data.servers);
 		setTerminals(loaded.data.terminals);
 	}, [loaded.data, servers]);
-	useEffect(() => {
-		if (loaded.isError) toast.error(`${loaded.error}`);
-	}, [loaded.isError, loaded.error]);
 
-	const saveServers = async (next: ToolServerConnection[]) => {
+	/**
+	 * Saves the whole tool server list, showing it at once and putting the old
+	 * one back if the server refuses it. Throws after saying why, so a dialog
+	 * that asked for the save stays open.
+	 */
+	const saveServers = async (next: ToolServerConnection[], done: string) => {
+		const prev = servers;
 		setServers(next);
-		const res = await setToolServerConnections(token, { TOOL_SERVER_CONNECTIONS: next }).catch(() => null);
-		if (res) toast.success('Connections saved successfully');
-		else toast.error('Failed to save connections');
+		setSaving(true);
+		try {
+			const res = await setToolServerConnections(token, { TOOL_SERVER_CONNECTIONS: next });
+			if (!res) throw new Error('The server returned nothing.');
+		} catch (error) {
+			setServers(prev);
+			toastFailure("Couldn't save the tool servers.", error);
+			throw error;
+		} finally {
+			setSaving(false);
+		}
+		toast.success(done);
 	};
 
-	const saveTerminals = async (next: TerminalConnection[]) => {
+	/** The same for the terminal list. */
+	const saveTerminals = async (next: TerminalConnection[], done: string) => {
+		const prev = terminals;
 		setTerminals(next);
-		const res = await setTerminalServerConnections(token, { TERMINAL_SERVER_CONNECTIONS: next }).catch(() => null);
-		if (res) toast.success('Terminal servers saved');
-		else toast.error('Failed to save terminal servers');
+		setSaving(true);
+		try {
+			const res = await setTerminalServerConnections(token, { TERMINAL_SERVER_CONNECTIONS: next });
+			if (!res) throw new Error('The server returned nothing.');
+		} catch (error) {
+			setTerminals(prev);
+			toastFailure("Couldn't save the terminal connections.", error);
+			throw error;
+		} finally {
+			setSaving(false);
+		}
+		toast.success(done);
 	};
+	const quiet = (save: Promise<void>) => void save.catch(() => {});
+	const serverName = (s: ToolServerConnection) => `“${(s.info?.name as string | undefined) || s.url}”`;
+	const terminalName = (t: TerminalConnection) => `“${t.name || t.url || 'New terminal'}”`;
 
 	const editedServer = editServerIdx === null ? null : (servers?.[editServerIdx] ?? null);
 	const editedTerminal = terminalModal?.idx == null ? null : (terminals[terminalModal.idx] ?? null);
 
+	if (loaded.isError) {
+		return (
+			<SettingsForm title="Integrations" savesAtOnce>
+				<LoadFailed
+					what="the integrations"
+					error={loaded.error}
+					retrying={loaded.isFetching}
+					onRetry={() => void loaded.refetch()}
+				/>
+			</SettingsForm>
+		);
+	}
+
 	return (
-		<SettingsForm title="Integrations" loading={!servers} onSubmit={() => saveServers(servers ?? [])}>
+		<SettingsForm title="Integrations" loading={!servers} savesAtOnce saving={saving}>
 			<AddToolServerModal
 				open={addingServer}
 				onOpenChange={setAddingServer}
-				onSubmit={(c) => saveServers([...(servers ?? []), c])}
+				onSubmit={(c) => saveServers([...(servers ?? []), c], `${serverName(c)} added`)}
 			/>
 			<AddToolServerModal
 				open={editServerIdx !== null}
 				onOpenChange={(open) => !open && setEditServerIdx(null)}
 				edit
 				connection={editedServer}
-				onSubmit={(c) => saveServers((servers ?? []).map((s, i) => (i === editServerIdx ? c : s)))}
-				onDelete={() => saveServers((servers ?? []).filter((_, i) => i !== editServerIdx))}
+				onSubmit={(c) =>
+					saveServers(
+						(servers ?? []).map((s, i) => (i === editServerIdx ? c : s)),
+						`${serverName(c)} saved`
+					)
+				}
+				onDelete={async () => {
+					if (!editedServer) return;
+					await saveServers(
+						(servers ?? []).filter((_, i) => i !== editServerIdx),
+						`${serverName(editedServer)} deleted`
+					).catch(() => {});
+				}}
 			/>
 			<AddTerminalServerModal
 				open={terminalModal !== null}
@@ -158,83 +210,89 @@ export default function Integrations() {
 				connection={editedTerminal}
 				onSubmit={(c) => {
 					const idx = terminalModal?.idx;
-					if (idx == null) return saveTerminals([...terminals, { ...c, id: c.id ?? uuid() }]);
-					return saveTerminals(terminals.map((t, i) => (i === idx ? { ...t, ...c, id: c.id ?? t.id } : t)));
+					if (idx == null)
+						return saveTerminals([...terminals, { ...c, id: c.id ?? uuid() }], `${terminalName(c)} added`);
+					return saveTerminals(
+						terminals.map((t, i) => (i === idx ? { ...t, ...c, id: c.id ?? t.id } : t)),
+						`${terminalName(c)} saved`
+					);
 				}}
-				onDelete={() => saveTerminals(terminals.filter((_, i) => i !== terminalModal?.idx))}
+				onDelete={async () => {
+					if (!editedTerminal) return;
+					await saveTerminals(
+						terminals.filter((_, i) => i !== terminalModal?.idx),
+						`${terminalName(editedTerminal)} deleted`
+					).catch(() => {});
+				}}
 			/>
 
 			<SettingsSection title="Tools" first>
-				<div>
-					<div className="mb-2 flex items-center justify-between">
-						<div className="text-muted-foreground text-xs">External Tool Servers</div>
-						<AddButton label="Add Tool Server" onClick={() => setAddingServer(true)} />
-					</div>
-					<ul className="flex flex-col gap-1">
-						{(servers ?? []).map((server, idx) => {
-							const enabled = server.config?.enable ?? true;
-							const name = server.info?.name as string | undefined;
-							return (
-								<ConnectionRow
-									key={idx}
-									icon={
-										<Tip content={server.type === 'mcp' ? 'MCP' : 'OpenAPI'}>
-											<Wrench className="size-4 shrink-0" strokeWidth={1.5} />
-										</Tip>
-									}
-									label={name || server.url}
-									detail={name ? (server.info?.id as string) || undefined : undefined}
-									enabled={enabled}
-									onConfigure={() => setEditServerIdx(idx)}
-									onToggle={(on) =>
-										saveServers(
-											(servers ?? []).map((s, i) => (i === idx ? { ...s, config: { ...s.config, enable: on } } : s))
-										)
-									}
-								/>
-							);
-						})}
-					</ul>
-					{servers?.length === 0 && <div className={hint}>No tool server connections configured.</div>}
-					<div className={`${hint} mt-1`}>Connect to your own OpenAPI compatible external tool servers.</div>
+				<div className="flex flex-col gap-2">
+					<p className="text-foreground-muted text-dense">OpenAPI and MCP servers whose tools chats can call.</p>
+					{(servers ?? []).length > 0 ? (
+						<ul aria-label="Tool servers" className="flex flex-col gap-2">
+							{(servers ?? []).map((server, idx) => {
+								const enabled = server.config?.enable ?? true;
+								const name = server.info?.name as string | undefined;
+								return (
+									<ConnectionRow
+										key={idx}
+										icon={<Wrench aria-hidden className="size-4" />}
+										label={name || server.url}
+										detail={name ? (server.info?.id as string) || undefined : undefined}
+										kind={server.type === 'mcp' ? 'MCP' : 'OpenAPI'}
+										enabled={enabled}
+										onConfigure={() => setEditServerIdx(idx)}
+										onToggle={(on) =>
+											quiet(
+												saveServers(
+													(servers ?? []).map((s, i) =>
+														i === idx ? { ...s, config: { ...s.config, enable: on } } : s
+													),
+													`${serverName(server)} is ${on ? 'on' : 'off'}`
+												)
+											)
+										}
+									/>
+								);
+							})}
+						</ul>
+					) : (
+						<p className="text-foreground-muted text-dense">None yet.</p>
+					)}
+					<AddButton label="Add tool server" onClick={() => setAddingServer(true)} />
 				</div>
 			</SettingsSection>
 
 			<SettingsSection title="Terminal">
-				<div>
-					<div className="mb-2 flex items-center justify-between">
-						<div className="text-muted-foreground text-xs">Open Terminal</div>
-						<AddButton label="Add Terminal Connection" onClick={() => setTerminalModal({ idx: null })} />
-					</div>
-					<ul className="flex flex-col gap-1.5">
-						{terminals.map((t, idx) => (
-							<ConnectionRow
-								key={t.id ?? idx}
-								icon={
-									<Tip content="Terminal">
-										<Cloud className="size-4 shrink-0" strokeWidth={1.5} />
-									</Tip>
-								}
-								label={t.name || t.url || 'New Terminal'}
-								enabled={t.enabled !== false}
-								onConfigure={() => setTerminalModal({ idx })}
-								onToggle={(on) => saveTerminals(terminals.map((c, i) => (i === idx ? { ...c, enabled: on } : c)))}
-							/>
-						))}
-					</ul>
-					{terminals.length === 0 && <div className={hint}>No terminal connections configured.</div>}
-					<div className={`${hint} mt-1`}>
-						Connect to Open Terminal instances. Admins and users granted access can use file browsing and terminal tools
-						through these servers.
-					</div>
-					<a
-						className="text-muted-foreground hover:text-foreground mt-0.5 block text-caption underline"
-						href="https://github.com/open-webui/open-terminal"
-						target="_blank"
-						rel="noreferrer"
-					>
-						Learn more about Open Terminal ↗
-					</a>
+				<div className="flex flex-col gap-2">
+					<p className="text-foreground-muted text-dense">
+						Open Terminal servers for file browsing and terminal tools, used by admins and the users given access.
+					</p>
+					{terminals.length > 0 ? (
+						<ul aria-label="Terminal connections" className="flex flex-col gap-2">
+							{terminals.map((t, idx) => (
+								<ConnectionRow
+									key={t.id ?? idx}
+									icon={<Cloud aria-hidden className="size-4" />}
+									label={t.name || t.url || 'New terminal'}
+									enabled={t.enabled !== false}
+									onConfigure={() => setTerminalModal({ idx })}
+									onToggle={(on) =>
+										quiet(
+											saveTerminals(
+												terminals.map((c, i) => (i === idx ? { ...c, enabled: on } : c)),
+												`${terminalName(t)} is ${on ? 'on' : 'off'}`
+											)
+										)
+									}
+								/>
+							))}
+						</ul>
+					) : (
+						<p className="text-foreground-muted text-dense">None yet.</p>
+					)}
+					<AddButton label="Add terminal connection" onClick={() => setTerminalModal({ idx: null })} />
 				</div>
 			</SettingsSection>
 

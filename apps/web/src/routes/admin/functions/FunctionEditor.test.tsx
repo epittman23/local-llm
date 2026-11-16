@@ -271,3 +271,18 @@ describe('FunctionEditor save bar on a phone (FRM-3, LAY-4)', () => {
 		expect(bar).toHaveClass('max-sm:sticky', 'max-sm:bottom-0', 'max-sm:bg-page');
 	});
 });
+
+describe('FunctionEditor (create): the starter (#1029)', () => {
+	afterEach(() => {
+		cleanup();
+		onChanges.length = 0;
+	});
+
+	it('shows a labelled Start from choice, Filter first', async () => {
+		show();
+		const group = await screen.findByRole('radiogroup', { name: 'Start from' });
+		expect(within(group).getByRole('radio', { name: 'Filter' })).toHaveAttribute('aria-checked', 'true');
+		fireEvent.click(within(group).getByRole('radio', { name: 'Event' }));
+		expect(within(group).getByRole('radio', { name: 'Event' })).toHaveAttribute('aria-checked', 'true');
+	});
+});

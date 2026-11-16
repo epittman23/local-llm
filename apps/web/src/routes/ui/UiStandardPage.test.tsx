@@ -176,7 +176,7 @@ describe('UiStandardPage (/ui)', () => {
 		const answer = within(document.getElementById('content') as HTMLElement);
 		const failed = answer.getByRole('alert');
 		expect(failed.textContent).toContain("The model didn't answer");
-		expect(failed.textContent).toContain('Check the API key in Admin Settings > Connections.');
+		expect(failed.textContent).toContain('Check the API key in Admin > Settings > Connections.');
 		fireEvent.click(within(failed).getByRole('button', { name: 'Try another model' }));
 		const cuts = answer.getAllByTestId('cut-off');
 		expect(cuts.map((c) => c.textContent)).toEqual([

@@ -531,8 +531,15 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				</form>
 			)}
 
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete Model" onConfirm={remove}>
-				This will delete {deleteTag} and cannot be undone.
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title={`Delete “${deleteTag}”?`}
+				confirmLabel="Delete model"
+				destructive
+				onConfirm={remove}
+			>
+				It is deleted from the Ollama server, and chats can no longer use it. This can't be undone.
 			</ConfirmDialog>
 		</div>
 	);

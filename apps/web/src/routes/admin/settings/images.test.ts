@@ -70,15 +70,17 @@ describe('missingGenerationSetting', () => {
 	it('names what the chosen engine still needs', () => {
 		expect(
 			missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: '' })
-		).toBe('AUTOMATIC1111 Base URL is required.');
-		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'comfyui', COMFYUI_BASE_URL: ' ' })).toBe(
-			'ComfyUI Base URL is required.'
-		);
-		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'openai', IMAGES_OPENAI_API_KEY: '' })).toBe(
-			'OpenAI API Key is required.'
-		);
-		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'gemini', IMAGES_GEMINI_API_KEY: null })).toBe(
-			'Gemini API Key is required.'
+		).toEqual({ field: 'AUTOMATIC1111_BASE_URL', error: 'AUTOMATIC1111 Base URL is required.' });
+		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'comfyui', COMFYUI_BASE_URL: ' ' })).toEqual({
+			field: 'COMFYUI_BASE_URL',
+			error: 'ComfyUI Base URL is required.'
+		});
+		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'openai', IMAGES_OPENAI_API_KEY: '' })).toEqual({
+			field: 'IMAGES_OPENAI_API_KEY',
+			error: 'OpenAI API Key is required.'
+		});
+		expect(missingGenerationSetting({ ...on, IMAGE_GENERATION_ENGINE: 'gemini', IMAGES_GEMINI_API_KEY: null })).toEqual(
+			{ field: 'IMAGES_GEMINI_API_KEY', error: 'Gemini API Key is required.' }
 		);
 	});
 	it('is satisfied by a value, and never asked while generation is off', () => {
@@ -132,21 +134,34 @@ describe('prepareImagesConfig', () => {
 	it('refuses a workflow that is not JSON, and says which', () => {
 		expect(prepareImagesConfig({ ...base, COMFYUI_WORKFLOW: '{oops' }, rows, [])).toEqual({
 			ok: false,
+			field: 'COMFYUI_WORKFLOW',
 			error: 'Invalid JSON format for ComfyUI Workflow.'
 		});
 		expect(prepareImagesConfig({ ...base, IMAGES_EDIT_COMFYUI_WORKFLOW: '[1]' }, rows, [])).toEqual({
 			ok: false,
+			field: 'IMAGES_EDIT_COMFYUI_WORKFLOW',
 			error: 'Invalid JSON format for ComfyUI Edit Workflow.'
 		});
 	});
 	it('refuses bad params instead of throwing', () => {
-		expect(prepareImagesConfig({ ...base, AUTOMATIC1111_PARAMS: '{x' }, rows, []).ok).toBe(false);
-		expect(prepareImagesConfig({ ...base, IMAGES_OPENAI_API_PARAMS: '[1]' }, rows, []).ok).toBe(false);
+		expect(prepareImagesConfig({ ...base, AUTOMATIC1111_PARAMS: '{x' }, rows, [])).toMatchObject({
+			ok: false,
+			field: 'AUTOMATIC1111_PARAMS'
+		});
+		expect(prepareImagesConfig({ ...base, IMAGES_OPENAI_API_PARAMS: '[1]' }, rows, [])).toMatchObject({
+			ok: false,
+			field: 'IMAGES_OPENAI_API_PARAMS'
+		});
 	});
 	it('a missing engine setting refuses the save and asks for generation to be switched off', () => {
 		expect(
 			prepareImagesConfig({ ...base, ENABLE_IMAGE_GENERATION: true, IMAGES_OPENAI_API_KEY: '' }, rows, [])
-		).toEqual({ ok: false, error: 'OpenAI API Key is required.', disableGeneration: true });
+		).toEqual({
+			ok: false,
+			field: 'IMAGES_OPENAI_API_KEY',
+			error: 'OpenAI API Key is required.',
+			disableGeneration: true
+		});
 	});
 });
 

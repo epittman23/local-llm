@@ -189,7 +189,7 @@ test('a failed reply says the model did not answer and retries by name (#992)', 
 	await chat.socket.connected;
 	const alert = page.getByTestId('response-message').getByRole('alert');
 	await expect(alert).toContainText("The model didn't answer");
-	await expect(alert).toContainText('Check the API key in Admin Settings > Connections.');
+	await expect(alert).toContainText('Check the API key in Admin > Settings > Connections.');
 	await expect(page.getByTestId('response-message').getByRole('button', { name: 'Copy' })).toHaveCount(0);
 	await alert.getByRole('button', { name: 'Retry' }).click();
 	await expect.poll(() => chat.seen.completions.length).toBe(1);

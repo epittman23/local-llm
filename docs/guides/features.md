@@ -49,12 +49,12 @@ flowchart LR
   subgraph SETTINGS["Settings modal: ?settings=tab"]
     direction TB
     setUser["Personal: interface, audio, connections, personalization, data, account"]
-    setAdmin["Admin tabs: connections, models, documents, web, code execution, images, subagents"]
   end
 
   subgraph ADMIN["Admin pages: /admin"]
     direction TB
     users["Users and groups, permissions"]
+    setAdmin["Settings /admin/settings/tab: connections, models, documents, web, code execution, images, subagents"]
     evals["Evaluations: leaderboard and feedback"]
     funcs["Functions: filters and pipes (plugins on only)"]
     play["Playground: chat, completions, images"]
@@ -138,13 +138,16 @@ notes, create an automation, look up calendar events, and so on).
 
 ### Settings
 
-Settings is a modal, opened from any page with `?settings=<tab>`.
+Personal settings are a modal, opened from any page with `?settings=<tab>`.
 Personal tabs cover the interface, audio, notifications, connections,
 integrations, personalization, data controls, archived chats and the
-account. An admin also gets `?settings=admin:<tab>`, where the app is
-configured: connections, models, documents (retrieval), web search, code
-execution, images, audio, subagents, analytics and more. The full tab list
-is in [README.md](../../README.md#signed-in).
+account. The server's settings, where the app is configured, are pages
+under Admin, `/admin/settings/<tab>` (an admin also gets a "Server settings"
+link in the modal, and old `?settings=admin:<tab>` links redirect there):
+connections, models, documents (retrieval), web search, code execution,
+images, audio, subagents and more; Analytics is its own Admin page,
+`/admin/analytics`. The full tab list is in
+[README.md](../../README.md#signed-in).
 
 ### Admin pages (`/admin`)
 
@@ -201,7 +204,7 @@ flowchart TB
 
   gen["utils/chat.py generate_chat_completion"]
 
-  subgraph CONN["OpenAI-compatible connection, set in Admin Settings > Connections"]
+  subgraph CONN["OpenAI-compatible connection, set in Admin > Settings > Connections"]
     direction LR
     orr["OpenRouter: the default"]
     llama["llama-server on :8090: evaluation only"]
@@ -237,7 +240,7 @@ flowchart TB
   backend merges the entry's system prompt and params into the request and
   sends it to whichever OpenAI-compatible connection serves the entry's
   base model. OpenRouter is that connection today. Pointing chat at local
-  inference is a change to the connection's base URL and API key in Admin
+  inference is a change to the connection's base URL and API key in Admin >
   Settings > Connections, nothing more.
 - **Preparation** happens in `process_chat_payload`
   (`apps/server/local_llm/utils/middleware.py`): the system prompt, history

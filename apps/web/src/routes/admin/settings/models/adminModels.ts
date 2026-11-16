@@ -30,8 +30,8 @@ export const VIEW_OPTIONS = [
 	['hidden', 'Hidden'],
 	['public', 'Public'],
 	['private', 'Private'],
-	['selected', 'Selected'],
-	['pinned', 'Pinned']
+	['selected', 'Default for new chats'],
+	['pinned', 'Pinned by default']
 ] as const;
 
 export type ViewOption = (typeof VIEW_OPTIONS)[number][0];
@@ -132,6 +132,34 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
 	const [item] = next.splice(from, 1);
 	next.splice(to, 0, item);
 	return next;
+}
+
+/**
+ * S5-D9: the list in two groups, models from connections first and then the
+ * workspace models built on them, each in the list's order.
+ */
+export const groupModels = (models: ModelItem[]): { connection: ModelItem[]; workspace: ModelItem[] } => ({
+	connection: models.filter((m) => !isPresetModel(m)),
+	workspace: models.filter((m) => isPresetModel(m))
+});
+
+/**
+ * `order` with one group's row moved from `from` to `to` within that group
+ * (indices into `groupIds`); every other id keeps its place. Rows move only
+ * within their group, so the saved order still lists each group together.
+ */
+export function reorderGroup(
+	order: readonly string[],
+	groupIds: readonly string[],
+	from: number,
+	to: number
+): string[] {
+	const moved = moveItem(groupIds, from, to);
+	const inGroup = new Set(groupIds);
+	let i = 0;
+	const next = order.map((id) => (inGroup.has(id) ? moved[i++] : id));
+	const placed = new Set(next);
+	return [...next, ...moved.filter((id) => !placed.has(id))];
 }
 
 /** `ids` with `id` added, or removed if it is already there. */

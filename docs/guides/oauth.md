@@ -2,7 +2,7 @@
 
 OAuth / OIDC sign-in is not in use today: no provider is configured. It is
 kept working, and when it is wanted it is turned on through environment
-variables only. Admin Settings > Authentication does not configure the
+variables only. Admin > Settings > Authentication does not configure the
 provider (see the 2026-11-08 entry in [../decisions.md](../decisions.md)).
 
 ## Why the environment
@@ -76,7 +76,7 @@ Sign-out redirects to `LLLM_AUTH_SIGNOUT_REDIRECT_URL` when that is set, and
 the session tokens OAuth stores are encrypted with
 `OAUTH_SESSION_TOKEN_ENCRYPTION_KEY` (default `LLLM_SECRET_KEY`).
 
-## What Admin Settings still shows
+## What Admin > Settings still shows
 
 With `ENABLE_OAUTH_PERSISTENT_CONFIG` on (it is off by default), the
 Authentication page offers the behaviour settings above that the backend reads

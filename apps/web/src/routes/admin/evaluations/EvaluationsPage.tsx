@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
-import { getModels } from '@/lib/apis';
 import { getFeedbackItems, getLeaderboard } from '@/lib/apis/evaluations';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -10,7 +9,7 @@ import { SubTabs } from '../AdminLayout';
 import { tabFromPath } from '../adminAccess';
 import { Feedbacks } from './Feedbacks';
 import { Leaderboard } from './Leaderboard';
-import { type LeaderboardEntry, type ModelInfo, leaderboardCount } from './leaderboard';
+import { type LeaderboardEntry, leaderboardCount } from './leaderboard';
 
 const TABS = ['leaderboard', 'feedback'] as const;
 
@@ -27,14 +26,10 @@ export function EvaluationsPage() {
 		let cancelled = false;
 		Promise.all([
 			getLeaderboard(token).catch(() => null),
-			getFeedbackItems(token, 'updated_at', 'desc', 1).catch(() => null),
-			getModels(token).catch(() => null)
-		]).then(([board, feedback, models]) => {
+			getFeedbackItems(token, 'updated_at', 'desc', 1).catch(() => null)
+		]).then(([board, feedback]) => {
 			if (cancelled) return;
-			setCount(
-				'leaderboard',
-				leaderboardCount((models ?? []) as ModelInfo[], (board?.entries ?? []) as LeaderboardEntry[])
-			);
+			setCount('leaderboard', board ? leaderboardCount((board.entries ?? []) as LeaderboardEntry[]) : null);
 			setCount('feedback', feedback?.total ?? null);
 		});
 		return () => {
@@ -43,8 +38,9 @@ export function EvaluationsPage() {
 	}, [token, setCount]);
 
 	return (
-		<div className="flex h-full w-full flex-col pb-2 lg:flex-row lg:space-x-4">
+		<div className="flex w-full flex-col pb-2">
 			<SubTabs
+				label="Evaluations sections"
 				active={tab}
 				tabs={[
 					{
@@ -61,9 +57,7 @@ export function EvaluationsPage() {
 					}
 				]}
 			/>
-			<div className="mt-1 flex-1 overflow-y-scroll px-4 lg:mt-0 lg:pr-4 lg:pl-0">
-				{tab === 'leaderboard' ? <Leaderboard /> : <Feedbacks />}
-			</div>
+			<div className="min-w-0 flex-1 px-4 pt-3">{tab === 'leaderboard' ? <Leaderboard /> : <Feedbacks />}</div>
 		</div>
 	);
 }

@@ -56,7 +56,7 @@ The backend refuses to start when `LLLM_SECRET_KEY` is shorter than 32 bytes
 (the command above gives 32 characters) or starts or ends with whitespace,
 and when `JWT_EXPIRES_IN`, if set, is a duration sign-in cannot use: one it
 cannot read, or one under a minute. That variable only sets the default the
-first time the backend starts; after that, Admin Settings > Authentication (JWT
+first time the backend starts; after that, Admin > Settings > Authentication (JWT
 Expiration) holds the session length in use.
 
 `make backend` also starts two services beside Postgres and Redis: SearXNG
@@ -72,7 +72,7 @@ few root steps at host setup;
 then `make sandbox-images` builds its two images (about 11 GB, 20 minutes
 or more) and `make wheelhouse` downloads the reviewed Python wheels its
 package mirror serves. Without the images the interpreter is unavailable,
-and Admin Settings > Code Execution says why; without the wheelhouse,
+and Admin > Settings > Code Execution says why; without the wheelhouse,
 `pip install` in a sandbox finds nothing. See
 [docs/guides/sandbox.md](docs/guides/sandbox.md).
 
@@ -216,14 +216,14 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/workspace/functions/create` | Redirects to `/admin/functions/create` |
 | `/admin` | *Admin* (everything under `/admin` is). Redirects to `/admin/users/overview` |
 | `/admin/users/overview` | Users: paginated, sortable, searchable list; add (form or CSV), edit, chats, delete. `/admin/users` redirects here |
-| `/admin/users/groups` | Groups and their permission switches, member CSV import, default permissions |
+| `/admin/users/groups` | Groups and their permissions, member CSV import, default permissions. Hidden, with the sub-tabs, while there is one account and sign-ups are off; the address then goes to `/admin/users` |
 | `/admin/evaluations/leaderboard` | Leaderboard and activity chart. `/admin/evaluations` redirects here |
 | `/admin/evaluations/feedback` | Feedback table, details, JSON/CSV export |
 | `/admin/functions` | Functions list. Bounces to `/admin` when the backend has plugins off |
 | `/admin/functions/create` | Function editor, new |
 | `/admin/functions/edit?id=<function-id>` | Function editor; query param |
-| `/admin/settings[/<tab>]` | **Not a page:** redirects to `/?settings=admin:<tab>`, which opens the Settings modal on that tab (see below) |
-| `/admin/analytics[/<tab>]` | Redirects to `/?settings=admin:analytics`, or to `/admin` when analytics is off |
+| `/admin/settings/<tab>` | The server's settings, one page per tab, with the tab list and its search beside it (tab ids below). Below 768 px `/admin/settings` is the list; from 768 px it opens the first tab. An unknown tab, or `pipelines` while no pipelines server is connected, goes back to the list |
+| `/admin/analytics` | Analytics, an Admin tab shown while admin analytics is on; otherwise it redirects to `/admin`. `/admin/analytics/<anything>` redirects here |
 | `/benchmarks` | Redirects to `/benchmarks/serve`. *Admin*, and the backend's `features.enable_benchmarks` must not be `false`; otherwise you're sent to `/` |
 | `/benchmarks/serve` | Serve + the Profiles panel |
 | `/benchmarks/live` | Live telemetry |
@@ -250,9 +250,12 @@ Anything marked *admin* also needs `role === 'admin'`.
 
 A workspace section you lack permission for redirects you to `/`.
 
-**Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
-admin, `?settings=admin:<tab>` opens the modal on that admin tab. The
-parameter stays in the address while the modal is open (a tab change replaces
+**Personal settings are a modal; the server's are pages.** Any page accepts
+`?settings=<tab>`, which opens the Settings modal on a personal tab; for an
+admin the modal also has a "Server settings" link to `/admin/settings`. An
+old `?settings=admin:<tab>` link redirects to `/admin/settings/<tab>` (and
+`admin:analytics` to `/admin/analytics`; an id that is not a server tab to
+the list, `/admin/settings`), keeping any other query parameters. The parameter stays in the address while the modal is open (a tab change replaces
 it, so a reload reopens the same tab); closing removes it, and Back closes the
 modal, asking first if the open tab has unsaved changes. Personal tab ids
 (plain `?settings=<tab>`, anyone): `general`, `interface`, `notifications`,
@@ -260,11 +263,12 @@ modal, asking first if the open tab has unsaved changes. Personal tab ids
 `archived_chats`, `account`, `about`; some are shown only when the backend and
 your permissions allow them. `tools` (personal tool and terminal servers) is
 hidden until chats use personal servers (#1090), so `?settings=tools` opens
-General. Admin tab ids (`admin:<tab>`): `general`,
+General. An unknown tab falls back to the first one listed. Server tab ids
+(`/admin/settings/<tab>`, or the old `?settings=admin:<tab>`): `general`,
 `authentication`, `connections`, `models`, `evaluations`, `integrations`,
-`documents`, `web`, `code-execution`, `interface`, `audio`, `images`,
-`pipelines`, `db`, `subagents`, `analytics`. An unknown tab falls back to the
-first one listed; a non-admin asking for an admin tab gets no modal.
+`documents`, `web`, `code-execution`, `interface` (titled "Tasks & prompts"),
+`audio`, `images`, `pipelines`, `db`, `subagents`; like everything under
+`/admin`, they are for admins only.
 
 ### Anything else
 
@@ -304,7 +308,7 @@ beneath; name the entry to change what it says.
 A new workspace model starts with memory, web search and the code
 interpreter on (and file upload, file context, citations, status updates,
 usage and builtin tools), and vision, image generation and the terminal off.
-Admin Settings > Models defaults, once saved, apply on top of these.
+Admin > Settings > Models defaults, once saved, apply on top of these.
 
 Both models are configured (per-model, in the System Prompt field) with the
 following instructions:

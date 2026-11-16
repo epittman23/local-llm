@@ -54,19 +54,44 @@ type DynamicTitleState = {
 	dynamic: string | null;
 	/** Which mounted page set `dynamic`, so another page's cleanup cannot clear it. */
 	owner: object | null;
+	/**
+	 * The names `dynamic` covers, oldest first: a dialog that names itself (Settings) over a page that
+	 * does too. When the one on top gives its name up, the one under it shows again.
+	 */
+	below: { owner: object; title: string }[];
 };
 
-export const usePageTitleStore = create<DynamicTitleState>(() => ({ dynamic: null, owner: null }));
+export const usePageTitleStore = create<DynamicTitleState>(() => ({ dynamic: null, owner: null, below: [] }));
 
-/** Sets the dynamic piece for `owner`; null gives it up (see clearDynamicTitle). */
+/**
+ * Sets the dynamic piece for `owner`; null gives it up (see clearDynamicTitle). A new owner covers the
+ * current one; an owner already covered changes its name underneath, so what covers it keeps showing.
+ */
 export function setDynamicTitle(owner: object, title: string | null) {
-	if (title === null) clearDynamicTitle(owner);
-	else usePageTitleStore.setState({ dynamic: title, owner });
+	if (title === null) return clearDynamicTitle(owner);
+	const { owner: current, dynamic, below = [] } = usePageTitleStore.getState();
+	if (current === owner || current === null || dynamic === null) {
+		usePageTitleStore.setState({ dynamic: title, owner });
+	} else if (below.some((entry) => entry.owner === owner)) {
+		usePageTitleStore.setState({
+			below: below.map((entry) => (entry.owner === owner ? { owner, title } : entry))
+		});
+	} else {
+		usePageTitleStore.setState({ dynamic: title, owner, below: [...below, { owner: current, title: dynamic }] });
+	}
 }
 
-/** Clears the dynamic piece only if `owner` is still the page that set it. */
+/** Gives up `owner`'s piece, if it still has one; the name it covered shows again. */
 export function clearDynamicTitle(owner: object) {
-	if (usePageTitleStore.getState().owner === owner) usePageTitleStore.setState({ dynamic: null, owner: null });
+	const { owner: current, below = [] } = usePageTitleStore.getState();
+	if (current === owner) {
+		const next = below.at(-1);
+		usePageTitleStore.setState(
+			next ? { dynamic: next.title, owner: next.owner, below: below.slice(0, -1) } : { dynamic: null, owner: null }
+		);
+	} else if (below.some((entry) => entry.owner === owner)) {
+		usePageTitleStore.setState({ below: below.filter((entry) => entry.owner !== owner) });
+	}
 }
 
 /** The current page's name (the dynamic piece, else the route's title), where its h1 comes from, and foldsBar. */

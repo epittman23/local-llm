@@ -8,7 +8,7 @@ import { AdminLayout } from '@/routes/admin/AdminLayout';
 import { EvaluationsPage } from '@/routes/admin/evaluations/EvaluationsPage';
 import { FunctionCreatePage, FunctionEditPage } from '@/routes/admin/functions/FunctionPages';
 import { FunctionsPage } from '@/routes/admin/functions/FunctionsPage';
-import { AnalyticsRedirect, SettingsRedirect } from '@/routes/admin/SettingsRedirects';
+import { AdminAnalyticsPage, AdminSettingsPage } from '@/routes/admin/settings/AdminSettingsPage';
 import { UsersPage } from '@/routes/admin/users/UsersPage';
 import { AutomationPage } from '@/routes/automations/AutomationPage';
 import { AutomationsPage } from '@/routes/automations/AutomationsPage';
@@ -141,10 +141,17 @@ const router = createBrowserRouter(
 									handle: layout('Evaluations')
 								},
 								{ path: 'evaluations/:tab', element: <EvaluationsPage />, handle: layout('Evaluations') },
-								{ path: 'settings', element: <SettingsRedirect />, handle: layout('Settings') },
-								{ path: 'settings/:tab', element: <SettingsRedirect />, handle: layout('Settings') },
-								{ path: 'analytics', element: <AnalyticsRedirect />, handle: layout('Analytics') },
-								{ path: 'analytics/:tab', element: <AnalyticsRedirect />, handle: layout('Analytics') },
+								// S5-D1: the server's settings are pages here, not the Settings dialog;
+								// each tab titles itself ("Connections · Settings").
+								{ path: 'settings', element: <AdminSettingsPage />, handle: layout('Settings') },
+								{ path: 'settings/:tab', element: <AdminSettingsPage />, handle: layout('Settings') },
+								{ path: 'analytics', element: <AdminAnalyticsPage />, handle: layout('Analytics') },
+								// The Svelte app's /admin/analytics/<tab> had one page.
+								{
+									path: 'analytics/*',
+									element: <Navigate to={routePaths.adminAnalytics} replace />,
+									handle: layout('Analytics')
+								},
 								{ path: 'functions', element: <FunctionsPage />, handle: layout('Functions') },
 								{ path: 'functions/create', element: <FunctionCreatePage />, handle: layout('New function') },
 								{ path: 'functions/edit', element: <FunctionEditPage />, handle: layout('Edit function') }

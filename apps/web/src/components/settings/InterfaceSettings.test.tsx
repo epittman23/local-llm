@@ -61,3 +61,15 @@ describe('saving at once (#951)', () => {
 		expect(screen.getByRole('textbox', { name: 'Font Family name' })).toHaveAttribute('data-slot', 'input');
 	});
 });
+
+describe('A setting that cycles through its values', () => {
+	it('is named by the setting and the value it shows, which a press moves on (WCAG 2.5.3)', () => {
+		const seen = vi.fn();
+		render(<Harness initial={{ chatDirection: 'auto' }} seen={seen} />);
+		const cycle = screen.getByRole('button', { name: 'Chat Direction Auto' });
+		expect(cycle).not.toHaveAttribute('aria-description');
+		fireEvent.click(cycle);
+		expect(seen).toHaveBeenLastCalledWith(expect.objectContaining({ chatDirection: 'LTR' }));
+		expect(screen.getByRole('button', { name: /^Chat Direction (?!Auto)/ })).toBe(cycle);
+	});
+});

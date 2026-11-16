@@ -1,5 +1,6 @@
 import type { SessionUser } from '@/lib/stores/authStore';
 import type { BackendConfig } from '@/lib/stores/configStore';
+import { routePaths } from '@/routes/routePaths';
 
 export type SettingsTab = {
 	id: string;
@@ -191,9 +192,18 @@ export const adminTabs: SettingsTab[] = [
 	},
 	{
 		id: 'admin:interface',
-		title: 'Server: Interface',
+		title: 'Tasks & prompts',
 		group: 'Experience',
-		keywords: ['interface', 'ui', 'appearance', 'banners', 'tasks', 'prompt suggestions', 'tags']
+		keywords: [
+			'tasks',
+			'prompts',
+			'title generation',
+			'follow-up',
+			'task model',
+			'interface',
+			'prompt suggestions',
+			'tags'
+		]
 	},
 	{
 		id: 'admin:audio',
@@ -263,10 +273,10 @@ export const isAdminTab = (id: string) => id.startsWith('admin:');
 export const sectionOf = (id: string) => (isAdminTab(id) ? 'Server' : 'Your settings');
 
 /**
- * Tabs this user can open: their personal tabs, then (for an admin) the admin ones. `implemented` is the set of tab ids that have a
- * component in this app so far (the modal passes its registry), so a tab is
- * never listed before it works. Analytics also needs `enable_admin_analytics`
- * (default on), which the Svelte modal checks at filter time.
+ * The personal tabs this user can open: the Settings dialog's list. `implemented`
+ * is the set of tab ids that have a component in this app so far (the modal
+ * passes its registry), so a tab is never listed before it works. The server's
+ * tabs are pages under Admin since S5-D1 (`serverTabs`).
  */
 export function availableTabs(
 	user: SessionUser | null,
@@ -274,15 +284,40 @@ export function availableTabs(
 	implemented: ReadonlySet<string>
 ): SettingsTab[] {
 	if (!user) return [];
-	const personal = personalTabs.filter((t) => implemented.has(t.id) && personalTabVisible(t.id, user, config));
-	if (user.role !== 'admin') return personal;
-	return [
-		...personal,
-		...adminTabs.filter(
-			(t) => implemented.has(t.id) && (t.id !== 'admin:analytics' || (config?.features?.enable_admin_analytics ?? true))
-		)
-	];
+	return personalTabs.filter((t) => implemented.has(t.id) && personalTabVisible(t.id, user, config));
 }
+
+/**
+ * The server's settings an admin can open, the list on `/admin/settings`
+ * (S5-D1). Analytics is not one: it is its own Admin tab (`/admin/analytics`).
+ * Pipelines shows only while a pipelines server is connected (S5-D4), which
+ * the caller passes in as `pipelines`.
+ */
+export function serverTabs(
+	user: SessionUser | null,
+	implemented: ReadonlySet<string>,
+	{ pipelines = false }: { pipelines?: boolean } = {}
+): SettingsTab[] {
+	if (user?.role !== 'admin') return [];
+	return adminTabs.filter(
+		(t) => implemented.has(t.id) && t.id !== 'admin:analytics' && (t.id !== 'admin:pipelines' || pipelines)
+	);
+}
+
+/**
+ * Where a server tab lives (S5-D1): `/admin/settings/<segment>`, or
+ * `/admin/analytics` for Analytics; `/admin/settings` (the list) for none,
+ * and for an id that is not a server tab (an old or hand-edited
+ * `?settings=admin:a/b` never becomes an odd path).
+ */
+export function serverTabPath(id?: string | null): string {
+	if (!id || !adminTabs.some((t) => t.id === id)) return routePaths.adminSettings;
+	if (id === 'admin:analytics') return routePaths.adminAnalytics;
+	return `${routePaths.adminSettings}/${adminTabSegment(id)}`;
+}
+
+/** A tab's name without the "Server: " its list adds where it repeats a personal one ("Connections"). */
+export const plainTabTitle = (tab: SettingsTab) => tab.title.replace(/^Server: /, '');
 
 /** The search box: case-insensitive, matches the title or any keyword by substring. */
 export function filterTabs(tabs: SettingsTab[], search: string): SettingsTab[] {

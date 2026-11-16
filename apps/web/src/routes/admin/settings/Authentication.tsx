@@ -9,11 +9,14 @@ import {
 	SettingsSection,
 	SettingTextarea
 } from '@/components/settings/controls';
+import { Disclosure } from '@/components/settings/formFields';
 import { getAdminConfig, getOAuthConfig, updateAdminConfig, updateOAuthConfig } from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { isOAuthEditable } from './authentication';
 
 type Rec = Record<string, any>;
@@ -29,49 +32,64 @@ const grid = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
 const noteClass = 'text-muted-foreground block text-caption';
 const warnClass = 'mt-1 block rounded-lg bg-warning/15 px-2 py-1.5 text-caption text-warning';
 
-function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void; groups: Draft['groups'] }) {
+function UserAccess({
+	admin,
+	set,
+	groups,
+	forOthers
+}: {
+	admin: Rec;
+	set: (p: Rec) => void;
+	groups: Draft['groups'];
+	/** S5-D2: whether the settings for new accounts show (another account exists, or sign-ups are on). */
+	forOthers: boolean;
+}) {
 	return (
 		<SettingsSection title="User Access" first>
-			<SettingRow label="Default User Role" description="Role assigned to new users when they create an account.">
-				<SettingSelect
-					value={admin.DEFAULT_USER_ROLE}
-					onChange={(v) => set({ DEFAULT_USER_ROLE: v })}
-					aria-label="Default User Role"
-				>
-					<option value="pending">pending</option>
-					<option value="user">user</option>
-					<option value="admin">admin</option>
-				</SettingSelect>
-			</SettingRow>
+			{forOthers && (
+				<>
+					<SettingRow label="Default User Role" description="The role a new account starts with.">
+						<SettingSelect
+							value={admin.DEFAULT_USER_ROLE}
+							onChange={(v) => set({ DEFAULT_USER_ROLE: v })}
+							aria-label="Default User Role"
+						>
+							<option value="pending">Pending</option>
+							<option value="user">User</option>
+							<option value="admin">Admin</option>
+						</SettingSelect>
+					</SettingRow>
 
-			<SettingRow label="Default Group" description="Group assigned to new users by default.">
-				<SettingSelect
-					value={admin.DEFAULT_GROUP_ID}
-					onChange={(v) => set({ DEFAULT_GROUP_ID: v })}
-					aria-label="Default Group"
-				>
-					<option value="">None</option>
-					{groups.map((g) => (
-						<option key={g.id} value={g.id}>
-							{g.name}
-						</option>
-					))}
-				</SettingSelect>
-			</SettingRow>
+					<SettingRow label="Default Group" description="The group a new account joins.">
+						<SettingSelect
+							value={admin.DEFAULT_GROUP_ID}
+							onChange={(v) => set({ DEFAULT_GROUP_ID: v })}
+							aria-label="Default Group"
+						>
+							<option value="">None</option>
+							{groups.map((g) => (
+								<option key={g.id} value={g.id}>
+									{g.name}
+								</option>
+							))}
+						</SettingSelect>
+					</SettingRow>
+				</>
+			)}
 
 			<Toggle
 				config={admin}
 				set={set}
 				name="ENABLE_SIGNUP"
 				label="New Sign Ups"
-				description="Allow new users to create accounts."
+				description="Let anyone who reaches the sign-in page create an account."
 			/>
 			<Toggle
 				config={admin}
 				set={set}
 				name="ENABLE_API_KEYS"
 				label="API Keys"
-				description="Allow users to create API keys for programmatic access."
+				description="Create API keys, so scripts and other programs can use local-llm."
 			/>
 
 			{admin.ENABLE_API_KEYS && (
@@ -173,6 +191,13 @@ function PendingAccounts({ admin, set }: { admin: Rec; set: (p: Rec) => void }) 
 
 function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	const editable = isOAuthEditable(oauth);
+	// S5-D2: folded to one line; the details are rarely needed on a one-owner install.
+	const [open, setOpen] = useState(false);
+	// A provider exists only once the environment names one (`/api/config` lists it); until then nothing signs in.
+	const providers = Object.keys(useConfigStore((s) => s.config?.oauth?.providers) ?? {}).length > 0;
+	const state = !providers ? 'Not configured' : oauth.ENABLE_OAUTH ? 'On' : 'Off';
+	// Without a provider nothing signs in, so the switch reads off whatever ENABLE_OAUTH says; what is stored stays.
+	const on = providers && Boolean(oauth.ENABLE_OAUTH);
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
 		<Text config={oauth} set={set} name={name} label={label} description={description} placeholder={placeholder} />
 	);
@@ -182,93 +207,118 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 
 	return (
 		<SettingsSection title="OAuth / OIDC">
-			<div className={noteClass} data-testid="oauth-env-note">
-				The OAuth / OIDC provider (its name, discovery URL, client ID and secret, redirect URI, scopes, timeouts and
-				logout address) is configured through environment variables, not here. See docs/guides/oauth.md for the
-				variables. The settings below apply once a provider is configured that way.
-			</div>
-			{!editable && (
-				<div className={warnClass}>
-					These settings are read from environment variables and cannot be edited here while
-					ENABLE_OAUTH_PERSISTENT_CONFIG is disabled.
-				</div>
-			)}
-			<fieldset
-				className="flex min-w-0 flex-col gap-2.5 disabled:cursor-not-allowed disabled:opacity-75"
-				disabled={!editable}
+			<Disclosure
+				title="Sign-in with an identity provider"
+				description={providers && !editable ? `${state} (set by environment variables)` : state}
+				open={open}
+				onOpenChange={setOpen}
 			>
-				{toggle('ENABLE_OAUTH', 'OAuth / OIDC', 'Allow users to authenticate with an OAuth / OIDC provider.')}
-
-				{oauth.ENABLE_OAUTH && (
-					<>
-						<div className={grid}>
-							{text('OAUTH_EMAIL_CLAIM', 'Email Claim', 'Claim used as the user email address.', 'email')}
-							{text('OAUTH_USERNAME_CLAIM', 'Username Claim', 'Claim used as the display name.', 'name')}
+				<div className="flex min-w-0 flex-col gap-2.5">
+					<div className={noteClass} data-testid="oauth-env-note">
+						The OAuth / OIDC provider (its name, discovery URL, client ID and secret, redirect URI, scopes, timeouts and
+						logout address) is configured through environment variables, not here. See docs/guides/oauth.md for the
+						variables. The settings below apply once a provider is configured that way.
+					</div>
+					{!editable && (
+						<div className={warnClass}>
+							These settings are read from environment variables and cannot be edited here while
+							ENABLE_OAUTH_PERSISTENT_CONFIG is disabled.
 						</div>
-						<div className={grid}>
-							{text('OAUTH_PICTURE_CLAIM', 'Picture Claim', 'Claim used as the profile picture URL.', 'picture')}
-							{text('OAUTH_SUB_CLAIM', 'Sub Claim', 'Claim used as the stable user identifier.', 'sub')}
-						</div>
-
-						{toggle('ENABLE_OAUTH_SIGNUP', 'OAuth Signup', 'Allow users to create accounts through OAuth.')}
-						{toggle(
-							'OAUTH_MERGE_ACCOUNTS_BY_EMAIL',
-							'Merge Accounts by Email',
-							'Link OAuth sign-ins to existing accounts with the same email.'
-						)}
-						{toggle(
-							'OAUTH_AUTO_REDIRECT',
-							'Auto Redirect',
-							'Send users directly to the OAuth provider from the sign-in page.'
-						)}
-						{text(
-							'OAUTH_ALLOWED_DOMAINS',
-							'Allowed Domains',
-							'Email domains allowed to sign in with OAuth.',
-							'* (all domains)'
+					)}
+					<fieldset
+						className="flex min-w-0 flex-col gap-2.5 disabled:cursor-not-allowed disabled:opacity-75"
+						disabled={!editable}
+					>
+						{providers ? (
+							toggle('ENABLE_OAUTH', 'OAuth / OIDC', 'Sign in with an OAuth / OIDC provider.')
+						) : (
+							<fieldset disabled className="min-w-0">
+								<Toggle
+									config={{ ...oauth, ENABLE_OAUTH: false }}
+									set={set}
+									name="ENABLE_OAUTH"
+									label="OAuth / OIDC"
+									description="Off until the environment names a provider."
+								/>
+							</fieldset>
 						)}
 
-						{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to local-llm roles.')}
-						{oauth.ENABLE_OAUTH_ROLE_MANAGEMENT && (
+						{on && (
 							<>
 								<div className={grid}>
-									{text('OAUTH_ROLES_CLAIM', 'Roles Claim', 'Claim containing provider roles.', 'roles')}
-									{text('OAUTH_ADMIN_ROLES', 'Admin Roles', 'Provider roles that grant admin access.', 'admin')}
+									{text('OAUTH_EMAIL_CLAIM', 'Email Claim', "Claim used as the account's email address.", 'email')}
+									{text('OAUTH_USERNAME_CLAIM', 'Username Claim', 'Claim used as the display name.', 'name')}
 								</div>
-								{text('OAUTH_ALLOWED_ROLES', 'Allowed Roles', 'Provider roles allowed to sign in.', '*')}
-							</>
-						)}
+								<div className={grid}>
+									{text('OAUTH_PICTURE_CLAIM', 'Picture Claim', 'Claim used as the profile picture URL.', 'picture')}
+									{text('OAUTH_SUB_CLAIM', 'Sub Claim', 'Claim used as the stable user identifier.', 'sub')}
+								</div>
 
-						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to local-llm groups.')}
-						{oauth.ENABLE_OAUTH_GROUP_MANAGEMENT && (
-							<>
 								{toggle(
-									'ENABLE_OAUTH_GROUP_CREATION',
-									'Auto-Create Groups',
-									'Create missing groups from OAuth claims.'
+									'ENABLE_OAUTH_SIGNUP',
+									'OAuth Signup',
+									'Create an account at the first sign-in through the provider.'
 								)}
-								<div className={grid}>
-									{text('OAUTH_GROUP_CLAIM', 'Group Claim', 'Claim containing provider groups.', 'groups')}
-									{text(
-										'OAUTH_BLOCKED_GROUPS',
-										'Blocked Groups',
-										'Provider groups blocked from signing in.',
-										'Comma-separated group names'
-									)}
-								</div>
+								{toggle(
+									'OAUTH_MERGE_ACCOUNTS_BY_EMAIL',
+									'Merge Accounts by Email',
+									'Link OAuth sign-ins to existing accounts with the same email.'
+								)}
+								{toggle('OAUTH_AUTO_REDIRECT', 'Auto Redirect', 'Go straight to the provider from the sign-in page.')}
+								{text(
+									'OAUTH_ALLOWED_DOMAINS',
+									'Allowed Domains',
+									'Email domains allowed to sign in with OAuth.',
+									'* (all domains)'
+								)}
+
+								{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to local-llm roles.')}
+								{oauth.ENABLE_OAUTH_ROLE_MANAGEMENT && (
+									<>
+										<div className={grid}>
+											{text('OAUTH_ROLES_CLAIM', 'Roles Claim', 'Claim containing provider roles.', 'roles')}
+											{text('OAUTH_ADMIN_ROLES', 'Admin Roles', 'Provider roles that grant admin access.', 'admin')}
+										</div>
+										{text('OAUTH_ALLOWED_ROLES', 'Allowed Roles', 'Provider roles allowed to sign in.', '*')}
+									</>
+								)}
+
+								{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to local-llm groups.')}
+								{oauth.ENABLE_OAUTH_GROUP_MANAGEMENT && (
+									<>
+										{toggle(
+											'ENABLE_OAUTH_GROUP_CREATION',
+											'Auto-Create Groups',
+											'Create missing groups from OAuth claims.'
+										)}
+										<div className={grid}>
+											{text('OAUTH_GROUP_CLAIM', 'Group Claim', 'Claim containing provider groups.', 'groups')}
+											{text(
+												'OAUTH_BLOCKED_GROUPS',
+												'Blocked Groups',
+												'Provider groups blocked from signing in.',
+												'Comma-separated group names'
+											)}
+										</div>
+									</>
+								)}
+
+								{toggle(
+									'OAUTH_UPDATE_EMAIL_ON_LOGIN',
+									'Update Email',
+									'Refresh the account email from OAuth on sign-in.'
+								)}
+								{toggle('OAUTH_UPDATE_NAME_ON_LOGIN', 'Update Name', 'Refresh the account name from OAuth on sign-in.')}
+								{toggle(
+									'OAUTH_UPDATE_PICTURE_ON_LOGIN',
+									'Update Picture',
+									'Refresh the profile picture from OAuth on sign-in.'
+								)}
 							</>
 						)}
-
-						{toggle('OAUTH_UPDATE_EMAIL_ON_LOGIN', 'Update Email', 'Refresh the account email from OAuth on sign-in.')}
-						{toggle('OAUTH_UPDATE_NAME_ON_LOGIN', 'Update Name', 'Refresh the account name from OAuth on sign-in.')}
-						{toggle(
-							'OAUTH_UPDATE_PICTURE_ON_LOGIN',
-							'Update Picture',
-							'Refresh the profile picture from OAuth on sign-in.'
-						)}
-					</>
-				)}
-			</fieldset>
+					</fieldset>
+				</div>
+			</Disclosure>
 		</SettingsSection>
 	);
 }
@@ -277,7 +327,15 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 export default function Authentication() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['authentication'], async () => {
+	const {
+		draft,
+		setDraft,
+		saved: stored,
+		dirty,
+		discard,
+		commit,
+		isLoading
+	} = useConfigDraft<Draft>(['authentication'], async () => {
 		const [admin, groups, oauth] = await Promise.all([
 			getAdminConfig(token),
 			getGroups(token),
@@ -286,6 +344,9 @@ export default function Authentication() {
 		return { admin, groups: groups ?? [], oauth };
 	});
 	const [saving, setSaving] = useState(false);
+	// S5-D2: the settings for other people's accounts hide while this is the only one and sign-ups are off.
+	const singleUser = useSingleUser();
+	const forOthers = !singleUser || Boolean(draft?.admin.ENABLE_SIGNUP);
 
 	const setAdmin = (p: Rec) => setDraft((d) => d && { ...d, admin: { ...d.admin, ...p } });
 	const setOAuth = (p: Rec) => setDraft((d) => d && { ...d, oauth: d.oauth && { ...d.oauth, ...p } });
@@ -308,14 +369,25 @@ export default function Authentication() {
 			// OAuth setting does not lose the admin config edits (and vice versa).
 			const adminSaved = await attempt(() => updateAdminConfig(token, draft.admin));
 			let oauthSaved = true;
+			let oauthAnswer: Rec | null = draft.oauth;
 			if (draft.oauth && isOAuthEditable(draft.oauth)) {
 				const oauth = draft.oauth;
 				oauthSaved = await attempt(async () => {
 					const res = await updateOAuthConfig(token, oauth);
-					if (res) setDraft((d) => d && { ...d, oauth: res });
+					if (res) {
+						oauthAnswer = res;
+						setDraft((d) => d && { ...d, oauth: res });
+					}
 					return res;
 				});
 			}
+			// Each half that was saved becomes the saved state; a refused one stays unsaved.
+			if (stored)
+				commit({
+					...stored,
+					admin: adminSaved ? draft.admin : stored.admin,
+					oauth: oauthSaved ? oauthAnswer : stored.oauth
+				});
 			if (adminSaved && oauthSaved) await saved();
 		} finally {
 			setSaving(false);
@@ -323,11 +395,18 @@ export default function Authentication() {
 	};
 
 	return (
-		<SettingsForm title="Authentication" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Authentication"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
+		>
 			{draft && (
 				<>
-					<UserAccess admin={draft.admin} set={setAdmin} groups={draft.groups} />
-					<PendingAccounts admin={draft.admin} set={setAdmin} />
+					<UserAccess admin={draft.admin} set={setAdmin} groups={draft.groups} forOthers={forOthers} />
+					{forOthers && <PendingAccounts admin={draft.admin} set={setAdmin} />}
 					{draft.oauth && <OAuth oauth={draft.oauth} set={setOAuth} />}
 				</>
 			)}

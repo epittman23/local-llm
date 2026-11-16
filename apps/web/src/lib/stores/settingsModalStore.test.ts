@@ -6,11 +6,33 @@ afterEach(() => s().closeSettings());
 
 describe('settingsModalStore (#951)', () => {
 	it('opens on a request, with its state, and closes to nothing', () => {
-		s().openSettings({ tab: 'admin:models', state: { model: 'm1' } });
-		expect(s()).toMatchObject({ open: true, requestedTab: 'admin:models', tabState: { model: 'm1' } });
-		s().setTab('admin:models');
+		s().openSettings({ tab: 'interface', state: { row: 'r1' } });
+		expect(s()).toMatchObject({ open: true, requestedTab: 'interface', tabState: { row: 'r1' } });
+		s().setTab('interface');
 		s().closeSettings();
 		expect(s()).toMatchObject({ open: false, requestedTab: null, tab: null, dirty: false, pending: null });
+	});
+
+	it('leaves for the page of a server tab (S5-D1), carrying its state', () => {
+		s().openSettings({ tab: 'admin:models', state: { id: 'm1' } });
+		expect(s()).toMatchObject({ open: false, leaveTo: '/admin/settings/models', tabState: { id: 'm1' } });
+		s().clearLeave();
+		expect(s().leaveTo).toBeNull();
+		s().openSettings('admin:analytics');
+		expect(s().leaveTo).toBe('/admin/analytics');
+	});
+
+	it('while dirty, asks before leaving for a page, and leaves on Discard changes', () => {
+		s().openSettings('general');
+		s().setTab('general');
+		s().setDirty(true);
+		s().requestLeave('/admin/settings', { id: 'x' });
+		expect(s()).toMatchObject({ open: true, leaveTo: null, pending: { kind: 'leave', to: '/admin/settings' } });
+		s().cancelLeave();
+		expect(s()).toMatchObject({ open: true, pending: null, dirty: true });
+		s().requestLeave('/admin/settings/db');
+		s().confirmLeave();
+		expect(s()).toMatchObject({ open: false, dirty: false, leaveTo: '/admin/settings/db', tabState: null });
 	});
 
 	it('switches tab at once while clean, and carries a setting to scroll to', () => {

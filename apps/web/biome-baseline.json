@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 681,
+	"total": 667,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -245,9 +245,6 @@
 		"apps/web/src/lib/apis/tools/index.ts": {
 			"lint/suspicious/noExplicitAny": 1
 		},
-		"apps/web/src/lib/apis/utils/index.ts": {
-			"lint/correctness/noUnusedVariables": 1
-		},
 		"apps/web/src/lib/auth/session.ts": {
 			"lint/suspicious/noDocumentCookie": 2
 		},
@@ -347,31 +344,12 @@
 		"apps/web/src/routes/admin/AdminLayout.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 1
 		},
-		"apps/web/src/routes/admin/analytics/Analytics.tsx": {
-			"lint/style/noNonNullAssertion": 1
-		},
 		"apps/web/src/routes/admin/analytics/AnalyticsModelModal.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 1,
-			"lint/style/noNonNullAssertion": 2
+			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/admin/analytics/ChartLine.tsx": {
 			"lint/suspicious/noArrayIndexKey": 1
-		},
-		"apps/web/src/routes/admin/evaluations/FeedbackModal.tsx": {
-			"lint/style/noNonNullAssertion": 1
-		},
-		"apps/web/src/routes/admin/evaluations/Feedbacks.tsx": {
-			"lint/a11y/useKeyWithClickEvents": 1
-		},
-		"apps/web/src/routes/admin/evaluations/Leaderboard.tsx": {
-			"lint/suspicious/noArrayIndexKey": 1
-		},
-		"apps/web/src/routes/admin/evaluations/LeaderboardModal.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 1,
-			"lint/style/noNonNullAssertion": 2
-		},
-		"apps/web/src/routes/admin/evaluations/leaderboard.test.ts": {
-			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/admin/functions/functionTypes.ts": {
 			"lint/complexity/useOptionalChain": 1
@@ -389,7 +367,6 @@
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/routes/admin/settings/CodeExecution.tsx": {
-			"lint/style/noNonNullAssertion": 1,
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/routes/admin/settings/Connections.tsx": {
@@ -399,9 +376,6 @@
 		},
 		"apps/web/src/routes/admin/settings/Documents.tsx": {
 			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/admin/settings/Evaluations.tsx": {
-			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/admin/settings/Events.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 2
@@ -482,14 +456,11 @@
 		"apps/web/src/routes/admin/settings/webSearch.ts": {
 			"lint/suspicious/noExplicitAny": 1
 		},
-		"apps/web/src/routes/admin/users/AddUserModal.tsx": {
-			"lint/suspicious/useIterableCallbackReturn": 1
-		},
 		"apps/web/src/routes/admin/users/EditGroupModal.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 8
 		},
 		"apps/web/src/routes/admin/users/EditUserModal.tsx": {
-			"lint/style/noNonNullAssertion": 2
+			"lint/style/noNonNullAssertion": 1
 		},
 		"apps/web/src/routes/admin/users/GroupUsers.tsx": {
 			"lint/suspicious/useIterableCallbackReturn": 1

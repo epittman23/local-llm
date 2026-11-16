@@ -76,30 +76,30 @@ test.describe('admin evaluations', () => {
 		await mockEvaluationsApi(page, { models, entries, feedbacks: [feedback(1), feedback(2)] });
 		await page.goto('/admin/evaluations');
 		await expect(page).toHaveURL(/\/admin\/evaluations\/leaderboard$/);
-		// alpha + beta (arena hidden) + the retired-but-rated model.
-		await expect(page.getByRole('link', { name: /^Leaderboard/ })).toContainText('3');
+		// The rated models only: alpha and the retired-but-rated model (#1027).
+		await expect(page.getByRole('link', { name: /^Leaderboard/ })).toContainText('2');
 		await expect(page.getByRole('link', { name: /^Feedback/ })).toContainText('2');
 	});
 
-	test('the leaderboard ranks by rating, shows dashes for the unrated, and hides arena models', async ({ page }) => {
+	test('the leaderboard ranks only rated models, and hides arena models (#1027)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { models, entries });
 		await page.goto('/admin/evaluations/leaderboard');
 		const rows = page.locator('tbody tr');
-		await expect(rows).toHaveCount(3);
+		await expect(rows).toHaveCount(2);
 		await expect(rows.nth(0)).toContainText('retired');
 		await expect(rows.nth(0).locator('td').first()).toHaveText('1');
 		await expect(rows.nth(1)).toContainText('Alpha');
-		await expect(rows.nth(2)).toContainText('Beta');
-		await expect(rows.nth(2).locator('td').first()).toHaveText('-');
+		await expect(page.getByText('Beta', { exact: true })).toHaveCount(0);
 		await expect(page.getByText('Arena', { exact: true })).toHaveCount(0);
 	});
 
-	test("sorting by name keeps each model's rank", async ({ page }) => {
+	test("sorting by name keeps each model's rank, and says so with aria-sort", async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { models, entries });
 		await page.goto('/admin/evaluations/leaderboard');
-		await page.getByRole('columnheader', { name: 'Model' }).click();
+		await page.getByRole('button', { name: /^Model/ }).click();
+		await expect(page.getByRole('columnheader', { name: /^Model/ })).toHaveAttribute('aria-sort', 'ascending');
 		const rows = page.locator('tbody tr');
 		await expect(rows.nth(0)).toContainText('Alpha');
 		// Alpha is rated second overall, not "1st" because it now sits first.
@@ -110,12 +110,14 @@ test.describe('admin evaluations', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockEvaluationsApi(page, { models, entries });
 		await page.goto('/admin/evaluations/leaderboard');
-		await expect(page.locator('tbody tr')).toHaveCount(3);
-		await page.getByLabel('Search', { exact: true }).fill('alp');
+		await expect(page.locator('tbody tr')).toHaveCount(2);
+		await page.getByLabel('Search models').fill('alp');
 		await expect.poll(() => calls.some((c) => c.path === '/leaderboard' && c.search.includes('query=alp'))).toBe(true);
 	});
 
-	test('a row opens the model dialog; changing range re-requests history with the right days', async ({ page }) => {
+	test('a row opens the model dialog; changing the period re-requests history with the right days', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockEvaluationsApi(page, {
 			models,
@@ -126,18 +128,19 @@ test.describe('admin evaluations', () => {
 			]
 		});
 		await page.goto('/admin/evaluations/leaderboard');
-		await page.locator('tbody tr', { hasText: 'Alpha' }).click();
+		await page.locator('tbody tr', { hasText: 'Alpha' }).locator('td').last().click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('code', { exact: false }).first()).toBeVisible();
-		await expect(dialog.getByRole('img', { name: 'Model activity chart' })).toBeVisible();
+		await expect(dialog.getByRole('img', { name: /^Wins and losses per day/ })).toBeVisible();
+		await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText('Wins');
 		await expect
 			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=30')))
 			.toBe(true);
-		await dialog.getByRole('button', { name: '1Y' }).click();
+		await dialog.getByRole('radio', { name: '1 year' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=365')))
 			.toBe(true);
-		await dialog.getByRole('button', { name: 'All' }).click();
+		await dialog.getByRole('radio', { name: 'All time' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=0')))
 			.toBe(true);
@@ -147,26 +150,49 @@ test.describe('admin evaluations', () => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { models, entries, history: [{ date: '2026-09-01', won: 0, lost: 0 }] });
 		await page.goto('/admin/evaluations/leaderboard');
-		await page.locator('tbody tr', { hasText: 'Alpha' }).click();
-		await expect(page.getByRole('dialog').getByText('No activity data')).toBeVisible();
+		await page.getByRole('button', { name: 'Alpha' }).click();
+		await expect(page.getByRole('dialog').getByText('No ratings in this period')).toBeVisible();
+	});
+
+	test('a model id with a slash opens its history (#913)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockEvaluationsApi(page, {
+			models: [{ id: 'qwen/qwen3.6-27b', name: 'qwen/qwen3.6-27b' }],
+			entries: [{ model_id: 'qwen/qwen3.6-27b', rating: 1010, won: 2, lost: 1 }],
+			history: [{ date: '2026-09-01', won: 2, lost: 1 }]
+		});
+		await page.goto('/admin/evaluations/leaderboard');
+		await page.getByRole('button', { name: 'qwen/qwen3.6-27b' }).click();
+		await expect(page.getByRole('dialog').getByRole('img', { name: /^Wins and losses per day/ })).toBeVisible();
+		expect(calls.some((c) => c.path === '/leaderboard/qwen%2Fqwen3.6-27b/history')).toBe(true);
+	});
+
+	test('a fresh install explains the empty leaderboard', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockEvaluationsApi(page, { models, entries: [] });
+		await page.goto('/admin/evaluations/leaderboard');
+		await expect(page.getByRole('heading', { name: 'No ratings yet' })).toBeVisible();
 	});
 });
 
 test.describe('admin feedback', () => {
-	test('lists feedback with result badges, including a numeric draw', async ({ page }) => {
+	test('lists feedback with Up/Down for a thumb and Won/Draw for an arena comparison', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, {
 			feedbacks: [
 				feedback(1, { data: { model_id: 'model-1', rating: 1 } }),
-				feedback(2, { data: { model_id: 'model-2', rating: 0 } }),
-				feedback(3, { data: { model_id: 'model-3', rating: -1 } })
+				feedback(2, { data: { model_id: 'model-2', rating: 0, sibling_model_ids: ['x'] } }),
+				feedback(3, { data: { model_id: 'model-3', rating: -1 } }),
+				feedback(4, { data: { model_id: 'model-4', rating: 1, sibling_model_ids: ['x'] } })
 			]
 		});
 		await page.goto('/admin/evaluations/feedback');
-		await expect(page.getByText('model-1', { exact: true })).toBeVisible();
-		await expect(page.locator('tbody').getByText('Won', { exact: true })).toBeVisible();
-		await expect(page.locator('tbody').getByText('Draw', { exact: true })).toBeVisible();
-		await expect(page.locator('tbody').getByText('Lost', { exact: true })).toBeVisible();
+		const body = page.locator('tbody');
+		await expect(body.getByRole('button', { name: 'model-1' })).toBeVisible();
+		await expect(body.getByText('Up', { exact: true })).toBeVisible();
+		await expect(body.getByText('Down', { exact: true })).toBeVisible();
+		await expect(body.getByText('Draw', { exact: true })).toBeVisible();
+		await expect(body.getByText('Won', { exact: true })).toBeVisible();
 	});
 
 	test('shows sibling models for an arena feedback, truncated after two', async ({ page }) => {
@@ -175,32 +201,32 @@ test.describe('admin feedback', () => {
 			feedbacks: [feedback(1, { data: { model_id: 'winner', rating: 1, sibling_model_ids: ['a', 'b', 'c', 'd'] } })]
 		});
 		await page.goto('/admin/evaluations/feedback');
-		await expect(page.getByText('a, b, and 2 more')).toBeVisible();
+		await expect(page.getByText('Compared with a, b and 2 more')).toBeVisible();
 	});
 
-	test('the model filter re-queries and resets to page 1', async ({ page }) => {
+	test('the model filter, named by its text, re-queries and resets to page 1', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockEvaluationsApi(page, { feedbacks: [feedback(1), feedback(2)] });
 		await page.goto('/admin/evaluations/feedback');
-		await page.getByRole('button', { name: 'Model' }).click();
+		await page.getByRole('button', { name: 'Model: All models' }).click();
 		await page.getByRole('menuitemradio', { name: 'model-2' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/feedbacks/list' && c.search.includes('model_id=model-2')))
 			.toBe(true);
-		await expect(page.getByText('model-1', { exact: true })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'model-1' })).toHaveCount(0);
 	});
 
 	test('a row opens the details with the prompt and response from the snapshot', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { feedbacks: [feedback(1)] });
 		await page.goto('/admin/evaluations/feedback');
-		await page.locator('tbody tr').first().click();
+		await page.locator('tbody tr').first().locator('td', { hasText: 'Up' }).click();
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('What is 2+2?')).toBeVisible();
 		await expect(dialog.getByText('It is 4.')).toBeVisible();
 		await expect(dialog.getByText('Reason 1')).toBeVisible();
 		await expect(dialog.getByText('helpful')).toBeVisible();
-		await expect(dialog.getByRole('link', { name: 'chat_1' })).toHaveAttribute('href', /\/s\/chat_1$/);
+		await expect(dialog.getByRole('link', { name: /^Open chat/ })).toHaveAttribute('href', /\/s\/chat_1$/);
 	});
 
 	test('a feedback with no chat snapshot still opens', async ({ page }) => {
@@ -210,18 +236,20 @@ test.describe('admin feedback', () => {
 			route.fulfill({ json: { id: 'fb_1', meta: {}, snapshot: null } })
 		);
 		await page.goto('/admin/evaluations/feedback');
-		await page.locator('tbody tr').first().click();
+		await page.getByRole('button', { name: 'model-1' }).click();
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByText('Feedback Details')).toBeVisible();
+		await expect(dialog.getByRole('heading', { name: 'Rating details' })).toBeVisible();
 		await expect(dialog.getByText('Prompt', { exact: true })).toHaveCount(0);
 	});
 
-	test('delete removes the row', async ({ page }) => {
+	test('delete asks first, then removes the row (ACT-3)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockEvaluationsApi(page, { feedbacks: [feedback(1)] });
 		await page.goto('/admin/evaluations/feedback');
-		await page.getByRole('button', { name: 'Feedback Menu' }).click();
-		await page.getByRole('menuitem', { name: 'Delete' }).click();
+		await page.getByRole('button', { name: 'More actions' }).click();
+		await page.getByRole('menuitem', { name: 'Delete rating' }).click();
+		const confirm = page.getByRole('alertdialog', { name: 'Delete this rating?' });
+		await confirm.getByRole('button', { name: 'Delete rating' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/feedback/fb_1')).toBe(true);
 		await expect(page.getByRole('heading', { name: 'No feedback yet' })).toBeVisible();
 	});
@@ -230,7 +258,7 @@ test.describe('admin feedback', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockEvaluationsApi(page, { feedbacks: [feedback(1)] });
 		await page.goto('/admin/evaluations/feedback');
-		await page.getByRole('button', { name: 'Export' }).click();
+		await page.getByRole('button', { name: 'Export ratings' }).click();
 		const download = page.waitForEvent('download');
 		await page.getByRole('menuitem', { name: 'Export as CSV' }).click();
 		expect((await download).suggestedFilename()).toMatch(/^feedback-history-export-\d+\.csv$/);

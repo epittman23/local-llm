@@ -17,9 +17,12 @@ import {
 	SettingRow,
 	SettingSwitch,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	settingErrorId,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
+import { fieldProps } from '@/components/ui/field-message';
 import { deleteAllFiles } from '@/lib/apis/files';
 import { reindexKnowledgeFiles, reindexKnowledgeMetadata } from '@/lib/apis/knowledge';
 import { reindexMemoryVectors } from '@/lib/apis/memories';
@@ -75,31 +78,45 @@ const TEXT_SPLITTERS = [
 ] as const;
 
 /** One of the confirm-then-act buttons at the bottom of the tab. */
+/**
+ * A Danger Zone row: its button opens a confirmation that names what is lost
+ * and repeats the action (ACT-2, ACT-3). One that destroys data is in the
+ * danger colour, on the row and in the dialog.
+ */
 function DangerAction({
 	label,
 	description,
 	action,
 	title,
 	children,
+	destructive = false,
 	onConfirm
 }: {
 	label: string;
 	description: string;
 	action: string;
-	title?: string;
-	children?: ReactNode;
+	title: string;
+	children: ReactNode;
+	destructive?: boolean;
 	onConfirm: () => Promise<void>;
 }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<>
 			<SettingRow label={label} description={description}>
-				<Button variant="outline" size="sm" type="button" onClick={() => setOpen(true)}>
+				<Button variant={destructive ? 'destructive' : 'outline'} size="sm" type="button" onClick={() => setOpen(true)}>
 					{action}
 				</Button>
 			</SettingRow>
-			<ConfirmDialog open={open} onOpenChange={setOpen} title={title ?? 'Confirm your action'} onConfirm={onConfirm}>
-				{children ?? 'This action cannot be undone. Do you wish to continue?'}
+			<ConfirmDialog
+				open={open}
+				onOpenChange={setOpen}
+				title={title}
+				confirmLabel={action}
+				destructive={destructive}
+				onConfirm={onConfirm}
+			>
+				{children}
 			</ConfirmDialog>
 		</>
 	);
@@ -109,7 +126,15 @@ function DangerAction({
 export default function Documents() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['documents'], async () => {
+	const {
+		draft,
+		setDraft,
+		saved: stored,
+		dirty,
+		discard,
+		commit,
+		isLoading
+	} = useConfigDraft<Draft>(['documents'], async () => {
 		const [embedding, rag] = await Promise.all([getEmbeddingConfig(token), getRAGConfig(token)]);
 		return embedding && rag ? { embedding: toEmbeddingForm(embedding), rag: toRagForm(rag) } : null;
 	});
@@ -122,18 +147,23 @@ export default function Documents() {
 	const setCredentials = (section: 'openai' | 'ollama' | 'azure') => (changes: Rec) =>
 		setDraft((d) => d && { ...d, embedding: { ...d.embedding, [section]: { ...d.embedding[section], ...changes } } });
 
+	// FRM-2: what is wrong is said under its field. The embedding fields are hidden, and not sent, while retrieval is bypassed.
+	const ragProblem = draft ? ragFormError(draft.rag) : null;
+	const embeddingProblem = draft && !draft.rag.BYPASS_EMBEDDING_AND_RETRIEVAL ? embeddingError(draft.embedding) : null;
+	const embeddingProblems = embeddingProblem ? { [`emb-${embeddingProblem.field}`]: embeddingProblem.message } : {};
+	const { errors, check, reset } = useSettingErrors({
+		...(ragProblem && { [`field-${ragProblem.field}`]: ragProblem.message }),
+		...embeddingProblems
+	});
+
 	/**
-	 * Applies the embedding model; false (after saying why) if it cannot be, in
-	 * which case the form is put back to what the server has. `forceReload`
-	 * loads it even when unchanged, as the Update button asks (#532).
+	 * Applies the embedding model (`check` it first); false (after saying why)
+	 * if the server refuses it, in which case the form is put back to what the
+	 * server has. `forceReload` loads it even when unchanged, as the Update
+	 * button asks (#532).
 	 */
 	const applyEmbedding = async (forceReload: boolean): Promise<boolean> => {
 		if (!draft) return false;
-		const invalid = embeddingError(draft.embedding);
-		if (invalid) {
-			toast.error(invalid);
-			return false;
-		}
 		try {
 			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding, { forceReload }));
 			return true;
@@ -146,6 +176,7 @@ export default function Documents() {
 	};
 
 	const updateEmbeddingModel = async () => {
+		if (!check(embeddingProblems)) return;
 		setEmbeddingLoading(true);
 		try {
 			if (await applyEmbedding(true)) toast.success('Embedding model updated');
@@ -157,11 +188,7 @@ export default function Documents() {
 	const save = async () => {
 		if (!draft) return;
 		const { rag } = draft;
-		const invalid = ragFormError(rag);
-		if (invalid) {
-			toast.error(invalid);
-			return;
-		}
+		if (!check()) return;
 		setSaving(true);
 		try {
 			// Built first: what cannot be sent stops the save before the embedding changes (#234).
@@ -171,6 +198,7 @@ export default function Documents() {
 			const res = await updateRAGConfig(token, payload);
 			const { warnings, changes } = ragSaveOutcome(rag, res);
 			if (Object.keys(changes).length) setRag(changes);
+			commit({ ...draft, rag: { ...rag, ...changes } });
 			for (const warning of warnings) toast.warning(warning, { duration: 15000 });
 			await saved();
 		} catch (error) {
@@ -212,7 +240,18 @@ export default function Documents() {
 	const hosted = emb?.engine === 'ollama' || emb?.engine === 'openai' || emb?.engine === 'azure_openai';
 
 	return (
-		<SettingsForm title="Documents" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Documents"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
+		>
 			{draft && rag && emb && (
 				<>
 					<SettingsSection title="Content Extraction" first>
@@ -237,11 +276,7 @@ export default function Documents() {
 							{...bound}
 							name="BYPASS_EMBEDDING_AND_RETRIEVAL"
 							label="Bypass Embedding and Retrieval"
-							description={
-								bypass
-									? 'Inject the entire content as context for comprehensive processing.'
-									: 'Use segmented retrieval for focused and relevant context.'
-							}
+							description="Send each document to the model whole, without splitting it into pieces or embedding it. Best for short files; long ones may not fit the model's context."
 						/>
 
 						{!bypass && (
@@ -403,13 +438,14 @@ export default function Documents() {
 
 							<SettingField
 								label="Embedding Model"
-								description="Model used to generate embeddings. Reindex knowledge after changing this."
+								description="Model used to generate embeddings."
 								htmlFor="emb-model"
 							>
 								<div className="flex w-full items-center gap-2">
 									<input
 										id="emb-model"
-										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring h-7 w-full rounded-lg border px-2 text-xs transition-colors"
+										{...fieldProps(settingErrorId('emb-model'), { error: errors['emb-model'] })}
+										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring aria-invalid:border-danger h-7 w-full rounded-lg border px-2 text-xs transition-colors"
 										placeholder={
 											emb.engine === 'ollama'
 												? 'Set embedding model'
@@ -433,15 +469,23 @@ export default function Documents() {
 										</Button>
 									)}
 								</div>
-								<div className={hintClass}>
-									After changing the embedding model, reindex knowledge, knowledge search, and memory vectors for
-									changes to take effect.
-								</div>
+								{/* FRM-5: said once, and only once the model differs from the stored one (#1023). */}
+								{stored && (emb.engine !== stored.embedding.engine || emb.model !== stored.embedding.model) && (
+									<p className="text-warning mt-1 text-dense">
+										After saving, reindex (Danger Zone, below): files and memories embedded with the previous model are
+										not found by searches with the new one.
+									</p>
+								)}
 							</SettingField>
 
-							<SettingRow label="Embedding Batch Size" description="Number of items processed per embedding batch.">
+							<SettingRow
+								label="Embedding Batch Size"
+								description="Number of items processed per embedding batch."
+								fieldId="emb-batchSize"
+							>
 								<div className="w-16">
 									<SettingNumber
+										id="emb-batchSize"
 										aria-label="Embedding Batch Size"
 										min={1}
 										max={16000}
@@ -465,9 +509,11 @@ export default function Documents() {
 									<SettingRow
 										label="Embedding Concurrent Requests"
 										description="Maximum concurrent embedding requests. Set to 0 for unlimited."
+										fieldId="emb-concurrent"
 									>
 										<div className="w-16">
 											<SettingNumber
+												id="emb-concurrent"
 												aria-label="Embedding Concurrent Requests"
 												min={0}
 												step={1}
@@ -488,11 +534,7 @@ export default function Documents() {
 									{...bound}
 									name="RAG_FULL_CONTEXT"
 									label="Full Context Mode"
-									description={
-										rag.RAG_FULL_CONTEXT
-											? 'Inject entire documents as context for comprehensive processing.'
-											: 'Use segmented retrieval for focused context.'
-									}
+									description="Send whole documents instead of the pieces that best match the question. Best for short files; long ones may not fit the model's context."
 								/>
 
 								{!rag.RAG_FULL_CONTEXT && (
@@ -558,9 +600,11 @@ export default function Documents() {
 										<SettingRow
 											label="Reranking Batch Size"
 											description="Number of results processed per reranking batch."
+											fieldId="field-RAG_RERANKING_BATCH_SIZE"
 										>
 											<div className="w-16">
 												<SettingNumber
+													id="field-RAG_RERANKING_BATCH_SIZE"
 													aria-label="Reranking Batch Size"
 													min={1}
 													max={16000}
@@ -676,37 +720,48 @@ export default function Documents() {
 							{...bound}
 							name="ENABLE_GOOGLE_DRIVE_INTEGRATION"
 							label="Google Drive"
-							description="Allow Google Drive as a document source."
+							description="Attach files from Google Drive."
 						/>
 						<BoundToggle
 							{...bound}
 							name="ENABLE_ONEDRIVE_INTEGRATION"
 							label="OneDrive"
-							description="Allow OneDrive as a document source."
+							description="Attach files from OneDrive."
 						/>
 					</SettingsSection>
 
 					<SettingsSection title="Danger Zone">
 						<DangerAction
 							label="Reset Upload Directory"
-							description="Delete uploaded files from the upload directory."
-							action="Reset"
+							description="Delete every uploaded file, with all stored embeddings."
+							action="Delete all uploads"
+							title="Delete every uploaded file?"
+							destructive
 							onConfirm={run(() => deleteAllFiles(token))}
-						/>
+						>
+							Every file uploaded to chats and knowledge bases is deleted from the server, with the embeddings of all
+							files and memories. Chats keep their messages but lose their attachments. This cannot be undone.
+						</DangerAction>
 						<DangerAction
 							label="Reset Vector Storage/Knowledge"
-							description="Clear vector storage and knowledge indexing data."
-							action="Reset"
+							description="Delete every knowledge base and all stored embeddings."
+							action="Reset vector storage"
+							title="Delete every knowledge base and its embeddings?"
+							destructive
 							onConfirm={run(() => resetVectorDB(token))}
-						/>
+						>
+							Every knowledge base is deleted, with the embeddings of all files and memories. The uploaded files stay,
+							and can be added to a new knowledge base. This cannot be undone.
+						</DangerAction>
 						<DangerAction
 							label="Reindex Knowledge and Memory Vectors"
 							description="Rebuild vectors for existing knowledge files, knowledge search, and memories."
 							action="Reindex"
-							title="Reindex Embedding Data"
+							title="Reindex knowledge and memories?"
 							onConfirm={reindexAll}
 						>
-							Rebuild knowledge file, knowledge search, and memory vectors using the current embedding model.
+							Knowledge files, knowledge search and memories are embedded again with the current embedding model.
+							Nothing is deleted; on a large library it takes a while.
 						</DangerAction>
 					</SettingsSection>
 				</>

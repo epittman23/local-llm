@@ -35,8 +35,70 @@ export const SEARCH_ENGINES = [
 
 export const LOADER_ENGINES = ['playwright', 'firecrawl', 'tavily', 'microsoft_web_iq', 'external'] as const;
 
-export const engineLabel = (engine: string): string =>
-	engine === 'duckduckgo' ? 'DDGS' : engine === 'serphouse' ? 'SERPHouse' : engine;
+/** Each engine as its makers write it (WRD-2, #1025). */
+const ENGINE_NAMES: Record<string, string> = {
+	ollama_cloud: 'Ollama Cloud',
+	perplexity_search: 'Perplexity Search API',
+	searxng: 'SearXNG (bundled)',
+	yacy: 'YaCy',
+	google_pse: 'Google Programmable Search',
+	brave: 'Brave Search',
+	brave_llm_context: 'Brave Search, LLM context',
+	kagi: 'Kagi',
+	mojeek: 'Mojeek',
+	bocha: 'Bocha',
+	serpstack: 'Serpstack',
+	serper: 'Serper',
+	serphouse: 'SERPHouse',
+	serply: 'Serply',
+	searchapi: 'SearchApi',
+	serpapi: 'SerpApi',
+	duckduckgo: 'DDGS',
+	tavily: 'Tavily',
+	jina: 'Jina',
+	bing: 'Bing',
+	exa: 'Exa',
+	perplexity: 'Perplexity Sonar',
+	microsoft_web_iq: 'Microsoft Web IQ',
+	sougou: 'Sogou',
+	firecrawl: 'Firecrawl',
+	external: 'External search server',
+	yandex: 'Yandex',
+	youcom: 'You.com',
+	linkup: 'Linkup',
+	openserp: 'OpenSERP',
+	playwright: 'Playwright'
+};
+
+export const engineLabel = (engine: string): string => ENGINE_NAMES[engine] ?? engine;
+
+/** A web loader's name: the search engine's, except the external one, which is a different server. */
+export const loaderLabel = (loader: string): string =>
+	loader === 'external' ? 'External loader server' : engineLabel(loader);
+
+/** The search engines in the order the select offers them: the bundled SearXNG first, then by name. */
+export const SEARCH_ENGINE_ORDER: string[] = [
+	'searxng',
+	...SEARCH_ENGINES.filter((e) => e !== 'searxng').sort((a, b) => engineLabel(a).localeCompare(engineLabel(b)))
+];
+
+/** The SearXNG that `make backend` starts beside the app (infra/docker-compose.yml). */
+export const BUNDLED_SEARXNG_URL = 'http://127.0.0.1:8080/search?q=<query>';
+
+/**
+ * S5-D6: with no engine stored, the bundled SearXNG is preselected, and its
+ * address filled in where none is stored. Nothing is stored until Save; a
+ * stored engine or address is never replaced, and Web Search stays as it is.
+ * Returns null when there is nothing to fill in.
+ */
+export function bundledSearxngPrefill(web: Rec): Rec | null {
+	if ((web.WEB_SEARCH_ENGINE ?? '') !== '') return null;
+	return {
+		WEB_SEARCH_ENGINE: 'searxng',
+		...(web.SEARXNG_QUERY_URL ? {} : { SEARXNG_QUERY_URL: BUNDLED_SEARXNG_URL }),
+		...(web.SEARXNG_LANGUAGE ? {} : { SEARXNG_LANGUAGE: 'all' })
+	};
+}
 
 /** One box of an engine's settings: `name` is the key of the web config it edits. */
 export type FieldSpec = {
@@ -81,8 +143,8 @@ export const SEARCH_ENGINE_FIELDS: Record<string, FieldSpec[]> = {
 		secret('PERPLEXITY_API_KEY', 'Perplexity API Key')
 	],
 	searxng: [
-		text('SEARXNG_QUERY_URL', 'Searxng Query URL', 'Enter Searxng Query URL', { required: true }),
-		text('SEARXNG_LANGUAGE', 'Searxng search language (all, en, es, de, fr, etc.)', 'Enter Searxng search language', {
+		text('SEARXNG_QUERY_URL', 'SearXNG Query URL', `e.g. ${BUNDLED_SEARXNG_URL}`, { required: true }),
+		text('SEARXNG_LANGUAGE', 'SearXNG Search Language (all, en, es, de, fr, ...)', 'e.g. all', {
 			required: true
 		})
 	],
@@ -260,7 +322,8 @@ export function toWebForm(web: Rec): Rec {
 	};
 }
 
-export type Prepared = { ok: true; payload: Rec } | { ok: false; error: string };
+/** The payload, or what is wrong and the key of the field it is about (FRM-2). */
+export type Prepared = { ok: true; payload: Rec } | { ok: false; field: string; error: string };
 
 /** The body of `POST /retrieval/config/update` for this tab: only the `web` block, in the shapes the backend takes. */
 export function prepareWebConfig(form: Rec): Prepared {
@@ -271,10 +334,10 @@ export function prepareWebConfig(form: Rec): Prepared {
 			try {
 				linkup = JSON.parse(linkup);
 			} catch {
-				return { ok: false, error: 'Invalid JSON format in Linkup Parameters' };
+				return { ok: false, field: 'LINKUP_SEARCH_PARAMS', error: 'Invalid JSON format in Linkup Parameters' };
 			}
 			if (linkup === null || typeof linkup !== 'object' || Array.isArray(linkup))
-				return { ok: false, error: 'Invalid JSON format in Linkup Parameters' };
+				return { ok: false, field: 'LINKUP_SEARCH_PARAMS', error: 'Invalid JSON format in Linkup Parameters' };
 		}
 	}
 	return {

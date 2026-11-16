@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-	type LeaderboardEntry,
 	buildRankedModels,
+	type LeaderboardEntry,
 	leaderboardCount,
 	percentOf,
 	rankById,
@@ -11,7 +11,6 @@ import {
 const models = [
 	{ id: 'a', name: 'Alpha' },
 	{ id: 'b', name: 'Beta' },
-	{ id: 'arena', name: 'Arena', owned_by: 'arena' },
 	{ id: 'hidden', name: 'Hidden', info: { meta: { hidden: true } } },
 	{ id: 'c' }
 ];
@@ -21,18 +20,19 @@ const entries: LeaderboardEntry[] = [
 	{ model_id: 'gone', rating: 1100, won: 1, lost: 0 }
 ];
 
-describe('buildRankedModels', () => {
+describe('buildRankedModels (#1027)', () => {
 	const ranked = buildRankedModels(models, entries);
-	it('lists active models and gone-but-rated ones, skipping arena and hidden', () => {
-		expect(ranked.map((m) => m.id)).toEqual(['b', 'gone', 'a', 'c']);
+	it('lists only the rated models, by rating', () => {
+		expect(ranked.map((m) => m.id)).toEqual(['b', 'gone', 'a']);
 	});
-	it('marks the unrated model with dashes and falls back to its id for a name', () => {
-		const c = ranked.find((m) => m.id === 'c')!;
-		expect(c).toMatchObject({ rating: '-', name: 'c', stats: { count: 0, won: '-', lost: '-' } });
+	it('leaves out an installed model nobody has rated', () => {
+		expect(ranked.find((m) => m.id === 'c')).toBeUndefined();
+		expect(buildRankedModels(models, [])).toEqual([]);
 	});
 	it('carries win/loss counts and tags', () => {
 		expect(ranked.find((m) => m.id === 'a')).toMatchObject({
-			stats: { count: 4, won: '3', lost: '1' },
+			name: 'Alpha',
+			stats: { count: 4, won: 3, lost: 1 },
 			top_tags: [{ tag: 'code', count: 2 }]
 		});
 	});
@@ -42,27 +42,28 @@ describe('buildRankedModels', () => {
 });
 
 describe('leaderboardCount', () => {
-	it('counts active models plus evaluated models that are not installed', () => {
-		expect(leaderboardCount(models, entries)).toBe(4);
+	it('counts the rated models', () => {
+		expect(leaderboardCount(entries)).toBe(3);
 	});
 });
 
 describe('rankById', () => {
-	it('ranks by rating and leaves the unrated out, whatever the display sort', () => {
-		const ranks = rankById(buildRankedModels(models, entries));
-		expect([ranks.get('b'), ranks.get('gone'), ranks.get('a'), ranks.get('c')]).toEqual([1, 2, 3, undefined]);
+	it('ranks by rating, whatever order the rows come in', () => {
+		const ranks = rankById(sortRanked(buildRankedModels(models, entries), 'name', 'asc'));
+		expect([ranks.get('b'), ranks.get('gone'), ranks.get('a')]).toEqual([1, 2, 3]);
 	});
 });
 
 describe('sortRanked', () => {
 	const ranked = buildRankedModels(models, entries);
-	it('sorts by rating with unrated last when descending', () => {
-		expect(sortRanked(ranked, 'rating', 'desc').map((m) => m.id)).toEqual(['b', 'gone', 'a', 'c']);
-		expect(sortRanked(ranked, 'rating', 'asc').map((m) => m.id)).toEqual(['c', 'a', 'gone', 'b']);
+	it('sorts by rating either way', () => {
+		expect(sortRanked(ranked, 'rating', 'desc').map((m) => m.id)).toEqual(['b', 'gone', 'a']);
+		expect(sortRanked(ranked, 'rating', 'asc').map((m) => m.id)).toEqual(['a', 'gone', 'b']);
 	});
-	it('sorts by name, and by won treating dashes as lowest', () => {
-		expect(sortRanked(ranked, 'name', 'asc').map((m) => m.name)).toEqual(['Alpha', 'Beta', 'c', 'gone']);
-		expect(sortRanked(ranked, 'won', 'desc').map((m) => m.id)).toEqual(['b', 'a', 'gone', 'c']);
+	it('sorts by name, and by wins or losses', () => {
+		expect(sortRanked(ranked, 'name', 'asc').map((m) => m.name)).toEqual(['Alpha', 'Beta', 'gone']);
+		expect(sortRanked(ranked, 'won', 'desc').map((m) => m.id)).toEqual(['b', 'a', 'gone']);
+		expect(sortRanked(ranked, 'lost', 'asc').map((m) => m.id)).toEqual(['gone', 'a', 'b']);
 	});
 	it('does not reorder the input', () => {
 		const before = ranked.map((m) => m.id);
@@ -72,8 +73,8 @@ describe('sortRanked', () => {
 });
 
 describe('percentOf', () => {
-	it('formats one decimal and survives a zero total', () => {
-		expect(percentOf('3', 4)).toBe('75.0');
-		expect(percentOf('0', 0)).toBe('0.0');
+	it('rounds to a whole percentage and survives a zero total', () => {
+		expect(percentOf(2, 3)).toBe(67);
+		expect(percentOf(0, 0)).toBe(0);
 	});
 });

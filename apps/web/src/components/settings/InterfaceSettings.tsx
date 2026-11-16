@@ -172,15 +172,15 @@ export function InterfaceSettings({
 				{(id) => (
 					<span className="flex items-center gap-3">
 						{saved(def.key)}
+						{/* Named "<setting> <value>": the name holds the value it shows (WCAG 2.5.3). */}
 						<Button
 							variant="ghost"
 							size="xs"
 							type="button"
-							aria-labelledby={id}
-							aria-description={option.label}
+							aria-labelledby={`${id} ${id}-value`}
 							onClick={() => set(def.key, next)}
 						>
-							{option.label}
+							<span id={`${id}-value`}>{option.label}</span>
 						</Button>
 					</span>
 				)}

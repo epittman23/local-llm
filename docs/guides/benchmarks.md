@@ -13,10 +13,10 @@ as chat, started by the same `make backend` described in [Running
 it](../../README.md#running-it)
 (port `4000`; `make frontend` adds a dev server on `5174`),
 and reached through its own entry in the sidebar (`apps/web/src/components/
-layout/Sidebar.tsx`) — admin-only, like Playground, rather than a tab inside
-the Settings modal like Analytics, since eight interactive pages do not fit
+layout/Sidebar.tsx`) — admin-only, like Playground, rather than a tab under
+Admin like Analytics, since eight interactive pages do not fit
 a settings panel. A `benchmarks.enable` config flag (`ENABLE_BENCHMARKS`,
-the **Benchmarks** switch in Admin Settings > General, surfaced to the
+the **Benchmarks** switch in Admin > Settings > General, surfaced to the
 frontend as `enable_benchmarks`) gates whether the entry shows at all.
 
 Those are the whole port table, apart from the services `make backend` runs
@@ -318,7 +318,7 @@ offloaded and thinking. `harness_stats.code_runs` shows which case a run is.
 
 **What it needs.** The model entry has to be on an OpenAI-compatible
 connection that points at the `llama-server` being measured, for example
-`http://127.0.0.1:8090/v1` in Admin Settings > Connections. The code
+`http://127.0.0.1:8090/v1` in Admin > Settings > Connections. The code
 interpreter has to be on, on the sandbox (a removed engine value in the
 configuration leaves it off). Native function calling only.
 

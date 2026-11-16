@@ -14,6 +14,8 @@ from local_llm.config import (
     DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
+    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
 )
 from local_llm.constants import ERROR_MESSAGES, TASKS
 from local_llm.models.config import Config
@@ -107,6 +109,26 @@ async def get_task_model_generation_config(default_model_id: str, models) -> tup
 @router.get('/config')
 async def get_task_config(request: Request, user=Depends(get_verified_user)):
     return await get_config_values(TASK_CONFIG_KEYS)
+
+
+# The built-in prompt each task falls back to while its stored template is
+# empty, keyed like GET /config. Admin > Settings shows them read-only, so a
+# template can start from the default instead of being written blind (#1101).
+DEFAULT_TASK_PROMPT_TEMPLATES = {
+    'TITLE_GENERATION_PROMPT_TEMPLATE': DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
+    'VOICE_MODE_PROMPT_TEMPLATE': DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
+    'FOLLOW_UP_GENERATION_PROMPT_TEMPLATE': DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE,
+    'TAGS_GENERATION_PROMPT_TEMPLATE': DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE,
+    'QUERY_GENERATION_PROMPT_TEMPLATE': DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE,
+    'AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE': DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE,
+    'IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE': DEFAULT_IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE,
+    'TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE': DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
+}
+
+
+@router.get('/config/defaults')
+async def get_task_config_defaults(user=Depends(get_admin_user)):
+    return DEFAULT_TASK_PROMPT_TEMPLATES
 
 
 class TaskConfigForm(BaseModel):

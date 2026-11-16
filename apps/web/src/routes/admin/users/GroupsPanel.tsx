@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, Search, X } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
-import { Spinner } from '@/components/common/Spinner';
+import { TableSkeleton } from '@/components/common/TableSkeleton';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -31,6 +33,9 @@ const sortItems: { value: GroupSort; label: string }[] = [
  * Ports admin/Users/Groups.svelte: the group list with search and sort, the
  * New Group modal, and the all-users "Default permissions" modal. The tab count
  * follows the *filtered* list, as in the original.
+ *
+ * #1057/#987: the shared search, a Sort menu named by its text, and New group
+ * in a toolbar row tall enough for it (LAY-3).
  */
 export function GroupsPanel() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -69,22 +74,22 @@ export function GroupsPanel() {
 
 	const addGroup = async (value: GroupFormValue) => {
 		const res = await createNewGroup(token, value).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't create the group.", error);
 			return null;
 		});
 		if (res) {
-			toast.success('Group created successfully');
+			toast.success(`Created “${value.name}”`);
 			await refetchGroups();
 		}
 	};
 
 	const updateDefaults = async (value: GroupFormValue) => {
 		const res = await updateUserDefaultPermissions(token, value.permissions).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't save the default permissions.", error);
 			return null;
 		});
 		if (res) {
-			toast.success('Default permissions updated successfully');
+			toast.success('Default permissions saved');
 			await queryClient.invalidateQueries({ queryKey: ['admin', 'default-permissions'] });
 		}
 	};
@@ -104,11 +109,7 @@ export function GroupsPanel() {
 	}
 
 	if (groupsQuery.isPending || defaultsQuery.isPending) {
-		return (
-			<div className="my-10 flex justify-center">
-				<Spinner />
-			</div>
-		);
+		return <TableSkeleton label="groups" />;
 	}
 
 	const defaultPermissions = defaultsQuery.data ?? {};
@@ -124,58 +125,40 @@ export function GroupsPanel() {
 				onSubmit={addGroup}
 			/>
 
-			<div>
-				<div className="bg-background sticky top-0 z-10">
-					<div className="flex h-8 w-full flex-1 items-center gap-2">
-						<div className="flex min-w-0 flex-1 items-center">
-							<Search className="mr-3 ml-1 size-3.5" />
-							<input
-								className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
-								value={query}
-								onChange={(e) => setQuery(e.target.value)}
-								aria-label="Search Groups"
-								placeholder="Search Groups"
-							/>
-							{query && (
-								<Button
-									variant="ghost"
-									size="icon-xs"
-									type="button"
-									aria-label="Clear search"
-									onClick={() => setQuery('')}
-								>
-									<X className="size-3" strokeWidth={2} />
-								</Button>
-							)}
-						</div>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon-sm" className="shrink-0" type="button" aria-label="Sort">
-									<span className="truncate">{sortLabel}</span>
-									<ChevronDown className="size-3.5" strokeWidth={2.5} />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								<DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as GroupSort)}>
-									{sortItems.map((item) => (
-										<DropdownMenuRadioItem key={item.value} value={item.value}>
-											{item.label}
-											{item.value === sortBy && <Check className="ml-auto" />}
-										</DropdownMenuRadioItem>
-									))}
-								</DropdownMenuRadioGroup>
-							</DropdownMenuContent>
-						</DropdownMenu>
-						<Button variant="outline" size="sm" className="ml-1 shrink-0 text-xs" onClick={() => setShowAdd(true)}>
-							New Group
-						</Button>
+			<div className="flex flex-col gap-2">
+				{/* items-start: on a phone Sort wraps under the search, and New group stays level with the search. */}
+				<div className="flex flex-wrap items-start gap-2">
+					<div className="min-w-0 flex-1">
+						<ListSearchBar value={query} onChange={setQuery} placeholder="Search groups">
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button variant="ghost" type="button">
+										Sort: {sortLabel}
+										<ChevronDown aria-hidden data-icon="inline-end" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as GroupSort)}>
+										{sortItems.map((item) => (
+											<DropdownMenuRadioItem key={item.value} value={item.value}>
+												{item.label}
+											</DropdownMenuRadioItem>
+										))}
+									</DropdownMenuRadioGroup>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</ListSearchBar>
 					</div>
+					<Button variant="outline" type="button" onClick={() => setShowAdd(true)}>
+						<Plus aria-hidden data-icon="inline-start" />
+						New group
+					</Button>
 				</div>
 
 				{filtered.length !== 0 ? (
-					<div className="mt-1 grid grid-cols-1">
-						{filtered.map((group, idx) => (
-							<div key={group.id}>
+					<ul aria-label="Groups" className="flex flex-col">
+						{filtered.map((group) => (
+							<li key={group.id} className="border-b last:border-0">
 								<GroupItem
 									group={group}
 									defaultPermissions={defaultPermissions}
@@ -183,36 +166,33 @@ export function GroupsPanel() {
 									onChanged={refetchGroups}
 									onGroupUpdate={patchGroup}
 								/>
-								{idx < filtered.length - 1 && <hr className="border-border/40" />}
-							</div>
+							</li>
 						))}
-					</div>
+					</ul>
 				) : (
-					<div className="flex w-full flex-col items-center justify-center py-16 pb-24">
-						<div className="max-w-sm text-center">
-							<div className="mb-1.5 text-sm">No groups found</div>
-							<div className="text-muted-foreground text-center text-xs leading-5">
-								Use groups to organize your users and assign permissions.
-							</div>
-						</div>
-					</div>
+					<ListEmptyState
+						title="No groups yet"
+						description="Groups give their members permissions beyond the defaults."
+						query={query}
+						onClear={() => setQuery('')}
+					/>
 				)}
 
-				<hr className="border-border/40 my-1" />
-
-				<RowButton className="group flex px-2.5 py-2" aria-haspopup="dialog" onClick={() => setShowDefaults(true)}>
-					<div className="flex w-full items-center gap-3">
-						<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
-							<div className="text-sm font-normal group-hover:underline">Default permissions</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">
-								applies to all users with the "user" role
-							</div>
+				<div className="border-t pt-2">
+					<RowButton
+						className="flex items-center gap-3 px-2.5 py-2"
+						aria-haspopup="dialog"
+						onClick={() => setShowDefaults(true)}
+					>
+						<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+							<span className="text-foreground-strong font-strong">Default permissions</span>
+							<span className="text-foreground-muted text-dense truncate">
+								What every account with the User role may do
+							</span>
 						</div>
-						<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">
-							Edit
-						</div>
-					</div>
-				</RowButton>
+						<span className="text-foreground-muted shrink-0">Edit</span>
+					</RowButton>
+				</div>
 			</div>
 
 			{showDefaults && (

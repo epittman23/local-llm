@@ -8,7 +8,8 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
-	SettingTextarea
+	SettingTextarea,
+	useSettingError
 } from './controls';
 
 // Settings tabs edit one flat config object, and each field is "this key of that
@@ -86,6 +87,7 @@ export function BoundSecret({
 	required = false
 }: Bound & Described & { placeholder: string; required?: boolean }) {
 	const id = fieldId({ idPrefix, name });
+	const invalid = useSettingError(id).props;
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
 			<SensitiveInput
@@ -95,6 +97,8 @@ export function BoundSecret({
 				required={required}
 				value={config[name] ?? ''}
 				onChange={(v) => set({ [name]: v })}
+				outerClassName={invalid['aria-invalid'] ? 'border-danger' : undefined}
+				{...invalid}
 			/>
 		</SettingField>
 	);

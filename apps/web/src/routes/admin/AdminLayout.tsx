@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { SectionSkeleton, type SectionTab, SectionTabs } from '@/components/layout/SectionTabs';
+import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
-import { adminGate, adminSectionOfPath } from './adminAccess';
+import { adminGate, adminSectionOfPath, analyticsOn } from './adminAccess';
 
 /**
  * Ports d863707:apps/openwebui/src/routes/(app)/admin/+layout.svelte: the admin-only
@@ -14,9 +15,9 @@ import { adminGate, adminSectionOfPath } from './adminAccess';
  *
  * The Svelte "Users" tab links to bare `/admin` and is active for any
  * `/admin/users*` path; that is kept, so a bookmark to `/admin` keeps working
- * through the index redirect. The Settings "tab" is not a page in this fork:
- * it opens the Settings modal (a `?settings=admin:general` deep link), so it
- * is a link to `/admin/settings` whose redirect does exactly that.
+ * through the index redirect. Settings and Analytics are pages here since
+ * S5-D1 (#932): `/admin/settings/<tab>` and `/admin/analytics`, not tabs of
+ * the Settings dialog, so leaving them never leaves Admin.
  */
 export function AdminLayout() {
 	const authStatus = useAuthStore((s) => s.status);
@@ -49,6 +50,9 @@ export function AdminLayout() {
 	const tabs: SectionTab[] = [
 		{ to: routePaths.admin, label: 'Users', active: section === 'users' },
 		{ to: routePaths.adminEvaluations, label: 'Evaluations', active: section === 'evaluations' },
+		...(analyticsOn(config)
+			? [{ to: routePaths.adminAnalytics, label: 'Analytics', active: section === 'analytics' }]
+			: []),
 		...(config?.features?.enable_plugins
 			? [{ to: routePaths.adminFunctions, label: 'Functions', active: section === 'functions' }]
 			: []),
@@ -73,33 +77,42 @@ export function AdminLayout() {
 	);
 }
 
-/** A sub-tab bar (Users: Overview/Groups; Evaluations: Leaderboard/Feedback). */
+/**
+ * A section's sub-tabs (Users: Overview, Groups; Evaluations: Leaderboard,
+ * Feedback), #1102, NAV-2: a strip above the content in the `SectionTabs`
+ * look, a navigation landmark named by `label`, each count a small secondary
+ * badge. It sits in the page gutter (LAY-1).
+ */
 export function SubTabs({
 	tabs,
-	active
+	active,
+	label = 'Sections'
 }: {
 	tabs: { id: string; to: string; label: string; count?: string | null; countClassName?: string }[];
 	active: string;
+	/** The landmark's name: "Users sections". */
+	label?: string;
 }) {
 	return (
-		<div className="tabs flex max-w-full flex-row gap-2.5 overflow-x-auto px-2 text-left text-sm font-normal lg:w-50 lg:flex-none lg:flex-col lg:gap-0">
-			{tabs.map((tab) => (
-				<NavLink
-					key={tab.id}
-					id={tab.id}
-					to={tab.to}
-					draggable={false}
-					className={cn(
-						'flex min-w-fit items-center gap-1.5 rounded-lg px-0.5 py-1 text-right transition select-none lg:flex-none',
-						active === tab.id ? '' : 'text-foreground-muted hover:text-foreground'
-					)}
-				>
-					<span>{tab.label}</span>
-					{tab.count != null && (
-						<span className={cn('text-sm', tab.countClassName ?? 'text-muted-foreground')}>{tab.count}</span>
-					)}
-				</NavLink>
-			))}
-		</div>
+		<SectionTabs
+			label={label}
+			className="shrink-0 px-4 pt-2"
+			tabs={tabs.map((tab) => ({
+				to: tab.to,
+				active: active === tab.id,
+				label: (
+					<>
+						<span>{tab.label}</span>
+						{/* Names the link "Overview 12", not "Overview12"; the flex gap draws the space. */}
+						{tab.count != null && ' '}
+						{tab.count != null && (
+							<Badge variant="secondary" className={cn('tabular-nums', tab.countClassName)}>
+								{tab.count}
+							</Badge>
+						)}
+					</>
+				)
+			}))}
+		/>
 	);
 }

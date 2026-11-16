@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -26,35 +26,54 @@ describe('SubTabs', () => {
 		expect(screen.getByRole('link', { name: 'Groups' }).getAttribute('href')).toBe('/admin/users/groups');
 	});
 
-	it('mutes the tabs that are not active', () => {
+	it('is a strip of links in a navigation landmark, the open one the current page (NAV-2, #1102)', () => {
 		renderTabs('overview');
-		expect(screen.getByRole('link', { name: 'Groups' }).className).toContain('text-foreground-muted');
-		expect(screen.getByRole('link', { name: /Overview/ }).className).not.toContain('text-foreground-muted');
+		const strip = screen.getByRole('navigation', { name: 'Sections' });
+		expect(strip.className).toContain('px-4');
+		expect(screen.getByRole('link', { name: /Overview/ })).toHaveAttribute('aria-current', 'page');
+		expect(screen.getByRole('link', { name: 'Groups' })).not.toHaveAttribute('aria-current');
+		expect(screen.getByRole('link', { name: 'Groups' }).className).toContain('text-muted-foreground');
+		cleanup();
+		render(
+			<MemoryRouter>
+				<SubTabs tabs={TABS} active="groups" label="Users sections" />
+			</MemoryRouter>
+		);
+		expect(screen.getByRole('navigation', { name: 'Users sections' })).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'Groups' })).toHaveAttribute('aria-current', 'page');
 	});
 
 	it('shows a tab count only when one is given', () => {
 		renderTabs('groups');
-		expect(screen.getByRole('link', { name: /Overview/ }).textContent).toContain('12');
+		expect(screen.getByRole('link', { name: 'Overview 12' })).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: 'Groups' }).textContent).toBe('Groups');
 	});
 
-	it('draws a count in the muted colour, not by fading the text (COL-2)', () => {
+	it('draws a count as a small secondary badge, not by fading the text (COL-2)', () => {
 		renderTabs('overview');
 		const count = screen.getByText('12');
-		expect(count.className).toContain('text-muted-foreground');
+		expect(count).toHaveAttribute('data-slot', 'badge');
+		expect(count).toHaveAttribute('data-variant', 'secondary');
 		expect(count.className).not.toContain('opacity');
 	});
 });
 
 describe('AdminLayout', () => {
-	const renderAt = (path: string, plugins = true) => {
+	const renderAt = (path: string, plugins = true, analytics = true) => {
 		useAuthStore.setState({ status: 'authenticated', token: 't', user: { id: 'u1', role: 'admin' } } as never);
-		useConfigStore.setState({ config: { name: 'local-llm', version: '0', features: { enable_plugins: plugins } } });
+		useConfigStore.setState({
+			config: {
+				name: 'local-llm',
+				version: '0',
+				features: { enable_plugins: plugins, enable_admin_analytics: analytics }
+			}
+		});
 		const router = createMemoryRouter(
 			[{ path: '/admin', element: <AdminLayout />, children: [{ path: '*', element: <p>admin page</p> }] }],
 			{ initialEntries: [path] }
 		);
 		render(<RouterProvider router={router} />);
+		return router;
 	};
 
 	it('opens with the Admin heading over its tabs, Users current on any users page (LAY-5, NAV-1)', () => {
@@ -81,6 +100,29 @@ describe('AdminLayout', () => {
 		renderAt('/admin/evaluations/leaderboard', false);
 		expect(screen.getByRole('link', { name: 'Evaluations' }).getAttribute('aria-current')).toBe('page');
 		expect(screen.queryByRole('link', { name: 'Functions' })).toBeNull();
+	});
+
+	it('has an Analytics tab between Evaluations and Functions while admin analytics is on (S5-D1)', () => {
+		renderAt('/admin/analytics');
+		const names = screen
+			.getAllByRole('link')
+			.map((l) => l.textContent)
+			.filter((n) => n !== 'admin page');
+		expect(names).toEqual(['Users', 'Evaluations', 'Analytics', 'Functions', 'Settings']);
+		expect(screen.getByRole('link', { name: 'Analytics' })).toHaveAttribute('aria-current', 'page');
+		expect(screen.getByRole('link', { name: 'Analytics' }).getAttribute('href')).toBe('/admin/analytics');
+	});
+
+	it('hides Analytics while it is off, and sends its address to /admin', async () => {
+		const router = renderAt('/admin/analytics', true, false);
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin'));
+		expect(screen.queryByRole('link', { name: 'Analytics' })).toBeNull();
+	});
+
+	it('makes Settings current on a server settings page, which stays in Admin', () => {
+		renderAt('/admin/settings/connections');
+		expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+		expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/admin/settings');
 	});
 
 	it('shows a skeleton, not "Loading…", until the session settles (STA-2)', () => {

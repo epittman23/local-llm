@@ -16,6 +16,9 @@ const settings = vi.hoisted(() => ({
 		{ url: 'https://number.example', info: { name: 42 } }
 	]
 }));
+// Admin's one-account rule (S5-D2) is tested where it is decided; here there are two accounts.
+const visibility = vi.hoisted(() => ({ single: false }));
+vi.mock('@/routes/admin/adminVisibility', () => ({ useAdminSingleUser: () => visibility.single }));
 vi.mock('@/lib/settings/userSettings', () => ({
 	useUserSettings: () => ({ settings, update: vi.fn() })
 }));

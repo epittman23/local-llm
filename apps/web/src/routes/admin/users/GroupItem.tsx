@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { toastFailure } from '@/components/common/failureToast';
+import { Badge } from '@/components/ui/badge';
 import { RowButton } from '@/components/ui/row-button';
 import type { Permissions } from '@/lib/access/permissions';
 import { deleteGroupById, updateGroupById } from '@/lib/apis/groups';
@@ -26,26 +28,27 @@ export function GroupItem({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [showEdit, setShowEdit] = useState(openOnMount);
+	const members = group.member_count ?? 0;
 	const hasCustomPermissions = Object.keys(group?.permissions ?? {}).length > 0;
 
 	const update = async (value: GroupFormValue) => {
 		const res = await updateGroupById(token, group.id, value).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure("Couldn't save the group.", error);
 			return null;
 		});
 		if (res) {
-			toast.success('Group updated successfully');
+			toast.success(`Saved “${value.name}”`);
 			onChanged();
 		}
 	};
 
 	const remove = async () => {
 		const res = await deleteGroupById(token, group.id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't delete “${group.name}”.`, error);
 			return null;
 		});
 		if (res) {
-			toast.success('Group deleted successfully');
+			toast.success(`Deleted “${group.name}”`);
 			onChanged();
 		}
 	};
@@ -63,25 +66,22 @@ export function GroupItem({
 				onDelete={remove}
 				onMemberChange={onGroupUpdate}
 			/>
-			<RowButton className="group flex px-2.5 py-2" onClick={() => setShowEdit(true)}>
-				<div className="flex w-full items-center gap-3">
-					<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
-						<div className="flex min-w-0 items-center gap-2">
-							<div className="line-clamp-1 text-sm font-normal group-hover:underline">{group.name}</div>
-							<div className="bg-muted text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5 text-caption leading-none font-normal">
-								{group.member_count ?? 0} members
-							</div>
-						</div>
-						<div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-							<div className="line-clamp-1 min-w-0">{group.description || 'No description'}</div>
-							<div className="text-foreground-muted shrink-0">/</div>
-							<div className="shrink-0">{hasCustomPermissions ? 'Custom permissions' : 'Uses defaults'}</div>
-						</div>
+			<RowButton className="flex items-center gap-3 px-2.5 py-2" onClick={() => setShowEdit(true)}>
+				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="flex min-w-0 items-center gap-2">
+						<span className="text-foreground-strong font-strong truncate" title={group.name}>
+							{group.name}
+						</span>
+						<Badge variant="secondary" className="shrink-0">
+							{members === 1 ? '1 member' : `${members} members`}
+						</Badge>
 					</div>
-					<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">
-						Edit
-					</div>
+					<span className="text-foreground-muted text-dense truncate">
+						{group.description || 'No description'} ·{' '}
+						{hasCustomPermissions ? 'Custom permissions' : 'Uses the defaults'}
+					</span>
 				</div>
+				<span className="text-foreground-muted shrink-0">Edit</span>
 			</RowButton>
 		</>
 	);

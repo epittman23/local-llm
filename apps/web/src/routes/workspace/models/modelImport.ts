@@ -90,7 +90,7 @@ export function importPayload(models: IncomingModel[]): Json[] {
 	);
 }
 
-/** Imports a models file as Admin Settings > Models does: parsed, then sent as `importPayload` shapes it. */
+/** Imports a models file as Admin > Settings > Models does: parsed, then sent as `importPayload` shapes it. */
 export const importModelFile = async (token: string, text: string) =>
 	importModels(token, importPayload(parseModelImport(text)));
 

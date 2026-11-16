@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelActivityChart, readChartTokens } from './ModelActivityChart';
 
@@ -86,8 +86,33 @@ describe('ModelActivityChart', () => {
 
 	it('draws nothing while loading or without activity', () => {
 		const { getByText, rerender } = render(<ModelActivityChart history={[]} loading={false} weekly={false} />);
-		expect(getByText('No activity data')).toBeTruthy();
+		expect(getByText('No ratings in this period')).toBeTruthy();
 		rerender(<ModelActivityChart history={history} loading weekly={false} />);
 		expect(charts.configs).toHaveLength(0);
+	});
+
+	it('names its colours in a legend and titles its axis (DAT-1, COL-8)', async () => {
+		render(<ModelActivityChart history={history} loading={false} weekly={false} />);
+		const legend = screen.getByRole('list', { name: 'Legend' });
+		expect(
+			within(legend)
+				.getAllByRole('listitem')
+				.map((li) => li.textContent)
+		).toEqual(['Wins', 'Losses']);
+		await waitFor(() => expect(charts.configs).toHaveLength(1));
+		const y = (charts.configs[0] as unknown as { options: { scales: { y: { title: { text: string } } } } }).options
+			.scales.y;
+		expect(y.title.text).toBe('Ratings per day');
+		expect(screen.getByRole('img')).toHaveAttribute('aria-label', 'Wins and losses per day: 3 wins, 4 losses');
+	});
+
+	it('gives every bar its figures as a table, for the keyboard (A11Y-4)', () => {
+		render(<ModelActivityChart history={history} loading={false} weekly={false} />);
+		const toggle = screen.getByRole('button', { name: 'Show as table' });
+		expect(toggle).toHaveAttribute('aria-expanded', 'false');
+		fireEvent.click(toggle);
+		expect(screen.getByRole('button', { name: 'Hide table' })).toHaveAttribute('aria-expanded', 'true');
+		const rows = within(screen.getByRole('table')).getAllByRole('row');
+		expect(rows.map((r) => r.textContent)).toEqual(['DayWinsLosses', 'Nov 1221', 'Nov 1313']);
 	});
 });

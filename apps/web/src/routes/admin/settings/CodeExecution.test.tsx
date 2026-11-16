@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
-import CodeExecution from './CodeExecution';
+import CodeExecution, { sandboxReasonSentence } from './CodeExecution';
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({
@@ -93,6 +93,7 @@ describe('CodeExecution: a rejected save', () => {
 				{ status: 422 }
 			);
 		await renderSandbox();
+		fireEvent.change(screen.getByLabelText('Sandbox Command Timeout'), { target: { value: '' } });
 		save();
 		await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
 		expect(toastError).toHaveBeenCalledWith(`CODE_INTERPRETER_SANDBOX_TIMEOUT: ${msg}`);
@@ -100,6 +101,30 @@ describe('CodeExecution: a rejected save', () => {
 });
 
 const section = (name: string) => screen.getByRole('region', { name });
+/** The sandbox notice, once its check has answered. */
+const notice_ = async () => {
+	await waitFor(() => expect(screen.queryByText('Checking the sandbox…')).toBeNull());
+	return document.querySelector('[data-slot="status-notice"]') as HTMLElement;
+};
+
+describe('sandboxReasonSentence', () => {
+	it.each([
+		[
+			'The sandbox-mirror container is not running; make backend starts it',
+			'The sandbox-mirror container is not running. Start the stack with make backend, which starts it.'
+		],
+		[
+			'The sandbox image x:1 is missing; build it with make sandbox-images',
+			'The sandbox image x:1 is missing. Build it with make sandbox-images.'
+		],
+		[
+			'Kata runs guests without seccomp (docs/guides/sandbox.md, "Guest seccomp")',
+			'Kata runs guests without seccomp (see "Guest seccomp" in the sandbox guide).'
+		],
+		['the guest could not be checked; try later', 'The guest could not be checked. Try later.'],
+		['Done!', 'Done!']
+	])('%s', (reason, sentence) => expect(sandboxReasonSentence(reason)).toBe(sentence));
+});
 
 describe('CodeExecution: the sandbox, the only engine', () => {
 	it('shows no engine select and no Jupyter field', async () => {
@@ -151,6 +176,8 @@ describe('CodeExecution: the sandbox, the only engine', () => {
 		async (legacy) => {
 			await renderSandbox({ ...CONFIG, CODE_EXECUTION_ENGINE: legacy, CODE_INTERPRETER_ENGINE: legacy });
 			expect(screen.queryByLabelText('Code Interpreter Engine')).toBeNull();
+			// Save waits for a change (FRM-3); the engines are sent whatever changed.
+			fireEvent.change(screen.getByLabelText('Sandbox Maximum Running'), { target: { value: '5' } });
 			save();
 			await waitFor(() => expect(posted).toHaveLength(1));
 			expect(posted[0]).toMatchObject({ CODE_EXECUTION_ENGINE: 'sandbox', CODE_INTERPRETER_ENGINE: 'sandbox' });
@@ -161,29 +188,68 @@ describe('CodeExecution: the sandbox, the only engine', () => {
 		sandboxStatus = () => new Response(JSON.stringify({ ready: false, reason: null }), { status: 200 });
 		await renderSandbox({ ...CONFIG, CODE_INTERPRETER_SANDBOX_DEFAULT_IMAGE: null });
 		expect(screen.getByLabelText('Sandbox Default Image')).toHaveValue('data');
-		expect((await screen.findByRole('status')).textContent).toBe('The sandbox is unavailable: no reason given');
+		const notice = await notice_();
+		expect(notice.getAttribute('data-tone')).toBe('warning');
+		expect(notice.textContent).toContain('The server gave no reason.');
+		expect(within(notice).queryByText('Details')).toBeNull();
 	});
 
-	it('says the sandbox is ready', async () => {
+	it('says the sandbox is ready, as a success line', async () => {
 		await renderSandbox();
-		expect((await screen.findByRole('status')).textContent).toBe('The sandbox is ready.');
+		await waitFor(() => expect(screen.getByText('The sandbox is ready')).toBeTruthy());
+		expect(
+			screen.getByText('The sandbox is ready').closest('[data-slot="status-notice"]')?.getAttribute('data-tone')
+		).toBe('success');
 	});
 
-	it('says why the sandbox is unavailable', async () => {
+	it('says why the sandbox is unavailable, what to do, and keeps the server words behind Details (#1100)', async () => {
+		const reason = 'The sandbox network local-llm_sandbox does not exist; make backend creates it';
+		sandboxStatus = () => new Response(JSON.stringify({ ready: false, reason }), { status: 200 });
+		await renderSandbox();
+		const notice = await notice_();
+		expect(notice.getAttribute('data-tone')).toBe('warning');
+		expect(within(notice).getByText("The sandbox isn't ready")).toBeTruthy();
+		expect(
+			within(notice).getByText(
+				'The sandbox network local-llm_sandbox does not exist. Start the stack with make backend, which creates it.'
+			)
+		).toBeTruthy();
+		expect(within(notice).getByText(reason)).toBeTruthy();
+		expect(
+			within(notice)
+				.getByRole('link', { name: /Sandbox guide/ })
+				.getAttribute('href')
+		).toMatch(/docs\/guides\/sandbox\.md$/);
+	});
+
+	it('checks again on request', async () => {
+		let ready = false;
 		sandboxStatus = () =>
-			new Response(JSON.stringify({ ready: false, reason: 'the kata-clh runtime is not registered' }), {
-				status: 200
-			});
+			new Response(JSON.stringify({ ready, reason: 'The Docker daemon does not answer' }), { status: 200 });
 		await renderSandbox();
-		expect((await screen.findByRole('status')).textContent).toBe(
-			'The sandbox is unavailable: the kata-clh runtime is not registered'
-		);
+		const notice = await notice_();
+		ready = true;
+		fireEvent.click(within(notice).getByRole('button', { name: 'Check again' }));
+		await waitFor(() => expect(screen.getByText('The sandbox is ready')).toBeTruthy());
 	});
 
 	it('says so when the status cannot be read', async () => {
 		sandboxStatus = () => new Response(JSON.stringify({ detail: 'nope' }), { status: 500 });
 		await renderSandbox();
-		expect((await screen.findByRole('status')).textContent).toBe('Could not check the sandbox.');
+		await waitFor(() => expect(screen.getByText("Couldn't check the sandbox")).toBeTruthy());
+		expect(screen.getByText('nope')).toBeTruthy();
+	});
+
+	it('shows no sandbox state while neither code execution nor the interpreter is on', async () => {
+		served = { ...CONFIG, ENABLE_CODE_EXECUTION: false, ENABLE_CODE_INTERPRETER: false };
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		render(
+			<QueryClientProvider client={client}>
+				<CodeExecution />
+			</QueryClientProvider>
+		);
+		await screen.findByRole('switch', { name: 'Enable Code Execution' });
+		expect(document.querySelector('[data-slot="status-notice"]')).toBeNull();
 	});
 
 	it('saves the settings as numbers, and a cleared one as null', async () => {

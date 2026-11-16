@@ -21,9 +21,11 @@ const CONFIG = {
 
 let updates: Record<string, unknown>[] = [];
 let answer: () => Response = () => new Response(JSON.stringify(CONFIG), { status: 200 });
+let stored: typeof CONFIG = CONFIG;
 
 beforeEach(() => {
 	updates = [];
+	stored = CONFIG;
 	answer = () => new Response(JSON.stringify(CONFIG), { status: 200 });
 	toastError.mockReset();
 	useAuthStore.setState({ token: 't' } as never);
@@ -32,7 +34,7 @@ beforeEach(() => {
 			updates.push(JSON.parse(String(init?.body)));
 			return answer();
 		}
-		if (String(url).endsWith('/audio/config')) return new Response(JSON.stringify(CONFIG), { status: 200 });
+		if (String(url).endsWith('/audio/config')) return new Response(JSON.stringify(stored), { status: 200 });
 		return new Response(JSON.stringify({}), { status: 200 });
 	});
 });
@@ -55,6 +57,8 @@ describe('Audio settings and the Whisper model', () => {
 		await waitFor(() => expect(updates).toHaveLength(1));
 		expect(updates[0].LOAD_WHISPER_MODEL).toBe(true);
 
+		// Save waits for a change (FRM-3).
+		fireEvent.change(screen.getByLabelText('Supported MIME Types'), { target: { value: 'audio/wav' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(updates).toHaveLength(2));
 		expect(updates[1]).not.toHaveProperty('LOAD_WHISPER_MODEL');
@@ -66,5 +70,40 @@ describe('Audio settings and the Whisper model', () => {
 		fireEvent.click(await renderPage());
 		await waitFor(() => expect(toastError).toHaveBeenCalled());
 		expect(String(toastError.mock.calls[0][0])).toContain('could not be loaded');
+	});
+});
+
+describe('Audio: Additional Parameters must be a JSON object (FRM-2)', () => {
+	const openai = { ...CONFIG, tts: { ...CONFIG.tts, ENGINE: 'openai', OPENAI_API_BASE_URL: 'http://tts' } };
+
+	it('says so under the field and focuses it; nothing is sent until they are put right', async () => {
+		stored = openai;
+		await renderPage();
+		const params = await screen.findByLabelText('Additional Parameters');
+		fireEvent.change(params, { target: { value: '[1,2]' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		expect(params).toHaveAttribute('aria-invalid', 'true');
+		expect(params).toHaveAccessibleDescription('Invalid JSON format for Parameters');
+		await waitFor(() => expect(params).toHaveFocus());
+		expect(toastError).not.toHaveBeenCalled();
+		expect(updates).toHaveLength(0);
+
+		fireEvent.change(params, { target: { value: '{"speed":1.25}' } });
+		expect(params).not.toHaveAttribute('aria-invalid');
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(updates).toHaveLength(1));
+		expect((updates[0].tts as Record<string, unknown>).OPENAI_PARAMS).toEqual({ speed: 1.25 });
+	});
+
+	it('another engine hides the field, so its problem is said in a toast', async () => {
+		stored = openai;
+		await renderPage();
+		fireEvent.change(await screen.findByLabelText('Additional Parameters'), { target: { value: '[1,2]' } });
+		fireEvent.change(screen.getByLabelText('Text-to-Speech Engine'), { target: { value: 'elevenlabs' } });
+
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith('Invalid JSON format for Parameters'));
+		expect(screen.queryByLabelText('Additional Parameters')).toBeNull();
+		expect(updates).toHaveLength(0);
 	});
 });

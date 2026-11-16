@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
  * outside one. The guard that asks before leaving with unsaved changes is the
  * caller's (Settings: `settingsModalStore`). On a create page (`creating`)
  * nothing is saved yet, so before the first change the line says "Nothing to
- * save yet" rather than "All changes saved".
+ * save yet" rather than "All changes saved". Toasts rise above it
+ * (`data-keep-clear`, FBK-2), so a failure never covers Save.
  */
 export function SaveBar({
 	dirty,
@@ -34,7 +35,7 @@ export function SaveBar({
 	className?: string;
 }) {
 	return (
-		<div data-slot="save-bar" className={cn('flex flex-wrap items-center justify-end gap-2 border-t pt-3', className)}>
+		<div data-slot="save-bar" data-keep-clear className={cn('flex flex-wrap items-center justify-end gap-2 border-t pt-3', className)}>
 			<p role="status" className="text-foreground-muted me-auto inline-flex items-center gap-2 text-dense max-sm:w-full">
 				{dirty && <span aria-hidden className="bg-warning size-2 rounded-full" />}
 				{dirty ? 'Unsaved changes' : creating ? 'Nothing to save yet' : 'All changes saved'}

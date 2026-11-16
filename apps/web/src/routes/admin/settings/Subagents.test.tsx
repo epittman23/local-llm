@@ -55,6 +55,8 @@ describe('Sub-agents limits: -1 is no limit (#602)', () => {
 		expect(output.value).toBe('-1');
 		expect(form.checkValidity()).toBe(true);
 
+		// Save waits for a change (FRM-3); one the assertions do not look at.
+		fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Be brief.' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({
@@ -102,8 +104,41 @@ describe('Sub-agents limits above the old form maximum (#760)', () => {
 		expect(output.validity.rangeOverflow).toBe(false);
 		expect((iterations.form as HTMLFormElement).checkValidity()).toBe(true);
 
+		// Save waits for a change (FRM-3); one the assertions do not look at.
+		fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Be brief.' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({ SUBAGENTS_MAX_ITERATIONS: 200, SUBAGENTS_MAX_OUTPUT: 200000 });
+	});
+});
+
+describe('Sub-agents: typing while a save is in flight', () => {
+	it('keeps what was typed after the save went out, and clears only what it sent', async () => {
+		let answer: (r: Response) => void = () => {};
+		const { output } = await renderTab();
+		vi.mocked(globalThis.fetch).mockImplementation(async (_url, init) => {
+			if (init?.method !== 'POST') return new Response(JSON.stringify(CONFIG), { status: 200 });
+			posted.push(JSON.parse(String(init.body)));
+			return new Promise<Response>((resolve) => {
+				answer = resolve;
+			});
+		});
+
+		fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Be brief.' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(posted).toHaveLength(1));
+		fireEvent.change(output, { target: { value: '5000' } });
+		answer(new Response(JSON.stringify(CONFIG), { status: 200 }));
+
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute('aria-busy'));
+		expect(output.value).toBe('5000');
+		expect(screen.getByLabelText<HTMLTextAreaElement>('System prompt').value).toBe('Be brief.');
+		expect(posted[0]).toMatchObject({ SUBAGENTS_MAX_OUTPUT: -1, SUBAGENTS_SYSTEM_PROMPT: 'Be brief.' });
+
+		// The edit made in flight is still a change to save.
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(posted).toHaveLength(2));
+		answer(new Response(JSON.stringify(CONFIG), { status: 200 }));
+		expect(posted[1]).toMatchObject({ SUBAGENTS_MAX_OUTPUT: 5000, SUBAGENTS_SYSTEM_PROMPT: 'Be brief.' });
 	});
 });

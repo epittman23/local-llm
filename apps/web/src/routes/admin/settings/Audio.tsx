@@ -11,7 +11,8 @@ import {
 	SettingSwitch,
 	SettingsForm,
 	SettingsSection,
-	SettingTextarea
+	SettingTextarea,
+	useSettingErrors
 } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { getAudioConfig, getModels, getVoices, updateAudioConfig } from '@/lib/apis/audio';
@@ -37,6 +38,9 @@ type Section = 'tts' | 'stt';
 const helpClass = 'text-foreground-muted [&_a]:text-foreground mt-1 text-caption [&_a]:hover:underline';
 const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
+/** FRM-2: said under Additional Parameters (`tts-params`) when they are not a JSON object. */
+const PARAMS_PROBLEM = { 'tts-params': 'Invalid JSON format for Parameters' };
+const NO_PROBLEMS = {};
 
 const Help = ({ href, children }: { href: string; children: ReactNode }) => (
 	<div className={helpClass}>
@@ -63,7 +67,7 @@ function useBrowserVoices(active: boolean) {
 export default function Audio() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['audio'], async () => {
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<Draft>(['audio'], async () => {
 		const res = await getAudioConfig(token);
 		if (!res) return null;
 		return {
@@ -78,6 +82,9 @@ export default function Audio() {
 	const [providerVoices, setProviderVoices] = useState<Voice[]>([]);
 	const [models, setModels] = useState<{ id: string }[]>([]);
 	const listRequest = useRef(0);
+	const { errors, check, reset } = useSettingErrors(
+		draft && !parseOpenAiParams(draft.paramsText).ok ? PARAMS_PROBLEM : NO_PROBLEMS
+	);
 
 	const setTts = (p: Rec) => setDraft((d) => d && { ...d, tts: { ...d.tts, ...p } });
 	const setStt = (p: Rec) => setDraft((d) => d && { ...d, stt: { ...d.stt, ...p } });
@@ -112,21 +119,20 @@ export default function Audio() {
 	const browserVoices = useBrowserVoices(draft?.tts.ENGINE === '');
 
 	/**
-	 * Saves `next`; false (after saying why) when the parameters are not valid JSON or the server refuses.
+	 * Saves `next`; false (after saying why, under the field) when the parameters are not a JSON object, or when
+	 * the server refuses.
 	 * `loadWhisperModel` has the server load the local Whisper model even when its name is unchanged.
 	 */
 	const persist = async (next: Draft, loadWhisperModel = false) => {
 		const params = parseOpenAiParams(next.paramsText);
-		if (!params.ok) {
-			toast.error('Invalid JSON format for Parameters');
-			return false;
-		}
+		if (!check(params.ok ? NO_PROBLEMS : PARAMS_PROBLEM) || !params.ok) return false;
 		try {
 			const res = await updateAudioConfig(token, {
 				...buildAudioPayload(next.tts, next.stt, params.value, next.mimeText),
 				...(loadWhisperModel && { LOAD_WHISPER_MODEL: true })
 			});
 			if (!res) return false;
+			commit({ ...next, paramsText: params.text });
 			setDraft((d) => d && { ...d, paramsText: params.text });
 			await saved();
 			return true;
@@ -214,7 +220,18 @@ export default function Audio() {
 	};
 
 	return (
-		<SettingsForm title="Audio" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Audio"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			errors={errors}
+			onDiscard={() => {
+				discard();
+				reset();
+			}}
+		>
 			{draft && tts && stt && (
 				<>
 					<SettingsSection title="Speech-to-Text" first>
@@ -227,12 +244,12 @@ export default function Audio() {
 								onChange={(v) => setStt({ ENGINE: v })}
 								aria-label="Speech-to-Text Engine"
 							>
-								<option value="">Whisper (Local)</option>
-								<option value="openai">OpenAI</option>
-								<option value="web">Web API</option>
-								<option value="deepgram">Deepgram</option>
-								<option value="azure">Azure AI Speech</option>
-								<option value="mistral">MistralAI</option>
+								<option value="">Whisper (on this machine)</option>
+								<option value="openai">OpenAI-compatible API</option>
+								<option value="web">The browser's speech recognition</option>
+								<option value="deepgram">Deepgram (cloud)</option>
+								<option value="azure">Azure AI Speech (cloud)</option>
+								<option value="mistral">Mistral AI (cloud)</option>
 							</SettingSelect>
 						</SettingRow>
 
@@ -390,12 +407,12 @@ export default function Audio() {
 							description="Choose the speech provider used for assistant audio output."
 						>
 							<SettingSelect value={tts.ENGINE} onChange={changeTtsEngine} aria-label="Text-to-Speech Engine">
-								<option value="">Web API</option>
-								<option value="transformers">Transformers (Local)</option>
-								<option value="openai">OpenAI</option>
-								<option value="elevenlabs">ElevenLabs</option>
-								<option value="azure">Azure AI Speech</option>
-								<option value="mistral">MistralAI</option>
+								<option value="">The browser's voices</option>
+								<option value="transformers">Transformers (on this machine)</option>
+								<option value="openai">OpenAI-compatible API</option>
+								<option value="elevenlabs">ElevenLabs (cloud)</option>
+								<option value="azure">Azure AI Speech (cloud)</option>
+								<option value="mistral">Mistral AI (cloud)</option>
 							</SettingSelect>
 						</SettingRow>
 

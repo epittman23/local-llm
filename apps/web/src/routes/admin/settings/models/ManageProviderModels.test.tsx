@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -71,13 +71,14 @@ describe('ManageProviderModels', () => {
 		await waitFor(() => expect(unloadProviderModel).toHaveBeenCalledWith('tok', 2, 'org/beta', 'inst-1'));
 	});
 
-	it('asks before deleting, then deletes the model', async () => {
+	it('asks before deleting, naming the model, destructive (ACT-3), then deletes it', async () => {
 		vi.mocked(deleteProviderModel).mockResolvedValue({ ok: true } as never);
 		await renderPanel();
 		fireEvent.click(screen.getByRole('button', { name: 'Delete Alpha' }));
-		expect(await screen.findByText('This will delete the cached model and cannot be undone.')).toBeTruthy();
+		const ask = await screen.findByRole('alertdialog', { name: 'Delete “org/alpha”?' });
+		expect(ask.textContent).toContain('it has to be downloaded again before it can run');
 		expect(deleteProviderModel).not.toHaveBeenCalled();
-		fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+		fireEvent.click(within(ask).getByRole('button', { name: 'Delete model' }));
 		await waitFor(() => expect(deleteProviderModel).toHaveBeenCalledWith('tok', 2, 'org/alpha'));
 	});
 

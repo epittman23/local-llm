@@ -69,12 +69,16 @@ export function sectionOfPath(pathname: string): WorkspaceSection | null {
  * Admin > Users recounts after adding, importing or deleting a user.
  */
 export function useSingleUser(): boolean {
+	return (useAccountCount().data ?? 1) <= 1;
+}
+
+/** The account count's query, shared by every reader: its data, and whether it has answered yet. */
+export function useAccountCount() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const accounts = useQuery({
+	return useQuery({
 		queryKey: ['account-count'],
 		enabled: Boolean(token),
 		staleTime: Number.POSITIVE_INFINITY,
 		queryFn: async () => ((await searchUsers(token)) as { total?: number } | null)?.total ?? 1
 	});
-	return (accounts.data ?? 1) <= 1;
 }

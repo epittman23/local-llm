@@ -28,7 +28,7 @@ started from the app's own Benchmarks > Serve page, serves the same
 OpenAI-compatible API on port 8090. It is **not** the default backing for
 chat; OpenRouter stays the day-to-day path until local throughput is
 acceptable. Moving chat to local inference is a change to the connection's
-base URL and API key in Admin Settings > Connections, nothing more.
+base URL and API key in Admin > Settings > Connections, nothing more.
 
 ## Models in use
 
@@ -138,7 +138,7 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   target changes in the same commit.
 - **Serving configuration has one source of truth**: `serving/profiles.py`,
   backed by Postgres. Model and system-prompt configuration for the
-  assistant lives in the app (Admin Settings > Connections; Workspace >
+  assistant lives in the app (Admin > Settings > Connections; Workspace >
   Models), never in a repo file.
 - **The one deliberate copy** is
   `apps/server/local_llm/benchmarks/data/prompts/assistant.txt`,

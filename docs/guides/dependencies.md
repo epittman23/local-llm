@@ -92,7 +92,7 @@ Face at runtime. The sentence-transformers embedding model
 (`RAG_EMBEDDING_MODEL`, default `sentence-transformers/all-MiniLM-L6-v2`) and
 any reranking model must therefore already be in the local Hugging Face cache.
 If one is missing, the backend still starts, but loading the embedding
-function fails and knowledge uploads are not embedded. In Admin Settings >
+function fails and knowledge uploads are not embedded. In Admin > Settings >
 Documents, a missing embedding model is refused with an error that says
 whether an earlier model is still in use; nothing is saved. A Documents save
 loads the embedding model only when it changed or none is loaded (the Update
@@ -107,7 +107,7 @@ deletes any vectors, and refuses with the reason if not. It still deletes
 each collection before embedding it again, so a file that fails during the
 run (a provider limit, an embedder that stops) loses its vectors; such files
 are named in the result instead of a plain "Success".
-The local Whisper model for speech to text (Admin Settings > Audio, engine
+The local Whisper model for speech to text (Admin > Settings > Audio, engine
 "Whisper (Local)", default `base`) is a faster-whisper model in
 `WHISPER_MODEL_DIR` (default `apps/server/data/cache/whisper/models`), not
 in the Hugging Face cache, so fetch it there once, from `apps/server`:

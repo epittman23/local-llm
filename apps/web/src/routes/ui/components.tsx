@@ -1,4 +1,5 @@
 import {
+	ChevronDownIcon,
 	CircleAlertIcon,
 	CircleCheckIcon,
 	CopyIcon,
@@ -16,6 +17,7 @@ import {
 	TriangleAlertIcon
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
@@ -75,10 +77,19 @@ import { ServerUnreachableError } from '@/lib/apis/errors';
 import type { History, Message } from '@/lib/chat/history';
 import { THEMES, type ThemeId } from '@/lib/theme';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
+import { SubTabs } from '@/routes/admin/AdminLayout';
 import { ResponseMessage } from '@/routes/chat/ChatMessages';
 import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { ModelRow } from '@/routes/chat/ModelSelector';
 import type { ChatModel } from '@/routes/chat/useModels';
+import {
+	ChartDemo,
+	ConnectionUrlDemo,
+	DisclosureDemo,
+	OpeningTableDemo,
+	StatusNoticeDemo,
+	TallDialogDemo
+} from './adminDemos';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
@@ -155,6 +166,49 @@ export function ActionsSection() {
 						Nothing is being served, so there is nothing to test.
 					</span>
 				</div>
+			</Example>
+			<Example
+				title="A chip"
+				note="A value changed in place beside a name, such as a user's role: a secondary pill of size chip that opens its own menu. On touch it keeps its size and type, and an invisible layer around it takes the 44 px target."
+			>
+				<div className="flex flex-wrap items-center gap-2">
+					<span className="text-body">Ada Lovelace</span>
+					<Button variant="secondary" size="chip" onClick={() => toast.success('Role menu opened')}>
+						<span className="sr-only">Role: </span>
+						User
+						<ChevronDownIcon aria-hidden data-icon="inline-end" />
+					</Button>
+				</div>
+			</Example>
+			<Example
+				title="Disabled switches"
+				note="A disabled switch still shows whether it is on: its edge turns to a divider, and the on track or the off knob turns the disabled grey. The same happens inside a disabled fieldset, which is how a tab that saves at once holds its controls while a save is in flight."
+			>
+				<Panel className="flex max-w-[40rem] flex-col gap-4">
+					<DemoSwitchRow
+						id="ui-demo-switch-off"
+						label="Image generation"
+						help="Off on this install. Turn it on in Admin > Settings > Images."
+						checked={false}
+						disabled
+					/>
+					<DemoSwitchRow
+						id="ui-demo-switch-on"
+						label="Code interpreter"
+						help="On for everyone. The server's configuration sets it, so it can't be changed here."
+						checked
+						disabled
+					/>
+					<fieldset disabled aria-busy className="flex flex-col gap-4 border-t pt-4">
+						<legend className="sr-only">Connections, while a change saves</legend>
+						<p className="text-foreground-muted flex items-center gap-2 text-dense">
+							<Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+							Saving…
+						</p>
+						<DemoSwitchRow id="ui-demo-fieldset-on" label="OpenAI-compatible connections" checked />
+						<DemoSwitchRow id="ui-demo-fieldset-off" label="Ollama" checked={false} />
+					</fieldset>
+				</Panel>
 			</Example>
 			<Example
 				title="Icon buttons"
@@ -242,7 +296,7 @@ export function FormsSection() {
 			id="forms"
 			title="Forms"
 			lead="Every field has a visible edge, a label that stays put, and its help or its error directly underneath. A form either saves when you press Save and tells you while changes are pending, or applies each change at once and says so. Never both without saying."
-			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'COL-6', 'ACT-5']}
+			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'FBK-1', 'COL-6', 'ACT-5']}
 		>
 			<Example
 				title="A form that saves on request"
@@ -335,6 +389,18 @@ export function FormsSection() {
 						)}
 					</Field>
 				</Panel>
+			</Example>
+			<Example
+				title="A folded group of settings"
+				note="One full-width row: the group's name, an optional second line and count, and a chevron that turns. Opened, it grows inside a frame in the page's own scroller and comes into view; it never scrolls on its own."
+			>
+				<DisclosureDemo />
+			</Example>
+			<Example
+				title="A URL with Test connection"
+				note="It checks for http:// or https:// first, then says under the URL what it found: the model count in the success colour, or the server's reason in the danger colour with the field marked invalid. An edit clears the result."
+			>
+				<ConnectionUrlDemo />
 			</Example>
 			<Example
 				title="A native select"
@@ -464,7 +530,7 @@ export function DataSection() {
 			id="data"
 			title="Tables and figures"
 			lead="Numbers are right-aligned in tabular figures with one precision per column, the unit lives in the column heading, and a missing value is a dash, not a blank or a zero. Identifiers are monospaced and can be copied."
-			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'TYP-6', 'COL-2', 'A11Y-2']}
+			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'NAV-5', 'TYP-6', 'COL-2', 'COL-8', 'A11Y-2', 'A11Y-4']}
 		>
 			<Example
 				title="A results table"
@@ -542,6 +608,18 @@ export function DataSection() {
 			>
 				<ListMatchCountDemo />
 			</Example>
+			<Example
+				title="Rows that open, headings that sort"
+				note="A click anywhere on a row opens it, except on a control in it; the name is a button, the keyboard's way in. A sortable heading is a button, and only the open sort's heading carries aria-sort."
+			>
+				<OpeningTableDemo />
+			</Example>
+			<Example
+				title="A chart"
+				note="A legend names each line's colour, the y axis has a title and round ticks, and Show as table gives every value to the keyboard and to a screen reader. The tooltip opens away from the nearer edge."
+			>
+				<ChartDemo />
+			</Example>
 		</Section>
 	);
 }
@@ -561,8 +639,48 @@ const DEMO_CHATS = [
 	{ group: 'Previous 7 days', titles: ['Bootstrap confidence interval', 'Refactor the CSV reader'] }
 ];
 
+/** A labelled switch with its help line, for the disabled states (ACT-5). */
+function DemoSwitchRow({
+	id,
+	label,
+	help,
+	checked,
+	disabled
+}: {
+	id: string;
+	label: string;
+	help?: string;
+	checked: boolean;
+	disabled?: boolean;
+}) {
+	return (
+		<div className="flex items-start justify-between gap-6">
+			<div>
+				<Label htmlFor={id} className="text-body font-strong">
+					{label}
+				</Label>
+				{help && (
+					<p id={`${id}-help`} className="text-foreground-muted mt-1 text-dense">
+						{help}
+					</p>
+				)}
+			</div>
+			<Switch id={id} checked={checked} disabled={disabled} aria-describedby={help ? `${id}-help` : undefined} />
+		</div>
+	);
+}
+
+const DEMO_SUB_TABS = [
+	{ id: 'overview', label: 'Overview', count: '12' },
+	{ id: 'groups', label: 'Groups', count: '3' },
+	{ id: 'permissions', label: 'Default permissions' }
+];
+
 export function NavigationSection() {
 	const [settingsTab, setSettingsTab] = useState('general');
+	// The sub-tabs demo opens its tabs by the address's hash, so the page neither moves nor leaves.
+	const { hash } = useLocation();
+	const subTab = DEMO_SUB_TABS.find((t) => hash === `#ui-subtab-${t.id}`)?.id ?? 'overview';
 	const [picked, setPicked] = useState('demo-coder');
 	const settingsTitle = DEMO_SETTINGS_TABS.find((t) => t.id === settingsTab)?.title ?? '';
 	return (
@@ -615,6 +733,21 @@ export function NavigationSection() {
 							Every upload and deletion.
 						</TabsContent>
 					</Tabs>
+				</Panel>
+			</Example>
+			<Example
+				title="A section's sub-tabs"
+				note="Admin > Users and Evaluations: a strip of links above the section's content, a navigation landmark named for its section, the open one marked as the current page, and counts as secondary badges. A strip too wide for the screen scrolls sideways, with a fade at the edge that hides more."
+			>
+				<Panel className="max-w-[40rem] px-0">
+					<SubTabs
+						label="Users sections"
+						active={subTab}
+						tabs={DEMO_SUB_TABS.map((t) => ({ ...t, to: `#ui-subtab-${t.id}` }))}
+					/>
+					<p className="text-foreground-muted px-4 pt-4">
+						The {DEMO_SUB_TABS.find((t) => t.id === subTab)?.label} section.
+					</p>
 				</Panel>
 			</Example>
 			<Example
@@ -696,7 +829,7 @@ export function FeedbackSection() {
 			id="feedback"
 			title="Feedback and overlays"
 			lead="A message appears where the thing it is about is. A toast only confirms something that already finished; an error stays until you have dealt with it and says what to do. Escape closes the top layer only, and focus returns to what opened it."
-			rules={['FBK-1', 'FBK-2', 'FBK-4', 'ACT-3', 'OVL-1', 'OVL-2', 'OVL-3', 'NAV-4']}
+			rules={['FBK-1', 'FBK-2', 'FBK-4', 'STA-4', 'COL-3', 'ACT-3', 'OVL-1', 'OVL-2', 'OVL-3', 'NAV-4']}
 		>
 			<Example
 				title="Toasts"
@@ -737,6 +870,18 @@ export function FeedbackSection() {
 						</p>
 					</div>
 				</div>
+			</Example>
+			<Example
+				title="A section's state"
+				note="At the top of the section it describes: an icon and a title in the status colour, what it means and what to do as sentences, one action, and the server's own words behind Details. It is not help text."
+			>
+				<StatusNoticeDemo />
+			</Example>
+			<Example
+				title="A tall dialog"
+				note="Never taller than the viewport less 1 rem each side: its fields scroll in DialogBody while its title and buttons stay in view. Try it at 390 px."
+			>
+				<TallDialogDemo />
 			</Example>
 			<Example
 				title="Dialog, destructive confirmation and menu"

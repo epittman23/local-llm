@@ -92,7 +92,7 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 1', { exact: true })).toHaveCount(0);
 
-		await page.getByRole('button', { name: 'Clear tag' }).click();
+		await page.getByRole('button', { name: 'Clear type filter' }).click();
 		await page.getByLabel('Search Functions').fill('zedzed');
 		await expect(page.getByText('Function 2', { exact: true })).toBeVisible();
 		await expect(page.getByText('Function 3', { exact: true })).toHaveCount(0);
@@ -176,7 +176,7 @@ test.describe('admin functions', () => {
 		await mockFunctionsApi(page, []);
 		await page.goto('/admin/functions/create');
 		await expect(page.locator('.cm-content')).toContainText('class Filter');
-		await page.getByLabel('Function starter').selectOption('event');
+		await page.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Event' }).click();
 		await expect(page.locator('.cm-content')).toContainText('class Event');
 		await expect(page.locator('.cm-content')).not.toContainText('class Filter');
 	});

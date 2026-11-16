@@ -33,33 +33,43 @@ async function mockConfigApi(
 	return { calls };
 }
 
-const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
+// Server tabs are pages under Admin (S5-D1); personal tabs are in the dialog.
+const modal = (page: Page) =>
+	page
+		.getByRole('dialog', { name: 'Settings' })
+		.or(page.getByRole('region', { name: /^(Server settings|Analytics)$/ }));
 
-test.describe('settings modal host', () => {
-	test('?settings=admin:<tab> opens the modal on that tab and keeps it in the address (NAV-1)', async ({ page }) => {
+test.describe('server settings pages (S5-D1, #932)', () => {
+	// The server's settings are pages under Admin; the dialog keeps personal settings.
+	const server = (page: Page) => page.getByRole('region', { name: 'Server settings' });
+	// The dialog itself, not the file's `modal` helper, which may also match the pages.
+	const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
+
+	test('?settings=admin:<tab> is replaced with its page under Admin (NAV-1)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', {
 			'/configs/code_execution': { ENABLE_CODE_EXECUTION: false, ENABLE_CODE_INTERPRETER: false }
 		});
 		await page.goto('/?settings=admin:code-execution');
-		await expect(modal(page)).toBeVisible();
-		await expect(modal(page).getByRole('tab', { name: 'Code Execution', selected: true })).toBeVisible();
-		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
-		await expect(page).toHaveURL(/\?settings=admin(%3A|:)code-execution$/);
-		await expect(page).toHaveTitle('Settings · local-llm');
-		await modal(page).getByRole('button', { name: 'Close' }).click();
+		await expect(page).toHaveURL(/\/admin\/settings\/code-execution$/);
 		await expect(modal(page)).toHaveCount(0);
-		await expect(page).toHaveURL(/localhost:5174\/$/);
+		await expect(server(page).getByRole('tab', { name: 'Code Execution', selected: true })).toBeVisible();
+		await expect(server(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
+		await expect(page).toHaveTitle('Code Execution · Settings · local-llm');
 	});
 
-	test('/admin/settings/<tab> redirects into the modal; its close button closes it', async ({ page }) => {
+	test('/admin/settings/<tab> is a page: it survives a reload, and Back leaves it', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/utils', {});
+		await page.goto('/');
+		await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 		await page.goto('/admin/settings/db');
-		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
-		await expect(modal(page).getByRole('button', { name: 'Back' })).toHaveCount(0);
-		await modal(page).getByRole('button', { name: 'Close' }).click();
+		await expect(server(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
 		await expect(modal(page)).toHaveCount(0);
+		await page.reload();
+		await expect(server(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
+		await page.goBack();
+		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
 	test('opened from the app it adds a history entry: Back closes it (NAV-1)', async ({ page }) => {
@@ -77,13 +87,16 @@ test.describe('settings modal host', () => {
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
-	test('the Settings tab in the admin layout opens the modal', async ({ page }) => {
+	test('the Settings tab in the admin layout opens the first server settings page', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/users/**', (route) => json(route, { users: [], total: 0 }));
 		await page.route('**/api/v1/groups/**', (route) => json(route, []));
 		await page.goto('/admin/users/overview');
 		await page.getByRole('link', { name: 'Settings', exact: true }).click();
-		await expect(modal(page)).toBeVisible();
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('General');
+		await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+		await expect(modal(page)).toHaveCount(0);
 	});
 
 	test('a non-admin asking for an admin tab gets no modal, and the param is dropped', async ({ page }) => {
@@ -94,43 +107,50 @@ test.describe('settings modal host', () => {
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
-	test('an unimplemented or unknown tab falls back to the first listed', async ({ page }) => {
+	test('an unknown tab goes back to the list, which opens its first tab', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		await page.route('**/openai/config', (route) =>
-			json(route, { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} })
-		);
-		await page.route('**/ollama/config', (route) =>
-			json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {} })
-		);
 		await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:nonsense');
-		// Whatever is first in the list, not whatever was asked for. Wait for the
-		// selected tab's body first: reading the list the instant the dialog
-		// appears raced the lazy tab chunk on a busy dev server. (Not "any h2":
-		// the dialog's screen-reader title is one too, so that matched two.)
-		const first = ((await modal(page).getByRole('tab').first().textContent()) ?? '').trim();
-		await expect(modal(page).getByRole('heading', { level: 2, name: first, exact: true })).toBeVisible();
-		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('General');
 	});
 
-	test('search finds tabs and settings, opens the chosen one, and says when nothing matches (#1001)', async ({
+	test('search finds server tabs from the dialog and on the page, and says when nothing matches (#1001)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/code_execution': {} });
-		await page.goto('/?settings=admin:db');
-		const search = modal(page).getByLabel('Search');
+		await mockConfigApi(page, '/utils', {});
+		await page.goto('/?settings=interface');
+		const search = modal(page).getByRole('combobox', { name: 'Search settings' });
 		await search.fill('sandbox');
 		await expect(modal(page).getByRole('option')).toHaveText(['Code Execution']);
 		// The open tab stays while searching.
-		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
+		await expect(modal(page).getByRole('heading', { name: 'Interface', level: 2 })).toBeVisible();
 		await search.press('Enter');
-		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText('Code Execution');
-		await search.fill('zzzz');
-		await expect(modal(page).getByText('No settings match ‘zzzz’.')).toBeVisible();
-		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
-		await search.fill('');
-		await expect(modal(page).getByRole('tab').first()).toBeVisible();
+		await expect(page).toHaveURL(/\/admin\/settings\/code-execution$/);
+		await expect(modal(page)).toHaveCount(0);
+		const pageSearch = server(page).getByRole('searchbox', { name: 'Search server settings' });
+		await pageSearch.fill('database');
+		await expect(server(page).getByRole('tab')).toHaveText(['Database']);
+		await pageSearch.fill('zzzz');
+		await expect(server(page).getByText('No server settings match ‘zzzz’.')).toBeVisible();
+		await expect(server(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
+		await server(page).getByRole('button', { name: 'Clear search' }).click();
+		await expect(server(page).getByRole('tab').first()).toBeVisible();
+	});
+
+	test('the dialog’s “Server settings” row leaves for the pages, and Back returns to the dialog', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockConfigApi(page, '/configs', {});
+		await page.goto('/?settings=general');
+		await expect(modal(page).getByRole('tab', { name: /Server/ })).toHaveCount(0);
+		await modal(page).getByRole('button', { name: 'Server settings' }).click();
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(modal(page)).toHaveCount(0);
+		await page.goBack();
+		await expect(modal(page)).toBeVisible();
+		await expect(page).toHaveURL(/\?settings=general$/);
 	});
 
 	test('the user menu offers Settings to an admin', async ({ page }) => {
@@ -141,6 +161,43 @@ test.describe('settings modal host', () => {
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
 		await expect(modal(page)).toBeVisible();
 	});
+
+	// FBK-2: toasts rise above the SaveBar (`data-keep-clear`), so a failure never covers Save. On a
+	// phone they sit at the top, clear of it too. A short wide window is where the two met.
+	for (const viewport of [
+		{ width: 1280, height: 720 },
+		{ width: 1024, height: 600 },
+		{ width: 390, height: 844 }
+	])
+		test(`a failure toast never covers the SaveBar (${viewport.width}×${viewport.height})`, async ({ page }) => {
+			await page.setViewportSize(viewport);
+			await mockWorkspaceBackend(page);
+			await page.route('**/api/v1/audio/**', (route) => {
+				const path = new URL(route.request().url()).pathname;
+				if (path.endsWith('/config/update')) return json(route, { detail: 'The server refused the change' }, 500);
+				if (path.endsWith('/config'))
+					return json(route, {
+						tts: { ENGINE: '', VOICE: '', MODEL: '', SPLIT_ON: 'punctuation', OPENAI_PARAMS: {} },
+						stt: { ENGINE: '', WHISPER_MODEL: 'base', SUPPORTED_CONTENT_TYPES: [], ALLOWED_EXTENSIONS: [] }
+					});
+				return json(route, {});
+			});
+			await page.goto('/admin/settings/audio');
+			await server(page).getByLabel('Supported MIME Types').fill('audio/wav');
+			const save = server(page).getByRole('button', { name: 'Save' });
+			await save.click();
+			const failure = page.locator('[data-sonner-toast][data-type="error"]');
+			await expect(failure).toContainText('The server refused the change');
+			const bar = server(page).locator('[data-slot="save-bar"]');
+			await expect
+				.poll(async () => {
+					const [toast, saveBar] = await Promise.all([failure.boundingBox(), bar.boundingBox()]);
+					return toast && saveBar ? toast.y + toast.height <= saveBar.y : false;
+				})
+				.toBe(true);
+			// Still dirty, so Save can be pressed again: nothing is over it.
+			await save.click({ trial: true, timeout: 2000 });
+		});
 });
 
 test.describe('settings: Sub-agents', () => {
@@ -194,6 +251,7 @@ test.describe('settings: Sub-agents limits (#602)', () => {
 		const posted = () => calls.filter((c) => c.method === 'POST' && c.path === '/configs/subagents');
 
 		// The browser's own validation used to block Save on the whole tab here.
+		await m.getByLabel('System prompt').fill('be brief');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => posted()[0]?.body)
@@ -233,6 +291,7 @@ test.describe('settings: Code Execution', () => {
 		await expect(m.getByLabel('Code Execution Engine')).toHaveCount(0);
 		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
 		await expect(m.getByText(/jupyter/i)).toHaveCount(0);
+		await m.getByLabel('Sandbox Maximum Running').fill('5');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
@@ -265,9 +324,10 @@ test.describe('settings: Code Execution', () => {
 		);
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByRole('status')).toHaveText(
-			'The sandbox is unavailable: the kata-clh runtime is not registered with Docker'
-		);
+		const notice = m.locator('[data-slot="status-notice"]');
+		await expect(notice).toHaveAttribute('data-tone', 'warning');
+		await expect(notice).toContainText("The sandbox isn't ready");
+		await expect(notice).toContainText('The kata-clh runtime is not registered with Docker');
 		await expect(m.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeVisible();
 		await m.getByLabel('Sandbox Default Image').selectOption('web');
 		await m.getByLabel('Sandbox Maximum Running').fill('8');
@@ -285,7 +345,7 @@ test.describe('settings: Code Execution', () => {
 });
 
 test.describe('settings: Database', () => {
-	test('Export Config downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
+	test('Export settings downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/export': { a: 1 } });
 		await page.route('**/api/v1/users/all', (route) =>
@@ -294,13 +354,16 @@ test.describe('settings: Database', () => {
 		await page.goto('/?settings=admin:db');
 		const m = modal(page);
 		const cfgDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).first().click();
-		expect((await cfgDownload).suggestedFilename()).toMatch(/^config-\d+\.json$/);
+		await m.getByRole('button', { name: 'Export settings' }).click();
+		expect((await cfgDownload).suggestedFilename()).toMatch(/^local-llm-config-\d{4}-\d{2}-\d{2}\.json$/);
+		// The SQLite-only database download is gone; the backup is a pg_dump command (#961).
+		await expect(m.getByRole('button', { name: 'Database' })).toHaveCount(0);
+		await expect(m.getByText(/pg_dump -Fc/)).toBeVisible();
 
 		const usersDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).last().click();
+		await m.getByRole('button', { name: 'Export users' }).click();
 		const dl = await usersDownload;
-		expect(dl.suggestedFilename()).toBe('users.csv');
+		expect(dl.suggestedFilename()).toMatch(/^local-llm-users-[\d-]+\.csv$/);
 		const stream = await dl.createReadStream();
 		let text = '';
 		for await (const chunk of stream) text += chunk;
@@ -308,7 +371,7 @@ test.describe('settings: Database', () => {
 		expect(text).toContain(`"'=HYPERLINK(""http://evil"",""x"")"`);
 	});
 
-	test('Import Config posts the parsed file', async ({ page }) => {
+	test('Import settings posts the parsed file', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:db');
@@ -320,7 +383,7 @@ test.describe('settings: Database', () => {
 });
 
 test.describe('settings: Evaluations', () => {
-	test('adding an arena model saves the whole config with it', async ({ page }) => {
+	test('an added arena model joins the draft and the tab Save sends the whole config (FRM-3)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/groups/**', (route) => json(route, []));
 		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'm1', name: 'Model One' }] }));
@@ -335,14 +398,20 @@ test.describe('settings: Evaluations', () => {
 		});
 		await page.goto('/?settings=admin:evaluations');
 		const m = modal(page);
-		await expect(m.getByText('Using the default arena model with all models.')).toBeVisible();
-		await m.getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await expect(m.getByText('None yet, so the Arena model chooses among all your models.')).toBeVisible();
+		await m.getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('My Arena!');
 		await expect(dialog.getByLabel('ID', { exact: true })).toHaveValue('my-arena');
-		await dialog.getByLabel('Select a model').selectOption('m1');
+		await dialog.getByRole('combobox', { name: 'Select a model' }).click();
+		await page.getByRole('option', { name: 'Model One' }).click();
 		await dialog.getByRole('button', { name: 'Add model' }).click();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
+		// Nothing is sent until the tab's Save.
+		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		expect(saved).toBeNull();
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect
 			.poll(() => saved)
 			.toMatchObject({
@@ -351,7 +420,7 @@ test.describe('settings: Evaluations', () => {
 					{ id: 'my-arena', name: 'My Arena!', meta: { model_ids: ['m1'], filter_mode: 'include', description: null } }
 				]
 			});
-		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
 	test('a duplicate arena name is refused', async ({ page }) => {
@@ -362,22 +431,26 @@ test.describe('settings: Evaluations', () => {
 			json(route, { ENABLE_EVALUATION_ARENA_MODELS: true, EVALUATION_ARENA_MODELS: [] })
 		);
 		await page.goto('/?settings=admin:evaluations');
-		await modal(page).getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await modal(page).getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('Taken');
-		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Model name already exists')).toBeVisible();
-		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('');
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
+		const name = dialog.getByLabel('Name', { exact: true });
+		await expect(name).toHaveAccessibleDescription('A model already has this name. Choose another.');
+		await expect(name).toBeFocused();
+		await expect(name).toHaveValue('Taken');
 	});
 });
 
 test.describe('settings: Pipelines', () => {
-	test('with no server it says so and has no Save', async ({ page }) => {
+	test('with no server the tab is not offered, and its address goes to the first tab (S5-D4)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/pipelines/list', (route) => json(route, { data: [] }));
-		await page.goto('/?settings=admin:pipelines');
-		await expect(modal(page).getByText('Pipelines Not Detected')).toBeVisible();
-		await expect(modal(page).getByRole('button', { name: 'Save' })).toHaveCount(0);
+		await page.goto('/admin/settings/pipelines');
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(
+			page.getByRole('region', { name: 'Server settings' }).getByRole('tab', { name: 'Pipelines' })
+		).toHaveCount(0);
 	});
 
 	test('picks a pipeline, edits a valve (None -> Custom), and saves arrays as arrays', async ({ page }) => {
@@ -453,16 +526,19 @@ test.describe('settings: Connections', () => {
 		return seen;
 	}
 
-	test('lists the upstreams, marks a disabled one, and flags a Pipelines server', async ({ page }) => {
+	test('lists the upstreams, marks a disabled one Off, and flags a Pipelines server', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
 		const m = modal(page);
-		await expect(m.getByLabel('API Base URL').first()).toHaveValue('https://openrouter.ai/api/v1');
-		await expect(m.getByLabel('API Base URL').nth(1)).toHaveValue('http://localhost:8090/v1');
-		await expect(m.getByRole('switch', { name: 'Disable https://openrouter.ai/api/v1' })).toBeChecked();
+		const list = m.getByRole('list', { name: 'OpenAI-compatible connections' });
+		const rows = list.getByRole('listitem');
+		await expect(rows.nth(0)).toContainText('https://openrouter.ai/api/v1');
+		await expect(rows.nth(1)).toContainText('http://localhost:8090/v1');
+		await expect(m.getByRole('switch', { name: 'Enable https://openrouter.ai/api/v1' })).toBeChecked();
 		await expect(m.getByRole('switch', { name: 'Enable http://localhost:8090/v1' })).not.toBeChecked();
-		await expect(m.getByText('pipeline', { exact: true })).toHaveCount(1);
+		await expect(rows.nth(1).locator('[data-slot=badge]', { hasText: 'Off' })).toBeVisible();
+		await expect(list.getByText('Pipelines', { exact: true })).toHaveCount(1);
 	});
 
 	test('the enable switch saves at once, keeping every other upstream as it was', async ({ page }) => {
@@ -478,16 +554,17 @@ test.describe('settings: Connections', () => {
 				OPENAI_API_KEYS: ['sk-or', ''],
 				OPENAI_API_CONFIGS: { 0: { enable: true, prefix_id: 'or' }, 1: { enable: true } }
 			});
+		await expect(page.getByText('“http://localhost:8090/v1” is on')).toBeVisible();
 	});
 
 	test('adding a connection appends the URL (minus a trailing slash), key and config, and saves', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
 		await dialog.getByLabel('URL', { exact: true }).fill('https://api.groq.com/openai/v1/');
-		await dialog.getByPlaceholder('API Key').fill('gsk_123');
+		await dialog.getByLabel(/API key/).fill('gsk_123');
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.openaiUpdate?.OPENAI_API_BASE_URLS)
@@ -499,17 +576,19 @@ test.describe('settings: Connections', () => {
 			auth_type: 'bearer',
 			model_ids: []
 		});
+		await expect(dialog).toBeHidden();
 	});
 
-	test('deleting the first connection re-indexes the config map', async ({ page }) => {
+	test('deleting the first connection asks, naming it, and re-indexes the config map', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Configure https://openrouter.ai/api/v1' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Edit Connection' });
+		await modal(page).getByRole('button', { name: 'Edit https://openrouter.ai/api/v1' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Edit connection' });
 		await expect(dialog.getByLabel('URL', { exact: true })).toHaveValue('https://openrouter.ai/api/v1');
-		await dialog.getByRole('button', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await dialog.getByRole('button', { name: 'Delete connection' }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Delete “https://openrouter.ai/api/v1”?' });
+		await ask.getByRole('button', { name: 'Delete connection' }).click();
 		await expect
 			.poll(() => seen.openaiUpdate)
 			.toMatchObject({
@@ -519,73 +598,72 @@ test.describe('settings: Connections', () => {
 			});
 	});
 
-	test('Azure needs an API version, then deployment names', async ({ page }) => {
+	test('Azure needs an API version, then deployment names, each said under its field', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
 		await dialog.getByLabel('URL', { exact: true }).fill('https://mine.openai.azure.com');
-		await dialog.getByPlaceholder('API Key').fill('k');
+		await dialog.getByLabel(/API key/).fill('k');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('API Version is required')).toBeVisible();
-		await dialog.getByLabel('API Version').fill('2024-02-01');
+		const version = dialog.getByLabel('API version');
+		await expect(version).toHaveAccessibleDescription('Enter the Azure API version.');
+		await expect(version).toBeFocused();
+		await version.fill('2024-02-01');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		// Said twice: as a toast, and as the hint in the Advanced section the
-		// refusal opens. A bare getByText matched whichever had rendered, and
-		// failed strict mode whenever both had.
-		const deploymentsRequired = 'Deployment names are required for Azure OpenAI';
-		await expect(page.locator('[data-sonner-toast]').filter({ hasText: deploymentsRequired })).toBeVisible();
-		await expect(dialog.getByText(deploymentsRequired)).toBeVisible();
-		await dialog.getByLabel('Add a model ID').fill('gpt-4o');
-		await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+		const models = dialog.getByLabel(/Model IDs/);
+		await expect(models).toHaveAccessibleDescription('Add a deployment name. Azure OpenAI needs at least one.');
+		await models.fill('gpt-4o');
+		await dialog.getByRole('button', { name: 'Add model ID' }).click();
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.openaiUpdate?.OPENAI_API_CONFIGS?.[2])
 			.toMatchObject({ azure: true, api_version: '2024-02-01', model_ids: ['gpt-4o'] });
 	});
 
-	test('bad headers JSON is refused and does not leave Save spinning', async ({ page }) => {
+	test('bad headers JSON is refused under its field and does not leave Save spinning', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
 		await dialog.getByLabel('URL', { exact: true }).fill('https://x.example/v1');
 		await dialog.getByRole('button', { name: 'Advanced' }).click();
-		await dialog.getByLabel('Headers').fill('[1, 2]');
+		await dialog.getByLabel(/Headers/).fill('[1, 2]');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Headers must be a valid JSON object')).toBeVisible();
+		await expect(dialog.getByLabel(/Headers/)).toHaveAccessibleDescription(
+			'Enter the headers as a JSON object, or leave them empty.'
+		);
 		await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
-		await expect(dialog.getByRole('status')).toHaveCount(0);
 		expect(seen.openaiUpdate).toBeNull();
 	});
 
-	test('Verify Connection sends the URL, key and auth config', async ({ page }) => {
+	test('Test connection sends the URL, key and auth config, and says what it found under the URL', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
 		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:8090/v1/');
-		await dialog.getByPlaceholder('API Key').fill('local');
-		await dialog.getByRole('button', { name: 'Verify Connection' }).click();
+		await dialog.getByLabel(/API key/).fill('local');
+		await dialog.getByRole('button', { name: 'Test connection' }).click();
 		await expect
 			.poll(() => seen.verify)
 			.toMatchObject({ url: 'http://localhost:8090/v1', key: 'local', config: { auth_type: 'bearer' } });
-		await expect(page.getByText('Server connection verified')).toBeVisible();
+		await expect(dialog.getByText('Reachable: 0 models')).toBeVisible();
 	});
 
-	test('Ollama connections save their key inside the config, and Direct Connections saves at once', async ({
+	test('Ollama connections save their key inside the config, and Direct connections saves at once', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page, { ollama: { ENABLE_OLLAMA_API: true } });
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add Ollama Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add connection' }).nth(1).click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
 		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:11434');
-		await dialog.getByPlaceholder('API Key').fill('olk');
+		await dialog.getByLabel(/API key/).fill('olk');
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.ollamaUpdate)
@@ -595,29 +673,30 @@ test.describe('settings: Connections', () => {
 				OLLAMA_API_CONFIGS: { 0: { key: 'olk', connection_type: 'local' } }
 			});
 
-		await modal(page).getByRole('switch', { name: 'Direct Connections' }).click();
+		await modal(page).getByRole('switch', { name: 'Direct connections' }).click();
 		await expect
 			.poll(() => seen.directUpdate)
 			.toEqual({ ENABLE_DIRECT_CONNECTIONS: true, ENABLE_BASE_MODELS_CACHE: false });
 	});
 
-	test('a failed Verify reports the failure only', async ({ page }) => {
+	test('a dead URL says why under the URL, without the "OpenAI: " prefix (#1018)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUpstreams(page);
-		// Later routes win: this one refuses.
+		// Later routes win: this one answers as the backend does for a refused connection (S5-D10).
 		await page.route('**/openai/verify', (route) =>
-			json(route, { error: { message: 'Server connection failed' } }, 500)
+			json(route, { detail: 'Connection refused at 127.0.0.1:9. Check that the server is running.' }, 500)
 		);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
-		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:8090/v1');
-		await dialog.getByRole('button', { name: 'Verify Connection' }).click();
-		await expect(page.getByText('OpenAI: Server connection failed')).toBeVisible();
-		// Counted once, after a moment for a false success toast to render: a retrying
-		// toHaveCount(0) would pass as soon as that toast timed out.
-		await page.waitForTimeout(300);
-		expect(await page.getByText('Server connection verified').count()).toBe(0);
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
+		const url = dialog.getByLabel('URL', { exact: true });
+		await url.fill('http://127.0.0.1:9');
+		await dialog.getByRole('button', { name: 'Test connection' }).click();
+		await expect(url).toHaveAccessibleDescription(
+			'Connection refused at 127.0.0.1:9. Check that the server is running.'
+		);
+		await expect(url).toHaveAttribute('aria-invalid', 'true');
+		expect(await dialog.getByText(/OpenAI: |Reachable/).count()).toBe(0);
 	});
 
 	test('a refused save reports the failure only and puts the old values back', async ({ page }) => {
@@ -631,59 +710,66 @@ test.describe('settings: Connections', () => {
 		);
 		await page.goto('/?settings=admin:connections');
 		const m = modal(page);
-		await m.getByRole('switch', { name: 'OpenAI API' }).click();
-		await expect(page.getByText('Not allowed').first()).toBeVisible();
+		await m.getByRole('switch', { name: 'OpenAI-compatible connections' }).click();
+		await expect(page.getByText("Couldn't save the OpenAI-compatible connections.")).toBeVisible();
 		await page.waitForTimeout(300);
-		expect(await page.getByText('OpenAI API settings updated').count()).toBe(0);
-		await expect(m.getByRole('switch', { name: 'OpenAI API' })).toBeChecked();
+		expect(await page.getByText('OpenAI-compatible connections are off').count()).toBe(0);
+		await expect(m.getByRole('switch', { name: 'OpenAI-compatible connections' })).toBeChecked();
 
-		await m.getByRole('switch', { name: 'Direct Connections' }).click();
-		await page.waitForTimeout(300);
-		expect(await page.getByText('Connections settings updated').count()).toBe(0);
-		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
-	});
-
-	test('Save reports the save as done only when both upstreams took it (#239)', async ({ page }) => {
-		await mockWorkspaceBackend(page);
-		await mockUpstreams(page);
-		await page.route('**/openai/config/update', (route) => json(route, { detail: 'upstream refused' }, 500));
-		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
-		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('upstream refused')).toBeVisible();
-		await expect(page.getByText('ollama refused')).toBeVisible();
-		// Counted once, after a moment for a false success toast to render.
+		await m.getByRole('switch', { name: 'Direct connections' }).click();
+		await expect(page.getByText("Couldn't save the change.")).toBeVisible();
 		await page.waitForTimeout(300);
 		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+		await expect(m.getByRole('switch', { name: 'Direct connections' })).not.toBeChecked();
 	});
 
-	test('Save does not say the save is done when only one upstream took it (#239)', async ({ page }) => {
+	test('the tab saves as changes are made: no Save button (#951)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		const m = modal(page);
+		await expect(m.getByText('Changes are saved as you make them.')).toBeVisible();
+		await expect(m.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+	});
+
+	test('a refused Ollama save says why once and keeps the Ollama list as it was', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page, {
+			ollama: { ENABLE_OLLAMA_API: true, OLLAMA_BASE_URLS: ['http://localhost:11434'], OLLAMA_API_CONFIGS: {} }
+		});
 		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('OpenAI API settings updated')).toBeVisible();
-		await expect(page.getByText('ollama refused')).toBeVisible();
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'Enable http://localhost:11434' }).click();
+		await expect(page.getByText("Couldn't save the Ollama connections.")).toBeVisible();
 		await page.waitForTimeout(300);
-		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+		expect(await page.getByText(/is off$/).count()).toBe(0);
+		await expect(m.getByRole('switch', { name: 'Enable http://localhost:11434' })).toBeChecked();
 	});
 
-	test('Save says the save is done when both upstreams took it', async ({ page }) => {
-		await mockWorkspaceBackend(page);
-		await mockUpstreams(page);
-		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
-	});
-
-	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
+	test('a URL that is not http or https is refused before anything is sent', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
 		await page.goto('/?settings=admin:connections');
-		await modal(page).getByRole('switch', { name: 'OpenAI API' }).click();
+		await modal(page).getByRole('button', { name: 'Add connection' }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Add connection' });
+		const url = dialog.getByLabel('URL', { exact: true });
+		await url.fill('not a url');
+		await dialog.getByRole('button', { name: 'Test connection' }).click();
+		await expect(url).toHaveAccessibleDescription('Enter a URL that starts with http:// or https://.');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(url).toBeFocused();
+		expect(seen.verify).toBeNull();
+		expect(seen.openaiUpdate).toBeNull();
+	});
+
+	test('the OpenAI-compatible switch turns the list off and saves that', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('switch', { name: 'OpenAI-compatible connections' }).click();
 		await expect.poll(() => seen.openaiUpdate?.ENABLE_OPENAI_API).toBe(false);
-		await expect(modal(page).getByLabel('API Base URL')).toHaveCount(0);
+		await expect(modal(page).getByRole('list', { name: 'OpenAI-compatible connections' })).toHaveCount(0);
 	});
 });
 
@@ -692,6 +778,8 @@ test.describe('settings: Analytics', () => {
 		const calls: { path: string; search: string }[] = [];
 		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'alpha', name: 'Alpha' }] }));
 		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		// Two accounts: with one, Analytics hides its users and group filter (S5-D2).
+		await page.route('**/api/v1/users/search**', (route) => json(route, { users: [], total: 2 }));
 		await page.route('**/api/v1/analytics/**', (route) => {
 			const url = new URL(route.request().url());
 			const path = url.pathname.replace('/api/v1/analytics', '');
@@ -747,7 +835,7 @@ test.describe('settings: Analytics', () => {
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
 		await expect(m.getByText('tokens', { exact: false }).first()).toBeVisible();
-		await expect(m.getByRole('img', { name: 'Messages over time' })).toBeVisible();
+		await expect(m.getByRole('img', { name: /^Messages per day/ })).toBeVisible();
 		// Sorted by messages, descending: the unnamed model falls back to its id.
 		const rows = m.locator('table').first().locator('tbody tr');
 		await expect(rows.nth(0)).toContainText('zeta');
@@ -764,11 +852,14 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
-		await m.getByLabel('Period').selectOption('30d');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Last 30 days' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('start_date='))).toBe(true);
-		await m.getByLabel('Group').selectOption('g1');
+		await m.getByRole('button', { name: /^Group:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Staff' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('group_id=g1'))).toBe(true);
-		await m.getByLabel('Period').selectOption('24h');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Last 24 hours' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/daily' && c.search.includes('granularity=hourly')))
 			.toBe(true);
@@ -782,7 +873,8 @@ test.describe('settings: Analytics', () => {
 		const m = modal(page);
 		await expect(m.getByText('1,234')).toBeVisible();
 		const before = calls.length;
-		await m.getByLabel('Period').selectOption('custom');
+		await m.getByRole('button', { name: /^Period:/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Custom range' }).click();
 		await m.getByLabel('Start date').fill('2026-09-01');
 		await page.waitForTimeout(300);
 		expect(calls.length).toBe(before);
@@ -796,7 +888,7 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		const rows = modal(page).locator('table').first().locator('tbody tr');
 		await expect(rows.nth(0)).toContainText('zeta');
-		await modal(page).getByRole('columnheader', { name: 'Model' }).click();
+		await modal(page).getByRole('columnheader', { name: 'Model' }).getByRole('button').click();
 		await expect(rows.nth(0)).toContainText('Alpha');
 	});
 
@@ -808,9 +900,9 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Alpha' });
-		await expect(dialog.getByText('Feedback Activity')).toBeVisible();
+		await expect(dialog.getByRole('heading', { name: 'Feedback' })).toBeVisible();
 		await expect(dialog.getByText('code', { exact: false }).first()).toBeVisible();
-		await expect(dialog.getByRole('button', { name: 'Chats' })).toHaveCount(0);
+		await expect(dialog.getByRole('tab', { name: 'Chats' })).toHaveCount(0);
 	});
 
 	test("with chat access the dialog lists that model's chats", async ({ page }) => {
@@ -819,7 +911,7 @@ test.describe('settings: Analytics', () => {
 		await page.goto('/?settings=admin:analytics');
 		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Alpha' });
-		await dialog.getByRole('button', { name: 'Chats' }).click();
+		await dialog.getByRole('tab', { name: 'Chats' }).click();
 		await expect(dialog.getByRole('link', { name: 'Hello there' })).toHaveAttribute('href', /\/s\/c1$/);
 	});
 
@@ -908,8 +1000,9 @@ test.describe('settings: General', () => {
 			return json(route, { id: 'new' });
 		});
 		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		// Two accounts: the parts for other people (banners, channels, the watermark) show (S5-D2).
 		await page.route('**/api/v1/users/search**', (route) =>
-			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 1 })
+			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 2 })
 		);
 		return { calls };
 	}
@@ -940,6 +1033,39 @@ test.describe('settings: General', () => {
 			});
 		await expect.poll(() => saved(calls, '/api/v1/configs/banners')).toEqual({ banners: [] });
 	});
+
+	test('a change asks before another tab replaces it, and Discard changes puts it back (#951)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'Folders' }).click();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		await m.getByRole('tab', { name: 'Tasks & prompts', exact: true }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await ask.getByRole('button', { name: 'Keep editing' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).toBeChecked();
+		await m.getByRole('button', { name: 'Discard changes' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).not.toBeChecked();
+		await expect(m.getByText('All changes saved')).toBeVisible();
+	});
+
+	for (const viewport of [
+		{ width: 1440, height: 900 },
+		{ width: 390, height: 844 }
+	])
+		test(`the page itself never scrolls at ${viewport.width} px: the tab's body does`, async ({ page }) => {
+			await page.setViewportSize(viewport);
+			await mockWorkspaceBackend(page);
+			await mockGeneral(page);
+			await page.goto('/admin/settings/general');
+			await expect(modal(page).getByRole('switch', { name: 'Folders' })).toBeVisible();
+			const sizes = await page.evaluate(() => ({
+				scroll: document.documentElement.scrollHeight,
+				view: window.innerHeight
+			}));
+			expect(sizes.scroll).toBeLessThanOrEqual(sizes.view);
+		});
 
 	test('memory and channel options appear only while their feature is on', async ({ page }) => {
 		await mockWorkspaceBackend(page);
@@ -995,6 +1121,10 @@ test.describe('settings: General', () => {
 			]);
 
 		await items.nth(0).getByRole('button', { name: 'Remove banner' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Remove this banner?' })
+			.getByRole('button', { name: 'Remove banner' })
+			.click();
 		await expect(items).toHaveCount(1);
 	});
 
@@ -1071,9 +1201,12 @@ test.describe('settings: General', () => {
 			.toEqual({ name: 'Beta 2', url: 'https://hooks.example.com/b', enabled: true, events: ['user.*'], targets: [] });
 
 		await modal(page).getByRole('button', { name: 'Configure Beta' }).click();
-		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete webhook' }).click();
 		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete “Beta”?' })
+			.getByRole('button', { name: 'Delete webhook' })
+			.click();
 		await expect
 			.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1'))
 			.toBe(true);
@@ -1085,8 +1218,8 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
-		await expect(m.getByText('1 settings configured')).toBeVisible();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
+		await expect(m.getByText('1 setting configured')).toBeVisible();
 		await m.getByRole('switch', { name: 'Widescreen Mode' }).click();
 		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
@@ -1114,7 +1247,7 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
 		await m.getByRole('button', { name: 'UI Scale: Default' }).click();
 		await m.getByRole('button', { name: 'Increase UI Scale' }).click();
 		await expect(m.getByRole('button', { name: 'UI Scale: 1.1x' })).toBeVisible();
@@ -1124,7 +1257,8 @@ test.describe('settings: General', () => {
 		await expect
 			.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS)
 			.toMatchObject({ theme: 'dark', textScale: 1.1 });
-		await m.getByRole('button', { name: 'Clear' }).click();
+		await m.getByRole('button', { name: 'Clear defaults' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Clear defaults' }).click();
 		await expect(m.getByText('0 settings configured')).toBeVisible();
 	});
 });
@@ -1173,6 +1307,8 @@ test.describe('settings: Interface', () => {
 				/* none */
 			}
 			calls.push({ method: req.method(), path, body });
+			if (path.endsWith('/defaults'))
+				return json(route, { TITLE_GENERATION_PROMPT_TEMPLATE: 'Built-in title prompt.' });
 			return json(route, req.method() === 'GET' ? taskCfg() : body);
 		});
 		await page.route('**/api/v1/chats/config', (route) => {
@@ -1261,6 +1397,26 @@ test.describe('settings: Interface', () => {
 			.toEqual({ ...chatCfg(), ENABLE_CONTEXT_COMPACTION: true, CONTEXT_COMPACTION_RETENTION_PERCENTAGE: 25 });
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
 	});
+
+	test('a prompt can start from the default and go back to it (#1101)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		const title = m.getByRole('textbox', { name: 'Title Generation Prompt' });
+		await expect(title).toHaveValue('');
+		await m.getByRole('button', { name: 'Show default' }).click();
+		await expect(m.getByLabel('Default title generation prompt')).toHaveText('Built-in title prompt.');
+		await m.getByRole('button', { name: 'Start from default' }).click();
+		await expect(title).toHaveValue('Built-in title prompt.');
+		await title.fill('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => post(calls, '/api/v1/tasks/config/update')?.TITLE_GENERATION_PROMPT_TEMPLATE)
+			.toBe('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Reset to default' }).click();
+		await expect(title).toHaveValue('');
+	});
 });
 
 test.describe('settings: Authentication', () => {
@@ -1344,14 +1500,20 @@ test.describe('settings: Authentication', () => {
 	});
 
 	test('OAuth settings that come from the environment are read-only and are not saved', async ({ page }) => {
-		await mockWorkspaceBackend(page);
+		// A provider the environment names, as /api/config lists it.
+		await mockWorkspaceBackend(page, { config: { oauth: { providers: { oidc: 'SSO' } } } });
 		const { calls } = await mockAuth(page, {
 			oauth: oauthCfg({ ENABLE_OAUTH_PERSISTENT_CONFIG: false, ENABLE_OAUTH: true })
 		});
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		// S5-D2: the block is folded to one line that says where it is set.
+		const fold = m.getByRole('button', { name: /^Sign-in with an identity provider/ });
+		await expect(fold).toContainText('On (set by environment variables)');
+		await fold.click();
 		await expect(m.getByText(/read from environment variables/)).toBeVisible();
 		await expect(m.getByLabel('Email Claim')).toBeDisabled();
+		await m.getByLabel('JWT Expiration').fill('2w');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config')).toBeTruthy();
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
@@ -1359,10 +1521,12 @@ test.describe('settings: Authentication', () => {
 	});
 
 	test('OAuth on reveals the claim fields; role and group mapping reveal theirs', async ({ page }) => {
-		await mockWorkspaceBackend(page);
+		// A provider named by the environment: without one the switch reads off and the claims stay hidden.
+		await mockWorkspaceBackend(page, { config: { oauth: { providers: { oidc: 'SSO' } } } });
 		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		await m.getByRole('button', { name: /^Sign-in with an identity provider/ }).click();
 		await expect(m.getByLabel('Email Claim')).toHaveValue('email');
 		await expect(m.getByTestId('oauth-env-note')).toContainText('environment variables');
 		await expect(m.getByLabel('Client ID')).toHaveCount(0);
@@ -1470,6 +1634,7 @@ test.describe('settings: Audio', () => {
 			ALLOWED_EXTENSIONS: ['wav', 'mp3'],
 			OPENAI_API_REQUEST_FORMAT: 'multipart'
 		});
+		await stt.getByLabel('STT Model').fill('medium');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => updates(calls).length).toBe(2);
 		await expect(page.getByText('Settings saved successfully!').first()).toBeVisible();
@@ -1528,7 +1693,11 @@ test.describe('settings: Audio', () => {
 		const before = updates(calls).length;
 		await tts.getByLabel('Additional Parameters').fill('[1,2]');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format for Parameters')).toBeVisible();
+		// FRM-2: said under the field, which gets focus, not in a toast.
+		const params = tts.getByLabel('Additional Parameters');
+		await expect(params).toHaveAttribute('aria-invalid', 'true');
+		await expect(params).toHaveAccessibleDescription('Invalid JSON format for Parameters');
+		await expect(params).toBeFocused();
 		expect(updates(calls)).toHaveLength(before);
 		await tts.getByLabel('Additional Parameters').fill('{"speed":1.25}');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -1730,7 +1899,10 @@ test.describe('settings: Images', () => {
 		await page.goto('/?settings=admin:images');
 		await create(page).getByLabel('Additional Parameters').fill('{oops');
 		await create(page).getByRole('button', { name: 'Verify connection' }).click();
-		await expect(page.getByText('Invalid JSON format for AUTOMATIC1111 Additional Parameters.')).toBeVisible();
+		await expect(create(page).getByLabel('Additional Parameters')).toHaveAccessibleDescription(
+			'Invalid JSON format for AUTOMATIC1111 Additional Parameters.'
+		);
+		await expect(create(page).getByLabel('Additional Parameters')).toBeFocused();
 		expect(calls.some((c) => c.path === '/config/url/verify')).toBe(false);
 		expect(updates(calls)).toHaveLength(0);
 	});
@@ -1772,7 +1944,10 @@ test.describe('settings: Images', () => {
 			.locator('input[type=file]')
 			.setInputFiles({ name: 'w.json', mimeType: 'application/json', buffer: Buffer.from('[1,2]') });
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format for ComfyUI Workflow.')).toBeVisible();
+		// Under the workflow's row, with focus on its Edit button (FRM-2).
+		const edit = create(page).getByRole('button', { name: 'Edit workflow.json content' });
+		await expect(edit).toHaveAccessibleDescription('Invalid JSON format for ComfyUI Workflow.');
+		await expect(edit).toBeFocused();
 		expect(updates(calls)).toHaveLength(0);
 	});
 
@@ -1961,7 +2136,11 @@ test.describe('settings: Documents', () => {
 		await m.getByLabel('Content Extraction Engine').selectOption('tika');
 		await expect(m.getByLabel('Tika Server Version')).toHaveValue('3');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Tika Server URL required.')).toBeVisible();
+		// FRM-2: said under the URL, which gets focus, not in a toast.
+		const url = m.getByLabel('Tika Server URL');
+		await expect(url).toHaveAttribute('aria-invalid', 'true');
+		await expect(url).toHaveAccessibleDescription('Tika Server URL required.');
+		await expect(url).toBeFocused();
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
 		await m.getByLabel('Tika Server URL').fill('http://tika:9998');
 		await m.getByRole('button', { name: 'Save' }).click();
@@ -1981,7 +2160,10 @@ test.describe('settings: Documents', () => {
 		await m.getByLabel('Document Loader URL').fill('http://loader');
 		await m.getByLabel('Headers').fill('["x"]');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Headers must be a valid JSON object')).toBeVisible();
+		await expect(m.getByLabel('Headers')).toHaveAccessibleDescription(
+			'External Document Loader Headers must be a valid JSON object'
+		);
+		await expect(m.getByLabel('Headers')).toBeFocused();
 		await m.getByLabel('Headers').fill('{"X-Id":"{{FILE_ID}}"}');
 		await expect(m.getByText('Available variables')).toHaveCount(0);
 		await m.getByRole('button', { name: 'Header variables' }).click();
@@ -2061,7 +2243,10 @@ test.describe('settings: Documents', () => {
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Embedding').getByLabel('Embedding Model', { exact: true }).fill('/models/hf/all-MiniLM');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText(/Model filesystem path detected/)).toBeVisible();
+		const model = region(page, 'Embedding').getByLabel('Embedding Model', { exact: true });
+		await expect(model).toHaveAttribute('aria-invalid', 'true');
+		await expect(model).toHaveAccessibleDescription(/Model filesystem path detected/);
+		await expect(model).toBeFocused();
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
 	});
 
@@ -2138,9 +2323,10 @@ test.describe('settings: Documents', () => {
 		await expect(m.getByLabel('Chunk Size')).toHaveValue('1000');
 		await m.getByLabel('Chunk Overlap').fill('2000');
 		await m.getByRole('button', { name: 'Save' }).click();
-		await expect(
-			page.getByText('Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).')
-		).toBeVisible();
+		await expect(m.getByLabel('Chunk Overlap')).toHaveAccessibleDescription(
+			'Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).'
+		);
+		await expect(m.getByLabel('Chunk Overlap')).toBeFocused();
 		expect(sent(calls, '/retrieval/embedding/update')).toHaveLength(0);
 		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
 		await m.getByLabel('Chunk Overlap').fill('200');
@@ -2160,6 +2346,7 @@ test.describe('settings: Documents', () => {
 		await page.goto('/?settings=admin:documents');
 		const r = region(page, 'Retrieval');
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).toBeChecked();
+		await r.getByLabel('Top K', { exact: true }).fill('5');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).not.toBeChecked();
@@ -2186,11 +2373,14 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		const z = region(page, 'Danger Zone');
-		await z.getByRole('button', { name: 'Reset' }).first().click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
 		expect(calls.some((c) => c.path === '/files/all')).toBe(false);
-		await z.getByRole('button', { name: 'Reset' }).first().click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete every uploaded file?' })
+			.getByRole('button', { name: 'Delete all uploads' })
+			.click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path === '/files/all').map((c) => c.method)).toEqual(['DELETE']);
 	});
@@ -2206,8 +2396,8 @@ test.describe('settings: Documents', () => {
 			)
 		);
 		await page.goto('/?settings=admin:documents');
-		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset' }).nth(1).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset vector storage' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset vector storage' }).click();
 		await expect(page.getByText('Vector DB is busy')).toBeVisible();
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});
@@ -2225,7 +2415,7 @@ test.describe('settings: Documents', () => {
 		);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(
 			page.getByText(
 				'1 of 3 files could not be embedded again and are missing from knowledge search until they are (report.pdf); the backend log has the errors.'
@@ -2241,7 +2431,7 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path.endsWith('reindex')).map((c) => c.path)).toEqual([
 			'/knowledge/reindex',
@@ -2335,6 +2525,7 @@ test.describe('settings: Web Search', () => {
 		}));
 		await page.goto('/?settings=admin:web');
 		await expect(modal(page).getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await modal(page).getByLabel('Domain Filter List').fill('example.com');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 	});
@@ -2383,7 +2574,9 @@ test.describe('settings: Web Search', () => {
 		await s.getByLabel('Web Search Engine').selectOption('linkup');
 		await s.getByLabel('Parameters').fill('{depth');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Invalid JSON format in Linkup Parameters')).toBeVisible();
+		await expect(s.getByLabel('Parameters')).toHaveAttribute('aria-invalid', 'true');
+		await expect(s.getByLabel('Parameters')).toHaveAccessibleDescription('Invalid JSON format in Linkup Parameters');
+		await expect(s.getByLabel('Parameters')).toBeFocused();
 		expect(update(calls)).toBeUndefined();
 		await s.getByLabel('Parameters').fill('{"depth":"deep"}');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -2546,43 +2739,58 @@ test.describe('settings: Models', () => {
 		await page.getByRole('menuitem', { name: item }).click();
 	};
 
-	test('lists served models and connection models with no record, in the saved order, with their access', async ({
+	/** More than one account, so the access labels and Pin by default show (S4-D1, S5-D12). */
+	const manyAccounts = (page: Page) =>
+		page.route('**/api/v1/users/search**', (route) => json(route, { users: [], total: 3 }));
+	const menuItem = (page: Page, name: string) => page.getByRole('menuitem', { name, exact: true });
+	const menuSetting = (page: Page, name: string) =>
+		page.getByRole('menuitemcheckbox', { name: new RegExp(`^${name}`) });
+
+	test('lists served models and connection models with no record in two groups, in the saved order (S5-D9)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
+		await manyAccounts(page);
 		await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		const m = modal(page);
-		await expect(m.getByRole('heading', { name: /^Models/, level: 2 })).toContainText('4');
-		// Saved order first, then anything new alphabetically.
-		await expect.poll(() => rowIds(page)).toEqual(['llama3', 'gpt-4o', 'helper', 'mistral']);
+		await expect(m.getByRole('heading', { name: /^From connections/, level: 3 })).toContainText('3');
+		await expect(m.getByRole('heading', { name: /^Workspace models/, level: 3 })).toContainText('1');
+		// Saved order first, then anything new alphabetically; the workspace model in its own group.
+		await expect.poll(() => rowIds(page)).toEqual(['llama3', 'gpt-4o', 'mistral', 'helper']);
 		await expect(row(page, 'llama3')).toContainText('Public');
 		await expect(row(page, 'helper')).toContainText('Shared');
 		await expect(row(page, 'gpt-4o')).toContainText('Private');
+		await expect(row(page, 'helper')).toContainText('Hidden');
+		await expect(row(page, 'helper')).toContainText('Off');
 		await expect(row(page, 'mistral').getByRole('switch')).toBeChecked();
 		await expect(row(page, 'helper').getByRole('switch')).not.toBeChecked();
 	});
 
-	test('search and views narrow the list, and reordering is offered only when nothing is filtered', async ({
+	test('search and views narrow the list, saying how many of the whole, and reordering is offered only when nothing is filtered', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
+		await manyAccounts(page);
 		await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		const m = modal(page);
-		await m.getByLabel('Search Models').fill('LLAMA');
+		await m.getByLabel('Search models').fill('LLAMA');
 		await expect.poll(() => rowIds(page)).toEqual(['llama3']);
+		await expect(m.getByText('1 of 4 models')).toBeVisible();
 		await expect(
-			row(page, 'llama3').getByRole('img', { name: 'Reordering is off while filters are set' })
+			row(page, 'llama3').getByRole('img', { name: 'Reordering is off while a search or filter is set' })
 		).toBeVisible();
-		await m.getByLabel('Clear search').click();
-		await m.getByRole('button', { name: 'View' }).click();
+		await m.getByLabel('Search models').fill('zzz');
+		await expect(m.getByText('Nothing matches “zzz”')).toBeVisible();
+		await m.getByTestId('model-list').getByRole('button', { name: 'Clear search' }).click();
+		await m.getByRole('button', { name: 'Show: All' }).click();
 		await page.getByRole('menuitemradio', { name: 'Disabled' }).click();
 		await expect.poll(() => rowIds(page)).toEqual(['helper']);
-		await m.getByRole('button', { name: 'View' }).click();
+		await m.getByRole('button', { name: 'Show: Disabled' }).click();
 		await page.getByRole('menuitemradio', { name: 'Public' }).click();
 		await expect.poll(() => rowIds(page)).toEqual(['llama3']);
-		await m.getByRole('button', { name: 'View' }).click();
+		await m.getByRole('button', { name: 'Show: Public' }).click();
 		await page.getByRole('menuitemradio', { name: 'All' }).click();
 		await expect.poll(async () => (await rowIds(page)).length).toBe(4);
 	});
@@ -2593,11 +2801,11 @@ test.describe('settings: Models', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
-		await row(page, 'llama3').getByRole('switch').click();
+		await row(page, 'llama3').getByRole('switch', { name: 'Enable Llama 3' }).click();
 		await expect
 			.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path))
 			.toEqual(['/models/model/toggle?id=llama3']);
-		await row(page, 'mistral').getByRole('switch').click();
+		await row(page, 'mistral').getByRole('switch', { name: 'Enable Mistral' }).click();
 		await expect
 			.poll(() => posts(calls, '/models/create')[0])
 			.toMatchObject({ id: 'mistral', name: 'Mistral', base_model_id: null, is_active: false, access_grants: [] });
@@ -2609,22 +2817,22 @@ test.describe('settings: Models', () => {
 		await page.goto('/?settings=admin:models');
 		const sw = row(page, 'llama3').getByRole('switch');
 		await sw.click();
-		await expect(page.getByText('Toggle refused')).toBeVisible();
+		await expect(page.getByText("Couldn't turn off “Llama 3”.")).toBeVisible();
 		await expect(sw).toBeChecked();
 	});
 
-	test('Set as Selected / Pinned saves the lists at once and marks the row; a refused save puts it back', async ({
-		page
-	}) => {
+	test('Default for new chats and Pin by default save the lists at once and mark the row', async ({ page }) => {
 		await mockWorkspaceBackend(page);
+		await manyAccounts(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		await moreMenu(page, 'gpt-4o', 'GPT-4o');
-		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
-		await expect(page.getByText('Model added to selected models')).toBeVisible();
-		await expect(row(page, 'gpt-4o')).toContainText('Selected');
+		await menuSetting(page, 'Default for new chats').click();
+		await expect(page.getByText('“GPT-4o” is a default for new chats')).toBeVisible();
+		await expect(row(page, 'gpt-4o')).toContainText('Default');
 		await moreMenu(page, 'gpt-4o', 'GPT-4o');
-		await page.getByRole('menuitem', { name: 'Set as Pinned Model' }).click();
+		await expect(menuSetting(page, 'Default for new chats')).toHaveAttribute('aria-checked', 'true');
+		await menuSetting(page, 'Pin by default').click();
 		await expect(row(page, 'gpt-4o')).toContainText('Pinned');
 		const last = posts(calls, '/configs/models').at(-1);
 		expect(last).toMatchObject({
@@ -2634,38 +2842,44 @@ test.describe('settings: Models', () => {
 		});
 	});
 
-	test('a refused Selected save reverts the mark', async ({ page }) => {
+	test('a refused default save reverts the mark, and one account offers no Pin by default (S5-D12)', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		await mockModels(page, { failCfgPost: true });
 		await page.goto('/?settings=admin:models');
 		await moreMenu(page, 'gpt-4o', 'GPT-4o');
-		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
-		await expect(page.getByText('Config refused')).toBeVisible();
-		await expect(row(page, 'gpt-4o')).not.toContainText('Selected');
+		await expect(menuSetting(page, 'Pin by default')).toHaveCount(0);
+		await expect(menuItem(page, 'Make public')).toHaveCount(0);
+		await menuSetting(page, 'Default for new chats').click();
+		await expect(page.getByText("Couldn't save the change.")).toBeVisible();
+		await expect(row(page, 'gpt-4o')).not.toContainText('Default');
 	});
 
-	test('Make Private drops every grant; Make Public adds the everyone grant to what is there', async ({ page }) => {
+	test('Make private drops every grant; Make public adds the everyone grant to what is there', async ({ page }) => {
 		await mockWorkspaceBackend(page);
+		await manyAccounts(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		await moreMenu(page, 'llama3', 'Llama 3');
-		await page.getByRole('menuitem', { name: 'Make Private' }).click();
+		await menuItem(page, 'Make private').click();
 		await expect(row(page, 'llama3')).toContainText('Private');
 		await moreMenu(page, 'helper', 'Helper');
-		await page.getByRole('menuitem', { name: 'Make Public' }).click();
+		await menuItem(page, 'Make public').click();
 		await expect(row(page, 'helper')).toContainText('Public');
 		const bodies = posts(calls, '/models/model/access/update');
 		expect(bodies[0]).toEqual({ id: 'llama3', name: 'Llama 3', access_grants: [] });
 		expect(bodies[1]).toEqual({ id: 'helper', name: 'Helper', access_grants: [grp, pub] });
 	});
 
-	test('Hide Model stores the flag through an update and says so', async ({ page }) => {
+	test('Hide model stores the flag through an update, says so by name, and shows Hidden', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		await moreMenu(page, 'llama3', 'Llama 3');
-		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
-		await expect(page.getByText('Model llama3 is now hidden')).toBeVisible();
+		await menuItem(page, 'Hide model').click();
+		await expect(page.getByText('“Llama 3” is hidden')).toBeVisible();
+		await expect(row(page, 'llama3')).toContainText('Hidden');
 		expect(posts(calls, '/models/model/update')[0]).toMatchObject({
 			id: 'llama3',
 			meta: { description: 'A **fast** model', hidden: true },
@@ -2687,11 +2901,11 @@ test.describe('settings: Models', () => {
 		});
 		await page.goto('/?settings=admin:models');
 		await moreMenu(page, 'mistral', 'Mistral');
-		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
-		await expect(page.getByText('Model mistral is now hidden')).toBeVisible();
+		await menuItem(page, 'Hide model').click();
+		await expect(page.getByText('“Mistral” is hidden')).toBeVisible();
 		await moreMenu(page, 'mistral', 'Mistral');
-		await page.getByRole('menuitem', { name: 'Show Model' }).click();
-		await expect(page.getByText('Model mistral is now visible')).toBeVisible();
+		await menuItem(page, 'Show model').click();
+		await expect(page.getByText('“Mistral” is shown')).toBeVisible();
 		expect(posts(calls, '/models/create').map((b) => b.id)).toEqual(['mistral']);
 		expect(posts(calls, '/models/model/update')).toEqual([
 			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
@@ -2704,18 +2918,21 @@ test.describe('settings: Models', () => {
 		expect(posts(calls, '/models/create')).toHaveLength(1);
 	});
 
-	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
+	test('Move down reorders within its group and enables Save, which sends the new order and nothing else changed', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
-		const save = modal(page).getByRole('button', { name: 'Save' });
+		const save = modal(page).getByRole('button', { name: 'Save', exact: true });
 		await expect(save).toBeDisabled();
 		await moreMenu(page, 'llama3', 'Llama 3');
-		await page.getByRole('menuitem', { name: 'Move Down' }).click();
-		await expect.poll(() => rowIds(page)).toEqual(['gpt-4o', 'llama3', 'helper', 'mistral']);
-		await expect(save).toBeEnabled();
+		await menuItem(page, 'Move down').click();
+		await expect.poll(() => rowIds(page)).toEqual(['gpt-4o', 'llama3', 'mistral', 'helper']);
+		await expect(modal(page).getByText('Unsaved changes')).toBeVisible();
 		await save.click();
-		await expect(page.getByText('Model order saved successfully')).toBeVisible();
+		await expect(page.getByText('Model settings saved')).toBeVisible();
+		// The one saved list keeps each id where it was; only the group's own rows trade places.
 		expect(posts(calls, '/configs/models').at(-1)).toMatchObject({
 			MODEL_ORDER_LIST: ['gpt-4o', 'llama3', 'helper', 'mistral'],
 			DEFAULT_MODELS: '',
@@ -2724,7 +2941,7 @@ test.describe('settings: Models', () => {
 		await expect(save).toBeDisabled();
 	});
 
-	test('dragging a row by its grip moves it', async ({ page }) => {
+	test('dragging a row by its grip moves it within its group (S5-D13)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockModels(page);
 		await page.goto('/?settings=admin:models');
@@ -2732,10 +2949,10 @@ test.describe('settings: Models', () => {
 			.getByRole('img', { name: /Drag Mistral/ })
 			.dragTo(row(page, 'llama3'));
 		await expect.poll(() => rowIds(page)).toEqual(['mistral', 'llama3', 'gpt-4o', 'helper']);
-		await expect(modal(page).getByRole('button', { name: 'Save' })).toBeEnabled();
+		await expect(modal(page).getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 	});
 
-	test('Model Defaults: editing them enables Save; one request carries the current lists, and the starter prompts go to their own endpoint', async ({
+	test('Model defaults: editing them enables Save; one request carries the current lists, and the starter prompts go to their own endpoint', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -2744,15 +2961,15 @@ test.describe('settings: Models', () => {
 		const m = modal(page);
 		// A default model chosen first must not be lost when the defaults are saved after it.
 		await moreMenu(page, 'gpt-4o', 'GPT-4o');
-		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
-		await expect(page.getByText('Model added to selected models')).toBeVisible();
-		await m.getByRole('button', { name: 'Configure model defaults' }).click();
-		await m.getByRole('button', { name: /Model Capabilities/ }).click();
+		await menuSetting(page, 'Default for new chats').click();
+		await expect(page.getByText('“GPT-4o” is a default for new chats')).toBeVisible();
+		await m.getByRole('button', { name: 'Model defaults' }).click();
+		await m.getByRole('button', { name: 'Capabilities' }).click();
 		await m.getByRole('checkbox', { name: 'Vision' }).click();
-		const save = m.getByRole('button', { name: 'Save' });
+		const save = m.getByRole('button', { name: 'Save', exact: true });
 		await expect(save).toBeEnabled();
 		await save.click();
-		await expect(page.getByText('Models configuration saved successfully')).toBeVisible();
+		await expect(page.getByText('Model settings saved')).toBeVisible();
 		const body = posts(calls, '/configs/models').at(-1);
 		expect(body.DEFAULT_MODELS).toBe('gpt-4o');
 		expect(body.DEFAULT_MODEL_METADATA.capabilities.vision).toBe(false);
@@ -2760,25 +2977,30 @@ test.describe('settings: Models', () => {
 		await expect(save).toBeDisabled();
 	});
 
-	test('Actions: Enable All acts on the models in view only', async ({ page }) => {
+	test('Actions: Turn all on acts on the models in view only', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
-		await actions(page, 'Enable All');
+		await actions(page, 'Turn all on');
 		await expect.poll(() => posts(calls, '/models/model/update').length).toBe(1);
 		expect(posts(calls, '/models/model/update')[0]).toMatchObject({ id: 'helper', is_active: true });
+		await expect(page.getByText('All models turned on')).toBeVisible();
 	});
 
-	test('Actions: Reset asks first, then deletes every model', async ({ page }) => {
+	test('Actions: Reset models asks first, destructive and counting the workspace models, then deletes every model', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
 		await page.goto('/?settings=admin:models');
-		await actions(page, 'Reset');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+		await actions(page, 'Reset models');
+		const ask = page.getByRole('alertdialog', { name: 'Reset all models?' });
+		await expect(ask).toContainText('All 1 workspace model and every model setting are deleted');
+		await ask.getByRole('button', { name: 'Cancel' }).click();
 		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(false);
-		await actions(page, 'Reset');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
-		await expect(page.getByText('All models deleted successfully')).toBeVisible();
+		await actions(page, 'Reset models');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset models' }).click();
+		await expect(page.getByText('Models reset')).toBeVisible();
 		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(true);
 	});
 
@@ -2790,7 +3012,7 @@ test.describe('settings: Models', () => {
 		await page.goto('/?settings=admin:models');
 		const input = modal(page).getByLabel('Import models file');
 		await input.setInputFiles({ name: 'm.json', mimeType: 'application/json', buffer: Buffer.from('not json') });
-		await expect(page.getByText('Invalid JSON file')).toBeVisible();
+		await expect(page.getByText("Couldn't import “m.json”. It isn't a JSON file.")).toBeVisible();
 		expect(posts(calls, '/models/import')).toHaveLength(0);
 		await input.setInputFiles({
 			name: 'm.json',
@@ -2805,20 +3027,45 @@ test.describe('settings: Models', () => {
 		});
 	});
 
-	test('a preset opens in the workspace editor, a connection model in the editor here', async ({ page }) => {
+	test('a workspace model opens in the workspace editor, a connection model in the editor here', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockModels(page);
 		await page.goto('/?settings=admin:models');
 		await row(page, 'gpt-4o').getByRole('button', { name: 'Edit GPT-4o' }).click();
-		await expect(modal(page).getByLabel('Model Name')).toHaveValue('GPT-4o');
-		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Back' }).click();
+		await expect(modal(page).getByLabel('Model name')).toHaveValue('GPT-4o');
+		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Models', exact: true }).click();
 		await expect(row(page, 'gpt-4o')).toBeVisible();
 		await row(page, 'helper').getByRole('button', { name: 'Edit Helper' }).click();
 		// The editor itself, not only its URL: a model it cannot edit sends it back
 		// to the list, after a URL check alone could already have passed.
-		await expect(page.getByLabel('Model Name')).toHaveValue('Helper');
+		await expect(page.getByLabel('Model name')).toHaveValue('Helper');
 		await expect(page).toHaveURL(/\/workspace\/models\/edit\?id=helper/);
 		await expect(modal(page)).toHaveCount(0);
+	});
+
+	test('leaving the model editor for another tab asks once before its changes are lost (#951)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await row(page, 'gpt-4o').getByRole('button', { name: 'Edit GPT-4o' }).click();
+		const name = modal(page).getByLabel('Model name');
+		await expect(name).toHaveValue('GPT-4o');
+		await name.fill('GPT-4o, renamed');
+		await expect(modal(page).getByText('Unsaved changes')).toBeVisible();
+		// On the page there is no layer for Escape to close (S5-D1).
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
+		await expect(name).toHaveValue('GPT-4o, renamed');
+		const connections = modal(page).getByRole('tab', { name: 'Connections', exact: true });
+		await connections.click();
+		await expect(page.getByRole('alertdialog')).toHaveCount(1);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+		await expect(name).toHaveValue('GPT-4o, renamed');
+		await connections.click();
+		await expect(page.getByRole('alertdialog')).toHaveCount(1);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+		await expect(page).toHaveURL(/\/admin\/settings\/connections$/);
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 	});
 
 	test('Manage says so when no engine can be managed', async ({ page }) => {
@@ -2831,7 +3078,7 @@ test.describe('settings: Models', () => {
 			json(route, { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} })
 		);
 		await page.goto('/?settings=admin:models');
-		await actions(page, 'Manage');
+		await actions(page, 'Manage models');
 		await expect(
 			page.getByRole('dialog', { name: 'Manage Models' }).getByText('No inference engine with management support found')
 		).toBeVisible();
@@ -2915,7 +3162,7 @@ test.describe('settings: Models > Manage', () => {
 	const open = async (page: Page) => {
 		await page.goto('/?settings=admin:models');
 		await modal(page).getByRole('button', { name: 'Actions', exact: true }).click();
-		await page.getByRole('menuitem', { name: 'Manage' }).click();
+		await page.getByRole('menuitem', { name: 'Manage models' }).click();
 	};
 
 	test('Ollama: pulls a pasted `ollama run` command as the plain tag, on the chosen instance, and reports success', async ({
@@ -2942,7 +3189,10 @@ test.describe('settings: Models > Manage', () => {
 		await d.getByLabel('Model to delete').selectOption('phi3');
 		await d.getByRole('button', { name: 'Delete Model' }).click();
 		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete “phi3”?' })
+			.getByRole('button', { name: 'Delete model' })
+			.click();
 		await expect(page.getByText('Deleted phi3')).toBeVisible();
 		expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ path: '/api/delete/0', body: { model: 'phi3' } });
 	});
@@ -3051,7 +3301,7 @@ test.describe('settings: Models > Manage', () => {
 		await expect(page.getByText('Model loaded successfully')).toBeVisible();
 		expect(calls.find((c) => c.path === '/models/0/load')?.body).toEqual({ model: 'qwen' });
 		await d.getByRole('button', { name: 'Delete qwen', exact: true }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete model' }).click();
 		await expect(page.getByText('Model deleted successfully')).toBeVisible();
 		expect(calls.find((c) => c.method === 'DELETE')?.path).toBe('/models/0?model=qwen');
 	});
@@ -3136,33 +3386,43 @@ test.describe('settings: Integrations', () => {
 		return seen;
 	}
 
+	const chooseOption = async (page: Page, scope: ReturnType<Page['getByRole']>, field: string, option: string) => {
+		await scope.getByRole('combobox', { name: field }).click();
+		await page.getByRole('option', { name: option, exact: true }).click();
+	};
+
 	test('lists tool servers by name (or URL) with their state; a switch saves the whole list', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page);
 		await page.goto('/?settings=admin:integrations');
 		const m = modal(page);
-		await expect(m.getByRole('switch', { name: 'Disable Weather' })).toBeChecked();
+		await expect(m.getByRole('switch', { name: 'Enable Weather' })).toBeChecked();
 		await expect(m.getByRole('switch', { name: 'Enable https://mcp.example/' })).not.toBeChecked();
-		await expect(m.getByText('No terminal connections configured.')).toBeVisible();
-		await expect(m.getByText('No external knowledge sources configured.')).toBeVisible();
+		await expect(
+			m.getByRole('list', { name: 'Tool servers' }).locator('[data-slot=badge]', { hasText: 'Off' })
+		).toHaveCount(1);
+		await expect(m.getByText('None yet.', { exact: true })).toBeVisible();
+		await expect(m.getByText(/^None yet\. Add one to search a vector store/)).toBeVisible();
 		await m.getByRole('switch', { name: 'Enable https://mcp.example/' }).click();
 		await expect.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS?.[1]?.config).toEqual({ enable: true });
 		expect(seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS[0].key).toBe('sk-tool');
 	});
 
-	test('adding an OpenAPI server drops the trailing slash; an ID with ":" is refused', async ({ page }) => {
+	test('adding an OpenAPI server drops the trailing slash; an ID with ":" is refused under the ID', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page, { servers: [] });
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Add Tool Server' }).click();
-		const d = page.getByRole('dialog', { name: 'Add Connection' });
+		await modal(page).getByRole('button', { name: 'Add tool server' }).click();
+		const d = page.getByRole('dialog', { name: 'Add tool server' });
 		await d.getByLabel('URL', { exact: true }).fill('https://new.example/');
-		await d.getByLabel('ID').fill('bad:id');
+		await d.getByLabel(/^ID/).fill('bad:id');
 		await d.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('ID cannot contain ":" or "|" characters')).toBeVisible();
+		await expect(d.getByLabel(/^ID/)).toHaveAccessibleDescription('An ID can’t contain “:” or “|”.');
 		expect(seen.tools).toHaveLength(0);
-		await d.getByLabel('ID').fill('good');
-		await d.getByPlaceholder('API Key').fill('k1');
+		await d.getByLabel(/^ID/).fill('good');
+		await d.getByLabel(/API key/).fill('k1');
 		await d.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS)
@@ -3182,45 +3442,50 @@ test.describe('settings: Integrations', () => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page, { servers: [] });
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Add Tool Server' }).click();
-		const d = page.getByRole('dialog', { name: 'Add Connection' });
-		await d.getByRole('button', { name: 'Type' }).click();
-		await expect(d.getByText(/MCP support is experimental/)).toBeVisible();
+		await modal(page).getByRole('button', { name: 'Add tool server' }).click();
+		const d = page.getByRole('dialog', { name: 'Add tool server' });
+		await d.getByRole('radio', { name: 'MCP', exact: true }).click();
+		await expect(d.getByText(/support is experimental/)).toBeVisible();
 		await d.getByLabel('URL', { exact: true }).fill('https://mcp.example/mcp/');
-		await d.getByLabel('ID').fill('m1');
-		await d.getByLabel('Auth', { exact: true }).selectOption('oauth_2.1');
-		await expect(d.getByText('Not Registered')).toBeVisible();
+		await d.getByLabel(/^ID/).fill('m1');
+		await chooseOption(page, d, 'Authentication', 'OAuth 2.1');
+		await expect(d.getByText('Not registered')).toBeVisible();
 		await d.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Please register the OAuth client')).toBeVisible();
-		await d.getByLabel('Auth', { exact: true }).selectOption('none');
+		await expect(d.getByRole('combobox', { name: 'Authentication' })).toHaveAccessibleDescription(
+			'Register the OAuth client first.'
+		);
+		await chooseOption(page, d, 'Authentication', 'None');
 		await d.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS?.[0])
 			.toMatchObject({ type: 'mcp', url: 'https://mcp.example/mcp/', auth_type: 'none' });
 	});
 
-	test('editing opens with the saved values; Delete asks first, then saves without it', async ({ page }) => {
+	test('editing opens with the saved values; Delete asks first, naming it, then saves without it', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page);
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Configure Weather' }).click();
-		const d = page.getByRole('dialog', { name: 'Edit Connection' });
+		await modal(page).getByRole('button', { name: 'Edit Weather' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit tool server' });
 		await expect(d.getByLabel('URL', { exact: true })).toHaveValue('https://tools.example');
-		await expect(d.getByLabel('ID')).toHaveValue('wx');
-		await d.getByRole('button', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await expect(d.getByLabel(/^ID/)).toHaveValue('wx');
+		await d.getByRole('button', { name: 'Delete connection' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete “Weather”?' })
+			.getByRole('button', { name: 'Delete connection' })
+			.click();
 		await expect
 			.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS)
 			.toEqual([expect.objectContaining({ url: 'https://mcp.example/' })]);
 	});
 
-	test('Verify sends the server to the backend; Export leaves the API key out', async ({ page }) => {
+	test('Test connection sends the server to the backend; Export leaves the API key out', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page);
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Configure Weather' }).click();
-		const d = page.getByRole('dialog', { name: 'Edit Connection' });
-		await d.getByRole('button', { name: 'Verify Connection' }).click();
+		await modal(page).getByRole('button', { name: 'Edit Weather' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit tool server' });
+		await d.getByRole('button', { name: 'Test connection' }).click();
 		await expect
 			.poll(() => seen.toolVerify)
 			.toMatchObject({
@@ -3230,6 +3495,7 @@ test.describe('settings: Integrations', () => {
 				key: 'sk-tool',
 				info: { id: 'wx', name: 'Weather' }
 			});
+		await expect(d.getByText('Reachable', { exact: true })).toBeVisible();
 		const download = page.waitForEvent('download');
 		await d.getByRole('button', { name: 'Export' }).click();
 		const file = await download;
@@ -3245,16 +3511,17 @@ test.describe('settings: Integrations', () => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page, { verifyType: 'orchestrator' });
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Add Terminal Connection' }).click();
-		const d = page.getByRole('dialog', { name: 'Add Terminal Connection' });
-		await d.getByLabel('Name').fill('Python DS');
+		await modal(page).getByRole('button', { name: 'Add terminal connection' }).click();
+		const d = page.getByRole('dialog', { name: 'Add terminal connection' });
+		await d.getByLabel(/^Name/).fill('Python DS');
 		await d.getByLabel('URL', { exact: true }).fill('http://orch:9900/');
-		await d.getByPlaceholder('API Key').fill('  okey ');
-		await d.getByRole('button', { name: 'Verify Connection' }).click();
+		await d.getByLabel(/API key/).fill('  okey ');
+		await d.getByRole('button', { name: 'Test connection' }).click();
+		await expect(d.getByText('Reachable: an Orchestrator')).toBeVisible();
 		await d.getByRole('button', { name: 'Orchestrator' }).click();
 		await expect(d.getByLabel('Policy ID')).toHaveValue('python-ds');
-		await d.getByLabel('Chat', { exact: true }).selectOption('chat_id');
-		await d.getByRole('button', { name: '+ Add' }).click();
+		await chooseOption(page, d, 'Chat terminals', 'Per chat');
+		await d.getByRole('button', { name: 'Add variable' }).click();
 		await d.getByLabel('Variable 1 name').fill('TOKEN');
 		await d.getByLabel('Variable 1 value').fill('x');
 		await d.getByRole('button', { name: 'Save' }).click();
@@ -3278,23 +3545,26 @@ test.describe('settings: Integrations', () => {
 		expect(saved.id).toMatch(/^[0-9a-f-]{36}$/);
 	});
 
-	test('editing an Orchestrator terminal loads its policy back; bad lifecycle JSON is refused', async ({ page }) => {
+	test('editing an Orchestrator terminal loads its policy back; bad lifecycle JSON is refused under it', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page, {
 			terminals: [{ id: 't1', url: 'http://orch', name: 'Orch', policy_id: 'p1', enabled: true, config: { extra: 1 } }]
 		});
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Configure Orch' }).click();
-		const d = page.getByRole('dialog', { name: 'Edit Terminal Connection' });
+		await modal(page).getByRole('button', { name: 'Edit Orch' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit terminal connection' });
 		await d.getByRole('button', { name: 'Orchestrator' }).click();
-		await expect(d.getByLabel('Image')).toHaveValue('img:1');
+		await expect(d.getByLabel(/^Image/)).toHaveValue('img:1');
 		await expect(d.getByLabel('Policy ID')).toBeDisabled();
-		await expect(d.getByLabel('Lifecycle JSON')).toHaveValue(/@weekly/);
-		await d.getByLabel('Lifecycle JSON').fill('[1]');
+		const lifecycle = d.getByLabel(/^Lifecycle/);
+		await expect(lifecycle).toHaveValue(/@weekly/);
+		await lifecycle.fill('[1]');
 		await d.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Lifecycle JSON must be a JSON object')).toBeVisible();
+		await expect(lifecycle).toHaveAccessibleDescription('Enter the lifecycle as a JSON object, or leave it empty.');
 		expect(seen.policy).toHaveLength(0);
-		await d.getByLabel('Lifecycle JSON').fill('{}');
+		await lifecycle.fill('{}');
 		await d.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => seen.terminals.at(-1)?.TERMINAL_SERVER_CONNECTIONS?.[0])
@@ -3302,25 +3572,28 @@ test.describe('settings: Integrations', () => {
 		expect(seen.policy[0].policy_data).toMatchObject({ image: 'img:1', env: { A: 'b' } });
 	});
 
-	test('a knowledge source cannot be created until a test passes, and an edit asks for a new test', async ({
-		page
-	}) => {
+	test('a knowledge source cannot be added until a test passes, and an edit asks for a new test', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockIntegrations(page);
 		await page.goto('/?settings=admin:integrations');
-		await modal(page).getByRole('button', { name: 'Add Knowledge Connection' }).click();
-		const d = page.getByRole('dialog', { name: 'Add Knowledge Connection' });
+		await modal(page).getByRole('button', { name: 'Add source' }).click();
+		const d = page.getByRole('dialog', { name: 'Add knowledge source' });
 		await d.getByLabel('Name').fill('Research');
 		await d.getByLabel('Endpoint').fill('https://q.example');
 		await d.getByLabel('Collection', { exact: true }).fill('docs');
-		await d.getByRole('textbox', { name: 'Test Query' }).fill('what?');
-		await expect(d.getByRole('button', { name: 'Create' })).toBeDisabled();
-		await d.getByRole('button', { name: 'Run test query' }).click();
-		await expect(d.getByRole('button', { name: 'Create' })).toBeEnabled();
+		const query = d.getByLabel('Test query');
+		await query.fill('what?');
+		await d.getByRole('button', { name: 'Add source' }).click();
+		await expect(query).toHaveAccessibleDescription(
+			'Run the test first: a source is added only once it finds documents.'
+		);
+		await d.getByRole('button', { name: 'Run test' }).click();
+		await expect(d.getByText('Found 1 document.')).toBeVisible();
 		await d.getByLabel('Collection', { exact: true }).fill('docs2');
-		await expect(d.getByRole('button', { name: 'Create' })).toBeDisabled();
-		await d.getByRole('button', { name: 'Run test query' }).click();
-		await d.getByRole('button', { name: 'Create' }).click();
+		await expect(d.getByText('Found 1 document.')).toHaveCount(0);
+		await d.getByRole('button', { name: 'Run test' }).click();
+		await expect(d.getByText('Found 1 document.')).toBeVisible();
+		await d.getByRole('button', { name: 'Add source' }).click();
 		await expect
 			.poll(() => seen.knowledge.find((c) => c.path.endsWith('/source/create'))?.body)
 			.toMatchObject({
@@ -3351,7 +3624,7 @@ test.describe('settings: Integrations', () => {
 		});
 		await page.goto('/?settings=admin:integrations');
 		await expect(modal(page).getByText('qdrant · papers')).toBeVisible();
-		await modal(page).getByRole('switch', { name: 'Disable Papers' }).click();
+		await modal(page).getByRole('switch', { name: 'Enable Papers' }).click();
 		await expect
 			.poll(() => seen.knowledge.at(-1))
 			.toEqual({

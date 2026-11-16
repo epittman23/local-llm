@@ -1,5 +1,5 @@
 import { createElement, type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
-import { type BlockerFunction, useBlocker } from 'react-router';
+import { type Blocker, type BlockerFunction, useBlocker } from 'react-router';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave this page.';
@@ -7,7 +7,9 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
 /**
  * FRM-3: a page that saves on request asks before its unsaved changes are lost.
  * While `dirty`, leaving for another page in the app (a link, a tab, Back, the
- * browser's Back) stops at "Discard changes?", and reloading or closing the tab
+ * browser's Back, another `?id=`) stops at "Discard changes?"; the Settings
+ * dialog opening or closing over the page (only `?settings=` changes) does
+ * not, since the page stays. Reloading or closing the tab
  * has the browser ask. Not in the desktop app: Electron cancels a prevented
  * unload without asking, so its window would silently refuse to close.
  *
@@ -27,10 +29,32 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * then it goes back to the control focused last before that, or, if that has
  * gone, to the first control of the dialog still open underneath.
  */
-export function useUnsavedChanges(
+export function useUnsavedChanges(dirty: boolean, options: { message?: string } = {}): LeaveGuard {
+	return useLeaveGuard(dirty, options, useBlocker, true);
+}
+
+/**
+ * `useUnsavedChanges` without its navigation guard: only `confirmLeave` (and
+ * its dialog) for a leave in place. For an editor embedded where something
+ * else already guards navigation (a settings tab, whose host asks once): a
+ * router keeps one blocker, the one registered last, so a second would
+ * silently replace the host's.
+ */
+export function useConfirmLeave(dirty: boolean, options: { message?: string } = {}): LeaveGuard {
+	return useLeaveGuard(dirty, options, useNoBlocker, false);
+}
+
+type LeaveGuard = { dialog: ReactElement; allowNext: () => void; confirmLeave: (action: () => void) => void };
+
+const UNBLOCKED: Blocker = { state: 'unblocked', proceed: undefined, reset: undefined, location: undefined };
+const useNoBlocker = (_shouldBlock: BlockerFunction): Blocker => UNBLOCKED;
+
+function useLeaveGuard(
 	dirty: boolean,
-	{ message = DEFAULT_MESSAGE }: { message?: string } = {}
-): { dialog: ReactElement; allowNext: () => void; confirmLeave: (action: () => void) => void } {
+	{ message = DEFAULT_MESSAGE }: { message?: string },
+	useGuardBlocker: (shouldBlock: BlockerFunction) => Blocker,
+	askOnUnload: boolean
+): LeaveGuard {
 	// Refs, so the blocker always sees this render's answer: the router reads its
 	// function from an effect, which would otherwise lag a save's navigate.
 	const dirtyNow = useRef(dirty);
@@ -58,26 +82,30 @@ export function useUnsavedChanges(
 
 	const shouldBlock = useCallback<BlockerFunction>(
 		({ currentLocation, nextLocation }) => {
+			// The Settings dialog opening or closing over the page (`?settings=`) leaves nothing,
+			// and must not use up a pending allowNext either.
+			const moving =
+				currentLocation.pathname !== nextLocation.pathname ||
+				withoutSettings(currentLocation.search) !== withoutSettings(nextLocation.search);
+			if (!moving) return false;
 			if (allowed.current) {
 				allowed.current = false;
 				return false;
 			}
-			const moving =
-				currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search;
-			const block = dirtyNow.current && moving;
+			const block = dirtyNow.current;
 			if (block) rememberFocus();
 			return block;
 		},
 		[rememberFocus]
 	);
-	const blocker = useBlocker(shouldBlock);
+	const blocker = useGuardBlocker(shouldBlock);
 
 	useEffect(() => {
-		if (!dirty || 'lllmDesktop' in window) return;
+		if (!dirty || !askOnUnload || 'lllmDesktop' in window) return;
 		const ask = (event: BeforeUnloadEvent) => event.preventDefault();
 		window.addEventListener('beforeunload', ask);
 		return () => window.removeEventListener('beforeunload', ask);
-	}, [dirty]);
+	}, [dirty, askOnUnload]);
 
 	const allowNext = useCallback(() => {
 		allowed.current = true;
@@ -140,6 +168,13 @@ export function useUnsavedChanges(
 		message
 	);
 	return { dialog, allowNext, confirmLeave };
+}
+
+/** A query string without `settings`, the Settings dialog's address (lib/settings/useSettingsUrl.ts). */
+function withoutSettings(search: string): string {
+	const params = new URLSearchParams(search);
+	params.delete('settings');
+	return params.toString();
 }
 
 const TABBABLE =

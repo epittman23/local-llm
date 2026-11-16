@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { DataSection, FormsSection, NavigationSection, StatesSection, StatusBadge } from './components';
+import { ActionsSection, DataSection, FormsSection, NavigationSection, StatesSection, StatusBadge } from './components';
 
 // The Forms demo's unsaved-changes guard blocks navigation, which needs a data router.
 const inProvider = (node: React.ReactNode) => {
@@ -124,6 +124,50 @@ describe('/ui components', () => {
 		fireEvent.click(options[1]);
 		expect(within(list).getAllByRole('option')[1].textContent).toContain('(current)');
 		expect(within(list).getAllByRole('option')[0].textContent).not.toContain('(current)');
+	});
+
+	it('shows a chip: a secondary pill of size chip that names its value (ACT-6, LAY-3)', () => {
+		inProvider(<ActionsSection />);
+		const chip = screen.getByRole('button', { name: 'Role: User' });
+		expect(chip).toHaveAttribute('data-size', 'chip');
+		expect(chip).toHaveAttribute('data-variant', 'secondary');
+	});
+
+	it('shows a disabled switch on and off, by itself and inside a disabled fieldset, each with its reason (ACT-5)', () => {
+		inProvider(<ActionsSection />);
+		const off = screen.getByRole('switch', { name: 'Image generation' });
+		const on = screen.getByRole('switch', { name: 'Code interpreter' });
+		expect(off).toBeDisabled();
+		expect(off).toHaveAttribute('data-state', 'unchecked');
+		expect(off).toHaveAccessibleDescription('Off on this install. Turn it on in Admin > Settings > Images.');
+		expect(on).toBeDisabled();
+		expect(on).toHaveAttribute('data-state', 'checked');
+		const held = screen.getByRole('group', { name: 'Connections, while a change saves' });
+		expect(held).toHaveAttribute('aria-busy', 'true');
+		expect(within(held).getByText('Saving…')).toBeInTheDocument();
+		const heldOn = within(held).getByRole('switch', { name: 'OpenAI-compatible connections' });
+		const heldOff = within(held).getByRole('switch', { name: 'Ollama' });
+		// Disabled by the fieldset alone, not by their own attribute.
+		for (const sw of [heldOn, heldOff]) {
+			expect(sw).toBeDisabled();
+			expect(sw).not.toHaveAttribute('disabled');
+		}
+		expect(heldOn).toHaveAttribute('data-state', 'checked');
+		expect(heldOff).toHaveAttribute('data-state', 'unchecked');
+	});
+
+	it('demonstrates a section’s sub-tabs: a named landmark of links, the open one current, counts as badges (NAV-2)', async () => {
+		const router = inProvider(<NavigationSection />);
+		const strip = screen.getByRole('navigation', { name: 'Users sections' });
+		const overview = within(strip).getByRole('link', { name: 'Overview 12' });
+		expect(overview).toHaveAttribute('aria-current', 'page');
+		expect(within(overview).getByText('12')).toHaveAttribute('data-variant', 'secondary');
+		fireEvent.click(within(strip).getByRole('link', { name: 'Groups 3' }));
+		expect(await screen.findByText('The Groups section.')).toBeInTheDocument();
+		expect(within(strip).getByRole('link', { name: 'Groups 3' })).toHaveAttribute('aria-current', 'page');
+		expect(overview).not.toHaveAttribute('aria-current');
+		expect(router.state.location.pathname).toBe('/ui');
+		expect(router.state.location.hash).toBe('#ui-subtab-groups');
 	});
 
 	it('demonstrates the vertical tab list, which opens a tab on Enter and names a repeated one by its half (NAV-2)', () => {

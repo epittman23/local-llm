@@ -72,9 +72,10 @@ describe('ErrorReply', () => {
 
 	it('points a refused key at Connections, and opens it for the owner', () => {
 		show('401 Unauthorized');
-		expect(screen.getByText('Check the API key in Admin Settings > Connections.')).toBeTruthy();
+		expect(screen.getByText('Check the API key in Admin > Settings > Connections.')).toBeTruthy();
 		fireEvent.click(screen.getByRole('button', { name: 'Open Connections' }));
-		expect(useSettingsModalStore.getState()).toMatchObject({ open: true, requestedTab: 'admin:connections' });
+		// A page under Admin since S5-D1: the app's useSettingsUrl navigates there.
+		expect(useSettingsModalStore.getState()).toMatchObject({ open: false, leaveTo: '/admin/settings/connections' });
 	});
 
 	it('offers no Connections button to someone who cannot open it', () => {

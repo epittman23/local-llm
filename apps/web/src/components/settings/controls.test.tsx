@@ -1,6 +1,12 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { createMemoryRouter, Link, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+
+const toastError = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+
 import {
 	SavedNote,
 	SettingField,
@@ -8,11 +14,15 @@ import {
 	SettingNumber,
 	SettingRow,
 	SettingSelect,
+	SettingsDialogHost,
 	SettingsForm,
+	SettingsPageHost,
 	SettingsSection,
 	SettingTextarea,
 	settingSlug,
-	useSavedFlash
+	useSavedFlash,
+	useSettingErrors,
+	useSettingsHost
 } from './controls';
 
 afterEach(() => {
@@ -20,6 +30,23 @@ afterEach(() => {
 	act(() => useSettingsModalStore.getState().closeSettings());
 	vi.useRealTimers();
 });
+
+/** An at-once tab whose Toggle starts a save and whose Saved (outside it) ends one. */
+function AtOnce({ startSaving = false }: { startSaving?: boolean }) {
+	const [saving, setSaving] = useState(startSaving);
+	return (
+		<>
+			<SettingsForm title="Connections" savesAtOnce saving={saving}>
+				<button type="button" onClick={() => setSaving(true)}>
+					Toggle
+				</button>
+			</SettingsForm>
+			<button type="button" onClick={() => setSaving(false)}>
+				Saved
+			</button>
+		</>
+	);
+}
 
 describe('SettingsForm (#951, FRM-3)', () => {
 	it('on request: the SaveBar, the dirty flag for the modal, and Discard changes', () => {
@@ -69,6 +96,40 @@ describe('SettingsForm (#951, FRM-3)', () => {
 		);
 		expect(screen.getByText('Changes are saved as you make them.')).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+	});
+
+	it('at once, while saving: says so and holds every control, then gives focus back (ACT-5)', () => {
+		render(<AtOnce />);
+		const toggle = screen.getByRole('button', { name: 'Toggle' });
+		toggle.focus();
+		fireEvent.click(toggle);
+		expect(screen.getByText('Saving…')).toBeInTheDocument();
+		expect(toggle).toBeDisabled();
+		expect(toggle.closest('fieldset')).toHaveAttribute('aria-busy', 'true');
+		// A browser moves focus off a control that becomes disabled.
+		toggle.blur();
+		fireEvent.click(screen.getByRole('button', { name: 'Saved' }));
+		expect(screen.getByText('Changes are saved as you make them.')).toBeInTheDocument();
+		expect(toggle).toBeEnabled();
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('at once: gives focus back even when it was lost before the save rendered (Chromium blurs at once)', () => {
+		render(<AtOnce />);
+		const toggle = screen.getByRole('button', { name: 'Toggle' });
+		toggle.focus();
+		toggle.blur();
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByRole('button', { name: 'Saved' }));
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('at once: leaves focus alone after a save if it has moved on', () => {
+		render(<AtOnce startSaving />);
+		const saved = screen.getByRole('button', { name: 'Saved' });
+		saved.focus();
+		fireEvent.click(saved);
+		expect(document.activeElement).toBe(saved);
 	});
 
 	it('neither (the admin tabs): a plain Save, as before', () => {
@@ -155,5 +216,191 @@ describe('SavedNote and useSavedFlash (FRM-3 at once)', () => {
 		expect(screen.getByRole('status')).toHaveTextContent('Saved');
 		act(() => vi.advanceTimersByTime(1001));
 		expect(screen.queryByText('Saved')).toBeNull();
+	});
+});
+
+/** A tab with one field, saved on request: dirty while the field differs from what was saved. */
+function DraftTab() {
+	const [value, setValue] = useState('');
+	const host = useSettingsHost();
+	return (
+		<SettingsForm title="General" dirty={value !== ''} onDiscard={() => setValue('')}>
+			<p>host: {String(host.kind)}</p>
+			<label>
+				Name
+				<input value={value} onChange={(e) => setValue(e.target.value)} />
+			</label>
+		</SettingsForm>
+	);
+}
+
+describe('settings hosts (#951, FRM-3)', () => {
+	it('outside any host the tab reports to the dialog store, with no kind', () => {
+		render(<DraftTab />);
+		expect(screen.getByText('host: null')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(true);
+	});
+
+	it('in the dialog host the tab reports to the dialog store', () => {
+		const { unmount } = render(
+			<SettingsDialogHost>
+				<DraftTab />
+			</SettingsDialogHost>
+		);
+		expect(screen.getByText('host: dialog')).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(true);
+		unmount();
+		expect(useSettingsModalStore.getState().dirty).toBe(false);
+	});
+
+	it('on a page the one page guard asks once before another tab, and never touches the dialog store', async () => {
+		const router = createMemoryRouter(
+			[
+				{
+					path: '/admin/settings/:tab',
+					element: (
+						<SettingsPageHost>
+							<Link to="/admin/settings/audio">Audio</Link>
+							<DraftTab />
+						</SettingsPageHost>
+					)
+				},
+				{ path: '/elsewhere', element: <p>Elsewhere</p> }
+			],
+			{ initialEntries: ['/admin/settings/general'] }
+		);
+		render(<RouterProvider router={router} />);
+		expect(screen.getByText('host: page')).toBeInTheDocument();
+		// Clean: a tab change goes straight through.
+		fireEvent.click(screen.getByRole('link', { name: 'Audio' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/audio'));
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		expect(useSettingsModalStore.getState().dirty).toBe(false);
+		await act(() => router.navigate('/admin/settings/general'));
+		expect(await screen.findAllByRole('alertdialog')).toHaveLength(1);
+		expect(screen.getByText('This tab has changes that are not saved. They are lost if you leave it.')).toBeVisible();
+		expect(router.state.location.pathname).toBe('/admin/settings/audio');
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/general'));
+	});
+
+	it('on a page, saving clears the guard: a clean tab leaves without asking', async () => {
+		const router = createMemoryRouter(
+			[
+				{
+					path: '/a',
+					element: (
+						<SettingsPageHost>
+							<DraftTab />
+						</SettingsPageHost>
+					)
+				},
+				{ path: '/b', element: <p>Page B</p> }
+			],
+			{ initialEntries: ['/a'] }
+		);
+		render(<RouterProvider router={router} />);
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } });
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+		await act(() => router.navigate('/b'));
+		expect(await screen.findByText('Page B')).toBeInTheDocument();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+});
+
+/**
+ * A tab checked on Save (FRM-2): Name must not be blank; Size is a number in a
+ * row; Extra's field is shown only while `Show extra` is ticked.
+ */
+function Checked({ onSave }: { onSave: () => void }) {
+	const [name, setName] = useState('');
+	const [size, setSize] = useState<number | ''>(1);
+	const [extra, setExtra] = useState(false);
+	const problems: Record<string, string> = {};
+	if (!name.trim()) problems.name = 'Enter a name.';
+	if (size !== '' && size < 1) problems.size = 'Size must be at least 1.';
+	if (!extra) problems.extra = 'Extra is wrong.';
+	const { errors, check, reset } = useSettingErrors(problems);
+	return (
+		<SettingsForm
+			title="Checked"
+			dirty
+			errors={errors}
+			onDiscard={reset}
+			onSubmit={() => {
+				if (check()) onSave();
+			}}
+		>
+			<SettingField label="Name" description="What to call it." descriptionId="name-help" htmlFor="name">
+				<SettingInput id="name" aria-describedby="name-help" value={name} onChange={(e) => setName(e.target.value)} />
+			</SettingField>
+			<SettingRow label="Size" fieldId="size">
+				<SettingNumber id="size" aria-label="Size" value={size} onChange={setSize} />
+			</SettingRow>
+			<label>
+				<input type="checkbox" checked={extra} onChange={(e) => setExtra(e.target.checked)} />
+				Show extra
+			</label>
+			<button type="button" onClick={() => check({ extra: 'Extra is wrong.' })}>
+				Check extra
+			</button>
+		</SettingsForm>
+	);
+}
+
+describe('field errors on Save (FRM-2)', () => {
+	it('shows nothing before Save, then each error under its field, and focuses the first', async () => {
+		vi.useFakeTimers();
+		const onSave = vi.fn();
+		render(<Checked onSave={onSave} />);
+		const name = screen.getByLabelText('Name');
+		expect(name).not.toHaveAttribute('aria-invalid');
+		expect(name).toHaveAttribute('aria-describedby', 'name-help');
+		expect(screen.getByText('What to call it.')).toBeInTheDocument();
+
+		fireEvent.change(screen.getByLabelText('Size'), { target: { value: '0' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(onSave).not.toHaveBeenCalled();
+		// The error replaces the help, and the field names it.
+		expect(name).toHaveAttribute('aria-invalid', 'true');
+		expect(name).toHaveAccessibleDescription('Enter a name.');
+		expect(screen.queryByText('What to call it.')).toBeNull();
+		const size = screen.getByLabelText('Size');
+		expect(size).toHaveAttribute('aria-invalid', 'true');
+		expect(size).toHaveAccessibleDescription('Size must be at least 1.');
+		act(() => vi.runAllTimers());
+		expect(name).toHaveFocus();
+		expect(toastError).not.toHaveBeenCalled();
+
+		// Put right, an error goes at once; the rest stay.
+		fireEvent.change(name, { target: { value: 'Ada' } });
+		expect(name).not.toHaveAttribute('aria-invalid');
+		expect(name).toHaveAttribute('aria-describedby', 'name-help');
+		expect(size).toHaveAttribute('aria-invalid', 'true');
+	});
+
+	it('says a wrong field that is not on the page in a toast, and saves once all is right', () => {
+		vi.useFakeTimers();
+		toastError.mockReset();
+		const onSave = vi.fn();
+		render(<Checked onSave={onSave} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Check extra' }));
+		act(() => vi.runAllTimers());
+		expect(toastError).toHaveBeenCalledWith('Extra is wrong.');
+
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ada' } });
+		fireEvent.click(screen.getByLabelText('Show extra'));
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(onSave).toHaveBeenCalledOnce();
+	});
+
+	it('Discard changes stops showing them', () => {
+		render(<Checked onSave={() => {}} />);
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.getByLabelText('Name')).not.toHaveAttribute('aria-invalid');
 	});
 });

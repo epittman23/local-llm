@@ -796,7 +796,7 @@ the next startup sweep, so a `--reload` restart kills no command.
 
 **Status.** `GET /api/v1/sandbox/status` (admin) answers
 `{"ready": bool, "reason": str | null}`: the first failing check of
-"Checks" above, the same text each refused call gets, shown on Admin
+"Checks" above, the same text each refused call gets, shown on Admin >
 Settings > Code Execution. `GET /api/v1/sandbox/packages` (admin) is the
 package report, "Package telemetry" below.
 
@@ -1236,7 +1236,7 @@ including the `.runs` listing against the real script.
 
 Owner decision Q15 (T24): each user keeps at most
 `code_interpreter.sandbox.max_workspaces` persistent workspaces (default
-20, at least 1; Admin Settings > Code Execution, "Sandbox Workspaces per
+20, at least 1; Admin > Settings > Code Execution, "Sandbox Workspaces per
 User"), and no workspace is deleted for that cap or for the retention
 expiry without the user's answer. Ephemeral sandboxes (unsaved chats,
 the harness) do not count and are not asked about.

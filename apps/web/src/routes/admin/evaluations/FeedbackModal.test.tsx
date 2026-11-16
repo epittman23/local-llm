@@ -10,7 +10,14 @@ vi.mock('@/lib/apis/evaluations', () => ({ getFeedbackById: vi.fn() }));
 const FEEDBACK: FeedbackItem = {
 	id: 'f1',
 	meta: { chat_id: 'chat-9', message_id: 'm2' },
-	data: { reason: 'Too long', comment: 'Rambles', tags: ['verbose', 'slow'], details: { rating: 1 } },
+	data: {
+		model_id: 'qwen/qwen3.6-27b',
+		rating: -1,
+		reason: 'Too long',
+		comment: 'Rambles',
+		tags: ['verbose', 'slow'],
+		details: { rating: 1 }
+	},
 	updated_at: 1700000000
 };
 
@@ -54,8 +61,42 @@ describe('FeedbackModal', () => {
 
 	it('links the chat the feedback came from', async () => {
 		renderModal();
-		const link = await screen.findByRole('link', { name: 'chat-9' });
+		const link = await screen.findByRole('link', { name: 'Open chat (opens in a new tab)' });
 		expect(link.getAttribute('href')).toContain('/s/chat-9');
+	});
+
+	it('names the model, the result in words and the date (#1027)', async () => {
+		renderModal();
+		expect(await screen.findByText('qwen/qwen3.6-27b')).toHaveClass('font-mono');
+		expect(screen.getByText('Down')).toBeInTheDocument();
+		expect(screen.getByRole('heading', { name: 'Rating details' })).toBeInTheDocument();
+		expect(screen.getByText('Rated').nextElementSibling?.querySelector('time')).toHaveAttribute(
+			'datetime',
+			new Date(1700000000 * 1000).toISOString()
+		);
+	});
+
+	it('keeps its description list valid while loading and loaded: each item a div of one dt and one dd', async () => {
+		let answer: (value: unknown) => void = () => {};
+		vi.mocked(getFeedbackById).mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+		renderModal();
+		const valid = () => {
+			const list = screen.getByRole('dialog').querySelector('dl') as HTMLElement;
+			for (const item of Array.from(list.children)) {
+				expect(item.tagName).toBe('DIV');
+				expect(Array.from(item.children).map((c) => c.tagName)).toEqual(['DT', 'DD']);
+			}
+		};
+		expect(screen.getByRole('status')).toHaveTextContent('Loading the chat');
+		valid();
+		answer({
+			meta: { message_id: 'm2' },
+			snapshot: {
+				chat: { chat: { history: { messages: { m1: { content: 'Q' }, m2: { content: 'A', parentId: 'm1' } } } } }
+			}
+		});
+		expect(await screen.findByText('A')).toBeInTheDocument();
+		valid();
 	});
 
 	it('closes from the Close button', async () => {

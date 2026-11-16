@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionEndReason } from '@/lib/auth/session';
 import { useConnectionStore } from '@/lib/socket/connectionStore';
-import { keepClearOffset, messageId, PHONE_TOP, Toaster, WIDE_QUERY } from './sonner';
+import { KEEP_CLEAR, keepClearOffset, messageId, PHONE_TOP, Toaster, WIDE_QUERY } from './sonner';
 
 vi.mock('@/lib/auth/session', () => ({ sessionEndReason: vi.fn(() => null) }));
 
@@ -30,9 +30,9 @@ function mockWidth(wide: boolean) {
 const toaster = () => document.querySelector('[data-sonner-toaster]');
 
 /** A message box at `top` px from the top of an 800 px tall viewport. */
-function composer(top: number, height = 100) {
+function composer(top: number, height = 100, marker = 'data-composite-field') {
 	const field = document.createElement('div');
-	field.setAttribute('data-composite-field', '');
+	field.setAttribute(marker, '');
 	field.getBoundingClientRect = () => ({ top, bottom: top + height, height, left: 0, right: 600, width: 600, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
 	document.body.append(field);
 	return field;
@@ -157,7 +157,7 @@ describe('keepClearOffset', () => {
 	beforeEach(() => vi.stubGlobal('innerHeight', 800));
 	afterEach(() => {
 		vi.unstubAllGlobals();
-		for (const field of document.querySelectorAll('[data-composite-field]')) field.remove();
+		for (const field of document.querySelectorAll(KEEP_CLEAR)) field.remove();
 	});
 
 	it('is null with no field, or only one near the top (a search box)', () => {
@@ -176,6 +176,13 @@ describe('keepClearOffset', () => {
 	it('never comes closer to the edge than Sonner itself', () => {
 		composer(790, 10);
 		expect(keepClearOffset()).toBe(24);
+	});
+
+	it('clears a SaveBar too (data-keep-clear), so a failure never covers Save', () => {
+		composer(740, 44, 'data-keep-clear');
+		expect(keepClearOffset()).toBe(68);
+		composer(600, 100);
+		expect(keepClearOffset()).toBe(208);
 	});
 });
 

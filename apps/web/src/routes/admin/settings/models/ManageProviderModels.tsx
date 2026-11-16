@@ -208,14 +208,17 @@ export function ManageProviderModels({
 			<ConfirmDialog
 				open={toDelete !== null}
 				onOpenChange={(open) => !open && setToDelete(null)}
-				title="Delete Model"
+				title={`Delete “${toDelete ?? ''}”?`}
+				confirmLabel="Delete model"
+				destructive
 				onConfirm={async () => {
 					const id = toDelete;
 					setToDelete(null);
 					if (id) await act(id, () => deleteProviderModel(token, urlIdx, id), 'Model deleted successfully');
 				}}
 			>
-				This will delete the cached model and cannot be undone.
+				Its downloaded files are deleted from the server, so it has to be downloaded again before it can run. This can't
+				be undone.
 			</ConfirmDialog>
 		</div>
 	);

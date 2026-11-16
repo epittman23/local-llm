@@ -20,21 +20,39 @@ export function FilterMenu({
 	value,
 	items,
 	onChange,
-	trigger
+	trigger,
+	asWritten = false
 }: {
 	value: string;
 	items: Item[];
 	onChange: (value: string) => void;
 	trigger: ReactNode;
+	/** Identifiers (model ids): shown whole and as written, never capitalised or cut. */
+	asWritten?: boolean;
 }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="min-w-40">
+			<DropdownMenuContent
+				align="end"
+				// An id list sizes to its longest id up to the cap, and an id past it ends in an ellipsis (TYP-7).
+				className={asWritten ? 'w-max max-w-[min(28rem,calc(100vw-2rem))] min-w-40' : 'min-w-40'}
+			>
 				<DropdownMenuRadioGroup value={value} onValueChange={onChange}>
 					{items.map((item) => (
-						<DropdownMenuRadioItem key={item.value} value={item.value} className="capitalize">
-							{item.label.length > 32 ? `${item.label.slice(0, 32)}...` : item.label}
+						<DropdownMenuRadioItem
+							key={item.value}
+							value={item.value}
+							className={asWritten ? 'font-mono' : 'capitalize'}
+							title={asWritten ? item.label : undefined}
+						>
+							{asWritten ? (
+								<span className="min-w-0 truncate">{item.label}</span>
+							) : item.label.length <= 32 ? (
+								item.label
+							) : (
+								`${item.label.slice(0, 32)}...`
+							)}
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -79,7 +97,8 @@ export function TagSelector({
 	onChange,
 	placeholder = 'All tags',
 	name = 'Tag',
-	labels = {}
+	labels = {},
+	asWritten = false
 }: {
 	value: string;
 	tags: string[];
@@ -89,18 +108,22 @@ export function TagSelector({
 	name?: string;
 	/** Display text for a value, where it differs from the value itself. */
 	labels?: Record<string, string>;
+	/** The values are identifiers (model ids): shown as written, never capitalised. */
+	asWritten?: boolean;
 }) {
 	return (
-		<div className="flex items-center">
+		// `min-w-0` on both: a long chosen value truncates, so the clear button stays on screen at 390.
+		<div className="flex min-w-0 items-center">
 			<FilterMenu
 				value={value}
 				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
+				asWritten={asWritten}
 				trigger={
-					<Button variant="ghost" size="sm">
+					<Button variant="ghost" size="sm" className="min-w-0 max-w-full shrink" title={value || undefined}>
 						<span className="sr-only">{name}: </span>
-						{/* A tag reads as written but capitalised; the placeholder is a sentence (WRD-1). */}
-						<span className={value ? 'truncate capitalize' : 'truncate'}>
+						{/* A tag reads as written but capitalised, an id exactly as written; the placeholder is a sentence (WRD-1). */}
+						<span className={!value ? 'truncate' : asWritten ? 'truncate font-mono' : 'truncate capitalize'}>
 							{value ? (labels[value] ?? value) : placeholder}
 						</span>
 						{!value && <ChevronDown />}
@@ -108,7 +131,12 @@ export function TagSelector({
 				}
 			/>
 			{value && (
-				<Button variant="ghost" size="icon-xs" aria-label="Clear tag" onClick={() => onChange('')}>
+				<Button
+					variant="ghost"
+					size="icon-xs"
+					aria-label={`Clear ${name.toLowerCase()} filter`}
+					onClick={() => onChange('')}
+				>
 					<X />
 				</Button>
 			)}
