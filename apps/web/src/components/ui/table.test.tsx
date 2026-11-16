@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableSortHead } from '@/components/ui/table';
@@ -125,6 +126,36 @@ describe('a row that opens something (DAT-6, NAV-5)', () => {
 		// A button's Enter is its click.
 		fireEvent.click(name);
 		expect(onOpen).toHaveBeenCalledTimes(1);
+	});
+
+	it('leaves a click on a link, a field or a portalled menu item in the row to that control', () => {
+		const onOpen = vi.fn();
+		render(
+			<Table>
+				<TableBody>
+					<TableRow onOpen={onOpen}>
+						<TableCell>
+							<a href="#details">Details</a>
+						</TableCell>
+						<TableCell>
+							<input aria-label="Note" />
+						</TableCell>
+						<TableCell>
+							{createPortal(
+								<div role="menuitem" tabIndex={-1}>
+									Delete
+								</div>,
+								document.body
+							)}
+						</TableCell>
+					</TableRow>
+				</TableBody>
+			</Table>
+		);
+		fireEvent.click(screen.getByRole('link', { name: 'Details' }));
+		fireEvent.click(screen.getByRole('textbox', { name: 'Note' }));
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+		expect(onOpen).not.toHaveBeenCalled();
 	});
 
 	it('leaves a plain row alone, and lets a caller’s own click stop the open', () => {
