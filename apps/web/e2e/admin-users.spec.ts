@@ -27,7 +27,10 @@ const group = (n: number, o: Rec = {}): Rec => ({
 });
 
 /** users + groups + permissions endpoints, recording every write. */
-async function mockAdminApi(page: Page, opts: { users?: Rec[]; groups?: Rec[]; defaults?: Rec } = {}) {
+async function mockAdminApi(
+	page: Page,
+	opts: { users?: Rec[]; groups?: Rec[]; defaults?: Rec; accounts?: number } = {}
+) {
 	const state = { users: opts.users ?? [], groups: opts.groups ?? [] };
 	const calls: Call[] = [];
 	const json = (route: any, d: unknown, status = 200) =>
@@ -47,6 +50,8 @@ async function mockAdminApi(page: Page, opts: { users?: Rec[]; groups?: Rec[]; d
 
 	await page.route('**/api/v1/users/**', (route) => {
 		const c = record(route.request());
+		// The account count behind Admin's one-account rule (S5-D2): two unless a test says otherwise.
+		if (c.path === '/users/search') return json(route, { users: state.users, total: opts.accounts ?? 2 });
 		if (c.path === '/users/' && c.method === 'GET') {
 			const params = new URLSearchParams(c.search);
 			const q = (params.get('query') ?? '').toLowerCase();
@@ -130,18 +135,23 @@ test.describe('admin shell', () => {
 	});
 });
 
+const moreActions = async (page: Page, name: string, item: string) => {
+	await page.getByRole('button', { name: `More actions for ${name}` }).click();
+	await page.getByRole('menuitem', { name: item }).click();
+};
+
 test.describe('admin users', () => {
-	test('lists users with counts, and hides delete/preview on admin rows', async ({ page }) => {
+	test('lists users with counts, and offers no delete or preview on admin rows', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { users: [user(1, { role: 'admin' }), user(2), user(3)], groups: [group(1)] });
 		await page.goto('/admin/users/overview');
 		await expect(page.getByText('User 2', { exact: true })).toBeVisible();
 		await expect(page.getByRole('link', { name: /^Overview/ })).toContainText('3');
 		await expect(page.getByRole('link', { name: /^Groups/ })).toContainText('1');
-		// 2 non-admin rows have Delete + Preview; the admin row has neither.
-		await expect(page.getByRole('button', { name: 'Delete User' })).toHaveCount(2);
-		await expect(page.getByRole('button', { name: 'Preview Access' })).toHaveCount(2);
-		await expect(page.getByRole('button', { name: 'Edit User' })).toHaveCount(3);
+		// 2 non-admin rows have a "More actions" menu; the admin row has none (#1026).
+		await expect(page.getByRole('button', { name: /^More actions for / })).toHaveCount(2);
+		await expect(page.getByRole('button', { name: /^Edit User \d$/ })).toHaveCount(3);
+		await expect(page.getByRole('button', { name: /^Role: User/ })).toHaveCount(2);
 	});
 
 	test('sorting and searching go to the server', async ({ page }) => {
@@ -149,31 +159,42 @@ test.describe('admin users', () => {
 		const { calls } = await mockAdminApi(page, { users: [user(1), user(2)] });
 		await page.goto('/admin/users/overview');
 		await expect(page.getByText('User 1', { exact: true })).toBeVisible();
-		await page.getByRole('button', { name: 'Name', exact: true }).click();
+		await page.getByRole('button', { name: /^Name/ }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/users/' && c.search.includes('order_by=name'))).toBe(true);
-		await page.getByRole('button', { name: 'Name', exact: true }).click();
+		await page.getByRole('button', { name: /^Name/ }).click();
 		await expect
 			.poll(() => calls.some((c) => c.search.includes('order_by=name') && c.search.includes('direction=desc')))
 			.toBe(true);
 
-		await page.getByLabel('Search', { exact: true }).fill('user2');
+		await page.getByLabel('Search users').fill('user2');
 		await expect.poll(() => calls.some((c) => c.search.includes('query=user2'))).toBe(true);
 		await expect(page.getByText('User 1', { exact: true })).toHaveCount(0);
 	});
 
-	test('editing a user sends the changed role and leaves the password out when it is empty', async ({ page }) => {
+	test('editing a user sends the changed name and leaves the password out when it is empty', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Role: user, change' }).click();
-		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByText('Group 1')).toBeVisible();
-		await dialog.getByLabel('Role').selectOption('admin');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Edit User 2' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Edit user' });
+		await expect(dialog.getByRole('link', { name: 'Group 1' })).toBeVisible();
+		await dialog.getByRole('textbox', { name: 'Name' }).fill('Renamed');
+		await dialog.getByRole('button', { name: 'Save user' }).click();
+		await expect
+			.poll(() => calls.find((c) => c.path === '/users/user_2/update')?.body)
+			.toMatchObject({ role: 'user', name: 'Renamed' });
+		expect(calls.find((c) => c.path === '/users/user_2/update')?.body).not.toHaveProperty('password');
+	});
+
+	test('the role menu changes a role at once (#1026)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAdminApi(page, { users: [user(2)] });
+		await page.goto('/admin/users/overview');
+		await page.getByRole('button', { name: /^Role: User/ }).click();
+		await page.getByRole('menuitemradio', { name: 'Admin' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/users/user_2/update')?.body)
 			.toMatchObject({ role: 'admin', name: 'User 2' });
-		expect(calls.find((c) => c.path === '/users/user_2/update')?.body).not.toHaveProperty('password');
 	});
 
 	test('an admin cannot change their own role', async ({ page }) => {
@@ -181,53 +202,69 @@ test.describe('admin users', () => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { users: [user(1, { id: 'u1', role: 'admin' })] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Edit User' }).click();
-		await expect(page.getByRole('dialog').getByLabel('Role')).toBeDisabled();
+		await expect(page.getByRole('button', { name: /^Role:/ })).toHaveCount(0);
+		await page.getByRole('button', { name: 'Edit User 1' }).click();
+		await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Role' })).toBeDisabled();
 	});
 
 	test('delete asks first, then removes the user', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Delete User' }).click();
-		await expect(page.getByRole('alertdialog')).toContainText('User 2');
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await moreActions(page, 'User 2', 'Delete user');
+		const confirm = page.getByRole('alertdialog', { name: 'Delete “User 2”?' });
+		await confirm.getByRole('button', { name: 'Delete user' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/users/user_2')).toBe(true);
 		await expect(page.getByText('User 2', { exact: true })).toHaveCount(0);
 	});
 
-	test('Add User posts the form', async ({ page }) => {
+	test('Add user posts the form', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Add User', exact: true }).click();
-		const dialog = page.getByRole('dialog');
-		await dialog.getByLabel('Name', { exact: true }).fill('New Person');
-		await dialog.getByLabel('Email', { exact: true }).fill('new@example.com');
-		await dialog.getByLabel('Password').first().fill('hunter2hunter2');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Add user', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add user' });
+		await dialog.getByRole('textbox', { name: 'Name' }).fill('New Person');
+		await dialog.getByRole('textbox', { name: 'Email' }).fill('new@example.com');
+		await dialog.getByLabel('Password', { exact: true }).fill('hunter2hunter2');
+		await dialog.getByRole('button', { name: 'Add user' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/auths/add')?.body)
 			.toMatchObject({ name: 'New Person', email: 'new@example.com', password: 'hunter2hunter2', role: 'user' });
 	});
 
-	test('Preview Access shows models with the "n of total" line', async ({ page }) => {
+	test('Add user shows what is missing under each field, and sends nothing (#1103)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAdminApi(page, { users: [user(2)] });
+		await page.goto('/admin/users/overview');
+		await page.getByRole('button', { name: 'Add user', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add user' });
+		await dialog.getByRole('button', { name: 'Add user' }).click();
+		await expect(dialog.getByText('Enter their name.')).toBeVisible();
+		await expect(dialog.getByText('Enter their email address.')).toBeVisible();
+		await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveAttribute('aria-invalid', 'true');
+		await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeFocused();
+		expect(calls.some((c) => c.path === '/auths/add')).toBe(false);
+	});
+
+	test('Preview access shows models with the "n of total" line', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Preview Access' }).click();
+		await moreActions(page, 'User 2', 'Preview access');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('Model A')).toBeVisible();
 		await expect(dialog.getByText('1 of 3 accessible')).toBeVisible();
 		await expect(dialog.getByText('No knowledge bases accessible')).toBeVisible();
 	});
 
-	test('the Chats action needs enable_admin_chat_access', async ({ page }) => {
+	test('View chats needs enable_admin_chat_access', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { users: [user(2)] });
 		await page.goto('/admin/users/overview');
-		await expect(page.getByRole('button', { name: 'Edit User' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveCount(0);
+		await page.getByRole('button', { name: 'More actions for User 2' }).click();
+		await expect(page.getByRole('menuitem', { name: 'Preview access' })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'View chats' })).toHaveCount(0);
 	});
 
 	test("with the flag, the Chats dialog lists the user's chats", async ({ page }) => {
@@ -237,10 +274,31 @@ test.describe('admin users', () => {
 			route.fulfill({ json: [{ id: 'c1', title: 'Their first chat', updated_at: 1700000000 }] })
 		);
 		await page.goto('/admin/users/overview');
-		await page.getByRole('button', { name: 'Chats', exact: true }).click();
+		await moreActions(page, 'User 2', 'View chats');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText("User 2's Chats")).toBeVisible();
 		await expect(dialog.getByRole('link', { name: 'Their first chat' })).toHaveAttribute('href', /\/s\/c1$/);
+	});
+
+	test('at 390 px a row is two lines and nothing runs off the page (#1026)', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await mockWorkspaceBackend(page);
+		await mockAdminApi(page, { users: [user(1, { role: 'admin' }), user(2)] });
+		await page.goto('/admin/users/overview');
+		// The email sits under the name (the Email column is hidden at this width).
+		await expect(page.getByText('user2@example.com').first()).toBeVisible();
+		await expect(page.getByRole('button', { name: 'More actions for User 2' })).toBeInViewport();
+		await expect(page.getByRole('button', { name: 'Add user' })).toBeInViewport();
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+	});
+
+	test('with one account, Groups and Default permissions are hidden (S5-D2)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAdminApi(page, { users: [user(1, { id: 'u1', role: 'admin' })], groups: [group(1)], accounts: 1 });
+		await page.goto('/admin/users/groups');
+		await expect(page.getByText('User 1', { exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: /^Groups/ })).toHaveCount(0);
+		await expect(page.getByRole('button', { name: /Default permissions/ })).toHaveCount(0);
 	});
 });
 
@@ -249,14 +307,19 @@ test.describe('admin groups', () => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { groups: [group(1), group(3, { permissions: { chat: { edit: false } } }), group(2)] });
 		await page.goto('/admin/users/groups');
-		const names = page.locator('button.group .line-clamp-1.text-sm');
-		await expect(names).toHaveText(['Group 3', 'Group 2', 'Group 1']);
-		await expect(page.getByText('Custom permissions')).toHaveCount(1);
-		await expect(page.getByText('Uses defaults')).toHaveCount(2);
+		const names = page.getByRole('list', { name: 'Groups' }).getByRole('listitem');
+		await expect(names).toHaveCount(3);
+		await expect(names.nth(0)).toContainText('Group 3');
+		await expect(names.nth(1)).toContainText('Group 2');
+		await expect(names.nth(2)).toContainText('Group 1');
+		await expect(page.getByText(/Custom permissions/)).toHaveCount(1);
+		await expect(page.getByText(/Uses the defaults/)).toHaveCount(2);
+		await expect(page.getByRole('button', { name: 'Sort: Members' })).toBeVisible();
 		await expect(page.getByRole('link', { name: /^Groups/ })).toContainText('3');
 
-		await page.getByLabel('Search Groups').fill('Group 2');
-		await expect(names).toHaveText(['Group 2']);
+		await page.getByLabel('Search groups').fill('Group 2');
+		await expect(names).toHaveCount(1);
+		await expect(names.nth(0)).toContainText('Group 2');
 		// The tab count follows the filter.
 		await expect(page.getByRole('link', { name: /^Groups/ })).toContainText('1');
 	});
@@ -268,17 +331,19 @@ test.describe('admin groups', () => {
 		await mockAdminApi(page, { groups: [group(1), group(2)] });
 		await page.goto('/admin/users/groups?id=group_2');
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByRole('heading', { name: 'Edit User Group' })).toBeVisible();
-		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Group 2');
+		await expect(dialog.getByRole('heading', { name: 'Edit group' })).toBeVisible();
+		await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('Group 2');
 
-		await dialog.getByRole('button', { name: 'Permissions' }).click();
-		await expect(dialog.getByRole('switch', { name: 'Import Models' })).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Models Access' }).click();
-		await expect(dialog.getByRole('switch', { name: 'Import Models' })).toBeVisible();
-		// Public sharing needs sharing first.
-		await expect(dialog.getByRole('switch', { name: 'Notes Public Sharing' })).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Notes Sharing' }).click();
-		await expect(dialog.getByRole('switch', { name: 'Notes Public Sharing' })).toBeVisible();
+		await dialog.getByRole('tab', { name: 'Permissions' }).click();
+		await dialog.getByRole('button', { name: /^Workspace/ }).click();
+		await expect(dialog.getByRole('switch', { name: 'Import models' })).toHaveCount(0);
+		await dialog.getByRole('switch', { name: 'Models', exact: true }).click();
+		await expect(dialog.getByRole('switch', { name: 'Import models' })).toBeVisible();
+		// Sharing with everyone needs sharing first; the filter finds both.
+		await dialog.getByLabel('Filter permissions').fill('notes');
+		await expect(dialog.getByRole('switch', { name: 'Share notes with everyone' })).toHaveCount(0);
+		await dialog.getByRole('switch', { name: 'Share notes', exact: true }).click();
+		await expect(dialog.getByRole('switch', { name: 'Share notes with everyone' })).toBeVisible();
 	});
 
 	test('saving a group sends name, description and the full permission set', async ({ page }) => {
@@ -287,10 +352,12 @@ test.describe('admin groups', () => {
 		await page.goto('/admin/users/groups');
 		await page.getByRole('button', { name: /Group 1/ }).click();
 		const dialog = page.getByRole('dialog');
-		await dialog.getByLabel('Name', { exact: true }).fill('Renamed');
-		await dialog.getByRole('button', { name: 'Permissions' }).click();
-		await dialog.getByRole('switch', { name: 'Allow Chat Edit' }).click();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('textbox', { name: 'Name' }).fill('Renamed');
+		await dialog.getByRole('tab', { name: 'Permissions' }).click();
+		await dialog.getByLabel('Filter permissions').fill('edit messages');
+		await dialog.getByRole('switch', { name: 'Edit messages' }).click();
+		await expect(dialog.getByRole('button', { name: /^Chat/ })).toContainText('1 changed');
+		await dialog.getByRole('button', { name: 'Save group' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/groups/id/group_1/update')?.body)
 			.toMatchObject({
@@ -306,29 +373,32 @@ test.describe('admin groups', () => {
 		await page.goto('/admin/users/groups');
 		await page.getByRole('button', { name: /Group 1/ }).click();
 		const dialog = page.getByRole('dialog');
-		await dialog.getByRole('button', { name: 'Permissions' }).click();
-		await expect(dialog.getByText('This is a default user permission and will remain enabled.')).toHaveCount(0);
-		await dialog.getByRole('switch', { name: 'Allow Chat Edit' }).click();
-		await expect(dialog.getByText('This is a default user permission and will remain enabled.')).toHaveCount(1);
+		await dialog.getByRole('tab', { name: 'Permissions' }).click();
+		await dialog.getByLabel('Filter permissions').fill('edit messages');
+		const hint = dialog.getByText("On for every account by default, so this group's members keep it.");
+		await expect(hint).toHaveCount(0);
+		await dialog.getByRole('switch', { name: 'Edit messages' }).click();
+		await expect(hint).toHaveCount(1);
 	});
 
-	test('New Group starts from the default permissions and posts to create', async ({ page }) => {
+	test('New group starts from the default permissions and posts to create', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { groups: [], defaults: { workspace: { models: true } } });
 		await page.goto('/admin/users/groups');
-		await expect(page.getByText('No groups found')).toBeVisible();
-		await page.getByRole('button', { name: 'New Group' }).click();
+		await expect(page.getByText('No groups yet')).toBeVisible();
+		await page.getByRole('button', { name: 'New group' }).click();
 		const dialog = page.getByRole('dialog');
-		await dialog.getByLabel('Name', { exact: true }).fill('Fresh');
-		await dialog.getByRole('button', { name: 'Permissions' }).click();
-		await expect(dialog.getByRole('switch', { name: 'Models Access' })).toBeChecked();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('textbox', { name: 'Name' }).fill('Fresh');
+		await dialog.getByRole('tab', { name: 'Permissions' }).click();
+		await dialog.getByRole('button', { name: /^Workspace/ }).click();
+		await expect(dialog.getByRole('switch', { name: 'Models', exact: true })).toBeChecked();
+		await dialog.getByRole('button', { name: 'Create group' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/groups/create')?.body)
 			.toMatchObject({ name: 'Fresh', permissions: { workspace: { models: true } } });
 		// Reopening does not keep the previous name.
-		await page.getByRole('button', { name: 'New Group' }).click();
-		await expect(page.getByRole('dialog').getByLabel('Name', { exact: true })).toHaveValue('');
+		await page.getByRole('button', { name: 'New group' }).click();
+		await expect(page.getByRole('dialog').getByRole('textbox', { name: 'Name' })).toHaveValue('');
 	});
 
 	test('Default permissions saves through /users/default/permissions', async ({ page }) => {
@@ -337,32 +407,50 @@ test.describe('admin groups', () => {
 		await page.goto('/admin/users/groups');
 		await page.getByRole('button', { name: /Default permissions/ }).click();
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByRole('heading', { name: 'Edit Default Permissions' })).toBeVisible();
-		await dialog.getByRole('switch', { name: 'Knowledge Access' }).click();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(dialog.getByRole('heading', { name: 'Default permissions' })).toBeVisible();
+		await expect(dialog.getByRole('tablist')).toHaveCount(0);
+		await dialog.getByRole('button', { name: /^Workspace/ }).click();
+		await dialog.getByRole('switch', { name: 'Knowledge', exact: true }).click();
+		await dialog.getByRole('button', { name: 'Save permissions' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/users/default/permissions')?.body)
 			.toMatchObject({ workspace: { knowledge: true } });
 	});
 
-	test('the Users tab ticks a user into the group', async ({ page }) => {
+	test('the Members tab ticks a user into the group', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { groups: [group(1)], users: [user(2)] });
 		await page.goto('/admin/users/groups?id=group_1');
 		const dialog = page.getByRole('dialog');
-		await dialog.getByRole('button', { name: 'Users', exact: true }).click();
+		await dialog.getByRole('tab', { name: 'Members' }).click();
+		await expect(dialog.getByRole('button', { name: /^Member/ })).toBeVisible();
 		await dialog.getByRole('checkbox', { name: 'User 2' }).click();
 		await expect
 			.poll(() => calls.some((c) => c.path === '/groups/id/group_1/users/add' && c.body?.user_ids?.[0] === 'user_2'))
 			.toBe(true);
 	});
 
-	test('deleting a group confirms first', async ({ page }) => {
+	test('removing a member says so, and Undo adds them back (ACT-3)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAdminApi(page, { groups: [group(1)], users: [user(2, { group_ids: ['group_1'] })] });
+		await page.goto('/admin/users/groups?id=group_1');
+		const dialog = page.getByRole('dialog');
+		await dialog.getByRole('tab', { name: 'Members' }).click();
+		await dialog.getByRole('checkbox', { name: 'User 2' }).click();
+		await expect.poll(() => calls.some((c) => c.path === '/groups/id/group_1/users/remove')).toBe(true);
+		await expect(dialog.getByRole('status')).toHaveText(/Removed “User 2” from Group 1/);
+		await dialog.getByRole('button', { name: 'Undo' }).click();
+		await expect.poll(() => calls.some((c) => c.path === '/groups/id/group_1/users/add')).toBe(true);
+	});
+
+	test('deleting a group confirms first, saying the members keep their accounts', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockAdminApi(page, { groups: [group(1)] });
 		await page.goto('/admin/users/groups?id=group_1');
-		await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Delete group' }).click();
+		const confirm = page.getByRole('alertdialog', { name: 'Delete “Group 1”?' });
+		await expect(confirm).toContainText('Its members keep their accounts');
+		await confirm.getByRole('button', { name: 'Delete group' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/groups/id/group_1/delete')).toBe(true);
 	});
 });
