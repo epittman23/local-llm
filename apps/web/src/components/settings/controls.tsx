@@ -184,7 +184,7 @@ export function SettingsForm({
 					</p>
 				)}
 			</div>
-			<div data-settings-body className="min-h-0 flex-1 overflow-y-auto pe-2">
+			<div data-settings-body className="relative min-h-0 flex-1 overflow-y-auto pe-2">
 				{loading ? (
 					<div className="flex h-full items-center justify-center">
 						<Spinner className="size-6" />

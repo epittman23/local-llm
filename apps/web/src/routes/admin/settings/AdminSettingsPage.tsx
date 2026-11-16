@@ -51,7 +51,9 @@ export function AdminSettingsPage() {
 	const listed = filterTabs(tabs, search);
 	const searching = search.trim() !== '';
 	return (
-		<section aria-label="Server settings" className="flex h-full min-h-0 max-md:flex-col">
+		// `relative`: what a tab positions out of the flow (a switch's hidden input, a screen-reader-only
+		// span) stays inside the page, so the document itself never scrolls.
+		<section aria-label="Server settings" className="relative flex h-full min-h-0 max-md:flex-col">
 			<div
 				className={cn(
 					'flex min-h-0 min-w-0 flex-col pt-3 md:w-60 md:shrink-0 md:border-r max-md:flex-1',
@@ -108,7 +110,7 @@ export function AdminSettingsPage() {
 						id={SETTINGS_PANEL_ID}
 						role="tabpanel"
 						aria-labelledby={settingsTabId(open.id)}
-						className="min-h-0 flex-1 overflow-hidden"
+						className="relative min-h-0 flex-1 overflow-hidden"
 					>
 						<SettingsPageHost>
 							<SettingsTabContent id={open.id} />
@@ -127,7 +129,7 @@ export function AdminSettingsPage() {
  */
 export function AdminAnalyticsPage() {
 	return (
-		<section aria-label="Analytics" className="h-full min-h-0 px-4 pt-4">
+		<section aria-label="Analytics" className="relative h-full min-h-0 px-4 pt-4">
 			<SettingsTabContent id="admin:analytics" />
 		</section>
 	);
