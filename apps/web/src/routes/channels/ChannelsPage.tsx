@@ -121,7 +121,12 @@ function Channels() {
 										}}
 									>
 										<ChannelIcon channel={c} />
-										<span className="min-w-0 flex-1 truncate font-strong">{channelTitle(c, me?.id)}</span>
+										<span className="flex min-w-0 flex-1 flex-col">
+											<span className="truncate font-strong">{channelTitle(c, me?.id)}</span>
+											{c.description?.trim() && (
+												<span className="text-foreground-muted truncate text-dense">{c.description}</span>
+											)}
+										</span>
 										{c.type && KIND[c.type] && <Badge variant="secondary">{KIND[c.type]}</Badge>}
 										{!joined && <Badge variant="secondary">Not joined</Badge>}
 										{joined && unread > 0 && <Badge variant="secondary">{formatUnread(unread)} unread</Badge>}

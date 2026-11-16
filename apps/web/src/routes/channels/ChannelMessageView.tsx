@@ -10,7 +10,7 @@ import {
 	SmilePlus,
 	Trash2
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
@@ -464,6 +464,9 @@ function TouchActions({
 	onDelete: () => void;
 }) {
 	const [picking, setPicking] = useState(false);
+	// The picker opens once the menu has closed and given focus back: opened at
+	// once, the menu's closing took focus out of it and closed it again.
+	const pickNext = useRef(false);
 	const editable = mine && (actions.onEdit || actions.onDelete);
 	return (
 		<div className="hidden shrink-0 self-start pointer-coarse:flex">
@@ -475,9 +478,22 @@ function TouchActions({
 								<MoreHorizontal />
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" collisionPadding={8}>
+						<DropdownMenuContent
+							align="end"
+							collisionPadding={8}
+							onCloseAutoFocus={(e) => {
+								if (!pickNext.current) return;
+								pickNext.current = false;
+								e.preventDefault();
+								setPicking(true);
+							}}
+						>
 							{actions.onReaction && (
-								<DropdownMenuItem onSelect={() => setPicking(true)}>
+								<DropdownMenuItem
+									onSelect={() => {
+										pickNext.current = true;
+									}}
+								>
 									<SmilePlus /> Add reaction
 								</DropdownMenuItem>
 							)}
