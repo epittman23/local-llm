@@ -79,6 +79,14 @@ import { ResponseMessage } from '@/routes/chat/ChatMessages';
 import { ErrorReply } from '@/routes/chat/ErrorReply';
 import { ModelRow } from '@/routes/chat/ModelSelector';
 import type { ChatModel } from '@/routes/chat/useModels';
+import {
+	ChartDemo,
+	ConnectionUrlDemo,
+	DisclosureDemo,
+	OpeningTableDemo,
+	StatusNoticeDemo,
+	TallDialogDemo
+} from './adminDemos';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
@@ -242,7 +250,7 @@ export function FormsSection() {
 			id="forms"
 			title="Forms"
 			lead="Every field has a visible edge, a label that stays put, and its help or its error directly underneath. A form either saves when you press Save and tells you while changes are pending, or applies each change at once and says so. Never both without saying."
-			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'COL-6', 'ACT-5']}
+			rules={['FRM-1', 'FRM-2', 'FRM-3', 'FRM-4', 'FRM-5', 'FRM-6', 'FBK-1', 'COL-6', 'ACT-5']}
 		>
 			<Example
 				title="A form that saves on request"
@@ -335,6 +343,18 @@ export function FormsSection() {
 						)}
 					</Field>
 				</Panel>
+			</Example>
+			<Example
+				title="A folded group of settings"
+				note="One full-width row: the group's name, an optional second line and count, and a chevron that turns. Opened, it grows inside a frame in the page's own scroller and comes into view; it never scrolls on its own."
+			>
+				<DisclosureDemo />
+			</Example>
+			<Example
+				title="A URL with Test connection"
+				note="It checks for http:// or https:// first, then says under the URL what it found: the model count in the success colour, or the server's reason in the danger colour with the field marked invalid. An edit clears the result."
+			>
+				<ConnectionUrlDemo />
 			</Example>
 			<Example
 				title="A native select"
@@ -464,7 +484,7 @@ export function DataSection() {
 			id="data"
 			title="Tables and figures"
 			lead="Numbers are right-aligned in tabular figures with one precision per column, the unit lives in the column heading, and a missing value is a dash, not a blank or a zero. Identifiers are monospaced and can be copied."
-			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'TYP-6', 'COL-2', 'A11Y-2']}
+			rules={['DAT-1', 'DAT-2', 'DAT-3', 'DAT-4', 'DAT-6', 'NAV-5', 'TYP-6', 'COL-2', 'COL-8', 'A11Y-2', 'A11Y-4']}
 		>
 			<Example
 				title="A results table"
@@ -541,6 +561,18 @@ export function DataSection() {
 				note="While a search narrows a list, the list says how many of the whole it shows ('2 of 6 prompts', the shared ListMatchCount); the tab keeps the whole count. Nothing matching says so and offers Clear search."
 			>
 				<ListMatchCountDemo />
+			</Example>
+			<Example
+				title="Rows that open, headings that sort"
+				note="A click anywhere on a row opens it, except on a control in it; the name is a button, the keyboard's way in. A sortable heading is a button, and only the open sort's heading carries aria-sort."
+			>
+				<OpeningTableDemo />
+			</Example>
+			<Example
+				title="A chart"
+				note="A legend names each line's colour, the y axis has a title and round ticks, and Show as table gives every value to the keyboard and to a screen reader. The tooltip opens away from the nearer edge."
+			>
+				<ChartDemo />
 			</Example>
 		</Section>
 	);
@@ -696,7 +728,7 @@ export function FeedbackSection() {
 			id="feedback"
 			title="Feedback and overlays"
 			lead="A message appears where the thing it is about is. A toast only confirms something that already finished; an error stays until you have dealt with it and says what to do. Escape closes the top layer only, and focus returns to what opened it."
-			rules={['FBK-1', 'FBK-2', 'FBK-4', 'ACT-3', 'OVL-1', 'OVL-2', 'OVL-3', 'NAV-4']}
+			rules={['FBK-1', 'FBK-2', 'FBK-4', 'STA-4', 'COL-3', 'ACT-3', 'OVL-1', 'OVL-2', 'OVL-3', 'NAV-4']}
 		>
 			<Example
 				title="Toasts"
@@ -737,6 +769,18 @@ export function FeedbackSection() {
 						</p>
 					</div>
 				</div>
+			</Example>
+			<Example
+				title="A section's state"
+				note="At the top of the section it describes: an icon and a title in the status colour, what it means and what to do as sentences, one action, and the server's own words behind Details. It is not help text."
+			>
+				<StatusNoticeDemo />
+			</Example>
+			<Example
+				title="A tall dialog"
+				note="Never taller than the viewport less 1 rem each side: its fields scroll in DialogBody while its title and buttons stay in view. Try it at 390 px."
+			>
+				<TallDialogDemo />
 			</Example>
 			<Example
 				title="Dialog, destructive confirmation and menu"
