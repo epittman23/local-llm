@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 667,
+	"total": 650,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -348,9 +348,6 @@
 			"lint/correctness/useExhaustiveDependencies": 1,
 			"lint/style/noNonNullAssertion": 1
 		},
-		"apps/web/src/routes/admin/analytics/ChartLine.tsx": {
-			"lint/suspicious/noArrayIndexKey": 1
-		},
 		"apps/web/src/routes/admin/functions/functionTypes.ts": {
 			"lint/complexity/useOptionalChain": 1
 		},
@@ -474,13 +471,6 @@
 		"apps/web/src/routes/admin/users/permissionRows.test.ts": {
 			"lint/style/noNonNullAssertion": 1
 		},
-		"apps/web/src/routes/automations/AutomationDialog.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 6,
-			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/automations/AutomationPage.tsx": {
-			"lint/a11y/useAriaPropsSupportedByRole": 1
-		},
 		"apps/web/src/routes/automations/automationModel.test.ts": {
 			"lint/suspicious/noExplicitAny": 2
 		},
@@ -510,22 +500,12 @@
 			"lint/suspicious/noArrayIndexKey": 3,
 			"lint/suspicious/noExplicitAny": 9
 		},
-		"apps/web/src/routes/calendar/CalendarDialogs.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 3
-		},
-		"apps/web/src/routes/calendar/CalendarPage.tsx": {
-			"lint/suspicious/noArrayIndexKey": 1
-		},
 		"apps/web/src/routes/calendar/calendarModel.test.ts": {
-			"lint/style/noNonNullAssertion": 1,
 			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/calendar/calendarModel.ts": {
-			"lint/suspicious/noAssignInExpressions": 1
 		},
 		"apps/web/src/routes/channels/ChannelDialogs.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1,
-			"lint/correctness/useExhaustiveDependencies": 4
+			"lint/correctness/useExhaustiveDependencies": 3
 		},
 		"apps/web/src/routes/channels/ChannelMessageView.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1,
@@ -619,8 +599,7 @@
 		},
 		"apps/web/src/routes/playground/PlaygroundPages.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 2,
-			"lint/suspicious/noArrayIndexKey": 3,
-			"lint/suspicious/noExplicitAny": 1
+			"lint/suspicious/noArrayIndexKey": 3
 		},
 		"apps/web/src/routes/public/AuthPage.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 7,
