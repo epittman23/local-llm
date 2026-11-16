@@ -213,11 +213,8 @@ export function Disclosure({
 			className="-mx-2 flex w-[calc(100%+1rem)] items-start gap-3 px-2 py-2"
 			aria-expanded={open}
 			aria-controls={id}
-			// Named by its title alone; the second line and the meta describe it.
-			aria-labelledby={`${id}-title`}
-			aria-describedby={
-				[description && `${id}-description`, meta && `${id}-meta`].filter(Boolean).join(' ') || undefined
-			}
+			// Named by everything it shows, title first (A11Y-2): a name that left out the second
+			// line or the count would not contain the visible label (WCAG 2.5.3).
 			onClick={() => {
 				clicked.current = !open;
 				setOwn(!open);
@@ -225,20 +222,13 @@ export function Disclosure({
 			}}
 		>
 			<span className="min-w-0 flex-1">
-				<span id={`${id}-title`} className="text-foreground-strong font-strong block">
-					{title}
-				</span>
-				{description && (
-					<span id={`${id}-description`} className="text-foreground-muted mt-1 block text-dense">
-						{description}
-					</span>
-				)}
+				<span className="text-foreground-strong font-strong block">{title}</span>
+				{/* Spaces keep the parts apart in the name; the layout ignores them. */}
+				{description && ' '}
+				{description && <span className="text-foreground-muted mt-1 block text-dense">{description}</span>}
 			</span>
-			{meta && (
-				<span id={`${id}-meta`} className="flex shrink-0 items-center gap-2">
-					{meta}
-				</span>
-			)}
+			{meta && ' '}
+			{meta && <span className="flex shrink-0 items-center gap-2">{meta}</span>}
 			<ChevronDown
 				aria-hidden
 				className={cn(

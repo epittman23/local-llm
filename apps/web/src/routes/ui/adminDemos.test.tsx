@@ -25,15 +25,14 @@ describe('the Admin demos on /ui', () => {
 		expect(toast.success).toHaveBeenCalledWith('Checked again');
 	});
 
-	it('shows a folded group closed and one open, each named by its title', () => {
+	it('shows a folded group closed and one open, each named by all it shows, title first', () => {
 		render(<DisclosureDemo />);
-		const closed = screen.getByRole('button', { name: 'Sign-in with an identity provider' });
-		const open = screen.getByRole('button', { name: 'Default interface settings' });
+		const closed = screen.getByRole('button', { name: 'Sign-in with an identity provider Not configured' });
+		const open = screen.getByRole('button', {
+			name: 'Default interface settings What every account starts from. A personal setting overrides its default. 1 changed'
+		});
 		expect(closed).toHaveAttribute('aria-expanded', 'false');
 		expect(open).toHaveAttribute('aria-expanded', 'true');
-		expect(open).toHaveAccessibleDescription(
-			'What every account starts from. A personal setting overrides its default. 1 changed'
-		);
 		expect(screen.getByRole('switch', { name: 'Widescreen mode' })).toBeChecked();
 		fireEvent.click(closed);
 		expect(screen.getByText('Set by environment variables.')).toBeTruthy();

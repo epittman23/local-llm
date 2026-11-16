@@ -90,15 +90,17 @@ describe('Disclosure', () => {
 		expect(screen.queryByText('Inside')).toBeNull();
 	});
 
-	it('is named by its title and described by its second line and meta, in a heading when asked', () => {
+	it('is named by all it shows, title first, so the name holds the visible label (WCAG 2.5.3), in a heading when asked', () => {
 		render(
 			<Disclosure title="Chat" description="What members can do in a chat." meta={<span>2 changed</span>} level={3}>
 				<p>Inside</p>
 			</Disclosure>
 		);
-		const button = screen.getByRole('button', { name: 'Chat' });
-		expect(button).toHaveAccessibleDescription('What members can do in a chat. 2 changed');
-		expect(screen.getByRole('heading', { level: 3, name: 'Chat' })).toContainElement(button);
+		const name = 'Chat What members can do in a chat. 2 changed';
+		const button = screen.getByRole('button', { name });
+		expect(button).not.toHaveAttribute('aria-labelledby');
+		expect(button).not.toHaveAttribute('aria-describedby');
+		expect(screen.getByRole('heading', { level: 3, name })).toContainElement(button);
 		const panel = document.getElementById(button.getAttribute('aria-controls') ?? '') as HTMLElement;
 		expect(panel.hidden).toBe(true);
 		expect(panel.className).toContain('rounded-lg border p-3');

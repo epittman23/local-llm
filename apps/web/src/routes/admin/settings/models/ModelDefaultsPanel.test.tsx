@@ -18,13 +18,13 @@ describe('ModelDefaultsPanel', () => {
 	it('starts closed and opens from its one Model defaults disclosure (#960)', () => {
 		renderPanel();
 		expect(screen.queryByRole('button', { name: 'Capabilities' })).toBeNull();
-		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: /^Model defaults / }));
 		expect(screen.getByRole('button', { name: 'Capabilities' })).toBeTruthy();
 	});
 
 	it('is a chevron disclosure that says whether it is open, with no Configure buttons (FRM-6)', () => {
 		renderPanel();
-		const toggle = screen.getByRole('button', { name: 'Model defaults' });
+		const toggle = screen.getByRole('button', { name: /^Model defaults / });
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 		expect(toggle.querySelector('svg')).toBeTruthy();
 		fireEvent.click(toggle);
@@ -37,7 +37,7 @@ describe('ModelDefaultsPanel', () => {
 		const scrolled = vi.fn();
 		Element.prototype.scrollIntoView = scrolled;
 		renderPanel();
-		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: /^Model defaults / }));
 		const sections = ['Capabilities', 'Parameters', 'Prompt suggestions'].map((name) =>
 			screen.getByRole('button', { name })
 		);
@@ -56,7 +56,7 @@ describe('ModelDefaultsPanel', () => {
 
 	it('reports a changed capability to the parent', () => {
 		const onChange = renderPanel();
-		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: /^Model defaults / }));
 		fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }));
 		expect(screen.getByRole('group', { name: 'What a new model can do' })).toBeTruthy();
 		const boxes = screen.getAllByRole('checkbox');
@@ -72,7 +72,7 @@ describe('ModelDefaultsPanel', () => {
 				<ModelDefaultsPanel value={value} onChange={onChange} />
 			</TooltipProvider>
 		);
-		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: /^Model defaults / }));
 		fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }));
 		const features = within(screen.getByRole('group', { name: 'On by default in a new chat' })).getAllByRole(
 			'checkbox'

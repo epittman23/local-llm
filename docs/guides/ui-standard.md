@@ -470,8 +470,9 @@ Behaviour, Knowledge and tools, Capabilities, and Advanced (closed), and a
 A folded group is the one disclosure row, `Disclosure` in
 `components/settings/formFields.tsx`: a full-width row with the group's
 name, an optional second line, optional meta (a count, a 'changed' badge)
-and a chevron that turns while open; it is named by its title, described by
-the rest, and sets `aria-expanded` and `aria-controls`. Opened, its panel
+and a chevron that turns while open; it is named by all it shows, title
+first, so its name holds its visible label (WCAG 2.5.3), and sets
+`aria-expanded` and `aria-controls`. Opened, its panel
 grows in the scroller around it inside a `rounded-lg border p-3` frame,
 never an inner max-height, and a click that opens it brings the row and
 panel into view (`scrollIntoView({ block: 'nearest' })`, `scroll-mt-3` so the
