@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { parsePromptImport, sanitizeExternalDraft } from './promptTypes';
+import { commandFieldError, INVALID_COMMAND, parsePromptImport, sanitizeExternalDraft } from './promptTypes';
+
+describe('commandFieldError (FRM-2)', () => {
+	it('asks for a missing command, says which characters a bad one may use, and passes a good one', () => {
+		expect(commandFieldError('')).toBe('Enter a command.');
+		expect(commandFieldError('has space')).toBe(INVALID_COMMAND);
+		expect(commandFieldError('weekly-report_2')).toBeUndefined();
+	});
+});
 
 describe('sanitizeExternalDraft', () => {
 	it('never carries access grants from outside, however they are spelled', () => {

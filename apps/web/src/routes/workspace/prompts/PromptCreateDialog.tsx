@@ -18,7 +18,7 @@ import { useFieldErrors } from '@/lib/ui/useFieldErrors';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn, slugify } from '@/lib/utils';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
-import { commandProblem, INVALID_COMMAND, isValidCommand, type PromptDraft } from './promptTypes';
+import { commandFieldError, commandProblem, type PromptDraft } from './promptTypes';
 
 /**
  * Ports the create half of workspace/Prompts/PromptEditor.svelte, in its
@@ -128,7 +128,7 @@ function CreateForm({
 	} = useFieldErrors(
 		{
 			name: name.trim() ? undefined : 'Enter a name for this prompt.',
-			command: isValidCommand(command) ? undefined : INVALID_COMMAND,
+			command: commandFieldError(command),
 			content: content.trim() ? undefined : 'Write the prompt: its command puts this text in the message.'
 		},
 		['name', 'command', 'content'] as const

@@ -100,6 +100,14 @@ describe('PromptCreateDialog fields (#911, #1095)', () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
+	it('asks for a command when it is empty, rather than listing the characters it may use', () => {
+		const onSubmit = open();
+		fireEvent.change(screen.getByLabelText('Prompt content'), { target: { value: 'x' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Create prompt' }));
+		expect(screen.getByLabelText('Command')).toHaveAccessibleDescription('Enter a command.');
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
 	it('says a taken command under the field, and any other failure above the buttons', async () => {
 		const onSubmit = open(vi.fn().mockRejectedValueOnce(TAKEN).mockRejectedValueOnce('Server storage is full'));
 		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Summary' } });
@@ -213,6 +221,28 @@ describe('PromptEditView (#911, #957, #1095)', () => {
 		}
 	});
 
+	it('asks for a command when one is cleared, and will not save a version without it', async () => {
+		vi.useFakeTimers();
+		try {
+			const onSubmit = vi.fn();
+			view(onSubmit);
+			fireEvent.change(screen.getByLabelText('Command'), { target: { value: '' } });
+			await act(async () => vi.advanceTimersByTimeAsync(600));
+			expect(screen.getByRole('alert')).toHaveTextContent('Enter a command.');
+			expect(updatePromptMetadata).not.toHaveBeenCalled();
+			fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+			await act(async () => vi.advanceTimersByTimeAsync(0));
+			const dialog = screen.getByRole('dialog', { name: 'Edit prompt' });
+			fireEvent.change(within(dialog).getByLabelText('Prompt content'), { target: { value: 'New' } });
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
+			await act(async () => vi.advanceTimersByTimeAsync(0));
+			expect(dialog).toHaveTextContent('Enter a command, then save the new version.');
+			expect(onSubmit).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('opens the history as a sheet from the header, and closes it on a pick', async () => {
 		vi.mocked(getPromptHistory).mockResolvedValue([
 			{ id: 'v2', commit_message: 'Second', created_at: 2, snapshot: { content: 'Two' } },
@@ -264,7 +294,10 @@ describe('PromptEditView (#911, #957, #1095)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 		const dialog = await screen.findByRole('dialog', { name: 'Edit prompt' });
 		fireEvent.change(within(dialog).getByLabelText('Prompt content'), { target: { value: 'New' } });
-		fireEvent.change(within(dialog).getByLabelText('What changed (optional)'), { target: { value: 'shorter' } });
+		const changed = within(dialog).getByLabelText('What changed (optional)');
+		// "(optional)" is muted, as on the editors' other optional fields (FRM-6).
+		expect(within(dialog).getByText('(optional)')).toHaveClass('text-foreground-muted');
+		fireEvent.change(changed, { target: { value: 'shorter' } });
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));
 		expect(await within(dialog).findByRole('alert')).toHaveTextContent('/summary is already used by another prompt.');
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Save new version' }));

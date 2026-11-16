@@ -39,7 +39,7 @@ import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { routePaths } from '@/routes/routePaths';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { CommandField } from './PromptCreateDialog';
-import { commandProblem, type EditablePrompt, INVALID_COMMAND, isValidCommand, type PromptDraft } from './promptTypes';
+import { commandFieldError, commandProblem, type EditablePrompt, type PromptDraft } from './promptTypes';
 
 type HistoryEntry = {
 	id: string;
@@ -167,8 +167,9 @@ export function PromptEditView({
 	// with keepalive when the page itself goes away (#675).
 	const debouncedMetadataSave = useDebouncedCallback(
 		async (next: { name: string; command: string; tags: { name: string }[] }, unloading: boolean) => {
-			if (!isValidCommand(next.command)) {
-				setCommandError(INVALID_COMMAND);
+			const problem = commandFieldError(next.command);
+			if (problem) {
+				setCommandError(problem);
 				return;
 			}
 			try {
@@ -241,9 +242,12 @@ export function PromptEditView({
 	const saveNewVersion = async () => {
 		if (disabled) return;
 		setVersionProblem(null);
-		if (!isValidCommand(command)) {
+		const problem = commandFieldError(command);
+		if (problem) {
 			setVersionProblem({
-				message: `The command can't be saved: ${INVALID_COMMAND.toLowerCase()} Fix it first.`,
+				message: command
+					? `The command can't be saved: ${problem.toLowerCase()} Fix it first.`
+					: 'Enter a command, then save the new version.',
 				detail: null
 			});
 			return;
@@ -416,7 +420,9 @@ export function PromptEditView({
 							<FieldMessage id={ids.contentMsg} error={versionErrors.content} />
 						</div>
 						<div className="flex flex-col gap-1.5">
-							<Label htmlFor={ids.message}>What changed (optional)</Label>
+							<Label htmlFor={ids.message}>
+								What changed <span className="text-foreground-muted font-normal">(optional)</span>
+							</Label>
 							<Input
 								id={ids.message}
 								placeholder="e.g. Asks for a shorter summary"
