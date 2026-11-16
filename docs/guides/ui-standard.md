@@ -407,7 +407,8 @@ sent with the tab's Save.
 On a page, `lib/ui/useUnsavedChanges(dirty, { message })` is the guard. It
 asks 'Discard changes?' ('Keep editing' / 'Discard changes') before in-app
 navigation, the browser's Back or Forward, or a change of `?id=` would lose
-changes, and has the browser ask before a reload or tab close (not in the
+changes (not a change of `?settings=` alone: the Settings dialog opening or
+closing over the page leaves nothing), and has the browser ask before a reload or tab close (not in the
 desktop app). `dirty` compares values against a baseline; it never counts
 change events. Render its `dialog`. Call `allowNext()` only after a save has
 resolved, immediately before navigating away; set before the save, a failed

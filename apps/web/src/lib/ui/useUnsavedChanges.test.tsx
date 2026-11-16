@@ -195,6 +195,33 @@ describe('useUnsavedChanges', () => {
 		expect(router.state.location.search).toBe('');
 	});
 
+	it('lets the Settings dialog open and close over the page (only ?settings= changes) without asking', async () => {
+		const router = setup();
+		type('x');
+		await act(() => router.navigate('/editor?settings=account'));
+		expect(router.state.location.search).toBe('?settings=account');
+		await act(() => router.navigate('/editor?settings=appearance', { replace: true }));
+		await act(() => router.navigate(-1));
+		expect(router.state.location.pathname).toBe('/editor');
+		expect(router.state.location.search).toBe('');
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		expect((screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value).toBe('x');
+		// The page is still guarded: another item asks.
+		fireEvent.click(screen.getByRole('link', { name: 'Other item' }));
+		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+		expect(router.state.location.search).toBe('');
+	});
+
+	it('still asks when ?settings= changes along with a page’s own parameter', async () => {
+		const router = setup();
+		type('x');
+		act(() => {
+			router.navigate('/editor?id=2&settings=account');
+		});
+		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+		expect(router.state.location.search).toBe('');
+	});
+
 	it('still asks on the next way out after Discard changes kept the page mounted (another item)', async () => {
 		const router = setup();
 		type('x');

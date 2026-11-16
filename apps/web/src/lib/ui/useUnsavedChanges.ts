@@ -7,7 +7,9 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
 /**
  * FRM-3: a page that saves on request asks before its unsaved changes are lost.
  * While `dirty`, leaving for another page in the app (a link, a tab, Back, the
- * browser's Back) stops at "Discard changes?", and reloading or closing the tab
+ * browser's Back, another `?id=`) stops at "Discard changes?"; the Settings
+ * dialog opening or closing over the page (only `?settings=` changes) does
+ * not, since the page stays. Reloading or closing the tab
  * has the browser ask. Not in the desktop app: Electron cancels a prevented
  * unload without asking, so its window would silently refuse to close.
  *
@@ -80,13 +82,17 @@ function useLeaveGuard(
 
 	const shouldBlock = useCallback<BlockerFunction>(
 		({ currentLocation, nextLocation }) => {
+			// The Settings dialog opening or closing over the page (`?settings=`) leaves nothing,
+			// and must not use up a pending allowNext either.
+			const moving =
+				currentLocation.pathname !== nextLocation.pathname ||
+				withoutSettings(currentLocation.search) !== withoutSettings(nextLocation.search);
+			if (!moving) return false;
 			if (allowed.current) {
 				allowed.current = false;
 				return false;
 			}
-			const moving =
-				currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search;
-			const block = dirtyNow.current && moving;
+			const block = dirtyNow.current;
 			if (block) rememberFocus();
 			return block;
 		},
@@ -162,6 +168,13 @@ function useLeaveGuard(
 		message
 	);
 	return { dialog, allowNext, confirmLeave };
+}
+
+/** A query string without `settings`, the Settings dialog's address (lib/settings/useSettingsUrl.ts). */
+function withoutSettings(search: string): string {
+	const params = new URLSearchParams(search);
+	params.delete('settings');
+	return params.toString();
 }
 
 const TABBABLE =
