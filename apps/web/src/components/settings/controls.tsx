@@ -1,5 +1,16 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { type ComponentProps, type ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+	type ComponentProps,
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useId,
+	useMemo,
+	useRef,
+	useState
+} from 'react';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +18,7 @@ import { SaveBar } from '@/components/ui/save-bar';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 
@@ -31,13 +43,63 @@ export const settingSlug = (label: string) =>
 		.replace(/^-|-$/g, '');
 
 /**
+ * Where a settings tab is shown, and how it reports unsaved changes (FRM-3,
+ * #951). A tab never asks "Discard changes?" itself; its host does, once:
+ *
+ * - `dialog`: the Settings dialog, which asks before another tab or closing
+ *   (`settingsModalStore`).
+ * - `page`: an admin settings page (`/admin/settings/<tab>`), whose one page
+ *   guard (`useUnsavedChanges`) asks before any navigation, another tab
+ *   included.
+ * - `null`: not inside a settings host (a page elsewhere, a test); dirty
+ *   state goes to the dialog's store, as it always has.
+ *
+ * Something with its own guard that a tab may embed (Admin > Models' model
+ * editor) turns that guard off while `kind` is set and reports through
+ * `setDirty` instead, so one leave never asks twice.
+ */
+export type SettingsHost = { kind: 'dialog' | 'page' | null; setDirty: (dirty: boolean) => void };
+
+const storeSetDirty = (dirty: boolean) => useSettingsModalStore.getState().setDirty(dirty);
+const dialogHost: SettingsHost = { kind: 'dialog', setDirty: storeSetDirty };
+const SettingsHostContext = createContext<SettingsHost>({ kind: null, setDirty: storeSetDirty });
+
+/** The settings host around this component: see `SettingsHost`. */
+export const useSettingsHost = () => useContext(SettingsHostContext);
+
+/** Marks its children as shown in the Settings dialog. */
+export function SettingsDialogHost({ children }: { children: ReactNode }) {
+	return <SettingsHostContext.Provider value={dialogHost}>{children}</SettingsHostContext.Provider>;
+}
+
+/**
+ * Hosts a settings tab on a page: the page's one unsaved-changes guard, fed
+ * by whatever the tab reports. Leaving the page, or opening another tab (a
+ * navigation), asks "Discard changes?" first while it is dirty.
+ */
+export function SettingsPageHost({ children }: { children: ReactNode }) {
+	const [dirty, setDirty] = useState(false);
+	const { dialog } = useUnsavedChanges(dirty, {
+		message: 'This tab has changes that are not saved. They are lost if you leave it.'
+	});
+	const host = useMemo<SettingsHost>(() => ({ kind: 'page', setDirty }), []);
+	return (
+		<SettingsHostContext.Provider value={host}>
+			{children}
+			{dialog}
+		</SettingsHostContext.Provider>
+	);
+}
+
+/**
  * A settings tab: heading, scrolling body, and a footer, in one of FRM-3's two
  * ways of saving.
  *
- * - On request, with `dirty` (and `onDiscard`): the shared SaveBar, and the
- *   modal asks "Discard changes?" before the tab is left while dirty (#951).
- * - At once, with `savesAtOnce`: no footer, and a line under the heading says
- *   so; each control confirms its own save (`SavedNote`).
+ * - On request, with `dirty` (and `onDiscard`): the shared SaveBar, and its
+ *   host (`SettingsHost`: the dialog or the page) asks "Discard changes?"
+ *   before the tab is left while dirty (#951).
+ * - At once, with `savesAtOnce`: no Save button, and a line under the heading
+ *   says so; each control confirms its own save (`SavedNote`).
  * - Neither (the admin tabs, until they adopt `dirty`): a Save button.
  *
  * Submitting the form saves; `saving` disables the button and shows a spinner
@@ -73,13 +135,14 @@ export function SettingsForm({
 	children: ReactNode;
 }) {
 	const guarded = dirty !== undefined;
+	const { setDirty } = useSettingsHost();
 	useEffect(() => {
 		if (!guarded) return;
-		useSettingsModalStore.getState().setDirty(Boolean(dirty));
-	}, [guarded, dirty]);
+		setDirty(Boolean(dirty));
+	}, [guarded, dirty, setDirty]);
 	useEffect(() => {
-		if (guarded) return () => useSettingsModalStore.getState().setDirty(false);
-	}, [guarded]);
+		if (guarded) return () => setDirty(false);
+	}, [guarded, setDirty]);
 	const form = (
 		<form
 			className="flex h-full flex-col text-body"
