@@ -95,6 +95,17 @@ describe('AddUserModal', () => {
 });
 
 describe('AddUserModal helpers', () => {
+	it('says a password problem right under its field, with Generate and Copy beside it, not between (#1103)', () => {
+		renderModal();
+		fireEvent.click(screen.getByRole('button', { name: 'Add user' }));
+		const field = screen.getByLabelText('Password').closest('[data-composite-field]') as HTMLElement;
+		const message = field.nextElementSibling as HTMLElement;
+		expect(message).toHaveTextContent('Enter a password, or press Generate.');
+		expect(screen.getByLabelText('Password')).toHaveAccessibleDescription('Enter a password, or press Generate.');
+		expect(field.parentElement).not.toContainElement(screen.getByRole('button', { name: 'Generate' }));
+		expect(field.parentElement).not.toContainElement(screen.getByRole('button', { name: 'Copy' }));
+	});
+
 	it('generates 16 characters with every class', () => {
 		const pw = generatePassword();
 		expect(pw).toHaveLength(16);

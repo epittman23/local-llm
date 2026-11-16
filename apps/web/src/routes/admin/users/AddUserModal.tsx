@@ -289,47 +289,53 @@ function AddUserForm({
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor={ids.password}>Password</Label>
-						<div className="flex flex-wrap items-center gap-2">
-							<div
-								data-composite-field
-								aria-invalid={passwordError ? true : undefined}
-								className={cn(
-									'border-border-control bg-surface-1 flex h-(--control) min-w-48 flex-1 items-center rounded-lg border ps-3 pe-1 pointer-coarse:h-(--control-touch)',
-									passwordError && 'border-danger'
-								)}
-							>
-								<SensitiveInput
-									id={ids.password}
-									{...field('password')}
-									className="text-body"
-									outerClassName="min-w-0 items-center"
-									value={user.password}
-									onChange={(password) => change({ password })}
-									placeholder="Temporary password"
-									autoComplete="new-password"
-									required={false}
-									{...fieldProps(`${ids.password}-msg`, { error: passwordError, help: passwordHelp })}
-								/>
+						{/* #1103: the field keeps its width with its line under it; Generate and Copy sit beside it,
+						    or below on a phone, never between the field and what is said about it. */}
+						<div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+							<div className="flex min-w-0 flex-1 flex-col gap-1.5">
+								<div
+									data-composite-field
+									aria-invalid={passwordError ? true : undefined}
+									className={cn(
+										'border-border-control bg-surface-1 flex h-(--control) items-center rounded-lg border ps-3 pe-1 pointer-coarse:h-(--control-touch)',
+										passwordError && 'border-danger'
+									)}
+								>
+									<SensitiveInput
+										id={ids.password}
+										{...field('password')}
+										className="text-body"
+										outerClassName="min-w-0 items-center"
+										value={user.password}
+										onChange={(password) => change({ password })}
+										placeholder="Temporary password"
+										autoComplete="new-password"
+										required={false}
+										{...fieldProps(`${ids.password}-msg`, { error: passwordError, help: passwordHelp })}
+									/>
+								</div>
+								<FieldMessage id={`${ids.password}-msg`} error={passwordError} help={passwordHelp} />
 							</div>
-							<Button variant="outline" type="button" onClick={() => change({ password: generatePassword() })}>
-								<KeyRound aria-hidden data-icon="inline-start" />
-								Generate
-							</Button>
-							<Button
-								variant="outline"
-								type="button"
-								disabled={!user.password}
-								onClick={() => copy(user.password, 'password')}
-							>
-								{copied ? (
-									<Check aria-hidden data-icon="inline-start" />
-								) : (
-									<Copy aria-hidden data-icon="inline-start" />
-								)}
-								{copied ? 'Copied' : 'Copy'}
-							</Button>
+							<div className="flex gap-2">
+								<Button variant="outline" type="button" onClick={() => change({ password: generatePassword() })}>
+									<KeyRound aria-hidden data-icon="inline-start" />
+									Generate
+								</Button>
+								<Button
+									variant="outline"
+									type="button"
+									disabled={!user.password}
+									onClick={() => copy(user.password, 'password')}
+								>
+									{copied ? (
+										<Check aria-hidden data-icon="inline-start" />
+									) : (
+										<Copy aria-hidden data-icon="inline-start" />
+									)}
+									{copied ? 'Copied' : 'Copy'}
+								</Button>
+							</div>
 						</div>
-						<FieldMessage id={`${ids.password}-msg`} error={passwordError} help={passwordHelp} />
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor={ids.role}>Role</Label>
