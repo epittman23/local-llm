@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getToolServerData } from '@/lib/apis';
@@ -7,6 +7,9 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { AddToolServerModal } from './AddToolServerModal';
 import type { ToolServerConnection } from './toolServerModel';
 
+// Admin's one-account rule (S5-D2) is tested where it is decided; here there are two accounts.
+const visibility = vi.hoisted(() => ({ single: false }));
+vi.mock('@/routes/admin/adminVisibility', () => ({ useAdminSingleUser: () => visibility.single }));
 vi.mock('file-saver', () => ({ default: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/lib/apis', () => ({ getToolServerData: vi.fn() }));
@@ -25,6 +28,7 @@ beforeAll(() => {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	visibility.single = false;
 	useAuthStore.setState({ token: 'jwt' } as never);
 });
 
@@ -259,5 +263,16 @@ describe('A tall tool server dialog (OVL-1)', () => {
 		expect(body).not.toContainElement(screen.getByRole('button', { name: 'Save' }));
 		expect(body.parentElement?.tagName).toBe('FORM');
 		expect(body.parentElement?.parentElement).toHaveAttribute('data-slot', 'dialog-content');
+	});
+});
+
+describe('Access control on the tool server dialog (S5-D2)', () => {
+	it('offers it while there is more than one account, and hides it for one', () => {
+		renderModal();
+		expect(screen.getByRole('button', { name: /Access control/ })).toBeInTheDocument();
+		cleanup();
+		visibility.single = true;
+		renderModal();
+		expect(screen.queryByRole('button', { name: /Access control/ })).toBeNull();
 	});
 });

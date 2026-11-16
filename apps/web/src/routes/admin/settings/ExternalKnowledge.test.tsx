@@ -17,6 +17,8 @@ import { ExternalKnowledge } from './ExternalKnowledge';
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/components/common/failureToast', () => ({ toastFailure: vi.fn() }));
 vi.mock('@/components/common/AccessControl', () => ({ AccessControl: () => <div>access control</div> }));
+const visibility = vi.hoisted(() => ({ single: false }));
+vi.mock('@/routes/admin/adminVisibility', () => ({ useAdminSingleUser: () => visibility.single }));
 vi.mock('@/lib/apis/knowledge', () => ({
 	createExternalKnowledgeSource: vi.fn(),
 	getExternalKnowledgeConnections: vi.fn(),
@@ -34,6 +36,7 @@ const ITEM = {
 };
 
 beforeEach(() => {
+	visibility.single = false;
 	vi.clearAllMocks();
 	useAuthStore.setState({ token: 'tok' } as never);
 	vi.mocked(getExternalKnowledgeConnections).mockResolvedValue({ items: [CONNECTION] } as never);
@@ -57,6 +60,18 @@ describe('ExternalKnowledge', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Configure Research' }));
 		expect(await screen.findByRole('heading', { name: 'Edit knowledge source' })).toBeTruthy();
 		expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Research');
+	});
+
+	it('shows who may search a source while there is more than one account, and not for one (S5-D2)', async () => {
+		await renderList();
+		fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+		expect(await screen.findByText('access control')).toBeInTheDocument();
+		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		visibility.single = true;
+		fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+		await screen.findByRole('heading', { name: 'Add knowledge source' });
+		expect(screen.queryByText('access control')).toBeNull();
 	});
 
 	it('opens a blank add dialog from Add source, on the shared fields (#933)', async () => {

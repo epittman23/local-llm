@@ -23,6 +23,7 @@ import { getToolServerData } from '@/lib/apis';
 import { initiateOAuthRedirect, registerOAuthClient, verifyToolServerConnection } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
+import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
 import { parseHeaders, type TestResult } from './connectionModel';
 import {
 	ConnectionUrlField,
@@ -113,6 +114,8 @@ export function AddToolServerModal({
 	const [f, setF] = useState<ToolServerFields>(blankToolServerFields());
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
+	// S5-D2: who may use it says nothing while the install has one account and sign-ups are off.
+	const singleUser = useAdminSingleUser();
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [errors, setErrors] = useState<Errors>({});
 	const [registration, setRegistration] = useState<string | null>(null);
@@ -624,7 +627,7 @@ export function AddToolServerModal({
 										Delete connection
 									</Button>
 								)}
-								{!direct && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
+								{!direct && !singleUser && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
 							</div>
 							<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
 								{loading && <Spinner className="size-3.5" />}

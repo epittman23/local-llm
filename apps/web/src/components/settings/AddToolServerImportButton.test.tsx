@@ -5,6 +5,9 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { AddToolServerModal } from './AddToolServerModal';
 
 const saveAs = vi.hoisted(() => vi.fn());
+// Admin's one-account rule (S5-D2) is tested where it is decided; here there are two accounts.
+const visibility = vi.hoisted(() => ({ single: false }));
+vi.mock('@/routes/admin/adminVisibility', () => ({ useAdminSingleUser: () => visibility.single }));
 vi.mock('file-saver', () => ({ default: saveAs }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 

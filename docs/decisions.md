@@ -23,7 +23,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     its sub-tabs; Authentication hides Default role, Default group and
     Pending accounts; General hides Channels, User webhooks, User status,
     Response watermark and Banners; Analytics hides its Users column, User
-    activity, group filter and user count. OAuth folds to one line. Users
+    activity, group filter and user count; the tool server, terminal,
+    knowledge source and arena model dialogs hide Access control. OAuth
+    folds to one line. Users
     stays. Everything returns with a second account or with sign-ups on.
   - **Ollama stays on (#1019, S5-D3 C).** No default, migration or stored
     value changes; only the words do ("OpenAI-compatible connections", no

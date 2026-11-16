@@ -33,6 +33,7 @@ import {
 	updateExternalKnowledgeSource
 } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
 import {
 	blankSourceForm,
 	connectionForItem,
@@ -231,6 +232,8 @@ function SourceDialog({
 	onSaved: () => void | Promise<void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	// S5-D2: who may search it says nothing while the install has one account and sign-ups are off.
+	const singleUser = useAdminSingleUser();
 	const ids = useId();
 	const id = (name: string) => `${ids}-${name}`;
 	const [f, setF] = useState<SourceForm>(blankSourceForm());
@@ -475,16 +478,18 @@ function SourceDialog({
 							/>
 						</div>
 
-						<div className="border-t pt-4">
-							<AccessControl
-								accessGrants={accessGrants}
-								onChange={setAccessGrants}
-								accessRoles={['read']}
-								share
-								sharePublic
-								shareUsers
-							/>
-						</div>
+						{!singleUser && (
+							<div className="border-t pt-4">
+								<AccessControl
+									accessGrants={accessGrants}
+									onChange={setAccessGrants}
+									accessRoles={['read']}
+									share
+									sharePublic
+									shareUsers
+								/>
+							</div>
+						)}
 					</DialogBody>
 					<div className="flex justify-end shrink-0 border-t pt-3">
 						<Button type="submit" disabled={saving} aria-busy={saving || undefined}>

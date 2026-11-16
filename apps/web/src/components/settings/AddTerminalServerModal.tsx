@@ -31,6 +31,7 @@ import {
 import { getTerminalConfig } from '@/lib/apis/terminal';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
+import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
 import { type TestResult, urlProblem } from './connectionModel';
 import { ConnectionUrlField, Disclosure, FieldLabel, FormField, SecretInput, SelectField } from './formFields';
 import {
@@ -112,6 +113,8 @@ export function AddTerminalServerModal({
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [showOrchestrator, setShowOrchestrator] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
+	// S5-D2: who may use it says nothing while the install has one account and sign-ups are off.
+	const singleUser = useAdminSingleUser();
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [urlError, setUrlError] = useState<string | null>(null);
 	const [lifecycleError, setLifecycleError] = useState<string | null>(null);
@@ -460,7 +463,7 @@ export function AddTerminalServerModal({
 										Delete connection
 									</Button>
 								)}
-								{!direct && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
+								{!direct && !singleUser && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
 							</div>
 							<Button
 								type="submit"
