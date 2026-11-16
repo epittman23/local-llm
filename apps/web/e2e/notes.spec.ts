@@ -217,6 +217,44 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	await expect(page.getByText(/^\d+ words · \d+ characters$/)).toBeVisible();
 });
 
+test('opening a note saves nothing; an edit saves Markdown that keeps highlights, ticks and math (#1132)', async ({
+	page
+}) => {
+	await mockWorkspaceBackend(page, enabled);
+	const md = [
+		'The posterior is $p(\\theta|x) \\propto p(x|\\theta)$, and the <mark>highlighted</mark> part is the prior.',
+		'',
+		'$$\\int_0^1 \\theta^{a-1}(1-\\theta)^{b-1} d\\theta$$',
+		'',
+		'- [ ] residual plot',
+		'- [x] QQ plot',
+		'- [ ] leverage'
+	].join('\n');
+	const seen = await mockNotes(page, [note('a', 'Diagnostics', { data: { content: { json: null, html: '', md } } })]);
+	await page.goto('/notes/a');
+	const editor = page.getByRole('textbox', { name: 'Note content' });
+	await expect(editor.getByRole('checkbox')).toHaveCount(3, { timeout: 20_000 });
+	await expect(editor.getByRole('checkbox').nth(1)).toBeChecked();
+	await expect(editor.locator('mark')).toHaveText('highlighted');
+	// Clicking into it is not an edit either. Then wait out the save delay (500 ms) three times over.
+	await editor.getByText('leverage', { exact: true }).click();
+	await page.waitForTimeout(1500);
+	expect(seen.updates).toEqual([]);
+
+	// The caret wait of the autosave test above, then type at the end of the last item.
+	await expect
+		.poll(() =>
+			editor.evaluate(
+				(el) =>
+					(el as unknown as { editor: { state: { selection: { $head: { parentOffset: number } } } } }).editor.state
+						.selection.$head.parentOffset
+			)
+		)
+		.toBe('leverage'.length);
+	await page.keyboard.type(' done');
+	await expect.poll(() => seen.updates.at(-1)?.data?.content?.md).toBe(`${md} done`);
+});
+
 test('pinning keeps an unsaved title edit, and the save sends it', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page, [note('a', 'Groceries')]);
