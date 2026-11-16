@@ -126,7 +126,8 @@ export function GroupsPanel() {
 			/>
 
 			<div className="flex flex-col gap-2">
-				<div className="flex flex-wrap items-center gap-2">
+				{/* items-start: on a phone Sort wraps under the search, and New group stays level with the search. */}
+				<div className="flex flex-wrap items-start gap-2">
 					<div className="min-w-0 flex-1">
 						<ListSearchBar value={query} onChange={setQuery} placeholder="Search groups">
 							<DropdownMenu>

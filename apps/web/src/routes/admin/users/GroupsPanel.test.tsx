@@ -66,6 +66,13 @@ describe('GroupsPanel', () => {
 		expect(screen.getByText(/No description · Uses the defaults/)).toBeTruthy();
 	});
 
+	it('keeps New group level with the search when Sort wraps under it on a phone (LAY-4)', async () => {
+		await renderPanel();
+		const toolbar = screen.getByRole('button', { name: 'New group' }).parentElement as HTMLElement;
+		expect(toolbar).toContainElement(screen.getByRole('textbox', { name: 'Search groups' }));
+		expect(toolbar).toHaveClass('items-start');
+	});
+
 	it('opens the group editor from a group row', async () => {
 		await renderPanel();
 		fireEvent.click(screen.getByRole('button', { name: /Research/ }));
