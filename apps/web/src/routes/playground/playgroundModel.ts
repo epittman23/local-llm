@@ -230,6 +230,17 @@ export function chatToExport(
 }
 
 /** The model a playground starts on: the user's first chosen model, else the admin default, else none. */
+/**
+ * A text completion's failure in words: a bare "404 Not Found" (a provider
+ * with no /completions answers that, with no body to explain it) says what it
+ * means. Anything with the server's own words is kept as it is.
+ */
+export function completionFailure(error: string): string {
+	return /^404\b/.test(error.trim()) && error.trim().length <= 20
+		? "This model's connection doesn't offer text completion (404)."
+		: error;
+}
+
 /** What the Playground reads of a model from /api/models. */
 export type PlaygroundModelInfo = {
 	id: string;

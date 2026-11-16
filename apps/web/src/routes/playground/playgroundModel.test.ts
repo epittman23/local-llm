@@ -5,6 +5,7 @@ import {
 	chatRequest,
 	chatToExport,
 	chatToText,
+	completionFailure,
 	completionModel,
 	completionRequest,
 	deltaFromLine,
@@ -195,5 +196,17 @@ describe('the models that can continue text (S6-D6)', () => {
 		expect(completionModel(models, 'llama3', 'coder')).toBe('coder');
 		expect(completionModel(models, '', 'llama3')).toBe('qwen');
 		expect(completionModel(models.slice(1, 5), '', 'qwen')).toBe('');
+	});
+});
+
+describe("a text completion's failure (S6-D6)", () => {
+	it("words a bare 404 as a connection with no text completion, and keeps the server's own words", () => {
+		expect(completionFailure('404 Not Found')).toBe("This model's connection doesn't offer text completion (404).");
+		expect(completionFailure('404 ')).toBe("This model's connection doesn't offer text completion (404).");
+		expect(completionFailure('Model not found')).toBe('Model not found');
+		expect(completionFailure('404: the route /v1/completions does not exist here')).toBe(
+			'404: the route /v1/completions does not exist here'
+		);
+		expect(completionFailure('500 Internal Server Error')).toBe('500 Internal Server Error');
 	});
 });

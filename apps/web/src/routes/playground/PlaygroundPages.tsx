@@ -18,7 +18,7 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import type { Params } from '@/components/common/advancedParamDefs';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { toastFailure } from '@/components/common/failureToast';
+import { errorText } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { type SectionTab, SectionTabs } from '@/components/layout/SectionTabs';
@@ -53,6 +53,7 @@ import {
 	chatRequest,
 	chatToExport,
 	chatToText,
+	completionFailure,
 	completionModel,
 	completionRequest,
 	formatStats,
@@ -142,14 +143,11 @@ function ModelSelect({
 	value: string;
 	onChange: (id: string) => void;
 }) {
+	// The name is cut short on a phone: the accessible name carries it whole.
+	const name = models.find((m) => m.id === value)?.name ?? value;
 	return (
 		<Select value={value || undefined} onValueChange={onChange}>
-			<SelectTrigger
-				aria-label="Model"
-				size="sm"
-				title={models.find((m) => m.id === value)?.name ?? value}
-				className="w-full min-w-0 sm:w-64"
-			>
+			<SelectTrigger aria-label={name ? `Model: ${name}` : 'Model'} size="sm" className="w-full min-w-0 sm:w-64">
 				<SelectValue placeholder="Choose a model" />
 			</SelectTrigger>
 			<SelectContent position="popper" align="end">
@@ -590,7 +588,10 @@ export function PlaygroundCompletions() {
 		const result = await run(completionRequest(modelId, prompt, params), (text) =>
 			setCompletions((c) => ({ output: c.output + text }))
 		);
-		setCompletions({ failure: result.error, stats: result.error ? null : result.stats });
+		setCompletions({
+			failure: result.error && completionFailure(result.error),
+			stats: result.error ? null : result.stats
+		});
 	};
 	const keep = () => setCompletions((c) => ({ prompt: c.prompt + c.output, output: '', stats: null }));
 	const speed = formatStats(stats ?? undefined);
@@ -703,6 +704,8 @@ export function PlaygroundImages() {
 	const [sources, setSources] = useState<string[]>([]);
 	const [results, setResults] = useState<{ url: string }[]>([]);
 	const [loading, setLoading] = useState(false);
+	// Why the last run failed, shown in place with Retry, as in Chat and Completions (#968).
+	const [failure, setFailure] = useState<string | null>(null);
 
 	const addFiles = async (files: FileList | File[] | null | undefined) => {
 		const images = Array.from(files ?? []).filter((f) => f.type.startsWith('image/'));
@@ -713,6 +716,7 @@ export function PlaygroundImages() {
 		if (!imagesOn) return;
 		if (!prompt.trim()) return void toast.error('Please enter a prompt');
 		setLoading(true);
+		setFailure(null);
 		try {
 			const res = sources.length
 				? await imageEdits(token, sources.length === 1 ? sources[0] : sources, prompt)
@@ -720,8 +724,7 @@ export function PlaygroundImages() {
 			if (Array.isArray(res)) setResults((prev) => [...res, ...prev]);
 		} catch (err) {
 			// The server answers "no permission" when the feature is off (WRD-4: there is one owner).
-			if (/permission/i.test(`${err}`)) toast.error(IMAGES_OFF);
-			else toastFailure("Couldn't make the image", err);
+			setFailure(/permission/i.test(`${err}`) ? IMAGES_OFF : (errorText(err) ?? "Couldn't make the image."));
 		} finally {
 			setLoading(false);
 		}
@@ -738,6 +741,7 @@ export function PlaygroundImages() {
 		<div className="flex h-full flex-col px-2.5">
 			<div className="min-h-0 flex-1 overflow-y-auto p-1">
 				{!imagesOn && <ImagesOff />}
+				{failure && !loading && <FailedRun error={failure} onRetry={() => void submit()} />}
 				{results.length ? (
 					<div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
 						{results.map((img, idx) => (
@@ -752,7 +756,8 @@ export function PlaygroundImages() {
 						))}
 					</div>
 				) : (
-					imagesOn && (
+					imagesOn &&
+					!failure && (
 						<div className="text-muted-foreground flex h-full items-center justify-center text-sm">
 							Generated images will appear here
 						</div>

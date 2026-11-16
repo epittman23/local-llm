@@ -180,17 +180,34 @@ describe('the Images tab while image generation is off (S6-D7)', () => {
 		wrap(<PlaygroundImages />);
 		fireEvent.change(screen.getByLabelText('Image prompt'), { target: { value: 'a red fox' } });
 		fireEvent.keyDown(screen.getByLabelText('Image prompt'), { key: 'Enter', metaKey: true });
-		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith('Image generation is off. Turn it on in Admin Settings > Images.')
-		);
+		const row = await screen.findByRole('alert');
+		expect(row).toHaveTextContent('Image generation is off. Turn it on in Admin Settings > Images.');
+		expect(toast.error).not.toHaveBeenCalled();
 	});
 
-	it("names another failure and keeps the server's words behind Details", async () => {
-		imageGenerations.mockRejectedValue('Upstream timed out');
+	it("shows a failure in place with the server's words and Retry, not as a toast (#968)", async () => {
+		imageGenerations
+			.mockRejectedValueOnce('Upstream timed out')
+			.mockResolvedValueOnce([{ url: 'data:image/png;base64,iVBORw0KGgo=' }]);
 		wrap(<PlaygroundImages />);
 		fireEvent.change(screen.getByLabelText('Image prompt'), { target: { value: 'a red fox' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Run' }));
-		await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't make the image", expect.anything()));
+		const row = await screen.findByRole('alert');
+		expect(within(row).getByText('Upstream timed out')).toBeInTheDocument();
+		expect(screen.queryByText('Generated images will appear here')).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+		fireEvent.click(within(row).getByRole('button', { name: 'Retry' }));
+		expect(await screen.findByRole('button', { name: 'Download image 1' })).toBeInTheDocument();
+		expect(screen.queryByRole('alert')).toBeNull();
+		expect(imageGenerations).toHaveBeenCalledTimes(2);
+	});
+
+	it('names a failure the server gave no words for', async () => {
+		imageGenerations.mockRejectedValue(null);
+		wrap(<PlaygroundImages />);
+		fireEvent.change(screen.getByLabelText('Image prompt'), { target: { value: 'a red fox' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+		expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't make the image.");
 	});
 });
 
@@ -441,7 +458,8 @@ describe('the completions playground (#1108, S6-D6)', () => {
 		usePlaygroundStore.setState((s) => ({ completions: { ...s.completions, modelId: 'llama3' } }));
 		wrap(<PlaygroundCompletions />);
 		await waitFor(() => expect(usePlaygroundStore.getState().completions.modelId).toBe('qwen'));
-		const model = screen.getByRole('combobox', { name: 'Model' });
+		// The chosen model's whole name is in the select's accessible name.
+		const model = screen.getByRole('combobox', { name: 'Model: Qwen' });
 		fireEvent.keyDown(model, { key: 'ArrowDown' });
 		expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['Qwen']);
 		expect(screen.queryByText(/None of your models can/)).toBeNull();
@@ -453,6 +471,21 @@ describe('the completions playground (#1108, S6-D6)', () => {
 		expect(
 			await screen.findByText(/None of your models can: text completion needs a model on an OpenAI-compatible/)
 		).toBeInTheDocument();
+	});
+
+	it("words a provider's bare 404 in place (S6-D6)", async () => {
+		textCompletion.mockImplementation(
+			vi.fn(async (_t: string, _b: object, c: AbortController) => [
+				new Response('not json', { status: 404, statusText: 'Not Found' }),
+				c
+			])
+		);
+		usePlaygroundStore.setState((s) => ({ completions: { ...s.completions, prompt: 'Once' } }));
+		wrap(<PlaygroundCompletions />);
+		fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+		expect(await screen.findByRole('alert')).toHaveTextContent(
+			"This model's connection doesn't offer text completion (404)."
+		);
 	});
 
 	it('asks for a model before running when none is chosen', () => {
