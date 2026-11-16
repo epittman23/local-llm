@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Tip } from '@/components/common/Tip';
 import {
 	BoundNumber,
 	BoundSecret,
@@ -15,7 +14,8 @@ import {
 	SettingRow,
 	SettingSelect,
 	SettingsForm,
-	SettingsSection
+	SettingsSection,
+	SettingTextarea
 } from '@/components/settings/controls';
 import { getRAGConfig, updateRAGConfig } from '@/lib/apis/retrieval';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
@@ -23,14 +23,16 @@ import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ragSaveOutcome } from './documents';
 import {
+	bundledSearxngPrefill,
 	engineLabel,
 	type FieldSpec,
 	isDefaultLoader,
 	LOADER_ENGINES,
 	loaderFields,
+	loaderLabel,
 	prepareWebConfig,
 	SEARCH_ENGINE_FIELDS,
-	SEARCH_ENGINES,
+	SEARCH_ENGINE_ORDER,
 	toWebForm
 } from './webSearch';
 
@@ -84,17 +86,15 @@ function Fields({ fields, config, set }: { fields: FieldSpec[]; config: Rec; set
 						);
 					case 'textarea':
 						return (
-							<SettingField key={key} label={f.label} htmlFor={`web-${f.name}`}>
-								<Tip content={f.tip}>
-									<textarea
-										id={`web-${f.name}`}
-										className="bg-muted/40 placeholder:text-foreground-muted focus:border-ring w-full rounded-lg border px-2 py-1.5 text-xs transition-colors"
-										rows={4}
-										placeholder={f.placeholder}
-										value={config[f.name] ?? ''}
-										onChange={(e) => set({ [f.name]: e.target.value })}
-									/>
-								</Tip>
+							<SettingField key={key} label={f.label} description={f.tip} htmlFor={`web-${f.name}`}>
+								<SettingTextarea
+									id={`web-${f.name}`}
+									className="font-mono"
+									rows={4}
+									placeholder={f.placeholder}
+									value={config[f.name] ?? ''}
+									onChange={(e) => set({ [f.name]: e.target.value })}
+								/>
 							</SettingField>
 						);
 					default:
@@ -128,6 +128,20 @@ export default function WebSearch() {
 	const [saving, setSaving] = useState(false);
 
 	const set = (changes: Rec) => setDraft((d) => d && { web: { ...d.web, ...changes } });
+
+	// S5-D6: with no engine stored, preselect the bundled SearXNG once, on load. The draft is then
+	// unsaved on purpose: Save stores it, Discard changes goes back to no engine.
+	const prefilled = useRef(false);
+	const [preselected, setPreselected] = useState(false);
+	useEffect(() => {
+		if (prefilled.current || !draft) return;
+		prefilled.current = true;
+		const prefill = bundledSearxngPrefill(draft.web);
+		if (prefill) {
+			setDraft((d) => d && { web: { ...d.web, ...prefill } });
+			setPreselected(true);
+		}
+	}, [draft, setDraft]);
 
 	const save = async () => {
 		if (!draft) return;
@@ -190,7 +204,14 @@ export default function WebSearch() {
 							/>
 						)}
 
-						<SettingRow label="Web Search Engine" description="Choose the provider used for web search queries.">
+						<SettingRow
+							label="Web Search Engine"
+							description={
+								preselected && engine === 'searxng' && dirty
+									? 'SearXNG, bundled with the stack, is preselected. Save to use it.'
+									: 'Choose the provider used for web search queries.'
+							}
+						>
 							<SettingSelect
 								value={engine}
 								onChange={(v) => set({ WEB_SEARCH_ENGINE: v })}
@@ -198,9 +219,9 @@ export default function WebSearch() {
 								aria-label="Web Search Engine"
 							>
 								<option disabled value="">
-									Select a engine
+									Select an engine
 								</option>
-								{SEARCH_ENGINES.map((e) => (
+								{SEARCH_ENGINE_ORDER.map((e) => (
 									<option key={e} value={e}>
 										{engineLabel(e)}
 									</option>
@@ -248,7 +269,10 @@ export default function WebSearch() {
 
 						{web.ENABLE_WEB_SEARCH && (
 							<>
-								<SettingField label="Search Limits" description="Control result volume and parallel search requests.">
+								<SettingField
+									label="Search Limits"
+									description="How many results each search returns, and how many searches run at once (0 for no limit; 1 for APIs with strict rate limits, such as Brave's free tier)."
+								>
 									<div role="group" aria-label="Search Limits" className="flex gap-2">
 										<div className="w-full">
 											<label className="text-muted-foreground mb-1 block text-xs" htmlFor="web-WEB_SEARCH_RESULT_COUNT">
@@ -263,14 +287,12 @@ export default function WebSearch() {
 											/>
 										</div>
 										<div className="w-full">
-											<Tip content="Limit concurrent search queries. 0 = unlimited (default). Set to 1 for sequential execution (recommended for APIs with strict rate limits like Brave free tier).">
-												<label
-													className="text-muted-foreground mb-1 block w-fit text-xs"
-													htmlFor="web-WEB_SEARCH_CONCURRENT_REQUESTS"
-												>
-													Concurrent Requests
-												</label>
-											</Tip>
+											<label
+												className="text-muted-foreground mb-1 block w-fit text-xs"
+												htmlFor="web-WEB_SEARCH_CONCURRENT_REQUESTS"
+											>
+												Concurrent Requests
+											</label>
 											<SettingNumber
 												id="web-WEB_SEARCH_CONCURRENT_REQUESTS"
 												min={0}
@@ -304,27 +326,19 @@ export default function WebSearch() {
 							{...bound}
 							name="BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL"
 							label="Bypass Embedding and Retrieval"
-							description={
-								web.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
-									? 'Inject the entire content as context for comprehensive processing.'
-									: 'Use segmented retrieval for focused and relevant content extraction.'
-							}
+							description="Send each result page to the model whole, without splitting or embedding it. Fine for a few short pages; many or long ones may not fit the model's context."
 						/>
 						<BoundToggle
 							{...bound}
 							name="BYPASS_WEB_SEARCH_WEB_LOADER"
 							label="Bypass Web Loader"
-							description="Use search results without fetching page contents."
+							description="Use only the snippets the search engine returns, without opening each page. Faster, but replies see less of each page."
 						/>
 						<BoundToggle
 							{...bound}
 							name="WEB_SEARCH_TRUST_ENV"
 							label="Trust Proxy Environment"
-							description={
-								web.WEB_SEARCH_TRUST_ENV
-									? 'Use proxy environment variables to fetch page contents.'
-									: 'Fetch page contents without proxy environment variables.'
-							}
+							description="Open result pages through the proxy in the server's HTTP_PROXY and HTTPS_PROXY variables. Turn on only if this machine needs a proxy to reach the web."
 						/>
 					</SettingsSection>
 
@@ -338,7 +352,7 @@ export default function WebSearch() {
 								<option value="">Default</option>
 								{LOADER_ENGINES.map((e) => (
 									<option key={e} value={e}>
-										{e}
+										{loaderLabel(e)}
 									</option>
 								))}
 							</SettingSelect>
@@ -349,9 +363,9 @@ export default function WebSearch() {
 								<BoundText
 									{...bound}
 									name="WEB_LOADER_TIMEOUT"
-									label="Timeout"
-									description="Maximum time to wait while loading web content."
-									placeholder="Timeout"
+									label="Timeout (s)"
+									description="Seconds to wait for each page. Leave empty for no limit."
+									placeholder="No limit"
 								/>
 								<BoundToggle
 									{...bound}
@@ -374,15 +388,15 @@ export default function WebSearch() {
 						<BoundText
 							{...bound}
 							name="YOUTUBE_LOADER_LANGUAGE"
-							label="Youtube Language"
+							label="YouTube Language"
 							description="Preferred transcript language codes, separated by commas."
 							placeholder="Enter language codes"
 						/>
 						<BoundText
 							{...bound}
 							name="YOUTUBE_LOADER_PROXY_URL"
-							label="Youtube Proxy URL"
-							description="Proxy URL used for Youtube loader requests."
+							label="YouTube Proxy URL"
+							description="Proxy used to fetch YouTube transcripts."
 							placeholder="Enter proxy URL (e.g. https://user:password@host:port)"
 						/>
 					</SettingsSection>
