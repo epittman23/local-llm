@@ -393,9 +393,12 @@ Save. On a create page (`creating`) nothing exists until Save, so before the
 first change the line reads "Nothing to save yet", never "All changes saved". In Settings, `SettingsForm` takes `dirty`/`onDiscard` and the dialog
 asks 'Discard changes?' before a tab switch, close, Escape or Back loses
 them; an at-once tab passes `savesAtOnce` and confirms each control with
-`SavedNote`. Every Admin settings tab is one or the other: Connections and
+`SavedNote`. An at-once tab that passes `saving` holds its controls (a
+disabled fieldset) and says "Saving…" under its heading while a save is in
+flight, so a second change never overlaps the first; focus goes back to the
+control that had it. Every Admin settings tab is one or the other: Connections and
 Integrations save each change at once (one toast, or `toastFailure` with the
-old value put back); the rest show the `SaveBar` (Pipelines for the selected
+old value put back, holding the tab while each saves); the rest show the `SaveBar` (Pipelines for the selected
 pipeline's valves), except Database, which has nothing to save. On an Admin settings page
 the page's one guard (`SettingsPageHost`) asks before another tab or any
 navigation; a tab reports through `useSettingsHost().setDirty`, and anything

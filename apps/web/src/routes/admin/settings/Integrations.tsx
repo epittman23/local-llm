@@ -80,7 +80,9 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
  *
  * Every change saves at once (FRM-3, `savesAtOnce`) -- adding, editing,
  * toggling or deleting a server writes that whole list -- and says what it
- * saved in one toast, or why it couldn't, putting the old list back. Not ported: refreshing the app-wide `terminalServers`
+ * saved in one toast, or why it couldn't, putting the old list back. While a
+ * save is in flight the tab's controls wait ("Saving…"), so a second change is
+ * never built on a list the server may yet refuse. Not ported: refreshing the app-wide `terminalServers`
  * store after a terminal save, since the chat that reads it is Phase 10; the
  * query key below is the hook for it.
  */
@@ -91,6 +93,8 @@ export default function Integrations() {
 	const [addingServer, setAddingServer] = useState(false);
 	const [editServerIdx, setEditServerIdx] = useState<number | null>(null);
 	const [terminalModal, setTerminalModal] = useState<{ idx: number | null } | null>(null);
+	// A save in flight: the tab's controls wait for it, so two saves of one list never overlap.
+	const [saving, setSaving] = useState(false);
 
 	const loaded = useQuery({
 		queryKey: ['admin-settings', 'integrations'],
@@ -122,6 +126,7 @@ export default function Integrations() {
 	const saveServers = async (next: ToolServerConnection[], done: string) => {
 		const prev = servers;
 		setServers(next);
+		setSaving(true);
 		try {
 			const res = await setToolServerConnections(token, { TOOL_SERVER_CONNECTIONS: next });
 			if (!res) throw new Error('The server returned nothing.');
@@ -129,6 +134,8 @@ export default function Integrations() {
 			setServers(prev);
 			toastFailure("Couldn't save the tool servers.", error);
 			throw error;
+		} finally {
+			setSaving(false);
 		}
 		toast.success(done);
 	};
@@ -137,6 +144,7 @@ export default function Integrations() {
 	const saveTerminals = async (next: TerminalConnection[], done: string) => {
 		const prev = terminals;
 		setTerminals(next);
+		setSaving(true);
 		try {
 			const res = await setTerminalServerConnections(token, { TERMINAL_SERVER_CONNECTIONS: next });
 			if (!res) throw new Error('The server returned nothing.');
@@ -144,6 +152,8 @@ export default function Integrations() {
 			setTerminals(prev);
 			toastFailure("Couldn't save the terminal connections.", error);
 			throw error;
+		} finally {
+			setSaving(false);
 		}
 		toast.success(done);
 	};
@@ -168,7 +178,7 @@ export default function Integrations() {
 	}
 
 	return (
-		<SettingsForm title="Integrations" loading={!servers} savesAtOnce>
+		<SettingsForm title="Integrations" loading={!servers} savesAtOnce saving={saving}>
 			<AddToolServerModal
 				open={addingServer}
 				onOpenChange={setAddingServer}

@@ -95,7 +95,10 @@ function ConnectionRow({
  *
  * Every change saves at once (FRM-3, `savesAtOnce`) -- toggling an API on or
  * off, adding, editing or deleting a connection -- and says what it saved in
- * one toast, or why it couldn't, putting the old values back. The connection
+ * one toast, or why it couldn't, putting the old values back. While a save is
+ * in flight the tab's controls wait ("Saving…"): each save sends a whole list
+ * keyed by position, so an overlapping one could leave on screen a list the
+ * server does not hold. The connection
  * list is edited through pure helpers (connectionsList.ts): URLs lose a
  * trailing slash, keys are kept the same length as the URLs, and deleting one
  * re-indexes the config map, which is keyed by list position.
@@ -108,6 +111,8 @@ export default function Connections() {
 	const [ollama, setOllama] = useState<OllamaState | null>(null);
 	const [direct, setDirect] = useState<DirectState | null>(null);
 	const [pipelineUrls, setPipelineUrls] = useState<Record<string, boolean>>({});
+	// A save in flight: the tab's controls wait for it, so two saves never overlap (each sends a whole list).
+	const [saving, setSaving] = useState(false);
 	const [showAddOpenAI, setShowAddOpenAI] = useState(false);
 	const [showAddOllama, setShowAddOllama] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
@@ -186,6 +191,7 @@ export default function Connections() {
 		const state = { ...next, urls, keys: alignKeys(urls, next.keys) };
 		const prev = openai;
 		setOpenAI(state);
+		setSaving(true);
 		try {
 			const res = await updateOpenAIConfig(token, {
 				ENABLE_OPENAI_API: state.enabled,
@@ -198,6 +204,8 @@ export default function Connections() {
 			if (prev) setOpenAI(prev);
 			toastFailure("Couldn't save the OpenAI-compatible connections.", error);
 			return false;
+		} finally {
+			setSaving(false);
 		}
 		toast.success(done);
 		refreshModels();
@@ -209,6 +217,7 @@ export default function Connections() {
 		const state = { ...next, urls: stripTrailingSlashes(next.urls) };
 		const prev = ollama;
 		setOllama(state);
+		setSaving(true);
 		try {
 			const res = await updateOllamaConfig(token, {
 				ENABLE_OLLAMA_API: state.enabled,
@@ -220,6 +229,8 @@ export default function Connections() {
 			if (prev) setOllama(prev);
 			toastFailure("Couldn't save the Ollama connections.", error);
 			return false;
+		} finally {
+			setSaving(false);
 		}
 		toast.success(done);
 		refreshModels();
@@ -229,6 +240,7 @@ export default function Connections() {
 	const saveDirect = async (next: DirectState) => {
 		const prev = direct;
 		setDirect(next);
+		setSaving(true);
 		try {
 			const res = await setConnectionsConfig(token, next);
 			if (!res) throw new Error('The server returned nothing.');
@@ -236,6 +248,8 @@ export default function Connections() {
 			setDirect(prev);
 			toastFailure("Couldn't save the change.", error);
 			return;
+		} finally {
+			setSaving(false);
 		}
 		refreshModels();
 		await saved();
@@ -273,7 +287,7 @@ export default function Connections() {
 	const ready = openai && ollama && direct;
 
 	return (
-		<SettingsForm title="Connections" loading={!ready} savesAtOnce>
+		<SettingsForm title="Connections" loading={!ready} savesAtOnce saving={saving}>
 			{ready && (
 				<>
 					<AddConnectionModal

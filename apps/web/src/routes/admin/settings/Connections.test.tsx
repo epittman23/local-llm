@@ -153,6 +153,36 @@ describe('Connections', () => {
 		expect(toast.success).not.toHaveBeenCalled();
 	});
 
+	it('holds every control while a save is in flight, so a second change cannot overlap it', async () => {
+		// Save A: toggling the OpenRouter connection, which the server then refuses.
+		let refuse: (reason: unknown) => void = () => {};
+		vi.mocked(updateOpenAIConfig).mockImplementationOnce(
+			() =>
+				new Promise((_resolve, reject) => {
+					refuse = reject;
+				})
+		);
+		await renderTab();
+		const sw = screen.getByRole('switch', { name: 'Enable https://openrouter.ai/api/v1' });
+		fireEvent.click(sw);
+		expect(await screen.findByText('Saving…')).toBeTruthy();
+		expect(sw).toBeDisabled();
+		expect(sw.getAttribute('data-state')).toBe('unchecked');
+		// The rest of the tab waits too: no delete, no other list, no other switch.
+		expect(screen.getByRole('button', { name: 'Edit https://openrouter.ai/api/v1' })).toBeDisabled();
+		expect(screen.getByRole('switch', { name: 'Enable http://localhost:11434' })).toBeDisabled();
+		expect(screen.getByRole('switch', { name: 'Direct connections' })).toBeDisabled();
+		for (const add of screen.getAllByRole('button', { name: 'Add connection' })) expect(add).toBeDisabled();
+
+		refuse('Not allowed');
+		await waitFor(() => expect(screen.getByText('Changes are saved as you make them.')).toBeTruthy());
+		// What the server holds is on screen again, and the tab can be used.
+		expect(sw.getAttribute('data-state')).toBe('checked');
+		expect(sw).toBeEnabled();
+		expect(screen.getByRole('switch', { name: 'Enable http://localhost:11434' })).toBeEnabled();
+		expect(updateOpenAIConfig).toHaveBeenCalledTimes(1);
+	});
+
 	it('deletes a connection from its dialog', async () => {
 		await renderTab();
 		fireEvent.click(screen.getByRole('button', { name: 'Edit http://localhost:11434' }));

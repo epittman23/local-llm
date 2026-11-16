@@ -175,6 +175,34 @@ describe('Integrations', () => {
 		expect(screen.getByRole('switch', { name: 'Enable Box' }).getAttribute('data-state')).toBe('checked');
 	});
 
+	it('holds the tab while a save is in flight, then shows what the server kept', async () => {
+		let refuse: (reason: unknown) => void = () => {};
+		vi.mocked(setTerminalServerConnections).mockImplementationOnce(
+			() =>
+				new Promise((_resolve, reject) => {
+					refuse = reject;
+				})
+		);
+		await renderTab();
+		const box = screen.getByRole('switch', { name: 'Enable Box' });
+		fireEvent.click(box);
+		expect(await screen.findByText('Saving…')).toBeTruthy();
+		expect(box.getAttribute('data-state')).toBe('unchecked');
+		for (const control of [
+			box,
+			screen.getByRole('switch', { name: 'Enable Tools' }),
+			screen.getByRole('button', { name: 'Edit Tools' }),
+			screen.getByRole('button', { name: 'Add tool server' }),
+			screen.getByRole('button', { name: 'Add terminal connection' })
+		])
+			expect(control).toBeDisabled();
+		refuse('No');
+		await waitFor(() => expect(screen.getByText('Changes are saved as you make them.')).toBeTruthy());
+		expect(box.getAttribute('data-state')).toBe('checked');
+		expect(box).toBeEnabled();
+		expect(setToolServerConnections).not.toHaveBeenCalled();
+	});
+
 	it('links nowhere outside the app, and says when nothing is set up', async () => {
 		vi.mocked(getToolServerConnections).mockResolvedValue({ TOOL_SERVER_CONNECTIONS: [] } as never);
 		vi.mocked(getTerminalServerConnections).mockResolvedValue({ TERMINAL_SERVER_CONNECTIONS: [] } as never);

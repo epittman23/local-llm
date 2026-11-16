@@ -7,6 +7,7 @@ import {
 	useContext,
 	useEffect,
 	useId,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState
@@ -99,7 +100,10 @@ export function SettingsPageHost({ children }: { children: ReactNode }) {
  *   host (`SettingsHost`: the dialog or the page) asks "Discard changes?"
  *   before the tab is left while dirty (#951).
  * - At once, with `savesAtOnce`: no Save button, and a line under the heading
- *   says so; each control confirms its own save (`SavedNote`).
+ *   says so; each control confirms its own save (`SavedNote`). While `saving`,
+ *   that line says "Saving…" and the tab's controls are disabled, so a second
+ *   change cannot overlap the first and show what the server does not hold
+ *   (ACT-5); focus goes back to the control that had it.
  * - Neither (the admin tabs, until they adopt `dirty`): a Save button.
  *
  * Submitting the form saves; `saving` disables the button and shows a spinner
@@ -136,6 +140,19 @@ export function SettingsForm({
 }) {
 	const guarded = dirty !== undefined;
 	const { setDirty } = useSettingsHost();
+	// An at-once save in flight holds the controls; disabling the focused one drops focus (Chromium
+	// moves it to <body> as the fieldset is disabled), so the control focused last gets it back after.
+	const holding = savesAtOnce && saving;
+	const lastFocused = useRef<HTMLElement | null>(null);
+	const wasHolding = useRef(false);
+	useLayoutEffect(() => {
+		const released = wasHolding.current && !holding;
+		wasHolding.current = holding;
+		if (!released) return;
+		const held = lastFocused.current;
+		const lost = document.activeElement === null || document.activeElement === document.body;
+		if (lost && held?.isConnected) held.focus({ preventScroll: true });
+	}, [holding]);
 	useEffect(() => {
 		if (!guarded) return;
 		setDirty(Boolean(dirty));
@@ -146,6 +163,9 @@ export function SettingsForm({
 	const form = (
 		<form
 			className="flex h-full flex-col text-body"
+			onFocus={(e) => {
+				if (e.target instanceof HTMLElement) lastFocused.current = e.target;
+			}}
 			onSubmit={(e) => {
 				e.preventDefault();
 				// A dialog rendered inside a tab (a portal, but still in React's tree) with
@@ -157,7 +177,12 @@ export function SettingsForm({
 		>
 			<div className="mb-6 pe-10">
 				<h2 className="text-heading font-title tracking-tight">{title}</h2>
-				{savesAtOnce && <p className="text-foreground-muted mt-1 text-dense">Changes are saved as you make them.</p>}
+				{savesAtOnce && (
+					<p className="text-foreground-muted mt-1 flex items-center gap-2 text-dense">
+						{saving && <Spinner className="size-3.5" />}
+						{saving ? 'Saving…' : 'Changes are saved as you make them.'}
+					</p>
+				)}
 			</div>
 			<div data-settings-body className="min-h-0 flex-1 overflow-y-auto pe-2">
 				{loading ? (
@@ -165,7 +190,15 @@ export function SettingsForm({
 						<Spinner className="size-6" />
 					</div>
 				) : (
-					<div className="max-w-160 pb-6">{children}</div>
+					<div className="max-w-160 pb-6">
+						{savesAtOnce ? (
+							<fieldset disabled={holding} aria-busy={holding || undefined} className="contents">
+								{children}
+							</fieldset>
+						) : (
+							children
+						)}
+					</div>
 				)}
 			</div>
 			{guarded && !loading && (

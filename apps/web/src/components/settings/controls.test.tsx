@@ -26,6 +26,23 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+/** An at-once tab whose Toggle starts a save and whose Saved (outside it) ends one. */
+function AtOnce({ startSaving = false }: { startSaving?: boolean }) {
+	const [saving, setSaving] = useState(startSaving);
+	return (
+		<>
+			<SettingsForm title="Connections" savesAtOnce saving={saving}>
+				<button type="button" onClick={() => setSaving(true)}>
+					Toggle
+				</button>
+			</SettingsForm>
+			<button type="button" onClick={() => setSaving(false)}>
+				Saved
+			</button>
+		</>
+	);
+}
+
 describe('SettingsForm (#951, FRM-3)', () => {
 	it('on request: the SaveBar, the dirty flag for the modal, and Discard changes', () => {
 		const onDiscard = vi.fn();
@@ -74,6 +91,40 @@ describe('SettingsForm (#951, FRM-3)', () => {
 		);
 		expect(screen.getByText('Changes are saved as you make them.')).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+	});
+
+	it('at once, while saving: says so and holds every control, then gives focus back (ACT-5)', () => {
+		render(<AtOnce />);
+		const toggle = screen.getByRole('button', { name: 'Toggle' });
+		toggle.focus();
+		fireEvent.click(toggle);
+		expect(screen.getByText('Saving…')).toBeInTheDocument();
+		expect(toggle).toBeDisabled();
+		expect(toggle.closest('fieldset')).toHaveAttribute('aria-busy', 'true');
+		// A browser moves focus off a control that becomes disabled.
+		toggle.blur();
+		fireEvent.click(screen.getByRole('button', { name: 'Saved' }));
+		expect(screen.getByText('Changes are saved as you make them.')).toBeInTheDocument();
+		expect(toggle).toBeEnabled();
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('at once: gives focus back even when it was lost before the save rendered (Chromium blurs at once)', () => {
+		render(<AtOnce />);
+		const toggle = screen.getByRole('button', { name: 'Toggle' });
+		toggle.focus();
+		toggle.blur();
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByRole('button', { name: 'Saved' }));
+		expect(document.activeElement).toBe(toggle);
+	});
+
+	it('at once: leaves focus alone after a save if it has moved on', () => {
+		render(<AtOnce startSaving />);
+		const saved = screen.getByRole('button', { name: 'Saved' });
+		saved.focus();
+		fireEvent.click(saved);
+		expect(document.activeElement).toBe(saved);
 	});
 
 	it('neither (the admin tabs): a plain Save, as before', () => {
