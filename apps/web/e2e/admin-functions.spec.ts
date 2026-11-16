@@ -176,7 +176,7 @@ test.describe('admin functions', () => {
 		await mockFunctionsApi(page, []);
 		await page.goto('/admin/functions/create');
 		await expect(page.locator('.cm-content')).toContainText('class Filter');
-		await page.getByLabel('Function starter').selectOption('event');
+		await page.getByRole('radiogroup', { name: 'Start from' }).getByRole('radio', { name: 'Event' }).click();
 		await expect(page.locator('.cm-content')).toContainText('class Event');
 		await expect(page.locator('.cm-content')).not.toContainText('class Filter');
 	});

@@ -31,7 +31,6 @@
 			"src/components/settings/controls.tsx": 1,
 			"src/components/settings/personal/Notifications.tsx": 1,
 			"src/components/settings/personal/Personalization.tsx": 1,
-			"src/routes/admin/functions/FunctionEditor.tsx": 1,
 			"src/routes/admin/settings/ArenaModelModal.tsx": 1,
 			"src/routes/admin/settings/ExternalKnowledge.tsx": 1,
 			"src/routes/admin/settings/Interface.tsx": 1,
