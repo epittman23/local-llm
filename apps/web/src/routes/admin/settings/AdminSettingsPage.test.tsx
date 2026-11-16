@@ -83,16 +83,18 @@ describe('the server’s settings as pages under Admin (S5-D1, #932)', () => {
 		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/general'));
 		expect(router.state.historyAction).toBe('REPLACE');
 		expect(await screen.findByRole('textbox', { name: 'Draft' })).toBeInTheDocument();
-		expect(screen.getByRole('tab', { name: 'Server: General' })).toHaveAttribute('aria-selected', 'true');
+		expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true');
 		expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'settings-tab-admin-general');
 		expect(usePageTitleStore.getState().dynamic).toBe('General · Settings');
 		expect(screen.getByRole('region', { name: 'Server settings' })).toBeInTheDocument();
 	});
 
-	it('names a tab plainly in the title where its list says “Server:”', async () => {
+	it('names a tab plainly, in its list and its title, where the dialog said “Server:”', async () => {
 		mount('/admin/settings/db');
 		expect(await screen.findByText('Database body')).toBeInTheDocument();
 		expect(usePageTitleStore.getState().dynamic).toBe('Database · Settings');
+		expect(screen.getByRole('tab', { name: 'General' })).toHaveTextContent(/^General$/);
+		expect(screen.queryByText('Server:', { exact: false })).toBeNull();
 	});
 
 	it('on a phone is two levels: the list, then the tab with a way back (#1000)', async () => {
@@ -152,7 +154,7 @@ describe('the server’s settings as pages under Admin (S5-D1, #932)', () => {
 		fireEvent.change(screen.getByRole('searchbox', { name: 'Search server settings' }), {
 			target: { value: 'general' }
 		});
-		fireEvent.click(screen.getByRole('tab', { name: 'Server: General' }));
+		fireEvent.click(screen.getByRole('tab', { name: 'General' }));
 		await waitFor(() => expect(router.state.location.pathname).toBe('/admin/settings/general'));
 		expect(screen.getByRole('searchbox', { name: 'Search server settings' })).toHaveValue('');
 	});
@@ -184,5 +186,6 @@ describe('Analytics, an Admin tab of its own (S5-D1)', () => {
 	it('renders the Analytics component as the page', async () => {
 		mount('/admin/analytics');
 		expect(await screen.findByText('Analytics body')).toBeInTheDocument();
+		expect(screen.getByRole('region', { name: 'Analytics' })).toContainElement(screen.getByText('Analytics body'));
 	});
 });

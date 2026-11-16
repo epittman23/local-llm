@@ -30,13 +30,16 @@ const SIDE_BY_SIDE = '(min-width: 768px)';
 export function AdminSettingsPage() {
 	const { tab: segment } = useParams();
 	const navigate = useNavigate();
-	const { tabs, pending } = useServerTabs();
+	const server = useServerTabs();
+	const pending = server.pending;
+	// Every tab here is the server's: the region says so, so names drop "Server: ".
+	const tabs = server.tabs.map((t) => ({ ...t, title: plainTabTitle(t) }));
 	const [search, setSearch] = useState('');
 	const selected = segment ? `admin:${segment}` : null;
 	const open = tabs.find((t) => t.id === selected) ?? null;
 	const first = tabs[0]?.id ?? null;
 
-	useDocumentTitle(open ? `${plainTabTitle(open)} · Settings` : null);
+	useDocumentTitle(open ? `${open.title} · Settings` : null);
 
 	useEffect(() => {
 		if (selected || !first || !window.matchMedia?.(SIDE_BY_SIDE).matches) return;
@@ -124,8 +127,8 @@ export function AdminSettingsPage() {
  */
 export function AdminAnalyticsPage() {
 	return (
-		<div className="h-full min-h-0 px-4 pt-4">
+		<section aria-label="Analytics" className="h-full min-h-0 px-4 pt-4">
 			<SettingsTabContent id="admin:analytics" />
-		</div>
+		</section>
 	);
 }
