@@ -427,6 +427,14 @@ describe('channelPayload', () => {
 		});
 		expect('payload' in channelPayload({ ...base, name: 'x'.repeat(60) })).toBe(true);
 	});
+	it('lets an existing channel keep a longer name until it is changed (S6-D2)', () => {
+		const old = 'x'.repeat(70);
+		expect('payload' in channelPayload({ ...base, name: old }, old)).toBe(true);
+		expect('payload' in channelPayload({ ...base, name: ` ${old} ` }, old)).toBe(true);
+		expect(channelPayload({ ...base, name: `${old}y` }, old)).toEqual({
+			problems: { name: 'Shorten the name to 60 characters or fewer.' }
+		});
+	});
 });
 
 describe('display helpers', () => {

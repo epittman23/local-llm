@@ -462,20 +462,24 @@ export type ChannelProblems = Partial<Record<'name' | 'members', string>>;
 /**
  * What is wrong with the channel form, by field (FRM-2, #1109). The name is
  * kept as typed, trimmed (S6-D2): it is no longer lower-cased and hyphenated.
+ * The length limit is for new names only: a channel saved under a longer
+ * name before it existed keeps that name until it is changed (`original`).
  */
-export function channelProblems(v: ChannelFormValue): ChannelProblems {
+export function channelProblems(v: ChannelFormValue, original?: string): ChannelProblems {
 	const name = v.name.trim();
 	const problems: ChannelProblems = {};
-	if (name.length > CHANNEL_NAME_MAX) problems.name = `Shorten the name to ${CHANNEL_NAME_MAX} characters or fewer.`;
+	if (name.length > CHANNEL_NAME_MAX && name !== original?.trim())
+		problems.name = `Shorten the name to ${CHANNEL_NAME_MAX} characters or fewer.`;
 	else if (v.type !== 'dm' && !name) problems.name = 'Enter a name for the channel.';
 	if (v.type === 'dm' && v.userIds.length === 0) problems.members = 'Choose at least one person to message.';
 	return problems;
 }
 
 export function channelPayload(
-	v: ChannelFormValue
+	v: ChannelFormValue,
+	original?: string
 ): { problems: ChannelProblems } | { payload: Record<string, unknown> } {
-	const problems = channelProblems(v);
+	const problems = channelProblems(v, original);
 	if (Object.keys(problems).length) return { problems };
 	return {
 		payload: {

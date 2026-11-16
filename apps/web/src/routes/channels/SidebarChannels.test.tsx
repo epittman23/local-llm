@@ -167,6 +167,17 @@ describe('public group channels in the sidebar', () => {
 		expect(screen.queryByText(/read its whole history/)).toBeNull();
 	});
 
+	it('saves an untouched name longer than the limit, which only new names meet (S6-D2)', async () => {
+		const long = 'A reading group for the long winter evenings and the books we never finish';
+		list.current = [group('team', { name: long, is_private: true, is_member: true, user_id: 'me' })];
+		permitted(true);
+		show();
+		fireEvent.click(screen.getByRole('button', { name: `Edit ${long}` }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
+		await waitFor(() => expect(updateChannelById).toHaveBeenCalled());
+		expect(updateChannelById.mock.calls[0]).toEqual(['t', 'team', expect.objectContaining({ name: long })]);
+	});
+
 	it('cancelling the confirmation keeps the channel private and saves nothing', async () => {
 		list.current = [group('team', { is_private: true, is_member: true, user_id: 'me' })];
 		permitted(true);

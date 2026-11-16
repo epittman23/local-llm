@@ -617,12 +617,12 @@ function ChannelForm({
 		errors,
 		field,
 		submit: checkFields
-	} = useFieldErrors(channelProblems(value), ['name', 'members'] as const, {
+	} = useFieldErrors(channelProblems(value, channel?.name), ['name', 'members'] as const, {
 		inDialog: true
 	});
 
 	const save = async () => {
-		const result = channelPayload(value);
+		const result = channelPayload(value, channel?.name);
 		if (!('payload' in result)) return;
 		setSaving(true);
 		const ok = await onSubmit(result.payload);
