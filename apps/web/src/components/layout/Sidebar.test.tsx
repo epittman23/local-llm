@@ -10,6 +10,7 @@ import { SidebarContent, SidebarRail } from './Sidebar';
 
 vi.mock('@/routes/chat/sidebar/ChatSidebar', () => ({ ChatSidebar: () => <div /> }));
 vi.mock('@/routes/channels/SidebarChannels', () => ({ SidebarChannels: () => <div /> }));
+vi.mock('@/routes/notes/SidebarPinnedNotes', () => ({ SidebarPinnedNotes: () => <div /> }));
 const account = vi.hoisted(() => ({ update: vi.fn() }));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ update: account.update }) }));
 const toastError = vi.hoisted(() => vi.fn());
