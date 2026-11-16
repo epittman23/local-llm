@@ -402,8 +402,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (the two-pane dialog, setting search, the unsaved-changes guard, and the
   URL param via `lib/settings/useSettingsUrl.ts`), `SettingsTabContent.tsx`
   (one tab's body, in the dialog or on a page), `useServerTabs.ts` (the
-  server tabs this install offers: Pipelines only with a pipelines server,
-  Analytics only while it is on), `formFields.tsx` (the form language of the
+  server tabs this install offers: Pipelines only with a pipelines server;
+  never Analytics, which is its own Admin tab, `/admin/analytics`, gated by
+  `adminGate` and `AdminLayout`), `formFields.tsx` (the form language of the
   settings forms and connection dialogs: `FormField`, `FieldLabel`, the
   `Disclosure` row of FRM-6, `ConnectionUrlField` with Test connection,
   `SecretInput`, `SelectField`, `SwitchField`), `SettingsNav.tsx` (the
