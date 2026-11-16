@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { defaultsFromConfig } from './adminModels';
@@ -62,5 +62,28 @@ describe('ModelDefaultsPanel', () => {
 		const boxes = screen.getAllByRole('checkbox');
 		fireEvent.click(boxes[0]);
 		expect(onChange).toHaveBeenCalledTimes(1);
+	});
+
+	it('turns a default feature and a builtin tool on and off', () => {
+		const onChange = vi.fn();
+		const value = { ...defaultsFromConfig({}, []), defaultFeatureIds: ['web_search'] };
+		render(
+			<TooltipProvider>
+				<ModelDefaultsPanel value={value} onChange={onChange} />
+			</TooltipProvider>
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }));
+		const features = within(screen.getByRole('group', { name: 'On by default in a new chat' })).getAllByRole(
+			'checkbox'
+		);
+		fireEvent.click(features[0]);
+		fireEvent.click(features[1]);
+		const tools = within(screen.getByRole('group', { name: 'Builtin tools' })).getAllByRole('checkbox');
+		fireEvent.click(tools[0]);
+		const calls = onChange.mock.calls.map(([next]) => next);
+		expect(calls[0].defaultFeatureIds).not.toEqual(value.defaultFeatureIds);
+		expect(calls[1].defaultFeatureIds.length).toBeGreaterThan(0);
+		expect(Object.values(calls[2].builtinTools)).toContain(false);
 	});
 });
