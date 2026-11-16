@@ -15,41 +15,50 @@ const renderPanel = () => {
 };
 
 describe('ModelDefaultsPanel', () => {
-	it('starts collapsed and opens from the Model Defaults button', () => {
+	it('starts closed and opens from its one Model defaults disclosure (#960)', () => {
 		renderPanel();
-		expect(screen.queryByRole('button', { name: /Model Capabilities/ })).toBeNull();
-		fireEvent.click(screen.getByRole('button', { name: 'Model Defaults' }));
-		expect(screen.getByRole('button', { name: /Model Capabilities/ })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Capabilities' })).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		expect(screen.getByRole('button', { name: 'Capabilities' })).toBeTruthy();
 	});
 
-	it('toggles from the configure button and reports its expanded state', () => {
+	it('is a chevron disclosure that says whether it is open, with no Configure buttons (FRM-6)', () => {
 		renderPanel();
-		const toggle = screen.getByRole('button', { name: 'Configure model defaults' });
+		const toggle = screen.getByRole('button', { name: 'Model defaults' });
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-		// It holds a word, so it is the small text button, not a 28 px icon square that clips it.
-		expect(toggle).toHaveAttribute('data-size', 'sm');
+		expect(toggle.querySelector('svg')).toBeTruthy();
 		fireEvent.click(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(toggle.textContent).toBe('Close');
+		expect(screen.queryByText('Configure')).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Configure model defaults' })).toBeNull();
 	});
 
-	it('opens and closes a section from its heading', () => {
+	it('opens and closes each inner section in place, with no inner scroll box, and brings it into view', () => {
+		const scrolled = vi.fn();
+		Element.prototype.scrollIntoView = scrolled;
 		renderPanel();
-		fireEvent.click(screen.getByRole('button', { name: 'Model Defaults' }));
-		const section = screen.getByRole('button', { name: /Prompt Suggestions/ });
+		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		const sections = ['Capabilities', 'Parameters', 'Prompt suggestions'].map((name) =>
+			screen.getByRole('button', { name })
+		);
+		const section = sections[2];
 		expect(section.getAttribute('aria-expanded')).toBe('false');
-		expect(section.textContent).toContain('Configure');
+		scrolled.mockClear();
 		fireEvent.click(section);
 		expect(section.getAttribute('aria-expanded')).toBe('true');
-		expect(section.textContent).toContain('Close');
+		expect(scrolled).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+		const body = document.getElementById(section.getAttribute('aria-controls') ?? '') as HTMLElement;
+		expect(body.hidden).toBe(false);
+		expect(body.outerHTML).not.toMatch(/max-h-|overflow-y-auto/);
 		fireEvent.click(section);
 		expect(section.getAttribute('aria-expanded')).toBe('false');
 	});
 
 	it('reports a changed capability to the parent', () => {
 		const onChange = renderPanel();
-		fireEvent.click(screen.getByRole('button', { name: 'Model Defaults' }));
-		fireEvent.click(screen.getByRole('button', { name: /Model Capabilities/ }));
+		fireEvent.click(screen.getByRole('button', { name: 'Model defaults' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Capabilities' }));
+		expect(screen.getByRole('group', { name: 'What a new model can do' })).toBeTruthy();
 		const boxes = screen.getAllByRole('checkbox');
 		fireEvent.click(boxes[0]);
 		expect(onChange).toHaveBeenCalledTimes(1);
