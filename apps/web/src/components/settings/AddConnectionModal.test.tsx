@@ -79,6 +79,18 @@ describe('AddConnectionModal (#933)', () => {
 		expect(vi.mocked(verifyOpenAIConnection).mock.calls[0][1]).toMatchObject({ url: 'http://127.0.0.1:4190/v1' });
 	});
 
+	it('says when the server answered with something that is not a model list', async () => {
+		// The backend hands back a 200 that is not JSON as a string (S5-D10).
+		vi.mocked(verifyOpenAIConnection).mockResolvedValue('<!DOCTYPE html><html></html>');
+		renderModal();
+		type(url(), 'http://127.0.0.1:4103');
+		fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+		await waitFor(() =>
+			expect(url()).toHaveAccessibleDescription("Reached the server, but it didn't return a model list.")
+		);
+		expect(url().getAttribute('aria-invalid')).toBe('true');
+	});
+
 	it('says why a test failed under the URL, and marks it invalid', async () => {
 		vi.mocked(verifyOpenAIConnection).mockRejectedValue(
 			'Connection refused at 127.0.0.1:9. Check that the server is running.'

@@ -188,7 +188,7 @@ export function Disclosure({
 	const body = useRef<HTMLDivElement>(null);
 	const opened = useRef(false);
 	useEffect(() => {
-		if (open && opened.current) body.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+		if (open && opened.current) body.current?.scrollIntoView?.({ block: 'nearest' });
 		opened.current = true;
 	}, [open]);
 	return (

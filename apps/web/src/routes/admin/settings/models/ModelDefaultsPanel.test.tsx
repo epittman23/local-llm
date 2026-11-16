@@ -46,7 +46,7 @@ describe('ModelDefaultsPanel', () => {
 		scrolled.mockClear();
 		fireEvent.click(section);
 		expect(section.getAttribute('aria-expanded')).toBe('true');
-		expect(scrolled).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+		expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
 		const body = document.getElementById(section.getAttribute('aria-controls') ?? '') as HTMLElement;
 		expect(body.hidden).toBe(false);
 		expect(body.outerHTML).not.toMatch(/max-h-|overflow-y-auto/);

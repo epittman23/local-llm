@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
@@ -3201,7 +3201,7 @@ test.describe('settings: Integrations', () => {
 		return seen;
 	}
 
-	const chooseOption = async (page: Page, scope: Locator, field: string, option: string) => {
+	const chooseOption = async (page: Page, scope: ReturnType<Page['getByRole']>, field: string, option: string) => {
 		await scope.getByRole('combobox', { name: field }).click();
 		await page.getByRole('option', { name: option, exact: true }).click();
 	};
