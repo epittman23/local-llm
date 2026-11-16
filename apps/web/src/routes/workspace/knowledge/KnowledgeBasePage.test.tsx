@@ -626,6 +626,20 @@ describe('KnowledgeBasePage failed uploads (#907)', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Dismiss notes.txt' }));
 		await waitFor(() => expect(screen.queryByText('The server refused the upload.')).toBeNull());
 	});
+
+	it('leaves room inside the scrolling list for the outline of the row Retry focuses (A11Y-1)', async () => {
+		vi.mocked(uploadFile).mockRejectedValueOnce('Embedding model is not available offline');
+		const { container } = renderPage();
+		await screen.findByText('file1.txt');
+		upload(container, 'notes.txt');
+		await screen.findByText('The server refused the upload.');
+		const row = screen.getByRole('button', { name: 'Retry notes.txt' }).closest('[role="listitem"]') as HTMLElement;
+		let scroller = row.parentElement;
+		while (scroller && !scroller.classList.contains('overflow-y-auto')) scroller = scroller.parentElement;
+		// The outline is 2 px wide at a 2 px offset: 4 px of padding keeps it inside the scroller.
+		expect(scroller?.classList).toContain('p-1');
+		expect(scroller?.classList).toContain('-mx-1');
+	});
 });
 
 describe('KnowledgeBasePage missing or failed base (#1095)', () => {

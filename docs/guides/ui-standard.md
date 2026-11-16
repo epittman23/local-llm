@@ -816,8 +816,12 @@ translucent ring. A box that draws the edge around a bare text field (the
 chat's message box) is a composite field: it carries `data-composite-field`
 and shows the focus on the box, as a field does: the same 2 px `--focus`
 outline, flush. One exception: the canvas's
-editor (CNV-6) shows its caret and no outline. Components transition colour,
-background and border only, never the outline.
+editor (CNV-6) shows its caret and no outline. A scrolling region cuts off
+what is drawn outside its box, so a list that scrolls keeps 4 px of room
+inside its edge (`p-1`: the outline's 2 px and its 2 px offset), with a
+matching negative margin where its rows must line up with what is around it;
+a region that takes focus itself draws its outline inside instead (DAT-6).
+Components transition colour, background and border only, never the outline.
 
 **A11Y-2. Every control has a name** a screen reader will read: a visible
 label tied to it, or an `aria-label` (ACT-4). A list row's accessible name is

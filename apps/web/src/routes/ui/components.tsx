@@ -183,7 +183,7 @@ export function ActionsSection() {
 			</Example>
 			<Example
 				title="Rows and pictures"
-				note="A whole row that opens something is a row button, not a stretched button: it takes the full width, highlights on hover and marks the open row. A picture you press to change it is an image button: the picture fills it, and an icon appears over it on hover and on focus. A model or person without a picture of its own shows its initials on surface-3 (the profile avatar), never a stock image."
+				note="A whole row that opens something is a row button, not a stretched button: it takes the full width, highlights on hover and marks the open row. A picture you press to change it is an image button: the picture fills it, and an icon appears over it on hover and on focus. A model or person without a picture of its own shows its initials on surface-3 (the profile avatar), never a stock image. The rows' box keeps 4 px of room inside its edge, as a list that scrolls must, so the focus outline is never cut."
 			>
 				<div className="grid max-w-[40rem] gap-6 sm:grid-cols-[1fr_auto]">
 					<div className="border-border flex flex-col gap-1 rounded-panel border p-1">

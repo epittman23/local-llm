@@ -794,7 +794,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					<div className="flex flex-1 flex-row gap-2 px-2">
 						<div className="flex min-h-full w-full flex-col">
 							{listed.items.length > 0 || listed.directories.length > 0 || uploading.length > 0 ? (
-								<div className="flex h-full w-full overflow-y-auto">
+								<div className="-mx-1 flex h-full overflow-y-auto p-1">
+									{/* A11Y-1: 4 px of room inside the scroller, so it never cuts a focused row's outline. */}
 									<KnowledgeFileList
 										files={shownFiles}
 										uploading={uploading}
