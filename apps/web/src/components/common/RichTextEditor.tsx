@@ -26,16 +26,7 @@ import {
 	Table,
 	Undo2
 } from 'lucide-react';
-import {
-	type ComponentProps,
-	type FormEvent,
-	type KeyboardEvent,
-	type ReactNode,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState
-} from 'react';
+import { type ComponentProps, type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,6 +41,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { htmlToMarkdown } from '@/lib/editor/markdown';
 import { MathPreview } from '@/lib/editor/mathPreview';
 import { formatChord } from '@/lib/shortcuts';
+import { useToolbarKeys } from '@/lib/ui/useToolbarKeys';
 import { cn } from '@/lib/utils';
 import { RichTextCodeBlock } from './RichTextCodeBlock';
 
@@ -339,44 +331,14 @@ function Toolbar({ editor }: { editor: Editor }) {
 			table: e.isActive('table')
 		})
 	});
-	const bar = useRef<HTMLDivElement>(null);
-	const [current, setCurrent] = useState(0);
-	const tools = () => Array.from(bar.current?.querySelectorAll<HTMLElement>('[data-tool]') ?? []);
-	// Only the current tool is in the page's tab order.
-	useLayoutEffect(() => {
-		tools().forEach((tool, i) => {
-			tool.tabIndex = i === current ? 0 : -1;
-		});
-	});
-	const onKeyDown = (e: KeyboardEvent) => {
-		// Keys from the Link popover or the Table menu reach here through React's portals: they are theirs.
-		if (!bar.current?.contains(e.target as Node)) return;
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			editor.commands.focus();
-			return;
-		}
-		const list = tools();
-		const at = list.indexOf(document.activeElement as HTMLElement);
-		if (at < 0) return;
-		const next = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: list.length - 1 }[e.key];
-		if (next === undefined) return;
-		e.preventDefault();
-		const to = (next + list.length) % list.length;
-		list[to].focus();
-		setCurrent(to);
-	};
+	// One tab stop: Escape returns to the text the tools act on.
+	const toolbar = useToolbarKeys(() => editor.commands.focus());
 	const c = () => editor.chain().focus();
 	return (
 		<div
-			ref={bar}
+			{...toolbar}
 			role="toolbar"
 			aria-label="Formatting"
-			onKeyDown={onKeyDown}
-			onFocus={(e) => {
-				const at = tools().indexOf(e.target as HTMLElement);
-				if (at >= 0) setCurrent(at);
-			}}
 			className="scroll-region mb-1 flex shrink-0 items-center gap-0.5 overflow-x-auto pb-0.5 [&_svg]:size-4"
 		>
 			<ToolButton label="Undo" chord="Cmd+Z" blocked={!s.undo} onClick={() => c().undo().run()}>

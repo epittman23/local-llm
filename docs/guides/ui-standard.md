@@ -565,10 +565,12 @@ Ctrl+Shift+M (Open model selector) opens the picker on screen;
 A toolbar of tools (the note editor's formatting bar) is one tab stop: the
 arrow keys, Home and End move between tools, Escape returns to the text it
 acts on, and each tool's name and shortcut are in its Tip ("Bold, Ctrl+B").
+`lib/ui/useToolbarKeys` does the keys for any `role="toolbar"`.
 A grid of days (the calendar's month and mini month) is one tab stop: the
 arrow keys move a day or a week, Home and End go to the ends of the week,
-and moving past the edge pages the month. Event chips sit beside the day's
-button, never inside it.
+and moving past the edge pages the month (`useRovingDays` in
+`routes/calendar/CalendarViews`). Event chips sit beside the day's button,
+never inside it. `/ui` shows both under Pages and navigation.
 
 ## Tables and figures
 

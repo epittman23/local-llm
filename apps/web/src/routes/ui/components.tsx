@@ -90,7 +90,7 @@ import {
 	StatusNoticeDemo,
 	TallDialogDemo
 } from './adminDemos';
-import { HighlightDemo, TimeGridDemo, WeekdayTogglesDemo } from './notesDemos';
+import { DayGridDemo, HighlightDemo, TimeGridDemo, ToolbarDemo, WeekdayTogglesDemo } from './notesDemos';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
 
@@ -818,6 +818,18 @@ export function NavigationSection() {
 						</CommandList>
 					</Command>
 				</Panel>
+			</Example>
+			<Example
+				title="A toolbar"
+				note="The note editor's formatting bar is one tab stop: Tab reaches the tool last used, the arrow keys, Home and End move between tools, and Escape returns to the text they act on. Each tool's Tip gives its name and its shortcut."
+			>
+				<ToolbarDemo />
+			</Example>
+			<Example
+				title="A grid of days"
+				note="The calendar's month and mini month are one tab stop: the arrow keys move a day or a week, Home and End go to the ends of the week, and moving past the edge pages the month."
+			>
+				<DayGridDemo />
 			</Example>
 			<Example
 				title="The model picker's rows"

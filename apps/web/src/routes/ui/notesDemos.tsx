@@ -1,10 +1,31 @@
-import { useState } from 'react';
+import { Bold, Code, Italic, Link2, Strikethrough } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import type { CalendarEventModel } from '@/lib/apis/calendar';
-import { formatHour, layoutDay, NS, nsAt, timeRange } from '@/routes/calendar/calendarModel';
+import { formatChord } from '@/lib/shortcuts';
+import { useToolbarKeys } from '@/lib/ui/useToolbarKeys';
+import { cn } from '@/lib/utils';
+import { useRovingDays } from '@/routes/calendar/CalendarViews';
+import {
+	dayKey,
+	dayName,
+	formatHour,
+	isSameDay,
+	layoutDay,
+	localeWeekStart,
+	monthGrid,
+	monthLabel,
+	NS,
+	nsAt,
+	timeRange,
+	weekdayName
+} from '@/routes/calendar/calendarModel';
 
 // Demos for the standard's section 6 additions (Notes, Calendar, Automations):
-// a highlight (CNT-1), a toggle group (COL-4) and a time grid (DAT-7).
+// a highlight (CNT-1), a toggle group (COL-4), a time grid (DAT-7), and a
+// toolbar and a grid of days that are each one tab stop (NAV-5).
 
 /** CNT-1: a highlight reads like the text around it, `--highlight` under `--highlight-foreground`. */
 export function HighlightDemo() {
@@ -127,6 +148,91 @@ export function TimeGridDemo() {
 				<div data-now="" className="bg-brand absolute inset-x-0 h-0.5" style={{ top: top(10 * 60 + 40) }}>
 					<span className="bg-brand absolute -top-1 -left-1 size-2.5 rounded-full" />
 				</div>
+			</div>
+		</div>
+	);
+}
+
+const TOOLS = [
+	{ label: 'Bold', chord: 'Cmd+B', icon: Bold },
+	{ label: 'Italic', chord: 'Cmd+I', icon: Italic },
+	{ label: 'Strikethrough', chord: 'Cmd+Shift+S', icon: Strikethrough },
+	{ label: 'Code', chord: 'Cmd+E', icon: Code },
+	{ label: 'Link', chord: 'Cmd+K', icon: Link2 }
+];
+
+/** NAV-5: a toolbar is one tab stop; the arrow keys, Home and End move between tools, Escape returns to the text. */
+export function ToolbarDemo() {
+	const text = useRef<HTMLTextAreaElement>(null);
+	const toolbar = useToolbarKeys(() => text.current?.focus());
+	const [on, setOn] = useState<string[]>(['Bold']);
+	return (
+		<div className="flex max-w-[28rem] flex-col gap-1">
+			<div {...toolbar} role="toolbar" aria-label="Formatting" className="flex items-center gap-0.5 [&_svg]:size-4">
+				{TOOLS.map(({ label, chord, icon: Icon }) => {
+					const pressed = on.includes(label);
+					return (
+						<Tip key={label} content={`${label}, ${formatChord(chord)}`}>
+							<Button
+								type="button"
+								variant={pressed ? 'secondary' : 'ghost'}
+								size="icon-sm"
+								data-tool=""
+								aria-label={label}
+								aria-pressed={pressed}
+								onClick={() => setOn(pressed ? on.filter((x) => x !== label) : [...on, label])}
+							>
+								<Icon />
+							</Button>
+						</Tip>
+					);
+				})}
+			</div>
+			<Textarea
+				ref={text}
+				aria-label="Sample text"
+				defaultValue="The variance of the sample mean falls as one over n."
+			/>
+		</div>
+	);
+}
+
+/** NAV-5: a grid of days is one tab stop; the arrows move a day or a week, Home and End the week's ends, and the edge pages the month. */
+export function DayGridDemo() {
+	const [chosen, setChosen] = useState(DAY);
+	const [month, setMonth] = useState(() => new Date(DAY.getFullYear(), DAY.getMonth(), 1));
+	const weekStart = useMemo(() => localeWeekStart(), []);
+	const days = useMemo(() => monthGrid(month, weekStart), [month, weekStart]);
+	const roving = useRovingDays(days, chosen, (d) => setMonth(new Date(d.getFullYear(), d.getMonth(), 1)));
+	return (
+		<div className="w-56">
+			<div className="text-body font-strong mb-1 px-1">{monthLabel(month)}</div>
+			<div aria-hidden className="text-foreground-muted grid grid-cols-7 text-center text-caption">
+				{days.slice(0, 7).map((d) => (
+					<div key={dayKey(d)} className="py-0.5">
+						{weekdayName(d, 'narrow')}
+					</div>
+				))}
+			</div>
+			<div className="grid grid-cols-7 justify-items-center text-caption">
+				{days.map((day) => (
+					<Button
+						key={dayKey(day)}
+						{...roving(day)}
+						type="button"
+						variant={isSameDay(day, chosen) ? 'secondary' : 'ghost'}
+						size="icon-xs"
+						aria-label={dayName(day)}
+						aria-current={isSameDay(day, chosen) ? 'true' : undefined}
+						className={cn(
+							'rounded-full text-caption font-normal',
+							day.getMonth() !== month.getMonth() && 'text-foreground-muted'
+						)}
+						onClick={() => setChosen(day)}
+					>
+						{day.getDate()}
+					</Button>
+				))}
 			</div>
 		</div>
 	);

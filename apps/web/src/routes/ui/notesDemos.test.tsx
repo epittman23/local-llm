@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { HighlightDemo, TimeGridDemo, WeekdayTogglesDemo } from './notesDemos';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { DayGridDemo, HighlightDemo, TimeGridDemo, ToolbarDemo, WeekdayTogglesDemo } from './notesDemos';
 
 describe('/ui section 6 demos', () => {
 	it('shows a highlight as a mark inside rendered text (CNT-1)', () => {
@@ -40,5 +41,57 @@ describe('/ui section 6 demos', () => {
 		expect(standup.style.height).toBe('23px');
 		expect(standup.style.width).toBe('calc(100% - 4px)');
 		expect(document.querySelector('[data-now]')).not.toBeNull();
+	});
+
+	it('shows a toolbar as one tab stop: arrows, Home and End move, Escape returns to the text (NAV-5)', () => {
+		render(
+			<TooltipProvider>
+				<ToolbarDemo />
+			</TooltipProvider>
+		);
+		const tools = screen.getAllByRole('button');
+		const tabbable = () => tools.filter((t) => t.tabIndex === 0).map((t) => t.getAttribute('aria-label'));
+		expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeInTheDocument();
+		expect(tabbable()).toEqual(['Bold']);
+		tools[0].focus();
+		fireEvent.keyDown(tools[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(tools[1]);
+		expect(tabbable()).toEqual(['Italic']);
+		fireEvent.keyDown(tools[1], { key: 'End' });
+		expect(document.activeElement).toBe(tools[4]);
+		fireEvent.keyDown(tools[4], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(tools[0]);
+		fireEvent.keyDown(tools[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(tools[4]);
+		fireEvent.keyDown(tools[4], { key: 'Home' });
+		expect(document.activeElement).toBe(tools[0]);
+		fireEvent.keyDown(tools[0], { key: 'a' });
+		expect(document.activeElement).toBe(tools[0]);
+		fireEvent.click(tools[1]);
+		expect(tools[1]).toHaveAttribute('aria-pressed', 'true');
+		fireEvent.keyDown(tools[0], { key: 'Escape' });
+		expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Sample text' }));
+	});
+
+	it('shows a grid of days as one tab stop that pages the month at its edge (NAV-5)', async () => {
+		render(<DayGridDemo />);
+		const day = (label: RegExp) => screen.getByRole('button', { name: label });
+		const tabbable = () => screen.getAllByRole('button').filter((b) => b.tabIndex === 0);
+		expect(tabbable()).toEqual([day(/^16 November 2026/)]);
+		day(/^16 November 2026/).focus();
+		fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+		await waitFor(() => expect(document.activeElement).toBe(day(/^23 November 2026/)));
+		fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowRight' });
+		await waitFor(() => expect(document.activeElement).toBe(day(/^24 November 2026/)));
+		// The grid ends on 12 December: a week down from the 8th pages to December.
+		expect(screen.getByText('November 2026')).toBeInTheDocument();
+		const down = () => fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+		down();
+		down();
+		down();
+		await waitFor(() => expect(document.activeElement).toBe(day(/^15 December 2026/)));
+		expect(screen.getByText('December 2026')).toBeInTheDocument();
+		fireEvent.click(document.activeElement as Element);
+		expect(day(/^15 December 2026/)).toHaveAttribute('aria-current', 'true');
 	});
 });
