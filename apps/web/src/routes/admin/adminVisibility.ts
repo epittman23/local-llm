@@ -1,5 +1,5 @@
 import { useConfigStore } from '@/lib/stores/configStore';
-import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { useAccountCount, useSingleUser } from '@/routes/workspace/workspaceAccess';
 
 /**
  * Whether Admin hides its multi-user parts (S5-D2, WRD-4): the install has one
@@ -15,4 +15,14 @@ export function useAdminSingleUser(): boolean {
 	const singleUser = useSingleUser();
 	const signup = useConfigStore((s) => s.config?.features?.enable_signup === true);
 	return singleUser && !signup;
+}
+
+/**
+ * Whether the account count has answered (or failed): until then
+ * `useAdminSingleUser` says one account by default, so a page must not act on
+ * it irreversibly (redirect an address) before this is true.
+ */
+export function useAccountCountKnown(): boolean {
+	const accounts = useAccountCount();
+	return accounts.isSuccess || accounts.isError;
 }

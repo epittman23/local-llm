@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { searchUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { type BackendConfig, useConfigStore } from '@/lib/stores/configStore';
-import { useAdminSingleUser } from './adminVisibility';
+import { useAccountCountKnown, useAdminSingleUser } from './adminVisibility';
 
 vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn() }));
 const search = vi.mocked(searchUsers);
@@ -55,5 +55,22 @@ describe('useAdminSingleUser', () => {
 		withSignup(undefined);
 		const { result } = renderHook(() => useAdminSingleUser(), { wrapper });
 		expect(result.current).toBe(true);
+	});
+});
+
+describe('useAccountCountKnown', () => {
+	it('is false until the count answers, then true', async () => {
+		let answer: (value: unknown) => void = () => {};
+		search.mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+		const { result } = renderHook(() => useAccountCountKnown(), { wrapper });
+		expect(result.current).toBe(false);
+		answer({ total: 1 });
+		await waitFor(() => expect(result.current).toBe(true));
+	});
+
+	it('is true once the count has failed too: the install then counts as one account', async () => {
+		search.mockRejectedValue(new Error('down'));
+		const { result } = renderHook(() => useAccountCountKnown(), { wrapper });
+		await waitFor(() => expect(result.current).toBe(true));
 	});
 });

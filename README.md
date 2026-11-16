@@ -216,7 +216,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/workspace/functions/create` | Redirects to `/admin/functions/create` |
 | `/admin` | *Admin* (everything under `/admin` is). Redirects to `/admin/users/overview` |
 | `/admin/users/overview` | Users: paginated, sortable, searchable list; add (form or CSV), edit, chats, delete. `/admin/users` redirects here |
-| `/admin/users/groups` | Groups and their permissions, member CSV import, default permissions. Hidden, with the sub-tabs, while there is one account and sign-ups are off |
+| `/admin/users/groups` | Groups and their permissions, member CSV import, default permissions. Hidden, with the sub-tabs, while there is one account and sign-ups are off; the address then goes to `/admin/users` |
 | `/admin/evaluations/leaderboard` | Leaderboard and activity chart. `/admin/evaluations` redirects here |
 | `/admin/evaluations/feedback` | Feedback table, details, JSON/CSV export |
 | `/admin/functions` | Functions list. Bounces to `/admin` when the backend has plugins off |

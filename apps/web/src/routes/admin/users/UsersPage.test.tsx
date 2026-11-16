@@ -1,14 +1,14 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getGroups } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
-import { useAdminSingleUser } from '../adminVisibility';
+import { useAccountCountKnown, useAdminSingleUser } from '../adminVisibility';
 import { UsersPage } from './UsersPage';
 
-vi.mock('../adminVisibility', () => ({ useAdminSingleUser: vi.fn() }));
+vi.mock('../adminVisibility', () => ({ useAdminSingleUser: vi.fn(), useAccountCountKnown: vi.fn() }));
 vi.mock('@/lib/apis/groups', () => ({ getGroups: vi.fn() }));
 vi.mock('@/lib/apis/users', () => ({ getUsers: vi.fn() }));
 vi.mock('./UserList', () => ({ UserList: () => <div>user list</div> }));
@@ -30,6 +30,11 @@ const renderAt = (path: string) =>
 		</MemoryRouter>
 	);
 
+/** Where the router is now. */
+function Where() {
+	return <p>at {useLocation().pathname}</p>;
+}
+
 describe('UsersPage (S5-D2, #1022)', () => {
 	it('shows Overview and Groups with more than one account', async () => {
 		vi.mocked(useAdminSingleUser).mockReturnValue(false);
@@ -47,8 +52,31 @@ describe('UsersPage (S5-D2, #1022)', () => {
 		expect(screen.queryByRole('link', { name: /Groups/ })).toBeNull();
 	});
 
-	it('shows the user list at the Groups address while there is one account, and Groups once a second appears', async () => {
+	it('sends the Groups address to /admin/users once one account is known (S5-D2)', async () => {
 		vi.mocked(useAdminSingleUser).mockReturnValue(true);
+		vi.mocked(useAccountCountKnown).mockReturnValue(true);
+		render(
+			<MemoryRouter initialEntries={[routePaths.adminUsersGroups]}>
+				<Routes>
+					<Route
+						path="/admin/users/*"
+						element={
+							<>
+								<UsersPage />
+								<Where />
+							</>
+						}
+					/>
+				</Routes>
+			</MemoryRouter>
+		);
+		expect(await screen.findByText(`at ${routePaths.adminUsers}`)).toBeTruthy();
+		expect(screen.getByText('user list')).toBeTruthy();
+	});
+
+	it('keeps the Groups address with the user list until the count is known, and Groups once a second appears', async () => {
+		vi.mocked(useAdminSingleUser).mockReturnValue(true);
+		vi.mocked(useAccountCountKnown).mockReturnValue(false);
 		const { rerender } = renderAt(routePaths.adminUsersGroups);
 		expect(screen.getByText('user list')).toBeTruthy();
 		expect(screen.queryByText('groups panel')).toBeNull();

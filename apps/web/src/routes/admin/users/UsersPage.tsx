@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useLocation } from 'react-router';
+import { Navigate, useLocation } from 'react-router';
 import { getGroups } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -8,7 +8,7 @@ import { formatNumber } from '@/lib/utils';
 import { routePaths } from '@/routes/routePaths';
 import { SubTabs } from '../AdminLayout';
 import { tabFromPath } from '../adminAccess';
-import { useAdminSingleUser } from '../adminVisibility';
+import { useAccountCountKnown, useAdminSingleUser } from '../adminVisibility';
 import { GroupsPanel } from './GroupsPanel';
 import { UserList } from './UserList';
 
@@ -28,6 +28,7 @@ export function UsersPage() {
 	const setCount = useAdminStore((s) => s.setCount);
 	const tab = tabFromPath(pathname, TABS);
 	const singleUser = useAdminSingleUser();
+	const countKnown = useAccountCountKnown();
 
 	// Seeds both counts so the inactive tab is not blank; each panel then keeps its own current.
 	useEffect(() => {
@@ -47,9 +48,11 @@ export function UsersPage() {
 
 	const userCount = counts.users === null ? null : formatNumber(counts.users);
 
-	// The address is kept: until the account count arrives the install counts as
-	// one account, and a Groups link must still open Groups once it does.
+	// Until the account count arrives the install counts as one account, and a
+	// Groups link must still open Groups once it does: the address is kept until
+	// then, and only a known one account sends /groups to /admin/users.
 	if (singleUser) {
+		if (countKnown && tab === 'groups') return <Navigate to={routePaths.adminUsers} replace />;
 		return (
 			<div className="flex w-full min-w-0 flex-col px-4 pt-3 pb-2">
 				<UserList />
