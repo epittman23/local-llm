@@ -47,7 +47,6 @@
 			"src/routes/chat/InputVariablesDialog.tsx": 1,
 			"src/routes/chat/PendingWorkspacesDialog.tsx": 3,
 			"src/routes/chat/ServerDialogs.tsx": 1,
-			"src/routes/notes/NotesPage.tsx": 3,
 			"src/routes/playground/PlaygroundPages.tsx": 1,
 			"src/routes/ui/components.tsx": 1
 		},
@@ -115,7 +114,6 @@
 			"src/routes/admin/users/EditUserModal.tsx": 1,
 			"src/routes/admin/users/UserList.tsx": 1,
 			"src/routes/channels/ChannelMessageView.tsx": 1,
-			"src/routes/notes/NoteEditorPage.tsx": 1,
 			"src/routes/playground/PlaygroundPages.tsx": 1,
 			"src/routes/workspace/models/ModelsPage.tsx": 1,
 			"src/routes/workspace/prompts/PromptsPage.tsx": 1,
