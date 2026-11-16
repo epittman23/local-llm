@@ -111,7 +111,7 @@ export function DefaultInterfaceSettings({
 		if (open) panel.current?.scrollIntoView?.({ block: 'nearest' });
 	}, [open]);
 	return (
-		<div ref={panel}>
+		<div ref={panel} className="scroll-mt-3">
 			<RowButton
 				className="-mx-2 flex items-start justify-between gap-4 px-2 py-2"
 				aria-expanded={open}

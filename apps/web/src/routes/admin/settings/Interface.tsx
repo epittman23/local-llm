@@ -327,7 +327,7 @@ export default function Interface() {
 									onChange={(v) => patchTask({ TASK_MODEL_EXTERNAL: v })}
 								/>
 							</div>
-							<div className="mt-2.5" ref={taskParameters}>
+							<div className="mt-2.5 scroll-mt-3" ref={taskParameters}>
 								<RowButton
 									className="-mx-2 flex items-center justify-between gap-4 px-2 py-2"
 									aria-expanded={showTaskParameters}
