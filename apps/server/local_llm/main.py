@@ -88,6 +88,7 @@ from local_llm.env import (
     ENABLE_EASTER_EGGS,
     ENABLE_OAUTH_BACKCHANNEL_LOGOUT,
     ENABLE_OTEL,
+    ENABLE_PASSWORD_VALIDATION,
     ENABLE_PLUGINS,
     ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
     ENABLE_SCIM,
@@ -109,6 +110,7 @@ from local_llm.env import (
     LLLM_STOP_JOBS_ON_SHUTDOWN,
     LOG_FORMAT,
     MAX_BODY_LOG_SIZE,
+    PASSWORD_VALIDATION_HINT,
     REDIS_KEY_PREFIX,
     REDIS_URL,
     RESET_CONFIG_ON_START,
@@ -2491,6 +2493,9 @@ async def get_app_config(request: Request):
                 {
                     'enable_api_keys': config.get('auth.enable_api_keys'),
                     'enable_password_change_form': config.get('ui.enable_password_change_form'),
+                    # The server's password rule, so Add User can show it (S5-D8).
+                    'enable_password_validation': ENABLE_PASSWORD_VALIDATION,
+                    'password_validation_hint': PASSWORD_VALIDATION_HINT,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
                     'enable_direct_connections': config.get('direct.enable'),
