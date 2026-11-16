@@ -76,6 +76,29 @@ describe('FeedbackModal', () => {
 		);
 	});
 
+	it('keeps its description list valid while loading and loaded: each item a div of one dt and one dd', async () => {
+		let answer: (value: unknown) => void = () => {};
+		vi.mocked(getFeedbackById).mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+		renderModal();
+		const valid = () => {
+			const list = screen.getByRole('dialog').querySelector('dl') as HTMLElement;
+			for (const item of Array.from(list.children)) {
+				expect(item.tagName).toBe('DIV');
+				expect(Array.from(item.children).map((c) => c.tagName)).toEqual(['DT', 'DD']);
+			}
+		};
+		expect(screen.getByRole('status')).toHaveTextContent('Loading the chat');
+		valid();
+		answer({
+			meta: { message_id: 'm2' },
+			snapshot: {
+				chat: { chat: { history: { messages: { m1: { content: 'Q' }, m2: { content: 'A', parentId: 'm1' } } } } }
+			}
+		});
+		expect(await screen.findByText('A')).toBeInTheDocument();
+		valid();
+	});
+
 	it('closes from the Close button', async () => {
 		const onOpenChange = renderModal();
 		const buttons = await screen.findAllByRole('button', { name: 'Close' });

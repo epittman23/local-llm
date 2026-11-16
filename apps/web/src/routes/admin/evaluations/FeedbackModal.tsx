@@ -27,9 +27,10 @@ export type FeedbackItem = {
 	updated_at: number;
 };
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** One term and its value, a direct child of the list's grid (a `<dl>` takes one level of `<div>`); `wide` spans both columns. */
+function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
 	return (
-		<div className="flex flex-col gap-0.5">
+		<div className={wide ? 'col-span-2 flex flex-col gap-0.5' : 'flex flex-col gap-0.5'}>
 			<dt className="text-foreground-muted text-dense">{label}</dt>
 			<dd className="break-words">{children}</dd>
 		</div>
@@ -86,49 +87,53 @@ export function FeedbackModal({
 						The model, result and chat behind one rating, with its reason and comment.
 					</DialogDescription>
 				</DialogHeader>
-				<dl className="flex w-full flex-col gap-3">
-					<div className="grid grid-cols-2 gap-3">
-						<Field label="Model">
-							<span className="font-mono break-all">{orDash(feedback.data?.model_id)}</span>
+				<dl className="grid w-full grid-cols-2 gap-3">
+					<Field label="Model">
+						<span className="font-mono break-all">{orDash(feedback.data?.model_id)}</span>
+					</Field>
+					<Field label="Result">
+						<ResultBadge result={feedbackResult(feedback)} />
+					</Field>
+					{siblings.length > 0 && (
+						<Field label="Compared with">
+							<span className="font-mono break-all">{siblings.join(', ')}</span>
 						</Field>
-						<Field label="Result">
-							<ResultBadge result={feedbackResult(feedback)} />
-						</Field>
-						{siblings.length > 0 && (
-							<Field label="Compared with">
-								<span className="font-mono break-all">{siblings.join(', ')}</span>
-							</Field>
-						)}
-						<Field label="Rated">
-							<time dateTime={when.toISOString()}>{when.format('YYYY-MM-DD HH:mm')}</time>
-						</Field>
-						{/* S4-D1: who rated says nothing while the install has one account. */}
-						{!singleUser && feedback.user?.name && <Field label="By">{feedback.user.name}</Field>}
-					</div>
+					)}
+					<Field label="Rated">
+						<time dateTime={when.toISOString()}>{when.format('YYYY-MM-DD HH:mm')}</time>
+					</Field>
+					{/* S4-D1: who rated says nothing while the install has one account. */}
+					{!singleUser && feedback.user?.name && <Field label="By">{feedback.user.name}</Field>}
 					{detail.isPending ? (
-						<div aria-busy="true" className="bg-surface-3 h-20 animate-pulse rounded">
-							<span className="sr-only" role="status">
-								Loading the chat
-							</span>
-						</div>
+						<Field label="Prompt and response" wide>
+							<div aria-busy="true" className="bg-surface-3 h-20 animate-pulse rounded">
+								<span className="sr-only" role="status">
+									Loading the chat
+								</span>
+							</div>
+						</Field>
 					) : (
 						<>
 							{prompt && (
-								<Field label="Prompt">
+								<Field label="Prompt" wide>
 									<span className="whitespace-pre-line">{orDash(prompt.content)}</span>
 								</Field>
 							)}
 							{response && (
-								<Field label="Response">
+								<Field label="Response" wide>
 									<div className="max-h-40 overflow-y-auto whitespace-pre-line">{orDash(response.content)}</div>
 								</Field>
 							)}
 						</>
 					)}
-					<Field label="Reason">{orDash(feedback.data?.reason)}</Field>
-					<Field label="Comment">{orDash(feedback.data?.comment)}</Field>
+					<Field label="Reason" wide>
+						{orDash(feedback.data?.reason)}
+					</Field>
+					<Field label="Comment" wide>
+						{orDash(feedback.data?.comment)}
+					</Field>
 					{feedback.data?.tags && feedback.data.tags.length > 0 && (
-						<Field label="Tags">
+						<Field label="Tags" wide>
 							<span className="flex flex-wrap gap-1">
 								{feedback.data.tags.map((tag) => (
 									<span key={tag} className="bg-muted text-caption rounded-full px-2 py-0.5">
