@@ -152,6 +152,7 @@ describe('every API helper rejects on a failed request', () => {
 		'ollama.unloadModel': 'returns the response',
 		'ollama.uploadModel': 'returns the response',
 		'openai.chatCompletion': 'returns the response',
+		'openai.textCompletion': 'returns the response',
 		'openai.synthesizeOpenAISpeech': 'returns the response',
 		'knowledge.streamPendingKnowledgeFiles': 'rejects with its own message, without the status',
 		// Best effort: a background extra whose failure the user should not see.

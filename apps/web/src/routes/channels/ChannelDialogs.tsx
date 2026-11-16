@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	Dialog,
+	DialogBody,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
@@ -568,7 +569,7 @@ export function ChannelFormDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			{/* OVL-1: a short form is 32 rem; its fields shorten rather than widen it (#967). */}
-			<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+			<DialogContent className="sm:max-w-lg">
 				{/* Remounted per open, so the form starts from the channel it was opened on. */}
 				{open && (
 					<ChannelForm channel={channel} onOpenChange={onOpenChange} onSubmit={onSubmit} onDeleted={onDeleted} />
@@ -667,78 +668,80 @@ function ChannelForm({
 				<DialogTitle>{edit ? 'Edit channel' : 'New channel'}</DialogTitle>
 				<DialogDescription>{TYPE_HELP[value.type]}</DialogDescription>
 			</DialogHeader>
-			<form onSubmit={submit} noValidate className="flex min-w-0 flex-col gap-4">
-				{!edit && types.length > 1 && (
-					<SegmentedControl
-						aria-label="Kind of channel"
-						value={value.type}
-						options={types}
-						onValueChange={(type) => setValue((v) => ({ ...v, type }))}
-					/>
-				)}
-				<div className="flex min-w-0 flex-col gap-1.5">
-					<Label htmlFor={ids.name}>
-						Name {value.type === 'dm' && <span className="text-foreground-muted font-normal">(optional)</span>}
-					</Label>
-					<Input
-						id={ids.name}
-						autoComplete="off"
-						placeholder="e.g. Reading group"
-						maxLength={CHANNEL_NAME_MAX}
-						value={value.name}
-						{...field('name')}
-						{...fieldProps(ids.nameMsg, { error: errors.name })}
-						onChange={(e) => setValue((v) => ({ ...v, name: e.target.value }))}
-					/>
-					<FieldMessage id={ids.nameMsg} error={errors.name} />
-				</div>
-
-				{value.type === '' && (
-					<AccessControl
-						accessGrants={value.accessGrants as AccessGrant[]}
-						onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))}
-						accessRoles={['read', 'write']}
-					/>
-				)}
-				{value.type === 'group' && (
-					<div className="flex min-w-0 flex-col gap-1.5">
-						<Label id={ids.visibility}>Who can join</Label>
+			<form onSubmit={submit} noValidate className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+				{/* OVL-1: a long member list scrolls here; the title and the buttons stay in view. */}
+				<DialogBody>
+					{!edit && types.length > 1 && (
 						<SegmentedControl
-							aria-labelledby={ids.visibility}
-							aria-describedby={ids.visibilityMsg}
-							value={value.isPrivate ? 'private' : 'public'}
-							options={[
-								{ value: 'private', label: 'Invited people' },
-								{ value: 'public', label: 'Anyone', disabled: !canMakePublic }
-							]}
-							onValueChange={(v) => setValue((prev) => ({ ...prev, isPrivate: v === 'private' }))}
+							aria-label="Kind of channel"
+							value={value.type}
+							options={types}
+							onValueChange={(type) => setValue((v) => ({ ...v, type }))}
 						/>
-						<FieldMessage id={ids.visibilityMsg} help={visibilityHelp} />
-					</div>
-				)}
-				{value.type === 'dm' && (
+					)}
 					<div className="flex min-w-0 flex-col gap-1.5">
-						<MemberSelector
-							accessGrants={[]}
-							userIds={value.userIds}
-							groupIds={[]}
-							onUserIdsChange={(userIds) => setValue((v) => ({ ...v, userIds }))}
-							onGroupIdsChange={() => {}}
-							includeGroups={false}
+						<Label htmlFor={ids.name}>
+							Name {value.type === 'dm' && <span className="text-foreground-muted font-normal">(optional)</span>}
+						</Label>
+						<Input
+							id={ids.name}
+							autoComplete="off"
+							placeholder="e.g. Reading group"
+							maxLength={CHANNEL_NAME_MAX}
+							value={value.name}
+							{...field('name')}
+							{...fieldProps(ids.nameMsg, { error: errors.name })}
+							onChange={(e) => setValue((v) => ({ ...v, name: e.target.value }))}
 						/>
-						<FieldMessage id={ids.membersMsg} error={errors.members} />
+						<FieldMessage id={ids.nameMsg} error={errors.name} />
 					</div>
-				)}
 
-				{edit && (
-					<div className="flex items-center justify-between gap-2">
-						<span>Webhooks</span>
-						<Button type="button" size="sm" variant="outline" onClick={() => setShowWebhooks(true)}>
-							Manage webhooks
-						</Button>
-					</div>
-				)}
+					{value.type === '' && (
+						<AccessControl
+							accessGrants={value.accessGrants as AccessGrant[]}
+							onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))}
+							accessRoles={['read', 'write']}
+						/>
+					)}
+					{value.type === 'group' && (
+						<div className="flex min-w-0 flex-col gap-1.5">
+							<Label id={ids.visibility}>Who can join</Label>
+							<SegmentedControl
+								aria-labelledby={ids.visibility}
+								aria-describedby={ids.visibilityMsg}
+								value={value.isPrivate ? 'private' : 'public'}
+								options={[
+									{ value: 'private', label: 'Invited people' },
+									{ value: 'public', label: 'Anyone', disabled: !canMakePublic }
+								]}
+								onValueChange={(v) => setValue((prev) => ({ ...prev, isPrivate: v === 'private' }))}
+							/>
+							<FieldMessage id={ids.visibilityMsg} help={visibilityHelp} />
+						</div>
+					)}
+					{value.type === 'dm' && (
+						<div className="flex min-w-0 flex-col gap-1.5">
+							<MemberSelector
+								accessGrants={[]}
+								userIds={value.userIds}
+								groupIds={[]}
+								onUserIdsChange={(userIds) => setValue((v) => ({ ...v, userIds }))}
+								onGroupIdsChange={() => {}}
+								includeGroups={false}
+							/>
+							<FieldMessage id={ids.membersMsg} error={errors.members} />
+						</div>
+					)}
 
+					{edit && (
+						<div className="flex items-center justify-between gap-2">
+							<span>Webhooks</span>
+							<Button type="button" size="sm" variant="outline" onClick={() => setShowWebhooks(true)}>
+								Manage webhooks
+							</Button>
+						</div>
+					)}
+				</DialogBody>
 				<DialogFooter className="gap-2">
 					{edit && (
 						<Button type="button" variant="ghost" className="sm:me-auto" onClick={() => setConfirmDelete(true)}>

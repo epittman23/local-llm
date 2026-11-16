@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
 	Dialog,
+	DialogBody,
 	DialogContent,
 	DialogDescription,
 	DialogFooter,
@@ -169,7 +170,7 @@ export function EventDialog({
 					: `Delete “${editing?.title ?? ''}”? This can’t be undone.`}
 			</ConfirmDialog>
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+				<DialogContent className="sm:max-w-lg">
 					<DialogHeader>
 						<DialogTitle className="text-title font-title tracking-tight">
 							{editing ? 'Edit event' : 'New event'}
@@ -180,157 +181,163 @@ export function EventDialog({
 					</DialogHeader>
 					<form
 						noValidate
-						className="flex flex-col gap-4"
+						className="flex min-h-0 flex-1 flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							save();
 						}}
 					>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="event-title">Title</Label>
-							<Input
-								id="event-title"
-								value={f.title}
-								{...field('title')}
-								{...fieldProps('event-title-message', { error: errors.title })}
-								onChange={(e) => set({ title: e.target.value })}
-							/>
-							<FieldMessage id="event-title-message" error={errors.title} />
-						</div>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="event-calendar">Calendar</Label>
-							<Select value={f.calendarId} onValueChange={(v) => set({ calendarId: v })}>
-								<SelectTrigger id="event-calendar" className="w-full">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{calendars
-										.filter((c) => c.id !== SCHEDULED_TASKS_ID)
-										.map((c) => (
-											<SelectItem key={c.id} value={c.id}>
-												<span
-													aria-hidden
-													className="size-2.5 rounded-sm"
-													style={{ backgroundColor: calendarColour(c) }}
-												/>
-												{c.name}
-											</SelectItem>
-										))}
-								</SelectContent>
-							</Select>
-						</div>
-						<fieldset className="flex flex-col gap-2">
-							<legend className="sr-only">When</legend>
-							<div className="flex items-center justify-between gap-3">
-								<span aria-hidden className="text-sm leading-none font-medium">
-									When
-								</span>
-								<Label className="font-normal">
-									<Checkbox checked={f.allDay} onCheckedChange={(v) => set({ allDay: v === true })} />
-									All day
-								</Label>
+						{/* OVL-1: at 390 px only the fields scroll; the title and the buttons stay in view. */}
+						<DialogBody>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="event-title">Title</Label>
+								<Input
+									id="event-title"
+									value={f.title}
+									{...field('title')}
+									{...fieldProps('event-title-message', { error: errors.title })}
+									onChange={(e) => set({ title: e.target.value })}
+								/>
+								<FieldMessage id="event-title-message" error={errors.title} />
 							</div>
-							<div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-								<span aria-hidden className="text-foreground-muted">
-									Starts
-								</span>
-								<Input
-									type="date"
-									aria-label="Start date"
-									className={cn(f.allDay && 'col-span-2')}
-									value={f.startDate}
-									{...field('start')}
-									{...fieldProps('event-start-message', { error: errors.start })}
-									onChange={(e) => moveStart({ startDate: e.target.value })}
-								/>
-								{!f.allDay && (
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="event-calendar">Calendar</Label>
+								<Select value={f.calendarId} onValueChange={(v) => set({ calendarId: v })}>
+									<SelectTrigger id="event-calendar" className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{calendars
+											.filter((c) => c.id !== SCHEDULED_TASKS_ID)
+											.map((c) => (
+												<SelectItem key={c.id} value={c.id}>
+													<span
+														aria-hidden
+														className="size-2.5 rounded-sm"
+														style={{ backgroundColor: calendarColour(c) }}
+													/>
+													{c.name}
+												</SelectItem>
+											))}
+									</SelectContent>
+								</Select>
+							</div>
+							<fieldset className="flex flex-col gap-2">
+								<legend className="sr-only">When</legend>
+								<div className="flex items-center justify-between gap-3">
+									<span aria-hidden className="text-sm leading-none font-medium">
+										When
+									</span>
+									<Label className="font-normal">
+										<Checkbox checked={f.allDay} onCheckedChange={(v) => set({ allDay: v === true })} />
+										All day
+									</Label>
+								</div>
+								<div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+									<span aria-hidden className="text-foreground-muted">
+										Starts
+									</span>
 									<Input
-										type="time"
-										aria-label="Start time"
-										value={f.startTime}
-										onChange={(e) => moveStart({ startTime: e.target.value })}
+										type="date"
+										aria-label="Start date"
+										className={cn(f.allDay && 'col-span-2')}
+										value={f.startDate}
+										{...field('start')}
+										{...fieldProps('event-start-message', { error: errors.start })}
+										onChange={(e) => moveStart({ startDate: e.target.value })}
 									/>
-								)}
-								<span aria-hidden className="text-foreground-muted">
-									Ends
-								</span>
-								<Input
-									type="date"
-									aria-label="End date"
-									className={cn(f.allDay && 'col-span-2')}
-									value={f.endDate}
-									{...endField}
-									{...fieldProps('event-end-message', { error: errors.end })}
-									onChange={(e) => set({ endDate: e.target.value })}
-								/>
-								{!f.allDay && (
+									{!f.allDay && (
+										<Input
+											type="time"
+											aria-label="Start time"
+											value={f.startTime}
+											onChange={(e) => moveStart({ startTime: e.target.value })}
+										/>
+									)}
+									<span aria-hidden className="text-foreground-muted">
+										Ends
+									</span>
 									<Input
-										type="time"
-										aria-label="End time"
-										value={f.endTime}
-										onBlur={endField.onBlur}
+										type="date"
+										aria-label="End date"
+										className={cn(f.allDay && 'col-span-2')}
+										value={f.endDate}
+										{...endField}
 										{...fieldProps('event-end-message', { error: errors.end })}
-										onChange={(e) => set({ endTime: e.target.value })}
+										onChange={(e) => set({ endDate: e.target.value })}
 									/>
-								)}
+									{!f.allDay && (
+										<Input
+											type="time"
+											aria-label="End time"
+											value={f.endTime}
+											onBlur={endField.onBlur}
+											{...fieldProps('event-end-message', { error: errors.end })}
+											onChange={(e) => set({ endTime: e.target.value })}
+										/>
+									)}
+								</div>
+								<FieldMessage id="event-start-message" error={errors.start} />
+								<FieldMessage id="event-end-message" error={errors.end} />
+							</fieldset>
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="event-location">Location (optional)</Label>
+								<Input id="event-location" value={f.location} onChange={(e) => set({ location: e.target.value })} />
 							</div>
-							<FieldMessage id="event-start-message" error={errors.start} />
-							<FieldMessage id="event-end-message" error={errors.end} />
-						</fieldset>
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="event-location">Location (optional)</Label>
-							<Input id="event-location" value={f.location} onChange={(e) => set({ location: e.target.value })} />
-						</div>
-						<div className="grid gap-3 sm:grid-cols-2">
-							<div className="flex min-w-0 flex-col gap-1.5">
-								<Label htmlFor="event-reminder">Reminder</Label>
-								<Select value={String(f.alertMinutes)} onValueChange={(v) => set({ alertMinutes: Number(v) })}>
-									<SelectTrigger id="event-reminder" className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{reminderValues.map(([v, l]) => (
-											<SelectItem key={v} value={String(v)}>
-												{l}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+							<div className="grid gap-3 sm:grid-cols-2">
+								<div className="flex min-w-0 flex-col gap-1.5">
+									<Label htmlFor="event-reminder">Reminder</Label>
+									<Select value={String(f.alertMinutes)} onValueChange={(v) => set({ alertMinutes: Number(v) })}>
+										<SelectTrigger id="event-reminder" className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{reminderValues.map(([v, l]) => (
+												<SelectItem key={v} value={String(v)}>
+													{l}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+								<div className="flex min-w-0 flex-col gap-1.5">
+									<Label htmlFor="event-repeat">Repeat</Label>
+									<Select
+										value={f.repeat || NO_REPEAT}
+										onValueChange={(v) => set({ repeat: v === NO_REPEAT ? '' : v })}
+									>
+										<SelectTrigger id="event-repeat" className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{REPEATS.map(([v, l]) => (
+												<SelectItem key={v} value={v}>
+													{l}
+												</SelectItem>
+											))}
+											{/* Only for an event that has one: it keeps the stored rule (#510). */}
+											{editing && repeatFromRrule(editing.rrule) === CUSTOM_REPEAT && (
+												<SelectItem value={CUSTOM_REPEAT}>Custom rule</SelectItem>
+											)}
+										</SelectContent>
+									</Select>
+								</div>
 							</div>
-							<div className="flex min-w-0 flex-col gap-1.5">
-								<Label htmlFor="event-repeat">Repeat</Label>
-								<Select value={f.repeat || NO_REPEAT} onValueChange={(v) => set({ repeat: v === NO_REPEAT ? '' : v })}>
-									<SelectTrigger id="event-repeat" className="w-full">
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{REPEATS.map(([v, l]) => (
-											<SelectItem key={v} value={v}>
-												{l}
-											</SelectItem>
-										))}
-										{/* Only for an event that has one: it keeps the stored rule (#510). */}
-										{editing && repeatFromRrule(editing.rrule) === CUSTOM_REPEAT && (
-											<SelectItem value={CUSTOM_REPEAT}>Custom rule</SelectItem>
-										)}
-									</SelectContent>
-								</Select>
+							{occurrence && (
+								<p className="text-foreground-muted text-dense">
+									This is one occurrence of a repeating event: changes apply to every occurrence.
+								</p>
+							)}
+							<div className="flex flex-col gap-1.5">
+								<Label htmlFor="event-description">Description (optional)</Label>
+								<Textarea
+									id="event-description"
+									rows={3}
+									value={f.description}
+									onChange={(e) => set({ description: e.target.value })}
+								/>
 							</div>
-						</div>
-						{occurrence && (
-							<p className="text-foreground-muted text-dense">
-								This is one occurrence of a repeating event: changes apply to every occurrence.
-							</p>
-						)}
-						<div className="flex flex-col gap-1.5">
-							<Label htmlFor="event-description">Description (optional)</Label>
-							<Textarea
-								id="event-description"
-								rows={3}
-								value={f.description}
-								onChange={(e) => set({ description: e.target.value })}
-							/>
-						</div>
+						</DialogBody>
 						<DialogFooter>
 							{editing && (
 								<Button
