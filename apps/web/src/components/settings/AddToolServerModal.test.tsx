@@ -137,8 +137,8 @@ describe('AddToolServerModal (#933)', () => {
 	it('warns that MCP is experimental, needs an ID, and needs a registered OAuth 2.1 client', async () => {
 		vi.mocked(registerOAuthClient).mockResolvedValueOnce({ oauth_client_info: { client_id: 'c' } } as never);
 		const { onSubmit } = renderModal();
-		fireEvent.click(screen.getByRole('radio', { name: 'MCP (Streamable HTTP)' }));
-		expect(screen.getByText(/MCP support is experimental/)).toBeTruthy();
+		fireEvent.click(screen.getByRole('radio', { name: 'MCP' }));
+		expect(screen.getByText(/support is experimental/)).toBeTruthy();
 		type(url(), 'https://mcp.example.com/');
 		save();
 		await waitFor(() =>

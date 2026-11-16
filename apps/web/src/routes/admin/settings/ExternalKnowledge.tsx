@@ -49,6 +49,18 @@ const PROVIDERS: readonly (readonly [Provider, string])[] = [
 	['pgvector', 'pgvector']
 ];
 
+/** What to say under an empty field that a test or save needs (FRM-2). */
+const NEEDED: Partial<Record<keyof SourceForm, string>> = {
+	name: 'Enter a name.',
+	endpoint: 'Enter the vector store’s endpoint.',
+	sourceName: 'Enter the collection to search.',
+	tableName: 'Enter the table that holds the vectors.',
+	collectionField: 'Enter the field that names the collection.',
+	contentField: 'Enter the field that holds the text.',
+	vectorField: 'Enter the field that holds the vectors.',
+	testQuery: 'Enter a test query.'
+};
+
 type TestResult = { documents?: string[]; metadatas?: Record<string, unknown>[]; distances?: number[] };
 
 /**
@@ -313,7 +325,7 @@ function SourceDialog({
 	) : (
 		'A source is saved only once this finds documents.'
 	);
-	const needed = (key: keyof SourceForm) => (missing.has(key) ? 'Needed.' : undefined);
+	const needed = (key: keyof SourceForm) => (missing.has(key) ? NEEDED[key] : undefined);
 	const text = (
 		key: keyof SourceForm,
 		label: string,

@@ -98,7 +98,7 @@ describe('ExternalKnowledge', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Configure Research' }));
 		const query = await screen.findByLabelText('Test query');
 		fireEvent.click(screen.getByRole('button', { name: 'Run test' }));
-		await waitFor(() => expect(query).toHaveAccessibleDescription('Needed.'));
+		await waitFor(() => expect(query).toHaveAccessibleDescription('Enter a test query.'));
 		fireEvent.change(query, { target: { value: 'hello' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() =>

@@ -325,7 +325,7 @@ export function AddToolServerModal({
 									onValueChange={(type) => set({ type })}
 									options={[
 										{ value: 'openapi', label: 'OpenAPI' },
-										{ value: 'mcp', label: 'MCP (Streamable HTTP)' }
+										{ value: 'mcp', label: 'MCP' }
 									]}
 									className="self-start"
 								/>
@@ -333,7 +333,7 @@ export function AddToolServerModal({
 									<FieldMessage
 										id={id('type-help')}
 										className="mt-1.5"
-										help="MCP support is experimental and its specification changes often, so a server may stop working after an update. OpenAPI is the steadier choice."
+										help="MCP over Streamable HTTP. Its support is experimental and its specification changes often, so a server may stop working after an update. OpenAPI is the steadier choice."
 									/>
 								)}
 							</div>
