@@ -74,7 +74,7 @@ describe('ArenaModelModal', () => {
 		fireEvent.change(screen.getByLabelText('Select a model'), { target: { value: 'm2' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Include' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
 		expect(onSubmit.mock.calls[0][0]).toMatchObject({
 			id: 'rumble',
@@ -86,9 +86,10 @@ describe('ArenaModelModal', () => {
 	it('shows Delete only when editing, and confirms before deleting', async () => {
 		const { onDelete } = renderModal({ edit: true, model: EXISTING });
 		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-		expect(await screen.findByText('Delete arena model?')).toBeTruthy();
+		expect(await screen.findByText(`Delete "${EXISTING.name}"?`)).toBeTruthy();
 		expect(onDelete).not.toHaveBeenCalled();
-		const confirm = screen.getAllByRole('button', { name: 'Delete' }).at(-1) as HTMLElement;
+		const confirm = screen.getByRole('button', { name: 'Delete arena model' });
+		expect(confirm.getAttribute('data-variant')).toBe('destructive');
 		fireEvent.click(confirm);
 		await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
 	});

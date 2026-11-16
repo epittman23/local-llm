@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -79,23 +79,26 @@ describe('Events webhooks', () => {
 		await renderEvents();
 		fireEvent.click(screen.getByRole('button', { name: 'Configure Audit' }));
 		expect(await screen.findByText('Edit webhook')).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Delete webhook' })).toBeTruthy();
 	});
 
 	it('has no Delete button when adding a webhook', async () => {
 		await renderEvents();
 		await openAdd();
-		expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Delete webhook' })).toBeNull();
 	});
 
 	it('confirms before deleting, then deletes the webhook', async () => {
 		vi.mocked(deleteEventWebhook).mockResolvedValue(undefined as never);
 		await renderEvents();
 		fireEvent.click(screen.getByRole('button', { name: 'Configure Audit' }));
-		fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-		expect(await screen.findByText('Delete webhook')).toBeTruthy();
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete webhook' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Delete “Audit”?' });
+		expect(ask).toHaveTextContent('It stops receiving events at');
 		expect(deleteEventWebhook).not.toHaveBeenCalled();
-		fireEvent.click(screen.getAllByRole('button', { name: 'Delete' }).at(-1) as HTMLElement);
+		const confirm = within(ask).getByRole('button', { name: 'Delete webhook' });
+		expect(confirm.dataset.variant).toBe('destructive');
+		fireEvent.click(confirm);
 		await waitFor(() => expect(deleteEventWebhook).toHaveBeenCalledWith('tok', 'w1'));
 	});
 

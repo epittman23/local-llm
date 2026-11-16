@@ -210,6 +210,7 @@ test.describe('settings: Sub-agents limits (#602)', () => {
 		const posted = () => calls.filter((c) => c.method === 'POST' && c.path === '/configs/subagents');
 
 		// The browser's own validation used to block Save on the whole tab here.
+		await m.getByLabel('System prompt').fill('be brief');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => posted()[0]?.body)
@@ -249,6 +250,7 @@ test.describe('settings: Code Execution', () => {
 		await expect(m.getByLabel('Code Execution Engine')).toHaveCount(0);
 		await expect(m.getByLabel('Code Interpreter Engine')).toHaveCount(0);
 		await expect(m.getByText(/jupyter/i)).toHaveCount(0);
+		await m.getByLabel('Sandbox Maximum Running').fill('5');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/configs/code_execution')?.body)
@@ -281,9 +283,10 @@ test.describe('settings: Code Execution', () => {
 		);
 		await page.goto('/?settings=admin:code-execution');
 		const m = modal(page);
-		await expect(m.getByRole('status')).toHaveText(
-			'The sandbox is unavailable: the kata-clh runtime is not registered with Docker'
-		);
+		const notice = m.locator('[data-slot="status-notice"]');
+		await expect(notice).toHaveAttribute('data-tone', 'warning');
+		await expect(notice).toContainText("The sandbox isn't ready");
+		await expect(notice).toContainText('The kata-clh runtime is not registered with Docker');
 		await expect(m.getByText(/4 GiB of memory and 2 CPUs, so 16 at once is 64 GiB/)).toBeVisible();
 		await m.getByLabel('Sandbox Default Image').selectOption('web');
 		await m.getByLabel('Sandbox Maximum Running').fill('8');
@@ -301,7 +304,7 @@ test.describe('settings: Code Execution', () => {
 });
 
 test.describe('settings: Database', () => {
-	test('Export Config downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
+	test('Export settings downloads JSON; the users CSV neutralizes formulas', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/export': { a: 1 } });
 		await page.route('**/api/v1/users/all', (route) =>
@@ -310,13 +313,16 @@ test.describe('settings: Database', () => {
 		await page.goto('/?settings=admin:db');
 		const m = modal(page);
 		const cfgDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).first().click();
-		expect((await cfgDownload).suggestedFilename()).toMatch(/^config-\d+\.json$/);
+		await m.getByRole('button', { name: 'Export settings' }).click();
+		expect((await cfgDownload).suggestedFilename()).toMatch(/^local-llm-config-\d{4}-\d{2}-\d{2}\.json$/);
+		// The SQLite-only database download is gone; the backup is a pg_dump command (#961).
+		await expect(m.getByRole('button', { name: 'Database' })).toHaveCount(0);
+		await expect(m.getByText(/pg_dump -Fc/)).toBeVisible();
 
 		const usersDownload = page.waitForEvent('download');
-		await m.getByRole('button', { name: 'Export' }).last().click();
+		await m.getByRole('button', { name: 'Export users' }).click();
 		const dl = await usersDownload;
-		expect(dl.suggestedFilename()).toBe('users.csv');
+		expect(dl.suggestedFilename()).toMatch(/^local-llm-users-[\d-]+\.csv$/);
 		const stream = await dl.createReadStream();
 		let text = '';
 		for await (const chunk of stream) text += chunk;
@@ -324,7 +330,7 @@ test.describe('settings: Database', () => {
 		expect(text).toContain(`"'=HYPERLINK(""http://evil"",""x"")"`);
 	});
 
-	test('Import Config posts the parsed file', async ({ page }) => {
+	test('Import settings posts the parsed file', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:db');
@@ -336,7 +342,7 @@ test.describe('settings: Database', () => {
 });
 
 test.describe('settings: Evaluations', () => {
-	test('adding an arena model saves the whole config with it', async ({ page }) => {
+	test('an added arena model joins the draft and the tab Save sends the whole config (FRM-3)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/groups/**', (route) => json(route, []));
 		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'm1', name: 'Model One' }] }));
@@ -351,14 +357,19 @@ test.describe('settings: Evaluations', () => {
 		});
 		await page.goto('/?settings=admin:evaluations');
 		const m = modal(page);
-		await expect(m.getByText('Using the default arena model with all models.')).toBeVisible();
-		await m.getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await expect(m.getByText('None yet, so the Arena model chooses among all your models.')).toBeVisible();
+		await m.getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('My Arena!');
 		await expect(dialog.getByLabel('ID', { exact: true })).toHaveValue('my-arena');
 		await dialog.getByLabel('Select a model').selectOption('m1');
 		await dialog.getByRole('button', { name: 'Add model' }).click();
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
+		// Nothing is sent until the tab's Save.
+		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		expect(saved).toBeNull();
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
 		await expect
 			.poll(() => saved)
 			.toMatchObject({
@@ -367,7 +378,7 @@ test.describe('settings: Evaluations', () => {
 					{ id: 'my-arena', name: 'My Arena!', meta: { model_ids: ['m1'], filter_mode: 'include', description: null } }
 				]
 			});
-		await expect(m.getByText('My Arena!')).toBeVisible();
+		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
 	test('a duplicate arena name is refused', async ({ page }) => {
@@ -378,10 +389,10 @@ test.describe('settings: Evaluations', () => {
 			json(route, { ENABLE_EVALUATION_ARENA_MODELS: true, EVALUATION_ARENA_MODELS: [] })
 		);
 		await page.goto('/?settings=admin:evaluations');
-		await modal(page).getByRole('button', { name: 'Add Arena Model' }).click();
-		const dialog = page.getByRole('dialog', { name: 'Add Arena Model' });
+		await modal(page).getByRole('button', { name: 'Add arena model' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('Taken');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Add arena model' }).click();
 		await expect(page.getByText('Model name already exists')).toBeVisible();
 		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('');
 	});
@@ -924,8 +935,9 @@ test.describe('settings: General', () => {
 			return json(route, { id: 'new' });
 		});
 		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		// Two accounts: the parts for other people (banners, channels, the watermark) show (S5-D2).
 		await page.route('**/api/v1/users/search**', (route) =>
-			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 1 })
+			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 2 })
 		);
 		return { calls };
 	}
@@ -955,6 +967,22 @@ test.describe('settings: General', () => {
 				RESPONSE_WATERMARK: 'AI generated'
 			});
 		await expect.poll(() => saved(calls, '/api/v1/configs/banners')).toEqual({ banners: [] });
+	});
+
+	test('a change asks before another tab replaces it, and Discard changes puts it back (#951)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'Folders' }).click();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		await m.getByRole('tab', { name: 'Interface', exact: true }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await ask.getByRole('button', { name: 'Keep editing' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).toBeChecked();
+		await m.getByRole('button', { name: 'Discard changes' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).not.toBeChecked();
+		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
 	test('memory and channel options appear only while their feature is on', async ({ page }) => {
@@ -1011,6 +1039,10 @@ test.describe('settings: General', () => {
 			]);
 
 		await items.nth(0).getByRole('button', { name: 'Remove banner' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Remove this banner?' })
+			.getByRole('button', { name: 'Remove banner' })
+			.click();
 		await expect(items).toHaveCount(1);
 	});
 
@@ -1087,9 +1119,12 @@ test.describe('settings: General', () => {
 			.toEqual({ name: 'Beta 2', url: 'https://hooks.example.com/b', enabled: true, events: ['user.*'], targets: [] });
 
 		await modal(page).getByRole('button', { name: 'Configure Beta' }).click();
-		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete webhook' }).click();
 		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete “Beta”?' })
+			.getByRole('button', { name: 'Delete webhook' })
+			.click();
 		await expect
 			.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1'))
 			.toBe(true);
@@ -1101,8 +1136,8 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
-		await expect(m.getByText('1 settings configured')).toBeVisible();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
+		await expect(m.getByText('1 setting configured')).toBeVisible();
 		await m.getByRole('switch', { name: 'Widescreen Mode' }).click();
 		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
@@ -1130,7 +1165,7 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
 		await m.getByRole('button', { name: 'UI Scale: Default' }).click();
 		await m.getByRole('button', { name: 'Increase UI Scale' }).click();
 		await expect(m.getByRole('button', { name: 'UI Scale: 1.1x' })).toBeVisible();
@@ -1140,7 +1175,8 @@ test.describe('settings: General', () => {
 		await expect
 			.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS)
 			.toMatchObject({ theme: 'dark', textScale: 1.1 });
-		await m.getByRole('button', { name: 'Clear' }).click();
+		await m.getByRole('button', { name: 'Clear defaults' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Clear defaults' }).click();
 		await expect(m.getByText('0 settings configured')).toBeVisible();
 	});
 });
@@ -1189,6 +1225,8 @@ test.describe('settings: Interface', () => {
 				/* none */
 			}
 			calls.push({ method: req.method(), path, body });
+			if (path.endsWith('/defaults'))
+				return json(route, { TITLE_GENERATION_PROMPT_TEMPLATE: 'Built-in title prompt.' });
 			return json(route, req.method() === 'GET' ? taskCfg() : body);
 		});
 		await page.route('**/api/v1/chats/config', (route) => {
@@ -1276,6 +1314,26 @@ test.describe('settings: Interface', () => {
 			.poll(() => post(calls, '/api/v1/chats/config'))
 			.toEqual({ ...chatCfg(), ENABLE_CONTEXT_COMPACTION: true, CONTEXT_COMPACTION_RETENTION_PERCENTAGE: 25 });
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
+	test('a prompt can start from the default and go back to it (#1101)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		const title = m.getByRole('textbox', { name: 'Title Generation Prompt' });
+		await expect(title).toHaveValue('');
+		await m.getByRole('button', { name: 'Show default' }).click();
+		await expect(m.getByLabel('Default title generation prompt')).toHaveText('Built-in title prompt.');
+		await m.getByRole('button', { name: 'Start from default' }).click();
+		await expect(title).toHaveValue('Built-in title prompt.');
+		await title.fill('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => post(calls, '/api/v1/tasks/config/update')?.TITLE_GENERATION_PROMPT_TEMPLATE)
+			.toBe('Built-in title prompt. Five words at most.');
+		await m.getByRole('button', { name: 'Reset to default' }).click();
+		await expect(title).toHaveValue('');
 	});
 });
 
@@ -1366,8 +1424,13 @@ test.describe('settings: Authentication', () => {
 		});
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		// S5-D2: the block is folded to one line that says where it is set.
+		const fold = m.getByRole('button', { name: /^Sign-in with an identity provider/ });
+		await expect(fold).toContainText('On (set by environment variables)');
+		await fold.click();
 		await expect(m.getByText(/read from environment variables/)).toBeVisible();
 		await expect(m.getByLabel('Email Claim')).toBeDisabled();
+		await m.getByLabel('JWT Expiration').fill('2w');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config')).toBeTruthy();
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
@@ -1379,6 +1442,7 @@ test.describe('settings: Authentication', () => {
 		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
 		await page.goto('/?settings=admin:authentication');
 		const m = modal(page);
+		await m.getByRole('button', { name: /^Sign-in with an identity provider/ }).click();
 		await expect(m.getByLabel('Email Claim')).toHaveValue('email');
 		await expect(m.getByTestId('oauth-env-note')).toContainText('environment variables');
 		await expect(m.getByLabel('Client ID')).toHaveCount(0);
@@ -1486,6 +1550,7 @@ test.describe('settings: Audio', () => {
 			ALLOWED_EXTENSIONS: ['wav', 'mp3'],
 			OPENAI_API_REQUEST_FORMAT: 'multipart'
 		});
+		await stt.getByLabel('STT Model').fill('medium');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => updates(calls).length).toBe(2);
 		await expect(page.getByText('Settings saved successfully!').first()).toBeVisible();
@@ -2176,6 +2241,7 @@ test.describe('settings: Documents', () => {
 		await page.goto('/?settings=admin:documents');
 		const r = region(page, 'Retrieval');
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).toBeChecked();
+		await r.getByLabel('Top K', { exact: true }).fill('5');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).not.toBeChecked();
@@ -2202,11 +2268,14 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		const z = region(page, 'Danger Zone');
-		await z.getByRole('button', { name: 'Reset' }).first().click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
 		expect(calls.some((c) => c.path === '/files/all')).toBe(false);
-		await z.getByRole('button', { name: 'Reset' }).first().click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete every uploaded file?' })
+			.getByRole('button', { name: 'Delete all uploads' })
+			.click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path === '/files/all').map((c) => c.method)).toEqual(['DELETE']);
 	});
@@ -2222,8 +2291,8 @@ test.describe('settings: Documents', () => {
 			)
 		);
 		await page.goto('/?settings=admin:documents');
-		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset' }).nth(1).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset vector storage' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset vector storage' }).click();
 		await expect(page.getByText('Vector DB is busy')).toBeVisible();
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});
@@ -2241,7 +2310,7 @@ test.describe('settings: Documents', () => {
 		);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(
 			page.getByText(
 				'1 of 3 files could not be embedded again and are missing from knowledge search until they are (report.pdf); the backend log has the errors.'
@@ -2257,7 +2326,7 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path.endsWith('reindex')).map((c) => c.path)).toEqual([
 			'/knowledge/reindex',
@@ -2351,6 +2420,7 @@ test.describe('settings: Web Search', () => {
 		}));
 		await page.goto('/?settings=admin:web');
 		await expect(modal(page).getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await modal(page).getByLabel('Domain Filter List').fill('example.com');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
 		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 	});

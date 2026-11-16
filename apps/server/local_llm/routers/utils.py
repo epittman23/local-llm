@@ -5,9 +5,8 @@ import logging
 import black
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
-from starlette.responses import FileResponse
 
-from local_llm.config import CODE_ENGINES, ENABLE_ADMIN_EXPORT
+from local_llm.config import CODE_ENGINES
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.chats import ChatTitleMessagesForm
 from local_llm.models.config import Config
@@ -127,22 +126,3 @@ async def download_chat_as_pdf(form_data: ChatTitleMessagesForm, user=Depends(ge
     except Exception as e:
         log.exception(f'Error generating PDF: {e}')
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get('/db/download')
-async def download_db(user=Depends(get_admin_user)):
-    """Download the raw SQLite database file (admin-only, SQLite deployments only)."""
-    if not ENABLE_ADMIN_EXPORT:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
-
-    # Lazy import avoids circular dependency at module load time
-    from local_llm.internal.db import engine
-
-    if engine.name != 'sqlite':
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DB_NOT_SQLITE)
-
-    return FileResponse(
-        str(engine.url.database),
-        media_type='application/octet-stream',
-        filename='webui.db',
-    )

@@ -132,8 +132,6 @@ class ERROR_MESSAGES(StrEnum):
 
     EMPTY_CONTENT = 'The content provided is empty. Please ensure that there is text or data present before proceeding.'
 
-    DB_NOT_SQLITE = 'This feature is only available with SQLite databases.'
-
     INVALID_URL = 'The URL you provided is invalid. Please double-check and try again.'
 
     WEB_SEARCH_ERROR = 'Something went wrong while searching the web.'

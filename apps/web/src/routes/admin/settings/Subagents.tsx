@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { SettingField, SettingRow, SettingSwitch, SettingsForm, SettingTextarea } from '@/components/settings/controls';
+import {
+	SettingField,
+	SettingRow,
+	SettingSwitch,
+	SettingsForm,
+	SettingTextarea,
+	settingInputClass
+} from '@/components/settings/controls';
 import { getSubagentsConfig, setSubagentsConfig } from '@/lib/apis/configs';
 import { toastSaved } from '@/lib/settings/useAdminSaved';
-import { useConfigDraft } from '@/lib/settings/useConfigDraft';
+import { sameSettings, useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { settingInputClass } from '@/components/settings/controls';
 
 type Config = {
 	ENABLE_SUBAGENTS?: boolean;
@@ -78,8 +84,12 @@ export default function Subagents() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const { draft, isLoading, isError } = useConfigDraft<Config>(['subagents'], () => getSubagentsConfig(token));
 	const [edits, setEdits] = useState<Partial<Form>>({});
+	// What the server holds: as loaded, until a save replaces it.
+	const [base, setBase] = useState<Form | null>(null);
 	const [saving, setSaving] = useState(false);
-	const form: Form = { ...toForm(draft), ...edits };
+	const stored = base ?? toForm(draft);
+	const form: Form = { ...stored, ...edits };
+	const dirty = !sameSettings(form, stored);
 	const set = (patch: Partial<Form>) => setEdits((e) => ({ ...e, ...patch }));
 
 	const save = async () => {
@@ -94,6 +104,8 @@ export default function Subagents() {
 				SUBAGENTS_MAX_OUTPUT: form.maxOutput,
 				SUBAGENTS_SYSTEM_PROMPT: form.systemPrompt
 			});
+			setBase(form);
+			setEdits({});
 			toastSaved();
 		} catch (error) {
 			toast.error(`${error}`);
@@ -103,7 +115,14 @@ export default function Subagents() {
 	};
 
 	return (
-		<SettingsForm title="Sub-agents" loading={isLoading && !isError} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Sub-agents"
+			loading={isLoading && !isError}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={() => setEdits({})}
+		>
 			<div className="flex flex-col gap-2.5">
 				<SettingRow
 					label="Enable sub-agents"

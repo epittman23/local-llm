@@ -116,21 +116,22 @@ export function ArenaModelModal({
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete arena model?"
-				confirmLabel="Delete"
+				title={`Delete "${model?.name}"?`}
+				confirmLabel="Delete arena model"
+				destructive
 				onConfirm={async () => {
 					setConfirmDelete(false);
 					await onDelete?.();
 					onOpenChange(false);
 				}}
 			>
-				This will delete <span className="font-normal">{model?.name}</span>.
+				Chats stop offering it once you save the Evaluations tab. Its settings cannot be recovered.
 			</ConfirmDialog>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
 					<DialogHeader>
-						<DialogTitle className="text-sm font-medium">{edit ? 'Edit Arena Model' : 'Add Arena Model'}</DialogTitle>
+						<DialogTitle className="text-sm font-medium">{edit ? 'Edit arena model' : 'Add arena model'}</DialogTitle>
 						<DialogDescription className="sr-only">An alias the arena chooses between.</DialogDescription>
 					</DialogHeader>
 					<form
@@ -291,7 +292,7 @@ export function ArenaModelModal({
 								</Button>
 							)}
 							<Button type="submit" size="sm" disabled={loading}>
-								Save
+								{edit ? 'Apply' : 'Add arena model'}
 								{loading && <Spinner className="size-3.5" />}
 							</Button>
 						</div>

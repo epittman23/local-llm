@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+	BUNDLED_SEARXNG_URL,
+	bundledSearxngPrefill,
 	LOADER_ENGINES,
+	loaderLabel,
+	SEARCH_ENGINE_ORDER,
 	SEARCH_ENGINES,
 	SEARCH_ENGINE_FIELDS,
 	engineLabel,
@@ -22,10 +26,42 @@ describe('engine tables', () => {
 			for (const f of fields) expect(f.label, `${engine}.${f.name}`).toBeTruthy();
 		}
 	});
-	it('names DDGS and SERPHouse as the UI does, others as they are', () => {
+	it('names each engine as its makers write it (#1025)', () => {
 		expect(engineLabel('duckduckgo')).toBe('DDGS');
 		expect(engineLabel('serphouse')).toBe('SERPHouse');
-		expect(engineLabel('brave')).toBe('brave');
+		expect(engineLabel('brave')).toBe('Brave Search');
+		expect(engineLabel('searxng')).toBe('SearXNG (bundled)');
+		expect(engineLabel('unknown_engine')).toBe('unknown_engine');
+		for (const e of SEARCH_ENGINES) expect(engineLabel(e), e).not.toBe(e);
+		expect(loaderLabel('external')).toBe('External loader server');
+		expect(loaderLabel('playwright')).toBe('Playwright');
+	});
+	it('offers the bundled SearXNG first, then the rest by name', () => {
+		expect(SEARCH_ENGINE_ORDER[0]).toBe('searxng');
+		expect([...SEARCH_ENGINE_ORDER].sort()).toEqual([...SEARCH_ENGINES].sort());
+		const rest = SEARCH_ENGINE_ORDER.slice(1).map(engineLabel);
+		expect(rest).toEqual([...rest].sort((a, b) => a.localeCompare(b)));
+	});
+});
+
+describe('bundledSearxngPrefill (S5-D6)', () => {
+	it('preselects SearXNG and fills its address and language when no engine is stored', () => {
+		expect(bundledSearxngPrefill({ WEB_SEARCH_ENGINE: '', SEARXNG_QUERY_URL: '', SEARXNG_LANGUAGE: '' })).toEqual({
+			WEB_SEARCH_ENGINE: 'searxng',
+			SEARXNG_QUERY_URL: BUNDLED_SEARXNG_URL,
+			SEARXNG_LANGUAGE: 'all'
+		});
+		expect(BUNDLED_SEARXNG_URL).toBe('http://127.0.0.1:8080/search?q=<query>');
+	});
+	it('never replaces a stored address or language, and leaves a stored engine alone', () => {
+		expect(
+			bundledSearxngPrefill({
+				WEB_SEARCH_ENGINE: null,
+				SEARXNG_QUERY_URL: 'http://searx/search',
+				SEARXNG_LANGUAGE: 'en'
+			})
+		).toEqual({ WEB_SEARCH_ENGINE: 'searxng' });
+		expect(bundledSearxngPrefill({ WEB_SEARCH_ENGINE: 'brave' })).toBeNull();
 	});
 });
 

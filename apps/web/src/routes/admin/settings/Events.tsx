@@ -431,7 +431,7 @@ function WebhookDialog({
 							<div>
 								{editing && (
 									<Button variant="destructive" size="sm" type="button" onClick={() => setConfirmDelete(true)}>
-										Delete
+										Delete webhook
 									</Button>
 								)}
 							</div>
@@ -445,11 +445,12 @@ function WebhookDialog({
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete webhook"
-				confirmLabel="Delete"
+				title={`Delete “${editing?.id === 'default' ? 'Default webhook' : (editing?.name ?? '')}”?`}
+				confirmLabel="Delete webhook"
+				destructive
 				onConfirm={remove}
 			>
-				Are you sure you want to delete this webhook? This action cannot be undone.
+				It stops receiving events at {editing?.url}. This cannot be undone.
 			</ConfirmDialog>
 		</>
 	);

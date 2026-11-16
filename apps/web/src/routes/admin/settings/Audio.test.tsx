@@ -55,6 +55,8 @@ describe('Audio settings and the Whisper model', () => {
 		await waitFor(() => expect(updates).toHaveLength(1));
 		expect(updates[0].LOAD_WHISPER_MODEL).toBe(true);
 
+		// Save waits for a change (FRM-3).
+		fireEvent.change(screen.getByLabelText('Supported MIME Types'), { target: { value: 'audio/wav' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(updates).toHaveLength(2));
 		expect(updates[1]).not.toHaveProperty('LOAD_WHISPER_MODEL');
