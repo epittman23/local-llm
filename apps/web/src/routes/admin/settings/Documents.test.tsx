@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import Documents from './Documents';
@@ -146,15 +146,55 @@ describe('Documents: the danger zone asks before it acts', () => {
 	it('the Reindex button opens a confirmation without sending anything', async () => {
 		fireEvent.click(await openPage());
 
-		expect(await screen.findByText('Reindex Embedding Data')).toBeTruthy();
+		expect(await screen.findByRole('alertdialog', { name: 'Reindex knowledge and memories?' })).toBeTruthy();
 		expect(posted).toEqual([]);
 	});
 
-	it('a Reset button opens the generic confirmation', async () => {
+	it('each reset names what it deletes, and its confirming button repeats the action in the danger colour (ACT-3)', async () => {
 		await openPage();
-		fireEvent.click(screen.getAllByRole('button', { name: 'Reset' })[0]);
+		fireEvent.click(screen.getByRole('button', { name: 'Delete all uploads' }));
+		const uploads = await screen.findByRole('alertdialog', { name: 'Delete every uploaded file?' });
+		expect(uploads).toHaveTextContent('Chats keep their messages but lose their attachments.');
+		expect(within(uploads).getByRole('button', { name: 'Delete all uploads' }).dataset.variant).toBe('destructive');
+		fireEvent.click(within(uploads).getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 
-		expect(await screen.findByText('Confirm your action')).toBeTruthy();
+		fireEvent.click(screen.getByRole('button', { name: 'Reset vector storage' }));
+		const vectors = await screen.findByRole('alertdialog', { name: 'Delete every knowledge base and its embeddings?' });
+		expect(vectors).toHaveTextContent('The uploaded files stay');
 		expect(posted).toEqual([]);
+	});
+});
+
+describe('Documents: switch help and the reindex warning (#1023, FRM-5)', () => {
+	const open = async () => {
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<Documents />
+			</QueryClientProvider>
+		);
+		await screen.findByRole('button', { name: 'Save' });
+	};
+
+	it('says what turning a switch on does, whichever way it is set', async () => {
+		await open();
+		const help = /Send each document to the model whole, without splitting it/;
+		expect(screen.getByText(help)).toBeInTheDocument();
+		expect(screen.getByText(/Send whole documents instead of the pieces/)).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('switch', { name: /^Bypass Embedding and Retrieval/ }));
+		expect(screen.getByText(help)).toBeInTheDocument();
+	});
+
+	it('warns to reindex only once the embedding model differs from the stored one', async () => {
+		await open();
+		const warning = /After saving, reindex/;
+		expect(screen.queryByText(warning)).toBeNull();
+		expect(screen.queryByText(/Reindex knowledge after changing this/)).toBeNull();
+		fireEvent.change(screen.getByLabelText('Embedding Model'), { target: { value: 'another/model' } });
+		expect(screen.getByText(warning)).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText('Embedding Model'), {
+			target: { value: 'sentence-transformers/all-MiniLM-L6-v2' }
+		});
+		expect(screen.queryByText(warning)).toBeNull();
 	});
 });

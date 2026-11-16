@@ -1103,9 +1103,12 @@ test.describe('settings: General', () => {
 			.toEqual({ name: 'Beta 2', url: 'https://hooks.example.com/b', enabled: true, events: ['user.*'], targets: [] });
 
 		await modal(page).getByRole('button', { name: 'Configure Beta' }).click();
-		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete webhook' }).click();
 		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete “Beta”?' })
+			.getByRole('button', { name: 'Delete webhook' })
+			.click();
 		await expect
 			.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1'))
 			.toBe(true);
@@ -2249,11 +2252,14 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		const z = region(page, 'Danger Zone');
-		await z.getByRole('button', { name: 'Reset' }).first().click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
 		expect(calls.some((c) => c.path === '/files/all')).toBe(false);
-		await z.getByRole('button', { name: 'Reset' }).first().click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await z.getByRole('button', { name: 'Delete all uploads' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Delete every uploaded file?' })
+			.getByRole('button', { name: 'Delete all uploads' })
+			.click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path === '/files/all').map((c) => c.method)).toEqual(['DELETE']);
 	});
@@ -2269,8 +2275,8 @@ test.describe('settings: Documents', () => {
 			)
 		);
 		await page.goto('/?settings=admin:documents');
-		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset' }).nth(1).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset vector storage' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reset vector storage' }).click();
 		await expect(page.getByText('Vector DB is busy')).toBeVisible();
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});
@@ -2288,7 +2294,7 @@ test.describe('settings: Documents', () => {
 		);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(
 			page.getByText(
 				'1 of 3 files could not be embedded again and are missing from knowledge search until they are (report.pdf); the backend log has the errors.'
@@ -2304,7 +2310,7 @@ test.describe('settings: Documents', () => {
 		const { calls } = await mockDocuments(page);
 		await page.goto('/?settings=admin:documents');
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Reindex' }).click();
 		await expect(page.getByText('Success')).toBeVisible();
 		expect(calls.filter((c) => c.path.endsWith('reindex')).map((c) => c.path)).toEqual([
 			'/knowledge/reindex',
