@@ -919,8 +919,9 @@ test.describe('settings: General', () => {
 			return json(route, { id: 'new' });
 		});
 		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		// Two accounts: the parts for other people (banners, channels, the watermark) show (S5-D2).
 		await page.route('**/api/v1/users/search**', (route) =>
-			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 1 })
+			json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 2 })
 		);
 		return { calls };
 	}
@@ -950,6 +951,22 @@ test.describe('settings: General', () => {
 				RESPONSE_WATERMARK: 'AI generated'
 			});
 		await expect.poll(() => saved(calls, '/api/v1/configs/banners')).toEqual({ banners: [] });
+	});
+
+	test('a change asks before another tab replaces it, and Discard changes puts it back (#951)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'Folders' }).click();
+		await expect(m.getByText('Unsaved changes')).toBeVisible();
+		await m.getByRole('tab', { name: 'Interface', exact: true }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await ask.getByRole('button', { name: 'Keep editing' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).toBeChecked();
+		await m.getByRole('button', { name: 'Discard changes' }).click();
+		await expect(m.getByRole('switch', { name: 'Folders' })).not.toBeChecked();
+		await expect(m.getByText('All changes saved')).toBeVisible();
 	});
 
 	test('memory and channel options appear only while their feature is on', async ({ page }) => {
@@ -1006,6 +1023,10 @@ test.describe('settings: General', () => {
 			]);
 
 		await items.nth(0).getByRole('button', { name: 'Remove banner' }).click();
+		await page
+			.getByRole('alertdialog', { name: 'Remove this banner?' })
+			.getByRole('button', { name: 'Remove banner' })
+			.click();
 		await expect(items).toHaveCount(1);
 	});
 
@@ -1096,8 +1117,8 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
-		await expect(m.getByText('1 settings configured')).toBeVisible();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
+		await expect(m.getByText('1 setting configured')).toBeVisible();
 		await m.getByRole('switch', { name: 'Widescreen Mode' }).click();
 		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
@@ -1125,7 +1146,7 @@ test.describe('settings: General', () => {
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
 		const m = modal(page);
-		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
+		await m.getByRole('button', { name: /^Default interface settings/ }).click();
 		await m.getByRole('button', { name: 'UI Scale: Default' }).click();
 		await m.getByRole('button', { name: 'Increase UI Scale' }).click();
 		await expect(m.getByRole('button', { name: 'UI Scale: 1.1x' })).toBeVisible();
@@ -1135,7 +1156,8 @@ test.describe('settings: General', () => {
 		await expect
 			.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS)
 			.toMatchObject({ theme: 'dark', textScale: 1.1 });
-		await m.getByRole('button', { name: 'Clear' }).click();
+		await m.getByRole('button', { name: 'Clear defaults' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Clear defaults' }).click();
 		await expect(m.getByText('0 settings configured')).toBeVisible();
 	});
 });

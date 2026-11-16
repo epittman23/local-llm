@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDownIcon, Plus } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import {
 	SettingField,
 	SettingInput,
@@ -25,6 +26,8 @@ import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import type { Banner } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { useAdminSingleUser } from '../adminVisibility';
 import { Banners } from './Banners';
 import { canAddBanner, newBanner } from './banners';
 import { Events } from './Events';
@@ -92,68 +95,78 @@ export function DefaultInterfaceSettings({
 	onChange: (next: Record<string, any>) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	const [confirmClear, setConfirmClear] = useState(false);
 	// Bumped by Clear, to start the rows' own state (an open font box and what
 	// was typed in it) over with the cleared values.
 	const [cleared, setCleared] = useState(0);
+	const panelId = useId();
+	const panel = useRef<HTMLDivElement>(null);
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const autocompleteEnabled = useConfigStore((s) => Boolean(s.config?.features?.enable_autocomplete_generation));
 	const defaults = interfaceDefaults(value);
 	const count = Object.keys(defaults).length;
+	const counted = `${count} ${count === 1 ? 'setting' : 'settings'}`;
+	// #960: the panel opens below the last row of the tab, so bring it into view.
+	useEffect(() => {
+		if (open) panel.current?.scrollIntoView?.({ block: 'nearest' });
+	}, [open]);
 	return (
 		<div>
-			<div className="flex w-full items-start justify-between gap-4">
-				<RowButton
-					className="flex w-auto min-w-0 flex-1 flex-col items-start justify-start px-3 py-2"
-					aria-expanded={open}
-					onClick={() => setOpen((v) => !v)}
-				>
-					<div>Default Interface Settings</div>
-					<div className="text-foreground-muted mt-1.5 text-caption">
-						Set system-wide interface defaults for every account. Personal settings override these defaults.
-					</div>
-				</RowButton>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					className="shrink-0"
-					type="button"
-					aria-label={`${open ? 'Close' : 'Configure'} Default Interface Settings`}
-					onClick={() => setOpen((v) => !v)}
-				>
-					{open ? 'Close' : 'Configure'}
-				</Button>
-			</div>
+			<RowButton
+				className="-mx-2 flex items-start justify-between gap-4 px-2 py-2"
+				aria-expanded={open}
+				aria-controls={panelId}
+				onClick={() => setOpen((v) => !v)}
+			>
+				<span className="min-w-0">
+					<span className="text-foreground-strong font-strong block">Default interface settings</span>
+					<span className="text-foreground-muted mt-1 block text-dense">
+						What every account starts from. A personal setting overrides its default.
+					</span>
+				</span>
+				<ChevronDownIcon
+					aria-hidden
+					className={cn(
+						'text-foreground-muted mt-0.5 size-4 shrink-0 transition-transform duration-(--motion-fast)',
+						open && 'rotate-180'
+					)}
+				/>
+			</RowButton>
 			{open && (
-				<div className="mt-2 space-y-2">
+				<div id={panelId} ref={panel} className="mt-2 space-y-2">
 					<div className="flex items-center justify-between gap-4">
-						<div className="text-foreground-muted text-caption">{count} settings configured</div>
+						<div className="text-foreground-muted text-dense">{counted} configured</div>
 						{count > 0 && (
-							<Button
-								variant="ghost"
-								size="sm"
-								type="button"
-								onClick={() => {
-									onChange({});
-									setCleared((n) => n + 1);
-								}}
-							>
-								Clear
+							<Button variant="outline" size="sm" type="button" onClick={() => setConfirmClear(true)}>
+								Clear defaults
 							</Button>
 						)}
 					</div>
-					<div className="max-h-[28rem] overflow-y-auto rounded-lg border p-3">
-						<InterfaceSettings
-							key={cleared}
-							mode="defaults"
-							values={defaults}
-							onChange={(p) => onChange({ ...defaults, ...p })}
-							isAdmin={isAdmin}
-							canTemporaryChat
-							autocompleteEnabled={autocompleteEnabled}
-						/>
-					</div>
+					<InterfaceSettings
+						key={cleared}
+						mode="defaults"
+						values={defaults}
+						onChange={(p) => onChange({ ...defaults, ...p })}
+						isAdmin={isAdmin}
+						canTemporaryChat
+						autocompleteEnabled={autocompleteEnabled}
+					/>
 				</div>
 			)}
+			<ConfirmDialog
+				open={confirmClear}
+				onOpenChange={setConfirmClear}
+				destructive
+				title="Clear the default interface settings?"
+				confirmLabel="Clear defaults"
+				onConfirm={() => {
+					onChange({});
+					setCleared((n) => n + 1);
+					setConfirmClear(false);
+				}}
+			>
+				Removes the {counted} set here. Once you save, every account without its own setting uses the app's defaults.
+			</ConfirmDialog>
 		</div>
 	);
 }
@@ -168,6 +181,8 @@ export default function General() {
 		banners: await getBanners(token).catch(() => [] as Banner[])
 	}));
 	const [saving, setSaving] = useState(false);
+	// S5-D2: while this is the only account and sign-ups are off, the parts for other people are hidden (stored values stay).
+	const singleUser = useAdminSingleUser();
 
 	const patch = (changes: AdminConfig) => setDraft((d) => d && { ...d, admin: { ...d.admin, ...changes } });
 	const setBannerList = (banners: Banner[]) => setDraft((d) => d && { ...d, banners });
@@ -205,14 +220,14 @@ export default function General() {
 							patch={patch}
 							name="ENABLE_MESSAGE_RATING"
 							label="Message Rating"
-							description="Let users rate assistant responses."
+							description="Show thumbs up and down under each reply, to rate it."
 						/>
 						<Toggle
 							config={admin}
 							patch={patch}
 							name="ENABLE_FOLDERS"
 							label="Folders"
-							description="Allow users to organize chats into folders."
+							description="Organize chats into folders."
 						/>
 						{admin.ENABLE_FOLDERS && (
 							<SettingField
@@ -234,7 +249,7 @@ export default function General() {
 							patch={patch}
 							name="ENABLE_MEMORIES"
 							label="Memories"
-							description="Allow users to save memories for more personalized responses."
+							description="Save facts about you that replies can draw on."
 						/>
 						{admin.ENABLE_MEMORIES && (
 							<Toggle
@@ -251,23 +266,25 @@ export default function General() {
 							patch={patch}
 							name="ENABLE_NOTES"
 							label="Notes"
-							description="Allow users to create and manage notes."
+							description="Write and keep notes beside your chats."
 						/>
 						<Toggle
 							config={admin}
 							patch={patch}
 							name="ENABLE_BENCHMARKS"
 							label="Benchmarks"
-							description="Show the Benchmarks section (admins only)."
+							description="Show the Benchmarks section."
 						/>
-						<Toggle
-							config={admin}
-							patch={patch}
-							name="ENABLE_CHANNELS"
-							label="Channels"
-							description="Allow users to use channels for shared conversations."
-						/>
-						{admin.ENABLE_CHANNELS && (
+						{!singleUser && (
+							<Toggle
+								config={admin}
+								patch={patch}
+								name="ENABLE_CHANNELS"
+								label="Channels"
+								description="Rooms where several accounts and models talk together."
+							/>
+						)}
+						{!singleUser && admin.ENABLE_CHANNELS && (
 							<SettingRow
 								label="Model Response Mode"
 								description="Choose where model responses to root-level channel mentions are posted."
@@ -288,42 +305,46 @@ export default function General() {
 							patch={patch}
 							name="ENABLE_CALENDAR"
 							label="Calendar"
-							description="Allow users to access calendar features."
+							description="Show the calendar and its events."
 						/>
 						<Toggle
 							config={admin}
 							patch={patch}
 							name="ENABLE_AUTOMATIONS"
 							label="Automations"
-							description="Allow users to create and run automations."
+							description="Create automations that run prompts on a schedule."
 						/>
-						<Toggle
-							config={admin}
-							patch={patch}
-							name="ENABLE_USER_WEBHOOKS"
-							label="User Webhooks"
-							description="Allow users to configure webhooks from their account."
-						/>
-						<Toggle
-							config={admin}
-							patch={patch}
-							name="ENABLE_USER_STATUS"
-							label="User Status"
-							description="Show user status information in the app."
-						/>
+						{!singleUser && (
+							<>
+								<Toggle
+									config={admin}
+									patch={patch}
+									name="ENABLE_USER_WEBHOOKS"
+									label="User Webhooks"
+									description="Let each account set a webhook for its own notifications."
+								/>
+								<Toggle
+									config={admin}
+									patch={patch}
+									name="ENABLE_USER_STATUS"
+									label="User Status"
+									description="Let each account set a status: an emoji and a short message."
+								/>
 
-						<SettingField
-							label="Response Watermark"
-							description="Append a watermark to assistant responses when configured."
-							htmlFor="response-watermark"
-						>
-							<SettingTextarea
-								id="response-watermark"
-								placeholder="Enter a watermark for the response. Leave empty for none."
-								value={admin.RESPONSE_WATERMARK ?? ''}
-								onChange={(e) => patch({ RESPONSE_WATERMARK: e.target.value })}
-							/>
-						</SettingField>
+								<SettingField
+									label="Response Watermark"
+									description="Text added to the end of every reply. Leave empty for none."
+									htmlFor="response-watermark"
+								>
+									<SettingTextarea
+										id="response-watermark"
+										placeholder="e.g. Written with local-llm."
+										value={admin.RESPONSE_WATERMARK ?? ''}
+										onChange={(e) => patch({ RESPONSE_WATERMARK: e.target.value })}
+									/>
+								</SettingField>
+							</>
+						)}
 
 						<SettingField
 							label="App URL"
@@ -333,7 +354,7 @@ export default function General() {
 							<SettingInput
 								id="webui-url"
 								type="text"
-								placeholder={`e.g.) "http://localhost:3000"`}
+								placeholder="e.g. http://127.0.0.1:4000"
 								value={admin.WEBUI_URL ?? ''}
 								onChange={(e) => patch({ WEBUI_URL: e.target.value })}
 							/>
@@ -343,27 +364,29 @@ export default function General() {
 					<Events />
 
 					<SettingsSection title="UI">
-						<div>
-							<div className="mb-2 flex w-full items-start justify-between gap-4">
-								<div className="min-w-0">
-									<div className="text-muted-foreground text-xs">Banners</div>
-									<p className="text-foreground-muted mt-1.5 text-caption">
-										Create announcements shown to users in the app.
-									</p>
+						{!singleUser && (
+							<div>
+								<div className="mb-2 flex w-full items-start justify-between gap-4">
+									<div className="min-w-0">
+										<div className="text-muted-foreground text-xs">Banners</div>
+										<p className="text-foreground-muted mt-1.5 text-caption">
+											Announcements shown above new chats, to every account.
+										</p>
+									</div>
+									<Button
+										variant="ghost"
+										size="icon-sm"
+										className="justify-center"
+										type="button"
+										aria-label="Add banner"
+										onClick={() => canAddBanner(draft.banners) && setBannerList([...draft.banners, newBanner()])}
+									>
+										<Plus className="size-4" />
+									</Button>
 								</div>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									className="justify-center"
-									type="button"
-									aria-label="Add banner"
-									onClick={() => canAddBanner(draft.banners) && setBannerList([...draft.banners, newBanner()])}
-								>
-									<Plus className="size-4" />
-								</Button>
+								<Banners banners={draft.banners} onChange={setBannerList} />
 							</div>
-							<Banners banners={draft.banners} onChange={setBannerList} />
-						</div>
+						)}
 						<DefaultInterfaceSettings
 							value={admin.DEFAULT_INTERFACE_SETTINGS}
 							onChange={(DEFAULT_INTERFACE_SETTINGS) => patch({ DEFAULT_INTERFACE_SETTINGS })}
