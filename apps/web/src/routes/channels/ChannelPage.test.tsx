@@ -17,11 +17,11 @@ const { getChannelById, joinChannelById, toast } = vi.hoisted(() => ({
 
 // A relative image URL would be fetched from the test server; a data: URL is not.
 // Channels show with more than one account (S6-D1).
-const accounts = vi.hoisted(() => ({ single: false }));
+const accounts = vi.hoisted(() => ({ single: false, pending: false }));
 vi.mock('@/routes/workspace/workspaceAccess', () => ({ useSingleUser: () => accounts.single }));
 vi.mock('./useChannels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	useChannelsEnabled: () => !accounts.single
+	useChannelsAccess: () => (accounts.pending ? 'unknown' : accounts.single ? 'hidden' : 'shown')
 }));
 vi.mock('@/lib/constants', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -168,5 +168,15 @@ describe('a channel that is not there (NAV-3, S6-D1)', () => {
 		expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
 		expect(getChannelById).not.toHaveBeenCalled();
 		accounts.single = false;
+	});
+});
+
+describe('while the account count loads (STA-2)', () => {
+	it('waits, rather than saying the channel is not found', () => {
+		accounts.pending = true;
+		open(channel({}));
+		expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+		expect(getChannelById).not.toHaveBeenCalled();
+		accounts.pending = false;
 	});
 });

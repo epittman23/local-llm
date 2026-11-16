@@ -14,7 +14,7 @@ import { NotFound } from '@/routes/NotFound';
 import { routePaths } from '@/routes/routePaths';
 import { ChannelFormDialog } from './ChannelDialogs';
 import { type Channel, channelTitle, formatUnread, isPublicChannel } from './channelModel';
-import { useChannelList, useChannelsEnabled, useCreateChannel, useMarkChannelRead } from './useChannels';
+import { useChannelList, useChannelsAccess, useCreateChannel, useMarkChannelRead } from './useChannels';
 
 const KIND: Record<string, string> = { group: 'Group', dm: 'Direct message' };
 
@@ -35,8 +35,21 @@ function ChannelIcon({ channel }: { channel: Channel }) {
  * the address is not found, as any other is.
  */
 export function ChannelsPage() {
-	const enabled = useChannelsEnabled();
-	return <FeatureGate feature="channels">{enabled ? <Channels /> : <NotFound />}</FeatureGate>;
+	const access = useChannelsAccess();
+	return (
+		<FeatureGate feature="channels">
+			{access === 'shown' ? <Channels /> : access === 'hidden' ? <NotFound /> : <Waiting />}
+		</FeatureGate>
+	);
+}
+
+/** While the account count loads (STA-2). */
+function Waiting() {
+	return (
+		<div className="flex flex-1 items-center justify-center p-8">
+			<Spinner className="size-5" />
+		</div>
+	);
 }
 
 function Channels() {

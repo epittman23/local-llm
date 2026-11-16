@@ -23,7 +23,7 @@ import { type Channel, type ChannelMessage, channelTitle, isPublicChannel, joins
 import { type ComposerHandle, MessageComposer } from './MessageComposer';
 import { MessageList } from './MessageList';
 import { ThreadPanel } from './ThreadPanel';
-import { CHANNELS_KEY, useChannelsEnabled, useMarkChannelRead, useOpenChannelStore } from './useChannels';
+import { CHANNELS_KEY, useChannelsAccess, useMarkChannelRead, useOpenChannelStore } from './useChannels';
 import { useMessageFeed } from './useMessageFeed';
 
 function useLargeScreen() {
@@ -43,8 +43,20 @@ function useLargeScreen() {
 export function ChannelPage() {
 	const { id = '' } = useParams();
 	// S6-D1: hidden while the install has one account, as any unknown address is.
-	const enabled = useChannelsEnabled();
-	return <FeatureGate feature="channels">{enabled ? <ChannelView key={id} id={id} /> : <NotFound />}</FeatureGate>;
+	const access = useChannelsAccess();
+	return (
+		<FeatureGate feature="channels">
+			{access === 'shown' ? (
+				<ChannelView key={id} id={id} />
+			) : access === 'hidden' ? (
+				<NotFound />
+			) : (
+				<div className="flex flex-1 items-center justify-center p-8">
+					<Spinner className="size-5" />
+				</div>
+			)}
+		</FeatureGate>
+	);
 }
 
 /** What a channel is, for the header's sentence (LAY-5): its own description, or its kind. */

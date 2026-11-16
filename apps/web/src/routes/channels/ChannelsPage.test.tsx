@@ -13,7 +13,7 @@ const { createNewChannel, list, me, enabled } = vi.hoisted(() => ({
 	createNewChannel: vi.fn(async () => ({ id: 'new' })),
 	list: { current: [] as Channel[] },
 	me: { current: { id: 'me', name: 'Me', role: 'user', permissions: {} } as Record<string, unknown> },
-	enabled: { current: true }
+	enabled: { current: true as boolean | null }
 }));
 
 vi.mock('@/lib/stores/authStore', () => ({
@@ -28,7 +28,7 @@ vi.mock('@/lib/apis/channels', async (importOriginal) => ({
 }));
 vi.mock('./useChannels', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	useChannelsEnabled: () => enabled.current,
+	useChannelsAccess: () => (enabled.current === null ? 'unknown' : enabled.current ? 'shown' : 'hidden'),
 	useChannelList: () => ({ data: list.current }),
 	useMarkChannelRead: () => () => {}
 }));
@@ -78,6 +78,13 @@ describe('the channels page (#971)', () => {
 		expect(lobby).toHaveTextContent('Not joined');
 		fireEvent.click(reading);
 		expect(await screen.findByText('channel page')).toBeInTheDocument();
+	});
+
+	it('waits while the account count loads, rather than saying it is not found (STA-2)', () => {
+		enabled.current = null;
+		show();
+		expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+		expect(screen.queryByRole('heading', { name: 'Channels' })).toBeNull();
 	});
 
 	it('is not found while the install has one account (S6-D1)', () => {
