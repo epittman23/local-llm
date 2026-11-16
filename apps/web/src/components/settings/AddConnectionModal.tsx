@@ -165,6 +165,8 @@ export function AddConnectionModal({
 		} catch {
 			setShowAdvanced(true);
 			setErrors((prev) => ({ ...prev, headers: 'Enter the headers as a JSON object, or leave them empty.' }));
+			// FRM-2: to the field, after the render that opens Advanced; at 390 it is below the fold.
+			setTimeout(() => document.getElementById(id('headers'))?.focus());
 			return { ok: false as const, value: null };
 		}
 	};

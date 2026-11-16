@@ -165,6 +165,8 @@ describe('AddConnectionModal (#933)', () => {
 				'Enter the headers as a JSON object, or leave them empty.'
 			)
 		);
+		// FRM-2: Save takes you to the error, which can be below the fold.
+		await waitFor(() => expect(screen.getByLabelText(/Headers/)).toHaveFocus());
 		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
