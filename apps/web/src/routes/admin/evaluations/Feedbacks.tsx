@@ -3,6 +3,7 @@ import saveAs from 'file-saver';
 import { Check, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { ListEmptyState } from '@/components/common/ListChrome';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -178,14 +179,15 @@ export function Feedbacks() {
 
 			<div className="relative max-w-full overflow-x-auto whitespace-nowrap">
 				{items.length === 0 ? (
-					<div className="flex w-full flex-col items-center justify-center py-16 pb-24">
-						<div className="max-w-sm text-center">
-							<div className="mb-1.5 text-sm">No feedback found</div>
-							<div className="text-muted-foreground text-center text-xs leading-5">
-								Try adjusting your search or filter to find what you are looking for.
-							</div>
-						</div>
-					</div>
+					<ListEmptyState
+						title="No feedback yet"
+						description="The ratings you give replies in chat appear here."
+						filtered={modelId !== ''}
+						onClear={() => {
+							setModelId('');
+							setPage(1);
+						}}
+					/>
 				) : (
 					<table className="text-muted-foreground w-full max-w-full table-auto px-2 text-left text-sm">
 						<thead className="text-foreground bg-transparent text-xs uppercase">

@@ -8,7 +8,9 @@ import { cn } from '@/lib/utils';
  * changed. Busy, Save reads "Saving…" with a spinner and cannot be pressed
  * twice (ACT-5). Inside a form, Save submits it; pass `onSave` to use it
  * outside one. The guard that asks before leaving with unsaved changes is the
- * caller's (Settings: `settingsModalStore`).
+ * caller's (Settings: `settingsModalStore`). On a create page (`creating`)
+ * nothing is saved yet, so before the first change the line says "Nothing to
+ * save yet" rather than "All changes saved".
  */
 export function SaveBar({
 	dirty,
@@ -17,6 +19,7 @@ export function SaveBar({
 	onDiscard,
 	onSave,
 	saveLabel = 'Save',
+	creating = false,
 	className
 }: {
 	dirty: boolean;
@@ -26,13 +29,15 @@ export function SaveBar({
 	onDiscard: () => void;
 	onSave?: () => void;
 	saveLabel?: string;
+	/** A create page: the thing does not exist until Save. */
+	creating?: boolean;
 	className?: string;
 }) {
 	return (
 		<div data-slot="save-bar" className={cn('flex flex-wrap items-center justify-end gap-2 border-t pt-3', className)}>
 			<p role="status" className="text-foreground-muted me-auto inline-flex items-center gap-2 text-dense max-sm:w-full">
 				{dirty && <span aria-hidden className="bg-warning size-2 rounded-full" />}
-				{dirty ? 'Unsaved changes' : 'All changes saved'}
+				{dirty ? 'Unsaved changes' : creating ? 'Nothing to save yet' : 'All changes saved'}
 			</p>
 			<Button type="button" variant="ghost" disabled={!dirty || saving} onClick={onDiscard}>
 				Discard changes

@@ -1,17 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
-import { Camera, ChevronLeft } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Camera, ChevronLeft, ChevronRight, CircleAlert } from 'lucide-react';
+import { type ReactNode, useId, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
+import { failureCause } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { hasPicture, ProfileAvatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { ImageButton } from '@/components/ui/image-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SaveBar } from '@/components/ui/save-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { getModels } from '@/lib/apis';
 import { getVoices } from '@/lib/apis/audio';
@@ -22,26 +28,42 @@ import { getSkills } from '@/lib/apis/skills';
 import { getTerminalServers } from '@/lib/apis/terminal';
 import { getTools } from '@/lib/apis/tools';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { cn } from '@/lib/utils';
-import { BaseModelSelect, CheckboxGrid, ItemPicker } from './EditorPickers';
+import { initials } from '@/lib/utils/initials';
+import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { BaseModelSelect, CheckboxGrid, groupLabel, ItemPicker } from './EditorPickers';
 import { KnowledgePicker } from './KnowledgePicker';
-import { availableFeatures, builtinToolItems, capabilityItems, featureItems } from './modelEditorLabels';
+import {
+	availableFeatures,
+	builtinToolItems,
+	capabilityItems,
+	featureItems,
+	markSwitchedOff
+} from './modelEditorLabels';
 import {
 	buildModelInfo,
-	DEFAULT_PROFILE_IMAGE,
+	type EditorErrors,
+	type EditorField,
 	type EditorState,
+	firstError,
 	getBaseModelItems,
 	getChatVariablesPreview,
 	initialEditorState,
 	type ModelInfo,
-	modelIdFromName
+	modelIdFromName,
+	sameValue,
+	validateEditor
 } from './modelEditorLogic';
 import { type PromptSuggestion, PromptSuggestionsEditor } from './PromptSuggestionsEditor';
 
-const sectionLabel = 'text-xs text-muted-foreground';
-
 /** An endpoint that fails or answers with something unexpected counts as an empty list. */
 const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+const PICTURE_TYPES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
+const NO_TERMINAL = 'none';
 
 /** Resizes a picked image to a 250px square (cover-cropped) WebP data URL; animated formats are kept as they are. */
 function readProfileImage(file: File): Promise<string> {
@@ -69,16 +91,78 @@ function readProfileImage(file: File): Promise<string> {
 	});
 }
 
+/** One of the form's sections (FRM-6): an h3 over its fields. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+	const id = useId();
+	return (
+		<section aria-labelledby={id} className="flex flex-col gap-5">
+			<h3 id={id} className="text-title font-title border-b pb-2">
+				{title}
+			</h3>
+			{children}
+		</section>
+	);
+}
+
+/** A label above its field, with "(optional)" for an optional one (FRM-1, FRM-6). */
+function FieldLabel({
+	htmlFor,
+	id,
+	optional,
+	children
+}: {
+	htmlFor?: string;
+	id?: string;
+	optional?: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<Label htmlFor={htmlFor} id={id} className="text-body font-strong mb-1.5">
+			{children}
+			{optional && <span className="text-foreground-muted font-normal">(optional)</span>}
+		</Label>
+	);
+}
+
+/** A closed-by-default part of the form, opened by a disclosure button (FRM-6). */
+function Disclosure({ title, children }: { title: string; children: ReactNode }) {
+	const [open, setOpen] = useState(false);
+	const id = useId();
+	return (
+		<div>
+			<Button
+				variant="ghost"
+				type="button"
+				className="-ms-2"
+				aria-expanded={open}
+				aria-controls={id}
+				onClick={() => setOpen((v) => !v)}
+			>
+				<ChevronRight aria-hidden className={cn('transition-transform', open && 'rotate-90')} />
+				{title}
+			</Button>
+			<div id={id} hidden={!open} className="mt-3">
+				{open && children}
+			</div>
+		</div>
+	);
+}
+
 /**
- * Ports workspace/Models/ModelEditor.svelte (create, clone and edit): name, id,
- * profile image, base model, description, tags, system prompt, advanced
- * parameters, suggestion prompts, knowledge, tools, skills, filters, actions,
- * capabilities, default features, builtin tools, terminal, TTS voice, access.
+ * Ports workspace/Models/ModelEditor.svelte (create, clone and edit), as a long
+ * form in sections (FRM-6): Identity, Behaviour, Knowledge and tools,
+ * Capabilities, and Advanced (closed). It saves on request (FRM-3): the save
+ * bar says whether there are unsaved changes, and leaving with some asks
+ * first. Errors appear under their fields (FRM-2); a failed save says so above
+ * the save bar.
  *
  * The data flow is in modelEditorLogic.ts (`initialEditorState` in,
- * `buildModelInfo` out), so this file is layout and wiring. Loading: it waits for
- * the model list and the admin defaults (both feed the initial state), then
- * renders; the tool/skill/function lists load in the background.
+ * `buildModelInfo` out), so this file is layout and wiring. Loading: it waits
+ * for the model list and the admin defaults (both feed the initial state),
+ * then renders; the tool/skill/function lists load in the background.
+ *
+ * `onSubmit` saves and throws on failure; after a save the editor leaves
+ * through `onBack`.
  */
 export function ModelEditor({
 	model,
@@ -139,19 +223,39 @@ function EditorForm({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
+	const features = useConfigStore((s) => s.config?.features);
 	const isAdmin = user?.role === 'admin';
+	const singleUser = useSingleUser();
+	const ids = useId();
+	const fieldId = (name: string) => `${ids}-${name}`;
 
-	const [state, setState] = useState<EditorState>(() =>
+	// The baseline is the form as first rendered (blank, cloned or loaded), so
+	// opening and leaving never asks; values are compared, not change events.
+	const [baseline, setBaseline] = useState<EditorState>(() =>
 		initialEditorState(model, defaults, { edit, baseModels: allModels })
 	);
+	const [state, setState] = useState<EditorState>(baseline);
+	const dirty = !sameValue(state, baseline);
 	const patch = (p: Partial<EditorState>) => setState((s) => ({ ...s, ...p }));
 	const setMeta = (p: Record<string, unknown>) =>
 		setState((s) => ({ ...s, info: { ...s.info, meta: { ...s.info.meta, ...p } } }));
-	const [loading, setLoading] = useState(false);
-	const [showAdvanced, setShowAdvanced] = useState(false);
-	const [showPreview, setShowPreview] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState<unknown>(null);
+	const [errors, setErrors] = useState<EditorErrors>({});
 	const [showAccess, setShowAccess] = useState(false);
 	const imageInput = useRef<HTMLInputElement>(null);
+	const nameField = useRef<HTMLInputElement>(null);
+	const idField = useRef<HTMLInputElement>(null);
+	const baseField = useRef<HTMLButtonElement>(null);
+	const knowledgeField = useRef<HTMLDivElement>(null);
+	// Switching suggestions to Default and back keeps what was written.
+	const lastSuggestions = useRef<PromptSuggestion[] | null>(null);
+
+	const guard = useUnsavedChanges(dirty, {
+		message: edit
+			? `Your changes to “${baseline.name}” are not saved. They are lost if you leave.`
+			: 'This model is not created yet. What you entered is lost if you leave.'
+	});
 
 	const tools = useQuery({
 		queryKey: ['tools-all'],
@@ -193,26 +297,58 @@ function EditorForm({
 	});
 	const meta = state.info.meta;
 	const tags = ((meta.tags ?? []) as Array<{ name: string }>).map((t) => (typeof t === 'string' ? { name: t } : t));
-	const features = availableFeatures(state.capabilities);
+	const available = availableFeatures(state.capabilities);
+	const takenIds = edit ? [] : allModels.map((m) => m.id as string);
+	const customSuggestions = (meta.suggestion_prompts ?? null) !== null;
+
+	/** FRM-2: judge one field when the person leaves it, and clear its error once it is put right. */
+	const check = (field: EditorField, next: EditorState = state, always = true) => {
+		const message = validateEditor(next, { preset, takenIds })[field];
+		setErrors((e) => (always || e[field] ? { ...e, [field]: message } : e));
+	};
+
+	const focusField = (field: EditorField) => {
+		const target = { name: nameField, id: idField, base: baseField, knowledge: knowledgeField }[field].current;
+		target?.scrollIntoView?.({ block: 'nearest' });
+		target?.focus();
+	};
 
 	const submit = async () => {
-		const result = buildModelInfo(state, { preset });
-		if (!result.ok) {
-			toast.error(result.error);
+		const found = validateEditor(state, { preset, takenIds });
+		setErrors(found);
+		const first = firstError(found);
+		if (first) {
+			focusField(first);
 			return;
 		}
-		setLoading(true);
+		const result = buildModelInfo(state, { preset, takenIds });
+		if (!result.ok) return;
+		setSaving(true);
+		setSaveError(null);
 		try {
 			await onSubmit(result.info);
-		} finally {
-			setLoading(false);
+		} catch (error) {
+			setSaveError(error ?? 'unknown');
+			setSaving(false);
+			return;
 		}
+		setSaving(false);
+		setBaseline(state);
+		guard.allowNext();
+		onBack();
 	};
 
 	const preview = buildModelInfo({ ...state, id: state.id || '(id)', name: state.name || '(name)' }, { preset: false });
+	const failed = saveError === null ? null : failureCause(saveError);
+	const nameNote = fieldId('name-note');
+	const idNote = fieldId('id-note');
+	const baseNote = fieldId('base-note');
+	const systemNote = fieldId('system-note');
+	const idHelp = edit ? "A model's ID can't be changed." : "Names the model in the API. It can't be changed later.";
 
 	return (
 		<div className="flex h-full min-h-0 w-full flex-col">
+			{guard.dialog}
 			<AccessControlModal
 				open={showAccess}
 				onOpenChange={setShowAccess}
@@ -224,47 +360,61 @@ function EditorForm({
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
 			/>
 
-			<Button variant="ghost" size="sm" className="mb-1 w-fit" type="button" onClick={onBack}>
-				<ChevronLeft className="size-3" strokeWidth={2} />
-				<span>Back</span>
-			</Button>
+			<div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-3">
+				<Button variant="ghost" size="sm" className="-ms-2" type="button" onClick={() => guard.confirmLeave(onBack)}>
+					<ChevronLeft aria-hidden />
+					Back
+				</Button>
+				<h2 className="text-heading font-title min-w-0 flex-1 truncate tracking-tight">
+					{edit ? 'Edit model' : 'New model'}
+				</h2>
+				{/* WRD-4, S4-D1: sharing says nothing while the install has one account. */}
+				{!singleUser && <AccessButton onClick={() => setShowAccess(true)} />}
+			</div>
 
-			<div className="min-h-0 w-full flex-1 overflow-y-auto pr-1">
-				<input
-					ref={imageInput}
-					type="file"
-					hidden
-					accept="image/*"
-					onChange={async (e) => {
-						const file = e.target.files?.[0];
-						e.target.value = '';
-						if (!file || !['image/gif', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-							if (file) toast.error(`Unsupported File Type '${file.type}'.`);
-							return;
-						}
-						try {
-							setMeta({ profile_image_url: await readProfileImage(file) });
-						} catch (error) {
-							toast.error(`${error}`);
-						}
-					}}
-				/>
+			<input
+				ref={imageInput}
+				type="file"
+				hidden
+				accept="image/*"
+				onChange={async (e) => {
+					const file = e.target.files?.[0];
+					e.target.value = '';
+					if (!file) return;
+					if (!PICTURE_TYPES.includes(file.type)) {
+						toast.error('Use a PNG, JPEG, WebP or GIF image.');
+						return;
+					}
+					try {
+						setMeta({ profile_image_url: await readProfileImage(file) });
+					} catch (error) {
+						toast.error(`Couldn't read “${file.name}”. Try another image.`, { description: String(error) });
+					}
+				}}
+			/>
 
-				<form
-					className="flex w-full flex-col gap-2.5 md:flex-row"
-					onSubmit={(e) => {
-						e.preventDefault();
-						submit();
-					}}
-				>
-					<div className="w-full px-1">
-						<div className="flex w-full flex-col gap-3">
-							<div className="flex w-full min-w-0 items-center gap-3 py-0.5">
-								<div className="group relative size-12 shrink-0 md:size-14">
+			<form
+				noValidate
+				className="flex min-h-0 w-full flex-1 flex-col"
+				onSubmit={(e) => {
+					e.preventDefault();
+					submit();
+				}}
+			>
+				<div className="min-h-0 w-full flex-1 overflow-y-auto pe-1">
+					<div className="flex max-w-[72rem] flex-col gap-10 pb-10">
+						<Section title="Identity">
+							<div className="flex min-w-0 items-start gap-4">
+								<div className="flex shrink-0 flex-col items-center gap-1 pt-7">
 									<ImageButton
-										aria-label="Upload profile image"
+										// WCAG 2.5.3: a name that holds the initials the button shows, when it shows them.
+										aria-label={
+											hasPicture(meta.profile_image_url)
+												? 'Upload a picture'
+												: `${initials(state.name)}, upload a picture`
+										}
 										shape="circle"
-										className="size-full"
+										className="size-12 md:size-14"
 										overlay={<Camera />}
 										onClick={() => imageInput.current?.click()}
 									>
@@ -274,117 +424,134 @@ function EditorForm({
 										<Button
 											variant="ghost"
 											size="xs"
-											className="absolute top-full left-1/2 mt-1 -translate-x-1/2 opacity-0 group-hover:opacity-60"
 											type="button"
-											onClick={() => setMeta({ profile_image_url: DEFAULT_PROFILE_IMAGE })}
+											onClick={() => setMeta({ profile_image_url: null })}
 										>
-											Reset
+											Remove picture
 										</Button>
 									)}
 								</div>
-								<div className="flex min-w-0 flex-1 flex-col gap-1.5">
-									<Label htmlFor="model-name">Model name</Label>
-									<div className="flex min-w-0 items-center gap-2">
+								<div className="flex min-w-0 flex-1 flex-col gap-4">
+									<div>
+										<FieldLabel htmlFor={fieldId('name')}>Model name</FieldLabel>
 										<Input
-											id="model-name"
-											className="min-w-0 flex-1"
+											ref={nameField}
+											id={fieldId('name')}
 											placeholder="e.g. Statistics tutor"
 											value={state.name}
-											required
+											{...fieldProps(nameNote, { error: errors.name })}
+											onBlur={() => check('name')}
 											onChange={(e) => {
-												// A new model's id follows its name until edited by hand.
+												// A new model's id follows its name, cleared name included, until the id is edited by hand.
 												const name = e.target.value;
-												patch(!edit && name ? { name, id: modelIdFromName(name) } : { name });
+												const auto = !edit && state.id === modelIdFromName(state.name);
+												const next = { ...state, name, ...(auto ? { id: modelIdFromName(name) } : {}) };
+												setState(next);
+												check('name', next, false);
+												if (next.id !== state.id) check('id', next, false);
 											}}
 										/>
-										<AccessButton onClick={() => setShowAccess(true)} />
+										<FieldMessage id={nameNote} error={errors.name} />
 									</div>
-									<Label htmlFor="model-id" className="mt-1.5">
-										Model ID
-									</Label>
-									<Input
-										id="model-id"
-										className="font-mono"
-										placeholder="e.g. statistics-tutor"
-										value={state.id}
-										disabled={edit}
-										required
-										onChange={(e) => patch({ id: e.target.value })}
-									/>
+									<div>
+										<FieldLabel htmlFor={fieldId('id')}>Model ID</FieldLabel>
+										<Input
+											ref={idField}
+											id={fieldId('id')}
+											className="font-mono"
+											placeholder="e.g. statistics-tutor"
+											value={state.id}
+											disabled={edit}
+											{...fieldProps(idNote, { error: errors.id, help: idHelp })}
+											onBlur={() => check('id')}
+											onChange={(e) => {
+												const next = { ...state, id: e.target.value };
+												setState(next);
+												check('id', next, false);
+											}}
+										/>
+										<FieldMessage id={idNote} error={errors.id} help={idHelp} />
+									</div>
 								</div>
 							</div>
 
 							{preset && (
 								<div>
-									<div className={cn(sectionLabel, 'mb-1')}>Base Model (From)</div>
+									<FieldLabel id={fieldId('base-label')}>Base model</FieldLabel>
 									<BaseModelSelect
+										ref={baseField}
+										labelId={fieldId('base-label')}
 										items={baseItems}
 										value={state.info.base_model_id}
-										placeholder="Select a base model (e.g. llama3, gpt-4o)"
-										onChange={(base) => setState((s) => ({ ...s, info: { ...s.info, base_model_id: base } }))}
+										placeholder="Choose a model, e.g. qwen/qwen3.6-27b"
+										invalid={Boolean(errors.base)}
+										describedBy={baseNote}
+										onChange={(base) => {
+											const next = { ...state, info: { ...state.info, base_model_id: base } };
+											setState(next);
+											check('base', next, false);
+										}}
+									/>
+									<FieldMessage
+										id={baseNote}
+										error={errors.base}
+										help="The model that answers. This entry gives it a name, a prompt, knowledge and tools."
 									/>
 								</div>
 							)}
 
 							<div>
-								<div className="mb-1 flex w-full items-center justify-between">
-									<Label htmlFor="model-description">Description</Label>
-									<Button
-										variant="ghost"
-										size="xs"
-										type="button"
-										aria-label={state.enableDescription ? 'Custom description enabled' : 'Default description enabled'}
-										onClick={() => patch({ enableDescription: !state.enableDescription })}
-									>
-										{state.enableDescription ? 'Custom' : 'Default'}
-									</Button>
-								</div>
-								{state.enableDescription && (
-									<Textarea
-										id="model-description"
-										className="resize-none"
-										rows={2}
-										placeholder="e.g. Explains statistics step by step"
-										value={meta.description ?? ''}
-										onChange={(e) => setMeta({ description: e.target.value })}
-									/>
-								)}
+								<FieldLabel htmlFor={fieldId('description')} optional>
+									Description
+								</FieldLabel>
+								<Textarea
+									id={fieldId('description')}
+									rows={2}
+									placeholder="e.g. Explains statistics step by step"
+									value={meta.description ?? ''}
+									onChange={(e) => setMeta({ description: e.target.value })}
+								/>
 							</div>
 
-							<Tags
-								tags={tags}
-								suggestionTags={(tagSuggestions.data ?? []).map((name) => ({ name }))}
-								onAdd={(name) => setMeta({ tags: [...tags, { name }] })}
-								onDelete={(name) => setMeta({ tags: tags.filter((t) => t.name !== name) })}
-							/>
-						</div>
+							<div>
+								<FieldLabel htmlFor={fieldId('tags')} optional>
+									Tags
+								</FieldLabel>
+								<Tags
+									id={fieldId('tags')}
+									tags={tags}
+									suggestionTags={(tagSuggestions.data ?? []).map((name) => ({ name }))}
+									onAdd={(name) => setMeta({ tags: [...tags, { name }] })}
+									onDelete={(name) => setMeta({ tags: tags.filter((t) => t.name !== name) })}
+								/>
+							</div>
+						</Section>
 
-						<hr className="my-3" />
-
-						<div className="my-2">
-							<div className="mb-1 text-sm">Model Params</div>
-							<div className="my-2">
-								<Label htmlFor="model-system-prompt" className="mb-1.5">
+						<Section title="Behaviour">
+							<div>
+								<FieldLabel htmlFor={fieldId('system')} optional>
 									System prompt
-								</Label>
+								</FieldLabel>
 								<Textarea
-									id="model-system-prompt"
-									className="resize-none"
-									rows={4}
+									id={fieldId('system')}
+									className="resize-y"
+									rows={8}
 									placeholder="e.g. You are a careful statistics tutor. Show each step."
+									aria-describedby={systemNote}
 									value={state.system}
 									onChange={(e) => patch({ system: e.target.value })}
 								/>
+								<FieldMessage id={systemNote} help="Sent at the start of every chat with this model." />
 								{(variables.fields.length > 0 || variables.userFields.length > 0 || variables.warnings.length > 0) && (
-									<div className="bg-muted/50 mt-1 rounded-lg px-3 py-2 text-xs">
-										<div className="font-medium">Detected Variables</div>
+									<div className="bg-surface-2 text-dense mt-2 rounded-lg px-3 py-2">
+										<div className="font-strong">Detected variables</div>
 										{variables.fields.length > 0 && (
 											<div className="mt-1">
-												<div className="text-muted-foreground">Chat Variables</div>
+												<div className="text-foreground-muted">Chat variables</div>
 												{variables.fields.map((f) => (
 													<div key={f.key} className="font-mono">
 														{f.key}{' '}
-														<span className="text-muted-foreground">
+														<span className="text-foreground-muted">
 															({f.type ?? 'text'}
 															{f.required ? ', required' : ''})
 														</span>
@@ -394,7 +561,7 @@ function EditorForm({
 										)}
 										{variables.userFields.length > 0 && (
 											<div className="mt-1">
-												<div className="text-muted-foreground">User Variables</div>
+												<div className="text-foreground-muted">User variables</div>
 												{variables.userFields.map((f) => (
 													<div key={f.key} className="font-mono">
 														{f.key}
@@ -403,7 +570,7 @@ function EditorForm({
 											</div>
 										)}
 										{variables.warnings.length > 0 && (
-											<ul className="mt-1 list-disc pl-4 text-warning">
+											<ul className="text-warning mt-1 list-disc ps-4">
 												{variables.warnings.map((w) => (
 													<li key={w}>{w}</li>
 												))}
@@ -413,145 +580,153 @@ function EditorForm({
 								)}
 							</div>
 
-							<div className="my-2">
-								<div className="flex w-full items-center justify-between">
-									<div className={sectionLabel}>Advanced Params</div>
-									<Button variant="ghost" size="xs" type="button" onClick={() => setShowAdvanced((v) => !v)}>
-										{showAdvanced ? 'Hide' : 'Show'}
-									</Button>
+							<div>
+								<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+									<h4 id={fieldId('suggestions')} className={groupLabel}>
+										Prompt suggestions
+									</h4>
+									<SegmentedControl
+										aria-labelledby={fieldId('suggestions')}
+										value={customSuggestions ? 'custom' : 'default'}
+										options={[
+											{ value: 'default', label: 'Default' },
+											{ value: 'custom', label: 'Custom' }
+										]}
+										onValueChange={(v) => {
+											if (v === 'default') {
+												lastSuggestions.current = (meta.suggestion_prompts as PromptSuggestion[]) ?? null;
+												setMeta({ suggestion_prompts: null });
+											} else {
+												setMeta({
+													suggestion_prompts: lastSuggestions.current ?? [{ content: '', title: ['', ''] }]
+												});
+											}
+										}}
+									/>
 								</div>
-								{showAdvanced && (
-									<div className="mt-2">
-										<AdvancedParams
-											admin
-											custom
-											layout="grid"
-											params={state.params}
-											onChange={(params) => patch({ params })}
+								{customSuggestions ? (
+									<div className="mt-3">
+										<PromptSuggestionsEditor
+											value={meta.suggestion_prompts as PromptSuggestion[]}
+											onChange={(next) => setMeta({ suggestion_prompts: next })}
 										/>
 									</div>
+								) : (
+									<p className="text-foreground-muted text-dense mt-1">
+										A new chat with this model shows the app's suggestions.
+									</p>
 								)}
 							</div>
-						</div>
+						</Section>
 
-						<hr className="my-3" />
-
-						<div className="my-2">
-							<div className="mb-1 flex w-full items-center justify-between">
-								<div className={sectionLabel}>Prompts</div>
-								<Button
-									variant="ghost"
-									size="xs"
-									type="button"
-									aria-label={
-										(meta.suggestion_prompts ?? null) === null
-											? 'Default prompt suggestions'
-											: 'Custom prompt suggestions'
-									}
-									onClick={() =>
-										setMeta({
-											suggestion_prompts:
-												(meta.suggestion_prompts ?? null) === null ? [{ content: '', title: ['', ''] }] : null
-										})
-									}
-								>
-									{(meta.suggestion_prompts ?? null) === null ? 'Default' : 'Custom'}
-								</Button>
-							</div>
-							{meta.suggestion_prompts && (
-								<PromptSuggestionsEditor
-									value={meta.suggestion_prompts as PromptSuggestion[]}
-									onChange={(next) => setMeta({ suggestion_prompts: next })}
+						<Section title="Knowledge and tools">
+							<div ref={knowledgeField} tabIndex={-1}>
+								<KnowledgePicker
+									items={state.knowledge}
+									error={errors.knowledge}
+									onChange={(knowledge) => {
+										const next = { ...state, knowledge };
+										setState(next);
+										check('knowledge', next, false);
+									}}
 								/>
-							)}
-						</div>
-
-						<hr className="my-3" />
-
-						<div className="my-3">
-							<KnowledgePicker items={state.knowledge} onChange={(knowledge) => patch({ knowledge })} />
-						</div>
-						<div className="my-3">
+							</div>
 							<ItemPicker
 								title="Tools"
 								items={tools.data ?? []}
 								selectedIds={state.toolIds}
 								onChange={(toolIds) => patch({ toolIds })}
-								labels={{ search: 'Search tools', trigger: 'Select Tool', empty: 'No tools found' }}
-								footnote='To select toolkits here, add them to the "Tools" workspace or enable a tool server first.'
+								labels={{ search: 'Search tools', trigger: 'Choose tools', noMatch: 'No tool matches that search.' }}
+								empty={
+									tools.isSuccess && (
+										<>
+											No tools yet.{' '}
+											<Link to={routePaths.workspaceTools} className="text-link underline">
+												Create one in Tools
+											</Link>
+											.
+										</>
+									)
+								}
 							/>
-						</div>
-						<div className="my-3">
 							<ItemPicker
 								title="Skills"
 								items={skills.data ?? []}
 								selectedIds={state.skillIds}
 								onChange={(skillIds) => patch({ skillIds })}
-								labels={{ search: 'Search skills', trigger: 'Select Skill', empty: 'No skills found' }}
-								footnote='To select skills here, add them to the "Skills" workspace first.'
+								labels={{ search: 'Search skills', trigger: 'Choose skills', noMatch: 'No skill matches that search.' }}
+								empty={
+									skills.isSuccess && (
+										<>
+											No skills yet.{' '}
+											<Link to={routePaths.workspaceSkills} className="text-link underline">
+												Create one in Skills
+											</Link>
+											.
+										</>
+									)
+								}
 							/>
-						</div>
+							{filters.length > 0 && (
+								<ItemPicker
+									title="Filters"
+									items={filters}
+									lockGlobal
+									selectedIds={state.filterIds}
+									onChange={(filterIds) => patch({ filterIds })}
+									labels={{
+										search: 'Search filters',
+										trigger: 'Choose filters',
+										noMatch: 'No filter matches that search.'
+									}}
+								/>
+							)}
+							{toggleableFilters.length > 0 && (
+								<ItemPicker
+									title="Filters on by default"
+									items={toggleableFilters}
+									selectedIds={state.defaultFilterIds}
+									onChange={(defaultFilterIds) => patch({ defaultFilterIds })}
+									labels={{
+										search: 'Search filters',
+										trigger: 'Choose filters on by default',
+										noMatch: 'No filter matches that search.'
+									}}
+								/>
+							)}
+							{actions.length > 0 && (
+								<ItemPicker
+									title="Actions"
+									items={actions}
+									lockGlobal
+									selectedIds={state.actionIds}
+									onChange={(actionIds) => patch({ actionIds })}
+									labels={{
+										search: 'Search actions',
+										trigger: 'Choose actions',
+										noMatch: 'No action matches that search.'
+									}}
+								/>
+							)}
+						</Section>
 
-						{(filters.length > 0 || actions.length > 0) && (
-							<>
-								<hr className="my-3" />
-								{filters.length > 0 && (
-									<div className="my-3">
-										<ItemPicker
-											title="Filters"
-											items={filters}
-											lockGlobal
-											selectedIds={state.filterIds}
-											onChange={(filterIds) => patch({ filterIds })}
-											labels={{ search: 'Search filters', trigger: 'Select Filter', empty: 'No filters found' }}
-											footnote='To select filters here, add them to the "Functions" workspace first.'
-										/>
-									</div>
-								)}
-								{toggleableFilters.length > 0 && (
-									<div className="my-3">
-										<ItemPicker
-											title="Default Filters"
-											items={toggleableFilters}
-											selectedIds={state.defaultFilterIds}
-											onChange={(defaultFilterIds) => patch({ defaultFilterIds })}
-											labels={{ search: 'Search filters', trigger: 'Select Filter', empty: 'No filters found' }}
-											footnote="To select default filters here, enable toggleable filters for this model first."
-										/>
-									</div>
-								)}
-								{actions.length > 0 && (
-									<div className="my-3">
-										<ItemPicker
-											title="Actions"
-											items={actions}
-											lockGlobal
-											selectedIds={state.actionIds}
-											onChange={(actionIds) => patch({ actionIds })}
-											labels={{ search: 'Search actions', trigger: 'Select Action', empty: 'No actions found' }}
-											footnote='To select actions here, add them to the "Functions" workspace first.'
-										/>
-									</div>
-								)}
-							</>
-						)}
-
-						<hr className="my-3" />
-
-						<div className="my-3">
+						<Section title="Capabilities">
 							<CheckboxGrid
-								title="Capabilities"
-								items={capabilityItems.filter((c) => !(c.id === 'file_context' && !state.capabilities.file_upload))}
+								title="What this model can do"
+								items={markSwitchedOff(
+									capabilityItems.filter((c) => !(c.id === 'file_context' && !state.capabilities.file_upload)),
+									features
+								)}
 								isChecked={(id) => Boolean(state.capabilities[id])}
 								onToggle={(id, checked) => patch({ capabilities: { ...state.capabilities, [id]: checked } })}
 							/>
-						</div>
-
-						{features.length > 0 && (
-							<div className="my-3">
+							{available.length > 0 && (
 								<CheckboxGrid
-									title="Default Features"
-									items={featureItems.filter((f) => features.includes(f.id))}
+									title="On by default in a new chat"
+									items={markSwitchedOff(
+										featureItems.filter((f) => available.includes(f.id)),
+										features
+									)}
 									isChecked={(id) => state.defaultFeatureIds.includes(id)}
 									onToggle={(id, checked) =>
 										patch({
@@ -563,89 +738,126 @@ function EditorForm({
 										})
 									}
 								/>
-							</div>
-						)}
+							)}
+							{state.capabilities.terminal && (terminals.data ?? []).length > 0 && (
+								<div>
+									<FieldLabel id={fieldId('terminal')}>Terminal server</FieldLabel>
+									<Select
+										value={state.terminalId || NO_TERMINAL}
+										onValueChange={(v) => patch({ terminalId: v === NO_TERMINAL ? '' : v })}
+									>
+										<SelectTrigger aria-labelledby={fieldId('terminal')} className="w-full sm:w-80">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value={NO_TERMINAL}>None</SelectItem>
+											{(terminals.data ?? []).map((t) => (
+												<SelectItem key={t.id} value={t.id}>
+													{t.name || t.id}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+							)}
+						</Section>
 
-						{state.capabilities.builtin_tools && (
-							<div className="my-3">
-								<CheckboxGrid
-									title="Builtin Tools"
-									items={builtinToolItems}
-									// Builtin tools are all on unless one is explicitly switched off.
-									isChecked={(id) => state.builtinTools[id] !== false}
-									onToggle={(id, checked) => {
-										const next = { ...state.builtinTools };
-										if (checked) delete next[id];
-										else next[id] = false;
-										patch({ builtinTools: next });
-									}}
-								/>
-							</div>
-						)}
+						<Section title="Advanced">
+							<Disclosure title="Builtin tools, voice and parameters">
+								<div className="flex flex-col gap-8">
+									{state.capabilities.builtin_tools ? (
+										<CheckboxGrid
+											title="Builtin tools"
+											items={markSwitchedOff(builtinToolItems, features)}
+											// Builtin tools are all on unless one is explicitly switched off.
+											isChecked={(id) => state.builtinTools[id] !== false}
+											onToggle={(id, checked) => {
+												const next = { ...state.builtinTools };
+												if (checked) delete next[id];
+												else next[id] = false;
+												patch({ builtinTools: next });
+											}}
+										/>
+									) : (
+										<p className="text-foreground-muted text-dense">
+											Builtin tools are off for this model. Turn them on under Capabilities to choose which.
+										</p>
+									)}
+									<div>
+										<FieldLabel htmlFor={fieldId('voice')} optional>
+											Voice for reading aloud
+										</FieldLabel>
+										<Input
+											id={fieldId('voice')}
+											list={fieldId('voices')}
+											className="sm:w-80"
+											autoComplete="off"
+											aria-describedby={fieldId('voice-note')}
+											value={state.tts.voice}
+											onChange={(e) => patch({ tts: { voice: e.target.value } })}
+										/>
+										<datalist id={fieldId('voices')}>
+											{(voices.data ?? []).map((v) => (
+												<option key={v.id} value={v.id}>
+													{v.name}
+												</option>
+											))}
+										</datalist>
+										<FieldMessage
+											id={fieldId('voice-note')}
+											help="Empty uses the voice set in Admin Settings > Audio."
+										/>
+									</div>
+									<div>
+										<h4 className={cn(groupLabel, 'mb-2')}>Parameters</h4>
+										<AdvancedParams
+											admin
+											custom
+											layout="grid"
+											params={state.params}
+											onChange={(params) => patch({ params })}
+										/>
+									</div>
+									<Disclosure title="JSON preview">
+										<pre className="bg-surface-2 text-dense max-h-96 overflow-auto rounded-lg p-3">
+											{JSON.stringify(preview.ok ? preview.info : state.info, null, 2)}
+										</pre>
+									</Disclosure>
+								</div>
+							</Disclosure>
+						</Section>
+					</div>
+				</div>
 
-						{state.capabilities.terminal && (terminals.data ?? []).length > 0 && (
-							<div className="my-3">
-								<div className="text-muted-foreground mb-1 text-xs">Terminal</div>
-								<select
-									className="border-border bg-background w-full rounded-lg border px-2 py-1.5 text-sm"
-									aria-label="Terminal"
-									value={state.terminalId}
-									onChange={(e) => patch({ terminalId: e.target.value })}
-								>
-									<option value="">None</option>
-									{(terminals.data ?? []).map((t) => (
-										<option key={t.id} value={t.id}>
-											{t.name || t.id}
-										</option>
-									))}
-								</select>
-							</div>
-						)}
-
-						<div className="my-3">
-							<Label htmlFor="model-tts-voice" className="mb-1.5">
-								TTS voice
-							</Label>
-							<Input
-								id="model-tts-voice"
-								list="tts-voices"
-								placeholder="e.g. alloy, echo, shimmer"
-								autoComplete="off"
-								value={state.tts.voice}
-								onChange={(e) => patch({ tts: { voice: e.target.value } })}
-							/>
-							<datalist id="tts-voices">
-								{(voices.data ?? []).map((v) => (
-									<option key={v.id} value={v.id}>
-										{v.name}
-									</option>
-								))}
-							</datalist>
-						</div>
-
-						<div className="my-4 flex justify-end pb-6">
-							<Button type="submit" disabled={loading}>
-								{edit ? 'Save & Update' : 'Save & Create'}
-								{loading && <Spinner className="size-3.5" />}
-							</Button>
-						</div>
-
-						<div className="pb-16">
-							<div className="flex items-center justify-between">
-								<div className="text-sm">JSON Preview</div>
-								<Button variant="ghost" size="xs" type="button" onClick={() => setShowPreview((v) => !v)}>
-									{showPreview ? 'Hide' : 'Show'}
-								</Button>
-							</div>
-							{showPreview && (
-								<pre className="bg-muted/50 mt-2 max-h-96 overflow-auto rounded-lg p-3 text-xs">
-									{JSON.stringify(preview.ok ? preview.info : state.info, null, 2)}
-								</pre>
+				{failed && (
+					<div role="alert" className="text-danger mb-3 flex items-start gap-2">
+						<CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+						<div className="min-w-0">
+							<p>
+								{edit ? "Couldn't save the model." : "Couldn't create the model."} {failed.cause}
+							</p>
+							{failed.detail && (
+								<details className="text-foreground-muted text-dense mt-1">
+									<summary className="cursor-pointer">Details</summary>
+									<p className="mt-1 break-words">{failed.detail}</p>
+								</details>
 							)}
 						</div>
 					</div>
-				</form>
-			</div>
+				)}
+				<SaveBar
+					creating={!edit}
+					// An unsaved clone can be created as it is.
+					dirty={dirty || (!edit && model !== null)}
+					saving={saving}
+					saveLabel={edit ? 'Save changes' : 'Create model'}
+					onDiscard={() => {
+						setState(baseline);
+						setErrors({});
+						setSaveError(null);
+					}}
+				/>
+			</form>
 		</div>
 	);
 }

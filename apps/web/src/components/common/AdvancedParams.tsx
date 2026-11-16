@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, Plus, RotateCcw } from 'lucide-react';
-import { type ReactNode, useId, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -107,6 +107,13 @@ export function AdvancedParams({
 }) {
 	const set = (key: string, value: unknown) => onChange({ ...params, [key]: value });
 	const [filter, setFilter] = useState('');
+	// The custom parameter row being added, kept here until it has a name.
+	const [draft, setDraft] = useState<{ name: string; value: string } | null>(null);
+	const draftName = useRef<HTMLInputElement>(null);
+	const adding = draft !== null;
+	useEffect(() => {
+		if (adding) draftName.current?.focus();
+	}, [adding]);
 	const defs = paramDefs.filter((d) => admin || !d.admin);
 	const groups = paramGroups(defs);
 	const grid =
@@ -257,7 +264,16 @@ export function AdvancedParams({
 	};
 
 	const customParams = (params.custom_params ?? {}) as Record<string, string>;
-	const setCustom = (next: Record<string, string>) => set('custom_params', next);
+	// An unnamed row is not a parameter: it is never handed to the caller, and any edit
+	// drops one stored from before (the backend would merge "" into every request).
+	const setCustom = (next: Record<string, string>) =>
+		set('custom_params', Object.fromEntries(Object.entries(next).filter(([name]) => name.trim() !== '')));
+	const commitDraft = () => {
+		const named = draft?.name.trim();
+		if (!draft || !named) return;
+		setCustom({ ...customParams, [named]: draft.value });
+		setDraft(null);
+	};
 	const moreShown = groups.more.filter((d) => matchesFilter(d, filter));
 
 	return (
@@ -320,7 +336,7 @@ export function AdvancedParams({
 									variant="ghost"
 									size="sm"
 									type="button"
-									aria-label={`Remove ${key}`}
+									aria-label={key ? `Remove ${key}` : 'Remove this parameter'}
 									onClick={() => {
 										const { [key]: _removed, ...rest } = customParams;
 										setCustom(rest);
@@ -338,11 +354,51 @@ export function AdvancedParams({
 							/>
 						</div>
 					))}
+					{draft && (
+						// The row is kept here until it has a name; it is added once focus leaves it, or on Enter.
+						<fieldset
+							aria-label="New custom parameter"
+							className="flex flex-col gap-1"
+							onBlur={(e) => {
+								if (!e.currentTarget.contains(e.relatedTarget)) commitDraft();
+							}}
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' && e.target instanceof HTMLInputElement) commitDraft();
+							}}
+						>
+							<div className="flex items-center gap-2">
+								<Input
+									ref={draftName}
+									type="text"
+									aria-label="Custom parameter name"
+									placeholder="Custom parameter name"
+									value={draft.name}
+									onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+								/>
+								<Button
+									variant="ghost"
+									size="sm"
+									type="button"
+									aria-label="Remove this parameter"
+									onClick={() => setDraft(null)}
+								>
+									Remove
+								</Button>
+							</div>
+							<Input
+								type="text"
+								aria-label="Custom parameter value"
+								placeholder="Custom parameter value"
+								value={draft.value}
+								onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+							/>
+						</fieldset>
+					)}
 					<Button
 						variant="ghost"
 						className="self-start"
 						type="button"
-						onClick={() => setCustom({ ...customParams, custom_param_name: 'custom_param_value' })}
+						onClick={() => (draft ? draftName.current?.focus() : setDraft({ name: '', value: '' }))}
 					>
 						<Plus aria-hidden /> Add custom parameter
 					</Button>

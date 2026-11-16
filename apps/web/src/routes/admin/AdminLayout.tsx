@@ -54,9 +54,13 @@ export function AdminLayout() {
 			: []),
 		{ to: routePaths.adminSettings, label: 'Settings', active: section === 'settings' }
 	];
+	// LAY-4: on a phone the function editor gets the height the Admin header and
+	// tabs would take, as the workspace editors do; its own header has Back.
+	const editing = /^\/admin\/functions\/(create|edit)$/.test(pathname);
 	return (
 		<div className="flex h-full min-w-0 flex-col">
-			<div className="flex flex-col gap-3 border-b px-4 pt-4">
+			{editing && <h1 className="sr-only sm:hidden">Admin</h1>}
+			<div className={cn('flex flex-col gap-3 border-b px-4 pt-4', editing && 'max-sm:hidden')}>
 				<div className="ps-[var(--shell-menu-inset,0px)]">
 					<PageHeader title="Admin" description="Accounts, evaluations, functions and settings for this server." />
 				</div>

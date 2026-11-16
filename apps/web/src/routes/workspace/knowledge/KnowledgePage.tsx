@@ -1,12 +1,13 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, MoreHorizontal, Trash2 } from 'lucide-react';
+import { CircleAlert, Download, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -17,9 +18,13 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
+import { Textarea } from '@/components/ui/textarea';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import {
 	createNewKnowledge,
@@ -33,6 +38,7 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { knowledgeMetaPreview } from './knowledgeFiles';
 
 type KnowledgeListItem = {
@@ -67,7 +73,10 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 
 	const [query, setQuery] = useState('');
 	const [debouncedQuery, setDebouncedQuery] = useState('');
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [sourceOption, setSourceOption] = useState(() => localStorage.workspaceKnowledgeSourceOption || '');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -105,9 +114,12 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 	const total = list.data?.pages[0]?.total ?? null;
 	const failed = list.isError || (list.isPaused && list.data === undefined);
 
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = debouncedQuery !== '' || viewOption !== '' || sourceOption !== '';
+	const wholeCount = useWorkspaceStore((s) => s.counts.knowledge);
 	useEffect(() => {
-		if (total !== null) setCount('knowledge', total);
-	}, [total, setCount]);
+		if (total !== null && !filtered) setCount('knowledge', total);
+	}, [total, filtered, setCount]);
 
 	useEffect(() => {
 		const node = sentinel.current;
@@ -120,7 +132,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 	}, [list.hasNextPage, list.isFetchingNextPage, list.fetchNextPage, items.length]);
 
 	useEffect(() => {
-		setActions([{ id: 'knowledge-new', label: 'Create', onClick: () => setShowCreate(true) }]);
+		setActions([{ id: 'knowledge-new', label: 'New knowledge base', onClick: () => setShowCreate(true) }]);
 		return () => setActions([]);
 	}, [setActions]);
 
@@ -130,8 +142,9 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 
 	const deleteMutation = useMutation({
 		mutationFn: (item: KnowledgeListItem) => deleteKnowledgeById(token, item.id),
-		onSuccess: (res) => res && toast.success('Knowledge deleted successfully.'),
-		onError: (error) => toast.error(`${error}`),
+		// FBK-2, FBK-4: the result names the knowledge base; the server's own words are the detail.
+		onSuccess: (res, item) => res && toast.success(`Deleted “${item.name}”`),
+		onError: (error, item) => toastFailure(`Couldn't delete “${item.name}”.`, error),
 		onSettled: refetch
 	});
 
@@ -147,15 +160,15 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			a.click();
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
-			toast.success('Knowledge exported successfully');
+			toast.success(`Exported “${item.name}”`);
 		} catch (error) {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't export “${item.name}”.`, error);
 		}
 	};
 
 	const openKnowledge = (item: KnowledgeListItem) => {
 		if (item.meta?.document) {
-			toast.error('Only collections can be edited, create a new knowledge base to edit/add documents.');
+			toast.error('A single document can’t be opened here. To work with its file, add it to a new knowledge base.');
 			return;
 		}
 		navigate(`${routePaths.workspaceKnowledge}/${item.id}`);
@@ -179,14 +192,20 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete knowledge base"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				{deleting?.file_count === 0
+					? 'It holds no files.'
+					: deleting?.file_count === undefined
+						? 'Its files, their extracted text and embeddings are deleted.'
+						: `Its ${deleting.file_count} ${deleting.file_count === 1 ? 'file' : 'files'}, their extracted text and embeddings are deleted.`}{' '}
+				It can't be undone.
 			</ConfirmDialog>
 
 			<CreateKnowledgeDialog
@@ -199,16 +218,19 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 			/>
 
 			<ListSearchBar value={query} placeholder="Search Knowledge" onChange={setQuery}>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+						}}
+					/>
+				)}
 				<TagSelector
 					value={sourceOption}
-					placeholder="All Sources"
+					placeholder="All sources"
+					name="Source"
 					tags={['local', 'external']}
 					labels={{ local: 'Local', external: 'Connected' }}
 					onChange={(value) => {
@@ -225,9 +247,28 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 					<Spinner />
 				</div>
 			) : items.length === 0 ? (
-				<ListEmptyState title="No knowledge found" />
+				<ListEmptyState
+					title="No knowledge bases yet"
+					description="A knowledge base holds files a chat or a model can search for answers."
+					action={
+						<Button size="sm" type="button" onClick={() => setShowCreate(true)}>
+							New knowledge base
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || sourceOption !== ''}
+					onClear={() => {
+						setQuery('');
+						setDebouncedQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+						localStorage.workspaceKnowledgeSourceOption = '';
+						setSourceOption('');
+					}}
+				/>
 			) : (
 				<div className="my-1">
+					{filtered && <ListMatchCount shown={total ?? items.length} total={wholeCount} noun="knowledge bases" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"
@@ -236,7 +277,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -254,7 +295,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={item.id}
-									className="group hover:bg-muted/50 flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1"
+									className="group hover:bg-muted/50 flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1"
 								>
 									<RowButton
 										className="flex min-w-0 flex-1 items-center gap-2 self-stretch hover:bg-transparent"
@@ -268,29 +309,44 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 												{external && (
 													<>
 														<Badge variant="secondary">{item.meta?.external?.provider ?? 'Connected'}</Badge>
-														<Badge variant="secondary">Read Only</Badge>
+														<Badge variant="secondary">Read only</Badge>
 													</>
 												)}
-												{!item.write_access && !external && <Badge variant="secondary">Read Only</Badge>}
+												{!item.write_access && !external && <Badge variant="secondary">Read only</Badge>}
 												<Tip content={dayjs(item.updated_at * 1000).format('LLLL')}>
-													<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+													<div
+														aria-hidden
+														className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+													>
 														{dayjs(item.updated_at * 1000).fromNow()}
 													</div>
 												</Tip>
 											</div>
-											{preview && (
-												<Tip content={preview} side="top">
-													<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{preview}</div>
+											{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+											<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+												{preview && (
+													<Tip content={preview} side="top">
+														<span className="text-foreground-muted min-w-0 truncate">{preview}</span>
+													</Tip>
+												)}
+												<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+													{dayjs(item.updated_at * 1000).fromNow()}
+												</span>
+											</div>
+										</div>
+										{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+										{!singleUser && (
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+											>
+												<Tip content={item.user?.email ?? 'Deleted User'} side="top">
+													<div className="truncate">
+														{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
+													</div>
 												</Tip>
-											)}
-										</div>
-										<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-											<Tip content={item.user?.email ?? 'Deleted User'} side="top">
-												<div className="truncate">
-													{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
-												</div>
-											</Tip>
-										</div>
+											</div>
+										)}
 									</RowButton>
 									{(item.write_access || isAdmin) && (
 										<div className="ml-2 flex shrink-0 flex-row items-center self-center">
@@ -315,7 +371,8 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 															Export
 														</DropdownMenuItem>
 													)}
-													<DropdownMenuItem onSelect={() => setDeleting(item)}>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(item)}>
 														<Trash2 />
 														Delete
 													</DropdownMenuItem>
@@ -362,26 +419,29 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
+	// WRD-4, S4-D1: who may see it is a question only with several accounts.
+	const singleUser = useSingleUser();
 	const [name, setName] = useState('');
+	const [nameError, setNameError] = useState<string | null>(null);
 	const [description, setDescription] = useState('');
 	const [accessGrants, setAccessGrants] = useState<AccessGrant[]>([]);
 	const [loading, setLoading] = useState(false);
+	const nameField = useRef<HTMLInputElement>(null);
 
 	const submit = async () => {
-		setLoading(true);
-		if (name.trim() === '' || description.trim() === '') {
-			toast.error('Please fill in all fields.');
-			setName('');
-			setDescription('');
-			setLoading(false);
+		// FRM-2: an empty name is said at the field, not in a toast.
+		if (name.trim() === '') {
+			setNameError('Give the knowledge base a name.');
+			nameField.current?.focus();
 			return;
 		}
-		const res = await createNewKnowledge(token, name, description, accessGrants).catch((e) => {
-			toast.error(`${e}`);
+		setLoading(true);
+		const res = await createNewKnowledge(token, name.trim(), description.trim(), accessGrants).catch((error) => {
+			toastFailure("Couldn't create the knowledge base.", error);
 			return null;
 		});
 		if (res) {
-			toast.success('Knowledge created successfully.');
+			toast.success('Knowledge base created');
 			onCreated(res);
 		}
 		setLoading(false);
@@ -389,42 +449,49 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 
 	return (
 		<>
-			<DialogTitle className="text-base font-normal">Create a knowledge base</DialogTitle>
-			<DialogDescription className="sr-only">Name it, describe it, and choose who can see it.</DialogDescription>
+			{/* ACT-2, #1011: the dialog, its button and the Create menu say the same thing. */}
+			<DialogTitle>New knowledge base</DialogTitle>
+			<DialogDescription className="sr-only">Name it, and say what it is for.</DialogDescription>
 			<form
-				className="flex flex-col"
+				className="flex flex-col gap-4"
+				noValidate
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
 				}}
 			>
-				<div className="flex w-full flex-col gap-2.5">
-					<div>
-						<div className="text-muted-foreground mb-2 text-xs">What are you working on?</div>
-						<input
-							className="placeholder:text-foreground-muted w-full bg-transparent text-sm"
-							type="text"
-							aria-label="Name"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="Name your knowledge base"
-							required
-						/>
-					</div>
-					<div>
-						<div className="text-muted-foreground mb-2 text-xs">What are you trying to achieve?</div>
-						<textarea
-							className="placeholder:text-foreground-muted w-full resize-none bg-transparent text-sm"
-							rows={6}
-							aria-label="Description"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder="Describe your knowledge base and objectives"
-							required
-						/>
-					</div>
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="knowledge-name">Name</Label>
+					<Input
+						id="knowledge-name"
+						ref={nameField}
+						value={name}
+						placeholder="e.g. Statistics textbooks"
+						aria-invalid={nameError ? true : undefined}
+						aria-describedby={nameError ? 'knowledge-name-error' : undefined}
+						onChange={(e) => {
+							setName(e.target.value);
+							if (e.target.value.trim()) setNameError(null);
+						}}
+					/>
+					{nameError && (
+						<p id="knowledge-name-error" className="text-dense text-danger flex items-center gap-1.5">
+							<CircleAlert aria-hidden className="size-4 shrink-0" />
+							{nameError}
+						</p>
+					)}
 				</div>
-				<div className="mt-2">
+				<div className="flex flex-col gap-1.5">
+					<Label htmlFor="knowledge-description">Description (optional)</Label>
+					<Textarea
+						id="knowledge-description"
+						rows={4}
+						value={description}
+						onChange={(e) => setDescription(e.target.value)}
+						placeholder="What these files are, and what to use them for"
+					/>
+				</div>
+				{!singleUser && (
 					<AccessControl
 						accessGrants={accessGrants}
 						onChange={setAccessGrants}
@@ -433,14 +500,14 @@ function CreateForm({ onClose, onCreated }: { onClose: () => void; onCreated: (k
 						sharePublic={Boolean(user?.permissions?.sharing?.public_knowledge) || isAdmin}
 						shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
 					/>
-				</div>
-				<div className="flex justify-end gap-2 pt-3">
+				)}
+				<div className="flex justify-end gap-2">
 					<Button type="button" variant="ghost" size="sm" onClick={onClose}>
 						Cancel
 					</Button>
 					<Button type="submit" size="sm" disabled={loading}>
-						Create Knowledge
 						{loading && <Spinner className="size-3.5" />}
+						Create knowledge base
 					</Button>
 				</div>
 			</form>

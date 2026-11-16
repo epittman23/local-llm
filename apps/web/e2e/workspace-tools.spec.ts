@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Tool = Record<string, any>;
@@ -83,8 +83,9 @@ test.describe('workspace tools', () => {
 		await page.getByLabel('Search Tools').fill('Tool 2');
 		await expect(page.getByText('Tool 1', { exact: true })).toHaveCount(0);
 		await expect(page.getByText('Tool 2', { exact: true })).toBeVisible();
-		// The tab count follows the filtered list.
-		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('1');
+		// The tab counts every tool; the list says how many of them match (#955, DAT-2).
+		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('3');
+		await expect(page.getByRole('status').filter({ hasText: 'of 3 tools' })).toHaveText('1 of 3 tools');
 	});
 
 	test('the Support dialog only links http(s) funding URLs', async ({ page }) => {
@@ -112,11 +113,11 @@ test.describe('workspace tools', () => {
 		await page.goto('/workspace/tools');
 		await page.getByRole('button', { name: 'Tool Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete tool' }).click();
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 
-	test('valves: loads a spec, edits a custom value and a default toggle, and saves arrays as arrays', async ({
+	test('valves: the settings show at once, save arrays as arrays, and leave untouched ones at their default', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -132,19 +133,22 @@ test.describe('workspace tools', () => {
 			valves: { api_key: null, tags: ['a', 'b'], verbose: null }
 		});
 		await page.goto('/workspace/tools');
-		await page.getByRole('button', { name: 'Valves', exact: true }).click();
+		await page
+			.getByRole('button', { name: /^Settings for Tool / })
+			.first()
+			.click();
 		const dialog = page.getByRole('dialog');
-		await expect(dialog.getByText('API Key')).toBeVisible();
-		await expect(dialog.getByText('*required')).toBeVisible();
+		await expect(dialog.locator('label', { hasText: 'API key' })).toHaveText('API key (required)');
 		// Descriptions are rendered markdown.
 		await expect(dialog.locator('strong', { hasText: 'separated' })).toBeVisible();
 		// Arrays are shown as comma-separated text.
 		await expect(dialog.getByLabel('Tags', { exact: true })).toHaveValue('a,b');
 
-		await dialog.getByRole('button', { name: 'API Key: None' }).click();
-		await dialog.getByPlaceholder('').first().fill('secret');
+		// Masked, and shown at once: no Default/Custom switch first (#1016).
+		await expect(dialog.locator('#valve-api_key')).toHaveAttribute('type', 'password');
+		await dialog.locator('#valve-api_key').fill('secret');
 		await dialog.getByLabel('Tags', { exact: true }).fill('x, y ,,z');
-		await dialog.getByRole('button', { name: 'Save' }).click();
+		await dialog.getByRole('button', { name: 'Save settings' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/tool_1/valves/update')?.body)
 			.toMatchObject({
@@ -152,6 +156,36 @@ test.describe('workspace tools', () => {
 				tags: ['x', 'y', 'z'],
 				verbose: null
 			});
+	});
+
+	test('the Settings dialog is named for its tool and keeps its height when a switch flips (#1016)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		await mockToolsApi(page, [tool(1)], {
+			valvesSpec: {
+				properties: {
+					verbose: { title: 'Verbose', type: 'boolean', default: false },
+					units: { title: 'Units', type: 'string', default: 'SI' }
+				}
+			},
+			valves: { verbose: null, units: null }
+		});
+		await page.goto('/workspace/tools');
+		await page.getByRole('button', { name: 'Settings for Tool 1' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Settings for Tool 1' });
+		await expect(dialog.getByRole('switch')).toBeVisible();
+		// Measured once the dialog's opening animation has finished.
+		const settled = () =>
+			dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+		await settled();
+		const before = await dialog.boundingBox();
+		await dialog.getByRole('switch').click();
+		await expect(dialog.getByRole('switch')).toBeChecked();
+		await settled();
+		const after = await dialog.boundingBox();
+		expect(after?.height).toBe(before?.height);
+		expect(after?.y).toBe(before?.y);
 	});
 
 	test('import from a JSON file asks for acknowledgement, and drops grants', async ({ page }) => {
@@ -177,15 +211,15 @@ test.describe('workspace tools', () => {
 			)
 		});
 		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('arbitrary code execution');
+		await expect(dialog).toContainText('The code comes from the file tools.json');
 		expect(calls.some((c) => c.path === '/create')).toBe(false); // nothing before the acknowledgement
-		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await dialog.getByRole('button', { name: 'Import tools' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/create')?.body)
 			.toMatchObject({ id: 'imp', access_grants: [] });
 	});
 
-	test('create: boilerplate is seeded, the header fills name/description, and saving needs acknowledgement', async ({
+	test('create: boilerplate is seeded, the header fills name/description, and code written here saves without an acknowledgement', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -203,12 +237,10 @@ test.describe('workspace tools', () => {
 		await expect(page.getByLabel('Tool ID')).toHaveValue('fancy_tool');
 		await expect(page.getByLabel('Tool Description')).toHaveValue('Does fancy things');
 
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		const dialog = page.getByRole('alertdialog');
-		await expect(dialog).toContainText('arbitrary code execution');
-		expect(calls.some((c) => c.path === '/create')).toBe(false);
-		await dialog.getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Create tool' }).click();
+		// Code written in the editor is the person's own: no acknowledgement (S4-D4).
 		await expect(page).toHaveURL(/\/workspace\/tools$/);
+		await expect(page.getByRole('alertdialog')).toHaveCount(0);
 		const body = calls.find((c) => c.path === '/create')?.body;
 		expect(body).toMatchObject({
 			id: 'fancy_tool',
@@ -229,8 +261,7 @@ test.describe('workspace tools', () => {
 		await page.keyboard.insertText('"""\nrequired_open_webui_version: 999.0.0\n"""\nclass Tools:\n    pass\n');
 		await page.getByLabel('Tool Name').fill('Needs new');
 		await page.getByLabel('Tool Description').fill('d');
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await page.getByRole('button', { name: 'Create tool' }).click();
 		await expect(page.getByText(/is lower than required version \(v999\.0\.0\)/)).toBeVisible();
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
@@ -242,13 +273,13 @@ test.describe('workspace tools', () => {
 		await expect(page.getByLabel('Tool Name')).toHaveValue('Tool 1');
 		await expect(page.locator('.cm-content')).toContainText('def f1');
 		await page.getByLabel('Tool Description').fill('Changed');
-		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/id/tool_1/update')?.body)
 			.toMatchObject({ id: 'tool_1', meta: { description: 'Changed' } });
 
 		await page.goto('/workspace/tools/edit?id=tool_3');
-		await expect(page.getByText('You do not have permission to edit this tool')).toBeVisible();
+		await expect(page.getByText('You can open this tool but not edit it.')).toBeVisible();
 		await expect(page).toHaveURL(/\/workspace\/tools$/);
 	});
 

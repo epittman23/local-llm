@@ -58,14 +58,14 @@ export function visibilityUpdate(m: BulkRow, hidden: boolean): Json {
 }
 
 /**
- * Saves one writable model's visibility (the row's Hide / Show Model) with the
+ * Saves one writable model's visibility (the row's Hide / Show model) with the
  * body visibilityUpdate builds, and toasts the outcome. Returns whether it was
  * saved.
  */
 export async function setVisibility(token: string, m: BulkRow, hidden: boolean) {
 	try {
 		if (!(await updateModelById(token, m.id, visibilityUpdate(m, hidden)))) return false;
-		toast.success(`Model ${m.id} is now ${hidden ? 'hidden' : 'visible'}`);
+		toast.success(`“${m.name || m.id}” is ${hidden ? 'hidden' : 'shown'}`);
 		return true;
 	} catch (e) {
 		toast.error(`${e}`);

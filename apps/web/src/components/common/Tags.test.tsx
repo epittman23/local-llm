@@ -22,4 +22,29 @@ describe('Tags', () => {
 		fireEvent.click(screen.getByRole('option', { name: 'gamma' }));
 		expect(onAdd).toHaveBeenCalledWith('gamma');
 	});
+
+	it('is the shared field, named by a visible label when given an id, and adds what is typed on Enter (#983, #1057)', () => {
+		const onAdd = vi.fn();
+		render(
+			<>
+				<label htmlFor="tags">Tags</label>
+				<Tags id="tags" tags={[]} onAdd={onAdd} onDelete={vi.fn()} />
+			</>
+		);
+		const field = screen.getByRole('combobox', { name: 'Tags' });
+		expect(field).toHaveAttribute('data-slot', 'input');
+		fireEvent.change(field, { target: { value: 'stats' } });
+		fireEvent.keyDown(field, { key: 'Enter' });
+		expect(onAdd).toHaveBeenCalledWith('stats');
+		expect(field).toHaveValue('');
+	});
+
+	it('closes its suggestions when the field is left, so Tab moves on', () => {
+		render(<Tags tags={[]} suggestionTags={['beta']} onAdd={vi.fn()} onDelete={vi.fn()} />);
+		const field = screen.getByRole('combobox', { name: 'Add a tag' });
+		fireEvent.focus(field);
+		expect(screen.getByRole('option', { name: 'beta' })).toBeInTheDocument();
+		fireEvent.blur(field);
+		expect(screen.queryByRole('option', { name: 'beta' })).toBeNull();
+	});
 });

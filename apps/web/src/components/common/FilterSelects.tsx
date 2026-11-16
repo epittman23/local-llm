@@ -59,8 +59,7 @@ export function ViewSelector({ value, onChange }: { value: string; onChange: (va
 			onChange={onChange}
 			trigger={
 				<Button variant="ghost" size="sm">
-					<span className="sr-only">View: </span>
-					<span className="truncate">{label}</span>
+					<span className="truncate">View: {label}</span>
 					<ChevronDown />
 				</Button>
 			}
@@ -78,13 +77,16 @@ export function TagSelector({
 	value,
 	tags,
 	onChange,
-	placeholder = 'Tag',
+	placeholder = 'All tags',
+	name = 'Tag',
 	labels = {}
 }: {
 	value: string;
 	tags: string[];
 	onChange: (value: string) => void;
 	placeholder?: string;
+	/** What the filter chooses, read before its value (A11Y-2): "Source: All sources". */
+	name?: string;
 	/** Display text for a value, where it differs from the value itself. */
 	labels?: Record<string, string>;
 }) {
@@ -95,9 +97,12 @@ export function TagSelector({
 				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
 				trigger={
-					<Button variant="ghost" size="sm" className="capitalize">
-						<span className="sr-only">Tag: </span>
-						<span className="truncate">{value ? (labels[value] ?? value) : placeholder}</span>
+					<Button variant="ghost" size="sm">
+						<span className="sr-only">{name}: </span>
+						{/* A tag reads as written but capitalised; the placeholder is a sentence (WRD-1). */}
+						<span className={value ? 'truncate capitalize' : 'truncate'}>
+							{value ? (labels[value] ?? value) : placeholder}
+						</span>
 						{!value && <ChevronDown />}
 					</Button>
 				}

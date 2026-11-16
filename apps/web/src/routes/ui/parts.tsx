@@ -1,6 +1,6 @@
-import { CircleAlertIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useId } from 'react';
+import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Label } from '@/components/ui/label';
 
 export { PageHeader } from '@/components/ui/page-header';
@@ -80,26 +80,15 @@ export function Field({
 	children: (props: { id: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }) => ReactNode;
 }) {
 	const id = useId();
-	const describedBy = error || help ? `${id}-note` : undefined;
+	const note = `${id}-note`;
 	return (
 		<div className="flex flex-col gap-1.5">
 			<Label htmlFor={id} className="text-body font-strong">
 				{label}
 				{optional && <span className="text-foreground-muted font-normal"> (optional)</span>}
 			</Label>
-			{children({ id, 'aria-describedby': describedBy, 'aria-invalid': error ? true : undefined })}
-			{error ? (
-				<p id={describedBy} role="alert" className="text-danger text-dense flex items-start gap-1.5">
-					<CircleAlertIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-					{error}
-				</p>
-			) : (
-				help && (
-					<p id={describedBy} className="text-foreground-muted text-dense">
-						{help}
-					</p>
-				)
-			)}
+			{children({ id, ...fieldProps(note, { error, help }) })}
+			<FieldMessage id={note} error={error} help={help} />
 		</div>
 	);
 }

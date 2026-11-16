@@ -50,7 +50,7 @@ describe('PromptSuggestionsEditor', () => {
 		const keep = { content: long, title: [longTitle, ''], id: 'k' };
 		const onChange = renderEditor([{ content: 'gone', title: ['Gone', ''] }, keep]);
 
-		fireEvent.click(screen.getAllByLabelText('Remove prompt suggestion')[0]);
+		fireEvent.click(screen.getByRole('button', { name: 'Remove suggestion 1' }));
 
 		expect(onChange.mock.calls[0][0]).toEqual([keep]);
 	});
@@ -73,5 +73,20 @@ describe('PromptSuggestionsEditor', () => {
 describe('parseSuggestionsImport', () => {
 	it('rejects anything that is not a JSON array', () => {
 		expect(() => parseSuggestionsImport('{}')).toThrow('Expected a JSON array.');
+	});
+});
+
+describe('PromptSuggestionsEditor fields (#911, #1009)', () => {
+	it('uses the shared fields, adds a blank suggestion from Add suggestion, and says when there are none', () => {
+		const onChange = vi.fn();
+		const { rerender } = render(<PromptSuggestionsEditor value={[]} onChange={onChange} />);
+		expect(screen.getByText('No suggestions yet. Add one, or import a file.')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Add suggestion' }));
+		expect(onChange).toHaveBeenCalledWith([{ content: '', title: ['', ''] }]);
+		rerender(<PromptSuggestionsEditor value={[{ content: '', title: ['', ''] }]} onChange={onChange} />);
+		expect(screen.getByLabelText('Title')).toHaveAttribute('data-slot', 'input');
+		expect(screen.getByLabelText('Content')).toHaveAttribute('data-slot', 'textarea');
+		fireEvent.click(screen.getByRole('button', { name: 'Add suggestion' }));
+		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 });

@@ -252,7 +252,10 @@ describe('unsaved changes (#951, FRM-3)', () => {
 		expect(screen.getByRole('textbox', { name: 'Draft' })).toHaveValue('x');
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Interface' }));
-		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' }));
+		const discard = within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard changes' });
+		// ACT-3: losing typed work is destructive, as in the editors' guard.
+		expect(discard).toHaveAttribute('data-variant', 'destructive');
+		fireEvent.click(discard);
 		expect(await screen.findByText('Interface tab body')).toBeInTheDocument();
 		expect(store().dirty).toBe(false);
 	});

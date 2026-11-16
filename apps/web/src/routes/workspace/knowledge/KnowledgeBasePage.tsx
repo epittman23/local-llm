@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Copy, ExternalLink, MoreHorizontal, Pencil, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -7,18 +7,28 @@ import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { AttachWebpageDialog } from '@/components/common/AttachWebpageDialog';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { FilterMenu, ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { ListSearchBar } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
+import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
+	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { PageHeader } from '@/components/ui/page-header';
+import { SaveBar } from '@/components/ui/save-bar';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
 import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
 import { getFileById, renameFileById, updateFileDataContentById } from '@/lib/apis/files';
 import {
@@ -36,13 +46,14 @@ import {
 } from '@/lib/apis/knowledge';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { copyToClipboard } from '@/lib/utils';
+import { useCopy } from '@/lib/ui/useCopy';
+import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { blobToFile } from '@/lib/utils/files';
-import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { ExternalKnowledgePanel } from './ExternalKnowledgePanel';
-import { AddContentMenu, AddTextDialog, NewDirectoryDialog } from './KnowledgeDialogs';
+import { AddContentMenu, AddTextDialog, EditDetailsDialog, NewDirectoryDialog } from './KnowledgeDialogs';
 import {
 	KnowledgeBreadcrumbs,
 	type KnowledgeDirectory,
@@ -82,7 +93,16 @@ type FilesPage = {
 	hasPending: boolean;
 };
 
-const selectClass = 'bg-transparent text-xs';
+// One menu for the order, over the server's sort key and direction ('' is newest first, its default).
+const SORTS = [
+	{ value: '', label: 'Recently updated' },
+	{ value: 'created_at:', label: 'Recently added' },
+	{ value: 'created_at:asc', label: 'Oldest first' },
+	{ value: 'name:asc', label: 'Name, A to Z' },
+	{ value: 'name:', label: 'Name, Z to A' }
+];
+
+const filesLabel = (n: number) => `${n} ${n === 1 ? 'file' : 'files'}`;
 
 /**
  * Ports workspace/Knowledge/KnowledgeBase.svelte (the 1,745-line detail page):
@@ -115,13 +135,19 @@ export function KnowledgeBasePage() {
 		retry: false
 	});
 
-	useEffect(() => {
-		if (base.isError || (base.isSuccess && !base.data)) {
-			if (base.isError) toast.error(`${base.error}`);
-			navigate(routePaths.workspaceKnowledge);
-		}
-	}, [base.isError, base.isSuccess, base.data, base.error, navigate]);
-
+	// A base that no longer exists says so in place, with the way back (NAV-3).
+	if (base.isSuccess && !base.data) return <KnowledgeGone onBack={() => navigate(routePaths.workspaceKnowledge)} />;
+	if (base.isError) {
+		if (isNotFound(base.error)) return <KnowledgeGone onBack={() => navigate(routePaths.workspaceKnowledge)} />;
+		return (
+			<LoadFailed
+				what="this knowledge base"
+				error={base.error}
+				onRetry={() => base.refetch()}
+				retrying={base.isFetching}
+			/>
+		);
+	}
 	if (!id || !base.data) {
 		return (
 			<div className="flex h-full items-center justify-center">
@@ -159,6 +185,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [viewOption, setViewOption] = useState<string>('');
 	const [sortKey, setSortKey] = useState('');
 	const [direction, setDirection] = useState('');
+	const sortValue = sortKey ? `${sortKey}:${direction}` : '';
 	const [includeContent, setIncludeContent] = useState(false);
 	const [page, setPage] = useState(1);
 	const [directoryId, setDirectoryId] = useState<string | null>(null);
@@ -241,46 +268,37 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	}, [listed, files.isPlaceholderData, files.isFetching]);
 	const breadcrumbs = listed?.breadcrumbs ?? [];
 
-	const { uploading, syncing, uploadFiles, uploadWeb, uploadDirectoryEntries, syncDirectory } = useKnowledgeUploads({
-		knowledgeId: id,
-		directoryId,
-		breadcrumbs,
-		refresh: reload
-	});
+	const { uploading, syncing, uploadFiles, uploadWeb, retry, dismiss, uploadDirectoryEntries, syncDirectory } =
+		useKnowledgeUploads({
+			knowledgeId: id,
+			directoryId,
+			breadcrumbs,
+			refresh: reload
+		});
 
-	// --- name and description save themselves -------------------------------
-	// Leaving the page saves a pending change at once instead of dropping it,
-	// with keepalive when the page itself goes away (#675).
-	const scheduleSave = useDebouncedCallback(async (next: Knowledge, unloading: boolean) => {
-		if (next.name.trim() === '' || next.description.trim() === '') {
-			toast.error('Please fill in all fields.');
-			return;
-		}
+	// A file the server lists as pending while this page uploads it is already
+	// shown by its upload row, failed ones included: one row per file (#1072).
+	const inFlight = new Set(uploading.map((i) => i.serverId).filter(Boolean));
+	const shownFiles = (listed?.items ?? []).filter((f) => !f.id || !inFlight.has(f.id));
+
+	// --- name and description: saved from their dialog, never after a pause (FRM-3) ---
+	const singleUser = useSingleUser();
+	const [showDetails, setShowDetails] = useState(false);
+	const saveDetails = async (next: { name: string; description: string }): Promise<boolean> => {
 		// Name and description only: the grants are the access dialog's to save,
 		// and these could be older than one it saved meanwhile (#522).
-		const res = await updateKnowledgeById(
-			token,
-			id,
-			{ name: next.name, description: next.description },
-			unloading
-		).catch((e) => {
-			toast.error(`${e}`);
+		const res = await updateKnowledgeById(token, id, next).catch((e) => {
+			toastFailure("Couldn't save the name and description. Try again.", e);
 			return null;
 		});
-		if (!res) return;
+		if (!res) return false;
+		setKnowledge((k) => ({ ...k, ...next }));
 		// A page opened again from the cache must start from what was saved, and
 		// so must the list of knowledge bases.
-		queryClient.setQueryData<Knowledge | null>(
-			['knowledge-base', id],
-			(old) => old && { ...old, name: next.name, description: next.description }
-		);
+		queryClient.setQueryData<Knowledge | null>(['knowledge-base', id], (old) => old && { ...old, ...next });
 		queryClient.invalidateQueries({ queryKey: ['knowledge'] });
-		toast.success('Knowledge updated successfully');
-	}, 1000);
-	const edit = (patch: Partial<Knowledge>) => {
-		// Merged into the latest state, so an access reply applied meanwhile is kept.
-		setKnowledge((k) => ({ ...k, ...patch }));
-		scheduleSave({ ...knowledge, ...patch });
+		toast.success(`Saved "${next.name}"`);
+		return true;
 	};
 
 	// --- access -------------------------------------------------------------
@@ -297,7 +315,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			token,
 			id,
 			grants
-		).catch((e) => void toast.error(`${e}`));
+		).catch((e) => void toastFailure("Couldn't save who has access. The previous access is back.", e));
 		const latest = accessSaves.current === seq;
 		if (!res) {
 			if (latest) setKnowledge((k) => ({ ...k, access_grants: previous }));
@@ -306,7 +324,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		const stored = res.access_grants;
 		if (latest && Array.isArray(stored)) setKnowledge((k) => ({ ...k, access_grants: stored as AccessGrant[] }));
 		if (grantsDropped(grants, stored)) toast.warning(DROPPED_GRANTS_WARNING);
-		else toast.success('Saved');
+		else toast.success('Access saved');
 		onChanged();
 	};
 
@@ -318,6 +336,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [showReset, setShowReset] = useState(false);
 	const [pendingSync, setPendingSync] = useState<DirectoryFileEntry[] | null>(null);
 	const [deletingDir, setDeletingDir] = useState<string | null>(null);
+	// Ticked at first: the owner kept deleting a folder's files with it by default (2026-11-15).
+	// Unticking moves them up a level; deleting them deletes their extracted text and embeddings too (#1012).
 	const [deleteContents, setDeleteContents] = useState(true);
 	const fileInput = useRef<HTMLInputElement>(null);
 
@@ -336,12 +356,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			setDragged(false);
 			if (!e.dataTransfer?.types?.includes('Files')) return;
 			if (!uploadRefs.current.writeAccess) {
-				toast.error('You do not have permission to upload files to this knowledge base.');
+				toast.error('You can read this knowledge base but not add to it. Ask its owner for write access.');
 				return;
 			}
 			const items = Array.from(e.dataTransfer.items ?? []);
 			if (items.length === 0) {
-				toast.error('File not found.');
+				toast.error('No file was chosen.');
 				return;
 			}
 			const dropped = await gatherDroppedFiles(items, collectDroppedEntryFiles, handleDirectoryError);
@@ -361,7 +381,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	}, []);
 
 	// --- file / directory operations -----------------------------------------
-	const report = async <T,>(work: Promise<T>, success: string): Promise<boolean> => {
+	const report = async <T,>(work: Promise<T>, success: string, failure: string): Promise<boolean> => {
 		try {
 			const res = await work;
 			if (res) {
@@ -370,38 +390,59 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				return true;
 			}
 		} catch (e) {
-			toast.error(`${e}`);
+			toastFailure(failure, e);
 		}
 		return false;
 	};
+	const deletingDirName = listed?.directories.find((d) => d.id === deletingDir)?.name ?? '';
 	const navigateToDirectory = (dirId: string | null) => {
 		setDirectoryId(dirId);
 		setPage(1);
 		setSelectedFileId(null);
 	};
 	const move = (payload: { kind: 'file' | 'dir'; id: string }, target: string | null) => {
-		if (payload.kind === 'file') report(moveFileInKnowledge(token, id, payload.id, target), 'File moved.');
+		if (payload.kind === 'file')
+			report(moveFileInKnowledge(token, id, payload.id, target), 'File moved', "Couldn't move the file.");
 		else if (payload.id !== target)
-			report(updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }), 'Directory moved.');
+			report(
+				updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }),
+				'Folder moved',
+				"Couldn't move the folder."
+			);
 	};
-	const deleteFile = async (fileId: string) => {
+	// Removing deletes the file's extracted text and embeddings at once, so it confirms first (ACT-3, #906).
+	const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+	const deleteFile = async ({ id: fileId, name }: { id: string; name: string }) => {
 		setSelectedFileId(null);
 		try {
 			if (await removeFileFromKnowledgeById(token, id, fileId)) {
-				toast.success('File removed successfully.');
+				toast.success(`Removed "${name}"`);
 				reload();
 			}
 		} catch (e) {
-			toast.error(`${e}`);
+			toastFailure(`Couldn't remove "${name}".`, e);
 		}
 	};
 
 	// --- the file preview sheet ----------------------------------------------
 	const selectedFile = listed?.items.find((f) => f.id === selectedFileId) ?? null;
 	const [content, setContent] = useState('');
+	const [original, setOriginal] = useState('');
+	// The sheet opens on the rendered text; editing is a deliberate switch (CNT-1, #1096).
+	const [editingText, setEditingText] = useState(false);
 	const [loadingContent, setLoadingContent] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [previewName, setPreviewName] = useState('');
+	// FRM-3: edited text is a draft. Closing the sheet (Esc, ×, the scrim) or leaving the page asks first.
+	const textGuard = useUnsavedChanges(editingText && content !== original, {
+		message: "Your changes to this file's text are not saved. They are lost if you close it."
+	});
+	const closeFile = () =>
+		textGuard.confirmLeave(() => {
+			setContent(original);
+			setEditingText(false);
+			setSelectedFileId(null);
+		});
 	useEffect(() => {
 		if (!selectedFileId) return;
 		const file = listed?.items.find((f) => f.id === selectedFileId);
@@ -411,8 +452,10 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		}
 		setPreviewName(file.meta?.name ?? '');
 		const inline = (file as { data?: { content?: string } }).data?.content;
+		setEditingText(false);
 		if (inline !== undefined) {
 			setContent(inline);
+			setOriginal(inline);
 			setLoadingContent(false);
 			return;
 		}
@@ -420,8 +463,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setContent('');
 		setLoadingContent(true);
 		getFileById(token, selectedFileId)
-			.then((full) => !cancelled && setContent(full?.data?.content ?? ''))
-			.catch(() => !cancelled && toast.error('Failed to load file content.'))
+			.then((full) => {
+				if (cancelled) return;
+				setContent(full?.data?.content ?? '');
+				setOriginal(full?.data?.content ?? '');
+			})
+			.catch((e) => !cancelled && toastFailure("Couldn't load the file's text. Close it and open it again.", e))
 			.finally(() => !cancelled && setLoadingContent(false));
 		return () => {
 			cancelled = true;
@@ -435,7 +482,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		setSaving(true);
 		try {
 			const res = await updateFileDataContentById(token, selectedFileId, content).catch((e) => {
-				toast.error(`${e}`);
+				toastFailure("Couldn't save the text. Try again.", e);
 				return null;
 			});
 			if (res) {
@@ -453,18 +500,32 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			<div className="flex h-full min-h-full w-full flex-col">
 				<Header
 					knowledge={knowledge}
-					edit={edit}
+					onEditDetails={() => setShowDetails(true)}
+					showAccess={!singleUser}
 					writeAccess={writeAccess}
 					total={null}
 					onBack={() => navigate(routePaths.workspaceKnowledge)}
 					onAccess={() => setShowAccess(true)}
 					id={id}
 				/>
+				{detailsDialog()}
 				<div className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
 					<ExternalKnowledgePanel external={(knowledge.meta?.external ?? {}) as never} />
 				</div>
 				{accessModal()}
 			</div>
+		);
+	}
+
+	function detailsDialog() {
+		return (
+			<EditDetailsDialog
+				open={showDetails}
+				onOpenChange={setShowDetails}
+				name={knowledge.name}
+				description={knowledge.description}
+				onSave={saveDetails}
+			/>
 		);
 	}
 
@@ -488,13 +549,14 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			{dragged && (
 				<div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
 					<div className="text-center">
-						<div className="text-lg font-medium">Add Files</div>
-						<div className="text-muted-foreground text-sm">Drop any files here to upload</div>
+						<div className="text-title font-title">Add files</div>
+						<div className="text-foreground-muted">Drop them anywhere on the page</div>
 					</div>
 				</div>
 			)}
 
 			{accessModal()}
+			{detailsDialog()}
 
 			<ConfirmDialog
 				open={pendingSync !== null}
@@ -511,42 +573,80 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				removed. The folder structure will be mirrored. Continue?
 			</ConfirmDialog>
 			<ConfirmDialog
+				open={removing !== null}
+				onOpenChange={(open) => !open && setRemoving(null)}
+				title={`Remove "${removing?.name ?? ''}"?`}
+				confirmLabel="Remove file"
+				destructive
+				onConfirm={() => {
+					const file = removing;
+					setRemoving(null);
+					if (file) deleteFile(file);
+				}}
+			>
+				Its extracted text and embeddings are deleted. Adding it again processes it from the start.
+			</ConfirmDialog>
+			<ConfirmDialog
 				open={deletingDir !== null}
 				onOpenChange={(open) => !open && setDeletingDir(null)}
-				title="Delete directory?"
-				confirmLabel="Delete"
+				title={`Delete the folder "${deletingDirName}"?`}
+				confirmLabel="Delete folder"
+				destructive
 				onConfirm={async () => {
 					const dirId = deletingDir;
 					setDeletingDir(null);
-					if (dirId) await report(deleteKnowledgeDirectory(token, id, dirId, !deleteContents), 'Directory deleted.');
+					if (!dirId) return;
+					try {
+						if (await deleteKnowledgeDirectory(token, id, dirId, !deleteContents)) {
+							toast.success(`Deleted the folder "${deletingDirName}"`);
+							refresh();
+						}
+					} catch (e) {
+						toastFailure(`Couldn't delete the folder "${deletingDirName}".`, e);
+					}
 				}}
 			>
-				<div className="mb-2 text-sm">Are you sure you want to delete this directory?</div>
-				<label className="flex items-center gap-1.5">
-					<Checkbox checked={deleteContents} onCheckedChange={(c) => setDeleteContents(c === true)} />
-					<span className="text-muted-foreground text-xs">Delete all contents inside this directory</span>
+				<p>
+					{deleteContents
+						? 'The folder, its subfolders and every file in them are deleted, with their extracted text and embeddings.'
+						: 'The folder and its subfolders are deleted. The files in them move up to the folder above.'}
+				</p>
+				<label className="mt-3 flex items-start gap-2">
+					<Checkbox
+						className="mt-0.5"
+						checked={deleteContents}
+						onCheckedChange={(c) => setDeleteContents(c === true)}
+					/>
+					<span>Also delete the files inside</span>
 				</label>
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={showReset}
 				onOpenChange={setShowReset}
-				title="Reset knowledge base?"
-				confirmLabel="Confirm"
+				title={`Reset "${knowledge.name}"?`}
+				confirmLabel="Reset knowledge base"
+				destructive
 				onConfirm={async () => {
 					setShowReset(false);
 					try {
 						await resetKnowledgeById(token, id);
-						toast.success('Knowledge base has been reset');
+						toast.success(`Reset "${knowledge.name}"`);
 						reload();
 					} catch (e) {
-						toast.error(`${e}`);
+						toastFailure(`Couldn't reset "${knowledge.name}".`, e);
 					}
 				}}
 			>
-				This will remove all files and directories from this knowledge base. This action cannot be undone.
+				Every file and folder is removed from it, with their extracted text and embeddings. This can't be undone.
 			</ConfirmDialog>
 
-			<AttachWebpageDialog open={showWeb} onOpenChange={setShowWeb} onSubmit={uploadWeb} />
+			<AttachWebpageDialog
+				open={showWeb}
+				onOpenChange={setShowWeb}
+				onSubmit={uploadWeb}
+				title="Add a web page"
+				submitLabel="Add web page"
+			/>
 			<AddTextDialog
 				open={showText}
 				onOpenChange={setShowText}
@@ -555,7 +655,13 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			<NewDirectoryDialog
 				open={showNewDir}
 				onOpenChange={setShowNewDir}
-				onSubmit={(name) => report(createKnowledgeDirectory(token, id, name, directoryId), 'Directory created.')}
+				onSubmit={(name) =>
+					report(
+						createKnowledgeDirectory(token, id, name, directoryId),
+						`Created the folder "${name}"`,
+						`Couldn't create the folder "${name}".`
+					)
+				}
 			/>
 			<input
 				ref={fileInput}
@@ -566,7 +672,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				onChange={async (e) => {
 					const chosen = Array.from(e.target.files ?? []);
 					if (chosen.length === 0) {
-						toast.error('File not found.');
+						toast.error('No file was chosen.');
 						return;
 					}
 					await uploadFiles(chosen);
@@ -576,7 +682,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 
 			<Header
 				knowledge={knowledge}
-				edit={edit}
+				onEditDetails={() => setShowDetails(true)}
+				showAccess={!singleUser}
 				writeAccess={writeAccess}
 				total={listed?.total ?? null}
 				onBack={() => navigate(routePaths.workspaceKnowledge)}
@@ -584,100 +691,80 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				id={id}
 			/>
 
-			<div data-composite-field className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
-				<div className="flex w-full flex-1 items-center space-x-1.5 px-3">
-					<div className="flex flex-1 items-center">
-						<Search className="text-muted-foreground mr-2 ml-1 size-3.5" />
-						<input
-							className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-xs"
-							value={query}
-							onChange={(e) => {
-								setQuery(e.target.value);
+			<div className="mt-4 flex flex-1 flex-col gap-2">
+				<ListSearchBar
+					value={query}
+					onChange={(value) => {
+						setQuery(value);
+						setPage(1);
+					}}
+					placeholder="Search files"
+				>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon-sm" aria-label="Search options">
+								<SlidersHorizontal />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="min-w-44">
+							<DropdownMenuCheckboxItem
+								checked={includeContent}
+								onCheckedChange={(c) => {
+									setIncludeContent(c === true);
+									setPage(1);
+								}}
+							>
+								Search file contents too
+							</DropdownMenuCheckboxItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+					{!singleUser && (
+						<ViewSelector
+							value={viewOption}
+							onChange={(value) => {
+								if (value) localStorage.workspaceViewOption = value;
+								else delete localStorage.workspaceViewOption;
+								setViewOption(value);
 								setPage(1);
 							}}
-							aria-label="Search Collection"
-							placeholder="Search Collection"
-							onFocus={() => setSelectedFileId(null)}
 						/>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon-sm" aria-label="Search options">
-									<SlidersHorizontal />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end" className="min-w-44">
-								<DropdownMenuCheckboxItem
-									checked={includeContent}
-									onCheckedChange={(c) => {
-										setIncludeContent(c === true);
-										setPage(1);
-									}}
-								>
-									File content
-								</DropdownMenuCheckboxItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-						{writeAccess && (
-							<AddContentMenu
-								onUpload={async (kind) => {
-									if (kind === 'directory') {
-										const entries = await collectDirectoryFiles();
-										if (entries?.length) await uploadDirectoryEntries(entries);
-									} else if (kind === 'new_directory') setShowNewDir(true);
-									else if (kind === 'web') setShowWeb(true);
-									else if (kind === 'text') setShowText(true);
-									else fileInput.current?.click();
-								}}
-								onSync={async () => {
-									const entries = await collectDirectoryFiles();
-									if (entries?.length) setPendingSync(entries);
-								}}
-								onReset={() => setShowReset(true)}
-							/>
-						)}
-					</div>
-				</div>
-
-				<div className="flex items-center gap-2 px-2.5">
-					<select
-						className={selectClass}
-						aria-label="View"
-						value={viewOption}
-						onChange={(e) => {
-							const value = e.target.value;
-							if (value) localStorage.workspaceViewOption = value;
-							else delete localStorage.workspaceViewOption;
-							setViewOption(value);
+					)}
+					<FilterMenu
+						value={sortValue}
+						items={SORTS}
+						onChange={(value) => {
+							const [key, dir = ''] = value.split(':');
+							setSortKey(key);
+							setDirection(dir);
 							setPage(1);
 						}}
-					>
-						<option value="">All</option>
-						<option value="created">Created by you</option>
-						<option value="shared">Shared with you</option>
-					</select>
-					<select
-						className={selectClass}
-						aria-label="Sort"
-						value={sortKey}
-						onChange={(e) => setSortKey(e.target.value)}
-					>
-						<option value="">Sort</option>
-						<option value="name">Name</option>
-						<option value="created_at">Created</option>
-						<option value="updated_at">Updated</option>
-					</select>
-					{sortKey && (
-						<select
-							className={selectClass}
-							aria-label="Direction"
-							value={direction}
-							onChange={(e) => setDirection(e.target.value)}
-						>
-							<option value="asc">Asc</option>
-							<option value="">Desc</option>
-						</select>
+						trigger={
+							<Button variant="ghost" size="sm">
+								<span className="sr-only">Sort: </span>
+								<span className="truncate">{SORTS.find((o) => o.value === sortValue)?.label}</span>
+								<ChevronDown />
+							</Button>
+						}
+					/>
+					{writeAccess && (
+						<AddContentMenu
+							onUpload={async (kind) => {
+								if (kind === 'directory') {
+									const entries = await collectDirectoryFiles();
+									if (entries?.length) await uploadDirectoryEntries(entries);
+								} else if (kind === 'new_directory') setShowNewDir(true);
+								else if (kind === 'web') setShowWeb(true);
+								else if (kind === 'text') setShowText(true);
+								else fileInput.current?.click();
+							}}
+							onSync={async () => {
+								const entries = await collectDirectoryFiles();
+								if (entries?.length) setPendingSync(entries);
+							}}
+							onReset={() => setShowReset(true)}
+						/>
 					)}
-				</div>
+				</ListSearchBar>
 
 				{directoryId !== null && (
 					<div className="mb-1 px-4">
@@ -707,30 +794,63 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					<div className="flex flex-1 flex-row gap-2 px-2">
 						<div className="flex min-h-full w-full flex-col">
 							{listed.items.length > 0 || listed.directories.length > 0 || uploading.length > 0 ? (
-								<div className="flex h-full w-full overflow-y-auto text-xs">
+								<div className="-mx-1 flex h-full overflow-y-auto p-1">
+									{/* A11Y-1: 4 px of room inside the scroller, so it never cuts a focused row's outline. */}
 									<KnowledgeFileList
-										files={listed.items}
+										files={shownFiles}
 										uploading={uploading}
 										directories={listed.directories}
 										writeAccess={writeAccess}
 										selectedFileId={selectedFileId}
 										onSelect={setSelectedFileId}
-										onDeleteFile={deleteFile}
-										onRenameFile={(fileId, name) => report(renameFileById(token, fileId, name), 'File renamed.')}
+										onDeleteFile={(fileId) =>
+											setRemoving({
+												id: fileId,
+												name: listed.items.find((f) => f.id === fileId)?.meta?.name ?? 'this file'
+											})
+										}
+										onRenameFile={(fileId, name) =>
+											report(renameFileById(token, fileId, name), `Renamed to "${name}"`, "Couldn't rename the file.")
+										}
 										onOpenDirectory={navigateToDirectory}
 										onRenameDirectory={(dirId, name) =>
-											report(updateKnowledgeDirectory(token, id, dirId, { name }), 'Directory renamed.')
+											report(
+												updateKnowledgeDirectory(token, id, dirId, { name }),
+												`Renamed to "${name}"`,
+												"Couldn't rename the folder."
+											)
 										}
 										onDeleteDirectory={(dirId) => {
 											setDeleteContents(true);
 											setDeletingDir(dirId);
 										}}
 										onMove={move}
+										showOwner={!singleUser}
+										onRetryUpload={retry}
+										onDismissUpload={dismiss}
 									/>
 								</div>
 							) : (
-								<div className="text-muted-foreground my-3 flex flex-col justify-center text-center text-xs">
-									<div>No content found</div>
+								<div className="text-foreground-muted my-6 flex flex-col items-center gap-3 text-center">
+									{debouncedQuery ? (
+										<>
+											<p>Nothing matches "{debouncedQuery}".</p>
+											<Button
+												variant="outline"
+												onClick={() => {
+													setQuery('');
+													setPage(1);
+												}}
+											>
+												Clear search
+											</Button>
+										</>
+									) : (
+										<>
+											<p>No files yet. Files added here are searched when a chat uses this knowledge base.</p>
+											{writeAccess && <Button onClick={() => fileInput.current?.click()}>Upload files</Button>}
+										</>
+									)}
 								</div>
 							)}
 							{listed.total > PER_PAGE && (
@@ -741,44 +861,66 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				)}
 			</div>
 
-			<Sheet open={selectedFileId !== null} onOpenChange={(open) => !open && setSelectedFileId(null)}>
+			{textGuard.dialog}
+			<Sheet open={selectedFileId !== null} onOpenChange={(open) => !open && closeFile()}>
 				<SheetContent side="right" className="w-full sm:max-w-xl">
-					<SheetTitle className="sr-only">File content</SheetTitle>
-					<SheetDescription className="sr-only">The text extracted from this file.</SheetDescription>
-					<div className="flex h-full max-h-full flex-col">
-						<div className="flex shrink-0 items-center p-2 pr-10">
-							<div className="line-clamp-1 flex-1 text-sm">
-								<a
-									href="#"
-									className="line-clamp-1 hover:underline"
-									onClick={(e) => {
-										e.preventDefault();
-										if (selectedFile?.id)
-											window.open(
-												`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`,
-												'_blank'
-											);
-									}}
-								>
-									{previewName}
-								</a>
+					<div className="flex h-full max-h-full flex-col gap-3 p-4">
+						<div className="flex shrink-0 items-start gap-2 pe-8">
+							<div className="min-w-0 flex-1">
+								<SheetTitle className="text-title font-title truncate">{previewName}</SheetTitle>
+								<SheetDescription>The text extracted from this file, which chats search.</SheetDescription>
 							</div>
-							{writeAccess && (
-								<Button variant="ghost" size="sm" disabled={saving || loadingContent} onClick={saveContent}>
-									Save
-									{saving && <Spinner className="size-3.5" />}
+						</div>
+						<div className="flex shrink-0 flex-wrap items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									if (selectedFile?.id)
+										window.open(`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`, '_blank');
+								}}
+							>
+								<ExternalLink aria-hidden />
+								Open original
+							</Button>
+							{writeAccess && !editingText && (
+								<Button variant="outline" size="sm" disabled={loadingContent} onClick={() => setEditingText(true)}>
+									<Pencil aria-hidden />
+									Edit text
 								</Button>
 							)}
 						</div>
-						<textarea
-							key={selectedFileId}
-							className="h-full w-full resize-none bg-transparent px-3 py-2 text-xs"
-							value={content}
-							onChange={(e) => setContent(e.target.value)}
-							disabled={!writeAccess || loadingContent}
-							aria-label="File content"
-							placeholder="Add content here"
-						/>
+						{loadingContent ? (
+							<div className="flex flex-1 items-center justify-center">
+								<Spinner />
+							</div>
+						) : editingText ? (
+							<>
+								<Textarea
+									key={selectedFileId}
+									className="min-h-0 flex-1 resize-none field-sizing-fixed"
+									value={content}
+									onChange={(e) => setContent(e.target.value)}
+									aria-label="File text"
+								/>
+								<SaveBar
+									dirty={content !== original}
+									saving={saving}
+									saveLabel="Save text"
+									onSave={saveContent}
+									onDiscard={() => {
+										setContent(original);
+										setEditingText(false);
+									}}
+								/>
+							</>
+						) : content.trim() ? (
+							<div className="min-h-0 flex-1 overflow-y-auto">
+								<SafeMarkdown text={content} className="rich-text text-sm" />
+							</div>
+						) : (
+							<p className="text-foreground-muted">No text was extracted from this file.</p>
+						)}
 					</div>
 				</SheetContent>
 			</Sheet>
@@ -786,10 +928,27 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	);
 }
 
-/** The name/description block at the top; both fields save themselves after a pause. */
+/** A knowledge base that no longer exists, said in place (NAV-3, #1095). */
+function KnowledgeGone({ onBack }: { onBack: () => void }) {
+	return (
+		<Gone
+			level={2}
+			title="Knowledge base not found"
+			description="It may have been deleted, or the link is wrong."
+			actions={<Button onClick={onBack}>Back to Knowledge</Button>}
+		/>
+	);
+}
+
+/**
+ * The page's own header (#1017): the name as its heading, the description and
+ * file count under it, Access, and a menu with Edit name and description and
+ * Copy ID. The id is not shown: it is a detail only some need (DAT-4).
+ */
 function Header({
 	knowledge,
-	edit,
+	onEditDetails,
+	showAccess,
 	writeAccess,
 	total,
 	onBack,
@@ -797,73 +956,56 @@ function Header({
 	id
 }: {
 	knowledge: Knowledge;
-	edit: (patch: Partial<Knowledge>) => void;
+	onEditDetails: () => void;
+	showAccess: boolean;
 	writeAccess: boolean;
 	total: number | null;
 	onBack: () => void;
 	onAccess: () => void;
 	id: string;
 }) {
+	const { copied, copy } = useCopy();
+	const description = [knowledge.description, total === null ? '' : filesLabel(total)].filter(Boolean).join(' · ');
 	return (
-		<div className="w-full px-2">
-			<Button variant="ghost" size="sm" className="mb-1 w-fit" type="button" onClick={onBack}>
-				<ChevronLeft className="size-3" strokeWidth={2} />
+		<div className="w-full">
+			<Button variant="ghost" size="sm" className="mb-2 -ms-2 w-fit" type="button" onClick={onBack}>
+				<ChevronLeft aria-hidden />
 				<span>Back</span>
 			</Button>
-			<div className="flex w-full">
-				<div className="flex-1 px-1">
-					<div className="flex w-full items-center justify-between">
-						<div className="flex w-full items-center justify-between">
-							<input
-								type="text"
-								className="w-full flex-1 bg-transparent text-left text-sm"
-								value={knowledge.name}
-								aria-label="Knowledge Name"
-								placeholder="Knowledge Name"
-								disabled={!writeAccess}
-								onChange={(e) => edit({ name: e.target.value })}
-							/>
-							<div className="mr-2.5 shrink-0">
-								{total ? <div className="text-muted-foreground text-xs">{total} files</div> : null}
-							</div>
-						</div>
-						{writeAccess ? (
-							<div className="shrink-0 self-center">
-								<AccessButton onClick={onAccess} />
-							</div>
-						) : (
-							<div className="text-muted-foreground shrink-0 text-xs">Read Only</div>
-						)}
-					</div>
-					<div className="flex w-full items-center">
-						<input
-							type="text"
-							className="text-muted-foreground w-full flex-1 bg-transparent text-left text-xs"
-							value={knowledge.description}
-							aria-label="Knowledge Description"
-							placeholder="Knowledge Description"
-							disabled={!writeAccess}
-							onChange={(e) => edit({ description: e.target.value })}
-						/>
-						<div className="hidden md:block">
-							<Tip content="Click to copy ID">
-								<Button
-									variant="ghost"
-									size="xs"
-									className="shrink-0 font-mono"
-									type="button"
-									onClick={() => {
-										copyToClipboard(id);
-										toast.success('ID copied to clipboard');
+			<PageHeader
+				as="h2"
+				title={knowledge.name}
+				description={description}
+				action={
+					<div className="ms-auto flex items-center gap-2">
+						{!writeAccess && <Badge variant="secondary">Read only</Badge>}
+						{writeAccess && showAccess && <AccessButton onClick={onAccess} />}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="ghost" size="icon-sm" type="button" aria-label="More actions">
+									<MoreHorizontal />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end" className="w-max min-w-48">
+								{writeAccess && (
+									<DropdownMenuItem onSelect={onEditDetails}>
+										<Pencil />
+										Edit name and description
+									</DropdownMenuItem>
+								)}
+								<DropdownMenuItem
+									onSelect={() => {
+										copy(id, 'ID').then((ok) => ok && toast.success('ID copied'));
 									}}
 								>
-									{id}
-								</Button>
-							</Tip>
-						</div>
+									<Copy />
+									{copied ? 'Copied' : 'Copy ID'}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
-				</div>
-			</div>
+				}
+			/>
 		</div>
 	);
 }

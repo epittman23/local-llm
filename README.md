@@ -301,6 +301,11 @@ per task, each wrapping a specific OpenRouter model id:
 The new-chat greeting shows the Workspace entry's name, with its model id
 beneath; name the entry to change what it says.
 
+A new workspace model starts with memory, web search and the code
+interpreter on (and file upload, file context, citations, status updates,
+usage and builtin tools), and vision, image generation and the terminal off.
+Admin Settings > Models defaults, once saved, apply on top of these.
+
 Both models are configured (per-model, in the System Prompt field) with the
 following instructions:
 

@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -13,6 +14,10 @@ import {
 } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { PromptEditView } from './PromptEditView';
+
+// The install's account count, for useSingleUser (S4-D1).
+const accounts = vi.hoisted(() => ({ total: 2 }));
+vi.mock('@/lib/apis/users', () => ({ searchUsers: vi.fn(async () => ({ total: accounts.total })) }));
 
 vi.mock('@/lib/apis/prompts', () => ({
 	deletePromptHistoryVersion: vi.fn(),
@@ -52,13 +57,18 @@ const prompt = {
 	access_grants: []
 };
 
+// The view guards an unsaved version with useBlocker, which needs a data router.
+const Routed = ({ children }: { children: ReactNode }) => (
+	<RouterProvider router={createMemoryRouter([{ path: '*', element: children }])} />
+);
+
 const renderView = (disabled = false) =>
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<MemoryRouter>
+				<Routed>
 					<PromptEditView prompt={prompt} disabled={disabled} onSubmit={vi.fn()} />
-				</MemoryRouter>
+				</Routed>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -78,7 +88,7 @@ afterEach(() => {
 describe('PromptEditView metadata autosave (#228)', () => {
 	it('saves a name edit made just before leaving instead of dropping it', () => {
 		const view = renderView();
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
 		expect(updatePromptMetadata).toHaveBeenCalledWith('t', 'p1', 'Summary v2', 'summary', ['writing'], false);
@@ -86,7 +96,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 
 	it('saves the last name and command when leaving after several quick edits', () => {
 		const view = renderView();
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		fireEvent.change(screen.getByLabelText('Command'), { target: { value: 'summary-v2' } });
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
@@ -95,7 +105,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 
 	it('saves with the token current when leaving, not the one current at the edit', () => {
 		const view = renderView();
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		act(() => useAuthStore.setState({ token: 't2' }));
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledWith('t2', 'p1', 'Summary v2', 'summary', ['writing'], false);
@@ -103,7 +113,7 @@ describe('PromptEditView metadata autosave (#228)', () => {
 
 	it('does not save again on leaving once the pause has saved the edit', () => {
 		const view = renderView();
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		act(() => vi.advanceTimersByTime(500));
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
 		view.unmount();
@@ -112,14 +122,14 @@ describe('PromptEditView metadata autosave (#228)', () => {
 
 	it('saves a name edit as the page goes away, with keepalive (#675)', () => {
 		renderView();
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		act(() => void window.dispatchEvent(new Event('pagehide')));
 		expect(updatePromptMetadata).toHaveBeenCalledExactlyOnceWith('t', 'p1', 'Summary v2', 'summary', ['writing'], true);
 	});
 
 	it('saves nothing on leaving a prompt the user may not edit', () => {
 		const view = renderView(true);
-		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		fireEvent.change(screen.getByLabelText('Prompt name'), { target: { value: 'Summary v2' } });
 		view.unmount();
 		expect(updatePromptMetadata).not.toHaveBeenCalled();
 	});
@@ -141,13 +151,13 @@ describe('PromptEditView production switch (#222)', () => {
 		render(
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 				<TooltipProvider>
-					<MemoryRouter>
+					<Routed>
 						<PromptEditView
 							prompt={{ ...prompt, content: 'V2 content', version_id: 'v2' }}
 							disabled={false}
 							onSubmit={vi.fn()}
 						/>
-					</MemoryRouter>
+					</Routed>
 				</TooltipProvider>
 			</QueryClientProvider>
 		);
@@ -160,7 +170,7 @@ describe('PromptEditView production switch (#222)', () => {
 		expect(setProductionPromptVersion).toHaveBeenCalledWith('t', 'p1', 'v1');
 
 		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-		expect(screen.getByLabelText('Prompt Content')).toHaveValue('V1 content');
+		expect(screen.getByLabelText('Prompt content')).toHaveValue('V1 content');
 	});
 });
 

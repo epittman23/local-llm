@@ -29,7 +29,9 @@ function renderAt(path: string) {
 				element: <WorkspaceLayout />,
 				children: [
 					{ path: 'models', element: <p>models page</p> },
-					{ path: 'tools', element: <p>tools page</p> }
+					{ path: 'tools', element: <p>tools page</p> },
+					{ path: 'models/edit', element: <p>model editor</p> },
+					{ path: 'prompts/:id', element: <p>prompt editor</p> }
 				]
 			},
 			{ path: '/', element: <p>home</p> }
@@ -80,6 +82,20 @@ describe('WorkspaceLayout', () => {
 		expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeInTheDocument();
 		expect(tab('Models').getAttribute('aria-current')).toBe('page');
 		expect(screen.getByText('models page')).toBeInTheDocument();
+	});
+
+	it('gives an editor the height on a phone: the header and tabs hide below sm, the h1 stays for screen readers (LAY-4)', () => {
+		renderAt('/workspace/models/edit?id=m');
+		const nav = screen.getByRole('navigation', { name: 'Workspace' });
+		expect(nav.closest('.max-sm\\:hidden')).not.toBeNull();
+		expect(document.querySelector('h1.sr-only')).toHaveTextContent('Workspace');
+		cleanup();
+		renderAt('/workspace/prompts/p1');
+		expect(screen.getByRole('navigation', { name: 'Workspace' }).closest('.max-sm\\:hidden')).not.toBeNull();
+		cleanup();
+		renderAt('/workspace/models');
+		expect(screen.getByRole('navigation', { name: 'Workspace' }).closest('.max-sm\\:hidden')).toBeNull();
+		expect(document.querySelector('h1.sr-only')).toBeNull();
 	});
 
 	it('shows an en dash for every count while they load, not 0 (STA-2)', () => {

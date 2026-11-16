@@ -247,7 +247,7 @@
  */
 :root[data-focus="keyboard"] [data-composite-field]:has(:is(input, textarea, [contenteditable="true"]):focus-visible) {
 	border-color: var(--focus);
-	outline: 1px solid var(--focus);
+	outline: 2px solid var(--focus);
 	outline-offset: 0;
 }
 :root[data-focus="keyboard"] [data-composite-field] :is(input, textarea, [contenteditable="true"]):focus-visible {
@@ -424,10 +424,14 @@
 		inset: -0.5rem;
 	}
 }
-/* LAY-3: on touch, every control grows to the 44px target. */
+/* LAY-3: on touch, every control grows to the 44px target. A textarea's
+   least height is its own (components/ui/textarea.tsx: `rows`, never under
+   44px), so a tall one is not cut to one line here. */
 @media (pointer: coarse) {
-	:root :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+	:root :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="select-trigger"]) {
 		min-height: var(--control-touch);
+	}
+	:root :is(:is(button, a)[data-variant], [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
 		font-size: var(--text-reading); /* TYP-4: 16px, so iOS does not zoom */
 	}
 	:root

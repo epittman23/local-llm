@@ -1,5 +1,5 @@
-import { expect, test } from './test';
 import type { Page } from '@playwright/test';
+import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Call = { method: string; path: string; search: string; body: any };
@@ -91,10 +91,11 @@ test.describe('workspace models list', () => {
 		]);
 		await page.goto('/workspace/models');
 		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toBeVisible();
-		await expect(page.getByText('Preset 1')).toBeVisible();
-		await expect(page.getByText('llama3').first()).toBeVisible(); // description falls back to the base model
-		await expect(page.getByText('Read Only')).toHaveCount(1);
-		await expect(page.locator('#model-item-model-3')).toHaveClass(/opacity-50/);
+		await expect(page.locator('#model-item-model-1')).not.toContainText('Preset 1');
+		await expect(page.getByText('llama3').first()).toBeVisible(); // line 2 is the base model (#1097)
+		await expect(page.getByText('Read only', { exact: true })).toHaveCount(1);
+		// A hidden model says so with a badge, not a dimmed row (DAT-3, COL-2).
+		await expect(page.locator('#model-item-model-3').getByText('Hidden', { exact: true })).toBeVisible();
 
 		await page.getByLabel('Search Models').fill('Model 2');
 		await expect(page.getByRole('link', { name: 'New chat with Model 1' })).toHaveCount(0);
@@ -105,32 +106,32 @@ test.describe('workspace models list', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)]);
 		await page.goto('/workspace/models');
-		await page.getByRole('switch', { name: 'Enabled' }).click();
+		await page.getByRole('switch', { name: 'Enable Model 1' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/model/toggle')).toBe(true);
 
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete model' }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/model/delete')).toBe(true);
 	});
 
-	test('"Keep in Sidebar" saves the user\'s pinned list, keeping their other settings', async ({ page }) => {
+	test('"Keep in sidebar" saves the user\'s pinned list, keeping their other settings', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)], { settings: { theme: 'dark', pinnedModels: ['other'] } });
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
-		await page.getByRole('menuitem', { name: 'Keep in Sidebar' }).click();
+		await page.getByRole('menuitem', { name: 'Keep in sidebar' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/settings/update')?.body)
 			.toEqual({ ui: { theme: 'dark', pinnedModels: ['other', 'model-1'] } });
 	});
 
-	test('Hide Model saves meta.hidden; Hide All hides every visible model', async ({ page }) => {
+	test('Hide model saves meta.hidden; Hide All hides every visible model', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1), model(2)]);
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).first().click();
-		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await page.getByRole('menuitem', { name: 'Hide model' }).click();
 		await expect.poll(() => calls.filter((c) => c.path === '/model/update').length).toBe(1);
 		expect(calls.find((c) => c.path === '/model/update')?.body.meta.hidden).toBe(true);
 
@@ -232,25 +233,25 @@ test.describe('workspace model editor', () => {
 		await page.getByLabel('Model Name').fill('My Helper 2');
 		await expect(page.getByLabel('Model ID')).toHaveValue('my-helper-2');
 
-		// No base model yet: refused, nothing sent.
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		await expect(page.getByText('Base Model is required.')).toBeVisible();
+		// No base model yet: refused under the field, nothing sent.
+		await page.getByRole('button', { name: 'Create model' }).click();
+		await expect(page.getByText('Choose the model this one is built on.')).toBeVisible();
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 
 		await page.getByRole('button', { name: 'Base model' }).click();
 		// Presets are never offered as a base.
-		await expect(page.getByRole('button', { name: 'A Preset' })).toHaveCount(0);
-		await page.getByRole('button', { name: 'GPT-4o' }).click();
+		await expect(page.getByRole('option', { name: 'A Preset' })).toHaveCount(0);
+		await page.getByRole('option', { name: 'GPT-4o' }).click();
 
 		await page.getByLabel('System Prompt').fill('Be brief.');
-		await page.getByLabel('Description', { exact: true }).fill('A helpful preset');
-		// Capabilities: turn Vision off (it is on by default).
+		await page.getByLabel('Description').fill('A helpful preset');
+		// Capabilities: turn Vision on (a new model starts without it, S4-D2).
 		await page.getByRole('checkbox', { name: 'Vision' }).click();
 		// Pick a tool.
-		await page.getByRole('button', { name: 'Select Tool' }).click();
-		await page.getByRole('button', { name: 'Calculator' }).click();
+		await page.getByRole('button', { name: 'Choose tools' }).click();
+		await page.getByRole('option', { name: 'Calculator' }).click();
 
-		await page.getByRole('button', { name: 'Save & Create' }).click();
+		await page.getByRole('button', { name: 'Create model' }).click();
 		await expect(page).toHaveURL(/\/workspace\/models$/);
 		const body = calls.find((c) => c.path === '/create')?.body;
 		expect(body).toMatchObject({
@@ -258,7 +259,7 @@ test.describe('workspace model editor', () => {
 			name: 'My Helper 2',
 			base_model_id: 'gpt-4o',
 			access_grants: [],
-			meta: { description: 'A helpful preset', toolIds: ['calc'], capabilities: { vision: false, web_search: true } },
+			meta: { description: 'A helpful preset', toolIds: ['calc'], capabilities: { vision: true, web_search: true } },
 			params: { system: 'Be brief.' }
 		});
 		expect(body.meta).not.toHaveProperty('knowledge');
@@ -279,9 +280,9 @@ test.describe('workspace model editor', () => {
 		await page.getByLabel('Model Name').fill('Whatever');
 		await page.getByLabel('Model ID').fill('taken');
 		await page.getByRole('button', { name: 'Base model' }).click();
-		await page.getByRole('button', { name: 'Llama 3' }).click();
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		await expect(page.getByText("A model with the ID 'taken' already exists")).toBeVisible();
+		await page.getByRole('option', { name: 'Llama 3' }).click();
+		await page.getByRole('button', { name: 'Create model' }).click();
+		await expect(page.getByText('Another model already uses the ID “taken”. Choose a different ID.')).toBeVisible();
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
 
@@ -289,14 +290,14 @@ test.describe('workspace model editor', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)]);
 		await page.goto('/workspace/models/edit?id=model-1');
-		await page.getByRole('button', { name: 'Show' }).first().click();
+		await page.getByRole('button', { name: 'Builtin tools, voice and parameters' }).click();
 		await page.getByRole('button', { name: 'Temperature: Default' }).click();
 		await page.getByLabel('Temperature', { exact: true }).fill('1.2');
 		// Stop sequence is under the closed "More parameters" group (#996).
 		await page.getByRole('button', { name: 'More parameters' }).click();
 		await page.getByRole('button', { name: 'Stop sequence: Default' }).click();
 		await page.getByRole('textbox', { name: 'Stop sequence' }).fill('END, STOP');
-		await page.getByRole('button', { name: 'Save & Update' }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/model/update')?.body?.params)
 			.toMatchObject({ temperature: 1.2, stop: ['END', ' STOP'], system: 'You are model 1' });
@@ -313,7 +314,7 @@ test.describe('workspace model editor', () => {
 		await expect(page.getByText('support', { exact: true })).toBeVisible();
 		await page.getByLabel('Model Name').fill('Model One');
 		await expect(page.getByLabel('Model ID')).toHaveValue('model-1'); // an existing id does not follow the name
-		await page.getByRole('button', { name: 'Save & Update' }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect(page).toHaveURL(/\/workspace\/models$/);
 		expect(calls.find((c) => c.path === '/model/update')?.body).toMatchObject({
 			id: 'model-1',
@@ -322,14 +323,21 @@ test.describe('workspace model editor', () => {
 		});
 	});
 
-	test('edit: a read-only or missing model returns to the list', async ({ page }) => {
+	test('edit: a read-only model returns to the list; a missing one says so in place', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockModelsApi(page, [model(2, { write_access: false })]);
+		await page.route(/\/api\/v1\/models\/model\?id=nope/, (route) =>
+			route.fulfill({
+				status: 404,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: "We could not find what you're looking for :/" })
+			})
+		);
 		await page.goto('/workspace/models/edit?id=model-2');
-		await expect(page.getByText('You do not have permission to edit this model')).toBeVisible();
+		await expect(page.getByText("You can't edit “Model 2”")).toBeVisible();
 		await expect(page).toHaveURL(/\/workspace\/models$/);
 		await page.goto('/workspace/models/edit?id=nope');
-		await expect(page).toHaveURL(/\/workspace\/models$/);
+		await expect(page.getByRole('heading', { name: "This model doesn't exist." })).toBeVisible();
 	});
 
 	test('the system prompt panel flags bad chat variables', async ({ page }) => {
@@ -346,14 +354,59 @@ test.describe('workspace model editor', () => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)]);
 		await page.goto('/workspace/models/edit?id=model-1');
-		await page.getByRole('button', { name: 'Default prompt suggestions' }).click();
+		await page.getByRole('radio', { name: 'Custom' }).click();
 		await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Tell me a fact');
 		await page.getByLabel('Content').fill('Tell me a fun fact about Rome');
-		await page.getByRole('button', { name: 'Show' }).last().click();
+		await page.getByRole('button', { name: 'Builtin tools, voice and parameters' }).click();
+		await page.getByRole('button', { name: 'JSON preview' }).click();
 		await expect(page.locator('pre')).toContainText('Tell me a fun fact about Rome');
-		await page.getByRole('button', { name: 'Save & Update' }).click();
+		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/model/update')?.body?.meta?.suggestion_prompts)
 			.toEqual([{ content: 'Tell me a fun fact about Rome', title: ['Tell me a fact', ''] }]);
+	});
+
+	test('Back and the browser’s history buttons ask before unsaved changes are lost (#905)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModelsApi(page, [model(1)]);
+		// In-app history: Back to the list while clean leaves at once; the browser's Back returns.
+		await page.goto('/workspace/models/edit?id=model-1');
+		await page.getByRole('button', { name: 'Back' }).click();
+		await expect(page).toHaveURL(/\/workspace\/models$/);
+		await page.goBack();
+		await page.getByLabel('Model Name').fill('Model One');
+		await expect(page.getByText('Unsaved changes')).toBeVisible();
+		await page.getByRole('button', { name: 'Back' }).click();
+		const ask = page.getByRole('alertdialog', { name: 'Discard changes?' });
+		await expect(ask).toBeVisible();
+		await ask.getByRole('button', { name: 'Keep editing' }).click();
+		await expect(page).toHaveURL(/edit\?id=model-1$/);
+		// The list is the next entry in the browser's history: Forward asks too.
+		await page.goForward();
+		await expect(ask).toBeVisible();
+		await ask.getByRole('button', { name: 'Discard changes' }).click();
+		await expect(page).toHaveURL(/\/workspace\/models$/);
+	});
+
+	test('the knowledge picker lists knowledge bases first, then files, then notes (#1014)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModelsApi(page, [model(1)]);
+		const json = (d: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(d) });
+		await page.route('**/api/v1/notes/search**', (route) =>
+			route.fulfill(json({ items: [{ id: 'n1', title: 'Lecture note' }] }))
+		);
+		await page.route('**/api/v1/knowledge/search/files**', (route) =>
+			route.fulfill(json({ items: [{ id: 'f1', filename: 'syllabus.pdf' }] }))
+		);
+		await page.route('**/api/v1/knowledge/search?**', (route) =>
+			route.fulfill(json({ items: [{ id: 'k1', name: 'Handbook', file_count: 3 }] }))
+		);
+		await page.goto('/workspace/models/edit?id=model-1');
+		await page.getByRole('button', { name: 'Choose knowledge' }).click();
+		const picker = page.getByRole('dialog', { name: 'Attach knowledge' });
+		await expect(picker.getByText('3 files')).toBeVisible();
+		await expect(picker.locator('[cmdk-group-heading]')).toHaveText(['Knowledge bases', 'Files', 'Notes']);
+		await picker.getByRole('option', { name: /Handbook/ }).click();
+		await expect(page.getByRole('button', { name: 'Remove Handbook' })).toBeVisible();
 	});
 });

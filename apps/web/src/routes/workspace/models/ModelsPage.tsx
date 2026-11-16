@@ -21,7 +21,8 @@ import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
@@ -47,8 +48,8 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { type BulkAction, runBulkAction, setVisibility } from './modelBulk';
 import { parseModelImport, saveImportedModel } from './modelImport';
 
@@ -73,7 +74,7 @@ type ModelRow = {
  * list of model presets, with per-row menu, enable switch, and bulk Enable / Disable /
  * Show / Hide All. Differences from the Svelte version worth knowing:
  *
- * - Pinning ("Keep in Sidebar") reads and writes the user's saved UI settings
+ * - Pinning ("Keep in sidebar") reads and writes the user's saved UI settings
  *   through `useUserSettings`, optimistically, instead of a global store.
  * - The global `models` store the Svelte page refreshes after every change is
  *   the ['models-all'] query here, invalidated the same way.
@@ -90,12 +91,14 @@ export function ModelsPage() {
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
 	const setCount = useWorkspaceStore((s) => s.setCount);
-	const shiftKey = useShiftKey();
 	const { pinnedModels, togglePinned } = useUserSettings();
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption ?? '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption ?? '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [selectedTag, setSelectedTag] = useState('');
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -126,9 +129,12 @@ export function ModelsPage() {
 	const total = list.data?.total ?? 0;
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = debouncedQuery !== '' || viewOption !== '' || selectedTag !== '';
+	const wholeCount = useWorkspaceStore((s) => s.counts.models);
 	useEffect(() => {
-		if (list.data) setCount('models', list.data.total);
-	}, [list.data, setCount]);
+		if (list.data && !list.isPlaceholderData && !filtered) setCount('models', list.data.total);
+	}, [list.data, list.isPlaceholderData, filtered, setCount]);
 	useDocumentTitle('Models');
 
 	const refetch = async () => {
@@ -143,7 +149,7 @@ export function ModelsPage() {
 	// --- the layout's Create button ------------------------------------------
 	useEffect(() => {
 		setActions([
-			{ id: 'models-new', label: 'Create', href: routePaths.workspaceModelsCreate },
+			{ id: 'models-new', label: 'New model', href: routePaths.workspaceModelsCreate },
 			{ id: 'models-import', label: 'Import JSON', onClick: () => importInput.current?.click(), visible: canImport },
 			{
 				id: 'models-export',
@@ -164,12 +170,12 @@ export function ModelsPage() {
 		m.write_access && navigate(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(m.id)}`);
 
 	const deleteModel = async (m: ModelRow) => {
-		const res = await deleteModelById(token, m.id).catch((e) => {
-			toast.error(`${e}`);
+		const res = await deleteModelById(token, m.id).catch((error) => {
+			toastFailure(`Couldn't delete “${m.name}”.`, error);
 			return null;
 		});
 		if (res) {
-			toast.success(`Deleted ${m.id}`);
+			toast.success(`Deleted “${m.name}”`);
 			setPage(1);
 		}
 		await refetch();
@@ -240,13 +246,13 @@ export function ModelsPage() {
 			try {
 				incoming = parseModelImport(String(event.target?.result));
 			} catch {
-				toast.error('Invalid JSON file');
+				toast.error("That file isn't a models export (it isn't valid JSON).");
 				return;
 			}
 			for (const model of incoming) {
 				// Update a model that already exists, create it otherwise.
 				await saveImportedModel(token, model).catch((error) => {
-					toast.error(`${error}`);
+					toastFailure(`Couldn't import “${model.name ?? model.id}”.`, error);
 					return null;
 				});
 			}
@@ -255,6 +261,14 @@ export function ModelsPage() {
 		};
 		reader.readAsText(file);
 		if (importInput.current) importInput.current.value = '';
+	};
+
+	const clearFilters = () => {
+		setQuery('');
+		localStorage.workspaceViewOption = '';
+		setViewOption('');
+		setSelectedTag('');
+		setPage(1);
 	};
 
 	const sortBy = (key: string) => {
@@ -271,14 +285,15 @@ export function ModelsPage() {
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete model"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteModel(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				It can't be undone. Chats that used it keep their messages.
 			</ConfirmDialog>
 
 			<input
@@ -298,14 +313,16 @@ export function ModelsPage() {
 					setPage(1);
 				}}
 			>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-						setPage(1);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+							setPage(1);
+						}}
+					/>
+				)}
 				{(tags.data ?? []).length > 0 && (
 					<TagSelector
 						value={selectedTag}
@@ -352,9 +369,21 @@ export function ModelsPage() {
 					<Spinner className="size-4" />
 				</div>
 			) : models.length === 0 ? (
-				<ListEmptyState title="No models found" />
+				<ListEmptyState
+					title="No models yet"
+					description="A model is a base model with your own name, system prompt, knowledge and tools."
+					action={
+						<Button size="sm" asChild>
+							<Link to={routePaths.workspaceModelsCreate}>New model</Link>
+						</Button>
+					}
+					query={debouncedQuery}
+					filtered={viewOption !== '' || selectedTag !== ''}
+					onClear={clearFilters}
+				/>
 			) : (
 				<div id="model-list" className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
+					{filtered && !list.isPlaceholderData && <ListMatchCount shown={total} total={wholeCount} noun="models" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"
@@ -363,7 +392,7 @@ export function ModelsPage() {
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -377,18 +406,23 @@ export function ModelsPage() {
 						{models.map((model) => {
 							const isActive = activeOverride[model.id] ?? Boolean(model.is_active);
 							const hidden = Boolean(model.meta?.hidden);
-							const description = (model.meta?.description ?? '').trim() || model.base_model_id || 'No description';
+							const tags: string[] = (model.meta?.tags ?? [])
+								.map((t: { name?: string } | string) => (typeof t === 'string' ? t : t?.name))
+								.filter(Boolean);
+							const description = (model.meta?.description ?? '').trim();
 							const pinned = pinnedModels.includes(model.id);
+							const updated = dayjs(model.updated_at * 1000);
 							const rowContent = (
 								<>
-									<div className={`mr-1 shrink-0 self-center ${isActive ? '' : 'opacity-50'}`}>
+									<div className="mr-1 shrink-0 self-center">
 										<ProfileAvatar
 											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(model.id)}`}
 											name={model.name ?? model.id}
 										/>
 									</div>
-									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
+									{/* LAY-4: line 1 is the name and its state; line 2 what it is. Below sm the time moves to line 2. */}
+									<div className="flex min-w-0 flex-1 flex-col">
+										<div className="flex min-w-0 items-center gap-2">
 											<Tip content={model.name} side="top">
 												<div
 													className={`min-w-0 truncate text-dense leading-5 ${model.write_access ? 'group-hover:underline' : ''}`}
@@ -396,28 +430,66 @@ export function ModelsPage() {
 													{model.name}
 												</div>
 											</Tip>
-											{/* Below sm the name needs the room the row's three controls leave. */}
-											<div className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block">
+											<div
+												aria-hidden
+												className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+											>
 												{model.id}
 											</div>
-											<Tip content={dayjs(model.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
-													{dayjs(model.updated_at * 1000).fromNow()}
+											<Tip content={updated.format('LLLL')}>
+												<div
+													aria-hidden
+													className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+												>
+													{updated.fromNow()}
 												</div>
 											</Tip>
-											{!model.write_access && <Badge variant="secondary">Read Only</Badge>}
+											{/* DAT-3, COL-2: a row's state is a neutral badge, never a dimmed row. */}
+											{hidden && <Badge variant="secondary">Hidden</Badge>}
+											{!isActive && <Badge variant="secondary">Off</Badge>}
+											{!model.write_access && <Badge variant="secondary">Read only</Badge>}
 										</div>
-										<Tip content={description} side="top">
-											<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">{description}</div>
-										</Tip>
+										<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+											{model.base_model_id ? (
+												<span className="text-foreground-muted min-w-0 truncate font-mono">{model.base_model_id}</span>
+											) : (
+												description && <span className="text-foreground-muted min-w-0 truncate">{description}</span>
+											)}
+											{/* Below sm the base model and the time fill line 2; the tags stay one filter away. */}
+											{tags.slice(0, 3).map((tag) => (
+												<Badge
+													key={tag}
+													variant="secondary"
+													className="hidden max-w-32 min-w-0 truncate sm:inline-flex"
+												>
+													{/* The row's accessible name reads the tags as words, not run together (A11Y-2). */}
+													<span className="sr-only">, </span>
+													<span className="truncate">{tag}</span>
+												</Badge>
+											))}
+											{tags.length > 3 && (
+												<Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
+													<span className="sr-only">, </span>+{tags.length - 3}
+												</Badge>
+											)}
+											<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+												{updated.fromNow()}
+											</span>
+										</div>
 									</div>
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={model.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(model.user?.name ?? model.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+									{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+									{!singleUser && (
+										<div
+											aria-hidden
+											className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+										>
+											<Tip content={model.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(model.user?.name ?? model.user?.email ?? 'Deleted User')}
+												</div>
+											</Tip>
+										</div>
+									)}
 								</>
 							);
 							return (
@@ -425,7 +497,7 @@ export function ModelsPage() {
 								<div
 									key={model.id}
 									id={`model-item-${model.id}`}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${model.write_access ? 'hover:bg-muted/50' : ''} ${hidden ? 'opacity-50' : ''}`}
+									className={`group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1 ${model.write_access ? 'hover:bg-muted/50' : ''}`}
 								>
 									{model.write_access ? (
 										<RowButton
@@ -439,8 +511,9 @@ export function ModelsPage() {
 									)}
 
 									<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
+										{/* LAY-4: below sm the row keeps the menu and switch; New chat moves into the menu. */}
 										<Tip content="New chat with this model">
-											<Button variant="ghost" size="icon-sm" asChild>
+											<Button variant="ghost" size="icon-sm" className="hidden sm:inline-flex" asChild>
 												<Link
 													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
 													aria-label={`New chat with ${model.name}`}
@@ -449,110 +522,82 @@ export function ModelsPage() {
 												</Link>
 											</Button>
 										</Tip>
-										{shiftKey && model.write_access ? (
-											<>
-												<Tip content={hidden ? 'Show' : 'Hide'}>
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label={hidden ? 'Show' : 'Hide'}
-														onClick={(e) => {
-															e.stopPropagation();
-															setHidden(model, !hidden);
-														}}
-													>
-														{hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-													</Button>
+										<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
+											<DropdownMenu>
+												<Tip content="More">
+													<DropdownMenuTrigger asChild>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															type="button"
+															aria-label="Model Menu"
+															onClick={(e) => e.stopPropagation()}
+														>
+															<MoreHorizontal className="size-4" />
+														</Button>
+													</DropdownMenuTrigger>
 												</Tip>
-												<Tip content="Delete">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete"
-														onClick={(e) => {
-															e.stopPropagation();
-															deleteModel(model);
-														}}
+												<DropdownMenuContent align="end" className="min-w-44">
+													<DropdownMenuItem
+														className="sm:hidden"
+														onSelect={() => navigate(`${routePaths.home}?model=${encodeURIComponent(model.id)}`)}
 													>
-														<Trash2 className="size-4" />
-													</Button>
-												</Tip>
-											</>
-										) : (
-											<div className="flex shrink-0 flex-row items-center gap-1.5 self-center">
-												<DropdownMenu>
-													<Tip content="More">
-														<DropdownMenuTrigger asChild>
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Model Menu"
-																onClick={(e) => e.stopPropagation()}
-															>
-																<MoreHorizontal className="size-4" />
-															</Button>
-														</DropdownMenuTrigger>
-													</Tip>
-													<DropdownMenuContent align="end" className="min-w-44">
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => openModel(model)}>
-																<Pencil />
-																Edit
-															</DropdownMenuItem>
-														)}
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => setHidden(model, !hidden)}>
-																{hidden ? <Eye /> : <EyeOff />}
-																{hidden ? 'Show Model' : 'Hide Model'}
-															</DropdownMenuItem>
-														)}
-														<DropdownMenuItem onSelect={() => togglePinned(model.id)}>
-															{pinned ? <PinOff /> : <Pin />}
-															{pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'}
+														<SquarePen />
+														New chat
+													</DropdownMenuItem>
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => openModel(model)}>
+															<Pencil />
+															Edit
 														</DropdownMenuItem>
-														{model.write_access && (
-															<DropdownMenuItem onSelect={() => cloneModel(model)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-														)}
-														<DropdownMenuItem onSelect={() => copyLink(model)}>
-															<Link2 />
-															Copy Link
+													)}
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => setHidden(model, !hidden)}>
+															{hidden ? <Eye /> : <EyeOff />}
+															{hidden ? 'Show model' : 'Hide model'}
 														</DropdownMenuItem>
-														{model.write_access && canExport && (
-															<DropdownMenuItem onSelect={() => exportModel(model)}>
-																<Download />
-																Export
+													)}
+													<DropdownMenuItem onSelect={() => togglePinned(model.id)}>
+														{pinned ? <PinOff /> : <Pin />}
+														{pinned ? 'Hide from sidebar' : 'Keep in sidebar'}
+													</DropdownMenuItem>
+													{model.write_access && (
+														<DropdownMenuItem onSelect={() => cloneModel(model)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+													)}
+													<DropdownMenuItem onSelect={() => copyLink(model)}>
+														<Link2 />
+														Copy link
+													</DropdownMenuItem>
+													{model.write_access && canExport && (
+														<DropdownMenuItem onSelect={() => exportModel(model)}>
+															<Download />
+															Export
+														</DropdownMenuItem>
+													)}
+													{model.write_access && (
+														<>
+															<DropdownMenuSeparator />
+															<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(model)}>
+																<Trash2 />
+																Delete
 															</DropdownMenuItem>
-														)}
-														{model.write_access && (
-															<>
-																<DropdownMenuSeparator />
-																<DropdownMenuItem onSelect={() => setDeleting(model)}>
-																	<Trash2 />
-																	Delete
-																</DropdownMenuItem>
-															</>
-														)}
-													</DropdownMenuContent>
-												</DropdownMenu>
-												{model.write_access && (
-													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
-														<span className="flex h-6 items-center">
-															<Switch
-																aria-label={isActive ? 'Enabled' : 'Disabled'}
-																checked={isActive}
-																onCheckedChange={(next) => toggleActive(model, next)}
-															/>
-														</span>
-													</Tip>
-												)}
-											</div>
-										)}
+														</>
+													)}
+												</DropdownMenuContent>
+											</DropdownMenu>
+											{model.write_access && (
+												<span className="flex h-6 items-center">
+													<Switch
+														aria-label={`Enable ${model.name}`}
+														checked={isActive}
+														onCheckedChange={(next) => toggleActive(model, next)}
+													/>
+												</span>
+											)}
+										</div>
 									</div>
 								</div>
 							);

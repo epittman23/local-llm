@@ -67,6 +67,16 @@ describe('AdminLayout', () => {
 		expect(screen.getByText('admin page')).toBeInTheDocument();
 	});
 
+	it('gives the function editor the height on a phone: the header and tabs hide below sm, the h1 stays for screen readers (LAY-4)', () => {
+		renderAt('/admin/functions/create');
+		expect(screen.getByRole('navigation', { name: 'Admin' }).closest('.max-sm\\:hidden')).not.toBeNull();
+		expect(document.querySelector('h1.sr-only')).toHaveTextContent('Admin');
+		cleanup();
+		renderAt('/admin/functions');
+		expect(screen.getByRole('navigation', { name: 'Admin' }).closest('.max-sm\\:hidden')).toBeNull();
+		expect(document.querySelector('h1.sr-only')).toBeNull();
+	});
+
 	it('offers Functions only while plugins are on', () => {
 		renderAt('/admin/evaluations/leaderboard', false);
 		expect(screen.getByRole('link', { name: 'Evaluations' }).getAttribute('aria-current')).toBe('page');

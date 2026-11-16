@@ -6,8 +6,9 @@ import { Navigate, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { ViewSelector } from '@/components/common/FilterSelects';
+import { toastFailure } from '@/components/common/failureToast';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
-import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
+import { ListEmptyState, ListMatchCount, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { ManifestModal } from '@/components/common/ManifestModal';
 import { Spinner } from '@/components/common/Spinner';
@@ -29,8 +30,8 @@ import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import { CodeExecutionWarning } from './ToolkitEditor';
 import { filterAndSortTools, parseToolImport, type ToolListItem } from './toolTypes';
 
@@ -52,10 +53,12 @@ export function ToolsPage() {
 	const queryClient = useQueryClient();
 	const setActions = useWorkspaceStore((s) => s.setActions);
 	const setCount = useWorkspaceStore((s) => s.setCount);
-	const shiftKey = useShiftKey();
 
 	const [query, setQuery] = useState('');
-	const [viewOption, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	const [storedView, setViewOption] = useState(() => localStorage.workspaceViewOption || '');
+	// WRD-4, S4-D1: with one account there is nothing to filter by owner, and a stored view is ignored.
+	const singleUser = useSingleUser();
+	const viewOption = singleUser ? '' : storedView;
 	const [sortKey, setSortKey] = useState('updated_at');
 	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 	const [deleting, setDeleting] = useState<ToolListItem | null>(null);
@@ -89,22 +92,24 @@ export function ToolsPage() {
 	);
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
+	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
+	const filtered = query.trim() !== '' || viewOption !== '';
 	useEffect(() => {
-		if (list.data) setCount('tools', items.length);
-	}, [list.data, items.length, setCount]);
+		if (list.data) setCount('tools', list.data.length);
+	}, [list.data, setCount]);
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['tools'] });
 
 	useEffect(() => {
 		setActions([
-			{ id: 'tools-new', label: 'Create', href: routePaths.workspaceToolsCreate },
-			{ id: 'tools-import-link', label: 'Import From Link', onClick: () => setShowImportUrl(true), visible: isAdmin },
+			{ id: 'tools-new', label: 'New tool', href: routePaths.workspaceToolsCreate },
+			{ id: 'tools-import-link', label: 'Import from link', onClick: () => setShowImportUrl(true), visible: isAdmin },
 			{ id: 'tools-import', label: 'Import JSON', onClick: () => importInput.current?.click(), visible: canImport },
 			{
 				id: 'tools-export',
 				label: 'Export JSON',
 				onClick: async () => {
 					const all = await exportTools(token).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure("Couldn't export the tools.", error);
 						return null;
 					});
 					if (all)
@@ -124,20 +129,26 @@ export function ToolsPage() {
 	const deleteMutation = useMutation({
 		mutationFn: (tool: ToolListItem) => deleteToolById(token, tool.id),
 		onSuccess: (res) => res && toast.success('Tool deleted successfully'),
-		onError: (error) => toast.error(`${error}`),
+		onError: (error, tool) => toastFailure(`Couldn't delete “${tool.name}”.`, error),
 		onSettled: refetch
 	});
 
 	const fetchFull = (tool: ToolListItem) =>
 		getToolById(token, tool.id).catch((error) => {
-			toast.error(`${error}`);
+			toastFailure(`Couldn't load “${tool.name}”.`, error);
 			return null;
 		});
 
 	const cloneHandler = async (tool: ToolListItem) => {
 		const full = await fetchFull(tool);
 		if (!full) return;
-		sessionStorage.tool = JSON.stringify({ ...full, id: `${full.id}_clone`, name: `${full.name} (Clone)` });
+		// S4-D4: the stash says where the code came from (`source`, P4's CodeSource), so the editor confirms code it did not write.
+		sessionStorage.tool = JSON.stringify({
+			...full,
+			id: `${full.id}_clone`,
+			name: `${full.name} (Clone)`,
+			source: { kind: 'clone', from: full.name }
+		});
 		navigate(routePaths.workspaceToolsCreate);
 	};
 
@@ -161,7 +172,7 @@ export function ToolsPage() {
 				}
 				for (const tool of tools) {
 					await createNewTool(token, tool).catch((error) => {
-						toast.error(`${error}`);
+						toastFailure(`Couldn't import “${tool.name}”.`, error);
 						return null;
 					});
 				}
@@ -191,23 +202,23 @@ export function ToolsPage() {
 				open={showImportUrl}
 				onOpenChange={setShowImportUrl}
 				loadUrl={(url) => loadToolByUrl(token, url)}
-				successMessage="Tool imported successfully"
-				onImport={(tool) => {
-					sessionStorage.tool = JSON.stringify(tool);
+				onImport={(tool, url) => {
+					sessionStorage.tool = JSON.stringify({ ...tool, source: { kind: 'link', from: url } });
 					navigate(routePaths.workspaceToolsCreate);
 				}}
 			/>
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(open) => !open && setDeleting(null)}
-				title="Delete tool?"
-				confirmLabel="Delete"
+				title={`Delete “${deleting?.name ?? ''}”?`}
+				confirmLabel="Delete tool"
+				destructive
 				onConfirm={() => {
 					if (deleting) deleteMutation.mutate(deleting);
 					setDeleting(null);
 				}}
 			>
-				This will delete <span className="font-normal">{deleting?.name}</span>.
+				Models that use it lose it. It can't be undone.
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={pendingImport !== null}
@@ -217,20 +228,23 @@ export function ToolsPage() {
 						if (importInput.current) importInput.current.value = '';
 					}
 				}}
-				title="Confirm"
+				// ACT-2, S4-D4: code from elsewhere is confirmed, naming where it came from.
+				title="Import tools?"
+				confirmLabel="Import tools"
 				onConfirm={() => {
 					if (pendingImport) runImport(pendingImport);
 					setPendingImport(null);
 					if (importInput.current) importInput.current.value = '';
 				}}
 			>
-				<CodeExecutionWarning />
+				{pendingImport && <CodeExecutionWarning verb="import" source={{ kind: 'file', from: pendingImport.name }} />}
 			</ConfirmDialog>
 			<ValvesModal
 				open={valvesFor !== null}
 				onOpenChange={(o) => !o && setValvesFor(null)}
 				type="tool"
 				id={valvesFor?.id ?? null}
+				name={valvesFor?.name}
 			/>
 			<ManifestModal
 				open={manifestFor !== null}
@@ -248,13 +262,15 @@ export function ToolsPage() {
 			/>
 
 			<ListSearchBar value={query} placeholder="Search Tools" onChange={setQuery}>
-				<ViewSelector
-					value={viewOption}
-					onChange={(value) => {
-						localStorage.workspaceViewOption = value;
-						setViewOption(value);
-					}}
-				/>
+				{!singleUser && (
+					<ViewSelector
+						value={viewOption}
+						onChange={(value) => {
+							localStorage.workspaceViewOption = value;
+							setViewOption(value);
+						}}
+					/>
+				)}
 			</ListSearchBar>
 
 			{failed ? (
@@ -265,6 +281,7 @@ export function ToolsPage() {
 				</div>
 			) : items.length !== 0 ? (
 				<div className="my-1">
+					{filtered && <ListMatchCount shown={items.length} total={list.data?.length ?? null} noun="tools" />}
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
 						<SortHeaderButton
 							label="Title"
@@ -273,7 +290,7 @@ export function ToolsPage() {
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
 						/>
-						<div className="hidden w-44 shrink-0 md:block" />
+						{!singleUser && <div className="hidden w-44 shrink-0 md:block" />}
 						<SortHeaderButton
 							label="Updated at"
 							active={sortKey === 'updated_at'}
@@ -298,40 +315,56 @@ export function ToolsPage() {
 												</div>
 											</Tip>
 											{version && (
-												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5">
+												<div
+													aria-hidden
+													className="text-muted-foreground hidden max-w-[40%] min-w-0 shrink-0 truncate text-caption leading-5 sm:block"
+												>
 													v{version}
 												</div>
 											)}
 											<Tip content={dayjs(tool.updated_at * 1000).format('LLLL')}>
-												<div className="text-foreground-muted shrink-0 truncate text-caption leading-5">
+												<div
+													aria-hidden
+													className="text-foreground-muted hidden shrink-0 text-caption leading-5 sm:block"
+												>
 													{dayjs(tool.updated_at * 1000).fromNow()}
 												</div>
 											</Tip>
-											{!tool.write_access && <Badge variant="secondary">Read Only</Badge>}
+											{!tool.write_access && <Badge variant="secondary">Read only</Badge>}
 										</div>
-										{tool.meta?.description && (
-											<Tip content={tool.meta.description} side="top">
-												<div className="text-foreground-muted mt-0.5 truncate text-caption leading-4">
-													{tool.meta.description}
-												</div>
-											</Tip>
-										)}
+										{/* LAY-4: line 2 says what it is; below sm it also carries the time. */}
+										<div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-caption leading-4">
+											{tool.meta?.description && (
+												<Tip content={tool.meta?.description} side="top">
+													<span className="text-foreground-muted min-w-0 truncate">{tool.meta?.description}</span>
+												</Tip>
+											)}
+											<span aria-hidden className="text-foreground-muted ms-auto shrink-0 sm:hidden">
+												{dayjs(tool.updated_at * 1000).fromNow()}
+											</span>
+										</div>
 									</div>
 
-									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block">
-										<Tip content={tool.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">
-												{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}
-											</div>
-										</Tip>
-									</div>
+									{/* WRD-4: an owner says nothing with one account; it is not part of the row's name (A11Y-2). */}
+									{!singleUser && (
+										<div
+											aria-hidden
+											className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-caption leading-5 md:block"
+										>
+											<Tip content={tool.user?.email ?? 'Deleted User'} side="top">
+												<div className="truncate">
+													{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}
+												</div>
+											</Tip>
+										</div>
+									)}
 								</>
 							);
 							return (
 								// The row's controls sit beside the button that opens it, not inside it (ACT-7).
 								<div
 									key={tool.id}
-									className={`group flex min-h-8 w-full items-center gap-2 overflow-hidden rounded-xl px-2 py-1 ${tool.write_access ? 'hover:bg-muted/50' : 'opacity-60'}`}
+									className={`group flex min-h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 py-1 ${tool.write_access ? 'hover:bg-muted/50' : ''}`}
 								>
 									{tool.write_access ? (
 										<RowButton
@@ -346,91 +379,75 @@ export function ToolsPage() {
 
 									{tool.write_access && (
 										<div className="ml-2 flex shrink-0 flex-row items-center gap-1.5 self-center">
-											{shiftKey ? (
-												<Tip content="Delete">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete"
-														onClick={(e) => {
-															e.stopPropagation();
-															deleteMutation.mutate(tool);
-														}}
-													>
-														<Trash2 className="size-4" />
-													</Button>
-												</Tip>
-											) : (
-												<>
-													{tool.meta?.manifest?.funding_url && (
-														<Tip content="Support">
-															<Button
-																variant="ghost"
-																size="icon-sm"
-																type="button"
-																aria-label="Support"
-																onClick={(e) => {
-																	e.stopPropagation();
-																	setManifestFor(tool);
-																}}
-															>
-																<Heart className="size-4" />
-															</Button>
-														</Tip>
-													)}
-													<Tip content="Valves">
+											<>
+												{tool.meta?.manifest?.funding_url && (
+													<Tip content="Support">
 														<Button
 															variant="ghost"
 															size="icon-sm"
 															type="button"
-															aria-label="Valves"
+															aria-label="Support"
 															onClick={(e) => {
 																e.stopPropagation();
-																setValvesFor(tool);
+																setManifestFor(tool);
 															}}
 														>
-															<Settings className="size-4" />
+															<Heart className="size-4" />
 														</Button>
 													</Tip>
-													<DropdownMenu>
-														<Tip content="More">
-															<DropdownMenuTrigger asChild>
-																<Button
-																	variant="ghost"
-																	size="icon-sm"
-																	type="button"
-																	aria-label="Tool Menu"
-																	onClick={(e) => e.stopPropagation()}
-																>
-																	<MoreHorizontal className="size-4" />
-																</Button>
-															</DropdownMenuTrigger>
-														</Tip>
-														<DropdownMenuContent align="end" className="min-w-40">
-															<DropdownMenuItem onSelect={() => openTool(tool)}>
-																<Pencil />
-																Edit
+												)}
+												{/* ACT-4, WRD-2: the gear opens this tool's settings (its valves). */}
+												<Tip content="Settings">
+													<Button
+														variant="ghost"
+														size="icon-sm"
+														type="button"
+														aria-label={`Settings for ${tool.name}`}
+														onClick={(e) => {
+															e.stopPropagation();
+															setValvesFor(tool);
+														}}
+													>
+														<Settings className="size-4" />
+													</Button>
+												</Tip>
+												<DropdownMenu>
+													<Tip content="More">
+														<DropdownMenuTrigger asChild>
+															<Button
+																variant="ghost"
+																size="icon-sm"
+																type="button"
+																aria-label="Tool Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
+																<MoreHorizontal className="size-4" />
+															</Button>
+														</DropdownMenuTrigger>
+													</Tip>
+													<DropdownMenuContent align="end" className="min-w-40">
+														<DropdownMenuItem onSelect={() => openTool(tool)}>
+															<Pencil />
+															Edit
+														</DropdownMenuItem>
+														<DropdownMenuItem onSelect={() => cloneHandler(tool)}>
+															<Copy />
+															Clone
+														</DropdownMenuItem>
+														{canExport && (
+															<DropdownMenuItem onSelect={() => exportHandler(tool)}>
+																<Download />
+																Export
 															</DropdownMenuItem>
-															<DropdownMenuItem onSelect={() => cloneHandler(tool)}>
-																<Copy />
-																Clone
-															</DropdownMenuItem>
-															{canExport && (
-																<DropdownMenuItem onSelect={() => exportHandler(tool)}>
-																	<Download />
-																	Export
-																</DropdownMenuItem>
-															)}
-															<DropdownMenuSeparator />
-															<DropdownMenuItem onSelect={() => setDeleting(tool)}>
-																<Trash2 />
-																Delete
-															</DropdownMenuItem>
-														</DropdownMenuContent>
-													</DropdownMenu>
-												</>
-											)}
+														)}
+														<DropdownMenuSeparator />
+														<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(tool)}>
+															<Trash2 />
+															Delete
+														</DropdownMenuItem>
+													</DropdownMenuContent>
+												</DropdownMenu>
+											</>
 										</div>
 									)}
 								</div>
@@ -439,7 +456,22 @@ export function ToolsPage() {
 					</div>
 				</div>
 			) : (
-				<ListEmptyState title="No tools found" />
+				<ListEmptyState
+					title="No tools yet"
+					description="A tool is Python code a model can call while it answers, such as a calculator or a web lookup."
+					action={
+						<Button size="sm" type="button" onClick={() => navigate(routePaths.workspaceToolsCreate)}>
+							New tool
+						</Button>
+					}
+					query={query}
+					filtered={viewOption !== ''}
+					onClear={() => {
+						setQuery('');
+						localStorage.workspaceViewOption = '';
+						setViewOption('');
+					}}
+				/>
 			)}
 		</div>
 	);

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { addUser } from '@/lib/apis/auths';
 import { deleteUserById, getUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -15,6 +16,7 @@ vi.mock('@/lib/apis/users', () => ({
 	getUsers: vi.fn(),
 	getUserGroupsById: vi.fn().mockResolvedValue([])
 }));
+vi.mock('@/lib/apis/auths', () => ({ addUser: vi.fn() }));
 vi.mock('./UserChatsModal', () => ({
 	UserChatsModal: ({ open, user }: { open: boolean; user: { name: string } }) =>
 		open ? <div role="dialog">Chats of {user.name}</div> : null
@@ -44,9 +46,9 @@ beforeEach(() => {
 	} as never);
 });
 
-const renderList = async () => {
+const renderList = async (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) => {
 	render(
-		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+		<QueryClientProvider client={client}>
 			<MemoryRouter>
 				<TooltipProvider>
 					<UserList />
@@ -92,6 +94,27 @@ describe('UserList', () => {
 		expect(deleteUserById).not.toHaveBeenCalled();
 		fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 		await waitFor(() => expect(deleteUserById).toHaveBeenCalledWith('tok', 'b'));
+	});
+
+	it('recounts the accounts after a delete, so the workspace shows owners again without a reload', async () => {
+		vi.mocked(deleteUserById).mockResolvedValue(true as never);
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		client.setQueryData(['account-count'], 2);
+		await renderList(client);
+		fireEvent.click(screen.getByRole('button', { name: 'Delete User' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+		await waitFor(() => expect(client.getQueryState(['account-count'])?.isInvalidated).toBe(true));
+	});
+
+	it('recounts the accounts after a user is added (the form and the CSV import both report through onSaved)', async () => {
+		vi.mocked(addUser).mockResolvedValue({ id: 'c' } as never);
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		client.setQueryData(['account-count'], 1);
+		await renderList(client);
+		fireEvent.click(screen.getByRole('button', { name: 'Add User' }));
+		const dialog = await screen.findByRole('dialog');
+		fireEvent.submit(dialog.querySelector('form') as HTMLFormElement);
+		await waitFor(() => expect(client.getQueryState(['account-count'])?.isInvalidated).toBe(true));
 	});
 
 	it('opens the Add User dialog', async () => {

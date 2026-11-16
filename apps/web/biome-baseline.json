@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 691,
+	"total": 681,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -113,7 +113,6 @@
 			"lint/a11y/noLabelWithoutControl": 1
 		},
 		"apps/web/src/components/common/ValvesModal.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 1,
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/components/common/advancedParamDefs.test.ts": {
@@ -199,8 +198,7 @@
 			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/lib/apis/files/index.ts": {
-			"lint/complexity/useOptionalChain": 1,
-			"lint/style/useConst": 2
+			"lint/complexity/useOptionalChain": 1
 		},
 		"apps/web/src/lib/apis/folders/index.ts": {
 			"lint/suspicious/noExplicitAny": 3
@@ -594,7 +592,7 @@
 			"lint/suspicious/noExplicitAny": 3
 		},
 		"apps/web/src/routes/chat/ChatMessages.tsx": {
-			"lint/a11y/useAriaPropsSupportedByRole": 3,
+			"lint/a11y/useAriaPropsSupportedByRole": 2,
 			"lint/suspicious/noArrayIndexKey": 3
 		},
 		"apps/web/src/routes/chat/ChatPage.tsx": {
@@ -666,7 +664,6 @@
 		},
 		"apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx": {
 			"lint/a11y/noLabelWithoutControl": 1,
-			"lint/a11y/useValidAnchor": 1,
 			"lint/correctness/useExhaustiveDependencies": 1,
 			"lint/suspicious/noExplicitAny": 1
 		},
@@ -683,18 +680,8 @@
 		"apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts": {
 			"lint/suspicious/noExplicitAny": 8
 		},
-		"apps/web/src/routes/workspace/models/EditorPickers.tsx": {
-			"lint/a11y/noAutofocus": 2
-		},
-		"apps/web/src/routes/workspace/models/KnowledgePicker.tsx": {
-			"lint/a11y/noAutofocus": 1,
-			"lint/a11y/noLabelWithoutControl": 1
-		},
 		"apps/web/src/routes/workspace/models/ModelEditor.tsx": {
 			"lint/suspicious/noExplicitAny": 8
-		},
-		"apps/web/src/routes/workspace/models/ModelPages.tsx": {
-			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/routes/workspace/models/ModelsPage.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 2,

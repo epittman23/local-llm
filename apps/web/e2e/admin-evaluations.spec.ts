@@ -223,7 +223,7 @@ test.describe('admin feedback', () => {
 		await page.getByRole('button', { name: 'Feedback Menu' }).click();
 		await page.getByRole('menuitem', { name: 'Delete' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/feedback/fb_1')).toBe(true);
-		await expect(page.getByText('No feedback found')).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'No feedback yet' })).toBeVisible();
 	});
 
 	test('export offers JSON and CSV', async ({ page }) => {

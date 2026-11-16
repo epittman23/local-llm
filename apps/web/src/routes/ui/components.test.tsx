@@ -1,9 +1,21 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DataSection, FormsSection, NavigationSection, StatesSection, StatusBadge } from './components';
 
-const inProvider = (node: React.ReactNode) => render(<TooltipProvider>{node}</TooltipProvider>);
+// The Forms demo's unsaved-changes guard blocks navigation, which needs a data router.
+const inProvider = (node: React.ReactNode) => {
+	const router = createMemoryRouter(
+		[
+			{ path: '/ui', element: <TooltipProvider>{node}</TooltipProvider> },
+			{ path: '/elsewhere', element: <p>Elsewhere</p> }
+		],
+		{ initialEntries: ['/ui'] }
+	);
+	render(<RouterProvider router={router} />);
+	return router;
+};
 
 describe('/ui components', () => {
 	it.each([
@@ -29,6 +41,15 @@ describe('/ui components', () => {
 		inProvider(<DataSection />);
 		const region = screen.getByRole('region', { name: 'Runs' });
 		expect(within(region).getByRole('table')).toBeInTheDocument();
+	});
+
+	it('demonstrates a long name in a field that grows to show all of it (FRM-4)', () => {
+		inProvider(<FormsSection />);
+		const field = screen.getByRole('textbox', { name: 'Tool name' });
+		expect(field).toHaveAttribute('rows', '1');
+		expect((field as HTMLTextAreaElement).value.length).toBeGreaterThan(140);
+		expect(field.className).not.toMatch(/max-h-/);
+		expect(screen.getByText(/wraps and grows to show the whole name, however long/)).toBeInTheDocument();
 	});
 
 	it('demonstrates a native select beside the shared one (FRM-4)', () => {
@@ -138,5 +159,40 @@ describe('/ui components', () => {
 		expect(within(gone).getByRole('heading', { level: 4 })).toHaveTextContent('This chat no longer exists.');
 		expect(within(gone).getByRole('button', { name: 'New chat' })).toBeInTheDocument();
 		expect(within(gone).getByRole('button', { name: 'Search chats' })).toBeInTheDocument();
+	});
+
+	it('guards the form with the shared useUnsavedChanges: leaving with changes asks first (FRM-3)', async () => {
+		const router = inProvider(<FormsSection />);
+		fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'demo-b' } });
+		act(() => void router.navigate('/elsewhere'));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(within(ask).getByRole('button', { name: 'Discard changes' })).toHaveAttribute('data-variant', 'destructive');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Keep editing' }));
+		expect(router.state.location.pathname).toBe('/ui');
+		expect(screen.getByLabelText('Profile name')).toHaveValue('demo-b');
+	});
+
+	it('puts a field error in place of its help with the shared FieldMessage (FRM-2)', () => {
+		inProvider(<FormsSection />);
+		const field = screen.getByLabelText('Context size, tokens');
+		const help = document.getElementById(field.getAttribute('aria-describedby') as string);
+		expect(help).toHaveAttribute('data-slot', 'field-message');
+		expect(help).toHaveTextContent('512 to 32768.');
+		fireEvent.change(field, { target: { value: '40000' } });
+		fireEvent.blur(field);
+		expect(field).toHaveAttribute('aria-invalid', 'true');
+		expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number of tokens between 512 and 32768.');
+	});
+
+	it('shows the shared empty state in its three modes: fresh, searched and filtered (STA-3)', () => {
+		inProvider(<StatesSection />);
+		const states = document.getElementById('states') as HTMLElement;
+		expect(within(states).getByRole('heading', { name: 'No prompts yet' })).toBeInTheDocument();
+		fireEvent.click(within(states).getByRole('button', { name: 'No results' }));
+		expect(within(states).getByRole('heading', { name: 'Nothing matches “regresion”' })).toBeInTheDocument();
+		fireEvent.click(within(states).getByRole('button', { name: 'Filtered out' }));
+		expect(within(states).getByRole('heading', { name: 'Nothing matches these filters' })).toBeInTheDocument();
+		fireEvent.click(within(states).getByRole('button', { name: 'Clear filters' }));
+		expect(within(states).getByRole('heading', { name: 'No prompts yet' })).toBeInTheDocument();
 	});
 });

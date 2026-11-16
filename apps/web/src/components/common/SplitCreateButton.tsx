@@ -35,11 +35,14 @@ export function SplitCreateButton({ actions, label = 'Create' }: { actions: Work
 
 	if (visible.length === 0) return null;
 
+	// LAY-1, #1011: one action is drawn in the same frame as several, so the header keeps its height between sections.
 	if (visible.length === 1) {
 		return (
-			<Button variant="outline" size="sm" onClick={() => run(primary)}>
-				{label}
-			</Button>
+			<div className="flex overflow-hidden rounded-lg border">
+				<Button variant="ghost" size="sm" className="rounded-none" onClick={() => run(primary)}>
+					{label}
+				</Button>
+			</div>
 		);
 	}
 
