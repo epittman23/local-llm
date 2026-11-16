@@ -58,11 +58,22 @@ describe('content', () => {
 		});
 		expect(contentFromMarkdown()).toEqual({ json: null, html: '', md: '' });
 	});
-	it('the editor loads json, else html, else rendered markdown', () => {
+	it('the editor loads json, else rendered markdown, else html', () => {
 		expect(editorContent({ json: { type: 'doc' }, html: '<p>x</p>' })).toEqual({ type: 'doc' });
-		expect(editorContent({ html: '<p>x</p>', md: 'y' })).toBe('<p>x</p>');
 		expect(editorContent({ md: '**y**' })).toContain('<strong>y</strong>');
+		expect(editorContent({ md: '', html: '<p>x</p>' })).toBe('<p>x</p>');
 		expect(editorContent(null)).toBe('');
+	});
+	it('loads a note imported before #1134 from its Markdown, not its lossy html', () => {
+		// What Import stored then: the ticks gone from the html, kept in the Markdown.
+		const stored = {
+			json: null,
+			html: '<ul><li>residual plot</li><li>QQ plot</li></ul>',
+			md: '- [ ] residual plot\n- [x] QQ plot'
+		};
+		const html = editorContent(stored) as string;
+		expect(html).toContain('data-type="taskList"');
+		expect(html).toContain('data-checked="true"');
 	});
 	it('imports only md/txt; names files safely; counts words', () => {
 		expect(importableNote({ name: 'Plan.MD', type: '' })).toEqual({ title: 'Plan' });

@@ -46,11 +46,17 @@ export const contentFromMarkdown = (md = '', html?: string): NoteContent => ({
 	md
 });
 
-/** What the editor loads: the JSON if there is any, else the HTML, else the Markdown rendered. */
+/**
+ * What the editor loads: the JSON the editor saved, if there is any; else the
+ * Markdown rendered; else the HTML. A note no editor has saved yet (Import, a
+ * `?content=` link) has no JSON, and its HTML was rendered from its Markdown
+ * when it was made. Before #1134 that rendering dropped task-list ticks, so
+ * the Markdown it came from is the copy to trust.
+ */
 export function editorContent(c: Partial<NoteContent> | null | undefined): unknown {
 	if (c?.json) return c.json;
-	if (c?.html) return c.html;
-	return c?.md ? markdownToHtml(c.md) : '';
+	if (c?.md) return markdownToHtml(c.md);
+	return c?.html ?? '';
 }
 
 /** Only .md and .txt become notes; the title is the file name without its extension. */
