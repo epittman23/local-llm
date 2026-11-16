@@ -35,31 +35,35 @@ async function mockConfigApi(
 
 const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
 
-test.describe('settings modal host', () => {
-	test('?settings=admin:<tab> opens the modal on that tab and keeps it in the address (NAV-1)', async ({ page }) => {
+test.describe('server settings pages (S5-D1, #932)', () => {
+	// The server's settings are pages under Admin; the dialog keeps personal settings.
+	const server = (page: Page) => page.getByRole('region', { name: 'Server settings' });
+
+	test('?settings=admin:<tab> is replaced with its page under Admin (NAV-1)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', {
 			'/configs/code_execution': { ENABLE_CODE_EXECUTION: false, ENABLE_CODE_INTERPRETER: false }
 		});
 		await page.goto('/?settings=admin:code-execution');
-		await expect(modal(page)).toBeVisible();
-		await expect(modal(page).getByRole('tab', { name: 'Code Execution', selected: true })).toBeVisible();
-		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
-		await expect(page).toHaveURL(/\?settings=admin(%3A|:)code-execution$/);
-		await expect(page).toHaveTitle('Settings · local-llm');
-		await modal(page).getByRole('button', { name: 'Close' }).click();
+		await expect(page).toHaveURL(/\/admin\/settings\/code-execution$/);
 		await expect(modal(page)).toHaveCount(0);
-		await expect(page).toHaveURL(/localhost:5174\/$/);
+		await expect(server(page).getByRole('tab', { name: 'Code Execution', selected: true })).toBeVisible();
+		await expect(server(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
+		await expect(page).toHaveTitle('Code Execution · Settings · local-llm');
 	});
 
-	test('/admin/settings/<tab> redirects into the modal; its close button closes it', async ({ page }) => {
+	test('/admin/settings/<tab> is a page: it survives a reload, and Back leaves it', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/utils', {});
+		await page.goto('/');
+		await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 		await page.goto('/admin/settings/db');
-		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
-		await expect(modal(page).getByRole('button', { name: 'Back' })).toHaveCount(0);
-		await modal(page).getByRole('button', { name: 'Close' }).click();
+		await expect(server(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
 		await expect(modal(page)).toHaveCount(0);
+		await page.reload();
+		await expect(server(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
+		await page.goBack();
+		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
 	test('opened from the app it adds a history entry: Back closes it (NAV-1)', async ({ page }) => {
@@ -77,13 +81,16 @@ test.describe('settings modal host', () => {
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
-	test('the Settings tab in the admin layout opens the modal', async ({ page }) => {
+	test('the Settings tab in the admin layout opens the first server settings page', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.route('**/api/v1/users/**', (route) => json(route, { users: [], total: 0 }));
 		await page.route('**/api/v1/groups/**', (route) => json(route, []));
 		await page.goto('/admin/users/overview');
 		await page.getByRole('link', { name: 'Settings', exact: true }).click();
-		await expect(modal(page)).toBeVisible();
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('Server: General');
+		await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('aria-current', 'page');
+		await expect(modal(page)).toHaveCount(0);
 	});
 
 	test('a non-admin asking for an admin tab gets no modal, and the param is dropped', async ({ page }) => {
@@ -94,43 +101,50 @@ test.describe('settings modal host', () => {
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});
 
-	test('an unimplemented or unknown tab falls back to the first listed', async ({ page }) => {
+	test('an unknown tab goes back to the list, which opens its first tab', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		await page.route('**/openai/config', (route) =>
-			json(route, { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} })
-		);
-		await page.route('**/ollama/config', (route) =>
-			json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {} })
-		);
 		await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:nonsense');
-		// Whatever is first in the list, not whatever was asked for. Wait for the
-		// selected tab's body first: reading the list the instant the dialog
-		// appears raced the lazy tab chunk on a busy dev server. (Not "any h2":
-		// the dialog's screen-reader title is one too, so that matched two.)
-		const first = ((await modal(page).getByRole('tab').first().textContent()) ?? '').trim();
-		await expect(modal(page).getByRole('heading', { level: 2, name: first, exact: true })).toBeVisible();
-		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(server(page).getByRole('tab', { selected: true })).toHaveAccessibleName('Server: General');
 	});
 
-	test('search finds tabs and settings, opens the chosen one, and says when nothing matches (#1001)', async ({
+	test('search finds server tabs from the dialog and on the page, and says when nothing matches (#1001)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
 		await mockConfigApi(page, '/configs', { '/configs/code_execution': {} });
-		await page.goto('/?settings=admin:db');
-		const search = modal(page).getByLabel('Search');
+		await mockConfigApi(page, '/utils', {});
+		await page.goto('/?settings=interface');
+		const search = modal(page).getByRole('combobox', { name: 'Search settings' });
 		await search.fill('sandbox');
 		await expect(modal(page).getByRole('option')).toHaveText(['Code Execution']);
 		// The open tab stays while searching.
-		await expect(modal(page).getByRole('heading', { name: 'Database', level: 2 })).toBeVisible();
+		await expect(modal(page).getByRole('heading', { name: 'Interface', level: 2 })).toBeVisible();
 		await search.press('Enter');
-		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText('Code Execution');
-		await search.fill('zzzz');
-		await expect(modal(page).getByText('No settings match ‘zzzz’.')).toBeVisible();
-		await expect(modal(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
-		await search.fill('');
-		await expect(modal(page).getByRole('tab').first()).toBeVisible();
+		await expect(page).toHaveURL(/\/admin\/settings\/code-execution$/);
+		await expect(modal(page)).toHaveCount(0);
+		const pageSearch = server(page).getByRole('searchbox', { name: 'Search server settings' });
+		await pageSearch.fill('database');
+		await expect(server(page).getByRole('tab')).toHaveText(['Database']);
+		await pageSearch.fill('zzzz');
+		await expect(server(page).getByText('No server settings match ‘zzzz’.')).toBeVisible();
+		await expect(server(page).getByRole('heading', { name: 'Code Execution', level: 2 })).toBeVisible();
+		await server(page).getByRole('button', { name: 'Clear search' }).click();
+		await expect(server(page).getByRole('tab').first()).toBeVisible();
+	});
+
+	test('the dialog’s “Server settings” row leaves for the pages, and Back returns to the dialog', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockConfigApi(page, '/configs', {});
+		await page.goto('/?settings=general');
+		await expect(modal(page).getByRole('tab', { name: /Server/ })).toHaveCount(0);
+		await modal(page).getByRole('button', { name: 'Server settings' }).click();
+		await expect(page).toHaveURL(/\/admin\/settings\/general$/);
+		await expect(modal(page)).toHaveCount(0);
+		await page.goBack();
+		await expect(modal(page)).toBeVisible();
+		await expect(page).toHaveURL(/\?settings=general$/);
 	});
 
 	test('the user menu offers Settings to an admin', async ({ page }) => {

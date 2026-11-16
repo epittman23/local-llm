@@ -28,15 +28,17 @@ test.describe('personal settings', () => {
 		await expect(modal(page).getByRole('tab', { name: 'General', selected: true })).toBeVisible();
 		await expect(modal(page).getByRole('tab', { name: 'Account' })).toBeVisible();
 		await expect(modal(page).getByRole('tab', { name: 'Code Execution' })).toHaveCount(0);
+		await expect(modal(page).getByRole('button', { name: 'Server settings' })).toHaveCount(0);
 	});
 
-	test('an admin sees the personal tabs first, then the admin ones', async ({ page }) => {
+	test('an admin sees the personal tabs, then a link to the server settings (S5-D1)', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUserSettings(page);
 		await page.goto('/?settings=about');
 		const tabs = modal(page).getByRole('tab');
 		await expect(tabs.first()).toHaveText('General');
-		await expect(modal(page).getByRole('tab', { name: 'Database' })).toBeVisible();
+		await expect(modal(page).getByRole('tab', { name: 'Database' })).toHaveCount(0);
+		await expect(modal(page).getByRole('button', { name: 'Server settings' })).toBeVisible();
 		await expect(modal(page).getByRole('heading', { name: 'About', level: 2 })).toBeVisible();
 		await expect(modal(page).getByText(/Open WebUI Inc\. \[Created by Timothy Jaeryang Baek\]/)).toBeVisible();
 	});
