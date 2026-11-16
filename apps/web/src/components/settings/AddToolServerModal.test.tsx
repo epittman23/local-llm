@@ -197,4 +197,21 @@ describe('AddToolServerModal (#933)', () => {
 		fireEvent.click(within(ask).getByRole('button', { name: 'Delete connection' }));
 		await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
 	});
+
+	it('stays open when the save is refused', async () => {
+		const onSubmit = vi.fn(async () => {
+			throw new Error('refused');
+		});
+		const onOpenChange = vi.fn();
+		render(
+			<TooltipProvider>
+				<AddToolServerModal open onOpenChange={onOpenChange} onSubmit={onSubmit} />
+			</TooltipProvider>
+		);
+		type(url(), 'https://tools.example.com');
+		save();
+		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+		expect(onOpenChange).not.toHaveBeenCalledWith(false);
+	});
 });

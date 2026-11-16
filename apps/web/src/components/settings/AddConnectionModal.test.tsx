@@ -220,4 +220,17 @@ describe('AddConnectionModal (#933)', () => {
 		await waitFor(() => expect(auth).toHaveAccessibleDescription("Sends the signed-in user's session credentials."));
 		expect(screen.queryByLabelText(/API key/)).toBeNull();
 	});
+
+	it('stays open with what was entered when the save is refused', async () => {
+		const onSubmit = vi.fn(async () => {
+			throw new Error('refused');
+		});
+		const { onOpenChange } = renderModal({ onSubmit });
+		type(url(), 'https://openrouter.ai/api/v1');
+		save();
+		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+		expect(onOpenChange).not.toHaveBeenCalledWith(false);
+		expect(url()).toHaveValue('https://openrouter.ai/api/v1');
+	});
 });

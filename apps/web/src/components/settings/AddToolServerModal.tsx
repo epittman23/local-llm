@@ -227,6 +227,9 @@ export function AddToolServerModal({
 		setLoading(true);
 		try {
 			await onSubmit(buildToolServer(checked.fields, checked.headers));
+		} catch {
+			// The caller has said why; the dialog stays open with what was entered.
+			return;
 		} finally {
 			setLoading(false);
 		}

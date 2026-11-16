@@ -255,6 +255,8 @@ export function AddTerminalServerModal({
 			}
 			await onSubmit(result);
 			onOpenChange(false);
+		} catch {
+			// The caller has said why; the dialog stays open with what was entered.
 		} finally {
 			setSaving(false);
 		}

@@ -196,6 +196,9 @@ export function AddConnectionModal({
 		setLoading(true);
 		try {
 			await onSubmit(buildConnection(f, mode, headers.value));
+		} catch {
+			// The caller has said why; the dialog stays open with what was entered.
+			return;
 		} finally {
 			setLoading(false);
 		}

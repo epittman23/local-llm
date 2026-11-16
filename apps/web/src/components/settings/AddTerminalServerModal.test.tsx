@@ -200,4 +200,21 @@ describe('AddTerminalServerModal (#933)', () => {
 		fireEvent.click(within(ask).getByRole('button', { name: 'Delete connection' }));
 		await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
 	});
+
+	it('stays open when the save is refused', async () => {
+		const onSubmit = vi.fn(async () => {
+			throw new Error('refused');
+		});
+		const onOpenChange = vi.fn();
+		render(
+			<TooltipProvider>
+				<AddTerminalServerModal open onOpenChange={onOpenChange} onSubmit={onSubmit} />
+			</TooltipProvider>
+		);
+		fireEvent.change(url(), { target: { value: 'http://localhost:9900' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+		expect(onOpenChange).not.toHaveBeenCalledWith(false);
+	});
 });
