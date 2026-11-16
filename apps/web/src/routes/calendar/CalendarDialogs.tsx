@@ -504,7 +504,7 @@ export function CalendarDialog({
 										else picker.click();
 									}}
 								>
-									{!custom && <Palette aria-hidden />}
+									{!custom && <Palette aria-hidden className="size-4" />}
 								</Button>
 							</Tip>
 							<input
