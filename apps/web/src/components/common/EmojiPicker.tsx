@@ -20,11 +20,14 @@ export function EmojiPicker({
 	children,
 	onSubmit,
 	onOpenChange,
+	onCloseAutoFocus,
 	open: openProp
 }: {
 	children: ReactNode;
 	onSubmit: (name: string) => void;
 	onOpenChange?: (open: boolean) => void;
+	/** Where focus goes on close, for an owner that opened it from something that has gone (a menu item). */
+	onCloseAutoFocus?: (event: Event) => void;
 	open?: boolean;
 }) {
 	const [openState, setOpen] = useState(false);
@@ -50,7 +53,13 @@ export function EmojiPicker({
 			) : (
 				<PopoverTrigger asChild>{children}</PopoverTrigger>
 			)}
-			<PopoverContent align="end" side="top" collisionPadding={8} className="w-72 p-2">
+			<PopoverContent
+				align="end"
+				side="top"
+				collisionPadding={8}
+				className="w-72 p-2"
+				onCloseAutoFocus={onCloseAutoFocus}
+			>
 				<Input
 					autoFocus
 					value={search}

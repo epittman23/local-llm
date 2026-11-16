@@ -467,14 +467,24 @@ function TouchActions({
 	// The picker opens once the menu has closed and given focus back: opened at
 	// once, the menu's closing took focus out of it and closed it again.
 	const pickNext = useRef(false);
+	const trigger = useRef<HTMLButtonElement>(null);
 	const editable = mine && (actions.onEdit || actions.onDelete);
 	return (
 		<div className="hidden shrink-0 self-start pointer-coarse:flex">
-			<EmojiPicker open={picking} onOpenChange={setPicking} onSubmit={(name) => actions.onReaction?.(message, name)}>
+			<EmojiPicker
+				open={picking}
+				onOpenChange={setPicking}
+				onSubmit={(name) => actions.onReaction?.(message, name)}
+				// NAV-4: the menu item that opened it has gone; focus goes back to Message actions.
+				onCloseAutoFocus={(e) => {
+					e.preventDefault();
+					trigger.current?.focus({ preventScroll: true });
+				}}
+			>
 				<span>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button type="button" variant="ghost" size="icon" aria-label="Message actions">
+							<Button ref={trigger} type="button" variant="ghost" size="icon" aria-label="Message actions">
 								<MoreHorizontal />
 							</Button>
 						</DropdownMenuTrigger>

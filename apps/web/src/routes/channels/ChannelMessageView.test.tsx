@@ -183,6 +183,8 @@ describe('a message on touch (A11Y-4, #914)', () => {
 		fireEvent.click(await screen.findByRole('menuitem', { name: 'Add reaction' }));
 		expect(await screen.findByLabelText('Search emojis')).toBeInTheDocument();
 		fireEvent.keyDown(screen.getByLabelText('Search emojis'), { key: 'Escape' });
+		// NAV-4: its menu item has gone, so focus goes back to Message actions, not the page body.
+		await waitFor(() => expect(document.activeElement).toBe(trigger));
 		fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
 		fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
 		fireEvent.click(await screen.findByRole('button', { name: 'Delete message' }));
