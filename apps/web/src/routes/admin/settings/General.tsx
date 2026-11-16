@@ -106,12 +106,12 @@ export function DefaultInterfaceSettings({
 	const defaults = interfaceDefaults(value);
 	const count = Object.keys(defaults).length;
 	const counted = `${count} ${count === 1 ? 'setting' : 'settings'}`;
-	// #960: the panel opens below the last row of the tab, so bring it into view.
+	// #960: the panel opens below the last row of the tab, so bring the row and its panel into view.
 	useEffect(() => {
 		if (open) panel.current?.scrollIntoView?.({ block: 'nearest' });
 	}, [open]);
 	return (
-		<div>
+		<div ref={panel}>
 			<RowButton
 				className="-mx-2 flex items-start justify-between gap-4 px-2 py-2"
 				aria-expanded={open}
@@ -133,7 +133,7 @@ export function DefaultInterfaceSettings({
 				/>
 			</RowButton>
 			{open && (
-				<div id={panelId} ref={panel} className="mt-2 space-y-2">
+				<div id={panelId} className="mt-2 space-y-2 rounded-lg border p-3">
 					<div className="flex items-center justify-between gap-4">
 						<div className="text-foreground-muted text-dense">{counted} configured</div>
 						{count > 0 && (
