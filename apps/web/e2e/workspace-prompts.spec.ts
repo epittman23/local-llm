@@ -276,7 +276,9 @@ test.describe('workspace prompts', () => {
 		const { calls } = await mockPromptsApi(page, [makePrompt(1)]);
 		await page.goto('/workspace/prompts/p1');
 		await page.getByLabel('Command').fill('bad command');
-		await expect(page.getByRole('alert')).toHaveText('Use only letters, numbers, hyphens and underscores.');
+		await expect(page.getByRole('main').getByRole('alert')).toHaveText(
+			'Use only letters, numbers, hyphens and underscores.'
+		);
 		await expect(page.getByLabel('Command')).toHaveValue('bad command');
 		expect(calls.some((c) => c.path.endsWith('/update/meta'))).toBe(false);
 	});
