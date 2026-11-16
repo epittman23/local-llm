@@ -706,7 +706,9 @@ confirmation, 32 rem for a short form, 48 rem for a large one. A two-pane
 dialog, a tab list beside a 40 rem form (Settings), is 64 rem. Anything bigger
 is a page (NAV-1). A dialog is never taller than the viewport less 1 rem each
 side; content taller than that scrolls inside it. A tall form puts its fields
-in `DialogBody`, so the header and the footer's buttons stay pinned.
+in `DialogBody`, so the header and the footer's buttons stay pinned; a
+`<form>` may hold the body and its buttons (Admin's connection, tool server,
+terminal and knowledge source dialogs), so Enter still submits it.
 
 **OVL-2. Dialogs and menus sit on `--surface-2` with an edge and a shadow**,
 over `--scrim`. Focus is trapped inside a dialog and returns on close (NAV-4).

@@ -7,7 +7,14 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { FieldMessage } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -324,287 +331,293 @@ export function AddToolServerModal({
 					/>
 					<form
 						noValidate
-						className="flex flex-col gap-4"
+						className="flex min-h-0 flex-1 flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							void submit();
 						}}
 					>
-						{!direct && (
-							<div className="flex flex-col">
-								<FieldLabel>
-									<span id={id('type-label')}>Server type</span>
-								</FieldLabel>
-								<SegmentedControl
-									aria-labelledby={id('type-label')}
-									value={f.type === 'mcp' ? 'mcp' : 'openapi'}
-									onValueChange={(type) => set({ type })}
-									options={[
-										{ value: 'openapi', label: 'OpenAPI' },
-										{ value: 'mcp', label: 'MCP' }
-									]}
-									className="self-start"
-								/>
-								{f.type === 'mcp' && (
-									<FieldMessage
-										id={id('type-help')}
-										className="mt-1.5"
-										help="MCP over Streamable HTTP. Its support is experimental and its specification changes often, so a server may stop working after an update. OpenAPI is the steadier choice."
-									/>
-								)}
-							</div>
-						)}
-
-						<div className="grid gap-4 sm:grid-cols-2">
-							<FormField id={id('name')} label="Name" optional>
-								{(props) => (
-									<Input {...props} value={f.name} onChange={(e) => set({ name: e.target.value })} autoComplete="off" />
-								)}
-							</FormField>
+						<DialogBody>
 							{!direct && (
-								<FormField
-									id={id('id')}
-									label="ID"
-									optional={f.type !== 'mcp'}
-									help={f.type === 'mcp' ? undefined : 'Empty: one is made for it.'}
-									error={errors.id}
-								>
-									{(props) => (
-										<Input
-											{...props}
-											className="font-mono"
-											value={f.id}
-											onChange={(e) => set({ id: e.target.value })}
-											autoComplete="off"
+								<div className="flex flex-col">
+									<FieldLabel>
+										<span id={id('type-label')}>Server type</span>
+									</FieldLabel>
+									<SegmentedControl
+										aria-labelledby={id('type-label')}
+										value={f.type === 'mcp' ? 'mcp' : 'openapi'}
+										onValueChange={(type) => set({ type })}
+										options={[
+											{ value: 'openapi', label: 'OpenAPI' },
+											{ value: 'mcp', label: 'MCP' }
+										]}
+										className="self-start"
+									/>
+									{f.type === 'mcp' && (
+										<FieldMessage
+											id={id('type-help')}
+											className="mt-1.5"
+											help="MCP over Streamable HTTP. Its support is experimental and its specification changes often, so a server may stop working after an update. OpenAPI is the steadier choice."
 										/>
-									)}
-								</FormField>
-							)}
-						</div>
-
-						<FormField id={id('description')} label="Description" optional>
-							{(props) => (
-								<Input
-									{...props}
-									value={f.description}
-									onChange={(e) => set({ description: e.target.value })}
-									autoComplete="off"
-								/>
-							)}
-						</FormField>
-
-						<ConnectionUrlField
-							id={id('url')}
-							value={f.url}
-							onChange={(url) => set({ url })}
-							placeholder="https://tools.example.com"
-							error={errors.url}
-							testLabel={oauth ? 'Check OAuth discovery' : 'Test connection'}
-							onTest={test}
-						/>
-
-						<SwitchField
-							id={id('enable')}
-							label="Enabled"
-							checked={f.enable}
-							onCheckedChange={(enable) => set({ enable })}
-						/>
-
-						<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]} error={errors.auth}>
-							{(props) => (
-								<SelectField
-									{...props}
-									className="sm:w-60"
-									value={f.authType}
-									onChange={(authType) => set({ authType })}
-									options={authOptions}
-								/>
-							)}
-						</FormField>
-						{f.authType === 'bearer' && (
-							<FormField id={id('key')} label="API key" optional>
-								{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
-							</FormField>
-						)}
-						{f.authType === 'oauth_2.1_static' && (
-							<>
-								<FormField id={id('client-id')} label="Client ID">
-									{(props) => (
-										<SecretInput
-											{...props}
-											value={f.oauthClientId}
-											onChange={(oauthClientId) => set({ oauthClientId })}
-										/>
-									)}
-								</FormField>
-								<FormField id={id('client-secret')} label="Client secret">
-									{(props) => (
-										<SecretInput
-											{...props}
-											value={f.oauthClientSecret}
-											onChange={(oauthClientSecret) => set({ oauthClientSecret })}
-										/>
-									)}
-								</FormField>
-								<FormField id={id('oauth-server')} label="OAuth server URL" optional>
-									{(props) => (
-										<Input
-											{...props}
-											type="url"
-											value={f.oauthServerUrl}
-											onChange={(e) => set({ oauthServerUrl: e.target.value })}
-											autoComplete="off"
-										/>
-									)}
-								</FormField>
-							</>
-						)}
-						{oauth && (
-							<div className="flex flex-col gap-1.5">
-								<div className="flex flex-wrap items-center gap-2">
-									<Badge variant={f.oauthClientInfo ? 'success' : 'warning'}>
-										{f.oauthClientInfo ? 'Registered' : 'Not registered'}
-									</Badge>
-									<Button variant="outline" size="sm" type="button" onClick={register}>
-										{f.oauthClientInfo ? 'Register again' : 'Register client'}
-									</Button>
-									{Boolean(f.oauthClientInfo) && (
-										<Button variant="outline" size="sm" type="button" disabled={!edit} onClick={authorize}>
-											Authorize
-										</Button>
 									)}
 								</div>
-								<FieldMessage
-									id={id('registration')}
-									error={registration}
-									help={f.oauthClientInfo && !edit ? 'Save the connection first, then authorize it.' : undefined}
-								/>
-							</div>
-						)}
+							)}
 
-						<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
-							<div className="flex flex-col gap-4">
-								{f.type === 'openapi' && (
-									<div className="flex flex-col gap-4">
-										<div className="flex flex-col">
-											<FieldLabel>
-												<span id={id('spec-label')}>OpenAPI spec</span>
-											</FieldLabel>
-											<SegmentedControl
-												aria-labelledby={id('spec-label')}
-												value={f.specType}
-												onValueChange={(specType) => set({ specType })}
-												options={[
-													{ value: 'url', label: 'From a URL' },
-													{ value: 'json', label: 'JSON' }
-												]}
-												className="self-start"
-											/>
-										</div>
-										{f.specType === 'url' ? (
-											<FormField
-												id={id('path')}
-												label="Spec path or URL"
-												// An OpenAPI server's URL is saved without its trailing slash.
-												help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
-												error={errors.path}
-											>
-												{(props) => (
-													<Input
-														{...props}
-														value={f.path}
-														onChange={(e) => set({ path: e.target.value })}
-														autoComplete="off"
-													/>
-												)}
-											</FormField>
-										) : (
-											<FormField id={id('spec')} label="Spec" error={errors.spec}>
-												{(props) => (
-													<Textarea
-														{...props}
-														className="font-mono"
-														rows={5}
-														value={f.spec}
-														onChange={(e) => set({ spec: e.target.value })}
-													/>
-												)}
-											</FormField>
-										)}
-									</div>
-								)}
-
-								{f.type === 'mcp' && oauth && (
-									<>
-										<FormField
-											id={id('scope')}
-											label="OAuth scopes"
-											optional
-											help="Empty: the scopes the server advertises."
-										>
-											{(props) => (
-												<Input
-													{...props}
-													value={f.oauthScope}
-													onChange={(e) => set({ oauthScope: e.target.value })}
-													autoComplete="off"
-												/>
-											)}
-										</FormField>
-										<FormField id={id('resource')} label="OAuth resource parameter">
-											{(props) => (
-												<SelectField
-													{...props}
-													className="sm:w-60"
-													value={f.oauthResourceParameter}
-													onChange={(oauthResourceParameter) => set({ oauthResourceParameter })}
-													options={RESOURCE_PARAMETER}
-												/>
-											)}
-										</FormField>
-									</>
-								)}
-
+							<div className="grid gap-4 sm:grid-cols-2">
+								<FormField id={id('name')} label="Name" optional>
+									{(props) => (
+										<Input
+											{...props}
+											value={f.name}
+											onChange={(e) => set({ name: e.target.value })}
+											autoComplete="off"
+										/>
+									)}
+								</FormField>
 								{!direct && (
 									<FormField
-										id={id('headers')}
-										label="Headers"
-										optional
-										help='A JSON object, such as {"X-Custom-Header": "value"}.'
-										error={errors.headers}
-									>
-										{(props) => (
-											<Textarea
-												{...props}
-												className="font-mono"
-												value={f.headers}
-												onChange={(e) => set({ headers: e.target.value })}
-											/>
-										)}
-									</FormField>
-								)}
-
-								{!direct && (
-									<FormField
-										id={id('filter')}
-										label="Function name filter"
-										optional
-										help="Which of its functions chats may call, separated by commas: func1 allows one, !func2 leaves one out."
+										id={id('id')}
+										label="ID"
+										optional={f.type !== 'mcp'}
+										help={f.type === 'mcp' ? undefined : 'Empty: one is made for it.'}
+										error={errors.id}
 									>
 										{(props) => (
 											<Input
 												{...props}
-												value={f.functionNameFilterList}
-												onChange={(e) => set({ functionNameFilterList: e.target.value })}
+												className="font-mono"
+												value={f.id}
+												onChange={(e) => set({ id: e.target.value })}
 												autoComplete="off"
 											/>
 										)}
 									</FormField>
 								)}
 							</div>
-						</Disclosure>
 
-						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<FormField id={id('description')} label="Description" optional>
+								{(props) => (
+									<Input
+										{...props}
+										value={f.description}
+										onChange={(e) => set({ description: e.target.value })}
+										autoComplete="off"
+									/>
+								)}
+							</FormField>
+
+							<ConnectionUrlField
+								id={id('url')}
+								value={f.url}
+								onChange={(url) => set({ url })}
+								placeholder="https://tools.example.com"
+								error={errors.url}
+								testLabel={oauth ? 'Check OAuth discovery' : 'Test connection'}
+								onTest={test}
+							/>
+
+							<SwitchField
+								id={id('enable')}
+								label="Enabled"
+								checked={f.enable}
+								onCheckedChange={(enable) => set({ enable })}
+							/>
+
+							<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]} error={errors.auth}>
+								{(props) => (
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.authType}
+										onChange={(authType) => set({ authType })}
+										options={authOptions}
+									/>
+								)}
+							</FormField>
+							{f.authType === 'bearer' && (
+								<FormField id={id('key')} label="API key" optional>
+									{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+								</FormField>
+							)}
+							{f.authType === 'oauth_2.1_static' && (
+								<>
+									<FormField id={id('client-id')} label="Client ID">
+										{(props) => (
+											<SecretInput
+												{...props}
+												value={f.oauthClientId}
+												onChange={(oauthClientId) => set({ oauthClientId })}
+											/>
+										)}
+									</FormField>
+									<FormField id={id('client-secret')} label="Client secret">
+										{(props) => (
+											<SecretInput
+												{...props}
+												value={f.oauthClientSecret}
+												onChange={(oauthClientSecret) => set({ oauthClientSecret })}
+											/>
+										)}
+									</FormField>
+									<FormField id={id('oauth-server')} label="OAuth server URL" optional>
+										{(props) => (
+											<Input
+												{...props}
+												type="url"
+												value={f.oauthServerUrl}
+												onChange={(e) => set({ oauthServerUrl: e.target.value })}
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
+								</>
+							)}
+							{oauth && (
+								<div className="flex flex-col gap-1.5">
+									<div className="flex flex-wrap items-center gap-2">
+										<Badge variant={f.oauthClientInfo ? 'success' : 'warning'}>
+											{f.oauthClientInfo ? 'Registered' : 'Not registered'}
+										</Badge>
+										<Button variant="outline" size="sm" type="button" onClick={register}>
+											{f.oauthClientInfo ? 'Register again' : 'Register client'}
+										</Button>
+										{Boolean(f.oauthClientInfo) && (
+											<Button variant="outline" size="sm" type="button" disabled={!edit} onClick={authorize}>
+												Authorize
+											</Button>
+										)}
+									</div>
+									<FieldMessage
+										id={id('registration')}
+										error={registration}
+										help={f.oauthClientInfo && !edit ? 'Save the connection first, then authorize it.' : undefined}
+									/>
+								</div>
+							)}
+
+							<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+								<div className="flex flex-col gap-4">
+									{f.type === 'openapi' && (
+										<div className="flex flex-col gap-4">
+											<div className="flex flex-col">
+												<FieldLabel>
+													<span id={id('spec-label')}>OpenAPI spec</span>
+												</FieldLabel>
+												<SegmentedControl
+													aria-labelledby={id('spec-label')}
+													value={f.specType}
+													onValueChange={(specType) => set({ specType })}
+													options={[
+														{ value: 'url', label: 'From a URL' },
+														{ value: 'json', label: 'JSON' }
+													]}
+													className="self-start"
+												/>
+											</div>
+											{f.specType === 'url' ? (
+												<FormField
+													id={id('path')}
+													label="Spec path or URL"
+													// An OpenAPI server's URL is saved without its trailing slash.
+													help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
+													error={errors.path}
+												>
+													{(props) => (
+														<Input
+															{...props}
+															value={f.path}
+															onChange={(e) => set({ path: e.target.value })}
+															autoComplete="off"
+														/>
+													)}
+												</FormField>
+											) : (
+												<FormField id={id('spec')} label="Spec" error={errors.spec}>
+													{(props) => (
+														<Textarea
+															{...props}
+															className="font-mono"
+															rows={5}
+															value={f.spec}
+															onChange={(e) => set({ spec: e.target.value })}
+														/>
+													)}
+												</FormField>
+											)}
+										</div>
+									)}
+
+									{f.type === 'mcp' && oauth && (
+										<>
+											<FormField
+												id={id('scope')}
+												label="OAuth scopes"
+												optional
+												help="Empty: the scopes the server advertises."
+											>
+												{(props) => (
+													<Input
+														{...props}
+														value={f.oauthScope}
+														onChange={(e) => set({ oauthScope: e.target.value })}
+														autoComplete="off"
+													/>
+												)}
+											</FormField>
+											<FormField id={id('resource')} label="OAuth resource parameter">
+												{(props) => (
+													<SelectField
+														{...props}
+														className="sm:w-60"
+														value={f.oauthResourceParameter}
+														onChange={(oauthResourceParameter) => set({ oauthResourceParameter })}
+														options={RESOURCE_PARAMETER}
+													/>
+												)}
+											</FormField>
+										</>
+									)}
+
+									{!direct && (
+										<FormField
+											id={id('headers')}
+											label="Headers"
+											optional
+											help='A JSON object, such as {"X-Custom-Header": "value"}.'
+											error={errors.headers}
+										>
+											{(props) => (
+												<Textarea
+													{...props}
+													className="font-mono"
+													value={f.headers}
+													onChange={(e) => set({ headers: e.target.value })}
+												/>
+											)}
+										</FormField>
+									)}
+
+									{!direct && (
+										<FormField
+											id={id('filter')}
+											label="Function name filter"
+											optional
+											help="Which of its functions chats may call, separated by commas: func1 allows one, !func2 leaves one out."
+										>
+											{(props) => (
+												<Input
+													{...props}
+													value={f.functionNameFilterList}
+													onChange={(e) => set({ functionNameFilterList: e.target.value })}
+													autoComplete="off"
+												/>
+											)}
+										</FormField>
+									)}
+								</div>
+							</Disclosure>
+						</DialogBody>
+						<div className="flex flex-wrap items-center justify-between gap-2 shrink-0 border-t pt-3">
 							<div className="flex flex-wrap gap-2">
 								{edit && (
 									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>

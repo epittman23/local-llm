@@ -11,7 +11,14 @@ import { Tip } from '@/components/common/Tip';
 import { FieldLabel, FormField, SecretInput, SelectField } from '@/components/settings/formFields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -357,128 +364,129 @@ function SourceDialog({
 				</DialogHeader>
 				<form
 					noValidate
-					className="flex flex-col gap-4"
+					className="flex min-h-0 flex-1 flex-col gap-4"
 					onSubmit={(e) => {
 						e.preventDefault();
 						void save();
 					}}
 				>
-					<div className="grid gap-4 sm:grid-cols-2">
-						{text('name', 'Name', { placeholder: 'Research knowledge' })}
-						<FormField id={id('provider')} label="Vector store">
-							{(props) => (
-								<SelectField
-									{...props}
-									value={f.provider}
-									onChange={(provider) => change({ provider, ...schemaDefaults(provider) })}
-									options={PROVIDERS}
-								/>
-							)}
-						</FormField>
-					</div>
-
-					<FormField id={id('description')} label="Description" optional>
-						{(props) => (
-							<Textarea
-								{...props}
-								value={f.description}
-								onChange={(e) => setF((prev) => ({ ...prev, description: e.target.value }))}
-							/>
-						)}
-					</FormField>
-
-					{text('endpoint', 'Endpoint', { placeholder: endpointPlaceholder(f.provider) })}
-
-					<div className="grid gap-4 sm:grid-cols-2">
-						<FormField id={id('timeout')} label="Timeout, seconds">
-							{(props) => (
-								<Input
-									{...props}
-									type="number"
-									min={0}
-									value={f.timeout}
-									onChange={(e) => change({ timeout: e.target.value === '' ? 0 : Number(e.target.value) })}
-								/>
-							)}
-						</FormField>
-						{f.provider !== 'pgvector' && (
-							<FormField
-								id={id('apiKey')}
-								label="API key or token"
-								optional
-								help={editingConnection?.auth_configured ? 'Empty keeps the saved one.' : undefined}
-							>
-								{(props) => <SecretInput {...props} value={f.apiKey} onChange={(apiKey) => change({ apiKey })} />}
-							</FormField>
-						)}
-					</div>
-
-					{f.provider === 'milvus' && text('dbName', 'Database', { optional: true, placeholder: 'default' })}
-
-					<div className="flex flex-col gap-4 border-t pt-4">
-						{text('sourceName', 'Collection', { placeholder: 'research-docs', mono: true })}
-						{f.provider === 'pgvector' && (
-							<div className="grid gap-4 sm:grid-cols-2">
-								{text('tableName', 'Table', { placeholder: 'document_chunk', mono: true })}
-								{text('collectionField', 'Collection field', { placeholder: 'collection_name', mono: true })}
-							</div>
-						)}
+					<DialogBody>
 						<div className="grid gap-4 sm:grid-cols-2">
-							{text('contentField', 'Content field', { mono: true })}
-							{text('vectorField', 'Vector field', {
-								mono: true,
-								optional: f.provider === 'qdrant',
-								placeholder: f.provider === 'qdrant' ? 'Default' : undefined
-							})}
-							{text('metadataField', 'Metadata field', { mono: true, optional: true })}
-							{text('documentIdField', 'Document ID field', { mono: true, optional: true })}
+							{text('name', 'Name', { placeholder: 'Research knowledge' })}
+							<FormField id={id('provider')} label="Vector store">
+								{(props) => (
+									<SelectField
+										{...props}
+										value={f.provider}
+										onChange={(provider) => change({ provider, ...schemaDefaults(provider) })}
+										options={PROVIDERS}
+									/>
+								)}
+							</FormField>
 						</div>
-					</div>
 
-					<div className="flex flex-col">
-						<FieldLabel htmlFor={id('testQuery')}>Test query</FieldLabel>
-						<div className="flex flex-wrap items-start gap-2">
-							<Input
-								id={id('testQuery')}
-								className="min-w-48 flex-1"
-								value={f.testQuery}
-								onChange={(e) => change({ testQuery: e.target.value })}
-								placeholder="A question its documents answer"
-								autoComplete="off"
-								{...fieldProps(id('test-message'), { error: needed('testQuery') ?? testProblem, help: testHelp })}
+						<FormField id={id('description')} label="Description" optional>
+							{(props) => (
+								<Textarea
+									{...props}
+									value={f.description}
+									onChange={(e) => setF((prev) => ({ ...prev, description: e.target.value }))}
+								/>
+							)}
+						</FormField>
+
+						{text('endpoint', 'Endpoint', { placeholder: endpointPlaceholder(f.provider) })}
+
+						<div className="grid gap-4 sm:grid-cols-2">
+							<FormField id={id('timeout')} label="Timeout, seconds">
+								{(props) => (
+									<Input
+										{...props}
+										type="number"
+										min={0}
+										value={f.timeout}
+										onChange={(e) => change({ timeout: e.target.value === '' ? 0 : Number(e.target.value) })}
+									/>
+								)}
+							</FormField>
+							{f.provider !== 'pgvector' && (
+								<FormField
+									id={id('apiKey')}
+									label="API key or token"
+									optional
+									help={editingConnection?.auth_configured ? 'Empty keeps the saved one.' : undefined}
+								>
+									{(props) => <SecretInput {...props} value={f.apiKey} onChange={(apiKey) => change({ apiKey })} />}
+								</FormField>
+							)}
+						</div>
+
+						{f.provider === 'milvus' && text('dbName', 'Database', { optional: true, placeholder: 'default' })}
+
+						<div className="flex flex-col gap-4 border-t pt-4">
+							{text('sourceName', 'Collection', { placeholder: 'research-docs', mono: true })}
+							{f.provider === 'pgvector' && (
+								<div className="grid gap-4 sm:grid-cols-2">
+									{text('tableName', 'Table', { placeholder: 'document_chunk', mono: true })}
+									{text('collectionField', 'Collection field', { placeholder: 'collection_name', mono: true })}
+								</div>
+							)}
+							<div className="grid gap-4 sm:grid-cols-2">
+								{text('contentField', 'Content field', { mono: true })}
+								{text('vectorField', 'Vector field', {
+									mono: true,
+									optional: f.provider === 'qdrant',
+									placeholder: f.provider === 'qdrant' ? 'Default' : undefined
+								})}
+								{text('metadataField', 'Metadata field', { mono: true, optional: true })}
+								{text('documentIdField', 'Document ID field', { mono: true, optional: true })}
+							</div>
+						</div>
+
+						<div className="flex flex-col">
+							<FieldLabel htmlFor={id('testQuery')}>Test query</FieldLabel>
+							<div className="flex flex-wrap items-start gap-2">
+								<Input
+									id={id('testQuery')}
+									className="min-w-48 flex-1"
+									value={f.testQuery}
+									onChange={(e) => change({ testQuery: e.target.value })}
+									placeholder="A question its documents answer"
+									autoComplete="off"
+									{...fieldProps(id('test-message'), { error: needed('testQuery') ?? testProblem, help: testHelp })}
+								/>
+								<Button
+									id={id('test')}
+									type="button"
+									variant="outline"
+									disabled={testing}
+									aria-busy={testing || undefined}
+									onClick={test}
+								>
+									{testing && <Spinner className="size-3.5" />}
+									{testing ? 'Testing…' : 'Run test'}
+								</Button>
+							</div>
+							<FieldMessage
+								id={id('test-message')}
+								className="mt-1.5"
+								error={needed('testQuery') ?? testProblem}
+								help={testHelp}
 							/>
-							<Button
-								id={id('test')}
-								type="button"
-								variant="outline"
-								disabled={testing}
-								aria-busy={testing || undefined}
-								onClick={test}
-							>
-								{testing && <Spinner className="size-3.5" />}
-								{testing ? 'Testing…' : 'Run test'}
-							</Button>
 						</div>
-						<FieldMessage
-							id={id('test-message')}
-							className="mt-1.5"
-							error={needed('testQuery') ?? testProblem}
-							help={testHelp}
-						/>
-					</div>
 
-					<div className="border-t pt-4">
-						<AccessControl
-							accessGrants={accessGrants}
-							onChange={setAccessGrants}
-							accessRoles={['read']}
-							share
-							sharePublic
-							shareUsers
-						/>
-					</div>
-
-					<div className="flex justify-end border-t pt-3">
+						<div className="border-t pt-4">
+							<AccessControl
+								accessGrants={accessGrants}
+								onChange={setAccessGrants}
+								accessRoles={['read']}
+								share
+								sharePublic
+								shareUsers
+							/>
+						</div>
+					</DialogBody>
+					<div className="flex justify-end shrink-0 border-t pt-3">
 						<Button type="submit" disabled={saving} aria-busy={saving || undefined}>
 							{saving && <Spinner className="size-3.5" />}
 							{saving ? 'Saving…' : editing ? 'Save' : 'Add source'}

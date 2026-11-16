@@ -5,7 +5,14 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -273,237 +280,238 @@ export function AddConnectionModal({
 					</DialogHeader>
 					<form
 						noValidate
-						className="flex flex-col gap-4"
+						className="flex min-h-0 flex-1 flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							void submit();
 						}}
 					>
-						{!direct && (
-							<div className="flex flex-col">
-								<FieldLabel>
-									<span id={id('type-label')}>Connection type</span>
-								</FieldLabel>
-								<SegmentedControl
-									aria-labelledby={id('type-label')}
-									aria-describedby={id('type-help')}
-									value={f.connectionType === 'local' ? 'local' : 'external'}
-									onValueChange={(connectionType) => set({ connectionType })}
-									options={[
-										{ value: 'external', label: 'External' },
-										{ value: 'local', label: 'Local' }
-									]}
-									className="self-start"
-								/>
-								<FieldMessage
-									id={id('type-help')}
-									className="mt-1.5"
-									help="A chat on one of its models uses the local or the external task model."
-								/>
-							</div>
-						)}
-
-						<ConnectionUrlField
-							id={id('url')}
-							value={f.url}
-							onChange={(url) => set({ url })}
-							placeholder={ollama ? 'http://localhost:11434' : 'https://openrouter.ai/api/v1'}
-							list={ollama ? undefined : id('suggestions')}
-							error={errors.url}
-							onTest={test}
-						/>
-						{!ollama && (
-							<datalist id={id('suggestions')}>
-								{SUGGESTIONS.map((s) => (
-									<option key={s} value={s} />
-								))}
-							</datalist>
-						)}
-
-						<SwitchField
-							id={id('enable')}
-							label="Enabled"
-							checked={f.enable}
-							onCheckedChange={(enable) => set({ enable })}
-						/>
-
-						<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
-							{(props) => (
-								<SelectField
-									{...props}
-									className="sm:w-60"
-									value={f.authType}
-									onChange={(authType) => set({ authType })}
-									options={authOptions}
-								/>
-							)}
-						</FormField>
-						{f.authType === 'bearer' && (
-							<FormField id={id('key')} label="API key" optional={!azure} error={errors.key}>
-								{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
-							</FormField>
-						)}
-
-						{!ollama && !direct && (
-							<div className="flex flex-col">
-								<FieldLabel>
-									<span id={id('api-label')}>API type</span>
-								</FieldLabel>
-								<SegmentedControl
-									aria-labelledby={id('api-label')}
-									value={f.apiType === 'responses' ? 'responses' : 'chat'}
-									onValueChange={(v) => set({ apiType: v === 'responses' ? 'responses' : '' })}
-									options={[
-										{ value: 'chat', label: 'Chat Completions' },
-										{ value: 'responses', label: 'Responses' }
-									]}
-									className="self-start"
-								/>
-							</div>
-						)}
-
-						<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
-							<div className="flex flex-col gap-4">
-								{!direct && (
-									<FormField
-										id={id('headers')}
-										label="Headers"
-										optional
-										help='A JSON object, such as {"X-Custom-Header": "value"}.'
-										error={errors.headers}
-									>
-										{(props) => (
-											<Textarea
-												{...props}
-												className="font-mono"
-												value={f.headers}
-												onChange={(e) => set({ headers: e.target.value })}
-											/>
-										)}
-									</FormField>
-								)}
-								{!ollama && !direct && (
-									<FormField
-										id={id('passthrough')}
-										label="Passthrough parameters"
-										optional
-										help="Top-level request parameters this server may receive as they are, separated by commas. * allows every one."
-									>
-										{(props) => (
-											<Input
-												{...props}
-												value={f.passthroughParams}
-												onChange={(e) => set({ passthroughParams: e.target.value })}
-												placeholder="thinking, output_config"
-												autoComplete="off"
-											/>
-										)}
-									</FormField>
-								)}
-								<FormField
-									id={id('prefix')}
-									label="Prefix ID"
-									optional
-									help="Added in front of this server's model IDs, so they can't clash with another connection's."
-								>
-									{(props) => (
-										<Input
-											{...props}
-											value={f.prefixId}
-											onChange={(e) => set({ prefixId: e.target.value })}
-											autoComplete="off"
-										/>
-									)}
-								</FormField>
-								{!ollama && !direct && (
-									<FormField id={id('provider')} label="Provider">
-										{(props) => (
-											<SelectField
-												{...props}
-												className="sm:w-60"
-												value={f.provider}
-												onChange={(provider) => set({ provider })}
-												options={PROVIDERS}
-											/>
-										)}
-									</FormField>
-								)}
-								{azure && (
-									<FormField id={id('apiVersion')} label="API version" error={errors.apiVersion}>
-										{(props) => (
-											<Input
-												{...props}
-												value={f.apiVersion}
-												onChange={(e) => set({ apiVersion: e.target.value })}
-												placeholder="2024-10-21"
-												autoComplete="off"
-											/>
-										)}
-									</FormField>
-								)}
+						<DialogBody>
+							{!direct && (
 								<div className="flex flex-col">
-									<FieldLabel htmlFor={id('modelIds')} optional={!azure}>
-										Model IDs
+									<FieldLabel>
+										<span id={id('type-label')}>Connection type</span>
 									</FieldLabel>
-									{f.modelIds.length > 0 && (
-										<ul className="mb-2 flex flex-col gap-1">
-											{f.modelIds.map((m) => (
-												<li key={m} className="flex min-w-0 items-center justify-between gap-2 text-body">
-													<span className="min-w-0 truncate font-mono">{m}</span>
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label={`Remove ${m}`}
-														onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== m) })}
-													>
-														<Minus aria-hidden />
-													</Button>
-												</li>
-											))}
-										</ul>
-									)}
-									<div className="flex items-center gap-2">
-										<Input
-											id={id('modelIds')}
-											value={modelId}
-											onChange={(e) => setModelId(e.target.value)}
-											onKeyDown={(e) => {
-												// Enter here adds the model, it must not submit the connection.
-												if (e.key === 'Enter') {
-													e.preventDefault();
-													addModel();
-												}
-											}}
-											placeholder="Add a model ID"
-											{...fieldProps(id('modelIds-message'), { error: errors.modelIds, help: modelsHelp })}
-										/>
-										<Button variant="outline" size="icon" type="button" aria-label="Add model ID" onClick={addModel}>
-											<Plus aria-hidden />
-										</Button>
-									</div>
+									<SegmentedControl
+										aria-labelledby={id('type-label')}
+										aria-describedby={id('type-help')}
+										value={f.connectionType === 'local' ? 'local' : 'external'}
+										onValueChange={(connectionType) => set({ connectionType })}
+										options={[
+											{ value: 'external', label: 'External' },
+											{ value: 'local', label: 'Local' }
+										]}
+										className="self-start"
+									/>
 									<FieldMessage
-										id={id('modelIds-message')}
+										id={id('type-help')}
 										className="mt-1.5"
-										error={errors.modelIds}
-										help={modelsHelp}
+										help="A chat on one of its models uses the local or the external task model."
 									/>
 								</div>
-								<div className="flex flex-col">
-									<FieldLabel htmlFor={id('tags')} optional>
-										Tags
-									</FieldLabel>
-									<Tags
-										id={id('tags')}
-										tags={f.tags}
-										onAdd={(name) => set({ tags: [...f.tags, { name }] })}
-										onDelete={(name) => set({ tags: f.tags.filter((t) => t.name !== name) })}
-									/>
-								</div>
-							</div>
-						</Disclosure>
+							)}
 
-						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<ConnectionUrlField
+								id={id('url')}
+								value={f.url}
+								onChange={(url) => set({ url })}
+								placeholder={ollama ? 'http://localhost:11434' : 'https://openrouter.ai/api/v1'}
+								list={ollama ? undefined : id('suggestions')}
+								error={errors.url}
+								onTest={test}
+							/>
+							{!ollama && (
+								<datalist id={id('suggestions')}>
+									{SUGGESTIONS.map((s) => (
+										<option key={s} value={s} />
+									))}
+								</datalist>
+							)}
+
+							<SwitchField
+								id={id('enable')}
+								label="Enabled"
+								checked={f.enable}
+								onCheckedChange={(enable) => set({ enable })}
+							/>
+
+							<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
+								{(props) => (
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.authType}
+										onChange={(authType) => set({ authType })}
+										options={authOptions}
+									/>
+								)}
+							</FormField>
+							{f.authType === 'bearer' && (
+								<FormField id={id('key')} label="API key" optional={!azure} error={errors.key}>
+									{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+								</FormField>
+							)}
+
+							{!ollama && !direct && (
+								<div className="flex flex-col">
+									<FieldLabel>
+										<span id={id('api-label')}>API type</span>
+									</FieldLabel>
+									<SegmentedControl
+										aria-labelledby={id('api-label')}
+										value={f.apiType === 'responses' ? 'responses' : 'chat'}
+										onValueChange={(v) => set({ apiType: v === 'responses' ? 'responses' : '' })}
+										options={[
+											{ value: 'chat', label: 'Chat Completions' },
+											{ value: 'responses', label: 'Responses' }
+										]}
+										className="self-start"
+									/>
+								</div>
+							)}
+
+							<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+								<div className="flex flex-col gap-4">
+									{!direct && (
+										<FormField
+											id={id('headers')}
+											label="Headers"
+											optional
+											help='A JSON object, such as {"X-Custom-Header": "value"}.'
+											error={errors.headers}
+										>
+											{(props) => (
+												<Textarea
+													{...props}
+													className="font-mono"
+													value={f.headers}
+													onChange={(e) => set({ headers: e.target.value })}
+												/>
+											)}
+										</FormField>
+									)}
+									{!ollama && !direct && (
+										<FormField
+											id={id('passthrough')}
+											label="Passthrough parameters"
+											optional
+											help="Top-level request parameters this server may receive as they are, separated by commas. * allows every one."
+										>
+											{(props) => (
+												<Input
+													{...props}
+													value={f.passthroughParams}
+													onChange={(e) => set({ passthroughParams: e.target.value })}
+													placeholder="thinking, output_config"
+													autoComplete="off"
+												/>
+											)}
+										</FormField>
+									)}
+									<FormField
+										id={id('prefix')}
+										label="Prefix ID"
+										optional
+										help="Added in front of this server's model IDs, so they can't clash with another connection's."
+									>
+										{(props) => (
+											<Input
+												{...props}
+												value={f.prefixId}
+												onChange={(e) => set({ prefixId: e.target.value })}
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
+									{!ollama && !direct && (
+										<FormField id={id('provider')} label="Provider">
+											{(props) => (
+												<SelectField
+													{...props}
+													className="sm:w-60"
+													value={f.provider}
+													onChange={(provider) => set({ provider })}
+													options={PROVIDERS}
+												/>
+											)}
+										</FormField>
+									)}
+									{azure && (
+										<FormField id={id('apiVersion')} label="API version" error={errors.apiVersion}>
+											{(props) => (
+												<Input
+													{...props}
+													value={f.apiVersion}
+													onChange={(e) => set({ apiVersion: e.target.value })}
+													placeholder="2024-10-21"
+													autoComplete="off"
+												/>
+											)}
+										</FormField>
+									)}
+									<div className="flex flex-col">
+										<FieldLabel htmlFor={id('modelIds')} optional={!azure}>
+											Model IDs
+										</FieldLabel>
+										{f.modelIds.length > 0 && (
+											<ul className="mb-2 flex flex-col gap-1">
+												{f.modelIds.map((m) => (
+													<li key={m} className="flex min-w-0 items-center justify-between gap-2 text-body">
+														<span className="min-w-0 truncate font-mono">{m}</span>
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															type="button"
+															aria-label={`Remove ${m}`}
+															onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== m) })}
+														>
+															<Minus aria-hidden />
+														</Button>
+													</li>
+												))}
+											</ul>
+										)}
+										<div className="flex items-center gap-2">
+											<Input
+												id={id('modelIds')}
+												value={modelId}
+												onChange={(e) => setModelId(e.target.value)}
+												onKeyDown={(e) => {
+													// Enter here adds the model, it must not submit the connection.
+													if (e.key === 'Enter') {
+														e.preventDefault();
+														addModel();
+													}
+												}}
+												placeholder="Add a model ID"
+												{...fieldProps(id('modelIds-message'), { error: errors.modelIds, help: modelsHelp })}
+											/>
+											<Button variant="outline" size="icon" type="button" aria-label="Add model ID" onClick={addModel}>
+												<Plus aria-hidden />
+											</Button>
+										</div>
+										<FieldMessage
+											id={id('modelIds-message')}
+											className="mt-1.5"
+											error={errors.modelIds}
+											help={modelsHelp}
+										/>
+									</div>
+									<div className="flex flex-col">
+										<FieldLabel htmlFor={id('tags')} optional>
+											Tags
+										</FieldLabel>
+										<Tags
+											id={id('tags')}
+											tags={f.tags}
+											onAdd={(name) => set({ tags: [...f.tags, { name }] })}
+											onDelete={(name) => set({ tags: f.tags.filter((t) => t.name !== name) })}
+										/>
+									</div>
+								</div>
+							</Disclosure>
+						</DialogBody>
+						<div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t pt-3">
 							<div>
 								{edit && (
 									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>

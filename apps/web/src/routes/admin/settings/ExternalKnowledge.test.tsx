@@ -68,6 +68,11 @@ describe('ExternalKnowledge', () => {
 		expect(name.getAttribute('data-slot')).toBe('input');
 		expect(screen.getByRole('combobox', { name: 'Vector store' })).toBeTruthy();
 		expect(document.querySelector('form')?.noValidate).toBe(true);
+		// OVL-1: the fields scroll in DialogBody; the title and Add source stay pinned.
+		const body = document.querySelector('[data-slot="dialog-body"]') as HTMLElement;
+		expect(body).toContainElement(name);
+		expect(body).not.toContainElement(screen.getByRole('button', { name: 'Add source' }));
+		expect(body.parentElement?.parentElement).toHaveAttribute('data-slot', 'dialog-content');
 	});
 
 	it('turns a source off from its switch and says so; an off source says Off rather than fading', async () => {

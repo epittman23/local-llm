@@ -42,7 +42,9 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
  * 1 rem each side, and content taller than that scrolls inside it, so the
  * title, Close and the footer's buttons can always be reached (at 390 px too).
  * A tall form puts its fields in `DialogBody`: then only the body scrolls and
- * the header and footer stay pinned. A caller with its own layout (Settings,
+ * the header and footer stay pinned. A `<form>` holding the body and its
+ * buttons may sit between (`flex min-h-0 flex-1 flex-col gap-4`, buttons
+ * `shrink-0`), so Enter still submits it. A caller with its own layout (Settings,
  * a full-height viewer) replaces `max-h-*` or `overflow-*` in `className`.
  */
 function DialogContent({
@@ -62,7 +64,7 @@ function DialogContent({
 			<DialogPrimitive.Content
 				data-slot="dialog-content"
 				className={cn(
-					'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl has-[>[data-slot=dialog-body]]:flex has-[>[data-slot=dialog-body]]:flex-col has-[>[data-slot=dialog-body]]:overflow-hidden bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+					'fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl has-[>[data-slot=dialog-body]]:flex has-[>[data-slot=dialog-body]]:flex-col has-[>[data-slot=dialog-body]]:overflow-hidden has-[>form>[data-slot=dialog-body]]:flex has-[>form>[data-slot=dialog-body]]:flex-col has-[>form>[data-slot=dialog-body]]:overflow-hidden bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
 					className
 				)}
 				{...props}

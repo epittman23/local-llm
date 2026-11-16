@@ -8,7 +8,14 @@ import { toastFailure } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { FieldMessage } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -324,118 +331,129 @@ export function AddTerminalServerModal({
 					</DialogHeader>
 					<form
 						noValidate
-						className="flex flex-col gap-4"
+						className="flex min-h-0 flex-1 flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
 							void submit();
 						}}
 					>
-						<div className="grid gap-4 sm:grid-cols-2">
-							<FormField id={id('name')} label="Name" optional>
-								{(props) => (
-									<Input {...props} value={f.name} onChange={(e) => set({ name: e.target.value })} autoComplete="off" />
-								)}
-							</FormField>
-							{!direct && (
-								<FormField id={id('id')} label="ID" optional help="Empty: one is made for it.">
+						<DialogBody>
+							<div className="grid gap-4 sm:grid-cols-2">
+								<FormField id={id('name')} label="Name" optional>
 									{(props) => (
 										<Input
 											{...props}
-											className="font-mono"
-											value={f.id}
-											onChange={(e) => set({ id: e.target.value })}
+											value={f.name}
+											onChange={(e) => set({ name: e.target.value })}
 											autoComplete="off"
 										/>
 									)}
 								</FormField>
-							)}
-						</div>
+								{!direct && (
+									<FormField id={id('id')} label="ID" optional help="Empty: one is made for it.">
+										{(props) => (
+											<Input
+												{...props}
+												className="font-mono"
+												value={f.id}
+												onChange={(e) => set({ id: e.target.value })}
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
+								)}
+							</div>
 
-						<ConnectionUrlField
-							id={id('url')}
-							value={f.url}
-							onChange={(url) => set({ url })}
-							placeholder="http://localhost:9900"
-							error={urlError}
-							onTest={test}
-						/>
+							<ConnectionUrlField
+								id={id('url')}
+								value={f.url}
+								onChange={(url) => set({ url })}
+								placeholder="http://localhost:9900"
+								error={urlError}
+								onTest={test}
+							/>
 
-						<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
-							{(props) => (
-								<SelectField
-									{...props}
-									className="sm:w-60"
-									value={f.authType}
-									onChange={(authType) => set({ authType })}
-									options={authOptions}
-								/>
-							)}
-						</FormField>
-						{f.authType === 'bearer' && (
-							<FormField id={id('key')} label="API key" optional>
-								{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
-							</FormField>
-						)}
-
-						<FormField
-							id={id('uploads')}
-							label="Chat uploads"
-							help="Filesystem puts the files a chat uploads into the terminal's files."
-						>
-							{(props) => (
-								<SelectField
-									{...props}
-									className="sm:w-60"
-									value={f.chatUploads}
-									onChange={(chatUploads) => set({ chatUploads })}
-									options={UPLOADS}
-								/>
-							)}
-						</FormField>
-
-						{orchestrator && (
-							<Disclosure title="Orchestrator" open={showOrchestrator} onOpenChange={setShowOrchestrator}>
-								<OrchestratorFields
-									id={id}
-									f={f}
-									p={p}
-									set={set}
-									setPolicy={setPolicy}
-									policyIdLocked={edit && Boolean(connection?.policy_id)}
-									loadingPolicy={loadingPolicy}
-									policyError={policyError}
-									lifecycleError={lifecycleError}
-									refreshOnlyIdle={refreshOnlyIdle}
-									setRefreshOnlyIdle={setRefreshOnlyIdle}
-									refreshReset={refreshReset}
-									setRefreshReset={setRefreshReset}
-									refreshing={refreshing}
-									onRefresh={refreshTerminals}
-								/>
-							</Disclosure>
-						)}
-
-						<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
-							<FormField
-								id={id('path')}
-								label="Spec path or URL"
-								help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
-							>
+							<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]}>
 								{(props) => (
-									<Input {...props} value={f.path} onChange={(e) => set({ path: e.target.value })} autoComplete="off" />
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.authType}
+										onChange={(authType) => set({ authType })}
+										options={authOptions}
+									/>
 								)}
 							</FormField>
-						</Disclosure>
+							{f.authType === 'bearer' && (
+								<FormField id={id('key')} label="API key" optional>
+									{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+								</FormField>
+							)}
 
-						{loadingPolicy || policyError ? (
-							<FieldMessage
-								id={id('policy-state')}
-								error={policyError ? `Couldn't load the Orchestrator's policy, so Save is off: ${policyError}` : null}
-								help={loadingPolicy ? 'Loading the Orchestrator’s policy…' : undefined}
-							/>
-						) : null}
+							<FormField
+								id={id('uploads')}
+								label="Chat uploads"
+								help="Filesystem puts the files a chat uploads into the terminal's files."
+							>
+								{(props) => (
+									<SelectField
+										{...props}
+										className="sm:w-60"
+										value={f.chatUploads}
+										onChange={(chatUploads) => set({ chatUploads })}
+										options={UPLOADS}
+									/>
+								)}
+							</FormField>
 
-						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							{orchestrator && (
+								<Disclosure title="Orchestrator" open={showOrchestrator} onOpenChange={setShowOrchestrator}>
+									<OrchestratorFields
+										id={id}
+										f={f}
+										p={p}
+										set={set}
+										setPolicy={setPolicy}
+										policyIdLocked={edit && Boolean(connection?.policy_id)}
+										loadingPolicy={loadingPolicy}
+										policyError={policyError}
+										lifecycleError={lifecycleError}
+										refreshOnlyIdle={refreshOnlyIdle}
+										setRefreshOnlyIdle={setRefreshOnlyIdle}
+										refreshReset={refreshReset}
+										setRefreshReset={setRefreshReset}
+										refreshing={refreshing}
+										onRefresh={refreshTerminals}
+									/>
+								</Disclosure>
+							)}
+
+							<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+								<FormField
+									id={id('path')}
+									label="Spec path or URL"
+									help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
+								>
+									{(props) => (
+										<Input
+											{...props}
+											value={f.path}
+											onChange={(e) => set({ path: e.target.value })}
+											autoComplete="off"
+										/>
+									)}
+								</FormField>
+							</Disclosure>
+
+							{loadingPolicy || policyError ? (
+								<FieldMessage
+									id={id('policy-state')}
+									error={policyError ? `Couldn't load the Orchestrator's policy, so Save is off: ${policyError}` : null}
+									help={loadingPolicy ? 'Loading the Orchestrator’s policy…' : undefined}
+								/>
+							) : null}
+						</DialogBody>
+						<div className="flex flex-wrap items-center justify-between gap-2 shrink-0 border-t pt-3">
 							<div className="flex flex-wrap gap-2">
 								{edit && (
 									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>

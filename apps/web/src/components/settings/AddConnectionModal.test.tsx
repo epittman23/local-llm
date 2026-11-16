@@ -292,3 +292,15 @@ describe('Closing the connection dialog with unsaved changes (FRM-3)', () => {
 		expect(screen.queryByRole('alertdialog')).toBeNull();
 	});
 });
+
+describe('A tall connection dialog (OVL-1)', () => {
+	it('scrolls its fields in DialogBody while the title and Save stay pinned', () => {
+		renderModal();
+		fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+		const body = document.querySelector('[data-slot="dialog-body"]') as HTMLElement;
+		expect(body).toContainElement(url());
+		expect(body).not.toContainElement(screen.getByRole('button', { name: 'Save' }));
+		expect(body.parentElement?.tagName).toBe('FORM');
+		expect(body.parentElement?.parentElement).toHaveAttribute('data-slot', 'dialog-content');
+	});
+});

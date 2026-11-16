@@ -260,3 +260,14 @@ describe('Closing the terminal dialog with unsaved changes (FRM-3)', () => {
 		expect(onOpenChange).not.toHaveBeenCalled();
 	});
 });
+
+describe('A tall terminal dialog (OVL-1)', () => {
+	it('scrolls its fields in DialogBody while the title and Save stay pinned', () => {
+		renderModal();
+		const body = document.querySelector('[data-slot="dialog-body"]') as HTMLElement;
+		expect(body).toContainElement(url());
+		expect(body).not.toContainElement(screen.getByRole('button', { name: 'Save' }));
+		expect(body.parentElement?.tagName).toBe('FORM');
+		expect(body.parentElement?.parentElement).toHaveAttribute('data-slot', 'dialog-content');
+	});
+});
