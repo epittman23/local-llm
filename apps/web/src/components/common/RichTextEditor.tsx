@@ -84,7 +84,11 @@ export function RichTextEditor({
 				'aria-multiline': 'true'
 			}
 		},
-		onUpdate: ({ editor: e }) => {
+		onUpdate: ({ editor: e, transaction }) => {
+			// Only edits: the first click into a note ending in a list or a table also changes the
+			// document (TrailingNode appends a paragraph to the selection's transaction), and that
+			// alone saved the note (#1132).
+			if (!transaction.docChanged) return;
 			const html = e.getHTML();
 			onChangeRef.current?.({ html, json: e.getJSON(), md: htmlToMarkdown(html) });
 		}
@@ -96,7 +100,8 @@ export function RichTextEditor({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [editor]);
 	useEffect(() => {
-		editor?.setEditable(editable);
+		// Not an edit: by default TipTap reports one here, which saved every note on open (#1132).
+		editor?.setEditable(editable, false);
 	}, [editor, editable]);
 	// A new document (another note, a restored version): replace the content without reporting it as an edit.
 	const firstKey = useRef(contentKey);
