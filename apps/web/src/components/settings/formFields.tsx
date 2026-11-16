@@ -1,11 +1,15 @@
 import { ChevronRight, CircleCheck } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { FieldMessage, fieldProps } from '@/components/ui/field-message';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import type { TestResult } from './connectionModel';
 
 // The form language of Admin's settings forms and the connection dialogs
 // (#933): Add/Edit connection, Ollama, tool server, terminal server and
@@ -65,6 +69,100 @@ export function FormField({
 }
 
 /**
+ * A secret (an API key, a client secret): masked until its eye button is
+ * pressed, edged like the shared `Input`. Pass the props `FormField` gives.
+ */
+export function SecretInput({
+	value,
+	onChange,
+	placeholder,
+	...props
+}: {
+	id: string;
+	value: string;
+	onChange: (value: string) => void;
+	placeholder?: string;
+} & ReturnType<typeof fieldProps>) {
+	return (
+		<div
+			data-composite-field
+			aria-invalid={props['aria-invalid']}
+			className={cn(
+				'border-border-control bg-surface-1 flex h-(--control) items-center rounded-lg border ps-3 pe-1 pointer-coarse:h-(--control-touch)',
+				props['aria-invalid'] && 'border-danger'
+			)}
+		>
+			<SensitiveInput
+				className="text-body"
+				outerClassName="min-w-0 items-center"
+				value={value}
+				onChange={onChange}
+				placeholder={placeholder}
+				autoComplete="off"
+				required={false}
+				{...props}
+			/>
+		</div>
+	);
+}
+
+// Radix's Select keeps "" for "nothing chosen", so an option whose value is "" goes by this instead.
+const EMPTY = '__empty__';
+
+/** FRM-4: a list of choices in the shared `Select`, any of whose values may be "". */
+export function SelectField<T extends string>({
+	id,
+	value,
+	onChange,
+	options,
+	className,
+	...props
+}: {
+	id: string;
+	value: T;
+	onChange: (value: T) => void;
+	options: readonly (readonly [T, string])[];
+	className?: string;
+} & ReturnType<typeof fieldProps>) {
+	return (
+		<Select value={value === '' ? EMPTY : value} onValueChange={(v) => onChange((v === EMPTY ? '' : v) as T)}>
+			<SelectTrigger id={id} className={cn('w-full', className)} {...props}>
+				<SelectValue />
+			</SelectTrigger>
+			<SelectContent>
+				{options.map(([v, label]) => (
+					<SelectItem key={v || EMPTY} value={v || EMPTY}>
+						{label}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
+	);
+}
+
+/** A switch with its name beside it (FRM-1): "Enabled", never a bare toggle with a tooltip. */
+export function SwitchField({
+	id,
+	label,
+	checked,
+	onCheckedChange
+}: {
+	id: string;
+	label: string;
+	checked: boolean;
+	onCheckedChange: (checked: boolean) => void;
+}) {
+	return (
+		<div className="flex items-center gap-2.5">
+			<Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+			<Label htmlFor={id} className="text-body font-normal">
+				{label}
+			</Label>
+		</div>
+	);
+}
+
+/**
  * FRM-6: a closed-by-default group, opened by a chevron button that says
  * whether it is open (`aria-expanded`). Opening it brings it into view in the
  * scroller around it (#960: it used to open below the fold, unseen).
@@ -114,30 +212,6 @@ export function Disclosure({
 			</div>
 		</div>
 	);
-}
-
-/** What a connection test found: a line in the success colour, or the reason, under the URL. */
-export type TestResult = { ok: true; text: string } | { ok: false; text: string };
-
-/** "Reachable: 2 models" from a model-list answer, or the reason it is not one. */
-export function modelListResult(answer: unknown): TestResult {
-	const data = (answer as { data?: unknown } | null)?.data;
-	const list = Array.isArray(answer) ? answer : Array.isArray(data) ? data : null;
-	if (!list) return { ok: false, text: "Reached the server, but it didn't return a model list." };
-	return { ok: true, text: `Reachable: ${list.length} model${list.length === 1 ? '' : 's'}` };
-}
-
-/** FRM-2: the http/https check made before a URL is sent anywhere; null when it is fine. */
-export function urlProblem(url: string): string | null {
-	const value = url.trim();
-	if (!value) return 'Enter the server’s URL.';
-	try {
-		const parsed = new URL(value);
-		if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return null;
-	} catch {
-		/* not a URL at all */
-	}
-	return 'Enter a URL that starts with http:// or https://.';
 }
 
 /**

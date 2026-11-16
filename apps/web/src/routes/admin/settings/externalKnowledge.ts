@@ -153,6 +153,24 @@ export const canTest = (f: SourceForm) =>
 export const canSave = (f: SourceForm) => Boolean(f.name.trim()) && canTest(f);
 
 /**
+ * The fields a test (or, with `saving`, a save) still needs, in the order the
+ * form shows them, so each can say so under itself (FRM-2). The same rules as
+ * `canTest` and `canSave`.
+ */
+export function missingFields(f: SourceForm, saving: boolean): (keyof SourceForm)[] {
+	const needed: (keyof SourceForm)[] = [
+		...(saving ? (['name'] as const) : []),
+		'endpoint',
+		'sourceName',
+		...(f.provider === 'pgvector' ? (['tableName', 'collectionField'] as const) : []),
+		'contentField',
+		...(f.provider === 'qdrant' ? [] : (['vectorField'] as const)),
+		'testQuery'
+	];
+	return needed.filter((key) => !String(f[key]).trim());
+}
+
+/**
  * The body that flips a connection on or off. `auth_config: null` leaves the
  * stored credentials alone. A connection with no `enabled` flag counts as on,
  * so it turns *off* -- the Svelte version sent `!connection.enabled`, which is

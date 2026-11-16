@@ -56,33 +56,52 @@ describe('toolServerFields', () => {
 describe('validateToolServer', () => {
 	it('drops the trailing slash for OpenAPI but keeps it for MCP', () => {
 		const a = validateToolServer(fields());
-		const b = validateToolServer(fields({ type: 'mcp' }));
+		const b = validateToolServer(fields({ type: 'mcp', id: 'srv' }));
 		expect('fields' in a && a.fields.url).toBe('https://tools.example');
 		expect('fields' in b && b.fields.url).toBe('https://tools.example/');
 	});
 	it('refuses ":" or "|" in the ID', () => {
-		expect(validateToolServer(fields({ id: 'a:b' }))).toEqual({ error: 'ID cannot contain ":" or "|" characters' });
-		expect(validateToolServer(fields({ id: 'a|b' }))).toEqual({ error: 'ID cannot contain ":" or "|" characters' });
+		const refused = { error: 'An ID can’t contain “:” or “|”.', field: 'id' };
+		expect(validateToolServer(fields({ id: 'a:b' }))).toEqual(refused);
+		expect(validateToolServer(fields({ id: 'a|b' }))).toEqual(refused);
+		expect(validateToolServer(fields({ url: 'tools.example' }))).toEqual({
+			error: 'Enter a URL that starts with http:// or https://.',
+			field: 'url'
+		});
+		expect(validateToolServer(fields({ type: 'mcp' }))).toEqual({
+			error: 'Enter an ID. An MCP server needs one.',
+			field: 'id'
+		});
+		expect(validateToolServer(fields({ path: ' ' }))).toEqual({
+			error: 'Enter the path or URL of the OpenAPI spec.',
+			field: 'path'
+		});
 	});
 	it('needs a registered client for MCP OAuth 2.1', () => {
-		expect(validateToolServer(fields({ type: 'mcp', authType: 'oauth_2.1' }))).toEqual({
-			error: 'Please register the OAuth client'
+		expect(validateToolServer(fields({ type: 'mcp', id: 'srv', authType: 'oauth_2.1' }))).toEqual({
+			error: 'Register the OAuth client first.',
+			field: 'auth'
 		});
 		expect(
-			'fields' in validateToolServer(fields({ type: 'mcp', authType: 'oauth_2.1', oauthClientInfo: { x: 1 } }))
+			'fields' in
+				validateToolServer(fields({ type: 'mcp', id: 'srv', authType: 'oauth_2.1', oauthClientInfo: { x: 1 } }))
 		).toBe(true);
 	});
 	it('pretty-prints a JSON spec and refuses a bad one', () => {
 		const ok = validateToolServer(fields({ specType: 'json', spec: '{"openapi":"3"}' }));
 		expect('fields' in ok && ok.fields.spec).toBe('{\n  "openapi": "3"\n}');
 		expect(validateToolServer(fields({ specType: 'json', spec: '{' }))).toEqual({
-			error: 'Please enter a valid JSON spec'
+			error: 'Enter the spec as JSON.',
+			field: 'spec'
 		});
 	});
 	it('parses headers and refuses a non-object', () => {
 		const ok = validateToolServer(fields({ headers: '{"X":"1"}' }));
 		expect('headers' in ok && ok.headers).toEqual({ X: '1' });
-		expect(validateToolServer(fields({ headers: '[]' }))).toEqual({ error: 'Headers must be a valid JSON object' });
+		expect(validateToolServer(fields({ headers: '[]' }))).toEqual({
+			error: 'Enter the headers as a JSON object, or leave them empty.',
+			field: 'headers'
+		});
 	});
 });
 
@@ -127,9 +146,9 @@ describe('buildToolServer', () => {
 
 describe('verify and registration', () => {
 	it('needs a URL, and for OpenAPI a spec or path', () => {
-		expect(verifyProblem(fields({ url: '' }))).toBe('Please enter a valid URL');
-		expect(verifyProblem(fields({ path: '' }))).toBe('Please enter a valid path');
-		expect(verifyProblem(fields({ specType: 'json' }))).toBe('Please enter a valid JSON spec');
+		expect(verifyProblem(fields({ url: '' }))).toBe('Enter the server’s URL.');
+		expect(verifyProblem(fields({ path: '' }))).toBe('Enter the path or URL of the OpenAPI spec.');
+		expect(verifyProblem(fields({ specType: 'json' }))).toBe('Enter the spec as JSON.');
 		expect(verifyProblem(fields({ type: 'mcp', path: '' }))).toBeNull();
 	});
 	it('the verify body carries OAuth discovery hints only for OAuth 2.1', () => {
@@ -146,9 +165,10 @@ describe('verify and registration', () => {
 		});
 	});
 	it('registration needs the URL, the ID, and for static both credentials', () => {
-		expect(registrationProblem(fields({ id: '' }))).toBe('Please enter a valid ID');
+		expect(registrationProblem(fields({ url: '', id: 'x' }))).toBe('Enter the server’s URL.');
+		expect(registrationProblem(fields({ id: '' }))).toBe('Enter an ID first. Registration needs one.');
 		expect(registrationProblem(fields({ id: 'x', authType: 'oauth_2.1_static', oauthClientId: 'a' }))).toBe(
-			'Please enter Client ID and Client Secret'
+			'Enter the client ID and client secret first.'
 		);
 		expect(
 			registrationPayload(

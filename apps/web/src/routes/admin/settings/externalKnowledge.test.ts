@@ -6,6 +6,7 @@ import {
 	connectionForItem,
 	connectionPayload,
 	formFromItem,
+	missingFields,
 	schemaDefaults,
 	sourcePayload,
 	togglePayload
@@ -108,5 +109,33 @@ describe('togglePayload', () => {
 		expect(togglePayload(conn)).toMatchObject({ enabled: false, auth_config: null, capabilities: { retrieve: true } });
 		expect(togglePayload({ ...conn, enabled: false }).enabled).toBe(true);
 		expect(togglePayload({ ...conn, enabled: undefined }).enabled).toBe(false);
+	});
+});
+
+describe('missingFields', () => {
+	it('lists what a test still needs, by provider, and the name for a save', () => {
+		const blank = blankSourceForm();
+		expect(missingFields(blank, false)).toEqual(['endpoint', 'sourceName', 'testQuery']);
+		expect(missingFields(blank, true)[0]).toBe('name');
+		const pg = {
+			...blank,
+			provider: 'pgvector' as const,
+			...schemaDefaults('pgvector'),
+			tableName: ' ',
+			vectorField: ''
+		};
+		expect(missingFields(pg, false)).toEqual(['endpoint', 'sourceName', 'tableName', 'vectorField', 'testQuery']);
+	});
+
+	it('agrees with canTest and canSave', () => {
+		const full = {
+			...blankSourceForm(),
+			name: 'Research',
+			endpoint: 'https://q.example.com',
+			sourceName: 'docs',
+			testQuery: 'hello'
+		};
+		expect(missingFields(full, true)).toEqual([]);
+		expect(canSave(full)).toBe(true);
 	});
 });

@@ -4,8 +4,10 @@ import {
 	buildConnection,
 	fieldsFromConnection,
 	isAzure,
+	modelListResult,
 	parseHeaders,
 	parsePassthroughParams,
+	urlProblem,
 	validateConnection,
 	verifyConfig
 } from './connectionModel';
@@ -88,16 +90,28 @@ describe('fieldsFromConnection', () => {
 });
 
 describe('validateConnection', () => {
-	it('needs a URL unless it is Ollama', () => {
-		expect(validateConnection(blankFields(), openai)?.message).toBe('URL is required');
+	it('needs an http or https URL, which Ollama may leave empty', () => {
+		expect(validateConnection(blankFields(), openai)).toEqual({ field: 'url', message: 'Enter the server’s URL.' });
+		expect(validateConnection({ ...blankFields(), url: 'localhost:8090' }, openai)?.message).toBe(
+			'Enter a URL that starts with http:// or https://.'
+		);
 		expect(validateConnection(blankFields(), { ollama: true, direct: false })).toBeNull();
+		expect(validateConnection({ ...blankFields(), url: 'nope' }, { ollama: true, direct: false })?.field).toBe('url');
 	});
 	it('holds Azure to API version, a key (unless Entra) and deployment names, opening Advanced where relevant', () => {
 		const az = { ...blankFields(), provider: 'azure', url: 'https://x.openai.azure.com' };
-		expect(validateConnection(az, openai)).toEqual({ message: 'API Version is required', openAdvanced: true });
-		expect(validateConnection({ ...az, apiVersion: '1' }, openai)).toEqual({ message: 'Key is required' });
+		expect(validateConnection(az, openai)).toEqual({
+			field: 'apiVersion',
+			message: 'Enter the Azure API version.',
+			openAdvanced: true
+		});
+		expect(validateConnection({ ...az, apiVersion: '1' }, openai)).toEqual({
+			field: 'key',
+			message: 'Enter the API key. Azure OpenAI needs one.'
+		});
 		expect(validateConnection({ ...az, apiVersion: '1', key: 'k' }, openai)).toEqual({
-			message: 'Deployment names are required for Azure OpenAI',
+			field: 'modelIds',
+			message: 'Add a deployment name. Azure OpenAI needs at least one.',
 			openAdvanced: true
 		});
 		expect(
@@ -161,5 +175,33 @@ describe('verifyConfig', () => {
 			api_version: '',
 			passthrough_params: []
 		});
+	});
+});
+
+describe('modelListResult', () => {
+	it('counts the models in an OpenAI-style answer or a bare list', () => {
+		expect(modelListResult({ data: [{ id: 'a' }, { id: 'b' }] })).toEqual({ ok: true, text: 'Reachable: 2 models' });
+		expect(modelListResult([{ id: 'a' }])).toEqual({ ok: true, text: 'Reachable: 1 model' });
+	});
+
+	it('says when the server answered with something that is not a model list', () => {
+		expect(modelListResult('<html>')).toEqual({
+			ok: false,
+			text: "Reached the server, but it didn't return a model list."
+		});
+		expect(modelListResult(null).ok).toBe(false);
+	});
+});
+
+describe('urlProblem', () => {
+	it('accepts http and https URLs', () => {
+		expect(urlProblem('http://127.0.0.1:8090/v1')).toBeNull();
+		expect(urlProblem(' https://openrouter.ai/api/v1 ')).toBeNull();
+	});
+
+	it('asks for a URL, and for http or https', () => {
+		expect(urlProblem('  ')).toBe('Enter the server’s URL.');
+		expect(urlProblem('not a url')).toBe('Enter a URL that starts with http:// or https://.');
+		expect(urlProblem('ftp://host')).toBe('Enter a URL that starts with http:// or https://.');
 	});
 });

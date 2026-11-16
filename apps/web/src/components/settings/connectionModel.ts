@@ -1,4 +1,4 @@
-import { type Tag, normalizeTags } from '@/lib/utils/tags';
+import { normalizeTags, type Tag } from '@/lib/utils/tags';
 
 // The rules behind AddConnectionModal.svelte, pulled out of the component so they
 // can be tested and shared with the Phase 10 Direct Connections UI, which reuses
@@ -120,21 +120,32 @@ export function fieldsFromConnection(
 	};
 }
 
+/** A field of the connection form that a check can point at. */
+export type ConnectionField = 'url' | 'apiVersion' | 'key' | 'modelIds';
+
 /**
- * What must be true before Save: the message to toast and whether the Advanced
- * section (where the offending field lives) should be opened, or null when the
- * form is fine.
+ * What must be true before Save: the field at fault, what to say under it
+ * (FRM-2), and whether the Advanced section, where that field lives, should
+ * be opened; null when the form is fine.
  */
 export function validateConnection(
 	f: ConnectionFields,
 	{ ollama, direct }: ConnectionMode
-): { message: string; openAdvanced?: boolean } | null {
-	if (!ollama && !f.url) return { message: 'URL is required' };
+): { field: ConnectionField; message: string; openAdvanced?: boolean } | null {
+	// An Ollama connection may be saved without a URL, as it always could.
+	const urlCheck = ollama && !f.url.trim() ? null : urlProblem(f.url);
+	if (urlCheck) return { field: 'url', message: urlCheck };
 	if (isAzure(f.provider, f.url, direct)) {
-		if (!f.apiVersion) return { message: 'API Version is required', openAdvanced: true };
-		if (!f.key && !['azure_ad', 'microsoft_entra_id'].includes(f.authType)) return { message: 'Key is required' };
+		if (!f.apiVersion.trim())
+			return { field: 'apiVersion', message: 'Enter the Azure API version.', openAdvanced: true };
+		if (!f.key && !['azure_ad', 'microsoft_entra_id'].includes(f.authType))
+			return { field: 'key', message: 'Enter the API key. Azure OpenAI needs one.' };
 		if (f.modelIds.length === 0)
-			return { message: 'Deployment names are required for Azure OpenAI', openAdvanced: true };
+			return {
+				field: 'modelIds',
+				message: 'Add a deployment name. Azure OpenAI needs at least one.',
+				openAdvanced: true
+			};
 	}
 	return null;
 }
@@ -181,4 +192,28 @@ export function verifyConfig(
 		passthrough_params: parsePassthroughParams(f.passthroughParams),
 		...(headers ? { headers } : {})
 	};
+}
+
+/** What a connection test found: a line in the success colour, or the reason, under the URL. */
+export type TestResult = { ok: true; text: string } | { ok: false; text: string };
+
+/** "Reachable: 2 models" from a model-list answer, or the reason it is not one. */
+export function modelListResult(answer: unknown): TestResult {
+	const data = (answer as { data?: unknown } | null)?.data;
+	const list = Array.isArray(answer) ? answer : Array.isArray(data) ? data : null;
+	if (!list) return { ok: false, text: "Reached the server, but it didn't return a model list." };
+	return { ok: true, text: `Reachable: ${list.length} model${list.length === 1 ? '' : 's'}` };
+}
+
+/** FRM-2: the http/https check made before a URL is sent anywhere; null when it is fine. */
+export function urlProblem(url: string): string | null {
+	const value = url.trim();
+	if (!value) return 'Enter the server’s URL.';
+	try {
+		const parsed = new URL(value);
+		if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return null;
+	} catch {
+		/* not a URL at all */
+	}
+	return 'Enter a URL that starts with http:// or https://.';
 }

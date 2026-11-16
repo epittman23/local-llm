@@ -1,31 +1,43 @@
 import saveAs from 'file-saver';
-import { RefreshCw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AccessButton } from '@/components/common/AccessButton';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
-import { Tip } from '@/components/common/Tip';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
+import { FieldMessage } from '@/components/ui/field-message';
+import { Input } from '@/components/ui/input';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Textarea } from '@/components/ui/textarea';
 import { getToolServerData } from '@/lib/apis';
 import { initiateOAuthRedirect, registerOAuthClient, verifyToolServerConnection } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { parseHeaders } from './connectionModel';
+import { parseHeaders, type TestResult } from './connectionModel';
+import {
+	ConnectionUrlField,
+	Disclosure,
+	FieldLabel,
+	FormField,
+	SecretInput,
+	SelectField,
+	SwitchField
+} from './formFields';
 import {
 	blankToolServerFields,
 	buildToolServer,
 	directVerifyToken,
 	exportToolServer,
+	HEADERS_JSON,
 	importToolServer,
 	isOAuth21,
 	registrationPayload,
 	registrationProblem,
 	specRequestUrl,
 	type ToolServerConnection,
+	type ToolServerField,
 	type ToolServerFields,
 	toolServerFields,
 	validateToolServer,
@@ -33,15 +45,37 @@ import {
 	verifyProblem
 } from './toolServerModel';
 
-const bare = 'w-full bg-transparent text-sm placeholder:text-foreground-muted';
-const select = 'bg-transparent pr-5 text-sm';
-const label = 'text-muted-foreground text-xs';
+const AUTH_HELP: Record<string, string> = {
+	none: 'Requests go without credentials.',
+	session: "Sends the signed-in user's session credentials.",
+	system_oauth: "Sends the signed-in user's OAuth access token.",
+	'oauth_2.1': 'Registers a client by OAuth 2.1 Dynamic Client Registration.',
+	'oauth_2.1_static': 'Uses the OAuth 2.1 client you give below.'
+};
+
+const RESOURCE_PARAMETER = [
+	['auto', 'Automatic'],
+	['include', 'Include'],
+	['omit', 'Omit']
+] as const;
+
+type Errors = Partial<Record<ToolServerField, string>>;
+
+/** A thrown error's words, or a plain sentence when it has none. */
+const causeText = (error: unknown) =>
+	typeof error === 'string' && error ? error : "Couldn't reach the server. Check the URL and that it is running.";
+
 /**
  * Ports components/AddToolServerModal.svelte: add or edit an external tool
- * server, OpenAPI or MCP (Streamable HTTP). It verifies on request, registers
- * and authorizes OAuth 2.1 clients for MCP, imports and exports a connection as
- * JSON, and hands the finished connection to `onSubmit`. The rules live in
- * toolServerModel.ts.
+ * server, OpenAPI or MCP (Streamable HTTP). It tests the connection on
+ * request, registers and authorizes OAuth 2.1 clients for MCP, imports and
+ * exports a connection as JSON, and hands the finished connection to
+ * `onSubmit`. The rules live in toolServerModel.ts.
+ *
+ * #933: the connection dialogs' one form language (see AddConnectionModal):
+ * labelled shared fields, the server type as a segmented control, Advanced
+ * behind a chevron disclosure, problems said under their fields. #1018: Test
+ * connection beside the URL, its result under it.
  *
  * Differences from the original: every open starts from `connection` (or
  * blank); an export no longer contains the API key; an import no longer brings
@@ -65,77 +99,103 @@ export function AddToolServerModal({
 	onDelete?: () => void | Promise<void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const ids = useId();
+	const id = (name: string) => `${ids}-${name}`;
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [f, setF] = useState<ToolServerFields>(blankToolServerFields());
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [errors, setErrors] = useState<Errors>({});
+	const [registration, setRegistration] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
-	const set = (patch: Partial<ToolServerFields>) => setF((prev) => ({ ...prev, ...patch }));
 	const oauth = isOAuth21(f.authType);
+	const fieldOf: Partial<Record<keyof ToolServerFields, ToolServerField>> = {
+		url: 'url',
+		id: 'id',
+		authType: 'auth',
+		oauthClientInfo: 'auth',
+		path: 'path',
+		spec: 'spec',
+		specType: 'spec',
+		headers: 'headers',
+		type: 'id'
+	};
+	const set = (patch: Partial<ToolServerFields>) => {
+		setF((prev) => ({ ...prev, ...patch }));
+		// An edit to a field clears what was said about it.
+		setErrors((prev) => {
+			const next = { ...prev };
+			for (const key of Object.keys(patch)) {
+				const field = fieldOf[key as keyof ToolServerFields];
+				if (field) delete next[field];
+			}
+			return next;
+		});
+	};
 
 	useEffect(() => {
 		if (!open) return;
 		setF(toolServerFields(connection));
 		setShowAdvanced(false);
+		setErrors({});
+		setRegistration(null);
 		setLoading(false);
 		// Seeded when the dialog opens; edits inside it are local.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [open]);
 
-	const headersOrToast = () => {
+	/** The headers as an object, or null after saying under the field why they are not one. */
+	const checkedHeaders = () => {
 		try {
 			const { value, text } = parseHeaders(f.headers);
-			set({ headers: text });
+			setF((prev) => ({ ...prev, headers: text }));
 			return { ok: true as const, value };
 		} catch {
-			toast.error('Headers must be a valid JSON object');
+			setShowAdvanced(true);
+			setErrors((prev) => ({ ...prev, headers: HEADERS_JSON }));
 			return { ok: false as const, value: null };
 		}
 	};
 
-	const verify = async () => {
+	const test = async (): Promise<TestResult | null> => {
 		const problem = verifyProblem(f);
-		if (problem) return void toast.error(problem);
-		const headers = headersOrToast();
-		if (!headers.ok) return;
-		if (direct) {
-			const res = await getToolServerData(directVerifyToken(f, token), specRequestUrl(f.url, f.path)).catch(() => {
-				toast.error('Connection failed');
-				return null;
-			});
-			if (res) toast.success('Connection successful');
-			return;
+		if (problem) return { ok: false, text: problem };
+		const headers = checkedHeaders();
+		if (!headers.ok) return null;
+		try {
+			if (direct) {
+				await getToolServerData(directVerifyToken(f, token), specRequestUrl(f.url, f.path));
+				return { ok: true, text: 'Reachable: the spec loaded' };
+			}
+			await verifyToolServerConnection(token, verifyPayload(f, headers.value));
+			return { ok: true, text: oauth ? 'Reachable: OAuth discovery succeeded' : 'Reachable' };
+		} catch (error) {
+			return { ok: false, text: causeText(error) };
 		}
-		const res = await verifyToolServerConnection(token, verifyPayload(f, headers.value)).catch(() => {
-			toast.error('Connection failed');
-			return null;
-		});
-		if (res) toast.success(oauth ? 'OAuth discovery successful' : 'Connection successful');
 	};
 
 	const register = async () => {
 		const problem = registrationProblem(f);
-		if (problem) return void toast.error(problem);
-		const res = await registerOAuthClient(token, registrationPayload(f), 'mcp').catch(() => {
-			toast.error('Registration failed');
-			return null;
-		});
-		if (res) {
-			toast.warning('Please save the connection to persist the OAuth client information and do not change the ID');
-			toast.success('Registration successful');
+		if (problem) return void setRegistration(problem);
+		setRegistration(null);
+		try {
+			const res = await registerOAuthClient(token, registrationPayload(f), 'mcp');
+			if (!res) throw new Error();
 			set({ oauthClientInfo: res?.oauth_client_info ?? null });
+			toast.success('Client registered. Save the connection to keep it, and keep the ID as it is.');
+		} catch (error) {
+			setRegistration(`Couldn't register the client. ${causeText(error)}`);
 		}
 	};
 
 	const authorize = () => {
-		if (!f.id) return void toast.error('Please enter a valid ID');
-		if (!edit) return void toast.error('Please save the connection before authorizing OAuth');
+		if (!f.id) return void setRegistration('Enter an ID first. Authorizing needs one.');
 		initiateOAuthRedirect({ id: `server:mcp:${f.id}`, serverId: f.id, authType: 'mcp' });
 	};
 
 	const exportFile = () => {
-		const headers = headersOrToast();
+		const headers = checkedHeaders();
 		if (!headers.ok) return;
 		saveAs(
 			new Blob([JSON.stringify(exportToolServer(f, headers.value))], { type: 'application/json' }),
@@ -147,15 +207,22 @@ export function AddToolServerModal({
 		if (!file) return;
 		try {
 			setF(importToolServer(await file.text(), f));
-			toast.success('Import successful');
+			setErrors({});
+			toast.success(`Imported “${file.name}”`);
 		} catch {
-			toast.error('Please select a valid JSON file');
+			toast.error(`Couldn't import “${file.name}”. It isn't a tool server file.`);
 		}
 	};
 
 	const submit = async () => {
 		const checked = validateToolServer(f);
-		if ('error' in checked) return void toast.error(checked.error);
+		if ('error' in checked) {
+			if (checked.field === 'headers' || checked.field === 'path' || checked.field === 'spec') setShowAdvanced(true);
+			setErrors({ [checked.field]: checked.error });
+			// After the render that shows it (and opens Advanced), so the field exists.
+			setTimeout(() => document.getElementById(id(checked.field))?.focus());
+			return;
+		}
 		setF(checked.fields);
 		setLoading(true);
 		try {
@@ -166,22 +233,38 @@ export function AddToolServerModal({
 		onOpenChange(false);
 	};
 
-	const verifyLabel = oauth ? 'Check OAuth Discovery' : 'Verify Connection';
+	const authOptions: [string, string][] = [
+		['none', 'None'],
+		['bearer', 'API key (Bearer)'],
+		['session', 'Session'],
+		...(direct
+			? []
+			: ([
+					['system_oauth', 'OAuth'],
+					...(f.type === 'mcp'
+						? [
+								['oauth_2.1', 'OAuth 2.1'],
+								['oauth_2.1_static', 'OAuth 2.1 (static client)']
+							]
+						: [])
+				] as [string, string][]))
+	];
 
 	return (
 		<>
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete connection?"
-				confirmLabel="Delete"
+				title={`Delete “${f.name || f.url || 'this tool server'}”?`}
+				confirmLabel="Delete connection"
+				destructive
 				onConfirm={async () => {
 					setConfirmDelete(false);
 					await onDelete?.();
 					onOpenChange(false);
 				}}
 			>
-				Are you sure you want to delete this connection? This action cannot be undone.
+				Its tools stop being offered in chats. This can't be undone.
 			</ConfirmDialog>
 
 			<AccessControlModal
@@ -192,20 +275,22 @@ export function AddToolServerModal({
 			/>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
-				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+				<DialogContent className="sm:max-w-lg">
 					<DialogHeader>
-						<div className="flex items-center justify-between gap-3 pr-6">
-							<DialogTitle className="text-sm font-medium">{edit ? 'Edit Connection' : 'Add Connection'}</DialogTitle>
-							<div className="flex gap-1.5 text-xs">
-								<Button variant="link" size="xs" type="button" onClick={() => fileInput.current?.click()}>
-									Import
-								</Button>
-								<Button variant="link" size="xs" type="button" onClick={exportFile}>
-									Export
-								</Button>
-							</div>
+						<DialogTitle>{edit ? 'Edit tool server' : 'Add tool server'}</DialogTitle>
+						<DialogDescription>
+							{direct
+								? 'An OpenAPI tool server your browser talks to directly.'
+								: 'An OpenAPI or MCP server whose tools chats can use.'}
+						</DialogDescription>
+						<div className="flex gap-1">
+							<Button variant="outline" size="sm" type="button" onClick={() => fileInput.current?.click()}>
+								Import
+							</Button>
+							<Button variant="outline" size="sm" type="button" onClick={exportFile}>
+								Export
+							</Button>
 						</div>
-						<DialogDescription className="sr-only">An external OpenAPI or MCP tool server.</DialogDescription>
 					</DialogHeader>
 					<input
 						ref={fileInput}
@@ -214,374 +299,304 @@ export function AddToolServerModal({
 						accept=".json"
 						aria-label="Import connection file"
 						onChange={(e) => {
-							importFile(e.target.files?.[0]);
+							void importFile(e.target.files?.[0]);
 							e.target.value = '';
 						}}
 					/>
 					<form
-						className="flex flex-col gap-2.5"
+						noValidate
+						className="flex flex-col gap-4"
 						onSubmit={(e) => {
 							e.preventDefault();
-							submit();
+							void submit();
 						}}
 					>
-						<div className="flex items-center justify-between">
-							<div className={label}>Type</div>
-							{direct ? (
-								<div className="text-xs">OpenAPI</div>
-							) : (
-								<Button
-									variant="link"
-									size="xs"
-									type="button"
-									aria-label="Type"
-									onClick={() => set({ type: f.type === 'mcp' ? 'openapi' : 'mcp' })}
-								>
-									{f.type === 'mcp' ? (
-										<>
-											MCP <span className="text-muted-foreground">Streamable HTTP</span>
-										</>
-									) : (
-										'OpenAPI'
-									)}
-								</Button>
-							)}
-						</div>
-
-						<div className="flex gap-2">
-							<div className="min-w-0 flex-1">
-								<label className={label} htmlFor="tool-server-name">
-									Name
-								</label>
-								<input
-									id="tool-server-name"
-									className={bare}
-									type="text"
-									value={f.name}
-									onChange={(e) => set({ name: e.target.value })}
-									placeholder="Enter name"
-									autoComplete="off"
+						{!direct && (
+							<div className="flex flex-col">
+								<FieldLabel>
+									<span id={id('type-label')}>Server type</span>
+								</FieldLabel>
+								<SegmentedControl
+									aria-labelledby={id('type-label')}
+									value={f.type === 'mcp' ? 'mcp' : 'openapi'}
+									onValueChange={(type) => set({ type })}
+									options={[
+										{ value: 'openapi', label: 'OpenAPI' },
+										{ value: 'mcp', label: 'MCP (Streamable HTTP)' }
+									]}
+									className="self-start"
 								/>
-							</div>
-							{!direct && (
-								<div className="min-w-0 flex-1">
-									<label className={label} htmlFor="tool-server-id">
-										ID {f.type !== 'mcp' && <span className="opacity-50">(optional)</span>}
-									</label>
-									<input
-										id="tool-server-id"
-										className={`${bare} font-mono`}
-										type="text"
-										value={f.id}
-										onChange={(e) => set({ id: e.target.value })}
-										placeholder="auto"
-										autoComplete="off"
-										required={f.type === 'mcp'}
+								{f.type === 'mcp' && (
+									<FieldMessage
+										id={id('type-help')}
+										className="mt-1.5"
+										help="MCP support is experimental and its specification changes often, so a server may stop working after an update. OpenAPI is the steadier choice."
 									/>
-								</div>
-							)}
-						</div>
-
-						<div>
-							<label className={label} htmlFor="tool-server-description">
-								Description
-							</label>
-							<input
-								id="tool-server-description"
-								className={bare}
-								type="text"
-								value={f.description}
-								onChange={(e) => set({ description: e.target.value })}
-								placeholder="Enter description"
-								autoComplete="off"
-							/>
-						</div>
-
-						<div className="flex items-end gap-2">
-							<div className="min-w-0 flex-1">
-								<label className={label} htmlFor="tool-server-url">
-									URL
-								</label>
-								<input
-									id="tool-server-url"
-									className={bare}
-									type="text"
-									value={f.url}
-									onChange={(e) => set({ url: e.target.value })}
-									placeholder="API Base URL"
-									autoComplete="off"
-									required
-								/>
-							</div>
-							<Tip content={verifyLabel}>
-								<Button
-									variant="ghost"
-									size="icon-sm"
-									className="mb-0.5"
-									type="button"
-									aria-label={verifyLabel}
-									onClick={verify}
-								>
-									<RefreshCw className="size-4" />
-								</Button>
-							</Tip>
-							<Tip content={f.enable ? 'Enabled' : 'Disabled'}>
-								<span className="mb-0.5 flex items-center">
-									<Switch aria-label="Enabled" checked={f.enable} onCheckedChange={(enable) => set({ enable })} />
-								</span>
-							</Tip>
-						</div>
-
-						<div>
-							<div className="flex items-center justify-between">
-								<label className={label} htmlFor="tool-server-auth">
-									Auth
-								</label>
-								{oauth && (
-									<div className="flex items-center gap-2">
-										{Boolean(f.oauthClientInfo) && (
-											<Tip content={edit ? 'Authorize OAuth' : 'Please save the connection before authorizing OAuth'}>
-												<Button variant="link" size="xs" type="button" disabled={!edit} onClick={authorize}>
-													Authorize OAuth
-												</Button>
-											</Tip>
-										)}
-										<Tip content={f.oauthClientInfo ? 'Register Again' : 'Register Client'}>
-											<Button variant="link" size="xs" type="button" onClick={register}>
-												Register Client
-											</Button>
-										</Tip>
-										{f.oauthClientInfo ? (
-											<span className="rounded-md bg-success/20 px-1.5 text-xs text-success">Registered</span>
-										) : (
-											<span className="rounded-md bg-warning/20 px-1.5 text-xs text-warning">Not Registered</span>
-										)}
-									</div>
 								)}
 							</div>
-							<div className="flex gap-2">
-								<select
-									id="tool-server-auth"
-									className={`${select} self-start`}
-									value={f.authType}
-									onChange={(e) => set({ authType: e.target.value })}
+						)}
+
+						<div className="grid gap-4 sm:grid-cols-2">
+							<FormField id={id('name')} label="Name" optional>
+								{(props) => (
+									<Input {...props} value={f.name} onChange={(e) => set({ name: e.target.value })} autoComplete="off" />
+								)}
+							</FormField>
+							{!direct && (
+								<FormField
+									id={id('id')}
+									label="ID"
+									optional={f.type !== 'mcp'}
+									help={f.type === 'mcp' ? undefined : 'Empty: one is made for it.'}
+									error={errors.id}
 								>
-									<option value="none">None</option>
-									<option value="bearer">Bearer</option>
-									<option value="session">Session</option>
-									{!direct && (
-										<>
-											<option value="system_oauth">OAuth</option>
-											{f.type === 'mcp' && (
-												<>
-													<option value="oauth_2.1">OAuth 2.1</option>
-													<option value="oauth_2.1_static">OAuth 2.1 (Static)</option>
-												</>
-											)}
-										</>
-									)}
-								</select>
-								<div className="min-w-0 flex-1 text-sm">
-									{f.authType === 'bearer' ? (
-										<SensitiveInput
-											value={f.key}
-											onChange={(key) => set({ key })}
-											placeholder="API Key"
-											required={false}
+									{(props) => (
+										<Input
+											{...props}
+											className="font-mono"
+											value={f.id}
+											onChange={(e) => set({ id: e.target.value })}
+											autoComplete="off"
 										/>
-									) : f.authType === 'none' ? (
-										<div className="text-muted-foreground text-xs">No authentication</div>
-									) : f.authType === 'session' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user session credentials to authenticate
-										</div>
-									) : f.authType === 'system_oauth' ? (
-										<div className="text-muted-foreground text-xs">
-											Forwards system user OAuth access token to authenticate
-										</div>
-									) : f.authType === 'oauth_2.1' ? (
-										<div className="text-muted-foreground text-xs">Uses OAuth 2.1 Dynamic Client Registration</div>
-									) : f.authType === 'oauth_2.1_static' ? (
-										<div className="flex flex-col gap-1.5">
-											<SensitiveInput
-												value={f.oauthClientId}
-												onChange={(oauthClientId) => set({ oauthClientId })}
-												placeholder="Client ID"
-												required={false}
-											/>
-											<SensitiveInput
-												value={f.oauthClientSecret}
-												onChange={(oauthClientSecret) => set({ oauthClientSecret })}
-												placeholder="Client Secret"
-												required={false}
-											/>
-											<input
-												className={bare}
-												type="text"
-												aria-label="OAuth Server URL"
-												value={f.oauthServerUrl}
-												onChange={(e) => set({ oauthServerUrl: e.target.value })}
-												placeholder="OAuth Server URL"
-												autoComplete="off"
-											/>
-										</div>
-									) : null}
-								</div>
-							</div>
+									)}
+								</FormField>
+							)}
 						</div>
 
-						<div className="flex items-center justify-between">
-							<Button
-								variant="ghost"
-								size="xs"
-								className="w-fit"
-								type="button"
-								aria-expanded={showAdvanced}
-								onClick={() => setShowAdvanced((v) => !v)}
-							>
-								{showAdvanced ? '▾' : '▸'} Advanced
-							</Button>
-							{!direct && <AccessButton label="Access Control" onClick={() => setShowAccess(true)} />}
-						</div>
+						<FormField id={id('description')} label="Description" optional>
+							{(props) => (
+								<Input
+									{...props}
+									value={f.description}
+									onChange={(e) => set({ description: e.target.value })}
+									autoComplete="off"
+								/>
+							)}
+						</FormField>
 
-						{showAdvanced && (
+						<ConnectionUrlField
+							id={id('url')}
+							value={f.url}
+							onChange={(url) => set({ url })}
+							placeholder="https://tools.example.com"
+							error={errors.url}
+							testLabel={oauth ? 'Check OAuth discovery' : 'Test connection'}
+							onTest={test}
+						/>
+
+						<SwitchField
+							id={id('enable')}
+							label="Enabled"
+							checked={f.enable}
+							onCheckedChange={(enable) => set({ enable })}
+						/>
+
+						<FormField id={id('auth')} label="Authentication" help={AUTH_HELP[f.authType]} error={errors.auth}>
+							{(props) => (
+								<SelectField
+									{...props}
+									className="sm:w-60"
+									value={f.authType}
+									onChange={(authType) => set({ authType })}
+									options={authOptions}
+								/>
+							)}
+						</FormField>
+						{f.authType === 'bearer' && (
+							<FormField id={id('key')} label="API key" optional>
+								{(props) => <SecretInput {...props} value={f.key} onChange={(key) => set({ key })} />}
+							</FormField>
+						)}
+						{f.authType === 'oauth_2.1_static' && (
 							<>
+								<FormField id={id('client-id')} label="Client ID">
+									{(props) => (
+										<SecretInput
+											{...props}
+											value={f.oauthClientId}
+											onChange={(oauthClientId) => set({ oauthClientId })}
+										/>
+									)}
+								</FormField>
+								<FormField id={id('client-secret')} label="Client secret">
+									{(props) => (
+										<SecretInput
+											{...props}
+											value={f.oauthClientSecret}
+											onChange={(oauthClientSecret) => set({ oauthClientSecret })}
+										/>
+									)}
+								</FormField>
+								<FormField id={id('oauth-server')} label="OAuth server URL" optional>
+									{(props) => (
+										<Input
+											{...props}
+											type="url"
+											value={f.oauthServerUrl}
+											onChange={(e) => set({ oauthServerUrl: e.target.value })}
+											autoComplete="off"
+										/>
+									)}
+								</FormField>
+							</>
+						)}
+						{oauth && (
+							<div className="flex flex-col gap-1.5">
+								<div className="flex flex-wrap items-center gap-2">
+									<Badge variant={f.oauthClientInfo ? 'success' : 'warning'}>
+										{f.oauthClientInfo ? 'Registered' : 'Not registered'}
+									</Badge>
+									<Button variant="outline" size="sm" type="button" onClick={register}>
+										{f.oauthClientInfo ? 'Register again' : 'Register client'}
+									</Button>
+									{Boolean(f.oauthClientInfo) && (
+										<Button variant="outline" size="sm" type="button" disabled={!edit} onClick={authorize}>
+											Authorize
+										</Button>
+									)}
+								</div>
+								<FieldMessage
+									id={id('registration')}
+									error={registration}
+									help={f.oauthClientInfo && !edit ? 'Save the connection first, then authorize it.' : undefined}
+								/>
+							</div>
+						)}
+
+						<Disclosure title="Advanced" open={showAdvanced} onOpenChange={setShowAdvanced}>
+							<div className="flex flex-col gap-4">
 								{f.type === 'openapi' && (
-									<div>
-										<div className={label}>OpenAPI Spec</div>
-										<div className="flex gap-2">
-											<select
-												aria-label="OpenAPI Spec source"
-												className={`${select} self-start`}
+									<div className="flex flex-col gap-4">
+										<div className="flex flex-col">
+											<FieldLabel>
+												<span id={id('spec-label')}>OpenAPI spec</span>
+											</FieldLabel>
+											<SegmentedControl
+												aria-labelledby={id('spec-label')}
 												value={f.specType}
-												onChange={(e) => set({ specType: e.target.value as 'url' | 'json' })}
-											>
-												<option value="url">URL</option>
-												<option value="json">JSON</option>
-											</select>
-											{f.specType === 'url' ? (
-												<input
-													className={bare}
-													type="text"
-													aria-label="openapi.json URL or Path"
-													value={f.path}
-													onChange={(e) => set({ path: e.target.value })}
-													placeholder="openapi.json URL or Path"
-													autoComplete="off"
-													required
-												/>
-											) : (
-												<textarea
-													className={`${bare} resize-y`}
-													aria-label="JSON Spec"
-													rows={5}
-													value={f.spec}
-													onChange={(e) => set({ spec: e.target.value })}
-													placeholder="JSON Spec"
-													required
-												/>
-											)}
+												onValueChange={(specType) => set({ specType })}
+												options={[
+													{ value: 'url', label: 'From a URL' },
+													{ value: 'json', label: 'JSON' }
+												]}
+												className="self-start"
+											/>
 										</div>
-										{f.specType === 'url' && (
-											<div className="text-muted-foreground mt-1 text-xs">
-												WebUI will make requests to "{specRequestUrl(f.url, f.path)}"
-											</div>
+										{f.specType === 'url' ? (
+											<FormField
+												id={id('path')}
+												label="Spec path or URL"
+												// An OpenAPI server's URL is saved without its trailing slash.
+												help={`local-llm sends requests to ${specRequestUrl(f.url.trim().replace(/\/$/, ''), f.path)}`}
+												error={errors.path}
+											>
+												{(props) => (
+													<Input
+														{...props}
+														value={f.path}
+														onChange={(e) => set({ path: e.target.value })}
+														autoComplete="off"
+													/>
+												)}
+											</FormField>
+										) : (
+											<FormField id={id('spec')} label="Spec" error={errors.spec}>
+												{(props) => (
+													<Textarea
+														{...props}
+														className="font-mono"
+														rows={5}
+														value={f.spec}
+														onChange={(e) => set({ spec: e.target.value })}
+													/>
+												)}
+											</FormField>
 										)}
 									</div>
 								)}
 
 								{f.type === 'mcp' && oauth && (
 									<>
-										<div>
-											<label className={label} htmlFor="oauth-scope">
-												OAuth Scopes
-											</label>
-											<input
-												id="oauth-scope"
-												className={bare}
-												type="text"
-												value={f.oauthScope}
-												onChange={(e) => set({ oauthScope: e.target.value })}
-												placeholder="Use discovered scopes"
-												autoComplete="off"
-											/>
-										</div>
-										<div>
-											<label className={label} htmlFor="oauth-resource-parameter">
-												OAuth Resource Parameter
-											</label>
-											<select
-												id="oauth-resource-parameter"
-												className={`${select} block`}
-												value={f.oauthResourceParameter}
-												onChange={(e) => set({ oauthResourceParameter: e.target.value })}
-											>
-												<option value="auto">Automatic</option>
-												<option value="include">Include</option>
-												<option value="omit">Omit</option>
-											</select>
-										</div>
+										<FormField
+											id={id('scope')}
+											label="OAuth scopes"
+											optional
+											help="Empty: the scopes the server advertises."
+										>
+											{(props) => (
+												<Input
+													{...props}
+													value={f.oauthScope}
+													onChange={(e) => set({ oauthScope: e.target.value })}
+													autoComplete="off"
+												/>
+											)}
+										</FormField>
+										<FormField id={id('resource')} label="OAuth resource parameter">
+											{(props) => (
+												<SelectField
+													{...props}
+													className="sm:w-60"
+													value={f.oauthResourceParameter}
+													onChange={(oauthResourceParameter) => set({ oauthResourceParameter })}
+													options={RESOURCE_PARAMETER}
+												/>
+											)}
+										</FormField>
 									</>
 								)}
 
 								{!direct && (
-									<div>
-										<label className={label} htmlFor="tool-server-headers">
-											Headers
-										</label>
-										<Tip content='Enter additional headers in JSON format (e.g. {"X-Custom-Header": "value"}'>
-											<textarea
-												id="tool-server-headers"
-												className={`${bare} min-h-8 resize-y`}
+									<FormField
+										id={id('headers')}
+										label="Headers"
+										optional
+										help='A JSON object, such as {"X-Custom-Header": "value"}.'
+										error={errors.headers}
+									>
+										{(props) => (
+											<Textarea
+												{...props}
+												className="font-mono"
 												value={f.headers}
 												onChange={(e) => set({ headers: e.target.value })}
-												placeholder="Enter additional headers in JSON format"
 											/>
-										</Tip>
-									</div>
+										)}
+									</FormField>
 								)}
-							</>
-						)}
 
-						{!direct && (
-							<div className="border-t pt-2.5">
-								<label className={label} htmlFor="function-name-filter-list">
-									Function Name Filter List
-								</label>
-								<input
-									id="function-name-filter-list"
-									className={bare}
-									type="text"
-									value={f.functionNameFilterList}
-									onChange={(e) => set({ functionNameFilterList: e.target.value })}
-									placeholder="Enter function name filter list (e.g. func1, !func2)"
-									autoComplete="off"
-								/>
+								{!direct && (
+									<FormField
+										id={id('filter')}
+										label="Function name filter"
+										optional
+										help="Which of its functions chats may call, separated by commas: func1 allows one, !func2 leaves one out."
+									>
+										{(props) => (
+											<Input
+												{...props}
+												value={f.functionNameFilterList}
+												onChange={(e) => set({ functionNameFilterList: e.target.value })}
+												autoComplete="off"
+											/>
+										)}
+									</FormField>
+								)}
 							</div>
-						)}
+						</Disclosure>
 
-						{f.type === 'mcp' && (
-							<div className="rounded-2xl bg-warning/20 px-4 py-3 text-xs text-warning">
-								Warning: MCP support is experimental and its specification changes often, which can lead to
-								incompatibilities. OpenAPI specification support is directly maintained by the Open WebUI team, making
-								it the more reliable option for compatibility.{' '}
-								<a className="underline" href="https://docs.openwebui.com/" target="_blank" rel="noreferrer">
-									Read more →
-								</a>
-							</div>
-						)}
-
-						<div className="flex items-center justify-between pt-1">
-							<div>
+						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<div className="flex flex-wrap gap-2">
 								{edit && (
-									<Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
-										Delete
+									<Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>
+										Delete connection
 									</Button>
 								)}
+								{!direct && <AccessButton label="Access control" onClick={() => setShowAccess(true)} />}
 							</div>
-							<Button type="submit" size="sm" disabled={loading}>
-								Save
+							<Button type="submit" disabled={loading} aria-busy={loading || undefined}>
 								{loading && <Spinner className="size-3.5" />}
+								{loading ? 'Saving…' : 'Save'}
 							</Button>
 						</div>
 					</form>

@@ -1,5 +1,5 @@
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { parseHeaders } from './connectionModel';
+import { parseHeaders, urlProblem } from './connectionModel';
 
 // The rules behind AddToolServerModal.svelte, pulled out so they can be tested
 // and shared with the Phase 10 personal Tools settings, which open the same
@@ -120,18 +120,34 @@ const oauthScopeInfo = (f: ToolServerFields) =>
  * need theirs -- stripping it can turn into a 301 that drops the auth header),
  * and a JSON spec and the headers are pretty-printed.
  */
+/** A field of the tool server form that a check can point at. */
+export type ToolServerField = 'url' | 'id' | 'auth' | 'path' | 'spec' | 'headers';
+
+const SPEC_JSON = 'Enter the spec as JSON.';
+const SPEC_PATH = 'Enter the path or URL of the OpenAPI spec.';
+export const HEADERS_JSON = 'Enter the headers as a JSON object, or leave them empty.';
+
+/**
+ * What must be true before Save: the field at fault and what to say under it
+ * (FRM-2), or the tidied fields and parsed headers to save.
+ */
 export function validateToolServer(
 	f: ToolServerFields
-): { error: string } | { fields: ToolServerFields; headers: Record<string, unknown> | null } {
-	const next = { ...f, url: f.type === 'mcp' ? f.url : f.url.replace(/\/$/, '') };
-	if (next.id.includes(':') || next.id.includes('|')) return { error: 'ID cannot contain ":" or "|" characters' };
+): { error: string; field: ToolServerField } | { fields: ToolServerFields; headers: Record<string, unknown> | null } {
+	const next = { ...f, url: f.type === 'mcp' ? f.url.trim() : f.url.trim().replace(/\/$/, '') };
+	const url = urlProblem(next.url);
+	if (url) return { error: url, field: 'url' };
+	if (next.id.includes(':') || next.id.includes('|')) return { error: 'An ID can’t contain “:” or “|”.', field: 'id' };
+	if (next.type === 'mcp' && !next.id.trim()) return { error: 'Enter an ID. An MCP server needs one.', field: 'id' };
 	if (next.type === 'mcp' && isOAuth21(next.authType) && !next.oauthClientInfo)
-		return { error: 'Please register the OAuth client' };
+		return { error: 'Register the OAuth client first.', field: 'auth' };
+	if (next.type === 'openapi' && next.specType === 'url' && !next.path.trim())
+		return { error: SPEC_PATH, field: 'path' };
 	if (next.specType === 'json') {
 		try {
 			next.spec = JSON.stringify(JSON.parse(next.spec), null, 2);
 		} catch {
-			return { error: 'Please enter a valid JSON spec' };
+			return { error: SPEC_JSON, field: 'spec' };
 		}
 	}
 	try {
@@ -139,7 +155,7 @@ export function validateToolServer(
 		next.headers = h.text;
 		return { fields: next, headers: h.value };
 	} catch {
-		return { error: 'Headers must be a valid JSON object' };
+		return { error: HEADERS_JSON, field: 'headers' };
 	}
 }
 
@@ -186,11 +202,13 @@ export function directVerifyToken(f: ToolServerFields, sessionToken: string): st
 	return '';
 }
 
+/** Checks before a connection test; what to say under the URL, or null. */
 export function verifyProblem(f: ToolServerFields): string | null {
-	if (!f.url) return 'Please enter a valid URL';
+	const url = urlProblem(f.url);
+	if (url) return url;
 	if (f.type === 'openapi') {
-		if (f.specType === 'json' && !f.spec) return 'Please enter a valid JSON spec';
-		if (f.specType === 'url' && !f.path) return 'Please enter a valid path';
+		if (f.specType === 'json' && !f.spec) return SPEC_JSON;
+		if (f.specType === 'url' && !f.path) return SPEC_PATH;
 	}
 	return null;
 }
@@ -236,12 +254,13 @@ export function registrationPayload(f: ToolServerFields) {
 	};
 }
 
-/** Checks before registering an OAuth client; the message to toast, or null. */
+/** Checks before registering an OAuth client; what to say beside Register client, or null. */
 export function registrationProblem(f: ToolServerFields): string | null {
-	if (!f.url) return 'Please enter a valid URL';
-	if (!f.id) return 'Please enter a valid ID';
+	const url = urlProblem(f.url);
+	if (url) return url;
+	if (!f.id) return 'Enter an ID first. Registration needs one.';
 	if (f.authType === 'oauth_2.1_static' && (!f.oauthClientId || !f.oauthClientSecret))
-		return 'Please enter Client ID and Client Secret';
+		return 'Enter the client ID and client secret first.';
 	return null;
 }
 

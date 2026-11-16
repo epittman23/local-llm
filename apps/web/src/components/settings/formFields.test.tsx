@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { Input } from '@/components/ui/input';
-import { ConnectionUrlField, Disclosure, FormField, modelListResult, type TestResult, urlProblem } from './formFields';
+import type { TestResult } from './connectionModel';
+import { ConnectionUrlField, Disclosure, FormField } from './formFields';
 
 function Held({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
 	const [open, setOpen] = useState(true);
@@ -73,34 +74,6 @@ describe('Disclosure', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Orchestrator' }));
 		expect(onOpenChange).toHaveBeenCalledWith(false);
 		expect(screen.queryByText('Inside')).toBeNull();
-	});
-});
-
-describe('modelListResult', () => {
-	it('counts the models in an OpenAI-style answer or a bare list', () => {
-		expect(modelListResult({ data: [{ id: 'a' }, { id: 'b' }] })).toEqual({ ok: true, text: 'Reachable: 2 models' });
-		expect(modelListResult([{ id: 'a' }])).toEqual({ ok: true, text: 'Reachable: 1 model' });
-	});
-
-	it('says when the server answered with something that is not a model list', () => {
-		expect(modelListResult('<html>')).toEqual({
-			ok: false,
-			text: "Reached the server, but it didn't return a model list."
-		});
-		expect(modelListResult(null).ok).toBe(false);
-	});
-});
-
-describe('urlProblem', () => {
-	it('accepts http and https URLs', () => {
-		expect(urlProblem('http://127.0.0.1:8090/v1')).toBeNull();
-		expect(urlProblem(' https://openrouter.ai/api/v1 ')).toBeNull();
-	});
-
-	it('asks for a URL, and for http or https', () => {
-		expect(urlProblem('  ')).toBe('Enter the server’s URL.');
-		expect(urlProblem('not a url')).toBe('Enter a URL that starts with http:// or https://.');
-		expect(urlProblem('ftp://host')).toBe('Enter a URL that starts with http:// or https://.');
 	});
 });
 
