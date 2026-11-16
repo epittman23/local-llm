@@ -54,8 +54,8 @@ test('chat: builds a conversation, runs it with the system prompt and parameters
 	await page.goto('/playground');
 	// Starts on the user's first chosen model.
 	await expect(page.getByRole('combobox', { name: 'Model' })).toHaveText('Coder');
-	await page.getByRole('button', { name: 'System Instructions' }).click();
-	await page.getByLabel('System Instructions', { exact: true }).fill('Be brief');
+	await page.getByRole('button', { name: 'System instructions' }).click();
+	await page.getByLabel('System instructions', { exact: true }).fill('Be brief');
 	await page.getByLabel('New message').fill('Hi there');
 	await page.getByRole('button', { name: 'Run' }).click();
 	await expect(page.getByRole('region', { name: 'Assistant message 2' })).toHaveText('Hello!');

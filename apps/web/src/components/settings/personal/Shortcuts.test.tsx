@@ -81,3 +81,18 @@ describe('rebinding a shortcut (#808)', () => {
 		expect(first.textContent).toMatch(/J/);
 	});
 });
+
+describe('the Playground group (NAV-5, #1031)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'tok' });
+	});
+
+	it('lists Run and Stop with their keys', () => {
+		renderTab();
+		expect(screen.getByRole('heading', { name: 'Playground' })).toBeInTheDocument();
+		expect(screen.getByText('Run (Chat, Completions, Images)').nextElementSibling).toHaveTextContent(
+			/^(Ctrl\+Enter|⌘↩\uFE0E?)$/
+		);
+		expect(screen.getByText('Stop a run').nextElementSibling).toHaveTextContent('Esc');
+	});
+});

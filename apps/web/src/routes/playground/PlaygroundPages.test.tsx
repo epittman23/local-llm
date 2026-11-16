@@ -100,14 +100,14 @@ describe('the playground tabs', () => {
 });
 
 describe('the chat playground', () => {
-	it('makes System Instructions a target at least 24 px tall, 44 px on touch (LAY-3), that opens the field', () => {
+	it('makes System instructions a target at least 24 px tall, 44 px on touch (LAY-3), that opens the field', () => {
 		wrap(<PlaygroundChat />);
-		const toggle = screen.getByRole('button', { name: /System Instructions/ });
+		const toggle = screen.getByRole('button', { name: /System instructions/ });
 		expect(toggle.className).toContain('min-h-6');
 		expect(toggle.className).toContain('pointer-coarse:min-h-11');
 		fireEvent.click(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(screen.getByRole('textbox', { name: 'System Instructions' })).toBeInTheDocument();
+		expect(screen.getByRole('textbox', { name: 'System instructions' })).toBeInTheDocument();
 	});
 });
 
@@ -336,8 +336,8 @@ describe('the chat transcript (#934, #1076, #968, #1031)', () => {
 describe('keeping the work (#969)', () => {
 	it('a conversation survives the tab being left and opened again', () => {
 		const first = wrap(<PlaygroundChat />);
-		fireEvent.click(screen.getByRole('button', { name: /System Instructions/ }));
-		fireEvent.change(screen.getByRole('textbox', { name: 'System Instructions' }), { target: { value: 'Be brief' } });
+		fireEvent.click(screen.getByRole('button', { name: /System instructions/ }));
+		fireEvent.change(screen.getByRole('textbox', { name: 'System instructions' }), { target: { value: 'Be brief' } });
 		fireEvent.change(screen.getByLabelText('New message'), { target: { value: 'Draft' } });
 		first.unmount();
 		wrap(<PlaygroundChat />);

@@ -429,7 +429,7 @@ export function PlaygroundChat() {
 						aria-expanded={showSystem}
 						onClick={() => setShowSystem((v) => !v)}
 					>
-						<span className="ml-1.5 shrink-0">System Instructions</span>
+						<span className="ml-1.5 shrink-0">System instructions</span>
 						{!showSystem && system.trim() && (
 							<span className="text-muted-foreground line-clamp-1 flex-1 text-left">{system}</span>
 						)}
@@ -438,7 +438,7 @@ export function PlaygroundChat() {
 					{showSystem && (
 						<textarea
 							className="placeholder:text-foreground-muted mt-1 w-full resize-y bg-transparent px-1.5 text-sm"
-							aria-label="System Instructions"
+							aria-label="System instructions"
 							rows={4}
 							placeholder="You're a helpful assistant."
 							value={system}
@@ -798,7 +798,7 @@ export function PlaygroundImages() {
 								addFiles(e.dataTransfer.files);
 							}}
 						>
-							Add Image
+							Add image
 						</Button>
 						<Tip content={imagesOn ? `Run (${RUN_KEYS})` : undefined}>
 							<Button

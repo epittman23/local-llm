@@ -24,6 +24,16 @@ const fixedChord = (keys: string[]) =>
 	formatChord(keys.map((k) => (k === 'mod' ? 'Cmd' : k === 'shift' ? 'Shift' : k === 'alt' ? 'Alt' : k)).join('+'));
 
 /**
+ * The Playground's own keys (#1031): handled in its text boxes, not app-wide,
+ * so they are listed here and are not in the shortcut registry, which binds a
+ * handler on the whole window for each of its keys.
+ */
+const PLAYGROUND_SHORTCUTS = [
+	{ name: 'Run (Chat, Completions, Images)', keys: ['mod', 'Enter'] },
+	{ name: 'Stop a run', keys: ['Escape'] }
+];
+
+/**
  * Ports Settings/Shortcuts.svelte: keyboard shortcuts on or off, and every
  * shortcut by category; a configurable one can be rebound by clicking it and
  * pressing the new keys (Escape cancels, Backspace clears), with a warning
@@ -143,6 +153,14 @@ export default function Shortcuts() {
 					})}
 				</SettingsSection>
 			))}
+			<SettingsSection title="Playground">
+				{PLAYGROUND_SHORTCUTS.map((s) => (
+					<div key={s.name} className="flex items-center justify-between gap-3 text-xs">
+						<span className="text-muted-foreground">{s.name}</span>
+						<span className="bg-muted/30 rounded-md px-2 py-0.5 font-mono">{fixedChord(s.keys)}</span>
+					</div>
+				))}
+			</SettingsSection>
 			<div className="mt-4">
 				<Button type="button" size="sm" variant="outline" onClick={() => save({ ...DEFAULT_KEYBINDINGS })}>
 					Reset to defaults
