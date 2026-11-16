@@ -44,7 +44,7 @@ describe('Database settings', () => {
 		render(<Database />);
 		expect(screen.queryByRole('button', { name: 'Database' })).toBeNull();
 		expect(screen.getByText(BACKUP_COMMAND)).toBeTruthy();
-		fireEvent.click(screen.getByRole('button', { name: 'Copy the backup command' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Copy the pg_dump command' }));
 		await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(BACKUP_COMMAND));
 		expect(await screen.findByRole('button', { name: 'Copied' })).toBeTruthy();
 	});

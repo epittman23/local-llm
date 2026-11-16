@@ -47,7 +47,7 @@ function BackupNote() {
 					variant="outline"
 					size="sm"
 					type="button"
-					aria-label={copied ? 'Copied' : 'Copy the backup command'}
+					aria-label={copied ? 'Copied' : 'Copy the pg_dump command'}
 					onClick={() => copy(BACKUP_COMMAND, 'command')}
 				>
 					{copied ? <Check aria-hidden /> : <Copy aria-hidden />}
