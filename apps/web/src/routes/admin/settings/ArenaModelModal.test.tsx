@@ -9,6 +9,8 @@ import type { ArenaModel } from './arenaModels';
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/lib/apis', () => ({ getModels: vi.fn() }));
 vi.mock('@/components/common/AccessControl', () => ({ AccessControl: () => <div>access control</div> }));
+const visibility = vi.hoisted(() => ({ single: false }));
+vi.mock('../adminVisibility', () => ({ useAdminSingleUser: () => visibility.single }));
 
 const EXISTING: ArenaModel = {
 	id: 'duel',
@@ -24,6 +26,7 @@ const EXISTING: ArenaModel = {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	visibility.single = false;
 	useAuthStore.setState({ token: 'tok' } as never);
 	vi.mocked(getModels).mockResolvedValue([
 		{ id: 'm1', name: 'Model One' },
@@ -50,10 +53,48 @@ describe('ArenaModelModal', () => {
 		expect((screen.getByLabelText('ID') as HTMLInputElement).value).toBe('my-arena');
 	});
 
-	it('toggles between Include and Exclude', () => {
+	it('chooses only these models or all but these, saying which (FRM-4)', () => {
 		renderModal({ edit: true, model: EXISTING });
-		fireEvent.click(screen.getByRole('button', { name: 'Include' }));
-		expect(screen.getByRole('button', { name: 'Exclude' })).toBeTruthy();
+		const group = screen.getByRole('radiogroup', { name: 'Models' });
+		expect(screen.getByRole('radio', { name: 'Only these' })).toBeChecked();
+		expect(group).toHaveAccessibleDescription('The arena picks among these models only.');
+		fireEvent.click(screen.getByRole('radio', { name: 'All but these' }));
+		expect(screen.getByRole('radio', { name: 'All but these' })).toBeChecked();
+		expect(group).toHaveAccessibleDescription('The arena picks among all your models except these.');
+	});
+
+	it('labels its fields on the shared controls, and keeps the ID while editing', () => {
+		renderModal({ edit: true, model: EXISTING });
+		expect(screen.getByLabelText('Name')).toHaveAttribute('data-slot', 'input');
+		expect(screen.getByLabelText('ID')).toBeDisabled();
+		expect(screen.getByLabelText('ID')).toHaveAccessibleDescription("An arena model's ID can't be changed.");
+		expect(screen.getByText('access control')).toBeTruthy();
+	});
+
+	it('hides who may use it while the install has one account (S5-D2)', () => {
+		visibility.single = true;
+		renderModal();
+		expect(screen.queryByText('access control')).toBeNull();
+	});
+
+	it('says under Name what is missing or taken, without saving', async () => {
+		const { onSubmit } = renderModal();
+		await screen.findByRole('option', { name: 'Model Two' });
+		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
+		const name = screen.getByLabelText('Name');
+		expect(name).toHaveAccessibleDescription('Enter a name for the arena model.');
+		expect(document.activeElement).toBe(name);
+		fireEvent.change(name, { target: { value: 'Model Two' } });
+		expect(name).not.toHaveAttribute('aria-invalid', 'true');
+		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
+		expect(name).toHaveAccessibleDescription('A model already has this name. Choose another.');
+		expect(name).toHaveValue('Model Two');
+		fireEvent.change(screen.getByLabelText('ID'), { target: { value: '' } });
+		fireEvent.change(name, { target: { value: 'Brawl' } });
+		fireEvent.change(screen.getByLabelText('ID'), { target: { value: '' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
+		expect(screen.getByLabelText('ID')).toHaveAccessibleDescription('Enter an ID.');
+		expect(onSubmit).not.toHaveBeenCalled();
 	});
 
 	it('adds a picked model to the list and removes it again', async () => {
@@ -73,7 +114,7 @@ describe('ArenaModelModal', () => {
 		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Rumble' } });
 		fireEvent.change(screen.getByLabelText('Select a model'), { target: { value: 'm2' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Include' }));
+		fireEvent.click(screen.getByRole('radio', { name: 'All but these' }));
 		fireEvent.click(screen.getByRole('button', { name: 'Add arena model' }));
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
 		expect(onSubmit.mock.calls[0][0]).toMatchObject({

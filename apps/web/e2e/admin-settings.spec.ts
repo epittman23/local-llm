@@ -397,8 +397,10 @@ test.describe('settings: Evaluations', () => {
 		const dialog = page.getByRole('dialog', { name: 'Add arena model' });
 		await dialog.getByLabel('Name', { exact: true }).fill('Taken');
 		await dialog.getByRole('button', { name: 'Add arena model' }).click();
-		await expect(page.getByText('Model name already exists')).toBeVisible();
-		await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('');
+		const name = dialog.getByLabel('Name', { exact: true });
+		await expect(name).toHaveAccessibleDescription('A model already has this name. Choose another.');
+		await expect(name).toBeFocused();
+		await expect(name).toHaveValue('Taken');
 	});
 });
 
