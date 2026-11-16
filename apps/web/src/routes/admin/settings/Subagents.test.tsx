@@ -55,6 +55,8 @@ describe('Sub-agents limits: -1 is no limit (#602)', () => {
 		expect(output.value).toBe('-1');
 		expect(form.checkValidity()).toBe(true);
 
+		// Save waits for a change (FRM-3); one the assertions do not look at.
+		fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Be brief.' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({
@@ -102,6 +104,8 @@ describe('Sub-agents limits above the old form maximum (#760)', () => {
 		expect(output.validity.rangeOverflow).toBe(false);
 		expect((iterations.form as HTMLFormElement).checkValidity()).toBe(true);
 
+		// Save waits for a change (FRM-3); one the assertions do not look at.
+		fireEvent.change(screen.getByLabelText('System prompt'), { target: { value: 'Be brief.' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(posted).toHaveLength(1));
 		expect(posted[0]).toMatchObject({ SUBAGENTS_MAX_ITERATIONS: 200, SUBAGENTS_MAX_OUTPUT: 200000 });

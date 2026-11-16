@@ -63,7 +63,7 @@ function useBrowserVoices(active: boolean) {
 export default function Audio() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['audio'], async () => {
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<Draft>(['audio'], async () => {
 		const res = await getAudioConfig(token);
 		if (!res) return null;
 		return {
@@ -127,6 +127,7 @@ export default function Audio() {
 				...(loadWhisperModel && { LOAD_WHISPER_MODEL: true })
 			});
 			if (!res) return false;
+			commit({ ...next, paramsText: params.text });
 			setDraft((d) => d && { ...d, paramsText: params.text });
 			await saved();
 			return true;
@@ -214,7 +215,7 @@ export default function Audio() {
 	};
 
 	return (
-		<SettingsForm title="Audio" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm title="Audio" loading={isLoading} onSubmit={save} saving={saving} dirty={dirty} onDiscard={discard}>
 			{draft && tts && stt && (
 				<>
 					<SettingsSection title="Speech-to-Text" first>

@@ -109,7 +109,7 @@ function DangerAction({
 export default function Documents() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['documents'], async () => {
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<Draft>(['documents'], async () => {
 		const [embedding, rag] = await Promise.all([getEmbeddingConfig(token), getRAGConfig(token)]);
 		return embedding && rag ? { embedding: toEmbeddingForm(embedding), rag: toRagForm(rag) } : null;
 	});
@@ -171,6 +171,7 @@ export default function Documents() {
 			const res = await updateRAGConfig(token, payload);
 			const { warnings, changes } = ragSaveOutcome(rag, res);
 			if (Object.keys(changes).length) setRag(changes);
+			commit({ ...draft, rag: { ...rag, ...changes } });
 			for (const warning of warnings) toast.warning(warning, { duration: 15000 });
 			await saved();
 		} catch (error) {
@@ -212,7 +213,14 @@ export default function Documents() {
 	const hosted = emb?.engine === 'ollama' || emb?.engine === 'openai' || emb?.engine === 'azure_openai';
 
 	return (
-		<SettingsForm title="Documents" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Documents"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
+		>
 			{draft && rag && emb && (
 				<>
 					<SettingsSection title="Content Extraction" first>

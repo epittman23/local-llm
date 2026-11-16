@@ -213,7 +213,7 @@ export default function Images() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const setBackendConfig = useConfigStore((s) => s.setConfig);
 	const [models, setModels] = useState<{ id: string; name?: string }[]>([]);
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['images'], async () => {
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<Draft>(['images'], async () => {
 		const config = await getConfig(token);
 		return config ? toFormState(config) : null;
 	});
@@ -248,6 +248,7 @@ export default function Images() {
 		try {
 			const res = await updateConfig(token, prepared.payload);
 			if (!res) return false;
+			commit(draft);
 			const fresh = await getBackendConfig().catch(() => null);
 			if (fresh) setBackendConfig(fresh);
 			if (res.ENABLE_IMAGE_GENERATION) void loadModels();
@@ -338,7 +339,7 @@ export default function Images() {
 	const editEngine = c?.IMAGE_EDIT_ENGINE;
 
 	return (
-		<SettingsForm title="Images" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm title="Images" loading={isLoading} onSubmit={save} saving={saving} dirty={dirty} onDiscard={discard}>
 			{draft && c && (
 				<>
 					<SettingsSection first>

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
@@ -125,7 +125,15 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export default function Interface() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const setConfig = useConfigStore((s) => s.setConfig);
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['interface'], async () => {
+	const {
+		draft,
+		setDraft,
+		saved: stored,
+		dirty,
+		discard,
+		commit,
+		isLoading
+	} = useConfigDraft<Draft>(['interface'], async () => {
 		const [task, chat] = await Promise.all([getTaskConfig(token), getChatConfig(token)]);
 		return { task: { ...task, TASK_MODEL_PARAMS: task?.TASK_MODEL_PARAMS ?? {} }, chat };
 	});
@@ -158,12 +166,6 @@ export default function Interface() {
 	const patchChat = (p: Cfg) => setDraft((d) => d && { ...d, chat: { ...d.chat, ...p } });
 	const num = (v: number | '') => (v === '' ? null : v);
 
-	// What the server held when the tab loaded or last saved, to tell a refused half from one that landed.
-	const stored = useRef<Draft | null>(null);
-	useEffect(() => {
-		if (draft && !stored.current) stored.current = structuredClone(draft);
-	}, [draft]);
-
 	/** One half's outcome, and the values the form should show for it (undefined: keep the edits). */
 	const settle = async (
 		half: keyof Draft,
@@ -179,7 +181,8 @@ export default function Interface() {
 			const now = await load();
 			if (!now) return { label, state: 'unknown', reason };
 			const value = normalize(now);
-			return same(value, stored.current?.[half])
+			// `stored`: what the server held when the tab loaded or last saved.
+			return same(value, stored?.[half])
 				? { label, state: 'refused', reason }
 				: { label, state: 'landed', reason, value };
 		} catch {
@@ -206,10 +209,7 @@ export default function Interface() {
 				)
 			]);
 			// A half that was saved or landed shows what the server holds; a refused or unknown one keeps its edits.
-			if (stored.current) {
-				if (task.value) stored.current.task = task.value;
-				if (chat.value) stored.current.chat = chat.value;
-			}
+			if (stored) commit({ task: task.value ?? stored.task, chat: chat.value ?? stored.chat });
 			setDraft((d) => d && { task: task.value ?? d.task, chat: chat.value ?? d.chat });
 			// The chat reads these two off /api/config, so tell it without a refetch.
 			const current = useConfigStore.getState().config;
@@ -238,7 +238,14 @@ export default function Interface() {
 	);
 
 	return (
-		<SettingsForm title="Interface" loading={isLoading || models.isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Interface"
+			loading={isLoading || models.isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
+		>
 			{task && chat && (
 				<>
 					<SettingsSection title="Tasks" first>

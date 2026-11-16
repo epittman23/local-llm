@@ -277,7 +277,15 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 export default function Authentication() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['authentication'], async () => {
+	const {
+		draft,
+		setDraft,
+		saved: stored,
+		dirty,
+		discard,
+		commit,
+		isLoading
+	} = useConfigDraft<Draft>(['authentication'], async () => {
 		const [admin, groups, oauth] = await Promise.all([
 			getAdminConfig(token),
 			getGroups(token),
@@ -308,14 +316,25 @@ export default function Authentication() {
 			// OAuth setting does not lose the admin config edits (and vice versa).
 			const adminSaved = await attempt(() => updateAdminConfig(token, draft.admin));
 			let oauthSaved = true;
+			let oauthAnswer: Rec | null = draft.oauth;
 			if (draft.oauth && isOAuthEditable(draft.oauth)) {
 				const oauth = draft.oauth;
 				oauthSaved = await attempt(async () => {
 					const res = await updateOAuthConfig(token, oauth);
-					if (res) setDraft((d) => d && { ...d, oauth: res });
+					if (res) {
+						oauthAnswer = res;
+						setDraft((d) => d && { ...d, oauth: res });
+					}
 					return res;
 				});
 			}
+			// Each half that was saved becomes the saved state; a refused one stays unsaved.
+			if (stored)
+				commit({
+					...stored,
+					admin: adminSaved ? draft.admin : stored.admin,
+					oauth: oauthSaved ? oauthAnswer : stored.oauth
+				});
 			if (adminSaved && oauthSaved) await saved();
 		} finally {
 			setSaving(false);
@@ -323,7 +342,14 @@ export default function Authentication() {
 	};
 
 	return (
-		<SettingsForm title="Authentication" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Authentication"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
+		>
 			{draft && (
 				<>
 					<UserAccess admin={draft.admin} set={setAdmin} groups={draft.groups} />

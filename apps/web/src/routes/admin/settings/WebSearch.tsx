@@ -118,10 +118,13 @@ function Fields({ fields, config, set }: { fields: FieldSpec[]; config: Rec; set
 export default function WebSearch() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft, setDraft, isLoading } = useConfigDraft<{ web: Rec }>(['web-search'], async () => {
-		const res = await getRAGConfig(token);
-		return res ? { web: toWebForm(res.web ?? {}) } : null;
-	});
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<{ web: Rec }>(
+		['web-search'],
+		async () => {
+			const res = await getRAGConfig(token);
+			return res ? { web: toWebForm(res.web ?? {}) } : null;
+		}
+	);
 	const [saving, setSaving] = useState(false);
 
 	const set = (changes: Rec) => setDraft((d) => d && { web: { ...d.web, ...changes } });
@@ -136,6 +139,7 @@ export default function WebSearch() {
 		setSaving(true);
 		try {
 			const res = await updateRAGConfig(token, prepared.payload);
+			commit(draft);
 			// This tab sends no hybrid-search flag, but the save reloads the
 			// reranker, so it can still turn hybrid search off (#232).
 			for (const warning of ragSaveOutcome({}, res).warnings) toast.warning(warning, { duration: 15000 });
@@ -153,7 +157,14 @@ export default function WebSearch() {
 	const loader: string = web?.WEB_LOADER_ENGINE ?? '';
 
 	return (
-		<SettingsForm title="Web Search" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm
+			title="Web Search"
+			loading={isLoading}
+			onSubmit={save}
+			saving={saving}
+			dirty={dirty}
+			onDiscard={discard}
+		>
 			{web && (
 				<>
 					<SettingsSection title="Search" first>

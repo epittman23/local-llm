@@ -73,7 +73,10 @@ const saveWith = async (over: Record<string, unknown>) => {
 			<Documents />
 		</QueryClientProvider>
 	);
-	fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+	const save = await screen.findByRole('button', { name: 'Save' });
+	// Save waits for a change (FRM-3); one that no assertion looks at.
+	fireEvent.change(screen.getByLabelText('Top K'), { target: { value: '7' } });
+	fireEvent.click(save);
 };
 
 describe('Documents save with a JSON box the server refuses (#234)', () => {
@@ -113,7 +116,9 @@ describe('Documents: the embedding model is loaded again only when asked (#532)'
 	};
 
 	it('Save asks the server not to reload an unchanged model', async () => {
-		fireEvent.click(await open());
+		const save = await open();
+		fireEvent.change(screen.getByLabelText('Top K'), { target: { value: '7' } });
+		fireEvent.click(save);
 
 		await waitFor(() => expect(posted).toContain('/embedding/update'));
 		expect(bodies['/embedding/update']).toMatchObject({ force_reload: false });

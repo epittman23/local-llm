@@ -115,6 +115,7 @@ describe('Interface: one of its two saves fails (#606)', () => {
 		api.updateTaskConfig.mockRejectedValue('Unauthorized');
 		api.updateChatConfig.mockRejectedValue('Unauthorized');
 		const tab = await renderTab();
+		fireEvent.click(tab.toolPermissions);
 		tab.save();
 
 		await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
@@ -125,6 +126,7 @@ describe('Interface: one of its two saves fails (#606)', () => {
 		api.updateTaskConfig.mockRejectedValue('TASK_MODEL: Field required');
 		api.updateChatConfig.mockRejectedValue('Could not reach the server');
 		const tab = await renderTab();
+		fireEvent.click(tab.toolPermissions);
 		tab.save();
 
 		await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
@@ -194,6 +196,7 @@ describe('Interface: one of its two saves fails (#606)', () => {
 
 	it('saves both and says so', async () => {
 		const tab = await renderTab();
+		fireEvent.click(tab.toolPermissions);
 		tab.save();
 
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Settings saved successfully!'));

@@ -163,7 +163,7 @@ export default function General() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
 	const queryClient = useQueryClient();
-	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['general'], async () => ({
+	const { draft, setDraft, dirty, discard, commit, isLoading } = useConfigDraft<Draft>(['general'], async () => ({
 		admin: await getAdminConfig(token),
 		banners: await getBanners(token).catch(() => [] as Banner[])
 	}));
@@ -180,8 +180,10 @@ export default function General() {
 			await setBanners(token, draft.banners);
 			// The new chat's banners (ChatBanners) show the saved list, not a cached one.
 			void queryClient.invalidateQueries({ queryKey: ['banners'] });
-			if (res) await saved();
-			else toast.error('Failed to update settings');
+			if (res) {
+				commit(draft);
+				await saved();
+			} else toast.error('Failed to update settings');
 		} catch (error) {
 			toast.error(`${error}`);
 		} finally {
@@ -192,7 +194,7 @@ export default function General() {
 	const admin = draft?.admin;
 
 	return (
-		<SettingsForm title="General" loading={isLoading} onSubmit={save} saving={saving}>
+		<SettingsForm title="General" loading={isLoading} onSubmit={save} saving={saving} dirty={dirty} onDiscard={discard}>
 			{draft && admin && (
 				<>
 					<AboutBlock />
