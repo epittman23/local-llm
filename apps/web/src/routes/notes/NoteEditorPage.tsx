@@ -2,10 +2,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
 import { ChevronLeft, Copy, Download, Link2, Lock, MoreHorizontal, Pin, PinOff, Sparkles, Trash2 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControlModal } from '@/components/common/AccessControlModal';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
+import { Gone, isNotFound } from '@/components/common/Gone';
+import { LoadFailed } from '@/components/common/LoadFailed';
 import type { EditorContentValue } from '@/components/common/RichTextEditor';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
@@ -26,10 +29,14 @@ import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { initialModel } from '@/routes/playground/playgroundModel';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import {
 	editorContent,
+	isUntouchedNote,
 	type NoteContent,
+	type NoteOpenState,
 	noteAccessProps,
+	PINNED_NOTES_KEY,
 	parseGeneratedTitle,
 	safeFileName,
 	saveNoteAccess,
@@ -41,7 +48,6 @@ import {
 const RichTextEditor = lazy(() => import('@/components/common/RichTextEditor'));
 
 const SAVE_DELAY = 500;
-const iconButton = 'hover:bg-muted rounded-lg p-1.5 transition disabled:opacity-50';
 
 type Note = {
 	id: string;
@@ -53,6 +59,11 @@ type Note = {
 	data?: { content?: Partial<NoteContent> } | null;
 };
 
+/** Where the note's autosave stands (FBK-1): nothing sent yet, sending, stored, or refused. */
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
+
+type Pending = { title: string; content: NoteContent | null };
+
 /**
  * A debounced save of the note's title and body. Every edit restarts the
  * timer; `flush` sends a pending save at once (used when leaving the page, so
@@ -63,13 +74,18 @@ type Note = {
  * are. `access_grants` is deliberately omitted; that leaves sharing untouched
  * only because routers/notes.py was patched to skip grants the client didn't send (docs/history/bug-review-2026-09-27.md
  * H1) -- before that, every autosave cleared them.
+ *
+ * `status` says where the save stands (#1037). A refused save keeps what it
+ * carried, merged under any edit made since, so `retry` (or the next edit, or
+ * leaving the page) sends it again; it says so in a toast with the server's
+ * words behind Details (FBK-4).
  */
 export function useNoteSaver(id: string) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const queryClient = useQueryClient();
-	const pending = useRef<{ title: string; content: NoteContent | null } | null>(null);
+	const pending = useRef<Pending | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const [saving, setSaving] = useState(false);
+	const [status, setStatus] = useState<SaveStatus>('idle');
 
 	const send = useCallback(
 		async (keepalive = false) => {
@@ -78,16 +94,23 @@ export function useNoteSaver(id: string) {
 			if (timer.current) clearTimeout(timer.current);
 			timer.current = null;
 			if (!p) return;
-			setSaving(true);
-			await updateNoteById(
-				token,
-				id,
-				{ title: p.title.trim() || 'Untitled', data: p.content ? { content: p.content } : {} },
-				keepalive
-			).catch((e) => toast.error(`${e}`));
-			setSaving(false);
+			setStatus('saving');
+			try {
+				await updateNoteById(
+					token,
+					id,
+					{ title: p.title.trim() || 'Untitled', data: p.content ? { content: p.content } : {} },
+					keepalive
+				);
+				setStatus(pending.current ? 'saving' : 'saved');
+			} catch (error) {
+				const later = pending.current as Pending | null;
+				pending.current = later ? { title: later.title, content: later.content ?? p.content } : p;
+				setStatus('failed');
+				toastFailure("Couldn't save the note. Your changes are still here: choose Retry next to the title.", error);
+			}
 			queryClient.invalidateQueries({ queryKey: ['notes', 'list'] });
-			queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
+			queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
 		},
 		[token, id, queryClient]
 	);
@@ -109,7 +132,27 @@ export function useNoteSaver(id: string) {
 			void send();
 		};
 	}, [send]);
-	return { schedule, flush: () => send(), saving };
+	return { schedule, flush: () => send(), retry: () => send(), status };
+}
+
+/** The save status beside the title, at every width (FBK-1, #1037): Saving…, Saved, or Not saved with Retry. */
+export function SaveState({ status, onRetry }: { status: SaveStatus; onRetry: () => void }) {
+	return (
+		<span aria-live="polite" className="text-foreground-muted flex shrink-0 items-center gap-1 text-caption">
+			{status === 'failed' ? (
+				<>
+					<span className="text-danger">Not saved</span>
+					<Button type="button" variant="ghost" size="xs" onClick={onRetry}>
+						Retry
+					</Button>
+				</>
+			) : status === 'saving' ? (
+				'Saving…'
+			) : status === 'saved' ? (
+				'Saved'
+			) : null}
+		</span>
+	);
 }
 
 /**
@@ -128,6 +171,8 @@ function NoteEditor() {
 	const user = useAuthStore((s) => s.user);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	const location = useLocation();
+	const singleUser = useSingleUser();
 	const defaults = useConfigStore((s) => s.config?.default_models as string | undefined);
 	const { settings } = useUserSettings();
 	const note = useQuery({
@@ -137,14 +182,43 @@ function NoteEditor() {
 		staleTime: Infinity,
 		gcTime: 0
 	});
-	const { schedule, flush, saving } = useNoteSaver(id);
+	const { schedule, flush, retry, status } = useNoteSaver(id);
 	const [title, setTitle] = useState('');
 	const [text, setText] = useState('');
 	const [generating, setGenerating] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const latest = useRef<NoteContent | null>(null);
-	useDocumentTitle(title || 'Note');
+	const titleInput = useRef<HTMLInputElement>(null);
+	const gone = note.isError && isNotFound(note.error);
+	useDocumentTitle(gone ? 'Note not found' : title || 'Note');
+
+	// S6-D4: a note "New note" just made is opened on its title, and deleted on the
+	// way out if nothing was ever typed in it. Only that note, only on this visit:
+	// the flag is taken out of the history entry, so a reload or Back never counts.
+	const fresh = useRef((location.state as NoteOpenState | null)?.fresh === true ? id : null);
+	const edited = useRef(false);
+	const loaded = useRef<Note | null>(null);
+	loaded.current = note.data ?? null;
+	const leave = useRef({ token, queryClient });
+	leave.current = { token, queryClient };
+	useEffect(() => {
+		if ((location.state as NoteOpenState | null)?.fresh)
+			navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+	}, [location.state, location.pathname, location.search, navigate]);
+	useEffect(() => {
+		edited.current = false;
+		return () => {
+			const n = loaded.current;
+			if (fresh.current !== id || edited.current || !n || n.id !== id || !isUntouchedNote(n)) return;
+			fresh.current = null;
+			const { token: t, queryClient: qc } = leave.current;
+			// Silent: the note was never more than a click on New note.
+			void deleteNoteById(t, id)
+				.catch(() => null)
+				.then(() => qc.invalidateQueries({ queryKey: ['notes'] }));
+		};
+	}, [id]);
 
 	// Seed the title and body from the server once per note, during render
 	// rather than in an effect: an effect left a frame with an empty title
@@ -158,13 +232,29 @@ function NoteEditor() {
 		setTitle(note.data.title ?? '');
 		setText(note.data.data?.content?.md ?? '');
 	}
+	const seeded = seededId === id;
 	useEffect(() => {
-		if (note.isError) {
-			toast.error(`${note.error}`);
-			navigate('/notes', { replace: true });
-		}
-	}, [note.isError, note.error, navigate]);
+		if (!seeded || fresh.current !== id) return;
+		titleInput.current?.focus();
+		titleInput.current?.select();
+	}, [seeded, id]);
 
+	if (note.isError) {
+		return gone ? (
+			<Gone
+				level={2}
+				title="This note no longer exists"
+				description="It may have been deleted, or the link may be mistyped."
+				actions={
+					<Button asChild>
+						<Link to="/notes">Back to notes</Link>
+					</Button>
+				}
+			/>
+		) : (
+			<LoadFailed what="the note" error={note.error} onRetry={() => note.refetch()} retrying={note.isFetching} />
+		);
+	}
 	if (!note.data) {
 		return (
 			<div className="flex flex-1 items-center justify-center">
@@ -176,11 +266,13 @@ function NoteEditor() {
 	const editable = n.write_access !== false;
 
 	const onContent = (v: EditorContentValue) => {
+		edited.current = true;
 		latest.current = v;
 		setText(v.md);
 		schedule(title, v);
 	};
 	const onTitle = (value: string) => {
+		edited.current = true;
 		setTitle(value);
 		schedule(value, null);
 	};
@@ -188,33 +280,46 @@ function NoteEditor() {
 
 	const generateTitle = async () => {
 		const model = initialModel(settings?.models, defaults);
-		if (!model) return void toast.error('Please select a model.');
+		if (!model) return void toast.error('Choose a model in Settings first, then generate a title.');
 		setGenerating(true);
 		const res = await generateOpenAIChatCompletion(token, {
 			model,
 			stream: false,
 			messages: [{ role: 'user', content: titlePrompt(md()) }]
-		}).catch((e) => void toast.error(`${e}`));
+		}).catch((e) => void toastFailure("Couldn't generate a title.", e));
 		setGenerating(false);
 		const generated = parseGeneratedTitle(res?.choices?.[0]?.message?.content ?? '');
 		if (generated) onTitle(generated);
-		else if (res) toast.error('Failed to generate title');
+		else if (res) toast.error("Couldn't generate a title: the model's reply had none.");
 	};
 	const download = (ext: 'md' | 'txt') =>
 		saveAs(new Blob([md()], { type: ext === 'md' ? 'text/markdown' : 'text/plain' }), safeFileName(title, ext));
 	const copy = async (value: string, ok: string) =>
-		(await copyToClipboard(value)) ? toast.success(ok) : toast.error('Failed to copy');
+		(await copyToClipboard(value))
+			? toast.success(ok)
+			: toast.error("Couldn't copy: the browser blocked clipboard access");
 	const togglePin = async () => {
-		const res = await toggleNotePinnedStatusById(token, n.id).catch((e) => void toast.error(`${e}`));
-		if (res) queryClient.setQueryData(['notes', 'item', id], { ...n, is_pinned: !n.is_pinned });
-		queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
+		try {
+			await toggleNotePinnedStatusById(token, n.id);
+			queryClient.setQueryData(['notes', 'item', id], { ...n, is_pinned: !n.is_pinned });
+			toast.success(n.is_pinned ? 'Note unpinned' : 'Note pinned');
+		} catch (error) {
+			toastFailure(n.is_pinned ? "Couldn't unpin the note." : "Couldn't pin the note.", error);
+		}
+		queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
 	};
 	const remove = async () => {
-		const res = await deleteNoteById(token, n.id).catch((e) => void toast.error(`${e}`));
-		if (res) {
-			await queryClient.invalidateQueries({ queryKey: ['notes'] });
-			navigate('/notes');
+		try {
+			await deleteNoteById(token, n.id);
+		} catch (error) {
+			return void toastFailure("Couldn't delete the note.", error);
 		}
+		// Deleted on purpose: nothing for the way out to discard.
+		fresh.current = null;
+		toast.success('Note deleted');
+		await queryClient.invalidateQueries({ queryKey: ['notes'] });
+		queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
+		navigate('/notes');
 	};
 
 	return (
@@ -222,13 +327,14 @@ function NoteEditor() {
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete note?"
-				confirmLabel="Delete"
+				title={`Delete “${title || 'Untitled'}”?`}
+				confirmLabel="Delete note"
+				destructive
 				onConfirm={remove}
 			>
-				This will delete <span className="font-medium">{title}</span>.
+				The note and its text are deleted. It can't be undone.
 			</ConfirmDialog>
-			{editable && (
+			{editable && !singleUser && (
 				<AccessControlModal
 					open={showAccess}
 					onOpenChange={setShowAccess}
@@ -238,11 +344,17 @@ function NoteEditor() {
 				/>
 			)}
 
-			<div className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
-				<Link to="/notes" onClick={() => void flush()} aria-label="Back to notes" className={iconButton}>
-					<ChevronLeft className="size-4" />
-				</Link>
+			{/* The page's own header: on a phone, toasts start below it (FBK-2). */}
+			<div data-page-top="" className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
+				<Tip content="Back to notes">
+					<Button asChild variant="ghost" size="icon-sm">
+						<Link to="/notes" onClick={() => void flush()} aria-label="Back to notes">
+							<ChevronLeft className="size-4" />
+						</Link>
+					</Button>
+				</Tip>
 				<input
+					ref={titleInput}
 					className="placeholder:text-foreground-muted min-w-0 flex-1 bg-transparent text-lg"
 					aria-label="Title"
 					placeholder={generating ? 'Generating...' : 'Title'}
@@ -250,6 +362,7 @@ function NoteEditor() {
 					readOnly={!editable}
 					onChange={(e) => onTitle(e.target.value)}
 				/>
+				{editable && <SaveState status={status} onRetry={() => void retry()} />}
 				{editable && (
 					<Tip content="Generate title">
 						<Button
@@ -264,16 +377,15 @@ function NoteEditor() {
 						</Button>
 					</Tip>
 				)}
-				<span className="text-muted-foreground hidden w-12 text-right text-caption sm:block" aria-live="polite">
-					{saving ? 'Saving…' : ''}
-				</span>
 				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button type="button" variant="ghost" size="icon-sm" aria-label="Note menu">
-							<MoreHorizontal className="size-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
+					<Tip content="More">
+						<DropdownMenuTrigger asChild>
+							<Button type="button" variant="ghost" size="icon-sm" aria-label="Note menu">
+								<MoreHorizontal className="size-4" />
+							</Button>
+						</DropdownMenuTrigger>
+					</Tip>
+					<DropdownMenuContent align="end" className="min-w-44">
 						<DropdownMenuItem onSelect={() => download('md')}>
 							<Download /> Download (.md)
 						</DropdownMenuItem>
@@ -295,17 +407,19 @@ function NoteEditor() {
 								</>
 							) : (
 								<>
-									<Pin /> Pin to Sidebar
+									<Pin /> Pin to sidebar
 								</>
 							)}
 						</DropdownMenuItem>
+						{editable && !singleUser && (
+							<DropdownMenuItem onSelect={() => setShowAccess(true)}>
+								<Lock /> Access
+							</DropdownMenuItem>
+						)}
 						{editable && (
 							<>
-								<DropdownMenuItem onSelect={() => setShowAccess(true)}>
-									<Lock /> Access
-								</DropdownMenuItem>
 								<DropdownMenuSeparator />
-								<DropdownMenuItem onSelect={() => setConfirmDelete(true)}>
+								<DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
 									<Trash2 /> Delete
 								</DropdownMenuItem>
 							</>
