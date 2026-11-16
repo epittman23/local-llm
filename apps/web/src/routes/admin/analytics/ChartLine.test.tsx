@@ -32,7 +32,7 @@ describe('ChartLine', () => {
 		const { container } = render(
 			<ChartLine data={DATA} models={['alpha', 'beta']} colors={['var(--series-1)', 'var(--series-2)']} height={200} />
 		);
-		const paths = [...container.querySelectorAll('svg[role="img"] path')];
+		const paths = [...container.querySelectorAll<SVGPathElement>('svg[role="img"] path')];
 		expect(paths.map((p) => p.style.stroke)).toEqual(['var(--series-1)', 'var(--series-2)']);
 	});
 
