@@ -54,7 +54,12 @@ export function SplitCreateButton({
 	if (visible.length === 1) {
 		return (
 			<div className={frame}>
-				<Button variant={variant} size="sm" className="rounded-none" onClick={() => run(primary)}>
+				<Button
+					variant={variant}
+					size={filled ? 'default' : 'sm'}
+					className="rounded-none"
+					onClick={() => run(primary)}
+				>
 					{label}
 				</Button>
 			</div>
@@ -63,14 +68,14 @@ export function SplitCreateButton({
 
 	return (
 		<div className={frame}>
-			<Button variant={variant} size="sm" className="rounded-none" onClick={() => run(primary)}>
+			<Button variant={variant} size={filled ? 'default' : 'sm'} className="rounded-none" onClick={() => run(primary)}>
 				{label}
 			</Button>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
 						variant={variant}
-						size="icon-sm"
+						size={filled ? 'icon' : 'icon-sm'}
 						className={cn('rounded-none border-l', filled && 'border-background')}
 						aria-label="Open create menu"
 					>

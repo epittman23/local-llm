@@ -53,6 +53,8 @@ describe('SplitCreateButton', () => {
 		);
 		const main = screen.getByRole('button', { name: 'New note' });
 		expect(main).toHaveAttribute('data-variant', 'default');
+		// At the size of the other pages' main action, not the quiet pair's small one.
+		expect(main).toHaveAttribute('data-size', 'default');
 		expect(screen.getByRole('button', { name: 'Open create menu' })).toHaveAttribute('data-variant', 'default');
 		expect(main.parentElement).not.toHaveClass('border');
 	});
