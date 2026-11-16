@@ -873,11 +873,13 @@ from the accessible name: 'Max tokens · `max_tokens`', 'Layers on the GPU ·
 **WRD-3. The product is "local-llm"**, written that way everywhere: the tab
 title, the sidebar, the sign-in page, the desktop app. Nothing in the
 interface names or links to Open WebUI except the notices the licence
-requires. The mark is `components/ui/app-mark.tsx` (`AppMark`): lucide's
-Sigma in `--brand` on a `--surface-1` rounded square, the favicon's shape, at
-20, 24 or 32 px. It appears in the sidebar header, the phone bar, the boot
-splash (Base.astro repeats the same SVG), the sign-in page and the shared
-page.
+requires. The mark is `components/ui/app-mark.tsx` (`AppMark`): the ll of
+the name in `--foreground-strong` followed by a block cursor in `--brand`,
+on a `--surface-1` squircle, the favicon's shape, at 20, 24 or 32 px. It
+appears in the sidebar header, the phone bar, the boot splash (Base.astro
+repeats the same SVG), the sign-in page and the shared page. The favicon and
+the desktop app's `static/mark.svg` draw the same shapes in the dark theme's
+colours as hex; `app-mark.test.tsx` fails if a copy drifts.
 
 **WRD-4. There is one owner.** No "users", "admins", "contact your
 administrator", "shared with you". Features that only make sense with several

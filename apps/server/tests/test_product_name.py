@@ -44,8 +44,9 @@ WEB_PUBLIC = Path(__file__).resolve().parents[2] / 'web' / 'public'
 
 
 def test_the_manifest_shows_the_mark_on_the_page_colour(monkeypatch):
-    # Decision D1 (2026-11-14, #924): lucide's Sigma, not Open WebUI's 'OI' logo,
-    # on the dark theme's --page, not Open WebUI's grey.
+    # Decision D1 (2026-11-14, #924): the product's own mark (since 2026-11-16 the
+    # ll and cursor), not Open WebUI's 'OI' logo, on the dark theme's --page, not
+    # Open WebUI's grey.
     monkeypatch.setattr(main.app.state, 'LLLM_NAME', 'local-llm', raising=False)
     monkeypatch.setattr(main.app.state, 'EXTERNAL_PWA_MANIFEST_URL', None, raising=False)
     manifest = asyncio.run(main.get_manifest_json())

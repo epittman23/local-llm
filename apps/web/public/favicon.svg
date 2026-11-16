@@ -1,12 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <title>local-llm</title>
-  <!-- local-llm's mark until a real one exists (decision D1, 2026-11-14): lucide's
-       Sigma glyph (ISC licence; copyright (c) for portions of Lucide are held by
-       Cole Bemis 2013-2022 as part of Feather (MIT); all other copyright (c) for
-       Lucide are held by Lucide Contributors 2022). An asset file cannot read the tokens, so the
-       colours are the dark theme's, as hex (styles/standard.css): page,
-       oklch(0.205 0.012 170) = #121916, and brand, oklch(0.8 0.09 235) = #82c7f0.
+  <!-- local-llm's mark (decision 2026-11-16): the ll of the name followed by a
+       block cursor, a model writing its answer. An asset file cannot read the
+       tokens, so the colours are the dark theme's, as hex (styles/standard.css):
+       tile = page, oklch(0.205 0.012 170) = #121916; letters = foreground strong,
+       oklch(0.95 0.012 95) = #f1efe6, 15.5:1 on the tile; cursor = brand,
+       oklch(0.8 0.09 235) = #82c7f0, 9.7:1 on the tile. Strokes are 2 units on
+       whole-unit centres so they land on the pixel grid at 16 and 32 px.
        XML comments cannot hold two hyphens, so the token names are spelled bare. -->
-  <rect width="32" height="32" rx="7" fill="#121916"/>
-  <path transform="translate(4 4)" d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2" fill="none" stroke="#82c7f0" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 0C31.9 0 32 .1 32 16S31.9 32 16 32 0 31.9 0 16 .1 0 16 0Z" fill="#121916"/>
+  <path d="M9 7V23a2 2 0 0 0 2 2M15 7V23a2 2 0 0 0 2 2" fill="none" stroke="#f1efe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="20" y="18" width="4" height="8" rx="1" fill="#82c7f0"/>
 </svg>
