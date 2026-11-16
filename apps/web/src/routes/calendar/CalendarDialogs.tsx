@@ -1,8 +1,10 @@
+import { Palette } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { toastFailure } from '@/components/common/failureToast';
 import { Spinner } from '@/components/common/Spinner';
+import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -394,6 +396,7 @@ export function CalendarDialog({
 	const [name, setName] = useState('');
 	const [presets, setPresets] = useState(seriesHexes);
 	const [color, setColor] = useState(presets[0]);
+	const customInput = useRef<HTMLInputElement>(null);
 	const [loading, setLoading] = useState(false);
 	const [nameError, setNameError] = useState<string | null>(null);
 	const nameField = useRef<HTMLInputElement>(null);
@@ -410,6 +413,8 @@ export function CalendarDialog({
 			setColor(calendar ? calendar.color || now[0] : firstFreeColour(now, calendars));
 		}
 	}
+
+	const custom = !presets.includes(color);
 
 	const save = async () => {
 		if (!name.trim()) {
@@ -482,22 +487,36 @@ export function CalendarDialog({
 									onClick={() => setColor(c)}
 								/>
 							))}
-							<label
-								title="Custom colour"
-								className={cn(
-									'relative size-6 cursor-pointer overflow-hidden rounded-full border-2',
-									!presets.includes(color) ? 'border-foreground' : 'border-transparent'
-								)}
-								style={{ backgroundColor: color }}
-							>
-								<input
-									type="color"
+							{/* A control of its own, at the presets' size: a palette until a custom colour is chosen, then that colour. */}
+							<Tip content="Custom colour">
+								<Button
+									type="button"
+									variant={custom ? 'ghost' : 'outline'}
+									size="icon-xs"
 									aria-label="Custom colour"
-									className="absolute size-0 opacity-0"
-									value={color}
-									onChange={(e) => setColor(e.target.value)}
-								/>
-							</label>
+									aria-pressed={custom}
+									className={cn('rounded-full border-2', custom ? 'border-foreground' : 'border-border')}
+									style={custom ? { backgroundColor: color } : undefined}
+									onClick={() => {
+										const picker = customInput.current;
+										if (!picker) return;
+										if (typeof picker.showPicker === 'function') picker.showPicker();
+										else picker.click();
+									}}
+								>
+									{!custom && <Palette aria-hidden />}
+								</Button>
+							</Tip>
+							<input
+								ref={customInput}
+								type="color"
+								aria-hidden
+								tabIndex={-1}
+								data-testid="custom-colour-input"
+								className="sr-only"
+								value={color}
+								onChange={(e) => setColor(e.target.value)}
+							/>
 						</div>
 					</fieldset>
 					<DialogFooter>

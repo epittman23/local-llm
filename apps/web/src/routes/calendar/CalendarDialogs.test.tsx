@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import * as api from '@/lib/apis/calendar';
 import { CalendarDialog, EventDialog } from './CalendarDialogs';
 import { NS } from './calendarModel';
@@ -331,10 +332,13 @@ describe('CalendarDialog colour presets', () => {
 	it('offers the six series tokens, starts on the first one free, marks the chosen preset as pressed and saves it', async () => {
 		vi.mocked(api.createCalendar).mockResolvedValue({ id: 'n' } as never);
 		const onSaved = vi.fn();
-		render(<CalendarDialog open onOpenChange={() => {}} calendars={calendars} onSaved={onSaved} />);
+		render(<CalendarDialog open onOpenChange={() => {}} calendars={calendars} onSaved={onSaved} />, {
+			wrapper: TooltipProvider
+		});
 		expect(screen.getByRole('heading', { name: 'New calendar' })).toBeVisible();
 		// No stylesheet here, so the presets are the dark theme's series values (lib/ui/tokenColour.ts).
-		expect(document.querySelectorAll('button[aria-pressed]')).toHaveLength(6);
+		// Six presets, then Custom colour.
+		expect(document.querySelectorAll('button[aria-pressed]')).toHaveLength(7);
 		// Personal is blue (#3b82f6), so a new calendar starts on yellow (#1106).
 		const yellow = screen.getByRole('button', { name: 'Yellow' });
 		const green = screen.getByRole('button', { name: 'Green' });
@@ -355,7 +359,9 @@ describe('CalendarDialog colour presets', () => {
 		vi.mocked(api.createCalendar).mockResolvedValue({ id: 'n' } as never);
 		document.documentElement.style.setProperty('--series-1', 'oklch(0.48 0.115 245)');
 		try {
-			render(<CalendarDialog open onOpenChange={() => {}} calendars={[]} onSaved={() => {}} />);
+			render(<CalendarDialog open onOpenChange={() => {}} calendars={[]} onSaved={() => {}} />, {
+				wrapper: TooltipProvider
+			});
 			expect(screen.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'true');
 			fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Work' } });
 			fireEvent.click(screen.getByRole('button', { name: 'Create calendar' }));
@@ -368,7 +374,9 @@ describe('CalendarDialog colour presets', () => {
 	});
 
 	it('refuses an empty name under the field', () => {
-		render(<CalendarDialog open onOpenChange={() => {}} calendars={[]} onSaved={() => {}} />);
+		render(<CalendarDialog open onOpenChange={() => {}} calendars={[]} onSaved={() => {}} />, {
+			wrapper: TooltipProvider
+		});
 		fireEvent.click(screen.getByRole('button', { name: 'Create calendar' }));
 		expect(screen.getByText('Enter a name for the calendar')).toBeVisible();
 		expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
@@ -380,12 +388,27 @@ describe('CalendarDialog colour presets', () => {
 	it('edits a calendar: its name and colour, saved with the update (#1106)', async () => {
 		vi.mocked(api.updateCalendar).mockResolvedValue({ id: 'work' } as never);
 		const work = { id: 'work', name: 'Work', color: '#eb9a75', is_default: false, is_system: false } as never;
-		render(<CalendarDialog open onOpenChange={() => {}} calendar={work} calendars={calendars} onSaved={() => {}} />);
+		render(<CalendarDialog open onOpenChange={() => {}} calendar={work} calendars={calendars} onSaved={() => {}} />, {
+			wrapper: TooltipProvider
+		});
 		expect(screen.getByRole('heading', { name: 'Edit calendar' })).toBeVisible();
 		expect(screen.getByLabelText('Name')).toHaveValue('Work');
 		expect(screen.getByRole('button', { name: 'Orange' })).toHaveAttribute('aria-pressed', 'true');
 		fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Office' } });
-		fireEvent.change(screen.getByLabelText('Custom colour'), { target: { value: '#123456' } });
+		// A control of its own: a palette, not a copy of the chosen preset, until a custom colour is picked.
+		const customButton = screen.getByRole('button', { name: 'Custom colour' });
+		expect(customButton).toHaveAttribute('aria-pressed', 'false');
+		expect(customButton.style.backgroundColor).toBe('');
+		const picker = screen.getByTestId('custom-colour-input') as HTMLInputElement;
+		const showPicker = vi.fn();
+		Object.assign(picker, { showPicker });
+		fireEvent.click(customButton);
+		expect(showPicker).toHaveBeenCalled();
+		expect(picker.tabIndex).toBe(-1);
+		fireEvent.change(picker, { target: { value: '#123456' } });
+		expect(customButton).toHaveAttribute('aria-pressed', 'true');
+		expect(customButton.style.backgroundColor).toBe('#123456');
+		expect(screen.getByRole('button', { name: 'Orange' })).toHaveAttribute('aria-pressed', 'false');
 		fireEvent.click(screen.getByRole('button', { name: 'Save calendar' }));
 		await waitFor(() =>
 			expect(api.updateCalendar).toHaveBeenCalledWith(expect.anything(), 'work', { name: 'Office', color: '#123456' })
@@ -395,7 +418,9 @@ describe('CalendarDialog colour presets', () => {
 	it('says when a save fails', async () => {
 		vi.mocked(api.updateCalendar).mockRejectedValue('nope');
 		const work = { id: 'work', name: 'Work', color: null } as never;
-		render(<CalendarDialog open onOpenChange={() => {}} calendar={work} calendars={[]} onSaved={() => {}} />);
+		render(<CalendarDialog open onOpenChange={() => {}} calendar={work} calendars={[]} onSaved={() => {}} />, {
+			wrapper: TooltipProvider
+		});
 		fireEvent.click(screen.getByRole('button', { name: 'Save calendar' }));
 		await waitFor(() => expect(toastError).toHaveBeenCalledWith('Couldn’t save the calendar', expect.anything()));
 	});
