@@ -4,6 +4,12 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Switch as SwitchPrimitive } from 'radix-ui';
 
+/**
+ * The shared switch (FRM-5). Its colours come from standard.css (COL-4): the
+ * track, knob and edge for on, off and disabled. Disabled (ACT-5) covers a
+ * switch disabled itself and one inside a disabled fieldset: the Radix root is
+ * a <button>, so `:disabled` matches both, while `data-disabled` only the first.
+ */
 function Switch({
 	className,
 	size = 'default',
@@ -16,14 +22,14 @@ function Switch({
 			data-slot="switch"
 			data-size={size}
 			className={cn(
-				'peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-[color,background-color,border-color] outline-none group-has-[:focus-visible]/field-label:border-transparent group-has-[:focus-visible]/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 pointer-coarse:after:-inset-y-4 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50',
+				'peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-[color,background-color,border-color] outline-none group-has-[:focus-visible]/field-label:border-transparent group-has-[:focus-visible]/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 pointer-coarse:after:-inset-y-4 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 disabled:cursor-not-allowed data-disabled:cursor-not-allowed',
 				className
 			)}
 			{...props}
 		>
 			<SwitchPrimitive.Thumb
 				data-slot="switch-thumb"
-				className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground"
+				className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0"
 			/>
 		</SwitchPrimitive.Root>
 	);
