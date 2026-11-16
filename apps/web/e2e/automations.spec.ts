@@ -148,8 +148,23 @@ test('search and the status filter go to the server', async ({ page }) => {
 	await expect.poll(() => seen.lists.some((q) => new URLSearchParams(q).get('status') === 'paused')).toBe(true);
 });
 
+test('offers no channel to post to while the server has one account (S6-D1)', async ({ page }) => {
+	await mockWorkspaceBackend(page, enabled);
+	await page.route('**/api/v1/users/search**', (route) => json(route, { users: [], total: 1 }));
+	await mockAutomations(page);
+	await page.goto('/automations');
+	await page.getByRole('button', { name: 'New automation' }).first().click();
+	const d = page.getByRole('dialog', { name: 'New automation' });
+	await d.getByRole('button', { name: 'Post to' }).click();
+	await expect(page.getByRole('option', { name: /Chat, in no folder/ })).toBeVisible();
+	await expect(page.getByRole('option', { name: 'ops' })).toHaveCount(0);
+	await expect(page.getByRole('combobox', { name: 'Search folders' })).toBeVisible();
+});
+
 test('creating one: required fields, a weekly schedule, a channel destination, then it opens', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
+	// Channels are shown only with a second account (S6-D1).
+	await page.route('**/api/v1/users/search**', (route) => json(route, { users: [], total: 2 }));
 	const seen = await mockAutomations(page);
 	await page.goto('/automations');
 	await page.getByRole('button', { name: 'New automation' }).first().click();
