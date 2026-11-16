@@ -1,5 +1,5 @@
 import { Hash, Lock, Plus, Users } from 'lucide-react';
-import { useRef } from 'react';
+import { type Ref, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { ListEmptyState } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
@@ -81,9 +81,21 @@ function Channels() {
 			},
 			{ replace: !open }
 		);
+	// NAV-4: the dialog's opener gets focus back; when it has gone (the sidebar's
+	// + in a phone's navigation sheet) or there was none (a link to ?new=1),
+	// the page's own New channel does.
+	const headerButton = useRef<HTMLButtonElement>(null);
+	const opener = useRef<Element | null>(null);
+	const onCloseAutoFocus = (event: Event) => {
+		const from = opener.current;
+		opener.current = null;
+		if (from instanceof HTMLElement && from !== document.body && from.isConnected) return;
+		event.preventDefault();
+		headerButton.current?.focus({ preventScroll: true });
+	};
 	const list = channels.data ?? [];
-	const newChannel = (
-		<Button type="button" onClick={() => setCreating(true)}>
+	const newChannel = (ref?: Ref<HTMLButtonElement>) => (
+		<Button ref={ref} type="button" onClick={() => setCreating(true)}>
 			<Plus data-icon="inline-start" />
 			New channel
 		</Button>
@@ -96,11 +108,19 @@ function Channels() {
 					<PageHeader
 						title="Channels"
 						description="Rooms where the people on this server write to each other, and a model answers when mentioned."
-						action={newChannel}
+						action={newChannel(headerButton)}
 					/>
 				</div>
 			</div>
-			<ChannelFormDialog open={creating} onOpenChange={onOpenChange} onSubmit={onSubmit} />
+			<ChannelFormDialog
+				open={creating}
+				onOpenChange={onOpenChange}
+				onSubmit={onSubmit}
+				onOpenAutoFocus={() => {
+					opener.current = document.activeElement;
+				}}
+				onCloseAutoFocus={onCloseAutoFocus}
+			/>
 			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
 				{channels.isError ? (
 					<LoadFailed
@@ -117,7 +137,7 @@ function Channels() {
 					<ListEmptyState
 						title="No channels yet"
 						description="A channel keeps a conversation between people in one place. Mention a model with @ to have it answer."
-						action={newChannel}
+						action={newChannel()}
 					/>
 				) : (
 					<ul className="grid min-w-0 gap-0.5" aria-label="Channels">

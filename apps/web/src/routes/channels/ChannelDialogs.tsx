@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, Copy, Plus, Search, Trash2, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ComponentProps, useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AccessControl } from '@/components/common/AccessControl';
@@ -560,16 +560,19 @@ export function ChannelFormDialog({
 	onOpenChange,
 	channel,
 	onSubmit,
-	onDeleted
-}: DialogProps & {
-	channel?: Channel | null;
-	onSubmit: (payload: Record<string, unknown>) => Promise<boolean>;
-	onDeleted?: () => void;
-}) {
+	onDeleted,
+	onOpenAutoFocus,
+	onCloseAutoFocus
+}: DialogProps &
+	Pick<ComponentProps<typeof DialogContent>, 'onOpenAutoFocus' | 'onCloseAutoFocus'> & {
+		channel?: Channel | null;
+		onSubmit: (payload: Record<string, unknown>) => Promise<boolean>;
+		onDeleted?: () => void;
+	}) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			{/* OVL-1: a short form is 32 rem; its fields shorten rather than widen it (#967). */}
-			<DialogContent className="sm:max-w-lg">
+			<DialogContent className="sm:max-w-lg" onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
 				{/* Remounted per open, so the form starts from the channel it was opened on. */}
 				{open && (
 					<ChannelForm channel={channel} onOpenChange={onOpenChange} onSubmit={onSubmit} onDeleted={onDeleted} />

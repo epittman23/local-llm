@@ -107,6 +107,26 @@ describe('the new-channel dialog', () => {
 		expect(await screen.findByText('channel page')).toBeInTheDocument();
 	});
 
+	it("returns focus to the page's New channel when the dialog had no opener on the page (NAV-4)", async () => {
+		show('/channels?new=1');
+		await screen.findByRole('heading', { name: 'New channel' });
+		fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		const [header] = screen.getAllByRole('button', { name: 'New channel' });
+		await waitFor(() => expect(document.activeElement).toBe(header));
+	});
+
+	it('returns focus to the button that opened it, when that is still there (NAV-4)', async () => {
+		show();
+		const empty = screen.getAllByRole('button', { name: 'New channel' })[1];
+		empty.focus();
+		fireEvent.click(empty);
+		await screen.findByRole('heading', { name: 'New channel' });
+		fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		await waitFor(() => expect(document.activeElement).toBe(empty));
+	});
+
 	it('marks an empty name under the field, with no browser bubble (#1109)', async () => {
 		show('/channels?new=1');
 		const name = await screen.findByLabelText('Name');
