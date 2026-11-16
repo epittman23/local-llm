@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow, TableSortHead } from '@/components/ui/table';
 
 function rows() {
 	return (
@@ -74,5 +74,107 @@ describe('Table (DAT-6)', () => {
 		const { unmount } = render(<Table>{rows()}</Table>);
 		unmount();
 		expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
+	});
+});
+
+describe('a row that opens something (DAT-6, NAV-5)', () => {
+	function OpeningRow({ onOpen, onMenu }: { onOpen: () => void; onMenu?: () => void }) {
+		return (
+			<Table>
+				<TableBody>
+					<TableRow onOpen={onOpen}>
+						<TableCell>
+							<button type="button" onClick={onOpen}>
+								demo-a
+							</button>
+						</TableCell>
+						<TableCell>12.5</TableCell>
+						<TableCell>
+							<button type="button" onClick={onMenu}>
+								More
+							</button>
+						</TableCell>
+					</TableRow>
+				</TableBody>
+			</Table>
+		);
+	}
+
+	it('opens on a click anywhere on the row, once from its name button, and not from another control', () => {
+		const onOpen = vi.fn();
+		const onMenu = vi.fn();
+		render(<OpeningRow onOpen={onOpen} onMenu={onMenu} />);
+		const row = screen.getByRole('row');
+		expect(row).toHaveAttribute('data-opens');
+		expect(row).toHaveClass('cursor-pointer');
+		fireEvent.click(screen.getByText('12.5'));
+		expect(onOpen).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByRole('button', { name: 'demo-a' }));
+		expect(onOpen).toHaveBeenCalledTimes(2);
+		fireEvent.click(screen.getByRole('button', { name: 'More' }));
+		expect(onOpen).toHaveBeenCalledTimes(2);
+		expect(onMenu).toHaveBeenCalledTimes(1);
+	});
+
+	it('is reached and opened from the keyboard through its name button', () => {
+		const onOpen = vi.fn();
+		render(<OpeningRow onOpen={onOpen} />);
+		const name = screen.getByRole('button', { name: 'demo-a' });
+		name.focus();
+		expect(document.activeElement).toBe(name);
+		// A button's Enter is its click.
+		fireEvent.click(name);
+		expect(onOpen).toHaveBeenCalledTimes(1);
+	});
+
+	it('leaves a plain row alone, and lets a caller’s own click stop the open', () => {
+		const onClick = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+		const onOpen = vi.fn();
+		render(
+			<Table>
+				<TableBody>
+					<TableRow>
+						<TableCell>plain</TableCell>
+					</TableRow>
+					<TableRow onOpen={onOpen} onClick={onClick}>
+						<TableCell>stopped</TableCell>
+					</TableRow>
+				</TableBody>
+			</Table>
+		);
+		expect(screen.getAllByRole('row')[0]).not.toHaveAttribute('data-opens');
+		expect(screen.getAllByRole('row')[0]).not.toHaveClass('cursor-pointer');
+		fireEvent.click(screen.getByText('stopped'));
+		expect(onClick).toHaveBeenCalled();
+		expect(onOpen).not.toHaveBeenCalled();
+	});
+});
+
+describe('a sortable column heading (DAT-6)', () => {
+	function Head({ active, direction, onSort }: { active: boolean; direction: 'asc' | 'desc'; onSort: () => void }) {
+		return (
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableSortHead label="Rating" active={active} direction={direction} onSort={onSort} className="w-20" />
+					</TableRow>
+				</TableHeader>
+			</Table>
+		);
+	}
+
+	it('names the open sort and its way in aria-sort, on that heading only', () => {
+		const onSort = vi.fn();
+		const { rerender } = render(<Head active direction="desc" onSort={onSort} />);
+		const head = screen.getByRole('columnheader', { name: 'Rating' });
+		expect(head).toHaveAttribute('aria-sort', 'descending');
+		expect(head).toHaveAttribute('scope', 'col');
+		expect(head).toHaveClass('w-20');
+		fireEvent.click(screen.getByRole('button', { name: 'Rating' }));
+		expect(onSort).toHaveBeenCalledTimes(1);
+		rerender(<Head active direction="asc" onSort={onSort} />);
+		expect(head).toHaveAttribute('aria-sort', 'ascending');
+		rerender(<Head active={false} direction="asc" onSort={onSort} />);
+		expect(head).not.toHaveAttribute('aria-sort');
 	});
 });
