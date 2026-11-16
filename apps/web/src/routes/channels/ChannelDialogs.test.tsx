@@ -105,7 +105,7 @@ describe('the webhooks dialog', () => {
 		fireEvent.click(row);
 		expect(row).toHaveAttribute('aria-expanded', 'true');
 		expect(screen.getByRole('button', { name: 'Change picture' })).toBeInTheDocument();
-		expect(screen.getByLabelText('Webhook Name')).toHaveValue('Deploys');
+		expect(screen.getByLabelText('Webhook name')).toHaveValue('Deploys');
 	});
 
 	it('opens the file chooser when Change picture is pressed', async () => {

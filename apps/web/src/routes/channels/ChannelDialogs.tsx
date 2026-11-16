@@ -477,8 +477,8 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 											<Input
 												value={v.name}
 												onChange={(e) => edit(w, { name: e.target.value })}
-												placeholder="Webhook Name"
-												aria-label="Webhook Name"
+												placeholder="Webhook name"
+												aria-label="Webhook name"
 												className="h-8"
 											/>
 											<Tip content="Copy URL">
