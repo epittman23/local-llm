@@ -8,6 +8,7 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import type { WorkspaceAction } from '@/lib/stores/workspaceStore';
+import { cn } from '@/lib/utils';
 
 // Ports common/SplitCreateButton.svelte. The primary click runs the action
 // whose id ends in `-new` (or, failing that, the first visible one); the
@@ -22,7 +23,19 @@ function actionIcon(id: string) {
 	return Pencil;
 }
 
-export function SplitCreateButton({ actions, label = 'Create' }: { actions: WorkspaceAction[]; label?: string }) {
+/**
+ * `filled` draws it as the page's one filled brand button (ACT-1), for a page
+ * whose main action it is (Notes); otherwise it is the quiet outlined pair.
+ */
+export function SplitCreateButton({
+	actions,
+	label = 'Create',
+	filled = false
+}: {
+	actions: WorkspaceAction[];
+	label?: string;
+	filled?: boolean;
+}) {
 	const navigate = useNavigate();
 	const visible = actions.filter((action) => action.visible ?? true);
 	const primary = visible.find((action) => action.id.endsWith('-new')) ?? visible[0] ?? null;
@@ -34,12 +47,14 @@ export function SplitCreateButton({ actions, label = 'Create' }: { actions: Work
 	};
 
 	if (visible.length === 0) return null;
+	const variant = filled ? 'default' : 'ghost';
+	const frame = cn('flex overflow-hidden rounded-lg', !filled && 'border');
 
 	// LAY-1, #1011: one action is drawn in the same frame as several, so the header keeps its height between sections.
 	if (visible.length === 1) {
 		return (
-			<div className="flex overflow-hidden rounded-lg border">
-				<Button variant="ghost" size="sm" className="rounded-none" onClick={() => run(primary)}>
+			<div className={frame}>
+				<Button variant={variant} size="sm" className="rounded-none" onClick={() => run(primary)}>
 					{label}
 				</Button>
 			</div>
@@ -47,13 +62,18 @@ export function SplitCreateButton({ actions, label = 'Create' }: { actions: Work
 	}
 
 	return (
-		<div className="flex overflow-hidden rounded-lg border">
-			<Button variant="ghost" size="sm" className="rounded-none" onClick={() => run(primary)}>
+		<div className={frame}>
+			<Button variant={variant} size="sm" className="rounded-none" onClick={() => run(primary)}>
 				{label}
 			</Button>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon-sm" className="rounded-none border-l" aria-label="Open create menu">
+					<Button
+						variant={variant}
+						size="icon-sm"
+						className={cn('rounded-none border-l', filled && 'border-background')}
+						aria-label="Open create menu"
+					>
 						<ChevronDown />
 					</Button>
 				</DropdownMenuTrigger>

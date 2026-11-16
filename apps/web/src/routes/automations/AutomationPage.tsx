@@ -216,11 +216,14 @@ function Automation() {
 							Automations
 						</Link>
 					</Button>
-					{/* LAY-5: the automation's name is the h1; a long one is shortened, and whole in its tooltip. */}
+					{/* LAY-5: the automation's name is the h1. With a pointer a long one is shortened, whole in its
+					    tooltip; on touch, where a tooltip can't be opened, it wraps instead (#1040, A11Y-4). */}
 					<div data-page-top="" className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
 						<div className="min-w-0 flex-1 max-sm:basis-full">
 							<Tip content={a.name}>
-								<h1 className="text-heading font-title truncate tracking-tight">{a.name}</h1>
+								<h1 className="text-heading font-title truncate tracking-tight pointer-coarse:overflow-visible pointer-coarse:whitespace-normal pointer-coarse:wrap-anywhere">
+									{a.name}
+								</h1>
 							</Tip>
 							<p className="text-foreground-muted mt-1">
 								{formatSchedule(a.data.rrule)} · {destination}

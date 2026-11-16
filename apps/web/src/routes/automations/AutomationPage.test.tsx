@@ -99,7 +99,9 @@ beforeEach(() => {
 describe('an automation page', () => {
 	it('opens with its name as the h1, its schedule and destination, and its next runs', async () => {
 		open();
-		expect(await screen.findByRole('heading', { level: 1, name: 'Digest' })).toBeInTheDocument();
+		const h1 = await screen.findByRole('heading', { level: 1, name: 'Digest' });
+		// Shortened with a pointer, whole in its Tip; wrapped on touch, where no Tip opens (#1040).
+		expect(h1).toHaveClass('truncate', 'pointer-coarse:whitespace-normal', 'pointer-coarse:overflow-visible');
 		expect(screen.getAllByText('Daily at 9:00 AM · New chat')).toHaveLength(1);
 		expect(screen.getByText(/^Thu, Nov 19, 9:00 AM/)).toBeInTheDocument();
 		expect(screen.getByText('Active')).toBeInTheDocument();

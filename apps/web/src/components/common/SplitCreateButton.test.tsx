@@ -37,4 +37,23 @@ describe('SplitCreateButton', () => {
 				.map((item) => item.textContent)
 		).toEqual(['New model', 'Import JSON']);
 	});
+
+	it("draws a page's main action as its one filled brand button (ACT-1)", () => {
+		render(
+			<MemoryRouter>
+				<SplitCreateButton
+					filled
+					label="New note"
+					actions={[
+						{ id: 'note-new', label: 'New note', onClick: vi.fn() },
+						{ id: 'note-import', label: 'Import', onClick: vi.fn() }
+					]}
+				/>
+			</MemoryRouter>
+		);
+		const main = screen.getByRole('button', { name: 'New note' });
+		expect(main).toHaveAttribute('data-variant', 'default');
+		expect(screen.getByRole('button', { name: 'Open create menu' })).toHaveAttribute('data-variant', 'default');
+		expect(main.parentElement).not.toHaveClass('border');
+	});
 });

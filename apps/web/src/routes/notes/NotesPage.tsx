@@ -338,6 +338,7 @@ function Notes() {
 						description="Derivations, snippets and results you keep, written in Markdown."
 						action={
 							<SplitCreateButton
+								filled
 								label="New note"
 								actions={[
 									{ id: 'note-new', label: 'New note', onClick: newNote },
