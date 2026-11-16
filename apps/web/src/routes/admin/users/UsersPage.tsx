@@ -42,7 +42,7 @@ export function UsersPage() {
 	const userCount = counts.users === null ? null : formatNumber(counts.users);
 
 	return (
-		<div className="flex h-full w-full flex-col pb-2 lg:flex-row">
+		<div className="flex w-full flex-col pb-2">
 			<SubTabs
 				active={tab}
 				tabs={[
@@ -60,9 +60,7 @@ export function UsersPage() {
 					}
 				]}
 			/>
-			<div className="flex-1 overflow-y-scroll px-3.5 lg:pr-4 lg:pl-0">
-				{tab === 'overview' ? <UserList /> : <GroupsPanel />}
-			</div>
+			<div className="min-w-0 flex-1 px-4 pt-3">{tab === 'overview' ? <UserList /> : <GroupsPanel />}</div>
 		</div>
 	);
 }

@@ -1,17 +1,27 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, MessageSquare, Pencil, Search, Trash2, X } from 'lucide-react';
+import { ChevronDown, Eye, MessageSquare, MoreHorizontal, Pencil, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
-import { SortHeaderButton } from '@/components/common/ListChrome';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListSearchBar, SortHeaderButton } from '@/components/common/ListChrome';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { PagePagination } from '@/components/common/PagePagination';
-import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Table } from '@/components/ui/table';
-import { deleteUserById, getUsers } from '@/lib/apis/users';
+import { deleteUserById, getUsers, updateUserById } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAdminStore } from '@/lib/stores/adminStore';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -19,6 +29,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { TableSkeleton } from '../TableSkeleton';
 import { AddUserModal } from './AddUserModal';
 import { type AdminUser, EditUserModal } from './EditUserModal';
 import { UserChatsModal } from './UserChatsModal';
@@ -26,19 +37,76 @@ import { UserPreviewModal } from './UserPreviewModal';
 
 const PER_PAGE = 30;
 
-const roleClass = (role: string) =>
-	role === 'admin' ? 'text-brand' : role === 'user' ? 'text-foreground' : 'text-muted-foreground';
-
 type UserRow = AdminUser & { id: string };
 
-/** The columns a phone leaves out (DAT-6). */
-const LOW_PRIORITY = new Set(['last_active_at', 'created_at']);
+export const ROLES = [
+	{ value: 'admin', label: 'Admin', noun: 'an admin' },
+	{ value: 'user', label: 'User', noun: 'a user' },
+	{ value: 'pending', label: 'Pending', noun: 'pending' }
+] as const;
+const roleLabel = (role: string) => ROLES.find((r) => r.value === role)?.label ?? role;
+
+/** "Never" for an account that has not been active, not "57 years ago" from a null time (#1026). */
+export function lastActive(at: number | null | undefined): string {
+	return at ? dayjs(at * 1000).fromNow() : 'Never';
+}
+
+/** The columns a phone leaves out: the dates, and role and email, which move under the name (DAT-6). */
+const COLUMNS = [
+	{ key: 'name', label: 'Name', className: '' },
+	{ key: 'role', label: 'Role', className: 'hidden w-32 sm:table-cell' },
+	{ key: 'email', label: 'Email', className: 'hidden w-[30%] sm:table-cell' },
+	{ key: 'last_active_at', label: 'Last active', className: 'hidden w-32 md:table-cell' },
+	{ key: 'created_at', label: 'Created', className: 'hidden w-36 md:table-cell' }
+] as const;
+
+/**
+ * A user's role, and the menu that changes it (#1026): Admin, User or
+ * Pending, applied at once and confirmed in a toast. Your own role is shown
+ * but not a control, as in Edit user: an admin cannot demote themselves.
+ */
+function RoleControl({
+	user,
+	own,
+	onChange
+}: {
+	user: UserRow;
+	own: boolean;
+	onChange: (user: UserRow, role: string) => void;
+}) {
+	if (own) return <Badge variant="secondary">{roleLabel(user.role)}</Badge>;
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="secondary" size="xs" type="button" className="rounded-full">
+					<span className="sr-only">Role: </span>
+					{roleLabel(user.role)}
+					<ChevronDown aria-hidden data-icon="inline-end" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start">
+				<DropdownMenuRadioGroup value={user.role} onValueChange={(role) => onChange(user, role)}>
+					{ROLES.map((r) => (
+						<DropdownMenuRadioItem key={r.value} value={r.value}>
+							{r.label}
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
 
 /**
  * Ports admin/Users/UserList.svelte: the paginated, sortable, searchable user
  * table with add / edit / chats / access-preview / delete. Search is debounced
  * 300ms and resets to page 1; the previous page stays on screen while the next
- * loads instead of blanking to a spinner.
+ * loads instead of blanking.
+ *
+ * #1026: names and emails truncate with the whole text in their title; the
+ * role is a menu of its own (not the whole Edit dialog); Edit stays on the
+ * row and the rest sit in a labelled "More actions" menu, Delete last. On a
+ * phone a row is two lines, the name with its role, the email below.
  *
  * Not ported: the `ProfilePreview` hover card on the avatar. It renders the
  * channel surface's `UserStatusLinkPreview`, so it arrives with channels
@@ -46,6 +114,7 @@ const LOW_PRIORITY = new Set(['last_active_at', 'created_at']);
  */
 export function UserList() {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const sessionUserId = useAuthStore((s) => s.user?.id);
 	const config = useConfigStore((s) => s.config);
 	const queryClient = useQueryClient();
 	const setCount = useAdminStore((s) => s.setCount);
@@ -73,8 +142,9 @@ export function UserList() {
 
 	const failed = list.isError || (list.isPaused && list.data === undefined);
 	useEffect(() => {
-		if (total !== null) setCount('users', total);
-	}, [total, setCount]);
+		// The tab keeps the whole count while a search narrows the list (DAT-2).
+		if (total !== null && debouncedQuery === '') setCount('users', total);
+	}, [total, debouncedQuery, setCount]);
 
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
 	// Adding, importing or deleting a user changes how many accounts there are: the
@@ -84,14 +154,33 @@ export function UserList() {
 		queryClient.invalidateQueries({ queryKey: ['account-count'] });
 	};
 
-	const deleteUser = async (id: string) => {
-		const res = await deleteUserById(token, id).catch((error) => {
-			toast.error(`${error}`);
+	const deleteUser = async (user: UserRow) => {
+		const res = await deleteUserById(token, user.id).catch((error) => {
+			toastFailure(`Couldn't delete “${user.name}”.`, error);
 			return null;
 		});
+		if (!res) return;
+		toast.success(`Deleted “${user.name}”`);
 		// Deleting the last row of a later page would leave that page empty.
 		if (users?.length === 1 && page > 1) setPage(page - 1);
-		if (res) accountsChanged();
+		accountsChanged();
+	};
+
+	const changeRole = async (user: UserRow, role: string) => {
+		if (role === user.role) return;
+		const res = await updateUserById(token, user.id, {
+			role,
+			name: user.name,
+			email: user.email,
+			profile_image_url: user.profile_image_url,
+			password: ''
+		}).catch((error) => {
+			toastFailure(`Couldn't change the role of “${user.name}”.`, error);
+			return null;
+		});
+		if (!res) return;
+		toast.success(`“${user.name}” is now ${ROLES.find((r) => r.value === role)?.noun ?? role}`);
+		refetch();
 	};
 
 	const setSortKey = (key: string) => {
@@ -102,23 +191,26 @@ export function UserList() {
 		}
 	};
 	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
-
-	const th = 'font-normal select-none';
-	const thButton = 'flex w-full items-center gap-1.5 px-2.5 py-1.5';
+	const act = (user: UserRow, show: (open: boolean) => void) => {
+		setSelected(user);
+		show(true);
+	};
 
 	return (
 		<>
 			<ConfirmDialog
 				open={showDelete}
 				onOpenChange={setShowDelete}
-				title="Delete user?"
-				confirmLabel="Delete"
+				title={`Delete “${selected?.name ?? ''}”?`}
+				confirmLabel="Delete user"
+				destructive
 				onConfirm={() => {
-					if (selected) deleteUser(selected.id);
+					if (selected) deleteUser(selected);
 					setShowDelete(false);
 				}}
 			>
-				This will permanently delete <span className="font-normal">{selected?.name}</span> and their data.
+				Their account, chats, files, notes and memories are deleted. Models, knowledge bases and other things they made
+				pass to you. This can't be undone.
 			</ConfirmDialog>
 			<AddUserModal open={showAdd} onOpenChange={setShowAdd} onSaved={accountsChanged} />
 			<EditUserModal open={showEdit} onOpenChange={setShowEdit} selectedUser={selected} onSaved={refetch} />
@@ -132,197 +224,174 @@ export function UserList() {
 				/>
 			)}
 
-			{failed ? (
-				<LoadFailed what="users" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
-			) : users === null || total === null ? (
-				<div className="my-10 flex justify-center">
-					<Spinner />
-				</div>
-			) : (
-				<>
-					<div className="bg-background sticky top-0 z-10">
-						<div className="flex h-8 w-full flex-1 items-center gap-2">
-							<div className="flex min-w-0 flex-1 items-center">
-								<Search className="mr-3 ml-1 size-3.5" />
-								<input
-									className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm"
-									value={query}
-									onChange={(e) => {
-										setQuery(e.target.value);
-										setPage(1);
-									}}
-									aria-label="Search"
-									placeholder="Search"
-								/>
-								{query && (
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										type="button"
-										aria-label="Clear search"
-										onClick={() => {
-											setQuery('');
-											setPage(1);
-										}}
-									>
-										<X className="size-3" strokeWidth={2} />
-									</Button>
-								)}
-							</div>
-							<Button variant="outline" size="sm" className="ml-1 shrink-0 text-xs" onClick={() => setShowAdd(true)}>
-								Add User
-							</Button>
-						</div>
+			<div className="flex flex-col gap-2">
+				{/* LAY-3, #1057: the toolbar is as tall as its controls, so Add user is never clipped. */}
+				<div className="flex flex-wrap items-center gap-2">
+					<div className="min-w-0 flex-1">
+						<ListSearchBar
+							value={query}
+							onChange={(value) => {
+								setQuery(value);
+								setPage(1);
+							}}
+							placeholder="Search users"
+						/>
 					</div>
+					<Button variant="outline" type="button" onClick={() => setShowAdd(true)}>
+						<UserPlus aria-hidden data-icon="inline-start" />
+						Add user
+					</Button>
+				</div>
 
-					<Table aria-label="Users" className="text-muted-foreground max-w-full table-auto text-left whitespace-nowrap">
-						<thead className="text-foreground bg-transparent text-xs uppercase">
+				{failed ? (
+					<LoadFailed what="users" error={list.error} onRetry={() => list.refetch()} retrying={list.isFetching} />
+				) : users === null || total === null ? (
+					<TableSkeleton label="users" />
+				) : users.length === 0 ? (
+					<ListEmptyState
+						title="No users yet"
+						query={debouncedQuery}
+						onClear={() => {
+							setQuery('');
+							setPage(1);
+						}}
+					/>
+				) : (
+					<Table aria-label="Users" stickyFirstColumn className="text-dense table-fixed text-left">
+						<thead>
 							<tr className="border-b">
-								{(
-									[
-										['name', 'Name'],
-										['role', 'Role'],
-										['email', 'Email'],
-										['last_active_at', 'Last Active'],
-										['created_at', 'Created at']
-									] as const
-								).map(([key, label]) => (
-									<th
-										key={key}
-										scope="col"
-										// On a phone the dates give way to the name, role and actions (DAT-6).
-										className={cn(th, LOW_PRIORITY.has(key) && 'hidden md:table-cell')}
-										aria-sort={sortState(key)}
-									>
+								{COLUMNS.map(({ key, label, className }) => (
+									<th key={key} scope="col" className={cn('py-1 font-normal', className)} aria-sort={sortState(key)}>
 										<SortHeaderButton
 											label={label}
 											active={orderBy === key}
 											direction={direction}
-											className={thButton}
+											className="text-foreground-muted"
 											onClick={() => setSortKey(key)}
 										/>
 									</th>
 								))}
-								<th scope="col" className="px-2.5 py-1.5 text-right font-normal">
+								<th scope="col" className="w-20 px-2 py-1.5">
 									<span className="sr-only">Actions</span>
 								</th>
 							</tr>
 						</thead>
 						<tbody>
-							{users.map((user) => (
-								<tr key={user.id} className="text-xs">
-									<td className="text-foreground max-w-48 px-3 py-1 font-normal">
-										<div className="flex items-center gap-2">
-											<ProfileAvatar
-												src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
-												name={user.name}
-												size="sm"
-											/>
-											<div className="truncate font-normal">{user.name}</div>
-											{user.last_active_at && Date.now() / 1000 - user.last_active_at < 180 && (
-												<span className="relative flex size-1.5" title="Active now">
-													<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-													<span className="relative inline-flex size-1.5 rounded-full bg-success" />
-												</span>
+							{users.map((user) => {
+								const own = user.id === sessionUserId;
+								const activeNow = user.last_active_at && Date.now() / 1000 - user.last_active_at < 180;
+								return (
+									<tr key={user.id} className="border-b last:border-0">
+										<td className="px-2 py-1.5">
+											<div className="flex min-w-0 items-center gap-2">
+												<ProfileAvatar
+													src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
+													name={user.name}
+													size="sm"
+												/>
+												<div className="flex min-w-0 flex-1 flex-col">
+													<div className="flex min-w-0 items-center gap-1.5">
+														<span className="text-foreground font-strong truncate" title={user.name}>
+															{user.name}
+														</span>
+														{own && <span className="text-foreground-muted shrink-0">(you)</span>}
+														{activeNow && (
+															<span className="relative flex size-1.5 shrink-0" title="Active now">
+																<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+																<span className="relative inline-flex size-1.5 rounded-full bg-success" />
+																<span className="sr-only">Active now</span>
+															</span>
+														)}
+														{/* LAY-4: on a phone the role sits beside the name. */}
+														<span className="shrink-0 sm:hidden">
+															<RoleControl user={user} own={own} onChange={changeRole} />
+														</span>
+													</div>
+													<span className="text-foreground-muted text-caption truncate sm:hidden" title={user.email}>
+														{user.email}
+													</span>
+												</div>
+											</div>
+										</td>
+										<td className="hidden px-2 py-1.5 sm:table-cell">
+											<RoleControl user={user} own={own} onChange={changeRole} />
+										</td>
+										<td className="hidden px-2 py-1.5 sm:table-cell">
+											<span className="block truncate" title={user.email}>
+												{user.email}
+											</span>
+										</td>
+										<td className="text-foreground-muted hidden px-2 py-1.5 md:table-cell">
+											{user.last_active_at ? (
+												<Tip content={dayjs(user.last_active_at * 1000).format('YYYY-MM-DD HH:mm')}>
+													<span>{lastActive(user.last_active_at)}</span>
+												</Tip>
+											) : (
+												lastActive(user.last_active_at)
 											)}
-										</div>
-									</td>
-									<td className="w-20 min-w-[5rem] px-3 py-1">
-										<Button
-											variant="ghost"
-											size="xs"
-											className={`capitalize ${roleClass(user.role)}`}
-											type="button"
-											aria-label={`Role: ${user.role}, change`}
-											onClick={() => {
-												setSelected(user);
-												setShowEdit(true);
-											}}
-										>
-											{user.role}
-										</Button>
-									</td>
-									<td className="max-w-48 truncate px-3 py-1">{user.email}</td>
-									<td className="hidden px-3 py-1 md:table-cell">{dayjs(user.last_active_at * 1000).fromNow()}</td>
-									<td className="hidden px-3 py-1 md:table-cell">{dayjs(user.created_at * 1000).format('LL')}</td>
-									<td className="px-3 py-1 text-right">
-										<div className="flex w-full justify-end">
-											{config?.features?.enable_admin_chat_access && user.role !== 'admin' && (
-												<Tip content="Chats">
+										</td>
+										<td className="text-foreground-muted hidden px-2 py-1.5 md:table-cell">
+											{dayjs(user.created_at * 1000).format('YYYY-MM-DD')}
+										</td>
+										<td className="px-1 py-1">
+											<div className="flex justify-end">
+												<Tip content="Edit user">
 													<Button
 														variant="ghost"
 														size="icon-sm"
 														type="button"
-														aria-label="Chats"
-														onClick={() => {
-															setSelected(user);
-															setShowChats(true);
-														}}
+														aria-label={`Edit ${user.name}`}
+														onClick={() => act(user, setShowEdit)}
 													>
-														<MessageSquare className="size-3.5" />
+														<Pencil className="size-3.5" />
 													</Button>
 												</Tip>
-											)}
-											{user.role !== 'admin' && (
-												<Tip content="Preview Access">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Preview Access"
-														onClick={() => {
-															setSelected(user);
-															setShowPreview(true);
-														}}
-													>
-														<Eye className="size-3.5" />
-													</Button>
-												</Tip>
-											)}
-											<Tip content="Edit User">
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													type="button"
-													aria-label="Edit User"
-													onClick={() => {
-														setSelected(user);
-														setShowEdit(true);
-													}}
-												>
-													<Pencil className="size-3.5" />
-												</Button>
-											</Tip>
-											{user.role !== 'admin' && (
-												<Tip content="Delete User">
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														type="button"
-														aria-label="Delete User"
-														onClick={() => {
-															setSelected(user);
-															setShowDelete(true);
-														}}
-													>
-														<Trash2 className="size-3.5" />
-													</Button>
-												</Tip>
-											)}
-										</div>
-									</td>
-								</tr>
-							))}
+												{!own && user.role !== 'admin' && (
+													<DropdownMenu>
+														<Tip content="More actions">
+															<DropdownMenuTrigger asChild>
+																<Button
+																	variant="ghost"
+																	size="icon-sm"
+																	type="button"
+																	aria-label={`More actions for ${user.name}`}
+																>
+																	<MoreHorizontal className="size-4" />
+																</Button>
+															</DropdownMenuTrigger>
+														</Tip>
+														<DropdownMenuContent align="end">
+															{config?.features?.enable_admin_chat_access && (
+																<DropdownMenuItem onSelect={() => act(user, setShowChats)}>
+																	<MessageSquare />
+																	View chats
+																</DropdownMenuItem>
+															)}
+															<DropdownMenuItem onSelect={() => act(user, setShowPreview)}>
+																<Eye />
+																Preview access
+															</DropdownMenuItem>
+															<DropdownMenuSeparator />
+															<DropdownMenuItem variant="destructive" onSelect={() => act(user, setShowDelete)}>
+																<Trash2 />
+																Delete user
+															</DropdownMenuItem>
+														</DropdownMenuContent>
+													</DropdownMenu>
+												)}
+											</div>
+										</td>
+									</tr>
+								);
+							})}
 						</tbody>
 					</Table>
+				)}
 
-					<div className="text-muted-foreground mt-1.5 text-right text-xs">
-						ⓘ Click on the user role button to change a user's role.
-					</div>
-
-					{total > PER_PAGE && <PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />}
-				</>
-			)}
+				{total !== null && total > PER_PAGE && (
+					<PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />
+				)}
+			</div>
 
 			{total !== null && total > 50 && <LargeTeamNotice />}
 		</>
