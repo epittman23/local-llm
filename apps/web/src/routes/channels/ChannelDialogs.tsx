@@ -76,7 +76,7 @@ export function PinnedMessagesDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Pinned Messages</DialogTitle>
+					<DialogTitle>Pinned messages</DialogTitle>
 				</DialogHeader>
 				<div className="-mx-2 max-h-[28rem] overflow-y-auto pt-6">
 					{failed && messages === null ? (
@@ -299,7 +299,7 @@ function AddMembersDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Add Members</DialogTitle>
+					<DialogTitle>Add members</DialogTitle>
 					<DialogDescription className="sr-only">Choose users and groups to add to the channel</DialogDescription>
 				</DialogHeader>
 				<MemberSelector

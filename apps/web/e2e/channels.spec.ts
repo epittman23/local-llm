@@ -489,8 +489,8 @@ test('pinned messages and the member list', async ({ page }) => {
 		pinned: [message('p1', 'an important note', { is_pinned: true })]
 	});
 	await page.goto('/channels/c1');
-	await page.getByRole('button', { name: 'Pinned Messages' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
+	await page.getByRole('button', { name: 'Pinned messages' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Pinned messages' });
 	await expect(dialog.getByText('an important note')).toBeVisible();
 	await dialog.getByTestId('channel-message').hover();
 	await expect(dialog.getByRole('button', { name: 'Reply' })).toHaveCount(0);
@@ -528,8 +528,8 @@ test('a refused unpin puts the message back, and a failed load is not shown as n
 				);
 	});
 	await page.goto('/channels/c1');
-	await page.getByRole('button', { name: 'Pinned Messages' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
+	await page.getByRole('button', { name: 'Pinned messages' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Pinned messages' });
 	await expect(dialog.getByText('Pinned messages could not be loaded.')).toBeVisible();
 	await expect(dialog.getByText('No pinned messages')).toHaveCount(0);
 	await dialog.getByRole('button', { name: 'Retry' }).click();
