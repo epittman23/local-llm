@@ -88,12 +88,16 @@ function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
 	return <div data-slot="dialog-header" className={cn('flex shrink-0 flex-col gap-2', className)} {...props} />;
 }
 
-/** OVL-1: the scrolling middle of a tall dialog, between a pinned header and footer. A direct child of `DialogContent`. */
+/**
+ * OVL-1: the scrolling middle of a tall dialog, between a pinned header and footer. A direct child of `DialogContent`.
+ * `relative`: what a field positions out of the flow (a Select's hidden native select, a switch's input) stays inside
+ * the body, so the dialog is no taller than it looks and a centred scrollIntoView or find-in-page scrolls only the body.
+ */
 function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
 	return (
 		<div
 			data-slot="dialog-body"
-			className={cn('-mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4', className)}
+			className={cn('relative -mx-4 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4', className)}
 			{...props}
 		/>
 	);

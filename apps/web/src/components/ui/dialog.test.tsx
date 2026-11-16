@@ -202,6 +202,9 @@ describe('a tall dialog', () => {
 		expect(body).toHaveAttribute('data-slot', 'dialog-body');
 		expect(body.className).toMatch(/min-h-0/);
 		expect(body.className).toMatch(/overflow-y-auto/);
+		// What a field positions out of the flow (a hidden native select) stays inside the body, so the
+		// dialog is no taller than it looks and a scrollIntoView scrolls only the body (OVL-1).
+		expect(body).toHaveClass('relative');
 		// The content becomes a column that does not scroll itself once it holds a body.
 		expect(screen.getByRole('dialog').className).toContain('has-[>[data-slot=dialog-body]]:overflow-hidden');
 		expect(screen.getByText('buttons').className).toMatch(/shrink-0/);
