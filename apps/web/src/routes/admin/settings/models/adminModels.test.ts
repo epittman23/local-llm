@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DROPPED_GRANTS_WARNING } from '@/lib/access/accessGrants';
 import {
-	type ViewOption,
 	accessLabel,
 	canReorder,
 	defaultsFromConfig,
 	defaultsMetadata,
 	defaultsSnapshot,
 	filterModels,
+	groupModels,
 	importResultMessage,
 	isPresetModel,
 	mergeModels,
@@ -16,10 +16,12 @@ import {
 	nextAccessGrants,
 	orderIds,
 	privacyOutcome,
+	reorderGroup,
 	splitIds,
 	toggleId,
 	togglePlan,
-	upsertPlan
+	upsertPlan,
+	type ViewOption
 } from './adminModels';
 
 const pub = { principal_type: 'user', principal_id: '*', permission: 'read' };
@@ -331,5 +333,25 @@ describe('importResultMessage (#337)', () => {
 			kind: 'error',
 			text: 'Imported 0 models; skipped 1: x (no write access)'
 		});
+	});
+});
+
+describe('the two groups (S5-D9)', () => {
+	it('puts connection models first and workspace models second, each in list order', () => {
+		const list = [{ id: 'w1', base_model_id: 'a' }, { id: 'a' }, { id: 'w2', preset: true }, { id: 'b' }];
+		const { connection, workspace } = groupModels(list);
+		expect(connection.map((m) => m.id)).toEqual(['a', 'b']);
+		expect(workspace.map((m) => m.id)).toEqual(['w1', 'w2']);
+	});
+
+	it('moves a row within its group and leaves every other id in place', () => {
+		const order = ['a', 'w1', 'b', 'w2', 'c'];
+		expect(reorderGroup(order, ['a', 'b', 'c'], 2, 0)).toEqual(['c', 'w1', 'a', 'w2', 'b']);
+		expect(reorderGroup(order, ['w1', 'w2'], 0, 1)).toEqual(['a', 'w2', 'b', 'w1', 'c']);
+	});
+
+	it('appends group ids the saved order did not list yet', () => {
+		expect(reorderGroup(['a'], ['a', 'b'], 1, 0)).toEqual(['b', 'a']);
+		expect(reorderGroup([], ['a', 'b'], 0, 1)).toEqual(['b', 'a']);
 	});
 });

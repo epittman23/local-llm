@@ -111,7 +111,6 @@
 			"src/routes/admin/settings/Integrations.tsx": 1,
 			"src/routes/admin/settings/models/ManageOllama.tsx": 2,
 			"src/routes/admin/settings/models/ManageProviderModels.tsx": 1,
-			"src/routes/admin/settings/models/ModelRow.tsx": 4,
 			"src/routes/admin/users/EditUserModal.tsx": 1,
 			"src/routes/admin/users/UserList.tsx": 1,
 			"src/routes/channels/ChannelMessageView.tsx": 1,

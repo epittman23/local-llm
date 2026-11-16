@@ -6,8 +6,10 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { FilterMenu, TagSelector } from '@/components/common/FilterSelects';
-import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
-import { Spinner } from '@/components/common/Spinner';
+import { toastFailure } from '@/components/common/failureToast';
+import { ListEmptyState, ListMatchCount, ListSearchBar } from '@/components/common/ListChrome';
+import { LoadFailed } from '@/components/common/LoadFailed';
+import { SettingsForm, useSettingsHost } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -16,15 +18,13 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { getBackendConfig } from '@/lib/apis';
-import { getModels } from '@/lib/apis';
-import { getErrorMessage } from '@/lib/apis/openai';
+import { getBackendConfig, getModels } from '@/lib/apis';
 import { getModelsConfig, setDefaultPromptSuggestions, setModelsConfig } from '@/lib/apis/configs';
 import {
 	createNewModel,
 	deleteAllModels,
-	getBaseModelTags,
 	getBaseModels,
+	getBaseModelTags,
 	getModelById,
 	toggleModelById,
 	updateModelAccessGrants,
@@ -34,70 +34,83 @@ import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
+import { useConfirmLeave } from '@/lib/ui/useUnsavedChanges';
 import { copyToClipboard } from '@/lib/utils';
-import { useShiftKey } from '@/lib/utils/useShiftKey';
+import { useAdminSingleUser } from '@/routes/admin/adminVisibility';
 import { routePaths } from '@/routes/routePaths';
 import { ModelEditor } from '@/routes/workspace/models/ModelEditor';
 import { importModelFile } from '@/routes/workspace/models/modelImport';
-import { ManageModelsModal } from './ManageModelsModal';
-import { ModelDefaultsPanel } from './ModelDefaultsPanel';
-import { ModelRow, type RowHandlers } from './ModelRow';
+import { useSingleUser } from '@/routes/workspace/workspaceAccess';
 import {
 	type DefaultsState,
-	type ModelItem,
-	type PromptSuggestion,
-	VIEW_OPTIONS,
-	type ViewOption,
-	canReorder as reorderAllowed,
 	defaultsFromConfig,
 	defaultsMetadata,
 	defaultsSnapshot,
 	filterModels,
+	groupModels,
 	importResultMessage,
 	isPresetModel,
+	type ModelItem,
 	mergeModels,
 	modelsConfigBody,
-	moveItem,
 	nextAccessGrants,
-	privacyOutcome,
 	nonBlankSuggestions,
 	orderIds,
+	type PromptSuggestion,
+	privacyOutcome,
+	canReorder as reorderAllowed,
+	reorderGroup,
 	savedParams,
 	splitIds,
 	toggleId,
 	togglePlan,
-	upsertPlan
+	upsertPlan,
+	VIEW_OPTIONS,
+	type ViewOption
 } from './adminModels';
+import { ManageModelsModal } from './ManageModelsModal';
+import { ModelDefaultsPanel } from './ModelDefaultsPanel';
+import { ModelRow, type RowHandlers } from './ModelRow';
 
 type Rec = Record<string, any>;
 const asArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 const menuIcon = 'size-3.5';
 
+/** A model's name for a sentence: its name, else its id, in quotes. */
+const quoted = (model: ModelItem) => `“${model.name ?? model.id}”`;
+
 /**
  * Ports admin/Settings/Models.svelte: every model an admin can manage, with its
- * enabled / hidden / public state, the default and pinned selections, a saved
- * display order, and the defaults new models start from.
+ * enabled / hidden state, the default and pinned selections, a saved display
+ * order, and the defaults new models start from.
  *
- * Differences from the Svelte tab worth knowing: rows reorder by drag (native
- * HTML5, from the grip) *or* by Move Up / Move Down in the row menu, which is the
- * keyboard route; a failed change says so (the original swallows the error and
- * leaves the switch where it was clicked); the Model Defaults panel and the
- * list save through one request built from the current lists, so a default model
- * toggled a moment ago cannot be overwritten by an older copy.
+ * S5-D9 (#1030): two headed groups, the models from connections and the
+ * workspace models built on them; a workspace model opens its editor in
+ * Workspace. Rows reorder by drag (from the grip) or by Move up / Move down in
+ * the row menu, within their group. The order and the Model Defaults are saved
+ * on request (FRM-3: the SaveBar, and the host asks before they are lost);
+ * every row action saves at once and says so. The model editor reports its
+ * unsaved changes to the same host (#951), so a tab change, Escape or the close
+ * button asks once.
  */
 export default function AdminModels() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
+	const host = useSettingsHost();
+	const singleUser = useSingleUser();
+	// S5-D12: Pin by default only reaches other accounts, so it goes while Admin's one-account rule holds.
+	const pinsByDefault = !useAdminSingleUser();
 	const setBackendConfig = useConfigStore((s) => s.setConfig);
 	const appSuggestions = useConfigStore((s) => s.config?.default_prompt_suggestions);
 	const tabState = useSettingsModalStore((s) => s.tabState);
 	const setTabState = useSettingsModalStore((s) => s.setTabState);
 	const closeSettings = useSettingsModalStore((s) => s.closeSettings);
-	const shiftKey = useShiftKey();
 	const { pinnedModels: sidebarPinned, togglePinned: toggleSidebarPin } = useUserSettings();
 
 	const [models, setModels] = useState<ModelItem[] | null>(null);
+	const [loadError, setLoadError] = useState<unknown>(null);
+	const [retrying, setRetrying] = useState(false);
 	const [recordIds, setRecordIds] = useState<ReadonlySet<string>>(new Set());
 	const [tags, setTags] = useState<string[]>([]);
 	const [config, setConfig] = useState<Rec | null>(null);
@@ -111,14 +124,21 @@ export default function AdminModels() {
 	const [view, setView] = useState<ViewOption>('');
 	const [selectedTag, setSelectedTag] = useState('');
 	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editorDirty, setEditorDirty] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [importing, setImporting] = useState(false);
 	const [showReset, setShowReset] = useState(false);
 	const [showManage, setShowManage] = useState(false);
-	const [dragFrom, setDragFrom] = useState<number | null>(null);
+	const [dragFrom, setDragFrom] = useState<{ group: string; index: number } | null>(null);
 	const [dropAt, setDropAt] = useState<number | null>(null);
 	const importInput = useRef<HTMLInputElement>(null);
 	const seededDefaults = useRef(false);
+	// A reload after a change keeps an unsaved reorder rather than reading the saved order over it.
+	const orderDirtyNow = useRef(orderDirty);
+	orderDirtyNow.current = orderDirty;
+	// Whether a list is on screen, for a failed reload: kept, with a toast, rather than replaced by the failure.
+	const shown = useRef(false);
+	shown.current = models !== null;
 
 	const refreshApp = () =>
 		Promise.all([
@@ -150,8 +170,9 @@ export default function AdminModels() {
 				setSelectedTag(activeTag);
 				setRecordIds(new Set(baseModels.map((m) => m.id)));
 				setModels(merged);
-				setOrder(orderIds(cfg?.MODEL_ORDER_LIST ?? [], merged));
-				setOrderDirty(false);
+				setLoadError(null);
+				if (orderDirtyNow.current) setOrder((current) => orderIds(current, merged));
+				else setOrder(orderIds(cfg?.MODEL_ORDER_LIST ?? [], merged));
 				setSelectedIds(splitIds(cfg?.DEFAULT_MODELS));
 				setPinnedIds(splitIds(cfg?.DEFAULT_PINNED_MODELS));
 				if (!seededDefaults.current) {
@@ -161,8 +182,9 @@ export default function AdminModels() {
 					setBaseline(defaultsSnapshot(d));
 				}
 			} catch (error) {
-				toast.error(getErrorMessage(error));
-				setModels((m) => m ?? []);
+				// STA-4: a first load that fails is shown in place; a refresh after a change keeps the list.
+				if (quiet && shown.current) toastFailure("Couldn't refresh the model list.", error);
+				else setLoadError(error);
 			}
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,8 +210,31 @@ export default function AdminModels() {
 		() => filterModels(models ?? [], { search, view, order, selectedIds: selectedSet, pinnedIds: pinnedSet }),
 		[models, search, view, order, selectedSet, pinnedSet]
 	);
+	const groups = useMemo(() => groupModels(filtered), [filtered]);
 	const canReorder = reorderAllowed({ search, view, selectedTag });
 	const defaultsDirty = defaults !== null && defaultsSnapshot(defaults) !== baseline;
+	const listDirty = orderDirty || defaultsDirty;
+	const narrowed = search.trim() !== '' || view !== '' || selectedTag !== '';
+	const workspaceCount = (models ?? []).filter((m) => isPresetModel(m)).length;
+
+	// While the editor is open the list's form is gone; the host hears both: the list's unsaved
+	// order and defaults, and the editor's own changes.
+	useEffect(() => {
+		if (editingId === null) return;
+		host.setDirty(listDirty || editorDirty);
+		return () => host.setDirty(false);
+	}, [editingId, listDirty, editorDirty, host]);
+
+	// A way out that leaves Settings (a workspace model's editor, Clone) asks first in the dialog;
+	// on a page the page's own guard asks as the navigation starts.
+	const leaveGuard = useConfirmLeave(listDirty && host.kind !== 'page', {
+		message: 'The model order and defaults are not saved. They are lost if you leave.'
+	});
+	const leaveSettings = (path: string) =>
+		leaveGuard.confirmLeave(() => {
+			closeSettings();
+			navigate(path);
+		});
 
 	// --- one model ----------------------------------------------------------------
 
@@ -211,10 +256,10 @@ export default function AdminModels() {
 				setRecordIds((ids) => new Set(ids).add(plan.body.id));
 				patchModel(plan.body.id, { base_model_id: plan.body.base_model_id ?? null });
 			}
-			if (notify) toast.success('Model updated successfully');
+			if (notify) toast.success(`${quoted(model)} saved`);
 			return true;
 		} catch (error) {
-			toast.error(getErrorMessage(error));
+			if (notify) toastFailure(`Couldn't save ${quoted(model)}.`, error);
 			return false;
 		}
 	};
@@ -231,17 +276,20 @@ export default function AdminModels() {
 			if (plan.action === 'create') await init();
 		} catch (error) {
 			patchModel(model.id, { is_active: !next });
-			toast.error(getErrorMessage(error));
+			toastFailure(`Couldn't turn ${next ? 'on' : 'off'} ${quoted(model)}.`, error);
 		}
 	};
 
 	const toggleHidden = async (model: ModelItem) => {
 		const hidden = !(model.meta?.hidden ?? false);
 		const meta = { ...model.meta, hidden };
-		if (!(await upsert(model, { meta }, false))) return;
+		if (!(await upsert(model, { meta }, false))) {
+			toastFailure(`Couldn't ${hidden ? 'hide' : 'show'} ${quoted(model)}.`);
+			return;
+		}
 		patchModel(model.id, { meta });
 		await refreshApp();
-		toast.success(hidden ? `Model ${model.id} is now hidden` : `Model ${model.id} is now visible`);
+		toast.success(`${quoted(model)} is ${hidden ? 'hidden' : 'shown'}`);
 	};
 
 	const togglePrivacy = async (model: ModelItem) => {
@@ -254,7 +302,7 @@ export default function AdminModels() {
 			await refreshApp();
 			toast[outcome.kind](outcome.text);
 		} catch (error) {
-			toast.error(getErrorMessage(error));
+			toastFailure(`Couldn't change who can use ${quoted(model)}.`, error);
 		}
 	};
 
@@ -263,10 +311,9 @@ export default function AdminModels() {
 			? ((await getModelById(token, model.id).catch(() => null)) ?? model)
 			: model;
 
-	const openModel = async (model: ModelItem) => {
+	const openModel = (model: ModelItem) => {
 		if (isPresetModel(model)) {
-			closeSettings();
-			navigate(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(model.id)}`);
+			leaveSettings(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(model.id)}`);
 			return;
 		}
 		setEditingId(model.id);
@@ -280,8 +327,7 @@ export default function AdminModels() {
 			id: `${model.id}-clone`,
 			name: `${model.name} (Clone)`
 		});
-		closeSettings();
-		navigate(routePaths.workspaceModelsCreate);
+		leaveSettings(routePaths.workspaceModelsCreate);
 	};
 
 	const exportModel = async (model: ModelItem) => {
@@ -291,8 +337,8 @@ export default function AdminModels() {
 
 	const copyLink = async (model: ModelItem) => {
 		const ok = await copyToClipboard(`${window.location.origin}/?model=${encodeURIComponent(model.id)}`);
-		if (ok) toast.success('Copied link to clipboard');
-		else toast.error('Failed to copy link');
+		if (ok) toast.success('Link copied');
+		else toast.error("Couldn't copy the link. Your browser refused it.");
 	};
 
 	// --- default and pinned selections -------------------------------------------------
@@ -310,13 +356,13 @@ export default function AdminModels() {
 					order: config?.MODEL_ORDER_LIST ?? []
 				})
 			);
-			if (!res) throw new Error('Failed to save');
+			if (!res) throw new Error('The server returned nothing.');
 			setConfig(res);
 			toast.success(message);
 		} catch (error) {
 			setSelectedIds(prevSelected);
 			setPinnedIds(prevPinned);
-			toast.error(getErrorMessage(error));
+			toastFailure("Couldn't save the change.", error);
 		}
 	};
 
@@ -324,13 +370,17 @@ export default function AdminModels() {
 		saveSelections(
 			toggleId(selectedIds, model.id),
 			pinnedIds,
-			selectedSet.has(model.id) ? 'Model removed from selected models' : 'Model added to selected models'
+			selectedSet.has(model.id)
+				? `${quoted(model)} is no longer a default for new chats`
+				: `${quoted(model)} is a default for new chats`
 		);
 	const toggleDefaultPinned = (model: ModelItem) =>
 		saveSelections(
 			selectedIds,
 			toggleId(pinnedIds, model.id),
-			pinnedSet.has(model.id) ? 'Model removed from pinned models' : 'Model added to pinned models'
+			pinnedSet.has(model.id)
+				? `${quoted(model)} is no longer pinned by default`
+				: `${quoted(model)} is pinned by default`
 		);
 
 	// --- bulk ----------------------------------------------------------------------------
@@ -339,12 +389,14 @@ export default function AdminModels() {
 		targets: ModelItem[],
 		overrides: (m: ModelItem) => Rec,
 		apply: (m: ModelItem) => Rec,
-		message?: string
+		done: string
 	) => {
 		setModels((ms) => ms && ms.map((m) => (targets.some((t) => t.id === m.id) ? { ...m, ...apply(m) } : m)));
 		const results = await Promise.all(targets.map((m) => upsert(m, overrides(m), false)));
-		if (results.some((ok) => !ok)) toast.error('Some models could not be updated');
-		else if (message) toast.success(message);
+		const failed = results.filter((ok) => !ok).length;
+		// FBK-2: one toast for the whole action.
+		if (failed > 0) toastFailure(`${failed} of ${targets.length} models couldn't be changed. Try again.`);
+		else toast.success(done);
 		await refreshApp();
 		await init();
 	};
@@ -352,27 +404,29 @@ export default function AdminModels() {
 		bulk(
 			filtered.filter((m) => !(m.is_active ?? true)),
 			() => ({ is_active: true }),
-			() => ({ is_active: true })
+			() => ({ is_active: true }),
+			'All models turned on'
 		);
 	const disableAll = () =>
 		bulk(
 			filtered.filter((m) => m.is_active ?? true),
 			() => ({ is_active: false }),
-			() => ({ is_active: false })
+			() => ({ is_active: false }),
+			'All models turned off'
 		);
 	const showAll = () =>
 		bulk(
 			filtered.filter((m) => m.meta?.hidden === true),
 			(m) => ({ meta: { ...m.meta, hidden: false } }),
 			(m) => ({ meta: { ...m.meta, hidden: false } }),
-			'All models are now visible'
+			'All models shown'
 		);
 	const hideAll = () =>
 		bulk(
 			filtered.filter((m) => !(m.meta?.hidden ?? false)),
 			(m) => ({ meta: { ...m.meta, hidden: true } }),
 			(m) => ({ meta: { ...m.meta, hidden: true } }),
-			'All models are now hidden'
+			'All models hidden'
 		);
 
 	// --- import, export, reset --------------------------------------------------------------
@@ -387,14 +441,11 @@ export default function AdminModels() {
 				await refreshApp();
 				await init();
 			} else {
-				toast.error('Failed to import models');
+				toastFailure("Couldn't import the models. The server took none of them.");
 			}
 		} catch (error) {
-			toast.error(
-				error instanceof SyntaxError
-					? 'Invalid JSON file'
-					: ((error as Rec)?.detail ?? (error instanceof Error ? error.message : `${error}`))
-			);
+			if (error instanceof SyntaxError) toastFailure(`Couldn't import “${file.name}”. It isn't a JSON file.`);
+			else toastFailure(`Couldn't import “${file.name}”.`, error);
 		} finally {
 			setImporting(false);
 		}
@@ -408,22 +459,34 @@ export default function AdminModels() {
 	const resetAll = async () => {
 		try {
 			await deleteAllModels(token);
-			toast.success('All models deleted successfully');
+			toast.success('Models reset');
 			await refreshApp();
 			await init();
 		} catch (error) {
-			toast.error(getErrorMessage(error));
+			toastFailure("Couldn't reset the models.", error);
 		}
 	};
 
 	// --- order and defaults ----------------------------------------------------------------------
 
-	const reorder = (from: number, to: number) => {
-		const ids = filtered.map((m) => m.id);
-		const moved = moveItem(ids, from, to);
-		const movedSet = new Set(moved);
-		setOrder([...moved, ...order.filter((id) => !movedSet.has(id))]);
+	const reorder = (group: ModelItem[], from: number, to: number) => {
+		setOrder(
+			reorderGroup(
+				order,
+				group.map((m) => m.id),
+				from,
+				to
+			)
+		);
 		setOrderDirty(true);
+	};
+
+	const discard = () => {
+		setOrder(orderIds(config?.MODEL_ORDER_LIST ?? [], models ?? []));
+		setOrderDirty(false);
+		const d = defaultsFromConfig(config, appSuggestions as PromptSuggestion[] | undefined);
+		setDefaults(d);
+		setBaseline(defaultsSnapshot(d));
 	};
 
 	const saveAll = async () => {
@@ -439,12 +502,9 @@ export default function AdminModels() {
 					...(defaultsDirty ? { metadata: defaultsMetadata(defaults), params: savedParams(defaults) } : {})
 				})
 			);
-			if (!res) throw new Error('Failed to save models configuration');
+			if (!res) throw new Error('The server returned nothing.');
 			setConfig(res);
-			if (orderDirty) {
-				setOrderDirty(false);
-				toast.success('Model order saved successfully');
-			}
+			setOrderDirty(false);
 			if (defaultsDirty) {
 				const suggestions = nonBlankSuggestions(defaults.promptSuggestions);
 				await setDefaultPromptSuggestions(token, suggestions);
@@ -454,11 +514,11 @@ export default function AdminModels() {
 				setDefaults(next);
 				setBaseline(defaultsSnapshot(next));
 				await queryClient.invalidateQueries({ queryKey: ['models-defaults'] });
-				toast.success('Models configuration saved successfully');
 			}
+			toast.success('Model settings saved');
 			await refreshApp();
 		} catch (error) {
-			toast.error(getErrorMessage(error));
+			toastFailure("Couldn't save the model settings.", error);
 		} finally {
 			setSaving(false);
 		}
@@ -469,39 +529,62 @@ export default function AdminModels() {
 		await init(tag);
 	};
 
+	const clearFilters = () => {
+		setSearch('');
+		setView('');
+		if (selectedTag) void changeTag('');
+	};
+
 	// --- render --------------------------------------------------------------------------------------
 
-	if (models === null || defaults === null) {
-		return (
-			<div className="flex h-full w-full items-center justify-center">
-				<Spinner className="size-5" />
-			</div>
-		);
-	}
-
 	if (editingId !== null) {
-		const model = models.find((m) => m.id === editingId);
+		const model = (models ?? []).find((m) => m.id === editingId);
 		return (
 			<ModelEditor
 				key={editingId}
 				edit
 				preset={false}
 				model={model ? (model as { id: string; name: string }) : null}
+				onDirtyChange={setEditorDirty}
 				onSubmit={async (info) => {
-					await upsert(info as unknown as ModelItem);
-					setEditingId(null);
+					// A failure shows in the editor, above its save bar (FBK-1), not as a toast.
+					if (!(await upsert(info as unknown as ModelItem, {}, false))) {
+						throw new Error(`Couldn't save “${info.name}”. Try again.`);
+					}
+					toast.success(`“${info.name}” saved`);
 					await refreshApp();
-					await init();
 				}}
 				onBack={async () => {
 					setEditingId(null);
+					setEditorDirty(false);
 					await init();
 				}}
 			/>
 		);
 	}
 
-	const viewLabel = VIEW_OPTIONS.find(([v]) => v === view)?.[1] ?? 'All';
+	if (loadError !== null && models === null) {
+		return (
+			<SettingsForm title="Models" footer={false}>
+				<LoadFailed
+					what="models"
+					error={loadError}
+					retrying={retrying}
+					onRetry={async () => {
+						setRetrying(true);
+						await init('', true);
+						setRetrying(false);
+					}}
+				/>
+			</SettingsForm>
+		);
+	}
+
+	// One account: no access views (S4-D1), and no Pinned by default (S5-D12).
+	const views = VIEW_OPTIONS.filter(
+		([v]) => !((singleUser && (v === 'public' || v === 'private')) || (!pinsByDefault && v === 'pinned'))
+	);
+	const viewLabel = views.find(([v]) => v === view)?.[1] ?? 'All';
 	const menuItem = (icon: React.ReactNode, label: string, onSelect: () => void, disabled = false) => (
 		<DropdownMenuItem disabled={disabled} onSelect={onSelect}>
 			{icon}
@@ -509,14 +592,91 @@ export default function AdminModels() {
 		</DropdownMenuItem>
 	);
 
-	return (
-		<div className="flex h-full min-h-0 flex-col text-sm">
-			<div className="mb-2 flex items-center justify-between">
-				<h2 className="text-sm font-medium">
-					Models <span className="text-muted-foreground ml-2 font-normal">{filtered.length}</span>
-				</h2>
-			</div>
+	const renderGroup = (key: 'connection' | 'workspace', title: string, help: string) => {
+		const group = groups[key];
+		if (group.length === 0) return null;
+		const headingId = `admin-models-${key}`;
+		return (
+			<section aria-labelledby={headingId} className="mt-4 first:mt-0">
+				<h3 id={headingId} className="text-title font-title flex items-baseline gap-2">
+					{title}
+					<span className="text-foreground-muted text-dense font-normal tabular-nums">{group.length}</span>
+				</h3>
+				<p className="text-foreground-muted text-dense mb-1">{help}</p>
+				<ul className="space-y-px">
+					{group.map((model, i) => {
+						const handlers: RowHandlers = {
+							open: () => openModel(model),
+							toggleActive: () => void toggleActive(model),
+							toggleHidden: () => void toggleHidden(model),
+							toggleSelected: () => void toggleSelected(model),
+							toggleDefaultPinned: () => void toggleDefaultPinned(model),
+							togglePrivacy: () => void togglePrivacy(model),
+							togglePinnedInSidebar: () => toggleSidebarPin(model.id),
+							copyLink: () => void copyLink(model),
+							clone: () => void cloneModel(model),
+							exportModel: () => void exportModel(model),
+							moveUp: () => reorder(group, i, i - 1),
+							moveDown: () => reorder(group, i, i + 1)
+						};
+						const fromHere = dragFrom?.group === key;
+						return (
+							<li key={model.id}>
+								<ModelRow
+									model={model}
+									index={i}
+									count={group.length}
+									singleUser={singleUser}
+									pinsByDefault={pinsByDefault}
+									canReorder={canReorder}
+									isSelected={selectedSet.has(model.id)}
+									isDefaultPinned={pinnedSet.has(model.id)}
+									isSidebarPinned={sidebarPinned.includes(model.id)}
+									dragging={fromHere && dragFrom?.index === i}
+									dropTarget={fromHere && dropAt === i && dragFrom?.index !== i}
+									handlers={handlers}
+									onDragStart={(e) => {
+										setDragFrom({ group: key, index: i });
+										e.dataTransfer.effectAllowed = 'move';
+										e.dataTransfer.setData('text/plain', model.id);
+										const row = (e.currentTarget as HTMLElement).closest('[data-model-row]');
+										if (row) e.dataTransfer.setDragImage(row, 16, 16);
+									}}
+									onDragOver={(e) => {
+										// A row moves only within its own group.
+										if (!fromHere) return;
+										e.preventDefault();
+										setDropAt(i);
+									}}
+									onDrop={(e) => {
+										e.preventDefault();
+										if (fromHere && dragFrom) reorder(group, dragFrom.index, i);
+										setDragFrom(null);
+										setDropAt(null);
+									}}
+									onDragEnd={() => {
+										setDragFrom(null);
+										setDropAt(null);
+									}}
+								/>
+							</li>
+						);
+					})}
+				</ul>
+			</section>
+		);
+	};
 
+	return (
+		<SettingsForm
+			title="Models"
+			loading={models === null || defaults === null}
+			dirty={listDirty}
+			saving={saving}
+			onDiscard={discard}
+			onSubmit={saveAll}
+		>
+			{leaveGuard.dialog}
 			<input
 				ref={importInput}
 				type="file"
@@ -530,124 +690,96 @@ export default function AdminModels() {
 				}}
 			/>
 
-			<div className="flex min-h-0 flex-1 flex-col space-y-1">
-				<ModelDefaultsPanel value={defaults} onChange={setDefaults} />
+			{defaults && <ModelDefaultsPanel value={defaults} onChange={setDefaults} />}
 
-				<ListSearchBar value={search} onChange={setSearch} placeholder="Search Models">
+			<div className="mt-4 flex flex-col gap-2">
+				<ListSearchBar value={search} onChange={setSearch} placeholder="Search models">
 					<FilterMenu
 						value={view}
-						items={VIEW_OPTIONS.map(([value, label]) => ({ value, label }))}
+						items={views.map(([value, label]) => ({ value, label }))}
 						onChange={(v) => setView(v as ViewOption)}
 						trigger={
-							<Button variant="ghost" size="sm" aria-label="View">
+							<Button variant="outline" size="sm" aria-label={`Show: ${viewLabel}`}>
 								<span className="truncate">{viewLabel}</span>
-								<ChevronDown />
+								<ChevronDown aria-hidden />
 							</Button>
 						}
 					/>
 					{tags.length > 0 && <TagSelector value={selectedTag} tags={tags} onChange={(t) => void changeTag(t)} />}
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="ghost" size="sm" aria-label="Actions">
+							<Button variant="outline" size="sm">
 								Actions
-								<ChevronDown />
+								<ChevronDown aria-hidden />
 							</Button>
 						</DropdownMenuTrigger>
+						{/* OVL-3: grouped, with the destructive Reset last below a separator (ACT-3). */}
 						<DropdownMenuContent align="end" className="w-auto min-w-44">
-							{menuItem(<FileUp className={menuIcon} />, 'Import', () => importInput.current?.click(), importing)}
-							{menuItem(<Download className={menuIcon} />, 'Export', () => void exportAll())}
-							{menuItem(<Wrench className={menuIcon} />, 'Manage', () => setShowManage(true))}
-							{menuItem(<Trash2 className={menuIcon} />, 'Reset', () => setShowReset(true))}
+							{menuItem(
+								<FileUp className={menuIcon} />,
+								'Import models',
+								() => importInput.current?.click(),
+								importing
+							)}
+							{menuItem(<Download className={menuIcon} />, 'Export models', () => void exportAll())}
+							{menuItem(<Wrench className={menuIcon} />, 'Manage models', () => setShowManage(true))}
 							<DropdownMenuSeparator />
-							{menuItem(<CheckCircle className={menuIcon} />, 'Enable All', () => void enableAll())}
-							{menuItem(<Minus className={menuIcon} />, 'Disable All', () => void disableAll())}
+							{menuItem(<CheckCircle className={menuIcon} />, 'Turn all on', () => void enableAll())}
+							{menuItem(<Minus className={menuIcon} />, 'Turn all off', () => void disableAll())}
+							{menuItem(<Eye className={menuIcon} />, 'Show all', () => void showAll())}
+							{menuItem(<EyeOff className={menuIcon} />, 'Hide all', () => void hideAll())}
 							<DropdownMenuSeparator />
-							{menuItem(<Eye className={menuIcon} />, 'Show All', () => void showAll())}
-							{menuItem(<EyeOff className={menuIcon} />, 'Hide All', () => void hideAll())}
+							<DropdownMenuItem variant="destructive" onSelect={() => setShowReset(true)}>
+								<Trash2 className={menuIcon} />
+								Reset models
+							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</ListSearchBar>
-
-				<div
-					className={
-						filtered.length > 0
-							? 'my-0.5 min-h-0 flex-1 space-y-px overflow-y-auto pr-1.5'
-							: 'my-0.5 min-h-0 flex-1 overflow-hidden'
-					}
-					data-testid="model-list"
-				>
-					{filtered.length === 0 ? (
-						<ListEmptyState title="No models found" />
-					) : (
-						filtered.map((model, i) => {
-							const handlers: RowHandlers = {
-								open: () => void openModel(model),
-								toggleActive: () => void toggleActive(model),
-								toggleHidden: () => void toggleHidden(model),
-								toggleSelected: () => void toggleSelected(model),
-								toggleDefaultPinned: () => void toggleDefaultPinned(model),
-								togglePrivacy: () => void togglePrivacy(model),
-								togglePinnedInSidebar: () => toggleSidebarPin(model.id),
-								copyLink: () => void copyLink(model),
-								clone: () => void cloneModel(model),
-								exportModel: () => void exportModel(model),
-								moveUp: () => reorder(i, i - 1),
-								moveDown: () => reorder(i, i + 1)
-							};
-							return (
-								<ModelRow
-									key={model.id}
-									model={model}
-									index={i}
-									count={filtered.length}
-									shiftKey={shiftKey}
-									canReorder={canReorder}
-									isSelected={selectedSet.has(model.id)}
-									isDefaultPinned={pinnedSet.has(model.id)}
-									isSidebarPinned={sidebarPinned.includes(model.id)}
-									dragging={dragFrom === i}
-									dropTarget={dragFrom !== null && dropAt === i && dragFrom !== i}
-									handlers={handlers}
-									onDragStart={(e) => {
-										setDragFrom(i);
-										e.dataTransfer.effectAllowed = 'move';
-										e.dataTransfer.setData('text/plain', model.id);
-										const row = (e.currentTarget as HTMLElement).closest('[data-model-row]');
-										if (row) e.dataTransfer.setDragImage(row, 16, 16);
-									}}
-									onDragOver={(e) => {
-										if (dragFrom === null) return;
-										e.preventDefault();
-										setDropAt(i);
-									}}
-									onDrop={(e) => {
-										e.preventDefault();
-										if (dragFrom !== null) reorder(dragFrom, i);
-										setDragFrom(null);
-										setDropAt(null);
-									}}
-									onDragEnd={() => {
-										setDragFrom(null);
-										setDropAt(null);
-									}}
-								/>
-							);
-						})
-					)}
-				</div>
-
-				<div className="flex justify-end pt-6 text-sm font-normal">
-					<Button type="button" disabled={(!orderDirty && !defaultsDirty) || saving} onClick={() => void saveAll()}>
-						Save
-						{saving && <Spinner className="size-3.5" />}
-					</Button>
-				</div>
+				{/* DAT-2: while a search or filter narrows the list, it says how many of the whole it shows. */}
+				{narrowed && filtered.length > 0 && (
+					<ListMatchCount shown={filtered.length} total={(models ?? []).length} noun="models" />
+				)}
 			</div>
 
-			<ConfirmDialog open={showReset} onOpenChange={setShowReset} title="Reset All Models" onConfirm={resetAll}>
-				This will delete all models including custom models and cannot be undone.
+			<div className="mt-2" data-testid="model-list">
+				{filtered.length === 0 ? (
+					<ListEmptyState
+						title="No models yet"
+						description="Models come from your connections. Add one in Connections."
+						query={search}
+						filtered={view !== '' || selectedTag !== ''}
+						onClear={clearFilters}
+					/>
+				) : (
+					<>
+						{renderGroup(
+							'connection',
+							'From connections',
+							'The models your connections serve. Settings here apply wherever the model is used.'
+						)}
+						{renderGroup(
+							'workspace',
+							'Workspace models',
+							'Built in Workspace > Models on top of a connection model. Each opens its editor there.'
+						)}
+					</>
+				)}
+			</div>
+
+			<ConfirmDialog
+				open={showReset}
+				onOpenChange={setShowReset}
+				title="Reset all models?"
+				confirmLabel="Reset models"
+				destructive
+				onConfirm={resetAll}
+			>
+				{workspaceCount > 0
+					? `All ${workspaceCount} workspace model${workspaceCount === 1 ? '' : 's'} and every model setting are deleted: names, pictures, hidden and off states. This can't be undone.`
+					: "Every model setting is deleted: names, pictures, hidden and off states. This can't be undone."}
 			</ConfirmDialog>
 			<ManageModelsModal open={showManage} onOpenChange={setShowManage} />
-		</div>
+		</SettingsForm>
 	);
 }

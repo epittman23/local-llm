@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { createMemoryRouter, Link, RouterProvider, useNavigate } from 'react-router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { useUnsavedChanges } from './useUnsavedChanges';
+import { useConfirmLeave, useUnsavedChanges } from './useUnsavedChanges';
 
 function Editor({ message }: { message?: string }) {
 	const [saved, setSaved] = useState('');
@@ -345,5 +345,91 @@ describe('useUnsavedChanges', () => {
 		fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Keep editing' }));
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 		await waitFor(() => expect(document.activeElement).toBe(back));
+	});
+});
+
+// An editor hosted inside a page that already guards navigation, as the model
+// editor is inside an Admin settings tab: its own Back asks, the page's guard
+// asks on a navigation, and only one of them ever asks.
+function HostedEditor() {
+	const [hostDirty, setHostDirty] = useState(false);
+	const [value, setValue] = useState('');
+	const [closed, setClosed] = useState(false);
+	const host = useUnsavedChanges(hostDirty || value !== '');
+	const own = useConfirmLeave(value !== '', { message: 'The editor has changes.' });
+	return (
+		<div>
+			<label>
+				Draft
+				<input value={value} onChange={(e) => setValue(e.target.value)} />
+			</label>
+			<button type="button" onClick={() => setHostDirty(true)}>
+				Dirty the host
+			</button>
+			{closed ? <p>Editor closed</p> : null}
+			<button type="button" onClick={() => own.confirmLeave(() => setClosed(true))}>
+				Editor back
+			</button>
+			<Link to="/list">Other tab</Link>
+			{host.dialog}
+			{own.dialog}
+		</div>
+	);
+}
+
+function OwnOnly() {
+	return useConfirmLeave(true).dialog;
+}
+
+describe('useConfirmLeave', () => {
+	const setupHosted = () => {
+		const router = createMemoryRouter(
+			[
+				{ path: '/editor', element: <HostedEditor /> },
+				{ path: '/list', element: <p>The list</p> }
+			],
+			{ initialEntries: ['/editor'] }
+		);
+		render(<RouterProvider router={router} />);
+		return router;
+	};
+	const typeDraft = (text: string) =>
+		fireEvent.change(screen.getByRole('textbox', { name: 'Draft' }), { target: { value: text } });
+
+	it('runs its leave at once while nothing has changed', () => {
+		setupHosted();
+		fireEvent.click(screen.getByRole('button', { name: 'Editor back' }));
+		expect(screen.getByText('Editor closed')).toBeTruthy();
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+	});
+
+	it('asks with its own message before its leave while dirty', async () => {
+		setupHosted();
+		typeDraft('x');
+		fireEvent.click(screen.getByRole('button', { name: 'Editor back' }));
+		const ask = await screen.findByRole('alertdialog', { name: 'Discard changes?' });
+		expect(ask.textContent).toContain('The editor has changes.');
+		fireEvent.click(within(ask).getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('Editor closed')).toBeTruthy();
+	});
+
+	it('leaves navigation to the host, which still asks, once (one blocker per router)', async () => {
+		const router = setupHosted();
+		typeDraft('x');
+		fireEvent.click(screen.getByRole('link', { name: 'Other tab' }));
+		const asks = await screen.findAllByRole('alertdialog');
+		expect(asks).toHaveLength(1);
+		expect(asks[0].textContent).toContain('Your changes are not saved.');
+		fireEvent.click(within(asks[0]).getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByText('The list')).toBeTruthy();
+		expect(router.state.location.pathname).toBe('/list');
+	});
+
+	it('never has the browser ask before a reload (the host does that)', () => {
+		const add = vi.spyOn(window, 'addEventListener');
+		const router = createMemoryRouter([{ path: '/', element: <OwnOnly /> }]);
+		render(<RouterProvider router={router} />);
+		expect(add.mock.calls.some(([type]) => type === 'beforeunload')).toBe(false);
+		add.mockRestore();
 	});
 });

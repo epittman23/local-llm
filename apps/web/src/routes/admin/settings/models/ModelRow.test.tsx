@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ModelItem } from './adminModels';
@@ -29,7 +29,8 @@ const renderRow = (over: Partial<Parameters<typeof ModelRow>[0]> = {}) => {
 				model={MODEL}
 				index={1}
 				count={3}
-				shiftKey={false}
+				singleUser={false}
+				pinsByDefault
 				canReorder
 				isSelected={false}
 				isDefaultPinned={false}
@@ -48,12 +49,17 @@ const renderRow = (over: Partial<Parameters<typeof ModelRow>[0]> = {}) => {
 	return h;
 };
 
+const openMenu = async (name = 'Model One') => {
+	fireEvent.keyDown(screen.getByRole('button', { name: `More actions for ${name}` }), { key: 'Enter' });
+	return screen.findByRole('menu');
+};
+
 describe('ModelRow', () => {
-	it('shows the name with its access label and the selected and pinned flags', () => {
+	it('shows the name with its access label and the default and pinned badges', () => {
 		renderRow({ isSelected: true, isDefaultPinned: true });
 		expect(screen.getByText('Model One')).toBeTruthy();
 		expect(screen.getByText('Private')).toBeTruthy();
-		expect(screen.getByText('Selected')).toBeTruthy();
+		expect(screen.getByText('Default')).toBeTruthy();
 		expect(screen.getByText('Pinned')).toBeTruthy();
 	});
 
@@ -64,70 +70,142 @@ describe('ModelRow', () => {
 		expect(screen.getByText('Public')).toBeTruthy();
 	});
 
-	it('opens the editor from the pencil button', () => {
-		const h = renderRow();
-		fireEvent.click(screen.getByRole('button', { name: 'Edit Model One' }));
-		expect(h.open).toHaveBeenCalledTimes(1);
+	it('shows a hidden or off model as badges, not a dimmed row (DAT-3, COL-2)', () => {
+		renderRow({ model: { ...MODEL, is_active: false, meta: { hidden: true } } });
+		expect(screen.getByText('Hidden').closest('[data-slot=badge]')).toBeTruthy();
+		expect(screen.getByText('Off').closest('[data-slot=badge]')).toBeTruthy();
+		const row = document.querySelector('[data-model-row="m1"]') as HTMLElement;
+		expect(row.className).not.toMatch(/opacity/);
+		expect(row.querySelector('[data-slot=row-button]')?.innerHTML).not.toMatch(/opacity/);
 	});
 
-	it('toggles enabled from the switch', () => {
+	it('says nothing about access with one account (S4-D1)', async () => {
+		renderRow({ singleUser: true });
+		expect(screen.queryByText('Private')).toBeNull();
+		const menu = await openMenu();
+		expect(within(menu).queryByText('Make public')).toBeNull();
+	});
+
+	it('leaves out Pin by default and its badge under the one-account rule (S5-D12)', async () => {
+		renderRow({ singleUser: true, pinsByDefault: false, isDefaultPinned: true, isSelected: true });
+		expect(screen.queryByText('Pinned')).toBeNull();
+		const menu = await openMenu();
+		expect(within(menu).queryByText('Pin by default')).toBeNull();
+		expect(within(menu).getAllByRole('menuitemcheckbox')).toHaveLength(2);
+	});
+
+	it('opens the editor from the pencil button and from the row', () => {
 		const h = renderRow();
-		fireEvent.click(screen.getByRole('switch', { name: 'Model One enabled' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Edit Model One' }));
+		fireEvent.click(screen.getByText('Model One'));
+		expect(h.open).toHaveBeenCalledTimes(2);
+	});
+
+	it('toggles enabled from the switch, named as on the other lists', () => {
+		const h = renderRow();
+		fireEvent.click(screen.getByRole('switch', { name: 'Enable Model One' }));
 		expect(h.toggleActive).toHaveBeenCalledTimes(1);
 	});
 
-	it('shows the quick-action buttons only while shift is held', () => {
+	it('draws the switch from its own state, outside any tooltip trigger (#912)', () => {
 		renderRow();
-		expect(screen.queryByRole('button', { name: 'Set as Selected Model' })).toBeNull();
+		const on = screen.getByRole('switch', { name: 'Enable Model One' });
+		expect(on.getAttribute('data-slot')).toBe('switch');
+		expect(on.getAttribute('data-state')).toBe('checked');
 	});
 
-	it('runs each quick action while shift is held', () => {
-		const h = renderRow({ shiftKey: true });
-		fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Set as Selected Model' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Set as Pinned Model' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Make Public' }));
-		expect(h.toggleHidden).toHaveBeenCalledTimes(1);
-		expect(h.toggleSelected).toHaveBeenCalledTimes(1);
+	it('draws an off switch as unchecked (#912)', () => {
+		renderRow({ model: { ...MODEL, is_active: false } });
+		const off = screen.getByRole('switch', { name: 'Enable Model One' });
+		expect(off.getAttribute('data-slot')).toBe('switch');
+		expect(off.getAttribute('data-state')).toBe('unchecked');
+	});
+
+	it('has no Shift-held quick buttons (S5-D11)', () => {
+		renderRow();
+		fireEvent.keyDown(window, { key: 'Shift', shiftKey: true });
+		expect(screen.queryByRole('button', { name: /Selected Model|Pinned Model|^Hide$|Make Public/ })).toBeNull();
+	});
+
+	it('groups the menu: settings, copies, order, then Hide last (OVL-3)', async () => {
+		renderRow();
+		const menu = await openMenu();
+		const items = Array.from(menu.querySelectorAll('[role=menuitem], [role=menuitemcheckbox]')).map(
+			(i) => i.textContent
+		);
+		expect(items[0]).toContain('Default for new chats');
+		expect(items[1]).toContain('Pin to sidebar');
+		expect(items[2]).toContain('Pin by default');
+		expect(items.at(-1)).toBe('Hide model');
+		expect(within(menu).getAllByRole('separator')).toHaveLength(3);
+	});
+
+	it('marks each menu setting checked while it is on and runs its handler', async () => {
+		const h = renderRow({ isSelected: true, isSidebarPinned: true });
+		const menu = await openMenu();
+		const settings = within(menu).getAllByRole('menuitemcheckbox');
+		expect(settings.map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'true', 'false']);
+		fireEvent.click(settings[2]);
 		expect(h.toggleDefaultPinned).toHaveBeenCalledTimes(1);
+	});
+
+	it('runs the copies, the order and Hide from the menu', async () => {
+		const h = renderRow();
+		fireEvent.click(within(await openMenu()).getByText('Copy link'));
+		fireEvent.click(within(await openMenu()).getByText('Clone'));
+		fireEvent.click(within(await openMenu()).getByText('Export'));
+		fireEvent.click(within(await openMenu()).getByText('Move up'));
+		fireEvent.click(within(await openMenu()).getByText('Move down'));
+		fireEvent.click(within(await openMenu()).getByText('Hide model'));
+		fireEvent.click(within(await openMenu()).getByText('Make public'));
+		expect(h.copyLink).toHaveBeenCalledTimes(1);
+		expect(h.clone).toHaveBeenCalledTimes(1);
+		expect(h.exportModel).toHaveBeenCalledTimes(1);
+		expect(h.moveUp).toHaveBeenCalledTimes(1);
+		expect(h.moveDown).toHaveBeenCalledTimes(1);
+		expect(h.toggleHidden).toHaveBeenCalledTimes(1);
 		expect(h.togglePrivacy).toHaveBeenCalledTimes(1);
 	});
 
-	it('names the quick actions for the state they would undo', () => {
+	it('offers Show model and Make private for the state they would undo', async () => {
 		renderRow({
-			shiftKey: true,
-			isSelected: true,
-			isDefaultPinned: true,
-			model: { ...MODEL, meta: { hidden: true } }
+			model: {
+				...MODEL,
+				meta: { hidden: true },
+				access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'read' }]
+			}
 		});
-		expect(screen.getByRole('button', { name: 'Show' })).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Remove Selected Model' })).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Remove Pinned Model' })).toBeTruthy();
+		const menu = await openMenu();
+		expect(within(menu).getByText('Show model')).toBeTruthy();
+		expect(within(menu).getByText('Make private')).toBeTruthy();
 	});
 
-	it('has a More actions menu button named for the model', () => {
-		renderRow();
-		expect(screen.getByRole('button', { name: 'More actions for Model One' })).toBeTruthy();
+	it('turns off Move up on the first row of its group and Move down on the last', async () => {
+		renderRow({ index: 0, count: 1 });
+		const menu = await openMenu();
+		expect(within(menu).getByText('Move up').closest('[role=menuitem]')?.hasAttribute('data-disabled')).toBe(true);
+		expect(within(menu).getByText('Move down').closest('[role=menuitem]')?.hasAttribute('data-disabled')).toBe(true);
 	});
 
-	it('says reordering is off while filters are set', () => {
+	it('says reordering is off while a search or filter is set', () => {
 		renderRow({ canReorder: false });
-		expect(screen.getByRole('img', { name: 'Reordering is off while filters are set' })).toBeTruthy();
+		expect(screen.getByRole('img', { name: 'Reordering is off while a search or filter is set' })).toBeTruthy();
 	});
 
-	it('offers Make Private on a public model', () => {
-		const h = renderRow({
-			shiftKey: true,
-			model: { ...MODEL, access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'read' }] }
-		});
-		fireEvent.click(screen.getByRole('button', { name: 'Make Private' }));
-		expect(h.togglePrivacy).toHaveBeenCalledTimes(1);
+	it('shows the description on line 2, else the id', () => {
+		renderRow({ model: { ...MODEL, meta: { description: 'Fast coder' } } });
+		expect(screen.getByText('Fast coder')).toBeTruthy();
 	});
 
 	it('falls back to the id for the button names of a model with no name', () => {
 		renderRow({ model: { id: 'raw/id', is_active: true } });
 		expect(screen.getByRole('button', { name: 'Edit raw/id' })).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'More actions for raw/id' })).toBeTruthy();
-		expect(screen.getByRole('switch', { name: 'raw/id enabled' })).toBeTruthy();
+		expect(screen.getByRole('switch', { name: 'Enable raw/id' })).toBeTruthy();
+	});
+
+	it('outlines the row being dragged instead of fading it', () => {
+		renderRow({ dragging: true });
+		expect(document.querySelector('[data-model-row="m1"]')?.getAttribute('data-dragging')).toBe('true');
 	});
 });
