@@ -12,7 +12,7 @@ const ns = (iso: string) => new Date(iso).getTime() * NS;
 const calendars = [
 	{ id: 'personal', name: 'Personal', color: '#3b82f6', is_default: true, is_system: false },
 	{ id: 'work', name: 'Work', color: '#ef4444', is_default: false, is_system: false },
-	{ id: '__scheduled_tasks__', name: 'Scheduled Tasks', color: '#888888', is_default: false, is_system: true }
+	{ id: '__scheduled_tasks__', name: 'Automations', color: '#888888', is_default: false, is_system: true }
 ];
 const event = (
 	id: string,
@@ -103,8 +103,8 @@ test('shows the month with events, and fetches the six-week window', async ({ pa
 	await page.goto('/calendar');
 	await expect(page.getByRole('heading', { name: 'September 2026' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /Dentist/ })).toBeVisible();
-	// A three-day event is on all three days.
-	await expect(page.getByRole('button', { name: /Offsite/ })).toHaveCount(3);
+	// A three-day event is one bar across its days (#1107).
+	await expect(page.getByRole('button', { name: /Offsite/ })).toHaveCount(1);
 	expect(new URLSearchParams(seen.eventQueries[0]).get('start')).toBe(new Date('2026-08-30T00:00:00').toISOString());
 });
 
@@ -130,14 +130,18 @@ test('clicking a day creates a 9 AM event in the default calendar; the scheduled
 	const d = page.getByRole('dialog', { name: 'New event' });
 	await expect(d.getByLabel('Start time')).toHaveValue('09:00');
 	await expect(d.getByLabel('End time')).toHaveValue('10:00');
-	await expect(d.getByLabel('Calendar')).toHaveValue('personal');
-	await expect(d.getByLabel('Calendar').locator('option')).toHaveText(['Personal', 'Work']);
-	await d.getByRole('button', { name: 'Create' }).click();
-	await expect(page.getByText('Title is required')).toBeVisible();
-	await d.getByLabel('Event title').fill(' Standup ');
-	await d.getByLabel('Repeat').selectOption('weekdays');
-	await d.getByLabel('Reminder').selectOption('30');
-	await d.getByRole('button', { name: 'Create' }).click();
+	await expect(d.getByRole('combobox', { name: 'Calendar' })).toHaveText('Personal');
+	await d.getByRole('combobox', { name: 'Calendar' }).click();
+	await expect(page.getByRole('option')).toHaveText(['Personal', 'Work']);
+	await page.getByRole('option', { name: 'Personal' }).click();
+	await d.getByRole('button', { name: 'Create event' }).click();
+	await expect(d.getByText('Enter a title')).toBeVisible();
+	await d.getByLabel('Title').fill(' Standup ');
+	await d.getByRole('combobox', { name: 'Repeat' }).click();
+	await page.getByRole('option', { name: 'Monday to Friday' }).click();
+	await d.getByRole('combobox', { name: 'Reminder' }).click();
+	await page.getByRole('option', { name: '30 minutes before' }).click();
+	await d.getByRole('button', { name: 'Create event' }).click();
 	await expect
 		.poll(() => seen.created[0])
 		.toMatchObject({
@@ -162,9 +166,9 @@ test('an event opens for editing and saves; an automation run opens its chat ins
 	await page.goto('/calendar');
 	await page.getByRole('button', { name: /Dentist/ }).click();
 	const d = page.getByRole('dialog', { name: 'Edit event' });
-	await expect(d.getByLabel('Event title')).toHaveValue('Dentist');
-	await d.getByLabel('Location').fill('Main St');
-	await d.getByRole('button', { name: 'Save' }).click();
+	await expect(d.getByLabel('Title')).toHaveValue('Dentist');
+	await d.getByLabel('Location (optional)').fill('Main St');
+	await d.getByRole('button', { name: 'Save event' }).click();
 	await expect
 		.poll(() => seen.updated[0])
 		.toMatchObject({ title: 'Dentist', location: 'Main St', start_at: ns('2026-09-16T09:30:00') });
@@ -188,8 +192,8 @@ test('saving an occurrence of a repeating event keeps the series start; deleting
 	await page.getByRole('button', { name: /Standup/ }).click();
 	const d = page.getByRole('dialog', { name: 'Edit event' });
 	await expect(d.getByText('changes apply to every occurrence')).toBeVisible();
-	await d.getByLabel('Event title').fill('Daily standup');
-	await d.getByRole('button', { name: 'Save' }).click();
+	await d.getByLabel('Title').fill('Daily standup');
+	await d.getByRole('button', { name: 'Save event' }).click();
 	await expect
 		.poll(() => seen.updated[0])
 		.toMatchObject({
@@ -200,27 +204,31 @@ test('saving an occurrence of a repeating event keeps the series start; deleting
 		});
 
 	await page.getByRole('button', { name: /Standup/ }).click();
-	await d.getByRole('button', { name: 'Delete' }).click();
+	await d.getByRole('button', { name: 'Delete event' }).click();
 	const confirm = page.getByRole('alertdialog');
-	await expect(confirm).toContainText('every occurrence of this event');
+	await expect(confirm).toContainText('every occurrence of “Standup”');
 });
 
-test('a new calendar is created with its color; deleting one asks first', async ({ page }) => {
+test('a new calendar starts on a colour no calendar has; deleting one asks first', async ({ page }) => {
 	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
 	const seen = await mockCalendar(page);
 	await page.goto('/calendar');
 	await page.getByRole('button', { name: 'New calendar' }).click();
-	const d = page.getByRole('dialog', { name: 'New Calendar' });
+	const d = page.getByRole('dialog', { name: 'New calendar' });
 	await d.getByLabel('Name').fill('Gym');
-	// The presets are the series tokens in the current theme (dark): --series-4 is the green (#989, D1b).
+	// The presets are the series tokens in the current theme (dark) (#989, D1b). Personal is blue,
+	// Work red (next to orange) and Automations violet, so yellow is the first one free (#1106).
 	await expect(d.locator('button[aria-pressed]')).toHaveCount(6);
-	await expect(d.getByRole('button', { name: '#82c7f0' })).toHaveAttribute('aria-pressed', 'true');
-	await d.getByRole('button', { name: '#83d494' }).click();
-	await d.getByRole('button', { name: 'Create' }).click();
+	await expect(d.getByRole('button', { name: 'Yellow' })).toHaveAttribute('aria-pressed', 'true');
+	await d.getByRole('button', { name: 'Green' }).click();
+	await d.getByRole('button', { name: 'Create calendar' }).click();
 	await expect.poll(() => seen.calendarsCreated[0]).toEqual({ name: 'Gym', color: '#83d494' });
-	await expect(page.getByRole('button', { name: 'Delete calendar Personal' })).toHaveCount(0);
-	await page.getByRole('button', { name: 'Delete calendar Work' }).click();
-	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+	await page.getByRole('button', { name: 'More actions for Personal' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Delete calendar' })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'More actions for Work' }).click();
+	await page.getByRole('menuitem', { name: 'Delete calendar' }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete calendar' }).click();
 	await expect.poll(() => seen.deleted).toEqual(['/work/delete']);
 });
 

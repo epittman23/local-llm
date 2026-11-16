@@ -89,8 +89,9 @@ async def _check_calendar_access(calendar_id: str, user: UserModel, permission: 
 
 @router.get('/', response_model=list[CalendarModel])
 async def get_calendars(request: Request, user: UserModel = Depends(get_verified_user)):
-    """List user's calendars (owned + shared), plus a virtual Scheduled Tasks calendar
-    when automations are available."""
+    """List user's calendars (owned + shared), plus a virtual Automations calendar
+    when automations are available. It is named for the page it mirrors, and stores
+    no colour, so the frontend draws it in a series token (S6-D10)."""
     await check_calendar_permission(request, user)
     calendars = await Calendars.get_calendars_by_user(user.id)
 
@@ -100,8 +101,8 @@ async def get_calendars(request: Request, user: UserModel = Depends(get_verified
             CalendarModel(
                 id=SCHEDULED_TASKS_CALENDAR_ID,
                 user_id=user.id,
-                name='Scheduled Tasks',
-                color='#8b5cf6',
+                name='Automations',
+                color=None,
                 is_default=False,
                 is_system=True,
                 created_at=now,
@@ -160,7 +161,7 @@ async def get_events(
 
     Includes:
     - Stored events from the database
-    - Virtual events computed from active automation RRULEs (Scheduled Tasks calendar)
+    - Virtual events computed from active automation RRULEs (the Automations calendar)
     """
     await check_calendar_permission(request, user)
 
@@ -195,7 +196,7 @@ async def get_events(
         else:
             expanded.append(event)
 
-    # 2. Virtual automation events (Scheduled Tasks calendar)
+    # 2. Virtual automation events (the Automations calendar)
     if await _user_has_automations(request, user) and (
         cal_id_list is None or SCHEDULED_TASKS_CALENDAR_ID in cal_id_list
     ):
@@ -460,7 +461,7 @@ async def update_calendar(
 async def delete_calendar(request: Request, calendar_id: str, user: UserModel = Depends(get_verified_user)):
     await check_calendar_permission(request, user)
 
-    # Block deletion of the virtual Scheduled Tasks calendar
+    # Block deletion of the virtual Automations calendar
     if calendar_id == SCHEDULED_TASKS_CALENDAR_ID:
         raise HTTPException(status_code=400, detail='System calendars cannot be deleted')
 
