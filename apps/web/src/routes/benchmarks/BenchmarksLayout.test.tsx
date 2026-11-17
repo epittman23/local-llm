@@ -85,7 +85,7 @@ describe('BenchmarksLayout', () => {
 		vi.mocked(api.getLive).mockResolvedValue({ run: { config_id: 'c98ef02c11aa', model: 'qwen3.8-27b' } });
 		signIn();
 		renderAt('/benchmarks/compare');
-		const chip = await screen.findByRole('link', { name: /Serving qwen38/ });
+		const chip = await screen.findByRole('link', { name: 'Serving qwen38 · c98ef02c' });
 		expect(chip.getAttribute('href')).toBe('/benchmarks/serve');
 		expect(chip.textContent).toContain('c98ef02c');
 		expect(chip.textContent).not.toContain('11aa');

@@ -95,7 +95,7 @@ export function BenchmarksStatusChip() {
 						{state.label}
 						{state.detail && (
 							<>
-								<span aria-hidden>·</span>
+								{' · '}
 								<span className="font-mono">{state.detail}</span>
 							</>
 						)}

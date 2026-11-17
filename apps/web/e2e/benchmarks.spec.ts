@@ -797,13 +797,13 @@ test('Tune shows sweep status streamed as whole-object replacements, and Stop re
 	// The final (second) event's state, not an accumulation of both --
 	// two rounds, "adopted", and candidate-b as the winner rather than
 	// still "active".
-	await expect(page.getByText('adopted')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Result' }).getByText('Adopted', { exact: true })).toBeVisible();
 	await expect(page.getByRole('row', { name: /^2\s/ })).toBeVisible();
-	await expect(page.getByText('★ winner')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Candidates' }).getByText('Winner', { exact: true })).toBeVisible();
 	await expect(page.getByRole('row').filter({ hasText: 'candidate-b' })).not.toContainText('active');
 
 	// Stop is disabled once the sweep has already stopped running.
-	await expect(page.getByRole('button', { name: 'Stop' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Stop sweep' })).toBeDisabled();
 });
 
 test('Pre-screen streams a running sweep and labels its candidates as raw llama-bench throughput', async ({ page }) => {
@@ -893,7 +893,7 @@ test('Pre-screen streams a running sweep and labels its candidates as raw llama-
 	await page.goto('/benchmarks/prescreen');
 
 	await expect(page.getByRole('heading', { name: 'Pre-screen' })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Pre-screen' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pre-screen', exact: true })).toBeVisible();
 	await expect(
 		page.getByText('Candidates, raw llama-bench throughput (not a serving measurement): confirm with a full Tests run')
 	).toBeVisible();
@@ -901,9 +901,11 @@ test('Pre-screen streams a running sweep and labels its candidates as raw llama-
 	// The events replaced each other, and the final read replaced them: three
 	// points, the third an OOM, and the sweep done.
 	await expect(page.getByText('Points (3)')).toBeVisible();
-	await expect(page.getByRole('cell', { name: 'oom' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
-	await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+	await expect(page.getByRole('cell', { name: 'Out of memory' })).toBeVisible();
+	// The start form folds away while a sweep is shown.
+	await page.getByRole('button', { name: /^New pre-screen/ }).click();
+	await expect(page.getByRole('button', { name: 'Start pre-screen' })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Cancel pre-screen' })).toBeDisabled();
 });
 
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
@@ -966,4 +968,35 @@ test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.getByRole('button', { name: 'Run', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});
+
+// P4
+test('the Benchmarks tabs follow the workflow, and the chip names what is served and links to Serve', async ({
+	page
+}) => {
+	await page.route('**/api/v1/benchmarks/serve/check', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ port: 8090, model: 'qwen3.8-27b', profile: 'qwen38', running: true })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ run: { run_id: 1, config_id: 'c98ef02c', model: 'qwen3.8-27b' }, recent_samples: [] })
+		})
+	);
+	await page.goto('/benchmarks');
+
+	// /benchmarks opens on Serve (B-D2).
+	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	const tabs = page.getByRole('navigation', { name: 'Benchmarks' }).getByRole('link');
+	await expect(tabs).toHaveText(['Pre-screen', 'Tune', 'Serve', 'Live', 'Tests', 'Compare', 'Answers', 'Report']);
+	const chip = page.getByRole('link', { name: 'Serving qwen38 · c98ef02c' });
+	await expect(chip).toBeVisible();
+	await page.getByRole('link', { name: 'Compare', exact: true }).click();
+	await chip.click();
+	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
 });

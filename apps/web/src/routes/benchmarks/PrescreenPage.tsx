@@ -393,7 +393,8 @@ export function PrescreenPage() {
 		sampler === 'auto' && selectedGrid?.combinations !== undefined && selectedGrid.combinations <= GRID_LIMIT;
 	const trialsUnused = sampler === 'grid' || autoIsGrid;
 	const loaded = !sweepsQuery.isPending;
-	const newSweepOpen = formOpen ?? (loaded && !sweep);
+	// Open while there is nothing to show; folded once there is (#1114).
+	const newSweepOpen = formOpen ?? (loaded && sweeps.length === 0 && !sweep);
 	const sweepStatus = sweep ? statusOf(SWEEP_STATUS, sweep.status) : null;
 
 	return (
@@ -694,6 +695,7 @@ export function PrescreenPage() {
 
 			{!sweep ? (
 				loaded &&
+				sweeps.length === 0 &&
 				!detailError && (
 					<ListEmptyState
 						title="No pre-screens yet"
