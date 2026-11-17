@@ -379,8 +379,8 @@ export function ReportPage() {
 								<Markdown key={part.at} id={`report-${answer.date}-${part.at}`} content={part.text} />
 							) : (
 								// CNT-4: a generated figure sits in a frame that belongs to the theme.
-								<figure key={part.at} className="bg-surface-1 my-2 w-fit max-w-full rounded-lg border p-2">
-									<img src={part.src} alt={part.alt} className="block h-auto max-w-full rounded" />
+								<figure key={part.at} className="bg-surface-1 my-2 w-full max-w-3xl rounded-lg border p-2">
+									<img src={part.src} alt={part.alt} className="block h-auto w-full rounded" />
 									{part.caption && (
 										<figcaption className="text-foreground-muted mt-1.5 text-dense">{part.caption}</figcaption>
 									)}

@@ -50,7 +50,7 @@ describe('calibrationText', () => {
 
 	it('says why a calibration is stale, and nothing for a dataset not fetched', () => {
 		expect(calibrationText(status({ calibration_stale: 'not calibrated yet' }))).toBe('not calibrated yet');
-		expect(calibrationText(status({ fetched: false }))).toBe('-');
+		expect(calibrationText(status({ fetched: false }))).toBe('–');
 		expect(calibrationText(status({ fetched: false, calibration_stale: 'does not match its pinned hash' }))).toBe(
 			'does not match its pinned hash'
 		);

@@ -425,13 +425,10 @@ export function AnswersPage() {
 
 										<div>
 											<h4 className="text-foreground-muted mb-1 text-dense font-strong">Prompt</h4>
-											{view === 'raw' ? (
-												<pre className="bg-surface-1 overflow-x-auto rounded-lg border p-2.5 text-dense whitespace-pre-wrap">
-													{answer.prompt}
-												</pre>
-											) : (
-												<Markdown id={`answer-prompt-${selectedKey}`} content={answer.prompt ?? ''} />
-											)}
+											{/* The prompt is what was sent, often a code stub: always its exact text. */}
+											<pre className="bg-surface-1 overflow-x-auto rounded-lg border p-2.5 text-dense whitespace-pre-wrap">
+												{answer.prompt}
+											</pre>
 										</div>
 										{thinking && answer.reasoning && (
 											<div>

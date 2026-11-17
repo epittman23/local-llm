@@ -24,7 +24,7 @@ export const datasetEventText = (d: DatasetEvent): string => {
 export const calibrationText = (d: DatasetStatus): string => {
 	// A vendored file that fails its hash arrives unfetched, with the reason here.
 	if (d.calibration_stale) return d.calibration_stale;
-	if (!d.fetched) return '-';
+	if (!d.fetched) return '–';
 	return `${(d.n_checked ?? 0) - (d.n_ungradeable ?? 0)}/${d.n_checked} gradeable`;
 };
 
