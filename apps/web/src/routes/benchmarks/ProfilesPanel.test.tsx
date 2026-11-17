@@ -59,7 +59,15 @@ const version = (n: number, over: Record<string, unknown> = {}) => ({
 	...over
 });
 const entry = (name: string, over: Record<string, unknown> = {}, profile: Record<string, unknown> = {}) => ({
-	profile: { profile_id: name.length, name, display_name: `${name} display`, is_default: false, created_at: 1, archived_at: null, ...profile },
+	profile: {
+		profile_id: name.length,
+		name,
+		display_name: `${name} display`,
+		is_default: false,
+		created_at: 1,
+		archived_at: null,
+		...profile
+	},
 	version: version(2, over)
 });
 
@@ -159,7 +167,9 @@ describe('ProfilesPanel', () => {
 		fireEvent.click(await screen.findByRole('button', { name: 'Edit qwen38' }));
 		const dialog = await screen.findByRole('dialog');
 		expect(within(dialog).getByRole('heading', { name: 'New version of qwen38' })).toBeInTheDocument();
-		expect(within(dialog).getByText('No changes yet. Saving now would repeat the current version.')).toBeInTheDocument();
+		expect(
+			within(dialog).getByText('No changes yet. Saving now would repeat the current version.')
+		).toBeInTheDocument();
 		const ngl = within(dialog).getByRole('textbox', { name: 'GPU layers' });
 		expect((ngl as HTMLInputElement).value).toBe('20');
 		fireEvent.change(ngl, { target: { value: '22' } });
@@ -180,7 +190,9 @@ describe('ProfilesPanel', () => {
 		const ngl = await screen.findByRole('textbox', { name: 'GPU layers' });
 		expect((ngl as HTMLInputElement).value).toBe('22');
 		expect((screen.getByRole('textbox', { name: 'Batch size' }) as HTMLInputElement).value).toBe('1024');
-		expect((screen.getByRole('textbox', { name: /Version note/ }) as HTMLTextAreaElement).value).toBe('From pre-screen');
+		expect((screen.getByRole('textbox', { name: /Version note/ }) as HTMLTextAreaElement).value).toBe(
+			'From pre-screen'
+		);
 		expect(screen.getByText('Batch size:')).toBeInTheDocument();
 	});
 
@@ -222,7 +234,9 @@ describe('ProfilesPanel', () => {
 			target: { value: '--parallel 2' }
 		});
 		fireEvent.click(screen.getByRole('button', { name: 'Save as new version' }));
-		expect(await screen.findByText('A dense model has no experts to keep on the CPU. Leave this empty.')).toBeInTheDocument();
+		expect(
+			await screen.findByText('A dense model has no experts to keep on the CPU. Leave this empty.')
+		).toBeInTheDocument();
 		expect(screen.getByText('Remove -fit: the launcher always passes -fit off.')).toBeInTheDocument();
 		expect(screen.getByText('Set the slot count with Parallel slots, not here.')).toBeInTheDocument();
 		expect(api.addProfileVersion).not.toHaveBeenCalled();

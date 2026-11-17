@@ -54,7 +54,14 @@ const version = (over: Record<string, unknown> = {}) => ({
 	...over
 });
 const entry = (name: string, isDefault: boolean, over: Record<string, unknown> = {}) => ({
-	profile: { profile_id: 1, name, display_name: `${name} display`, is_default: isDefault, created_at: 1, archived_at: null },
+	profile: {
+		profile_id: 1,
+		name,
+		display_name: `${name} display`,
+		is_default: isDefault,
+		created_at: 1,
+		archived_at: null
+	},
 	version: version(over)
 });
 
@@ -110,7 +117,9 @@ describe('ServePage', () => {
 
 	it('opens on the default profile with its values as placeholders, and says nothing is served (#976, #1051)', async () => {
 		const router = renderPage();
-		await waitFor(() => expect(screen.getByRole('combobox', { name: 'Profile' }).textContent).toContain('qwen38 (default)'));
+		await waitFor(() =>
+			expect(screen.getByRole('combobox', { name: 'Profile' }).textContent).toContain('qwen38 (default)')
+		);
 		expect(screen.getByText('Nothing served')).toBeInTheDocument();
 		const ngl = screen.getByRole('textbox', { name: /GPU layers/ });
 		expect(ngl.getAttribute('placeholder')).toBe('20');
@@ -209,7 +218,10 @@ describe('ServePage', () => {
 	});
 
 	it('warns when the weights file is missing', async () => {
-		vi.mocked(api.getServeProfile).mockResolvedValue({ weights_present: false, model: '/models/missing.gguf' } as never);
+		vi.mocked(api.getServeProfile).mockResolvedValue({
+			weights_present: false,
+			model: '/models/missing.gguf'
+		} as never);
 		renderPage();
 		expect(await screen.findByText('Weights file not found')).toBeInTheDocument();
 		expect(screen.getByText('/models/missing.gguf')).toBeInTheDocument();
