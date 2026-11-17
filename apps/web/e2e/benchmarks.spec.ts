@@ -127,7 +127,8 @@ test('the Benchmarks gate admits an admin and Serve renders the profile list', a
 	await page.goto('/benchmarks');
 
 	// Bare /benchmarks redirects to /serve (AppRouter.tsx's index route).
-	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	// Serve then keeps its profile in the address (NAV-1).
+	await expect(page).toHaveURL(/\/benchmarks\/serve(\?profile=qwen38)?$/);
 	await expect(page.getByRole('heading', { name: 'Serve' })).toBeVisible();
 
 	// Three comboboxes exist on this page (profile, reasoning effort, spec) --
