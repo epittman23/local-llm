@@ -58,7 +58,7 @@ export function BenchmarksLayout() {
 	);
 }
 
-type ChipState = { label: string; detail?: string; to: string };
+export type ChipState = { label: string; detail?: string; to: string };
 
 /**
  * B-D2: what the section is doing now, linking to the page that owns it.
@@ -85,7 +85,11 @@ export function BenchmarksStatusChip() {
 	}
 
 	const state = chipState({ check: check.data, live: live.data, tune: tune.data, prescreen: prescreen.data });
+	return <StatusChip state={state} unavailable={queries.some((q) => q.isError)} />;
+}
 
+/** The chip itself (NAV-2): a success link to what is running, or a secondary word when nothing is. */
+export function StatusChip({ state, unavailable = false }: { state: ChipState | null; unavailable?: boolean }) {
 	return (
 		<div role="status" className="flex shrink-0 items-center pb-1">
 			{state ? (
@@ -104,7 +108,7 @@ export function BenchmarksStatusChip() {
 			) : (
 				<Badge variant="secondary" className="text-dense h-6 px-2.5">
 					<CircleDashedIcon aria-hidden data-icon="inline-start" />
-					{queries.some((q) => q.isError) ? 'Status unavailable' : 'Nothing running'}
+					{unavailable ? 'Status unavailable' : 'Nothing running'}
 				</Badge>
 			)}
 		</div>

@@ -90,6 +90,7 @@ import {
 	StatusNoticeDemo,
 	TallDialogDemo
 } from './adminDemos';
+import { OutcomeBadgesDemo, SparklineTileDemo, StickyTableDemo, WorkflowTabsDemo } from './benchmarksDemos';
 import { DayGridDemo, HighlightDemo, TimeGridDemo, ToolbarDemo, WeekdayTogglesDemo } from './notesDemos';
 import { Example, Field, PageHeader, Panel, Section } from './parts';
 import { CodeEditorFieldDemo, FailedRowDemo, ListMatchCountDemo, RowStateDemo } from './workspaceDemos';
@@ -615,6 +616,12 @@ export function DataSection() {
 				</div>
 			</Example>
 			<Example
+				title="Graded outcomes"
+				note="A benchmark item's outcome is a status badge with one word per outcome, the same on Tests, Answers and Compare: passed in success; assert failed, error, timed out and no code in danger; skipped in secondary."
+			>
+				<OutcomeBadgesDemo />
+			</Example>
+			<Example
 				title="A row's state"
 				note="Off, Hidden and Read only are words on the row's first line, never a faded row. The switch is named for its row ('Enable Code reviewer'), not for its state, and its row's second line says what the thing is."
 			>
@@ -635,10 +642,22 @@ export function DataSection() {
 				<OpeningTableDemo />
 			</Example>
 			<Example
+				title="A long table's headings"
+				note="stickyHeader keeps the headings in view while the rows scroll inside a frame of at most maxHeight; with stickyFirstColumn the first column stays too, and the corner heading above both. Rows hidden below make the named region a tab stop."
+			>
+				<StickyTableDemo />
+			</Example>
+			<Example
 				title="A chart"
 				note="A legend names each line's colour, the y axis has a title and round ticks, and Show as table gives every value to the keyboard and to a screen reader. The tooltip opens away from the nearer edge."
 			>
 				<ChartDemo />
+			</Example>
+			<Example
+				title="A key figure and its sparkline"
+				note="A tile names one figure with its unit, says what it means on a line under it, and draws one series small: named by the tile, no legend or axis, role img with a summary of its range. Every value it draws is in a table on the same page."
+			>
+				<SparklineTileDemo />
 			</Example>
 			<Example
 				title="A time grid"
@@ -778,6 +797,14 @@ export function NavigationSection() {
 					<p className="text-foreground-muted px-4 pt-4">
 						The {DEMO_SUB_TABS.find((t) => t.id === subTab)?.label} section.
 					</p>
+				</Panel>
+			</Example>
+			<Example
+				title="A workflow's tabs and its status chip"
+				note="Benchmarks: the tabs follow the workflow in groups, with a line between groups that a screen reader skips. The chip at the strip's end says what is running and links to its page, or says Nothing running and is not a link. On a narrow screen it wraps above the strip."
+			>
+				<Panel className="max-w-[48rem] px-0">
+					<WorkflowTabsDemo />
 				</Panel>
 			</Example>
 			<Example
