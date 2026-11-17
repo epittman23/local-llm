@@ -213,8 +213,9 @@ test('Live renders an active run and Kill requires AlertDialog confirmation', as
 
 	await page.goto('/benchmarks/live');
 
-	await expect(page.getByText('qwen38')).toBeVisible();
-	await expect(page.getByText('abc123')).toBeVisible();
+	// The section's status chip names the run too; these read the Live page's own copy.
+	await expect(page.getByText('qwen38', { exact: true })).toBeVisible();
+	await expect(page.getByText('abc123').and(page.locator(':not([role="status"] *)'))).toBeVisible();
 
 	await page.getByRole('button', { name: 'Kill server' }).click();
 	await expect(page.getByRole('heading', { name: 'Kill the recorded server?' })).toBeVisible();
