@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { errorMessage } from '@/lib/apis/benchmarks/profiles';
-import { argvToText, textToArgv } from './ProfileDefinitionForm';
+import { argvToText, textToArgv } from './profileForm';
 
 // docs/history/bug-review-2026-09-27.md M7 and L7.
 describe('profile argv fields', () => {

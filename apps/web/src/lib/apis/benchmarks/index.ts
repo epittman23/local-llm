@@ -213,6 +213,35 @@ export const checkServe = async (token: string = '') => {
 	return res;
 };
 
+/** What Start would launch for a form, and the config_id the run would be recorded under. Starts nothing. */
+export type ServePreview = {
+	profile: string;
+	version: number;
+	argv: string[];
+	config_id: string;
+	config_lines: string[];
+	warning: string | null;
+};
+
+/** GET /serve/preview: the form as query parameters, empty ones left out; rejects with the server's reason. */
+export const previewServe = async (token: string = '', form: ServeStartForm = {}): Promise<ServePreview> => {
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(form)) {
+		if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+	}
+	let res: Response;
+	try {
+		res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/serve/preview?${query}`, {
+			method: 'GET',
+			headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+		});
+	} catch (err) {
+		throw requestError(err);
+	}
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
 // Returns the raw [Response, AbortController] tuple, matching the
 // established convention for streaming fetches in this codebase (see
 // `pullModel` in `$lib/apis/ollama`). Callers pass `res.body` into `parseBenchmarksEventStream`
