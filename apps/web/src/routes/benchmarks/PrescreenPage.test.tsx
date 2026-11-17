@@ -145,6 +145,28 @@ describe('PrescreenPage', () => {
 		useAuthStore.setState({ token: null });
 	});
 
+	it('names a sweep the address asks for that does not exist, and offers the latest (NAV-3)', async () => {
+		vi.mocked(api.getPrescreenSweep).mockImplementation(async (_token, id) => (id === 'gone' ? null : detail('done')));
+		renderPage('/benchmarks/prescreen?sweep=gone');
+		expect(await screen.findByText('No pre-screen gone')).toBeTruthy();
+		expect(screen.queryByText("Couldn't load the pre-screen")).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Show the latest pre-screen' }));
+		await waitFor(() => expect(api.getPrescreenSweep).toHaveBeenCalledWith('test-token', '1793-abc'));
+		expect(router.state.location.search).toBe('');
+		expect(await screen.findByText("The profile's settings")).toBeTruthy();
+		expect(screen.queryByText('No pre-screen gone')).toBeNull();
+	});
+
+	it('treats a sweep that vanishes while streaming as missing', async () => {
+		const running = detail('running');
+		vi.mocked(api.getPrescreenSweep)
+			.mockResolvedValueOnce({ ...running, running: true })
+			.mockResolvedValue(null);
+		vi.mocked(api.streamPrescreen).mockResolvedValue(stream([]));
+		renderPage('/benchmarks/prescreen?sweep=1793-abc');
+		expect(await screen.findByText('No pre-screen 1793-abc')).toBeTruthy();
+	});
+
 	it('shows the latest sweep, labelled as raw llama-bench throughput', async () => {
 		renderPage();
 		expect(

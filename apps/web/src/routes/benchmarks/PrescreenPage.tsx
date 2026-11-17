@@ -241,6 +241,8 @@ export function PrescreenPage() {
 	// The sweep shown: streamed while it runs, read once otherwise
 	// -------------------------------------------------------------------
 	const [detail, setDetail] = useState<Detail | null>(null);
+	// The sweep the address named that the server does not have (NAV-3).
+	const [missing, setMissing] = useState<string | null>(null);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [streaming, setStreaming] = useState(false);
 	const streamControllerRef = useRef<AbortController | null>(null);
@@ -287,15 +289,19 @@ export function PrescreenPage() {
 				if (controller.signal.aborted) return;
 				await queryClient.invalidateQueries({ queryKey: ['prescreen-sweeps'] });
 				// The last event can predate the sweep's close; read its state again.
-				let latest: Detail;
+				let latest: Detail | null;
 				try {
-					latest = (await getPrescreenSweep(token, sweepId)) as Detail;
+					latest = (await getPrescreenSweep(token, sweepId)) as Detail | null;
 				} catch (err) {
 					setDetailError(errorMessage(err));
 					return;
 				}
 				if (controller.signal.aborted) return;
 				setDetail(latest);
+				if (!latest) {
+					setMissing(sweepId);
+					return;
+				}
 				if (latest?.sweep?.status !== 'running' || !latest?.running) return;
 			}
 		},
@@ -307,10 +313,12 @@ export function PrescreenPage() {
 			shownRef.current = sweepId;
 			stopStreaming();
 			setDetailError(null);
+			setMissing(null);
 			try {
-				const d = (await getPrescreenSweep(token, sweepId)) as Detail;
+				const d = (await getPrescreenSweep(token, sweepId)) as Detail | null;
 				setDetail(d);
-				if (d?.sweep?.status === 'running' && d?.running) void stream(sweepId);
+				if (!d) setMissing(sweepId);
+				else if (d.sweep?.status === 'running' && d.running) void stream(sweepId);
 			} catch (err) {
 				setDetailError(errorMessage(err));
 			}
@@ -663,13 +671,25 @@ export function PrescreenPage() {
 
 			{!sweep ? (
 				loaded &&
-				sweeps.length === 0 &&
-				!detailError && (
+				!detailError &&
+				(sweepParam && missing === sweepParam ? (
 					<ListEmptyState
-						title="No pre-screens yet"
-						description="A pre-screen times llama-bench over the profile's grid, to pick the settings worth a full Tests run. Choose a profile under New pre-screen, then start it."
+						title={`No pre-screen ${sweepParam}`}
+						description="It may have been deleted, or the link is wrong."
+						action={
+							<Button variant="outline" size="sm" type="button" onClick={() => setSearchParams({})}>
+								Show the latest pre-screen
+							</Button>
+						}
 					/>
-				)
+				) : (
+					sweeps.length === 0 && (
+						<ListEmptyState
+							title="No pre-screens yet"
+							description="A pre-screen times llama-bench over the profile's grid, to pick the settings worth a full Tests run. Choose a profile under New pre-screen, then start it."
+						/>
+					)
+				))
 			) : (
 				<>
 					<div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">

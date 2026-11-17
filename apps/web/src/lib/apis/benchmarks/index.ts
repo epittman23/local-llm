@@ -1290,6 +1290,7 @@ export const getPrescreenSweeps = async (token: string = '', limit: number = 20)
 	return res;
 };
 
+/** One pre-screen's whole detail, or null when there is no such sweep (a 404 is a state, not a failure). */
 export const getPrescreenSweep = async (token: string = '', sweepId: string) => {
 	let error = null;
 
@@ -1302,6 +1303,7 @@ export const getPrescreenSweep = async (token: string = '', sweepId: string) => 
 		}
 	})
 		.then(async (res) => {
+			if (res.status === 404) return null;
 			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})

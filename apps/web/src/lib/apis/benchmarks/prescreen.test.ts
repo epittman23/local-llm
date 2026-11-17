@@ -21,6 +21,15 @@ const ok = (body: unknown) =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('the pre-screen API helpers', () => {
+	it('getPrescreenSweep answers null for a sweep that does not exist, and throws other failures', async () => {
+		const status = (code: number) =>
+			vi.fn(async () => new Response(JSON.stringify({ detail: 'no' }), { status: code }));
+		vi.stubGlobal('fetch', status(404));
+		expect(await getPrescreenSweep('t', 'gone')).toBeNull();
+		vi.stubGlobal('fetch', status(500));
+		await expect(getPrescreenSweep('t', 'gone')).rejects.toBe('no');
+	});
+
 	it.each([
 		['getPrescreenGrids', () => getPrescreenGrids('t'), 'GET', '/benchmarks/prescreen/grids'],
 		['getPrescreenSweeps', () => getPrescreenSweeps('t', 5), 'GET', '/benchmarks/prescreen/sweeps?limit=5'],
