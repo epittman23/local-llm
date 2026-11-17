@@ -249,13 +249,13 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await page.goto('/benchmarks/tests');
 
 	await expect(page.getByRole('heading', { name: 'Tests' })).toBeVisible();
-	await page.getByRole('button', { name: 'Run', exact: true }).click();
+	await page.getByRole('button', { name: 'Run smoke' }).click();
 
 	await expect(page.getByText('20260101T000000Z-abc123')).toBeVisible();
 	await expect(page.getByText('HumanEval/0')).toBeVisible();
 	await expect(page.getByText('HumanEval/1')).toBeVisible();
 	await expect(page.getByText('AssertionError')).toBeVisible();
-	await expect(page.getByText('1 / 2 passed')).toBeVisible();
+	await expect(page.getByText('Final: 1 of 2 passed')).toBeVisible();
 });
 
 // The Tests page's dataset actions (#141): each POSTs, then follows the one Tests stream.
@@ -326,7 +326,7 @@ test('Fetch on a vendored dataset says it is in the repository', async ({ page }
 	);
 	await page.goto('/benchmarks/tests');
 	const panel = page.getByRole('region', { name: 'Datasets' });
-	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await panel.getByRole('button', { name: 'Fetch datasets', exact: true }).click();
 	await expect(
 		page.getByText('humanevalplus: in the repository, verified, 164 items, revision v0.1.10@42526ec0e7d5')
 	).toBeVisible();
@@ -340,10 +340,10 @@ test('Tests fetches the datasets and shows what was downloaded', async ({ page }
 	]);
 	await page.goto('/benchmarks/tests');
 	const panel = page.getByRole('region', { name: 'Datasets' });
-	await expect(panel.getByText('not fetched')).toBeVisible();
+	await expect(panel.getByText('Not fetched')).toBeVisible();
 	// Nothing to check before anything is fetched.
 	await expect(panel.getByRole('button', { name: 'Selfcheck' })).toBeDisabled();
-	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await panel.getByRole('button', { name: 'Fetch datasets', exact: true }).click();
 	await expect(page.getByText('humanevalplus: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
 	expect(seen.body).toEqual({});
 	// The table is read again once the job ends.
@@ -353,8 +353,8 @@ test('Tests fetches the datasets and shows what was downloaded', async ({ page }
 test('Tests force-refetches only after confirming', async ({ page }) => {
 	const seen = await mockTestsJob(page, 'fetch', [{ type: 'done', cancelled: false }]);
 	await page.goto('/benchmarks/tests');
-	page.once('dialog', (dialog) => dialog.accept());
-	await page.getByRole('button', { name: 'Force refetch' }).click();
+	await page.getByRole('button', { name: 'Refetch datasets' }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Refetch datasets' }).click();
 	await expect.poll(() => seen.body).toEqual({ force: true });
 });
 
@@ -420,10 +420,10 @@ test('Tests runs one item and shows its answer without recording it', async ({ p
 	await form.getByRole('button', { name: 'Run item' }).click();
 	const card = page.getByTestId('item-result');
 	await expect(card).toContainText('mbppplus/2');
-	await expect(card).toContainText('fail_assert');
+	await expect(card).toContainText('assert failed');
 	await expect(card).toContainText('A suite here leaves this item out: fail_assert: its own reference fails here');
 	await expect(card).toContainText('def neg(a):');
-	await expect(card).toContainText('2.3s');
+	await expect(card).toContainText('2.3 s');
 	expect(seen.body).toEqual({ benchmark: 'mbppplus', item_id: '2' });
 });
 
@@ -679,7 +679,7 @@ test('Answers lists results and renders a selected transcript', async ({ page })
 	await expect(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
 	await expect(page.getByText('HumanEval/3')).toBeVisible();
 
-	await page.getByText('HumanEval/3').click();
+	await page.getByRole('button', { name: /HumanEval\/3/ }).click();
 	await expect(page.getByText('wrong on purpose')).toBeVisible();
 	await expect(page.getByText('71bc58dd')).toBeVisible();
 });
@@ -696,18 +696,24 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({
-				markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
-				figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png'],
-				windows: ['2025-01-01..2025-04-06']
-			})
+			body: JSON.stringify(
+				route.request().method() === 'GET'
+					? { reports: [] }
+					: {
+							markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
+							figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png'],
+							date: '2026-01-01-abc123',
+							windows: ['2025-01-01..2025-04-06'],
+							figures_skipped: ''
+						}
+			)
 		})
 	);
 	await page.route('**/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md', (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: 'text/plain',
-			body: '# Serving comparison\n\n<script>window.__xss = true</script>\n\nqwen38 leads on pass rate.\n'
+			body: '# Serving comparison\n\n<script>window.__xss = true</script>\n\nqwen38 leads on pass rate.\n\n![generation throughput per request](fig1.png)\n\n*Throughput over the run*\n'
 		})
 	);
 	// A 1x1 transparent PNG, just enough for the browser to accept it as a
@@ -723,12 +729,15 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 	await page.goto('/benchmarks/report');
 
 	await expect(page.getByRole('heading', { name: 'Report' })).toBeVisible();
-	await page.getByRole('button', { name: 'Generate' }).click();
+	await page.getByRole('button', { name: 'Generate report' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Serving comparison' })).toBeVisible();
 	await expect(page.getByText('qwen38 leads on pass rate.')).toBeVisible();
 	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
-	await expect(page.locator('img[alt$="fig1.png"]')).toBeVisible();
+	// The figure sits where the report references it, fetched with the token, with its caption.
+	await expect(page.getByRole('img', { name: 'generation throughput per request' })).toBeVisible();
+	await expect(page.getByText('Throughput over the run')).toBeVisible();
+	await expect(page).toHaveURL(/report=2026-01-01-abc123/);
 	// DOMPurify stripped the <script> tag -- its text must not appear as
 	// literal markup, and it must not have actually executed.
 	await expect(page.locator('script:has-text("__xss")')).toHaveCount(0);
@@ -963,7 +972,36 @@ test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.route('**/api/v1/benchmarks/tests/stream', () => {});
 
 	await page.goto('/benchmarks/tests');
-	await page.getByRole('button', { name: 'Run', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Run smoke' }).click();
+	await expect(page.getByRole('button', { name: 'Cancel run' })).toBeEnabled();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});
+
+// P2
+test('Tests names what is served and holds Run while nothing is', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['full', 'smoke', 'standard'], benchmarks: ['humanevalplus'], systems: [] })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ run: null }) })
+	);
+	await page.goto('/benchmarks/tests');
+	await expect(page.getByText('Nothing is being served')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run smoke' })).toBeDisabled();
+
+	await page.route('**/api/v1/benchmarks/serve/check', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ port: 8090, model: 'qwen3.8-27b', profile: 'qwen38', running: true })
+		})
+	);
+	await page.goto('/benchmarks/tests?tier=standard');
+	await expect(page.getByText('Serving qwen3.8-27b')).toBeVisible();
+	await expect(page.getByText('Tests run against this server · profile qwen38 · port 8090.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run standard' })).toBeEnabled();
 });
