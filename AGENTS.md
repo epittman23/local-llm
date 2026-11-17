@@ -84,7 +84,9 @@ been measured on either build yet.
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and
-  request timing into the app's own Postgres.
+  request timing into the app's own Postgres. Out-of-range overrides are a
+  422, and the read-only `GET /benchmarks/serve/preview` shows the command
+  and `config_id` a Start would use (since 2026-11-16).
 - **Text completion**: the Playground's Completions tab goes through the
   backend's `POST /openai/completions` to the connection's OpenAI-compatible
   `/v1/completions`. llama-server has one; OpenRouter's is unverified, so on

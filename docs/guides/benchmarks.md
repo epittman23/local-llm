@@ -50,23 +50,51 @@ app itself, as an admin-only **Benchmarks** section at
 `/benchmarks`, served by the same `make backend` as the rest
 of the app rather than a separate process or port. See the sections
 below for the harnesses themselves. Eight pages,
-none of them a thin passthrough to a CLI that no longer exists:
+none of them a thin passthrough to a CLI that no longer exists. `/benchmarks`
+opens on Serve. The tabs follow the workflow in three groups (Pre-screen,
+Tune | Serve, Live, Tests | Compare, Answers, Report), and a chip at the end
+of the strip says what is running (a pre-screen, a tune sweep, a served
+model, a run being recorded) and links to its page:
 
 - **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
   profile with the same overrides the shell layer took, now typed request
-  fields instead of environment variables, and streams its output live.
+  fields instead of environment variables. It opens on the served profile
+  (else the default), shows the server's state (Stopped, Loading, Ready)
+  with its config_id, uptime and endpoint, previews the command and
+  config_id before Start, and streams the server's output. The profile and
+  overrides are in the address
+  (`?profile=&ngl=&ctx=&threads=&parallel=&ot=&reasoning=&spec=`), which
+  fills the form and never starts anything; `?edit=<profile>&def.<field>=…`
+  opens a new profile version prefilled, saved only on Save.
 - **Live** (`/benchmarks/live`) polls the run being recorded right now, every
-  5s to match the recorder's own sample interval.
+  5s to match the recorder's own sample interval: peak VRAM with its
+  headroom, GPU utilisation while busy, power and temperature, each with a
+  line of the samples seen since the page opened, prompt and generation
+  tokens/s worked out from the server's counters, and the spread over the
+  run.
 - **Tests** (`/benchmarks/tests`) runs a tier and streams one structured
   event per graded item over SSE — in-process, not by shelling out to a
   `lllm-test` that no longer exists, so cancelling mid-run stops the loop
   directly rather than sending a signal to a subprocess; every item is still
   its own committed transaction, so the run is exactly as resumable either
-  way.
+  way. Tests opens on `smoke` (tiers listed smoke, standard, full) and names
+  the tier on Run. A notice at the top says what a run will measure: the
+  served model, its profile, the configuration Live is recording and the
+  port, with links to Serve and Live. When nothing is served it says so, and
+  Run and Run item are held until a profile is started on Serve; Selfcheck
+  needs no model. The page knows a server only through Serve's check and
+  Live's recorded run, so a `llama-server` started outside the app, which
+  neither sees, keeps Run held too (an owner decision of 2026-11-16: start
+  it from Serve). A running suite shows a progress bar, items done of the
+  total, the pass rate, skips, elapsed time and an estimate of the time
+  left, and links its suite run to Answers.
 - **Compare** (`/benchmarks/compare`) and **Answers** (`/benchmarks/answers`)
   read the same tables and the same stored responses the old `lllm-test
   compare`/`lllm-test answer` printed, through the same underlying query
-  logic, ported into the backend rather than rewritten.
+  logic, ported into the backend rather than rewritten. A row of Compare's
+  Failures view opens its item in Answers
+  (`?run=<suite run>&benchmark=&item=`). Answers' run list
+  (`GET /answers/runs`) includes each run's `config_id`.
 - **Report** (`/benchmarks/report`) and **Tune** (`/benchmarks/tune`) drive
   the same code `lllm-report`/`lllm-tune` did: Report renders the same
   design-audited markdown and PNGs unmodified, rather than inventing a
@@ -77,9 +105,17 @@ none of them a thin passthrough to a CLI that no longer exists:
   candidate (Phase 2b, 2026-09-17) and fingerprints one in-process with
   `serving/fingerprint.py`'s `config_id()` before serving it, rather than
   shelling out to `lllm-serve`/`lllm-config-id`.
+  Tune opens on the latest sweep (or the one in `?sweep=`) with its outcome
+  first: the verdict, the winner's generation speed against the profile's
+  settings (the median log ratio, shown as a percentage), and links to Serve
+  with these overrides, Create profile version (which opens the profile's
+  Edit form prefilled; nothing is saved until Save) and Compare.
 - **Pre-screen** (`/benchmarks/prescreen`, since 2026-10-28) runs llama-bench
   over a grid of offload and batch flags to find the configurations worth a
-  Tests run. See [The pre-screen](#the-pre-screen) below.
+  Tests run. See [The pre-screen](#the-pre-screen) below. It names its
+  default grid, explains Sampler and Trials, and offers each candidate to
+  Serve or as a new profile version. A `?sweep=` the server does not have
+  says so in place, with a way to the latest.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
 into `apps/server/local_llm/benchmarks/data/`; they no
@@ -1014,11 +1050,16 @@ configuration (model, config-id).
 Columns: the group letter (below), the configuration, `passed/attempted`, the
 problem count (and cluster count), the pass rate with its 95% interval, its
 standard error and whether it is `iid` or `cluster`-robust, **passes per
-minute** with its interval, generation and cold prefill t/s, and the flag
-summary (`ngl`, `parallel`, `spec`, `-ot`, `fa`, ...) joined from
-`benchmark_config` with the same helpers that render the serving comparison.
-A baseline config-id adds each row's difference from the baseline's rate *in
-the same block*.
+minute** with its interval, generation and cold prefill t/s, a column for
+each flag that differs between the block's configurations (joined from
+`benchmark_config` with the same helpers that render the serving
+comparison), the time it was last run, and Set as baseline. The flags every
+configuration in the block shares are listed once under Shared flags, and
+every flag of a configuration is in the tip on its id. A baseline, chosen
+from the configurations present or with Set as baseline on a row, adds each
+row's difference from the baseline's rate *in the same block* and marks the
+baseline's row; a baseline id in the address that is not in the results says
+so.
 
 The statistics follow Evan Miller, "Adding Error Bars to Evals"
 (arXiv:2411.00640), in `local_llm/benchmarks/analysis/estimators.py`, which
@@ -1100,10 +1141,12 @@ across every configuration, so a column for it said nothing.
 Four views: **by config** (the default, the block tables above, each followed
 by its pairs), **by benchmark** (one row per configuration, with a
 `passed/attempted` and a pass-rate column per benchmark), **by failures** (every
-item that did not pass, with its reason and the size of its reasoning, newest
-first), and **by serving** (throughput and GPU telemetry per configuration,
-with no test run involved, and the derived table beneath it). Filters on the
-page: tier, and a baseline config to diff against. There is no built-in table
+item that did not pass, with its reason, the size of its reasoning and its
+suite run, newest first; a row opens the item in Answers), and **by serving** (throughput and GPU telemetry per configuration,
+with no test run involved, and the derived table beneath it). The view, the
+tier and the baseline are in the address (`?by=&tier=&baseline=`). Warnings
+that decide whether a comparison may be read are shown above the tables; the
+other notes are under How to read this. There is no built-in table
 export any more (see above) — a measured table pasted into these guides, per the
 maintenance policy, is copied out of the rendered page by hand.
 
@@ -1117,6 +1160,16 @@ to print). Generating a report writes `report.md` and its PNGs to
 report, never overwritten — and the page fetches and renders that markdown
 document directly; there is no separate `--stdout` mode, since the browser
 *is* the destination.
+
+Report figures are drawn in the page's theme: the report request takes
+`theme` (`light` or `dark`, default `light`), and reports made before keep
+their light figures. The answer carries `figures_skipped`, the reason a
+report has no figure files (figures turned off, matplotlib missing, or
+nothing in scope to plot: figures belong to system-prompt comparisons and to
+requests timed during a recorded serving run). Each report writes
+`report.json` beside `report.md` (since 2026-11-16; older reports have none
+and are still listed), and `GET /api/v1/benchmarks/report/` lists the saved
+reports, newest first, so the Report page can reopen them (`?report=<dir>`).
 
 The Compare page's rankings say nothing about whether a difference they show is real. At
 `smoke` the gap between two adjacent rows is routinely one item, and this repo's
