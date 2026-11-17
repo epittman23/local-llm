@@ -32,7 +32,8 @@ export function ResultActions({
 	note,
 	compareBaseline,
 	size = 'default',
-	label
+	label,
+	showNote = true
 }: {
 	profile: string;
 	overrides: Record<string, unknown> | null | undefined;
@@ -43,6 +44,8 @@ export function ResultActions({
 	size?: 'default' | 'sm';
 	/** Names the result the links act on, for a row of them ("candidate 2"). */
 	label?: string;
+	/** The line saying which knobs each link carries; a table says it once instead. */
+	showNote?: boolean;
 }) {
 	const toServe = serveLink(profile, overrides);
 	const toVersion = profileVersionLink(profile, overrides, note);
@@ -80,7 +83,7 @@ export function ResultActions({
 					</Button>
 				)}
 			</div>
-			<KnobsNote {...knobs} />
+			{showNote && <KnobsNote {...knobs} />}
 		</div>
 	);
 }
