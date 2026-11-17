@@ -526,10 +526,10 @@ test('Compare shows each block with intervals, groups and paired tests', async (
 
 	await expect(page.getByRole('heading', { name: 'Compare' })).toBeVisible();
 	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
-	await expect(page.getByText('100% [67.6, 100.0]')).toBeVisible();
-	await expect(page.getByText('25% [7.2, 59.1]')).toBeVisible();
+	await expect(page.getByText('100.0 [67.6, 100.0]')).toBeVisible();
+	await expect(page.getByText('25.0 [7.2, 59.1]')).toBeVisible();
 	await expect(page.getByText('0.412 [0.301, 0.563]')).toBeVisible();
-	await expect(page.getByText('Holm across 1 test(s)', { exact: false })).toBeVisible();
+	await expect(page.getByText('Holm-corrected across 1 test at alpha 0.05', { exact: false })).toBeVisible();
 	await expect(page.getByText('exact McNemar')).toBeVisible();
 	await expect(page.getByText('different', { exact: true })).toBeVisible();
 	await expect(page.getByText('differ in 2 flags', { exact: false })).toBeVisible();
@@ -572,18 +572,23 @@ test('Compare benchmark view renders flat per-benchmark columns and sorts on hea
 	);
 
 	await page.goto('/benchmarks/compare');
-	await page.getByRole('combobox').first().click();
+	await page.getByRole('combobox', { name: 'Compare by' }).click();
 	await page.getByRole('option', { name: 'Benchmark' }).click();
+	await expect(page).toHaveURL(/\?by=benchmark$/);
 
-	await expect(page.getByText('72%')).toBeVisible();
+	await expect(page.getByText('72.0')).toBeVisible();
 	await expect(page.getByText('18/25')).toBeVisible();
 
 	// TanStack Table defaults a numeric column's first click to descending
 	// (highest first), which is the more useful default for a rate column.
 	const firstDataRow = page.getByRole('row').nth(1);
-	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
+	await page.getByRole('button', { name: 'DS-1000 pass rate, %' }).click();
+	await expect(page.getByRole('columnheader', { name: 'DS-1000 pass rate, %' })).toHaveAttribute(
+		'aria-sort',
+		'descending'
+	);
 	await expect(firstDataRow).toContainText('bbb222');
-	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
+	await page.getByRole('button', { name: 'DS-1000 pass rate, %' }).click();
 	await expect(firstDataRow).toContainText('aaa111');
 });
 
@@ -607,12 +612,12 @@ test('Compare serving view renders the serving rows and the derived table', asyn
 	);
 
 	await page.goto('/benchmarks/compare');
-	await page.getByRole('combobox').first().click();
+	await page.getByRole('combobox', { name: 'Compare by' }).click();
 	await page.getByRole('option', { name: 'Serving' }).click();
 
-	await expect(page.getByRole('columnheader', { name: 'Gen Tps' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Gen, t/s' })).toBeVisible();
 	await expect(page.getByText('2.97')).toBeVisible();
-	await expect(page.getByRole('columnheader', { name: 'Ms Per Token' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Time per token, ms' })).toBeVisible();
 	await expect(page.getByText('336.7')).toBeVisible();
 });
 
@@ -966,4 +971,72 @@ test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.getByRole('button', { name: 'Run', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});
+
+// P3
+test('Compare keeps its view in the address, warns first, and keeps the failures header in view', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	const failures = Array.from({ length: 60 }, (_, i) => ({
+		config_id: 'aaa111',
+		model: 'qwen38',
+		tier: 'smoke',
+		benchmark: 'ds1000',
+		item_id: `DS/${i}`,
+		outcome: i % 2 ? 'fail_assert' : 'fail_timeout',
+		reason: 'AssertionError',
+		reasoning_chars: 1200 + i
+	}));
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) => {
+		const by = new URL(route.request().url()).searchParams.get('by');
+		const body = by === 'failures' ? { rows: failures, notes: [] } : compareConfigBody;
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+
+	await page.goto('/benchmarks/compare?baseline=nope');
+	await expect(page.getByText('No configuration nope in these results')).toBeVisible();
+	const warning = page.getByText('Read this comparison with care');
+	const firstTable = page.getByRole('region', { name: /^Configurations, DS-1000/ });
+	await expect(firstTable).toBeVisible();
+	const top = (locator: typeof warning) => locator.evaluate((el) => el.getBoundingClientRect().top);
+	expect(await top(warning)).toBeLessThan(await top(firstTable));
+	await page.getByRole('button', { name: 'Clear baseline' }).click();
+	await expect(page).toHaveURL(/\/benchmarks\/compare$/);
+
+	await page.goto('/benchmarks/compare?by=failures');
+	const region = page.getByRole('region', { name: 'Failures' });
+	await expect(region.getByText('DS/0', { exact: true })).toBeVisible();
+	await region.evaluate((el) => {
+		el.scrollTop = 600;
+	});
+	const [regionTop, headTop] = await region.evaluate((el) => [
+		el.getBoundingClientRect().top,
+		(el.querySelector('thead th') as HTMLElement).getBoundingClientRect().top
+	]);
+	expect(Math.abs(headTop - regionTop)).toBeLessThan(2);
+});
+
+test('Compare shows a failed load in place with the reason and Try again', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	let fail = true;
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) =>
+		fail
+			? route.fulfill({
+					status: 400,
+					contentType: 'application/json',
+					body: JSON.stringify({ detail: "unknown tier 'nightly'" })
+				})
+			: route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareConfigBody) })
+	);
+	await page.goto('/benchmarks/compare');
+	const content = page.locator('#content');
+	await expect(content.getByText("Couldn't load the comparison")).toBeVisible();
+	await content.getByText('Details').click();
+	await expect(content.getByText("unknown tier 'nightly'")).toBeVisible();
+	fail = false;
+	await content.getByRole('button', { name: 'Try again' }).click();
+	await expect(page.getByRole('region', { name: /^Configurations, DS-1000/ })).toBeVisible();
 });
