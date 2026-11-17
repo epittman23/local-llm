@@ -11,6 +11,7 @@ import {
 	useTable
 } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableSortHead } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { type ColumnSpec, columnSpec, formatCell, isNumericKind, sortValue } from './compareFormat';
@@ -42,20 +43,25 @@ function shownColumns(columns: string[], rows: Record<string, unknown>[]): strin
  * failures and serving views, whose shapes are plain rows; the config view
  * has its own per-block rendering (CompareBlocks). The first column stays in
  * view while the rest scroll sideways, and with `stickyHeader` the headings
- * stay in view while a long list scrolls (LAY-7).
+ * stay in view while a long list scrolls (LAY-7). With `rowHref` a row opens
+ * the page it names (DAT-6): a click anywhere on it, or its item, a link.
  */
 export function CompareDataTable({
 	label,
 	columns,
 	rows,
-	stickyHeader = false
+	stickyHeader = false,
+	rowHref
 }: {
 	/** The table's name, for its scrolling region (DAT-6). */
 	label: string;
 	columns: string[];
 	rows: Record<string, unknown>[];
 	stickyHeader?: boolean;
+	/** Where a row leads, if anywhere; its `item_id` cell becomes the link. */
+	rowHref?: (row: Record<string, unknown>) => string | null;
 }) {
+	const navigate = useNavigate();
 	const [sorting, setSorting] = useState<SortingState>([]);
 	const specs = useMemo(
 		() =>
@@ -80,11 +86,13 @@ export function CompareDataTable({
 					cell: (info) => {
 						const value = info.row.original[col];
 						if (col === 'outcome' && typeof value === 'string' && value) return <OutcomeBadge outcome={value} />;
+						const href = col === 'item_id' ? rowHref?.(info.row.original) : null;
+						if (href) return <Link to={href}>{formatCell(value, col, spec)}</Link>;
 						return formatCell(value, col, spec);
 					}
 				};
 			}),
-		[specs]
+		[specs, rowHref]
 	);
 	const table = useTable({
 		features,
@@ -119,25 +127,28 @@ export function CompareDataTable({
 				))}
 			</TableHeader>
 			<TableBody>
-				{table.getRowModel().rows.map((row) => (
-					<TableRow key={row.id}>
-						{row.getAllCells().map((cell) => {
-							const kind = kindOf(cell.column.id);
-							return (
-								<TableCell
-									key={cell.id}
-									className={cn(
-										isNumericKind(kind) && 'text-right',
-										kind === 'id' && 'font-mono',
-										cell.column.id === 'reason' && 'min-w-64 whitespace-normal'
-									)}
-								>
-									{flexRender(cell.column.columnDef.cell, cell.getContext())}
-								</TableCell>
-							);
-						})}
-					</TableRow>
-				))}
+				{table.getRowModel().rows.map((row) => {
+					const href = rowHref?.(row.original);
+					return (
+						<TableRow key={row.id} onOpen={href ? () => navigate(href) : undefined}>
+							{row.getAllCells().map((cell) => {
+								const kind = kindOf(cell.column.id);
+								return (
+									<TableCell
+										key={cell.id}
+										className={cn(
+											isNumericKind(kind) && 'text-right',
+											kind === 'id' && 'font-mono',
+											cell.column.id === 'reason' && 'min-w-64 whitespace-normal'
+										)}
+									>
+										{flexRender(cell.column.columnDef.cell, cell.getContext())}
+									</TableCell>
+								);
+							})}
+						</TableRow>
+					);
+				})}
 				{rows.length === 0 && (
 					<TableRow>
 						<TableCell colSpan={Math.max(columns.length, 1)} className="text-muted-foreground text-center">

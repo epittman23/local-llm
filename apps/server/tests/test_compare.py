@@ -182,6 +182,20 @@ def test_benchmark_view_is_flat():
     assert rows[0]['humanevalplus_pass_rate'] == 1.0
 
 
+def test_failure_rows_carry_the_suite_run_id():
+    # B-D9: a Failures row links to Answers ?run=, so it names its suite run.
+    records = [
+        {**rec('aaaa', '1', 'fail_assert'), 'suite_run_id': 'run-a'},
+        {**rec('aaaa', '2', 'pass'), 'suite_run_id': 'run-a'},
+        rec('bbbb', '3', 'fail_timeout'),
+    ]
+    rows = compare.failure_rows(compare.group_records(records))
+    assert sorted((r['config_id'], r['item_id'], r['suite_run_id']) for r in rows) == [
+        ('aaaa', '1', 'run-a'),
+        ('bbbb', '3', ''),
+    ]
+
+
 def test_multi_flag_warning_within_a_block():
     records = run('aaaa', [1, 0]) + run('cccc', [1, 1])
     notes = compare.caveats(compare.group_records(records), {'aaaa': CONFIG_A, 'cccc': CONFIG_C})

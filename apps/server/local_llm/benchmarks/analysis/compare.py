@@ -639,7 +639,8 @@ def failure_rows(groups: list[Group]) -> list[dict]:
     This is what the per-group sections of the original's logs/tests.log
     carried, and it is the part worth keeping: passes are not listed
     individually because the count is the result, while the failures are
-    the list of things to go and look at.
+    the list of things to go and look at. Each row carries its suite run
+    id, so the page can open the answer it names in Answers.
     """
     rows = []
     for g in sorted(groups, key=lambda x: x.when(), reverse=True):
@@ -656,6 +657,7 @@ def failure_rows(groups: list[Group]) -> list[dict]:
                     'outcome': r.get('outcome', ''),
                     'reason': r.get('reason') or '',
                     'reasoning_chars': r.get('reasoning_chars'),
+                    'suite_run_id': r.get('suite_run_id') or '',
                 }
             )
     return rows

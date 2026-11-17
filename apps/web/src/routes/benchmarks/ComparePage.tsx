@@ -37,6 +37,14 @@ const byOptions: { value: CompareBy; label: string }[] = [
 
 const columnsOf = (rows: Record<string, unknown>[] | undefined): string[] => (rows?.[0] ? Object.keys(rows[0]) : []);
 
+/** B-D9: a failure opens its answer in Answers (the URL contract's `?run=&benchmark=&item=`). */
+export function answerHref(row: Record<string, unknown>): string | null {
+	const run = row.suite_run_id;
+	if (typeof run !== 'string' || !run) return null;
+	const params = new URLSearchParams({ run, benchmark: String(row.benchmark ?? ''), item: String(row.item_id ?? '') });
+	return `${routePaths.benchmarksAnswers}?${params}`;
+}
+
 /** A note's sentence, its ids as code. */
 function NoteText({ note }: { note: NoteParts }) {
 	return (
@@ -188,7 +196,15 @@ export function ComparePage() {
 				</div>
 			);
 		}
-		return <CompareDataTable label="Failures" columns={columnsOf(data?.rows)} rows={data?.rows ?? []} stickyHeader />;
+		return (
+			<CompareDataTable
+				label="Failures"
+				columns={columnsOf(data?.rows)}
+				rows={data?.rows ?? []}
+				stickyHeader
+				rowHref={answerHref}
+			/>
+		);
 	};
 
 	return (

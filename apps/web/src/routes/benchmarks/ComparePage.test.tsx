@@ -124,6 +124,7 @@ function renderPage(path = '/benchmarks/compare') {
 								</>
 							}
 						/>
+						<Route path="/benchmarks/answers" element={<Probe />} />
 					</Routes>
 				</MemoryRouter>
 			</TooltipProvider>
@@ -292,6 +293,46 @@ describe('ComparePage', () => {
 			'data-outcome',
 			'fail_timeout'
 		);
+	});
+
+	it('opens a failure in Answers from its item link or a click on its row (B-D9, DAT-6)', async () => {
+		const failure = {
+			config_id: 'aaa111',
+			model: 'qwen38',
+			benchmark: 'mbppplus',
+			item_id: 'Mbpp/7',
+			outcome: 'fail_assert',
+			reason: 'assertion failed',
+			suite_run_id: '20261116T120000Z-abc123'
+		};
+		vi.mocked(api.getCompare).mockResolvedValue({ rows: [failure], notes: [] } as never);
+		const answers = '/benchmarks/answers?run=20261116T120000Z-abc123&benchmark=mbppplus&item=Mbpp%2F7';
+
+		const first = renderPage('/benchmarks/compare?by=failures');
+		let region = await screen.findByRole('region', { name: 'Failures' });
+		expect(within(region).getByRole('columnheader', { name: /Suite run/ })).toBeTruthy();
+		const link = within(region).getByRole('link', { name: 'Mbpp/7' });
+		expect(link).toHaveAttribute('href', answers);
+		fireEvent.click(link);
+		await waitFor(() => expect(location).toBe(answers));
+		first.unmount();
+
+		renderPage('/benchmarks/compare?by=failures');
+		region = await screen.findByRole('region', { name: 'Failures' });
+		fireEvent.click(within(region).getByText('assertion failed'));
+		await waitFor(() => expect(location).toBe(answers));
+	});
+
+	it('leaves a failure without a suite run as plain text', async () => {
+		vi.mocked(api.getCompare).mockResolvedValue({
+			rows: [{ config_id: 'aaa111', benchmark: 'mbppplus', item_id: 'Mbpp/7', outcome: 'fail_assert' }],
+			notes: []
+		} as never);
+		renderPage('/benchmarks/compare?by=failures');
+		const region = await screen.findByRole('region', { name: 'Failures' });
+		expect(within(region).getByText('Mbpp/7')).toBeTruthy();
+		expect(within(region).queryByRole('link')).toBeNull();
+		expect(within(region).getAllByRole('row')[1]).not.toHaveAttribute('data-opens');
 	});
 
 	it("shows a failed load in place with the server's words and Try again (#1050, STA-4)", async () => {

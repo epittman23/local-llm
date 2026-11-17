@@ -49,6 +49,7 @@ const COLUMNS: Record<string, ColumnSpec> = {
 	outcome: { label: 'Outcome', kind: 'text' },
 	reason: { label: 'Reason', kind: 'text' },
 	reasoning_chars: { label: 'Reasoning, characters', kind: 'int' },
+	suite_run_id: { label: 'Suite run', kind: 'id' },
 	ngl: { label: 'GPU layers', kind: 'int' },
 	parallel: { label: 'Parallel slots', kind: 'int' },
 	spec: { label: 'Speculative decoding', kind: 'text' },
