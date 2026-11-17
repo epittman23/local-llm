@@ -87,7 +87,12 @@ export function CompareDataTable({
 						const value = info.row.original[col];
 						if (col === 'outcome' && typeof value === 'string' && value) return <OutcomeBadge outcome={value} />;
 						const href = col === 'item_id' ? rowHref?.(info.row.original) : null;
-						if (href) return <Link to={href}>{formatCell(value, col, spec)}</Link>;
+						if (href)
+							return (
+								<Link to={href} className="text-brand underline-offset-2 hover:underline">
+									{formatCell(value, col, spec)}
+								</Link>
+							);
 						return formatCell(value, col, spec);
 					}
 				};
