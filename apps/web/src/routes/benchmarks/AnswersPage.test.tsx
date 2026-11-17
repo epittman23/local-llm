@@ -161,4 +161,18 @@ describe('AnswersPage', () => {
 		renderPage('/benchmarks/answers?benchmark=mbppplus&item=Mbpp%2F3');
 		expect(await screen.findByText("Couldn't load this answer")).toBeInTheDocument();
 	});
+
+	it('on a phone moves focus to the opened answer, and Back returns it to the row (NAV-4)', async () => {
+		const mm = vi.fn(() => ({ matches: true }) as unknown as MediaQueryList);
+		vi.stubGlobal('matchMedia', mm);
+		Element.prototype.scrollIntoView = vi.fn();
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: /HumanEval\/2/ }));
+		await waitFor(() => expect(document.activeElement?.id).toBe('answers-detail-title'));
+		fireEvent.click(screen.getByRole('button', { name: 'Back to the list' }));
+		await waitFor(() =>
+			expect(document.activeElement?.getAttribute('data-row-open')).toBe('humanevalplus::HumanEval/2')
+		);
+		vi.unstubAllGlobals();
+	});
 });

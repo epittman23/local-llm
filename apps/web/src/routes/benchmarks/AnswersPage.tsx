@@ -142,13 +142,22 @@ export function AnswersPage() {
 		}
 	};
 
-	// On a phone the answer replaces the list: bring its heading to the top when one opens.
+	// On a phone the answer replaces the list: bring its heading to the top when one opens,
+	// and when it closes, give focus back to the row it came from (NAV-4).
 	const selectedKey = selected ? `${selected.benchmark}::${selected.item_id}` : '';
+	const returnTo = useRef('');
 	useEffect(() => {
-		if (!selectedKey) return;
+		if (!selectedKey) {
+			const key = returnTo.current;
+			returnTo.current = '';
+			if (key) listRef.current?.querySelector<HTMLButtonElement>(`[data-row-open="${CSS.escape(key)}"]`)?.focus();
+			return;
+		}
 		const el = detailRef.current;
 		if (el && typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1023px)').matches) {
 			el.scrollIntoView({ block: 'start' });
+			// The list (and the row that had focus) is hidden now: focus moves to the answer (NAV-4).
+			el.querySelector<HTMLElement>('#answers-detail-title')?.focus({ preventScroll: true });
 		}
 	}, [selectedKey]);
 
@@ -285,7 +294,7 @@ export function AnswersPage() {
 														type="button"
 														variant="ghost"
 														size="sm"
-														data-row-open
+														data-row-open={`${row.benchmark}::${row.item_id}`}
 														aria-current={sameItem(selected, row) ? 'true' : undefined}
 														className="-mx-2.5 h-auto max-w-full shrink flex-col items-start gap-0 py-1 text-left whitespace-normal"
 														onClick={() => open(row)}
@@ -332,7 +341,10 @@ export function AnswersPage() {
 										variant="ghost"
 										size="sm"
 										className="lg:hidden"
-										onClick={() => update({ benchmark: null, item: null })}
+										onClick={() => {
+											returnTo.current = selectedKey;
+											update({ benchmark: null, item: null });
+										}}
 									>
 										<ArrowLeftIcon aria-hidden />
 										Back to the list
@@ -366,7 +378,7 @@ export function AnswersPage() {
 									)}
 								</div>
 								<div className="flex flex-wrap items-center gap-2">
-									<h3 id="answers-detail-title" className="text-title font-title font-mono break-all">
+									<h3 id="answers-detail-title" tabIndex={-1} className="text-title font-title font-mono break-all">
 										{selected.item_id}
 									</h3>
 									{answer && <OutcomeBadge outcome={answer.outcome} />}
