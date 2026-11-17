@@ -22,18 +22,20 @@ import collections
 import contextlib
 import json
 import logging
+from typing import Annotated
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from local_llm.benchmarks.serving import env_profile
+from local_llm.benchmarks.serving import env_profile, launcher
+from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
-from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
+from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ResolvedConfig, resolve
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.benchmarks.configs import BenchmarkRuns
-from local_llm.models.benchmarks.profiles import BenchmarkProfiles
+from local_llm.models.benchmarks.profiles import BenchmarkProfileEntry, BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
 
 log = logging.getLogger(__name__)
@@ -92,16 +94,49 @@ _OVERRIDE_ENV = {
 
 
 class ServeStartForm(BaseModel):
+    """A start request's profile and one-off overrides.
+
+    The ranges are llama-server's own: a negative layer count or an empty
+    context is refused here with a 422, before anything is resolved, rather
+    than reaching the launcher (#1051).
+    """
+
     profile: str | None = None
-    ngl: int | None = None
-    ctx: int | None = None
-    threads: int | None = None
-    parallel: int | None = None
+    ngl: int | None = Field(default=None, ge=0)
+    ctx: int | None = Field(default=None, ge=1)
+    threads: int | None = Field(default=None, ge=1)
+    parallel: int | None = Field(default=None, ge=1)
     ot: str | None = None
     reasoning: str | None = None
     spec: str | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+
+async def _resolve_form(form_data: ServeStartForm) -> tuple[BenchmarkProfileEntry, ResolvedConfig]:
+    """The profile entry and the configuration a start request would serve.
+
+    The one place a form becomes a ResolvedConfig: `/start` launches what
+    this returns, and `/preview` shows it, so the two cannot disagree.
+    """
+    entry = (
+        await BenchmarkProfiles.get_by_name(form_data.profile)
+        if form_data.profile
+        else await BenchmarkProfiles.get_default()
+    )
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+
+    # spec 'on' means "the profile's own speculative flags", i.e. no override.
+    # Overrides.from_env would otherwise pass a literal `on` argument to
+    # llama-server, which refuses to start (docs/history/bug-review-2026-09-27.md M6).
+    spec = None if form_data.spec == 'on' else form_data.spec
+    values = {**form_data.model_dump(), 'spec': spec}
+    env_like = {var: str(values[field]) for field, var in _OVERRIDE_ENV.items() if values[field] is not None}
+    try:
+        return entry, resolve(entry.to_serving_profile(), Overrides.from_env(env_like))
+    except ProfileError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @router.get('/profiles')
@@ -112,6 +147,37 @@ async def get_profiles(user=Depends(get_admin_user)):
 @router.get('/profile/{name}')
 async def get_profile(name: str, user=Depends(get_admin_user)):
     return await env_profile.profile(name)
+
+
+@router.get('/preview')
+async def preview_serve(form_data: Annotated[ServeStartForm, Query()], user=Depends(get_admin_user)):
+    """What Start would launch for these overrides, and the config_id it would record. Starts nothing.
+
+    Read-only, and built from the same pieces Start uses: `_resolve_form`
+    for the configuration, the launcher's own `build_argv` for the command
+    (with the host and port a real ServeProcess resolves from the
+    environment), and fingerprint.py for the id -- the same `config_id` the
+    telemetry recorder files the run under (launcher.telemetry_argv).
+    """
+    entry, resolved = await _resolve_form(form_data)
+    # The real class, never a stub: constructing it only reads the
+    # environment (LLAMA_BIN, LLAMA_HOST, LLAMA_PORT); start() is what spawns.
+    job = launcher.ServeProcess(config=resolved)
+    # __post_init__ has already filled both; the fallbacks only satisfy the Optional types.
+    host = job.host or launcher.DEFAULT_HOST
+    port = job.port or launcher.DEFAULT_PORT
+    lines = config_lines(resolved)
+    return {
+        'profile': entry.profile.name,
+        'version': entry.version.version,
+        'argv': [
+            'llama-server',
+            *launcher.build_argv(resolved, host=host, port=port, log_verbosity=job.log_verbosity),
+        ],
+        'config_id': config_id(resolved, lines),
+        'config_lines': lines,
+        'warning': launcher.dense_partial_offload_warning(resolved),
+    }
 
 
 @router.post('/start')
@@ -138,28 +204,7 @@ async def _start_serve_locked(form_data: ServeStartForm):
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a pre-screen is running')
         )
 
-    entry = (
-        await BenchmarkProfiles.get_by_name(form_data.profile)
-        if form_data.profile
-        else await BenchmarkProfiles.get_default()
-    )
-    if entry is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
-
-    # spec 'on' means "the profile's own speculative flags", i.e. no override.
-    # Overrides.from_env would otherwise pass a literal `on` argument to
-    # llama-server, which refuses to start (docs/history/bug-review-2026-09-27.md M6).
-    if form_data.spec == 'on':
-        form_data.spec = None
-    env_like = {
-        var: str(getattr(form_data, field))
-        for field, var in _OVERRIDE_ENV.items()
-        if getattr(form_data, field) is not None
-    }
-    try:
-        resolved = resolve(entry.to_serving_profile(), Overrides.from_env(env_like))
-    except ProfileError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    entry, resolved = await _resolve_form(form_data)
 
     job = ServeProcess(config=resolved, profile_version_id=entry.version.version_id)
     # Something already answering on the port is not ours: a hand-started
