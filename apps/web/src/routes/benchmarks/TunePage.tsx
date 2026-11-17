@@ -730,7 +730,6 @@ export function TunePage() {
 						type="button"
 						variant="outline"
 						disabled={!resumable || resumeMutation.isPending}
-						title={resumable ? undefined : 'Only a sweep that stopped before the end can be resumed.'}
 						onClick={() => resumeMutation.mutate()}
 					>
 						{resumeMutation.isPending ? 'Resuming…' : 'Resume sweep'}
@@ -760,6 +759,19 @@ export function TunePage() {
 						{refreshing ? 'Refreshing…' : 'Refresh'}
 					</Button>
 				</div>
+				{hasSweep && (
+					<FieldMessage
+						id="tune-sweep-actions-help"
+						className="basis-full"
+						help={
+							running
+								? 'Stop sweep loses the round in progress; the sweep can be resumed later.'
+								: resumable
+									? 'This sweep stopped before the end: Resume sweep runs the rounds left.'
+									: 'Resume sweep is for a sweep that stopped before the end, and Stop sweep for one that is running.'
+						}
+					/>
+				)}
 				{resumeMutation.isError && (
 					<FieldMessage
 						id="tune-resume-error"

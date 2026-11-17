@@ -164,6 +164,7 @@ describe('PrescreenPage', () => {
 			expect(screen.getByRole('region', { name }).getAttribute('data-slot')).toBe('table-container');
 		}
 		expect(api.streamPrescreen).not.toHaveBeenCalled();
+		expect(screen.getByText('Cancel pre-screen is for one that is running.')).toBeTruthy();
 	});
 
 	it('starts a pre-screen with the form, and follows it live', async () => {
@@ -189,7 +190,7 @@ describe('PrescreenPage', () => {
 			grid: undefined,
 			sampler: 'auto',
 			objective: 'tg',
-			trials: 40,
+			trials: undefined,
 			seed: 7,
 			ctx_checks: 3,
 			point_timeout: 900,
@@ -382,6 +383,27 @@ describe('PrescreenPage form, candidates and address', () => {
 		expect(screen.getByText('Ranks candidates by both, as a Pareto front.')).toBeTruthy();
 		await choose('Grid', 'broken');
 		expect(screen.getByText('broken: this grid is invalid; the backend log has the reason')).toBeTruthy();
+	});
+
+	it('does not let a disabled Trials stop Start, and sends Trials only when TPE uses it', async () => {
+		vi.mocked(api.startPrescreen).mockResolvedValue({ started: true, sweep_id: '1794-new' });
+		renderPage();
+		await screen.findByText('No pre-screens yet');
+		await choose('Sampler', 'TPE');
+		fireEvent.change(screen.getByLabelText('Trials'), { target: { value: 'abc' } });
+		await choose('Sampler', 'Auto');
+		fireEvent.click(screen.getByRole('button', { name: 'Start pre-screen' }));
+		await waitFor(() => expect(api.startPrescreen).toHaveBeenCalledTimes(1));
+		expect(vi.mocked(api.startPrescreen).mock.calls[0][1]).toMatchObject({ sampler: 'auto', trials: undefined });
+
+		// A start folds the form; open it again for the next.
+		await waitFor(() => expect(screen.queryByRole('combobox', { name: 'Sampler' })).toBeNull());
+		openForm();
+		await choose('Sampler', 'TPE');
+		fireEvent.change(screen.getByLabelText('Trials'), { target: { value: '60' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Start pre-screen' }));
+		await waitFor(() => expect(api.startPrescreen).toHaveBeenCalledTimes(2));
+		expect(vi.mocked(api.startPrescreen).mock.calls[1][1]).toMatchObject({ sampler: 'tpe', trials: 60 });
 	});
 
 	it('checks the numbers before starting (FRM-2)', async () => {

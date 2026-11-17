@@ -113,6 +113,7 @@ describe('TunePage errors show what the server said', () => {
 		renderPage();
 		const resume = await screen.findByRole('button', { name: 'Resume sweep' });
 		await vi.waitFor(() => expect((resume as HTMLButtonElement).disabled).toBe(false));
+		expect(screen.getByText('This sweep stopped before the end: Resume sweep runs the rounds left.')).toBeTruthy();
 		fireEvent.click(resume);
 		expect(await screen.findByText('no sweep to resume')).toBeTruthy();
 		expect(api.resumeTune).toHaveBeenCalledWith('test-token', 's1');
@@ -427,6 +428,11 @@ describe('TunePage sweeps, results and form', () => {
 		renderPage();
 		const result = await screen.findByRole('region', { name: 'Result' });
 		expect(within(result).getByText('Adopted')).toBeTruthy();
+		expect(
+			screen.getByText(
+				'Resume sweep is for a sweep that stopped before the end, and Stop sweep for one that is running.'
+			)
+		).toBeTruthy();
 		expect(within(result).getByRole('heading', { name: 'Adopt ngl 22, ubatch 256, fa on' })).toBeTruthy();
 		expect(result.textContent).toContain('Generation +33.6% against the profile');
 		expect(result.textContent).toContain('19 passed against the baseline');
@@ -518,6 +524,7 @@ describe('TunePage sweeps, results and form', () => {
 		);
 		renderPage();
 		expect(await screen.findByText('Measuring b2')).toBeTruthy();
+		expect(screen.getByText('Stop sweep loses the round in progress; the sweep can be resumed later.')).toBeTruthy();
 		expect(screen.getByText('6m 52s · 3.9 tokens/s, 1,594 tokens generated')).toBeTruthy();
 		expect(screen.getByText('Measuring, 6m 52s')).toBeTruthy();
 	});

@@ -206,17 +206,6 @@ export function PrescreenPage() {
 	const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 	const [formOpen, setFormOpen] = useState<boolean | null>(null);
 
-	const problems: Partial<Record<FormField, string>> = {
-		trials: sampler === 'grid' ? undefined : wholeNumberProblem(trials, 1),
-		seed: wholeNumberProblem(seed, 0),
-		ctxChecks: wholeNumberProblem(ctxChecks, 0),
-		nPrompt: wholeNumberProblem(nPrompt, 1),
-		nGen: wholeNumberProblem(nGen, 1),
-		reps: wholeNumberProblem(reps, 1),
-		pointTimeout: wholeNumberProblem(pointTimeout, 1)
-	};
-	const fieldErrors = useFieldErrors(problems, FORM_ORDER);
-
 	const profilesQuery = useQuery({
 		queryKey: ['serve-profiles'],
 		queryFn: () => getServeProfiles(token),
@@ -351,7 +340,8 @@ export function PrescreenPage() {
 				grid: grid === DEFAULT_OPTION ? undefined : grid,
 				sampler,
 				objective,
-				trials: Number(trials),
+				// Unused, it is left to the server's default rather than sent as typed.
+				trials: trialsUnused ? undefined : Number(trials),
 				seed: Number(seed),
 				ctx_checks: Number(ctxChecks),
 				point_timeout: Number(pointTimeout),
@@ -392,6 +382,17 @@ export function PrescreenPage() {
 	const autoIsGrid =
 		sampler === 'auto' && selectedGrid?.combinations !== undefined && selectedGrid.combinations <= GRID_LIMIT;
 	const trialsUnused = sampler === 'grid' || autoIsGrid;
+	const problems: Partial<Record<FormField, string>> = {
+		// A disabled field is never wrong: Start must not stop on a value it does not send.
+		trials: trialsUnused ? undefined : wholeNumberProblem(trials, 1),
+		seed: wholeNumberProblem(seed, 0),
+		ctxChecks: wholeNumberProblem(ctxChecks, 0),
+		nPrompt: wholeNumberProblem(nPrompt, 1),
+		nGen: wholeNumberProblem(nGen, 1),
+		reps: wholeNumberProblem(reps, 1),
+		pointTimeout: wholeNumberProblem(pointTimeout, 1)
+	};
+	const fieldErrors = useFieldErrors(problems, FORM_ORDER);
 	const loaded = !sweepsQuery.isPending;
 	// Open while there is nothing to show; folded once there is (#1114).
 	const newSweepOpen = formOpen ?? (loaded && sweeps.length === 0 && !sweep);
@@ -672,6 +673,13 @@ export function PrescreenPage() {
 						</AlertDialogFooter>
 					</AlertDialogContent>
 				</AlertDialog>
+				{sweep && !running && (
+					<FieldMessage
+						id="prescreen-cancel-help"
+						className="basis-full"
+						help="Cancel pre-screen is for one that is running."
+					/>
+				)}
 				{streaming && (
 					<span className="flex items-center gap-1 pb-2 text-xs text-success">
 						<span className="size-1.5 animate-pulse rounded-full bg-success" />
