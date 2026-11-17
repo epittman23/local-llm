@@ -508,7 +508,9 @@ class BenchmarkResultTable:
         """Recent suite runs, newest first, with what each of them scored.
 
         `skipped` is left out of the denominator: an item nobody attempted
-        is not an item anybody failed.
+        is not an item anybody failed. `config_id` is the serving
+        configuration the run measured, so two runs of one model and tier
+        can be told apart.
         """
         async with get_async_db_context(db) as db:
             passed_case = func.sum(func.cast(BenchmarkResult.outcome == 'pass', Integer))
@@ -520,6 +522,10 @@ class BenchmarkResultTable:
                     func.max(BenchmarkResult.at).label('ended_at'),
                     BenchmarkResult.model,
                     BenchmarkResult.tier,
+                    # An aggregate, not a grouping column: a run's items share one
+                    # serving configuration, and grouping by it would split a run
+                    # into several rows if one ever did not.
+                    func.max(BenchmarkResult.config_id).label('config_id'),
                     attempted_case.label('attempted'),
                     passed_case.label('passed'),
                 )

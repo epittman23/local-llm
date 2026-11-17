@@ -687,7 +687,20 @@ export const exportAnswers = async (token: string = '', run: string) => {
 // Answers
 // -----------------------------------------------------------------------------
 
-export const getAnswerRuns = async (token: string = '', limit: number = 20) => {
+/** One suite run in Answers' run picker. */
+export type SuiteRun = {
+	suite_run_id: string;
+	started_at: number;
+	ended_at?: number;
+	model: string;
+	tier: string;
+	/** The serving configuration the run measured (null for an unrecorded one). */
+	config_id?: string | null;
+	attempted: number;
+	passed: number;
+};
+
+export const getAnswerRuns = async (token: string = '', limit: number = 20): Promise<{ runs: SuiteRun[] }> => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -796,9 +809,37 @@ export type ReportForm = {
 	model?: string;
 	benchmark?: string;
 	figures?: boolean;
+	/** The page's theme: the figures are drawn in its colours. */
+	theme?: 'light' | 'dark';
 };
 
-export const generateReport = async (token: string = '', form: ReportForm = {}) => {
+/** A report, freshly generated or saved (GET /report/ lists these). */
+export type ReportAnswer = {
+	markdown_url: string;
+	figures: string[];
+	date: string;
+	windows: string[];
+	/** Why there are no figure files, in words; '' when there are some. */
+	figures_skipped?: string;
+	filters?: { tier?: string | null; model?: string | null; benchmark?: string | null };
+	theme?: string | null;
+	created_at?: number;
+	error?: string;
+};
+
+/** The saved reports, newest first, to reopen. */
+export const listReports = async (token: string = ''): Promise<{ reports: ReportAnswer[] }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
+export const generateReport = async (token: string = '', form: ReportForm = {}): Promise<ReportAnswer> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {

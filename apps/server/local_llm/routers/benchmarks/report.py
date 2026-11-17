@@ -9,11 +9,13 @@ land (DATA_DIR/benchmarks/reports/<run>/) and how they're served back.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from pathlib import Path
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 
@@ -32,15 +34,37 @@ class ReportForm(BaseModel):
     model: str | None = None
     benchmark: str | None = None
     figures: bool = True
+    #: The page's theme, so the figures are drawn in its colours. Old reports keep their light PNGs.
+    theme: Literal['light', 'dark'] = 'light'
 
     model_config = ConfigDict(extra='forbid')
 
 
-def _write_report(out_dir: Path, result) -> None:
+#: What a saved report says about itself, next to its report.md, so the list
+#: of saved reports can show and reopen it. Reports written before this have none.
+META = 'report.json'
+
+
+def _write_report(out_dir: Path, result, meta: dict) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / 'report.md').write_text(result.markdown)
     for fig in result.figures:
         (out_dir / fig.name).write_bytes(fig.data)
+    (out_dir / META).write_text(json.dumps(meta))
+
+
+def _answer(run_dir: str, figure_names: list[str], meta: dict) -> dict:
+    """How a report is described to the page, freshly generated or reopened."""
+    base = f'/api/v1/benchmarks/report/files/{run_dir}'
+    return {
+        'markdown_url': f'{base}/report.md',
+        'figures': [f'{base}/{name}' for name in figure_names],
+        'date': run_dir,
+        'windows': meta.get('windows', []),
+        'figures_skipped': meta.get('figures_skipped', ''),
+        'filters': meta.get('filters', {}),
+        'theme': meta.get('theme'),
+    }
 
 
 @router.post('/')
@@ -51,6 +75,7 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
             model=form_data.model,
             benchmark=form_data.benchmark,
             generate_figures=form_data.figures,
+            theme=form_data.theme,
         )
     except report_logic.SciPyUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -58,15 +83,47 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
         return {'error': str(exc)}
 
     run_dir = f'{time.strftime("%Y-%m-%d", time.gmtime())}-{uuid.uuid4().hex[:6]}'
-    await asyncio.to_thread(_write_report, REPORTS_DIR / run_dir, result)
-
-    base = f'/api/v1/benchmarks/report/files/{run_dir}'
-    return {
-        'markdown_url': f'{base}/report.md',
-        'figures': [f'{base}/{fig.name}' for fig in result.figures],
-        'date': run_dir,
+    meta = {
+        'filters': {'tier': form_data.tier, 'model': form_data.model, 'benchmark': form_data.benchmark},
+        'theme': form_data.theme,
         'windows': result.windows,
+        'figures': [fig.name for fig in result.figures],
+        'figures_skipped': result.figures_skipped,
+        'created_at': int(time.time()),
     }
+    await asyncio.to_thread(_write_report, REPORTS_DIR / run_dir, result, meta)
+    return _answer(run_dir, meta['figures'], meta)
+
+
+def _saved_reports(limit: int) -> list[dict]:
+    """The saved reports, newest first by when they were written (a directory's name only orders by day)."""
+    if not REPORTS_DIR.is_dir():
+        return []
+    found = []
+    for path in REPORTS_DIR.iterdir():
+        md = path / 'report.md'
+        if not path.is_dir() or not md.is_file():
+            continue
+        meta: dict = {}
+        try:
+            meta = json.loads((path / META).read_text())
+        except (OSError, ValueError):
+            meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        figures = meta.get('figures')
+        if not isinstance(figures, list):
+            figures = sorted(p.name for p in path.glob('*.png'))
+        created = meta.get('created_at') or int(md.stat().st_mtime)
+        found.append({**_answer(path.name, figures, meta), 'created_at': created})
+    found.sort(key=lambda r: r['created_at'], reverse=True)
+    return found[:limit]
+
+
+@router.get('/')
+async def list_reports(limit: int = Query(50, ge=1, le=500), user=Depends(get_admin_user)):
+    """Saved reports to reopen: each one's files, filters and when it was written."""
+    return {'reports': await asyncio.to_thread(_saved_reports, limit)}
 
 
 @router.get('/files/{run_dir}/{filename}')

@@ -2303,6 +2303,20 @@ class ReportResult:
     #: The release-date windows present in scope, so the page can show them
     #: above the document as well as in its provenance.
     windows: list[str] = field(default_factory=list)
+    #: Why the report has no figure files, in words, or '' when it has some:
+    #: figures were turned off, matplotlib is missing (the figures are text
+    #: plots in the markdown), or nothing in scope can be plotted.
+    figures_skipped: str = ''
+
+
+#: figures_skipped when figures were on and drawable but nothing qualified.
+#: Every figure belongs to a paired system-prompt comparison (the matrix and
+#: discordance in section 4, the power curve in section 6) or to requests a
+#: recorded serving run timed (the timeline in section 7).
+NOTHING_TO_PLOT = (
+    'nothing to plot: figures are drawn for system-prompt comparisons and for '
+    'requests timed during a recorded serving run, and these results have neither'
+)
 
 
 async def _fetch(tier: str | None, model: str | None, benchmark: str | None):
@@ -2394,7 +2408,10 @@ def _assemble(
         section_throttle(records, regimes, blocks, samples_by_run),
     ]
     markdown = '\n'.join(head) + '\n' + '\n\n'.join(body) + '\n'
-    return ReportResult(markdown=markdown, figures=list(figs.figures), windows=windows_of(records))
+    skipped = figs.reason or ('' if figs.figures else NOTHING_TO_PLOT)
+    return ReportResult(
+        markdown=markdown, figures=list(figs.figures), windows=windows_of(records), figures_skipped=skipped
+    )
 
 
 async def build_report(
@@ -2403,6 +2420,7 @@ async def build_report(
     model: str | None = None,
     benchmark: str | None = None,
     generate_figures: bool = True,
+    theme: str = 'light',
 ) -> ReportResult:
     """Build the statistical markdown report, this module's one entry point.
 
@@ -2416,6 +2434,8 @@ async def build_report(
     report, controlled by `generate_figures` (True still degrades to text
     when matplotlib itself is missing; False always skips figures, even
     when matplotlib is present, mirroring the original's `--no-figures`).
+    `theme` ('light' or 'dark') picks the colours the figures are drawn in,
+    so they match the page that asked for them.
     """
     if not HAVE_SCIPY:
         raise SciPyUnavailable(
@@ -2436,5 +2456,5 @@ async def build_report(
     from local_llm.benchmarks.analysis.report_figures import Figures
 
     filters = {'tier': tier, 'model': model, 'benchmark': benchmark}
-    figs = Figures(enabled=generate_figures)
+    figs = Figures(enabled=generate_figures, theme=theme)
     return _assemble(records, samples_by_run, runs_by_id, notes, filters, figs)
