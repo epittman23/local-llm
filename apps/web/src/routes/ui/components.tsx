@@ -803,7 +803,7 @@ export function NavigationSection() {
 				title="A workflow's tabs and its status chip"
 				note="Benchmarks: the tabs follow the workflow in groups, with a line between groups that a screen reader skips. The chip at the strip's end says what is running and links to its page, or says Nothing running and is not a link. On a narrow screen it wraps above the strip."
 			>
-				<Panel className="max-w-[48rem] px-0">
+				<Panel className="max-w-[60rem]">
 					<WorkflowTabsDemo />
 				</Panel>
 			</Example>
