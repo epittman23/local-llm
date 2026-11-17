@@ -103,11 +103,13 @@ def test_a_report_is_written_with_its_figures(tmp_path):
         figures=[SimpleNamespace(name='fig1.png', data=b'\x89PNG'), SimpleNamespace(name='fig2.png', data=b'2')],
     )
 
-    report_router._write_report(tmp_path / 'run', result)
+    report_router._write_report(tmp_path / 'run', result, {'theme': 'dark', 'figures_skipped': ''})
 
     assert (tmp_path / 'run' / 'report.md').read_text() == '# report'
     assert (tmp_path / 'run' / 'fig1.png').read_bytes() == b'\x89PNG'
     assert (tmp_path / 'run' / 'fig2.png').read_bytes() == b'2'
+    # B-D10: the report's description is stored beside it.
+    assert (tmp_path / 'run' / 'report.json').read_text() == '{"theme": "dark", "figures_skipped": ""}'
 
 
 # -- audio ----------------------------------------------------------------------
@@ -229,7 +231,9 @@ def test_the_ssrf_safe_connector_checks_the_host_and_passes_everything_on(monkey
 
 
 def test_the_report_route_writes_the_report_under_its_run_directory(monkeypatch, tmp_path):
-    result = SimpleNamespace(markdown='# r', figures=[SimpleNamespace(name='fig1.png', data=b'1')], windows=[])
+    result = SimpleNamespace(
+        markdown='# r', figures=[SimpleNamespace(name='fig1.png', data=b'1')], windows=[], figures_skipped=''
+    )
 
     async def build_report(**_kwargs):
         return result
@@ -243,3 +247,6 @@ def test_the_report_route_writes_the_report_under_its_run_directory(monkeypatch,
     assert out['markdown_url'].endswith(f'/{run_dir.name}/report.md')
     assert (run_dir / 'report.md').read_text() == '# r'
     assert (run_dir / 'fig1.png').read_bytes() == b'1'
+    assert out['figures'] == [f'/api/v1/benchmarks/report/files/{run_dir.name}/fig1.png']
+    assert out['figures_skipped'] == ''
+    assert (run_dir / 'report.json').is_file()
