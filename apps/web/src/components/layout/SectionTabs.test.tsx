@@ -130,6 +130,25 @@ describe('SectionTabs', () => {
 });
 
 describe('SectionSkeleton', () => {
+	it('draws a line between workflow groups, hidden from assistive technology, and none without groups (NAV-2)', () => {
+		renderAt('/benchmarks/serve', [
+			{ to: '/benchmarks/prescreen', label: 'Pre-screen', group: 'Configure' },
+			{ to: '/benchmarks/tune', label: 'Tune', group: 'Configure' },
+			{ to: '/benchmarks/serve', label: 'Serve', group: 'Run' },
+			{ to: '/benchmarks/compare', label: 'Compare', group: 'Analyse' }
+		]);
+		const nav = screen.getByRole('navigation', { name: 'Benchmarks' });
+		const separators = nav.querySelectorAll('[data-slot="tab-group-separator"]');
+		expect(separators).toHaveLength(2);
+		for (const line of separators) expect(line.getAttribute('aria-hidden')).toBe('true');
+		// Each line sits just before the first tab of the next group.
+		expect(separators[0]?.nextElementSibling?.textContent).toBe('Serve');
+		expect(separators[1]?.nextElementSibling?.textContent).toBe('Compare');
+		cleanup();
+		renderAt('/benchmarks/serve');
+		expect(document.querySelectorAll('[data-slot="tab-group-separator"]')).toHaveLength(0);
+	});
+
 	it('stands in for the header while loading, and says so to a screen reader (STA-2)', () => {
 		render(<SectionSkeleton label="benchmarks" />);
 		expect(screen.getByRole('status').textContent).toBe('Loading benchmarks');
