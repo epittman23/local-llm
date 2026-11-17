@@ -364,13 +364,9 @@ def real_launcher(monkeypatch):
 
 
 def test_preview_shows_the_command_and_config_id_and_starts_nothing(client, real_launcher, monkeypatch):
+    # A spawn is recorded instead of run, and the test fails on it below.
     spawned = []
-
-    async def no_spawn(*args, **kwargs):  # pragma: no cover - failing the test is the point
-        spawned.append(args)
-        raise AssertionError('the preview must not spawn anything')
-
-    monkeypatch.setattr(asyncio, 'create_subprocess_exec', no_spawn)
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', lambda *args, **kwargs: spawned.append(args))
     resp = client.get('/preview', params={'profile': 'qwen25c', 'ngl': 20, 'ctx': 8192})
     assert resp.status_code == 200
     body = resp.json()
