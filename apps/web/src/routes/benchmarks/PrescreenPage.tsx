@@ -592,46 +592,6 @@ export function PrescreenPage() {
 				</StatusNotice>
 			)}
 
-			{/* optuna-dashboard */}
-			<div className="bg-muted/50 flex flex-wrap items-center gap-3 rounded-lg p-3 text-sm">
-				<span className="font-medium">Optuna dashboard</span>
-				{dashboard?.running ? (
-					<a className="text-primary underline" href={dashboard.url} target="_blank" rel="noreferrer">
-						{dashboard.url}
-					</a>
-				) : (
-					<span className="text-muted-foreground">stopped</span>
-				)}
-				<Button
-					type="button"
-					size="sm"
-					variant="secondary"
-					disabled={dashboardMutation.isPending}
-					onClick={() => dashboardMutation.mutate(!dashboard?.running)}
-				>
-					{dashboard?.running ? 'Stop dashboard' : 'Start dashboard'}
-				</Button>
-				<span className="text-muted-foreground text-xs">
-					Loopback only ({dashboard?.port ?? 8091}): it has no authentication. From another machine, use{' '}
-					<code>
-						ssh -L {dashboard?.port ?? 8091}:127.0.0.1:{dashboard?.port ?? 8091}
-					</code>
-					.
-				</span>
-				{!dashboard?.running && dashboard?.last_output && (
-					<pre className="text-muted-foreground w-full text-xs whitespace-pre-wrap">
-						Its last output: {dashboard.last_output}
-					</pre>
-				)}
-				{dashboardMutation.isError && (
-					<FieldMessage
-						id="prescreen-dashboard-error"
-						className="basis-full"
-						error={errorMessage(dashboardMutation.error)}
-					/>
-				)}
-			</div>
-
 			<div className="flex flex-wrap items-end gap-3">
 				<div className="flex min-w-0 grow basis-72 flex-col gap-1">
 					<Label htmlFor="prescreen-sweep">Pre-screen</Label>
@@ -866,6 +826,46 @@ export function PrescreenPage() {
 					</section>
 				</>
 			)}
+
+			{/* optuna-dashboard: a side tool, after the results so they start near the top (#1114) */}
+			<div className="bg-muted/50 flex flex-wrap items-center gap-3 rounded-lg p-3 text-sm">
+				<span className="font-medium">Optuna dashboard</span>
+				{dashboard?.running ? (
+					<a className="text-primary underline" href={dashboard.url} target="_blank" rel="noreferrer">
+						{dashboard.url}
+					</a>
+				) : (
+					<span className="text-muted-foreground">stopped</span>
+				)}
+				<Button
+					type="button"
+					size="sm"
+					variant="secondary"
+					disabled={dashboardMutation.isPending}
+					onClick={() => dashboardMutation.mutate(!dashboard?.running)}
+				>
+					{dashboard?.running ? 'Stop dashboard' : 'Start dashboard'}
+				</Button>
+				<span className="text-muted-foreground text-xs">
+					Loopback only ({dashboard?.port ?? 8091}): it has no authentication. From another machine, use{' '}
+					<code>
+						ssh -L {dashboard?.port ?? 8091}:127.0.0.1:{dashboard?.port ?? 8091}
+					</code>
+					.
+				</span>
+				{!dashboard?.running && dashboard?.last_output && (
+					<pre className="text-muted-foreground w-full text-xs whitespace-pre-wrap">
+						Its last output: {dashboard.last_output}
+					</pre>
+				)}
+				{dashboardMutation.isError && (
+					<FieldMessage
+						id="prescreen-dashboard-error"
+						className="basis-full"
+						error={errorMessage(dashboardMutation.error)}
+					/>
+				)}
+			</div>
 		</div>
 	);
 }
