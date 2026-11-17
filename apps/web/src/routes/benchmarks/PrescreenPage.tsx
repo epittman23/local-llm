@@ -702,7 +702,7 @@ export function PrescreenPage() {
 				)
 			) : (
 				<>
-					<div className="grid gap-3 text-sm sm:grid-cols-2 md:grid-cols-4">
+					<div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
 						<StatTile
 							label="Status"
 							value={sweepStatus && <StatusBadge label={sweepStatus.label} tone={sweepStatus.tone} />}

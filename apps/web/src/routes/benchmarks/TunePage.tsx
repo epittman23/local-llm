@@ -811,7 +811,7 @@ export function TunePage() {
 				<>
 					<ResultBanner status={status} />
 
-					<div className="grid gap-3 text-sm sm:grid-cols-2 md:grid-cols-4">
+					<div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
 						<StatTile label="Sweep" value={<span className="font-mono">{status.sweep_id}</span>} />
 						<StatTile label="Profile / tier" value={`${status.profile ?? NONE} / ${status.tier ?? NONE}`} />
 						<StatTile label="Benchmark" value={status.benchmark ?? 'All benchmarks'} />
@@ -863,7 +863,7 @@ export function TunePage() {
 
 					<section className="flex flex-col gap-1">
 						<h3 className="text-sm font-medium">Candidates</h3>
-						<Table aria-label="Candidates">
+						<Table aria-label="Candidates" stickyFirstColumn>
 							<TableHeader>
 								<TableRow>
 									<TableHead>Candidate</TableHead>
@@ -1007,7 +1007,7 @@ export function TunePage() {
 									)
 								}
 							>
-								<div className="grid gap-3 text-sm sm:grid-cols-2 md:grid-cols-4">
+								<div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
 									<StatTile label="Paired items" value={status.guard.n ?? NONE} />
 									<StatTile label="Winner passed" value={status.guard.winner_passed ?? NONE} />
 									<StatTile label="Baseline passed" value={status.guard.incumbent_passed ?? NONE} />
@@ -1079,23 +1079,25 @@ function ResultBanner({ status }: { status: TuneStatus }) {
 				{adoption?.reduces_context && <StatusBadge label="Reduces context" tone="warning" />}
 			</div>
 
-			<div className="text-dense flex flex-col gap-1">
-				{verdictKey === 'adopted' && winner && (
-					<p>
-						Generation <span className="font-strong tabular-nums">{speedVsBaseline(winner)}</span> against the profile's
-						settings, the median over {winner.paired_items ?? NONE} paired items.
-					</p>
-				)}
-				{status.guard && (
-					<p className="tabular-nums">
-						Correctness: {status.guard.winner_passed ?? NONE} passed against the baseline's{' '}
-						{status.guard.incumbent_passed ?? NONE} (McNemar p = {fmtNum(status.guard.p, 3)});{' '}
-						{status.guard.regressed ? 'a regression.' : 'no regression.'}
-					</p>
-				)}
-				{verdictKey === 'incomplete' && <p>Resume it to finish the remaining rounds.</p>}
-				{status.verdict_reason && <p className="text-muted-foreground">{status.verdict_reason}</p>}
-			</div>
+			{(verdictKey === 'adopted' || verdictKey === 'incomplete' || status.guard || status.verdict_reason) && (
+				<div className="text-dense flex flex-col gap-1">
+					{verdictKey === 'adopted' && winner && (
+						<p>
+							Generation <span className="font-strong tabular-nums">{speedVsBaseline(winner)}</span> against the
+							profile's settings, the median over {winner.paired_items ?? NONE} paired items.
+						</p>
+					)}
+					{status.guard && (
+						<p className="tabular-nums">
+							Correctness: {status.guard.winner_passed ?? NONE} passed against the baseline's{' '}
+							{status.guard.incumbent_passed ?? NONE} (McNemar p = {fmtNum(status.guard.p, 3)});{' '}
+							{status.guard.regressed ? 'a regression.' : 'no regression.'}
+						</p>
+					)}
+					{verdictKey === 'incomplete' && <p>Resume it to finish the remaining rounds.</p>}
+					{status.verdict_reason && <p className="text-muted-foreground">{status.verdict_reason}</p>}
+				</div>
+			)}
 
 			{verdictKey === 'adopted' && profile && (
 				<ResultActions
