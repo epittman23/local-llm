@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 636,
+	"total": 627,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -474,23 +474,10 @@
 		"apps/web/src/routes/automations/automationModel.test.ts": {
 			"lint/suspicious/noExplicitAny": 2
 		},
-		"apps/web/src/routes/benchmarks/AnswersPage.tsx": {
-			"lint/a11y/noLabelWithoutControl": 1,
-			"lint/suspicious/noExplicitAny": 1
-		},
-		"apps/web/src/routes/benchmarks/ComparePage.tsx": {
-			"lint/suspicious/noArrayIndexKey": 1
-		},
-		"apps/web/src/routes/benchmarks/ReportPage.tsx": {
-			"lint/security/noDangerouslySetInnerHtml": 1
-		},
 		"apps/web/src/routes/benchmarks/ServePage.tsx": {
-			"lint/correctness/useExhaustiveDependencies": 4,
-			"lint/suspicious/noArrayIndexKey": 1,
-			"lint/suspicious/noExplicitAny": 2
+			"lint/correctness/useExhaustiveDependencies": 3
 		},
 		"apps/web/src/routes/benchmarks/TestsPage.tsx": {
-			"lint/a11y/noLabelWithoutControl": 1,
 			"lint/suspicious/noArrayIndexKey": 2
 		},
 		"apps/web/src/routes/benchmarks/TunePage.tsx": {
