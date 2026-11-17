@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2113,
+	"total": 2105,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -151,10 +151,10 @@
 		"apps/server/local_llm/models/chats.py": {
 			"reportArgumentType": 25,
 			"reportAssignmentType": 3,
-			"reportAttributeAccessIssue": 43,
+			"reportAttributeAccessIssue": 39,
 			"reportGeneralTypeIssues": 9,
 			"reportIndexIssue": 4,
-			"reportOptionalMemberAccess": 31,
+			"reportOptionalMemberAccess": 27,
 			"reportReturnType": 6
 		},
 		"apps/server/local_llm/models/config.py": {
