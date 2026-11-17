@@ -367,8 +367,9 @@ function ProfileRow({
 	const { profile, version } = entry;
 	const archived = !!profile.archived_at;
 	return (
-		<TableRow>
-			<TableCell className="whitespace-normal">
+		// Below sm the actions go on their own line under the profile, so its name and file keep the width (#977).
+		<TableRow className="max-sm:flex max-sm:flex-col">
+			<TableCell className="whitespace-normal max-sm:pb-0">
 				<div className="flex flex-wrap items-center gap-2">
 					<span className="font-mono font-strong break-all">{profile.name}</span>
 					{profile.is_default && <Badge variant="secondary">Default</Badge>}
@@ -379,8 +380,8 @@ function ProfileRow({
 					Version {version.version} · <span className="font-mono">{fileName(version.model_path)}</span>
 				</p>
 			</TableCell>
-			<TableCell className="w-0 align-top">
-				<div className="flex items-center justify-end gap-1">
+			<TableCell className="w-0 align-top max-sm:w-full">
+				<div className="flex items-center justify-end gap-1 max-sm:-ms-2 max-sm:justify-start">
 					<Button
 						size="sm"
 						variant="ghost"

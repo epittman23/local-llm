@@ -77,7 +77,7 @@ export function ServeLog({ lines, streaming }: { lines: LogLine[]; streaming: bo
 					const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - AT_END_PX;
 					if (atEnd !== follow) setFollow(atEnd);
 				}}
-				className="scroll-region h-96 overflow-y-auto px-3 py-2 font-mono text-dense break-words whitespace-pre-wrap"
+				className="scroll-region max-h-96 overflow-y-auto px-3 py-2 font-mono text-dense break-words whitespace-pre-wrap"
 			>
 				{lines.length === 0 && (
 					<p className="text-foreground-muted">No log output yet. Start a server and its output appears here.</p>

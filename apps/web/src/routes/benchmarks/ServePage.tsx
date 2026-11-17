@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { Spinner } from '@/components/common/Spinner';
-import { FormField } from '@/components/settings/formFields';
+import { Disclosure, FormField } from '@/components/settings/formFields';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -676,10 +676,9 @@ function ProfileSummary({ definition }: { definition: ProfileEntry['version'] })
 				))}
 			</dl>
 			{definition.notes && (
-				<div className="flex flex-col gap-1">
-					<p className="text-foreground-muted text-dense">Notes</p>
+				<Disclosure title="Notes" description="Why the profile is set up this way">
 					<p className="text-dense max-w-[72ch] whitespace-pre-wrap">{definition.notes}</p>
-				</div>
+				</Disclosure>
 			)}
 		</div>
 	);

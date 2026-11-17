@@ -124,7 +124,8 @@ describe('ServePage', () => {
 		const ngl = screen.getByRole('textbox', { name: /GPU layers/ });
 		expect(ngl.getAttribute('placeholder')).toBe('20');
 		expect(screen.getByText('The profile uses 20.')).toBeInTheDocument();
-		expect(screen.getByText('ngl 20 is a placeholder until the sweep.')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: /^Notes/ }));
+		expect(await screen.findByText('ngl 20 is a placeholder until the sweep.')).toBeInTheDocument();
 		await waitFor(() => expect(router.state.location.search).toBe('?profile=qwen38'));
 	});
 

@@ -445,30 +445,24 @@ export function ProfileDefinitionForm({
 					</div>
 				</Group>
 
-				<Group title="Notes">
-					<div className="sm:col-span-2">
-						<FormField id="def-notes" label="Notes" optional help="Why the profile is set up this way.">
-							{(props) => (
-								<Textarea
-									{...props}
-									rows={4}
-									value={definition.notes ?? ''}
-									onChange={(e) => set('notes', e.target.value)}
-								/>
-							)}
-						</FormField>
-					</div>
-					<div className="sm:col-span-2">
-						<FormField
-							id="def-note"
-							label="Version note"
-							optional
-							help="Why this version: the reason, not a list of what changed."
-						>
-							{(props) => <Textarea {...props} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />}
-						</FormField>
-					</div>
-				</Group>
+				<FormField id="def-notes" label="Notes" optional help="Why the profile is set up this way.">
+					{(props) => (
+						<Textarea
+							{...props}
+							rows={4}
+							value={definition.notes ?? ''}
+							onChange={(e) => set('notes', e.target.value)}
+						/>
+					)}
+				</FormField>
+				<FormField
+					id="def-note"
+					label="Version note"
+					optional
+					help="Why this version: the reason, not a list of what changed."
+				>
+					{(props) => <Textarea {...props} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />}
+				</FormField>
 
 				{initial && (
 					<section aria-labelledby="def-changes-title" className="flex flex-col gap-2 rounded-lg border p-3">
