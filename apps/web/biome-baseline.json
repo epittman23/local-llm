@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 650,
+	"total": 636,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -494,11 +494,8 @@
 			"lint/suspicious/noArrayIndexKey": 2
 		},
 		"apps/web/src/routes/benchmarks/TunePage.tsx": {
-			"lint/complexity/useOptionalChain": 1,
-			"lint/correctness/useExhaustiveDependencies": 2,
 			"lint/security/noDangerouslySetInnerHtml": 1,
-			"lint/suspicious/noArrayIndexKey": 3,
-			"lint/suspicious/noExplicitAny": 9
+			"lint/suspicious/noArrayIndexKey": 1
 		},
 		"apps/web/src/routes/calendar/calendarModel.test.ts": {
 			"lint/suspicious/noExplicitAny": 1
