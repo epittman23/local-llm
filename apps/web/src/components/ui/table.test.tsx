@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Table, TableBody, TableCell, TableHeader, TableRow, TableSortHead } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableSortHead } from '@/components/ui/table';
 
 function rows() {
 	return (
@@ -68,6 +68,65 @@ describe('Table (DAT-6)', () => {
 		const table = screen.getByRole('table');
 		expect(table).toHaveAttribute('data-sticky-first-column');
 		expect(table).toHaveClass('[&_tr>:first-child]:sticky', 'min-w-[38rem]');
+	});
+
+	it('leaves the frame scrolling sideways only, and its headings in the flow, unless asked', () => {
+		render(<Table aria-label="Plain">{rows()}</Table>);
+		const region = screen.getByRole('region', { name: 'Plain' });
+		expect(region).toHaveClass('overflow-x-auto');
+		expect(region).not.toHaveClass('overflow-auto');
+		expect(region.style.maxHeight).toBe('');
+		expect(screen.getByRole('table')).not.toHaveAttribute('data-sticky-header');
+		// Rows taller than the frame do not make a plain table a tab stop: the page scrolls them.
+		Object.defineProperty(region, 'scrollHeight', { configurable: true, value: 900 });
+		Object.defineProperty(region, 'clientHeight', { configurable: true, value: 300 });
+		act(() => {
+			window.dispatchEvent(new Event('resize'));
+		});
+		expect(region).not.toHaveAttribute('tabindex');
+	});
+
+	it('keeps its headings in view in a frame of bounded height that scrolls both ways (LAY-7)', () => {
+		render(
+			<Table aria-label="Failures" stickyHeader maxHeight="24rem">
+				<TableHeader>
+					<TableRow>
+						<TableHead>Item</TableHead>
+					</TableRow>
+				</TableHeader>
+				{rows()}
+			</Table>
+		);
+		const region = screen.getByRole('region', { name: 'Failures' });
+		expect(region).toHaveClass('overflow-auto');
+		expect(region.style.maxHeight).toBe('24rem');
+		const table = screen.getByRole('table');
+		expect(table).toHaveAttribute('data-sticky-header');
+		expect(table).toHaveClass(
+			'[&_thead_th]:sticky',
+			'[&_thead_th]:top-0',
+			'[&_thead_th]:shadow-[inset_0_-1px_0_var(--border)]'
+		);
+		expect(table).not.toHaveClass('[&_thead_tr>:first-child]:z-[3]');
+
+		// Rows hidden below the frame make it a tab stop the arrow keys scroll (A11Y-2), with no column hidden.
+		expect(region).not.toHaveAttribute('tabindex');
+		Object.defineProperty(region, 'scrollHeight', { configurable: true, value: 900 });
+		Object.defineProperty(region, 'clientHeight', { configurable: true, value: 384 });
+		act(() => {
+			window.dispatchEvent(new Event('resize'));
+		});
+		expect(region).toHaveAttribute('tabindex', '0');
+	});
+
+	it('bounds a sticky-header frame at 70% of the window by default, and lifts the corner above both pinned edges', () => {
+		render(
+			<Table aria-label="Configurations" stickyHeader stickyFirstColumn>
+				{rows()}
+			</Table>
+		);
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('70dvh');
+		expect(screen.getByRole('table')).toHaveClass('[&_thead_tr>:first-child]:z-[3]', '[&_tr>:first-child]:sticky');
 	});
 
 	it('stops listening when it unmounts', () => {

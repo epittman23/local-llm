@@ -11,15 +11,28 @@ import { cn } from '@/lib/utils';
  * its cells are opaque in the page colour, or in `--table-surface` where the
  * table sits on another surface (set it on the table or a parent), and take
  * the row's hover tint.
+ * `stickyHeader` keeps the column headings in view while the rows scroll
+ * (LAY-7): the frame is then at most `maxHeight` tall (70% of the window
+ * unless given) and scrolls both ways, since the page's own scroll cannot
+ * hold a heading inside a frame that scrolls sideways. The headings are
+ * opaque in the same surface, with their rule drawn on them so it travels
+ * with them.
  */
 function Table({
 	className,
 	'aria-label': ariaLabel,
 	stickyFirstColumn = false,
+	stickyHeader = false,
+	maxHeight = '70dvh',
 	...props
-}: React.ComponentProps<'table'> & { stickyFirstColumn?: boolean }) {
+}: React.ComponentProps<'table'> & {
+	stickyFirstColumn?: boolean;
+	stickyHeader?: boolean;
+	/** With `stickyHeader`: the tallest the frame grows before its rows scroll (a CSS length). */
+	maxHeight?: string;
+}) {
 	const scroller = React.useRef<HTMLDivElement>(null);
-	const [clipped, setClipped] = React.useState({ start: false, end: false });
+	const [clipped, setClipped] = React.useState({ start: false, end: false, rows: false });
 
 	React.useEffect(() => {
 		const el = scroller.current;
@@ -27,7 +40,11 @@ function Table({
 		const measure = () => {
 			const start = el.scrollLeft > 0;
 			const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-			setClipped((was) => (was.start === start && was.end === end ? was : { start, end }));
+			// Rows hidden below or above: the region scrolls vertically, so it is a tab stop too (A11Y-2).
+			const rows = el.scrollHeight > el.clientHeight + 1;
+			setClipped((was) =>
+				was.start === start && was.end === end && was.rows === rows ? was : { start, end, rows }
+			);
 		};
 		measure();
 		el.addEventListener('scroll', measure, { passive: true });
@@ -43,7 +60,7 @@ function Table({
 		};
 	}, []);
 
-	const overflows = clipped.start || clipped.end;
+	const overflows = clipped.start || clipped.end || (stickyHeader && clipped.rows);
 	return (
 		<div
 			data-slot="table-frame"
@@ -57,15 +74,22 @@ function Table({
 				role={ariaLabel ? 'region' : undefined}
 				aria-label={ariaLabel}
 				tabIndex={ariaLabel && overflows ? 0 : undefined}
-				className="relative w-full overflow-x-auto"
+				className={cn('relative w-full', stickyHeader ? 'overflow-auto' : 'overflow-x-auto')}
+				style={stickyHeader ? { maxHeight } : undefined}
 			>
 				<table
 					data-slot="table"
 					data-sticky-first-column={stickyFirstColumn || undefined}
+					data-sticky-header={stickyHeader || undefined}
 					className={cn(
 						'w-full caption-bottom text-sm',
 						stickyFirstColumn &&
 							'[&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:z-[1] [&_tr>:first-child]:bg-[var(--table-surface,var(--page))] [@media(hover:hover)]:[&_tr:hover>:first-child]:bg-[color-mix(in_srgb,var(--muted)_50%,var(--table-surface,var(--page)))]',
+						// The collapsed border of the heading row stays behind when its cells stick, so the rule is a shadow on them.
+						stickyHeader &&
+							'[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[2] [&_thead_th]:bg-[var(--table-surface,var(--page))] [&_thead_th]:shadow-[inset_0_-1px_0_var(--border)]',
+						// The corner heading sticks both ways, above both the headings and the first column.
+						stickyHeader && stickyFirstColumn && '[&_thead_tr>:first-child]:z-[3]',
 						className
 					)}
 					{...props}
