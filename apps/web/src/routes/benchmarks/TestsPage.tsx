@@ -19,6 +19,7 @@ import {
 	type TestRunForm
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { OutcomeBadge } from './OutcomeBadge';
 import {
 	appendNote,
 	calibrationText,
@@ -78,14 +79,6 @@ type JobEvent =
 type Job = 'run' | 'fetch' | 'selfcheck' | 'item';
 
 const ALL_OPTION = '__all__';
-
-const outcomeBadgeVariant = (outcome: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
-	const o = (outcome ?? '').toLowerCase();
-	if (o === 'pass' || o === 'passed') return 'default';
-	if (o === 'fail' || o === 'failed') return 'destructive';
-	if (o === 'skip' || o === 'skipped') return 'secondary';
-	return 'outline';
-};
 
 /**
  * Ports d863707:apps/openwebui/src/lib/components/benchmarks/Tests.svelte: the
@@ -525,7 +518,7 @@ export function TestsPage() {
 						<span className="text-sm font-medium">
 							{result.benchmark}/{result.item_id}
 						</span>
-						<Badge variant={outcomeBadgeVariant(result.outcome)}>{result.outcome}</Badge>
+						<OutcomeBadge outcome={result.outcome} />
 						{result.reason && <span className="text-muted-foreground">{result.reason}</span>}
 						{result.wall_ms !== undefined && (
 							<span className="text-muted-foreground ml-auto">{(result.wall_ms / 1000).toFixed(1)}s</span>
@@ -567,7 +560,7 @@ export function TestsPage() {
 							<span className="text-muted-foreground w-10 shrink-0">{item.i}</span>
 							<span className="truncate">{item.benchmark}</span>
 							<span className="text-muted-foreground flex-1 truncate">{item.item_id}</span>
-							<Badge variant={outcomeBadgeVariant(item.outcome)}>{item.outcome}</Badge>
+							<OutcomeBadge outcome={item.outcome} />
 							{item.reason && <span className="text-muted-foreground max-w-48 truncate">{item.reason}</span>}
 						</div>
 					))}

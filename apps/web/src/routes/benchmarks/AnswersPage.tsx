@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getAnswerOne, getAnswerRuns, getAnswers } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { OutcomeBadge } from './OutcomeBadge';
 
 type AnswerRow = {
 	benchmark: string;
@@ -19,13 +19,6 @@ const filterOptions = [
 	{ value: 'all', label: 'All' },
 	{ value: 'pass', label: 'Pass' }
 ];
-
-const outcomeBadgeVariant = (outcome: string): 'default' | 'destructive' | 'secondary' => {
-	const o = (outcome ?? '').toLowerCase();
-	if (o.includes('pass')) return 'default';
-	if (o.includes('fail')) return 'destructive';
-	return 'secondary';
-};
 
 const formatRunLabel = (run: {
 	started_at: number;
@@ -172,7 +165,7 @@ export function AnswersPage() {
 								<TableCell>{row.benchmark}</TableCell>
 								<TableCell>{row.item_id}</TableCell>
 								<TableCell>
-									<Badge variant={outcomeBadgeVariant(row.outcome)}>{row.outcome}</Badge>
+									<OutcomeBadge outcome={row.outcome} />
 								</TableCell>
 								<TableCell className="max-w-96 truncate" title={row.reason ?? ''}>
 									{row.reason ?? '—'}
@@ -207,7 +200,7 @@ export function AnswersPage() {
 							<span className="text-foreground font-medium">{answer.model}</span>
 							{answer.config_id && <span>· {answer.config_id}</span>}
 							{answer.system_name && <span>· {answer.system_name}</span>}
-							<Badge variant={outcomeBadgeVariant(answer.outcome)}>{answer.outcome}</Badge>
+							<OutcomeBadge outcome={answer.outcome} />
 							{answer.reason && <span>— {answer.reason}</span>}
 						</div>
 						<div className="flex flex-col gap-3 rounded-lg border p-3">
