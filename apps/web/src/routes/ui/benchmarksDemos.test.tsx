@@ -19,12 +19,18 @@ describe('the Benchmarks demos on /ui', () => {
 	});
 
 	it('keeps a long table’s headings and first column in view inside a named region', () => {
-		render(<StickyTableDemo />);
+		render(
+			<MemoryRouter>
+				<StickyTableDemo />
+			</MemoryRouter>
+		);
 		const region = screen.getByRole('region', { name: 'Failures, invented' });
 		const table = within(region).getByRole('table');
 		expect(table).toHaveAttribute('data-sticky-header');
 		expect(within(region).getAllByRole('row')).toHaveLength(25);
 		expect(within(region).getByRole('columnheader', { name: 'Reasoning, characters' })).toBeTruthy();
+		expect(within(region).getByRole('link', { name: 'Demo/100' })).toHaveAttribute('href', '/#ui-failure-Demo-100');
+		expect(within(region).getAllByRole('row')[1]).toHaveAttribute('data-opens');
 	});
 
 	it('groups the workflow’s tabs and ends the strip with the chip in both its looks', () => {

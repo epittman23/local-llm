@@ -1,3 +1,4 @@
+import { Link, useNavigate } from 'react-router';
 import { SectionTabs } from '@/components/layout/SectionTabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusChip } from '@/routes/benchmarks/BenchmarksLayout';
@@ -26,8 +27,13 @@ const FAILURES = Array.from({ length: 24 }, (_, i) => ({
 	reasoning: 400 + ((i * 937) % 6000)
 }));
 
-/** DAT-6: a list long enough to scroll keeps its headings, and its first column, in view. */
+/**
+ * DAT-6: a list long enough to scroll keeps its headings, and its first
+ * column, in view; a row that opens another page has its item as a link.
+ */
 export function StickyTableDemo() {
+	const navigate = useNavigate();
+	const href = (item: string) => `#ui-failure-${item.replace('/', '-')}`;
 	return (
 		<div className="max-w-[40rem]">
 			<Table aria-label="Failures, invented" stickyHeader stickyFirstColumn maxHeight="18rem">
@@ -43,9 +49,13 @@ export function StickyTableDemo() {
 				</TableHeader>
 				<TableBody>
 					{FAILURES.map((row) => (
-						<TableRow key={row.item}>
+						<TableRow key={row.item} onOpen={() => navigate(href(row.item))}>
 							<TableCell className="font-mono">{row.config}</TableCell>
-							<TableCell className="font-mono">{row.item}</TableCell>
+							<TableCell className="font-mono">
+								<Link to={href(row.item)} className="text-brand underline-offset-2 hover:underline">
+									{row.item}
+								</Link>
+							</TableCell>
 							<TableCell>
 								<OutcomeBadge outcome={row.outcome} />
 							</TableCell>

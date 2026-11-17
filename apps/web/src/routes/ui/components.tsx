@@ -643,7 +643,7 @@ export function DataSection() {
 			</Example>
 			<Example
 				title="A long table's headings"
-				note="stickyHeader keeps the headings in view while the rows scroll inside a frame of at most maxHeight; with stickyFirstColumn the first column stays too, and the corner heading above both. Rows hidden below make the named region a tab stop."
+				note="stickyHeader keeps the headings in view while the rows scroll inside a frame of at most maxHeight; with stickyFirstColumn the first column stays too, and the corner heading above both. Rows hidden below make the named region a tab stop. A row that opens another page (Compare > Failures opens Answers) has its item as a link in brand blue, and a click anywhere on the row follows it."
 			>
 				<StickyTableDemo />
 			</Example>
