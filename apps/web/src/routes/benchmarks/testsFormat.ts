@@ -68,3 +68,53 @@ export const missingIncrements = (increments: WindowIncrement[], min: string, ma
 	min
 		? increments.filter((inc) => !inc.fetched && inc.last >= min && (!max || inc.first <= max)).map((inc) => inc.name)
 		: [];
+
+/** The tiers in the order they cost, cheapest first: smoke, standard, full, then any others by name (#918). */
+const TIER_ORDER = ['smoke', 'standard', 'full'];
+export const orderTiers = (tiers: string[]): string[] =>
+	[...tiers].sort((a, b) => {
+		const ia = TIER_ORDER.indexOf(a);
+		const ib = TIER_ORDER.indexOf(b);
+		return (ia === -1 ? TIER_ORDER.length : ia) - (ib === -1 ? TIER_ORDER.length : ib) || a.localeCompare(b);
+	});
+
+/** The tier the page opens on: smoke, the fast one, so one click on Run never starts a many-hours run (B-D1). */
+export const defaultTier = (tiers: string[]): string =>
+	tiers.includes('smoke') ? 'smoke' : (orderTiers(tiers)[0] ?? '');
+
+/** How big each tier is, from docs/guides/benchmarks.md "Tiers"; a tier not listed shows its name alone. */
+export const TIER_SIZE: Record<string, string> = {
+	smoke: '8 items per benchmark',
+	standard: '100 items per benchmark',
+	full: 'every item, many hours'
+};
+
+/** A duration as a person reads it: "45 s", "3 min 20 s", "1 h 5 min". */
+export const formatDuration = (ms: number): string => {
+	const s = Math.max(0, Math.round(ms / 1000));
+	if (s < 60) return `${s} s`;
+	const m = Math.floor(s / 60);
+	if (m < 60) return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+	return m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 60)} h`;
+};
+
+type Graded = { outcome: string; i: number };
+
+/** Where a run stands: items done of the total, passes, skips, the pass rate, and the time left at the mean pace so far. */
+export const runProgress = (items: Graded[], total: number, elapsedMs: number) => {
+	const done = items.length ? Math.max(...items.map((it) => it.i)) : 0;
+	const passed = items.filter((it) => it.outcome === 'pass').length;
+	const skipped = items.filter((it) => it.outcome === 'skipped').length;
+	const attempted = items.length - skipped;
+	const rate = attempted ? passed / attempted : null;
+	const left = total > done && done > 0 ? (elapsedMs / done) * (total - done) : null;
+	return { done, total, passed, skipped, attempted, rate, leftMs: left };
+};
+
+/** The fetch button says what it will download: the ticked increments and their size (#1048). */
+export const fetchLabel = (increments: WindowIncrement[], chosen: string[]): string => {
+	const picked = increments.filter((inc) => chosen.includes(inc.name));
+	if (!picked.length) return 'Fetch datasets';
+	const bytes = picked.reduce((sum, inc) => sum + inc.bytes, 0);
+	return `Fetch ${picked.length} ${picked.length === 1 ? 'increment' : 'increments'} · ${formatBytes(bytes)}`;
+};

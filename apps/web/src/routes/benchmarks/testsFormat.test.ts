@@ -111,3 +111,54 @@ describe('appendNote', () => {
 		]);
 	});
 });
+
+describe('tiers, durations, progress and the fetch label', () => {
+	it('orders tiers by cost and defaults to smoke', async () => {
+		const { orderTiers, defaultTier } = await import('./testsFormat');
+		expect(orderTiers(['full', 'zeta', 'smoke', 'alpha', 'standard'])).toEqual([
+			'smoke',
+			'standard',
+			'full',
+			'alpha',
+			'zeta'
+		]);
+		expect(defaultTier(['full', 'smoke'])).toBe('smoke');
+		expect(defaultTier(['full', 'standard'])).toBe('standard');
+		expect(defaultTier([])).toBe('');
+	});
+
+	it('reads durations in seconds, minutes and hours', async () => {
+		const { formatDuration } = await import('./testsFormat');
+		expect(formatDuration(45_000)).toBe('45 s');
+		expect(formatDuration(200_000)).toBe('3 min 20 s');
+		expect(formatDuration(180_000)).toBe('3 min');
+		expect(formatDuration(3_900_000)).toBe('1 h 5 min');
+		expect(formatDuration(7_200_000)).toBe('2 h');
+		expect(formatDuration(-5)).toBe('0 s');
+	});
+
+	it('works out the pass rate without skipped items, and the time left at the pace so far', async () => {
+		const { runProgress } = await import('./testsFormat');
+		const p = runProgress(
+			[
+				{ outcome: 'pass', i: 1 },
+				{ outcome: 'fail_error', i: 2 },
+				{ outcome: 'skipped', i: 3 },
+				{ outcome: 'pass', i: 4 }
+			],
+			10,
+			40_000
+		);
+		expect(p).toMatchObject({ done: 4, total: 10, passed: 2, skipped: 1, attempted: 3, leftMs: 60_000 });
+		expect(p.rate).toBeCloseTo(2 / 3);
+		expect(runProgress([], 10, 0)).toMatchObject({ done: 0, rate: null, leftMs: null });
+	});
+
+	it('says what a fetch downloads', async () => {
+		const { fetchLabel } = await import('./testsFormat');
+		const inc = (name: string, bytes: number) => ({ name, bytes, items: 1, first: '', last: '', fetched: false });
+		expect(fetchLabel([inc('a', 2 ** 30), inc('b', 2 ** 29)], [])).toBe('Fetch datasets');
+		expect(fetchLabel([inc('a', 2 ** 30), inc('b', 2 ** 29)], ['a'])).toBe('Fetch 1 increment · 1.00 GiB');
+		expect(fetchLabel([inc('a', 2 ** 30), inc('b', 2 ** 29)], ['a', 'b'])).toBe('Fetch 2 increments · 1.50 GiB');
+	});
+});
