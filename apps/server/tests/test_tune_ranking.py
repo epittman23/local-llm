@@ -391,3 +391,15 @@ def test_a_resumed_sweep_keeps_only_the_remaining_wall_clock(monkeypatch):
     assert budget.spent(now - spent, 0) is None
     assert budget.remaining(now) == 10_000.0
     assert budget.spent(now - 10_000, 0) == 'budget'
+
+
+def test_adoption_note_points_at_the_app_not_a_shell_script():
+    # The note names the Tune page's own actions; llama-env.sh is long gone.
+    winner = types.SimpleNamespace(
+        candidate_sha='c1', config_id='cfg', overrides={'LLAMA_CTX': '8192', 'LLAMA_NGL': 20}
+    )
+    note = tune.adoption_note(winner)
+    assert note['flags'] == 'LLAMA_CTX=8192 LLAMA_NGL=20'
+    assert note['reduces_context'] is True
+    assert 'Create profile version' in note['note'] and 'Serve with these overrides' in note['note']
+    assert 'llama-env' not in note['note']
