@@ -33,6 +33,7 @@ router's job to decide where (or whether) each one gets written to disk.
 from __future__ import annotations
 
 import io
+from dataclasses import dataclass
 
 from local_llm.benchmarks.analysis import stats as lstats
 from local_llm.benchmarks.analysis.report import (
@@ -76,6 +77,44 @@ FLAG = '#eb6834'  # flagged: throttled, discordant, refused
 FILL_OFF = '#e6e5df'  # the empty half of a binary cell
 FILL_ON = '#cfd8e3'  # a filled cell in a row that carries no information
 
+
+@dataclass(frozen=True)
+class Palette:
+    """One theme's figure colours. The module constants above are the light set."""
+
+    ink: str
+    ink_2: str
+    muted: str
+    grid: str
+    surface: str
+    series: str
+    flag: str
+    fill_off: str
+    fill_on: str
+
+
+# The dark set is the app's dark tokens (apps/web/src/styles/standard.css,
+# `.dark`) as hex: --surface-1 for the figure, --foreground-strong and
+# --foreground-muted for text, --border-divider for rules, --series-1 (blue)
+# for the primary mark and --series-5 (orange) for the flag, so a figure
+# shown on the dark page is drawn in the page's own colours (COL-6, COL-8)
+# instead of glaring as a near-white panel. Same two hues as the light set,
+# for the same deuteranope reason.
+PALETTES = {
+    'light': Palette(INK, INK_2, MUTED, GRID, SURFACE, SERIES, FLAG, FILL_OFF, FILL_ON),
+    'dark': Palette(
+        ink='#f1efe6',
+        ink_2='#d0d2ca',
+        muted='#b1bab3',
+        grid='#414a46',
+        surface='#19211e',
+        series='#82c7f0',
+        flag='#eb9a75',
+        fill_off='#2c3532',
+        fill_on='#2f4c5d',
+    ),
+}
+
 BLOCKS = ' ▏▎▍▌▋▊▉█'
 
 
@@ -116,8 +155,10 @@ class Figures:
     -- loses the analysis as well as the picture.
     """
 
-    def __init__(self, enabled: bool = True):
+    def __init__(self, enabled: bool = True, theme: str = 'light'):
         self.png = bool(enabled and HAVE_MPL)
+        #: The colours every figure is drawn in: the page's theme, light unless asked.
+        self.c = PALETTES.get(theme, PALETTES['light'])
         self.figures: list[Figure] = []
         if not enabled:
             self.reason = 'figures disabled by the caller'
@@ -139,23 +180,23 @@ class Figures:
         # their level count and the title does not shrink with them.
         size = (max(size[0], self.MIN_WIDTH_IN), size[1])
         fig, ax = plt.subplots(figsize=size, dpi=140)
-        fig.patch.set_facecolor(SURFACE)
-        ax.set_facecolor(SURFACE)
+        fig.patch.set_facecolor(self.c.surface)
+        ax.set_facecolor(self.c.surface)
         for side in ('top', 'right'):
             ax.spines[side].set_visible(False)
         for side in ('left', 'bottom'):
-            ax.spines[side].set_color(GRID)
+            ax.spines[side].set_color(self.c.grid)
             ax.spines[side].set_linewidth(1.0)
-        ax.tick_params(colors=MUTED, labelsize=8, length=0)
-        ax.grid(True, axis='y', color=GRID, linewidth=0.8)
+        ax.tick_params(colors=self.c.muted, labelsize=8, length=0)
+        ax.grid(True, axis='y', color=self.c.grid, linewidth=0.8)
         ax.set_axisbelow(True)
         return fig, ax
 
     def _save(self, fig, ax, name: str, title: str, out: list[str], alt: str):
-        ax.set_title(wrap_title(title, fig.get_size_inches()[0]), color=INK, fontsize=11, loc='left', pad=12)
+        ax.set_title(wrap_title(title, fig.get_size_inches()[0]), color=self.c.ink, fontsize=11, loc='left', pad=12)
         fig.tight_layout()
         buf = io.BytesIO()
-        fig.savefig(buf, format='png', facecolor=SURFACE)
+        fig.savefig(buf, format='png', facecolor=self.c.surface)
         plt.close(fig)
         self.figures.append(Figure(name=name, data=buf.getvalue(), alt=alt))
         out += [f'![{alt}]({name})', '', f'*{title}*', '']
@@ -198,7 +239,7 @@ class Figures:
                 ax.axvspan(
                     start_i - 0.5,
                     i - 0.5,
-                    color=FLAG,
+                    color=self.c.flag,
                     alpha=0.12,
                     lw=0,
                     label='served under a throttle' if not shaded else None,
@@ -212,22 +253,24 @@ class Figures:
         prompts = [(r.get('system_name') or NONE_LEVEL) for r in series]
         for i in range(1, len(prompts)):
             if prompts[i] != prompts[i - 1]:
-                ax.axvline(i - 0.5, color=MUTED, linewidth=0.8, linestyle=(0, (2, 3)), zorder=1)
+                ax.axvline(i - 0.5, color=self.c.muted, linewidth=0.8, linestyle=(0, (2, 3)), zorder=1)
 
         ax.plot(
             x,
             values,
-            color=SERIES,
+            color=self.c.series,
             linewidth=2.0,
             marker='o',
             markersize=4.5,
-            markeredgecolor=SURFACE,
+            markeredgecolor=self.c.surface,
             markeredgewidth=1.5,
             zorder=3,
             label='generation t/s, one request',
         )
-        ax.set_xlabel('request, in the order served  (dashed rules: system prompt changes)', color=INK_2, fontsize=9)
-        ax.set_ylabel('generation t/s', color=INK_2, fontsize=9)
+        ax.set_xlabel(
+            'request, in the order served  (dashed rules: system prompt changes)', color=self.c.ink_2, fontsize=9
+        )
+        ax.set_ylabel('generation t/s', color=self.c.ink_2, fontsize=9)
         ax.set_ylim(bottom=0, top=max(v for v in values if v) * 1.28)
 
         # The cliff, named with the moment it happened and the medians
@@ -239,18 +282,18 @@ class Figures:
             before = lstats.percentile(values[:cut], 0.5)
             after = lstats.percentile(values[cut:], 0.5)
             at = _iso(series[cut].get('at'))[:19]
-            ax.axvline(cut - 0.5, color=FLAG, linewidth=1.4, linestyle=(0, (4, 3)), zorder=2)
+            ax.axvline(cut - 0.5, color=self.c.flag, linewidth=1.4, linestyle=(0, (4, 3)), zorder=2)
             ax.annotate(
                 f'{at}Z: median {before:.1f} -> {after:.1f} t/s,\nand never recovers',
                 xy=(cut - 0.5, max(v for v in values if v)),
                 xytext=(8, -4),
                 textcoords='offset points',
-                color=FLAG,
+                color=self.c.flag,
                 fontsize=8.5,
                 ha='left',
                 va='top',
             )
-        ax.legend(loc='upper right', frameon=False, fontsize=8, labelcolor=INK_2)
+        ax.legend(loc='upper right', frameon=False, fontsize=8, labelcolor=self.c.ink_2)
         self._save(
             fig,
             ax,
@@ -316,13 +359,13 @@ class Figures:
                 # the flag colour. Still labelled in words: nothing here
                 # depends on seeing the difference between two hues.
                 if value:
-                    face, ink = (FILL_ON, INK_2) if not varies else (SERIES, SURFACE)
+                    face, ink = (self.c.fill_on, self.c.ink_2) if not varies else (self.c.series, self.c.surface)
                 else:
-                    face, ink = (FILL_OFF, MUTED) if not varies else (FLAG, SURFACE)
+                    face, ink = (self.c.fill_off, self.c.muted) if not varies else (self.c.flag, self.c.surface)
                 ax.add_patch(plt.Rectangle((j + 0.03, i + 0.03), 0.94, 0.94, facecolor=face, linewidth=0))
                 ax.text(j + 0.5, i + 0.5, 'pass' if value else 'fail', ha='center', va='center', fontsize=8, color=ink)
         for i in discordant:
-            ax.add_patch(plt.Rectangle((-0.06, i + 0.03), 0.06, 0.94, facecolor=FLAG, linewidth=0))
+            ax.add_patch(plt.Rectangle((-0.06, i + 0.03), 0.06, 0.94, facecolor=self.c.flag, linewidth=0))
         ax.set_xlim(-0.1, len(levels))
         ax.set_ylim(len(items), 0)
         ax.set_xticks([j + 0.5 for j in range(len(levels))])
@@ -389,8 +432,8 @@ class Figures:
             return
         name = f'fig3-discordance-{b.slug()}.png'
         fig, ax = self._new(name, size=(8.0, 0.46 * len(others) + 1.9))
-        ax.grid(True, axis='x', color=GRID, linewidth=0.8)
-        ax.axvline(0, color=INK_2, linewidth=1.2, zorder=2)
+        ax.grid(True, axis='x', color=self.c.grid, linewidth=0.8)
+        ax.axvline(0, color=self.c.ink_2, linewidth=1.2, zorder=2)
         for row, j in enumerate(others):
             y = len(others) - 1 - row
             ndisc = len(lost[j]) + len(gained[j])
@@ -400,7 +443,7 @@ class Figures:
                     xy=(0, y),
                     xytext=(8, 0),
                     textcoords='offset points',
-                    color=MUTED,
+                    color=self.c.muted,
                     fontsize=8.5,
                     va='center',
                 )
@@ -411,8 +454,8 @@ class Figures:
                     [y],
                     marker='o',
                     markersize=9,
-                    color=FLAG,
-                    markeredgecolor=SURFACE,
+                    color=self.c.flag,
+                    markeredgecolor=self.c.surface,
                     markeredgewidth=1.2,
                     zorder=3,
                 )
@@ -422,8 +465,8 @@ class Figures:
                     [y],
                     marker='o',
                     markersize=9,
-                    color=SERIES,
-                    markeredgecolor=SURFACE,
+                    color=self.c.series,
+                    markeredgecolor=self.c.surface,
                     markeredgewidth=1.2,
                     zorder=3,
                 )
@@ -432,7 +475,7 @@ class Figures:
                 xy=(max(len(gained[j]), 1), y),
                 xytext=(14, 0),
                 textcoords='offset points',
-                color=INK_2,
+                color=self.c.ink_2,
                 fontsize=8.5,
                 va='center',
             )
@@ -445,7 +488,7 @@ class Figures:
         ax.set_xticks(ticks)
         ax.set_xticklabels([str(abs(t)) for t in ticks])
         ax.set_xlabel(
-            'items lost (left, orange) and gained (right, blue) against the baseline', color=INK_2, fontsize=9
+            'items lost (left, orange) and gained (right, blue) against the baseline', color=self.c.ink_2, fontsize=9
         )
         for side in ('left',):
             ax.spines[side].set_visible(False)
@@ -477,11 +520,11 @@ class Figures:
         ax.plot(
             xs,
             ys,
-            color=SERIES,
+            color=self.c.series,
             linewidth=2.0,
             marker='o',
             markersize=4.5,
-            markeredgecolor=SURFACE,
+            markeredgecolor=self.c.surface,
             markeredgewidth=1.5,
             zorder=3,
         )
@@ -492,8 +535,8 @@ class Figures:
         # were being drawn straight through the explicit labels above.
         ax.xaxis.set_minor_locator(plt.NullLocator())
         ax.xaxis.set_minor_formatter(plt.NullFormatter())
-        ax.set_xlabel('items per level', color=INK_2, fontsize=9)
-        ax.set_ylabel('detectable difference, percentage points', color=INK_2, fontsize=9)
+        ax.set_xlabel('items per level', color=self.c.ink_2, fontsize=9)
+        ax.set_ylabel('detectable difference, percentage points', color=self.c.ink_2, fontsize=9)
 
         # Headroom above the ceiling, so the annotations below have
         # somewhere to sit that is not the title.
@@ -504,13 +547,13 @@ class Figures:
         # rate, since every unit of it has to come from an item that
         # changed, so this line is where section 6's `impossible` comes
         # from.
-        ax.axhline(100 * psi, color=MUTED, linewidth=1.2, linestyle=(0, (5, 4)), zorder=1)
+        ax.axhline(100 * psi, color=self.c.muted, linewidth=1.2, linestyle=(0, (5, 4)), zorder=1)
         ax.annotate(
             f'psi = {100 * psi:.1f} pp: no larger effect can exist',
             xy=(xs[-1] if xs else 1, 100 * psi),
             xytext=(0, 5),
             textcoords='offset points',
-            color=MUTED,
+            color=self.c.muted,
             fontsize=8.5,
             ha='right',
         )
@@ -521,7 +564,7 @@ class Figures:
         # figure dropped its own subject in the one case this section
         # exists to report.
         here = detectable_effect(now, psi, alpha=alpha)
-        ax.axvline(now, color=FLAG, linewidth=1.4, linestyle=(0, (4, 3)), zorder=2)
+        ax.axvline(now, color=self.c.flag, linewidth=1.4, linestyle=(0, (4, 3)), zorder=2)
         if here is not None:
             note = f'this experiment:\n{now} items, {100 * here:.0f} pp'
         else:
@@ -535,7 +578,7 @@ class Figures:
             xy=(now, top * 0.30),
             xytext=(10, 0),
             textcoords='offset points',
-            color=FLAG,
+            color=self.c.flag,
             fontsize=9,
             ha='left',
             va='center',
@@ -544,13 +587,13 @@ class Figures:
             # The curve starts where it starts for a reason; shade the dead
             # region and say why, rather than leaving a reader to wonder
             # how an axis of items per level begins where it does.
-            ax.axvspan(min(ns), min(xs), color=MUTED, alpha=0.07, lw=0, zorder=0)
+            ax.axvspan(min(ns), min(xs), color=self.c.muted, alpha=0.07, lw=0, zorder=0)
             ax.annotate(
                 f'under {min(xs)} items nothing is\ndetectable at 80% power',
                 xy=(min(ns), top * 0.06),
                 xytext=(6, 0),
                 textcoords='offset points',
-                color=MUTED,
+                color=self.c.muted,
                 fontsize=8.5,
                 ha='left',
                 va='bottom',
