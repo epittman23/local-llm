@@ -100,8 +100,26 @@ test.beforeEach(async ({ page, context }) => {
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify([qwen38Entry.version])
+			body: JSON.stringify([{ ...qwen38Entry.version, note: 'Seeded from the shell profile' }])
 		})
+	);
+	// P1: Serve's launch preview and weights check (GETs, read-only).
+	await page.route('**/api/v1/benchmarks/serve/preview?**', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				profile: 'qwen38',
+				version: 1,
+				argv: ['llama-server', '-m', '/models/qwen38.gguf', '-ngl', '20'],
+				config_id: 'c98ef02c',
+				config_lines: [],
+				warning: null
+			})
+		})
+	);
+	await page.route('**/api/v1/benchmarks/serve/profile/**', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ weights_present: true }) })
 	);
 });
 
@@ -122,35 +140,37 @@ test('the Profiles panel lists profiles from the CRUD backend', async ({ page })
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await expect(page.getByRole('dialog')).toBeVisible();
-	await expect(page.getByText('qwen38')).toBeVisible();
-	// exact + case-sensitive: without it this also matches the Serve page's
-	// own "Default" reasoning/spec <Select> options underneath the dialog.
-	await expect(page.getByText('default', { exact: true })).toBeVisible();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('qwen38', { exact: true })).toBeVisible();
+	// The default profile's status badge (#977), scoped to the dialog: the
+	// Serve page's own "Default (…)" select options sit underneath it.
+	await expect(dialog.getByText('Default', { exact: true })).toBeVisible();
 });
 
 test('Edit opens a version-history-backed form pre-filled from the current definition', async ({ page }) => {
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await page.getByRole('button', { name: 'Edit' }).click();
+	await page.getByRole('button', { name: 'Edit qwen38' }).click();
 
 	await expect(page.getByRole('heading', { name: 'New version of qwen38' })).toBeVisible();
-	// Scoped to the dialog: Serve's own "ctx" override input is still in the
-	// DOM behind it and shares the label text.
+	// Scoped to the dialog: Serve's own "Context" override input is still in
+	// the DOM behind it and shares the label text. Labels are words now (#1052).
 	const dialog = page.getByRole('dialog');
-	await expect(dialog.getByLabel('model_path')).toHaveValue('/models/qwen38.gguf');
-	await expect(dialog.getByLabel('ctx')).toHaveValue('4096');
+	await expect(dialog.getByLabel('Model file')).toHaveValue('/models/qwen38.gguf');
+	await expect(dialog.getByRole('textbox', { name: 'Context', exact: true })).toHaveValue('4096');
 });
 
 test('History shows the version table for a profile', async ({ page }) => {
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await page.getByRole('button', { name: 'History' }).click();
+	await page.getByRole('button', { name: 'History of qwen38' }).click();
 
 	await expect(page.getByRole('heading', { name: 'qwen38 — version history' })).toBeVisible();
-	await expect(page.getByRole('cell', { name: 'the dense baseline profile' })).toBeVisible();
+	// Each version's own note, not the profile's notes (#978).
+	await expect(page.getByRole('dialog').getByText('Seeded from the shell profile')).toBeVisible();
 });
 
 test('Live shows the empty state when nothing is recording', async ({ page }) => {
@@ -165,8 +185,8 @@ test('Live shows the empty state when nothing is recording', async ({ page }) =>
 	await page.goto('/benchmarks/live');
 
 	await expect(page.getByRole('heading', { name: 'Live' })).toBeVisible();
-	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Kill' })).not.toBeVisible();
+	await expect(page.getByText('Nothing is being recorded')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Kill server' })).not.toBeVisible();
 });
 
 test('Live renders an active run and Kill requires AlertDialog confirmation', async ({ page }) => {
@@ -195,14 +215,14 @@ test('Live renders an active run and Kill requires AlertDialog confirmation', as
 	await expect(page.getByText('qwen38')).toBeVisible();
 	await expect(page.getByText('abc123')).toBeVisible();
 
-	await page.getByRole('button', { name: 'Kill' }).click();
-	await expect(page.getByRole('heading', { name: 'Kill active run' })).toBeVisible();
+	await page.getByRole('button', { name: 'Kill server' }).click();
+	await expect(page.getByRole('heading', { name: 'Kill the recorded server?' })).toBeVisible();
 	// AlertDialog, not Dialog, per Phase 5's own checklist wording -- clicking
 	// the trigger must not kill anything by itself.
-	await expect(page.getByText('the currently running server', { exact: false })).toBeVisible();
+	await expect(page.getByText('force-stops', { exact: false })).toBeVisible();
 
-	await page.getByRole('button', { name: 'Kill', exact: true }).last().click();
-	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
+	await page.getByRole('button', { name: 'Kill server', exact: true }).last().click();
+	await expect(page.getByText('Nothing is being recorded')).toBeVisible();
 });
 
 test('Tests runs a suite and streams per-item outcomes to completion', async ({ page }) => {
@@ -944,7 +964,7 @@ test('Serve Start settles while the log stream is still open', async ({ page }) 
 	await page.goto('/benchmarks/serve');
 	await page.getByRole('button', { name: 'Start' }).click();
 	await expect.poll(() => started).toBe(1);
-	await expect(page.getByText('Log (streaming…)')).toBeVisible();
+	await expect(page.getByText('Streaming', { exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
 });
