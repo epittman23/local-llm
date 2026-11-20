@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { InfoIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
@@ -111,8 +111,13 @@ export function ComparePage() {
 				tier: tier === ALL_TIER ? null : tier,
 				baseline: by === 'config' && baseline ? baseline : null
 			}),
-		enabled: !!token
+		enabled: !!token,
+		// A new baseline only adds a column: keep the rows (and the select the
+		// focus moves to) on screen while it loads, rather than a skeleton.
+		placeholderData: (previous, previousQuery) =>
+			previousQuery?.queryKey[1] === by && previousQuery.queryKey[2] === tier ? previous : undefined
 	});
+	const baselineSelect = useRef<HTMLButtonElement>(null);
 
 	const data = compareQuery.data;
 	const notes = [...new Set<string>(data?.notes ?? [])].map(parseNote);
@@ -163,7 +168,12 @@ export function ComparePage() {
 					blocks={config?.blocks ?? []}
 					rows={configRows}
 					baseline={baselineKnown ? baseline : null}
-					onBaseline={(id) => setParam('baseline', id)}
+					onBaseline={(id) => {
+						setParam('baseline', id);
+						// The pressed button goes with its row's new state: focus moves to
+						// the select now naming the baseline (A11Y-1).
+						baselineSelect.current?.focus();
+					}}
 				/>
 			);
 		}
@@ -260,7 +270,7 @@ export function ComparePage() {
 								onValueChange={(v) => setParam('baseline', v === NO_BASELINE ? null : v)}
 								disabled={configs.length === 0}
 							>
-								<SelectTrigger id="compare-baseline" className="w-full sm:w-72">
+								<SelectTrigger ref={baselineSelect} id="compare-baseline" className="w-full sm:w-72">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>

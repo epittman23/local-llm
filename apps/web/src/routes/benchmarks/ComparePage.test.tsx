@@ -210,6 +210,12 @@ describe('ComparePage', () => {
 		expect(rows[1]).toHaveTextContent('+10.0');
 		fireEvent.click(within(rows[1]).getByRole('button', { name: 'Set as baseline, 47714ce1' }));
 		await waitFor(() => expect(location).toBe('/benchmarks/compare?baseline=47714ce1'));
+		// The pressed button goes away with its row's new state; focus lands on the baseline select (A11Y-1).
+		const select = screen.getByRole('combobox', { name: 'Baseline' });
+		expect(document.activeElement).toBe(select);
+		// The rows stay while the new baseline loads, so the select stays usable.
+		expect(select).not.toBeDisabled();
+		expect(screen.queryByText('Loading the comparison')).toBeNull();
 	});
 
 	it('says when the baseline in the address is not in the results, and clears it (#1044)', async () => {
