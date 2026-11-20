@@ -224,6 +224,25 @@ describe('ComparePage', () => {
 		expect(screen.getByRole('combobox', { name: 'Tier' })).toHaveTextContent('All tiers');
 	});
 
+	it("never shows the old baseline's differences under a new one while it loads", async () => {
+		vi.mocked(api.getCompare).mockResolvedValueOnce(configBody([{ vs_baseline: 0.1 }, { vs_baseline: 0 }]) as never);
+		let land: (value: unknown) => void = () => {};
+		vi.mocked(api.getCompare).mockReturnValueOnce(new Promise((resolve) => (land = resolve)) as never);
+		renderPage('/benchmarks/compare?baseline=bd04a851');
+		const region = await screen.findByRole('region', { name: 'Configurations, HumanEval+, smoke' });
+		fireEvent.click(within(region).getByRole('button', { name: 'Set as baseline, 47714ce1' }));
+		await waitFor(() => expect(location).toBe('/benchmarks/compare?baseline=47714ce1'));
+		let rows = within(region).getAllByRole('row');
+		expect(rows[1]).toHaveAttribute('data-baseline');
+		// bd04a851's 0.0 was against itself: while the new numbers load, it shows none.
+		expect(within(rows[2]).getByText('Loading')).toBeTruthy();
+		expect(rows[1]).not.toHaveTextContent('+10.0');
+		land(configBody([{ vs_baseline: 0 }, { vs_baseline: -0.1 }]));
+		await waitFor(() => expect(within(region).getAllByRole('row')[2]).toHaveTextContent('-10.0'));
+		rows = within(region).getAllByRole('row');
+		expect(within(rows[2]).queryByText('Loading')).toBeNull();
+	});
+
 	it('says when the baseline in the address is not in the results, and clears it (#1044)', async () => {
 		renderPage('/benchmarks/compare?baseline=nope');
 		expect(await screen.findByText('No configuration nope in these results')).toBeTruthy();

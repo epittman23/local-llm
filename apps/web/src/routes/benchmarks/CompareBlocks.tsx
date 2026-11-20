@@ -53,12 +53,15 @@ export function CompareBlocks({
 	blocks,
 	rows,
 	baseline,
+	baselinePending = false,
 	onBaseline
 }: {
 	blocks: CompareBlock[];
 	rows: CompareRow[];
 	/** The baseline configuration's id, when one is chosen and present in these results. */
 	baseline: string | null;
+	/** The rows on screen were measured against another baseline, and this one's are loading. */
+	baselinePending?: boolean;
 	onBaseline: (configId: string) => void;
 }) {
 	const byBlock = rowsByBlock(rows);
@@ -183,11 +186,19 @@ export function CompareBlocks({
 											</TableCell>
 											{baseline && (
 												<TableCell className={cn(NUM, row.vs_baseline_note && 'text-muted-foreground')}>
-													{isBaseline
-														? '0.0'
-														: row.vs_baseline === null || row.vs_baseline === undefined
-															? (row.vs_baseline_note ?? '–')
-															: formatDiff(row.vs_baseline)}
+													{isBaseline ? (
+														'0.0'
+													) : baselinePending ? (
+														// STA-2: the old baseline's numbers never stand under the new one.
+														<>
+															<span aria-hidden className="bg-surface-3 ml-auto block h-4 w-10 animate-pulse rounded" />
+															<span className="sr-only">Loading</span>
+														</>
+													) : row.vs_baseline === null || row.vs_baseline === undefined ? (
+														(row.vs_baseline_note ?? '–')
+													) : (
+														formatDiff(row.vs_baseline)
+													)}
 												</TableCell>
 											)}
 											<TableCell>

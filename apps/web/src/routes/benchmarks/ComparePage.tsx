@@ -174,6 +174,7 @@ export function ComparePage() {
 					blocks={config?.blocks ?? []}
 					rows={configRows}
 					baseline={baselineKnown ? baseline : null}
+					baselinePending={compareQuery.isPlaceholderData}
 					onBaseline={(id) => {
 						setParam('baseline', id);
 						// The pressed button goes with its row's new state: focus moves to
