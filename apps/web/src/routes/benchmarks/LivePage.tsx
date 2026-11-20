@@ -138,8 +138,10 @@ export function LivePage() {
 					</Button>
 					<AlertDialog open={killOpen} onOpenChange={setKillOpen}>
 						<AlertDialogTrigger asChild>
+							{/* ACT-3: the danger is in the words and colour here; the dialog's confirm is the filled one. */}
 							<Button
 								variant="outline"
+								className="text-danger"
 								disabled={killMutation.isPending}
 								aria-busy={killMutation.isPending || undefined}
 							>

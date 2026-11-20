@@ -135,7 +135,11 @@ describe('LivePage', () => {
 		vi.mocked(api.getLive).mockResolvedValue(recording() as never);
 		vi.mocked(api.killLive).mockResolvedValue({ killed: true } as never);
 		renderPage();
-		fireEvent.click(await screen.findByRole('button', { name: 'Kill server' }));
+		const trigger = await screen.findByRole('button', { name: 'Kill server' });
+		// An outline danger button, set apart from Open Serve; the confirm is the filled one.
+		expect(trigger.getAttribute('data-variant')).toBe('outline');
+		expect(trigger.className).toContain('text-danger');
+		fireEvent.click(trigger);
 		expect(await screen.findByText('Kill the recorded server?')).toBeInTheDocument();
 		expect(api.killLive).not.toHaveBeenCalled();
 		const confirm = screen.getAllByRole('button', { name: 'Kill server' }).at(-1) as HTMLElement;
