@@ -47,7 +47,7 @@ export function ResultActions({
 	label?: string;
 	/** The line saying which knobs each link carries; a table says it once instead. */
 	showNote?: boolean;
-	/** In a table's row: short labels on one line ("Serve", "Profile version"), the full action in each name. */
+	/** In a table's row: short labels on one line ("Serve", "Create version"), the full action in each name. */
 	compact?: boolean;
 }) {
 	const toServe = serveLink(profile, overrides);
@@ -71,9 +71,14 @@ export function ResultActions({
 				)}
 				{toVersion && (
 					<Button asChild variant="outline" size={size}>
-						<Link to={toVersion} aria-label={label || compact ? `Create profile version${of}` : undefined}>
+						<Link
+							to={toVersion}
+							aria-label={
+								compact ? `Create version of ${profile}${of}` : label ? `Create profile version${of}` : undefined
+							}
+						>
 							<SquarePenIcon aria-hidden data-icon="inline-start" />
-							{compact ? 'Profile version' : 'Create profile version'}
+							{compact ? 'Create version' : 'Create profile version'}
 						</Link>
 					</Button>
 				)}

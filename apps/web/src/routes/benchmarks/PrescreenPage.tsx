@@ -817,7 +817,7 @@ export function PrescreenPage() {
 							</TableBody>
 						</Table>
 						<p className="text-muted-foreground mt-1 text-xs">
-							Serve fills the Serve form with the GPU layers and threads a candidate changes; Profile version opens the
+							Serve fills the Serve form with the GPU layers and threads a candidate changes; Create version opens the
 							profile's Edit form with all of them (batch, micro-batch, MoE layers). Nothing starts or is saved until
 							you do it there.
 						</p>

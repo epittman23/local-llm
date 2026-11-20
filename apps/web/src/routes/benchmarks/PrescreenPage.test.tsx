@@ -480,7 +480,7 @@ describe('PrescreenPage form, candidates and address', () => {
 		const serve = within(table).getByRole('link', { name: 'Serve with these overrides, candidate 1' });
 		expect(serve.getAttribute('href')).toBe('/benchmarks/serve?profile=qwen38&ngl=22');
 		const version = new URL(
-			within(table).getByRole('link', { name: 'Create profile version, candidate 1' }).getAttribute('href') ?? '',
+			within(table).getByRole('link', { name: 'Create version of qwen38, candidate 1' }).getAttribute('href') ?? '',
 			'http://x'
 		);
 		expect(Object.fromEntries(version.searchParams)).toEqual({
@@ -491,13 +491,13 @@ describe('PrescreenPage form, candidates and address', () => {
 		});
 		// Batch alone is not a Serve override.
 		expect(within(table).queryByRole('link', { name: 'Serve with these overrides, candidate 2' })).toBeNull();
-		expect(within(table).getByRole('link', { name: 'Create profile version, candidate 2' })).toBeTruthy();
+		expect(within(table).getByRole('link', { name: 'Create version of qwen38, candidate 2' })).toBeTruthy();
 		expect(screen.getByRole('combobox', { name: 'Pre-screen' }).textContent).toContain(
 			'qwen38 · Grid / Generation · Done'
 		);
 		// In the row the actions are short, on one line, and keep the whole action in their names.
 		expect(serve.textContent).toBe('Serve');
-		expect(within(table).getAllByText('Profile version')).toHaveLength(3);
+		expect(within(table).getAllByText('Create version')).toHaveLength(3);
 		// WRD-2: the tiles say how it searched in words, and the long tables keep their headings in view (#1114).
 		expect(screen.getByText('Grid / Generation', { selector: 'dd, dd *, p, span, div' })).toBeTruthy();
 		expect(table.querySelector('table')?.getAttribute('data-sticky-header')).toBe('true');
