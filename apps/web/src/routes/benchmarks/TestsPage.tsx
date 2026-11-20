@@ -378,7 +378,8 @@ export function TestsPage() {
 						}
 					>
 						<p>
-							A run sends every item to the served model, so start a profile on Serve first. Selfcheck needs no model.
+							Run and Run item are off until a model is served: a run sends every item to it, so start a profile on
+							Serve first. Selfcheck, under Datasets, grades the reference solutions and needs no model, so it stays on.
 						</p>
 					</StatusNotice>
 				))}

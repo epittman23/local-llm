@@ -290,6 +290,10 @@ describe('TestsPage target, tiers, progress and datasets (#918, #938, #1047, #10
 		fireEvent.change(screen.getByLabelText('Item id'), { target: { value: 'HumanEval/1' } });
 		expect(screen.getByRole('button', { name: 'Run item' })).toBeDisabled();
 		expect(screen.getByRole('button', { name: 'Selfcheck' })).toBeEnabled();
+		// B-D11 holds Run only; the notice says why Selfcheck stays on.
+		expect(
+			screen.getByText(/Selfcheck, under Datasets, grades the reference solutions and needs no model/)
+		).toBeInTheDocument();
 	});
 
 	it('shows a failure to start beside Run (FBK-1)', async () => {
