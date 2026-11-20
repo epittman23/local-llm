@@ -1925,6 +1925,15 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     row = await BenchmarkTuneSweeps.get_by_id(sweep_id)
     if not row:
         raise TuneRefused(f"llama-tune: no sweep '{sweep_id}'")
+    # reclaim_stale_sweeps() above has closed every open sweep whose tuner
+    # is dead, so one still open has a live tuner in another process (a
+    # second backend on this database): resuming it would put a second
+    # tuner on the same sweep and the same GPU.
+    if row.ended_at is None:
+        raise TuneRefused(
+            f"llama-tune: sweep '{sweep_id}' is still running in another process (pid {row.pid}); "
+            'stop it there, or wait for it to end'
+        )
 
     merged = dataclasses.replace(
         defaults,
