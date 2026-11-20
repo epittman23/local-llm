@@ -285,8 +285,15 @@ describe('ServePage', () => {
 		vi.mocked(profilesApi.getProfile).mockResolvedValue(entry('qwen38', true) as never);
 		const router = renderPage('/benchmarks/serve?edit=qwen38&def.ngl=22');
 		expect(await screen.findByRole('heading', { name: 'New version of qwen38' })).toBeInTheDocument();
-		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-		fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		// The prefill is unsaved work: closing asks first, and the link stays until it is discarded (FRM-3, OVL-2).
+		expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+		expect(router.state.location.search).toContain('edit=qwen38');
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByText('Discard changes?')).toBeNull());
+		expect((screen.getByRole('textbox', { name: 'GPU layers' }) as HTMLInputElement).value).toBe('22');
+		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
 		await waitFor(() => expect(router.state.location.search).not.toContain('edit='));
 	});
 });

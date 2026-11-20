@@ -229,10 +229,13 @@ export function ProfileDefinitionForm({
 	}, [serverError]);
 
 	const changes = initial ? definitionChanges(initial, built) : [];
+	// Unsaved work is measured against what is saved, not against the form's
+	// first state: a prefilled edit (a pre-screen candidate, a Tune winner)
+	// is already unsaved, so closing it asks first (FRM-*, OVL-*).
 	const dirty =
 		(withIdentity && (identity.name !== '' || identity.displayName !== '')) ||
-		note !== initialNote ||
-		definitionChanges(start, built).length > 0;
+		note !== (prefill ? '' : initialNote) ||
+		definitionChanges(initial ?? start, built).length > 0;
 	useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
 	const label = (key: DefinitionKey) => (
