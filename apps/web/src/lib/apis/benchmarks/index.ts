@@ -841,9 +841,10 @@ export type ReportAnswer = {
 	error?: string;
 };
 
-/** The saved reports, newest first, to reopen. */
-export const listReports = async (token: string = ''): Promise<{ reports: ReportAnswer[] }> => {
-	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {
+/** The saved reports, newest first, to reopen; with `id`, only that one, however old. */
+export const listReports = async (token: string = '', id?: string): Promise<{ reports: ReportAnswer[] }> => {
+	const query = id ? `?${new URLSearchParams({ id })}` : '';
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/${query}`, {
 		method: 'GET',
 		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
 	}).catch((err) => {

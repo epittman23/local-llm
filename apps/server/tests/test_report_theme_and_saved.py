@@ -187,3 +187,29 @@ def test_saved_reports_survive_a_broken_description_and_respect_the_limit(report
 def test_no_reports_directory_lists_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(report_router, 'REPORTS_DIR', tmp_path / 'missing')
     assert asyncio.run(report_router.list_reports(limit=50, user=None)) == {'reports': []}
+
+
+def test_a_report_older_than_the_limit_reopens_by_its_id(reports_dir):
+    now = time.time()
+    for i in range(3):
+        _saved(reports_dir, f'2026-11-1{i}-r{i}', meta=None, mtime=now - i * 60)
+    oldest = '2026-11-12-r2'
+    assert oldest not in [r['date'] for r in asyncio.run(report_router.list_reports(limit=2, user=None))['reports']]
+
+    found = asyncio.run(report_router.list_reports(limit=1, report_id=oldest, user=None))['reports']
+    assert [r['date'] for r in found] == [oldest]
+    # A name that is not a saved report (or tries to climb out) finds nothing.
+    for missing in ('nope', '../reports', '.'):
+        assert asyncio.run(report_router.list_reports(report_id=missing, user=None)) == {'reports': []}
+
+
+@pytest.mark.parametrize('created_at', ['2026-11-15', None, True, [1], 0])
+def test_a_hand_edited_created_at_falls_back_to_the_file_time(reports_dir, created_at):
+    now = time.time()
+    _saved(reports_dir, '2026-11-15-cccccc', meta={'created_at': created_at}, mtime=now - 60)
+    _saved(reports_dir, '2026-11-15-dddddd', meta={'created_at': int(now)}, mtime=now - 120)
+
+    listed = asyncio.run(report_router.list_reports(limit=50, user=None))['reports']
+
+    assert [r['date'] for r in listed] == ['2026-11-15-dddddd', '2026-11-15-cccccc']
+    assert listed[1]['created_at'] == int(now - 60)

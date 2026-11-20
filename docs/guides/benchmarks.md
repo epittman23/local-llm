@@ -1175,6 +1175,10 @@ requests timed during a recorded serving run). Each report writes
 `report.json` beside `report.md` (since 2026-11-16; older reports have none
 and are still listed), and `GET /api/v1/benchmarks/report/` lists the saved
 reports, newest first, so the Report page can reopen them (`?report=<dir>`).
+The listing holds the newest 50 (`?limit=`, at most 500); `?id=<dir>` answers
+just that report, however old, which is how a link to an older one reopens.
+A report with no `report.json` is labelled by its directory name, since its
+file time is all it has.
 
 The Compare page's rankings say nothing about whether a difference they show is real. At
 `smoke` the gap between two adjacent rows is routinely one item, and this repo's

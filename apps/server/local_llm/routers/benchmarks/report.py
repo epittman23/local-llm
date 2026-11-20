@@ -13,7 +13,7 @@ import json
 import time
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -95,12 +95,18 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
     return _answer(run_dir, meta['figures'], meta)
 
 
-def _saved_reports(limit: int) -> list[dict]:
-    """The saved reports, newest first by when they were written (a directory's name only orders by day)."""
+def _saved_reports(limit: int, report_id: str | None = None) -> list[dict]:
+    """The saved reports, newest first by when they were written (a directory's name only orders by day).
+
+    `report_id` keeps only the report of that name, however old: it is matched
+    against the directory listing, never joined into a path.
+    """
     if not REPORTS_DIR.is_dir():
         return []
     found = []
     for path in REPORTS_DIR.iterdir():
+        if report_id is not None and path.name != report_id:
+            continue
         md = path / 'report.md'
         if not path.is_dir() or not md.is_file():
             continue
@@ -114,16 +120,27 @@ def _saved_reports(limit: int) -> list[dict]:
         figures = meta.get('figures')
         if not isinstance(figures, list):
             figures = sorted(p.name for p in path.glob('*.png'))
-        created = meta.get('created_at') or int(md.stat().st_mtime)
+        # A hand-edited report.json can hold anything; only a number sorts (bool is an int, and is not a time).
+        recorded = meta.get('created_at')
+        valid_time = isinstance(recorded, (int, float)) and not isinstance(recorded, bool)
+        created = int(recorded) if valid_time and recorded else int(md.stat().st_mtime)
         found.append({**_answer(path.name, figures, meta), 'created_at': created})
     found.sort(key=lambda r: r['created_at'], reverse=True)
     return found[:limit]
 
 
 @router.get('/')
-async def list_reports(limit: int = Query(50, ge=1, le=500), user=Depends(get_admin_user)):
-    """Saved reports to reopen: each one's files, filters and when it was written."""
-    return {'reports': await asyncio.to_thread(_saved_reports, limit)}
+async def list_reports(
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    report_id: Annotated[str | None, Query(alias='id')] = None,
+    user=Depends(get_admin_user),
+):
+    """Saved reports to reopen: each one's files, filters and when it was written.
+
+    `?id=` answers only that report (an empty list if there is none), so a
+    link reopens a report older than the newest `limit`.
+    """
+    return {'reports': await asyncio.to_thread(_saved_reports, limit, report_id)}
 
 
 @router.get('/files/{run_dir}/{filename}')

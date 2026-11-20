@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import * as api from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { figuresNote, ReportPage, reportLabel, reportParts } from './ReportPage';
+import { figuresNote, ReportPage, reportLabel, reportLabels, reportParts } from './ReportPage';
 
 vi.mock('@/lib/apis/benchmarks', async (importOriginal) => {
 	const real = await importOriginal<typeof import('@/lib/apis/benchmarks')>();
@@ -105,6 +105,18 @@ describe('report helpers', () => {
 			'2026-11-16-abc123 · filters not recorded · 0 figures'
 		);
 	});
+
+	it('names a report written before descriptions by its id, and tells identical labels apart (WRD-2)', () => {
+		// The server sends {} for a report with no report.json, and its file time, which copies share.
+		const old = (date: string) => ({ ...REPORT, date, filters: {}, created_at: 1_700_000_000, figures: [] });
+		expect(reportLabel(old('2026-11-14-78b104'))).toBe('2026-11-14-78b104 · filters not recorded · 0 figures');
+		const twin = { ...REPORT, date: '2026-11-16-def456' };
+		const labels = reportLabels([REPORT, twin, old('2026-11-14-78b104')]);
+		expect(labels.get('2026-11-16-abc123')).toMatch(/ · 1 figure · 2026-11-16-abc123$/);
+		expect(labels.get('2026-11-16-def456')).toMatch(/ · 1 figure · 2026-11-16-def456$/);
+		expect(labels.get('2026-11-14-78b104')).toBe('2026-11-14-78b104 · filters not recorded · 0 figures');
+		expect(new Set(labels.values()).size).toBe(3);
+	});
 });
 
 describe('ReportPage', () => {
@@ -185,6 +197,29 @@ describe('ReportPage', () => {
 		unmount();
 		renderPage('/benchmarks/report?report=2026-01-01-nope');
 		expect(await screen.findByText('This report no longer exists')).toBeInTheDocument();
+	});
+
+	it('reopens a report older than the listing by asking for it by id (B-D4)', async () => {
+		const older = { ...REPORT, date: '2026-01-02-old000' };
+		vi.mocked(api.listReports).mockImplementation(async (_token, id) => ({
+			reports: id === older.date ? [older] : [REPORT]
+		}));
+		renderPage(`/benchmarks/report?report=${older.date}`);
+		expect(
+			await screen.findByRole('heading', { name: 'Measurement report - 2026-11-16T22:49:45Z' })
+		).toBeInTheDocument();
+		expect(api.listReports).toHaveBeenCalledWith('test-token', older.date);
+		expect(screen.getByRole('combobox', { name: 'Saved report' }).textContent).toContain('smoke');
+	});
+
+	it('says when asking for one report by id failed, with a retry', async () => {
+		vi.mocked(api.listReports).mockImplementation(async (_token, id) => {
+			if (id) throw 'disk unreadable';
+			return { reports: [] };
+		});
+		renderPage('/benchmarks/report?report=2026-01-02-old000');
+		expect(await screen.findByText(/disk unreadable/)).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
 	});
 
 	it('says plainly when no results match, and keeps a server error behind Details', async () => {

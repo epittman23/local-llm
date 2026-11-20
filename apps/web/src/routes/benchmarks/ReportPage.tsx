@@ -83,13 +83,28 @@ export const reportParts = (
 	return { title, parts };
 };
 
-/** A saved report in the picker: when, what it covers, and how many figures. */
+/**
+ * A saved report in the picker: when, what it covers, and how many figures.
+ * A report written before descriptions existed (no recorded filters) is
+ * named by its own id: its file time is all there is, and copies share it.
+ */
 export const reportLabel = (r: ReportAnswer): string => {
 	const f = r.filters ?? {};
+	const recorded = Object.keys(f).length > 0;
 	const scope = [f.tier ?? 'all tiers', f.benchmark ?? 'all benchmarks', f.model ?? 'all models'].join(', ');
-	const when = r.created_at ? recordTime(r.created_at) : r.date;
-	return `${when} · ${r.filters ? scope : 'filters not recorded'} · ${r.figures.length} ${r.figures.length === 1 ? 'figure' : 'figures'}`;
+	const when = recorded && r.created_at ? recordTime(r.created_at) : r.date;
+	return `${when} · ${recorded ? scope : 'filters not recorded'} · ${r.figures.length} ${r.figures.length === 1 ? 'figure' : 'figures'}`;
 };
+
+/** Each report's label, with its id added where two would otherwise read the same (WRD-2). */
+export function reportLabels(reports: ReportAnswer[]): Map<string, string> {
+	const labels = reports.map((r) => [r.date, reportLabel(r)] as const);
+	const seen = new Map<string, number>();
+	for (const [, label] of labels) seen.set(label, (seen.get(label) ?? 0) + 1);
+	return new Map(
+		labels.map(([id, label]) => [id, (seen.get(label) ?? 0) > 1 && !label.startsWith(id) ? `${label} · ${id}` : label])
+	);
+}
 
 const pageTheme = (): 'light' | 'dark' =>
 	typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
@@ -158,8 +173,17 @@ export function ReportPage() {
 		}
 	});
 	const fresh = generateMutation.data;
-	const answer: ReportAnswer | undefined =
+	const listed: ReportAnswer | undefined =
 		reportId && fresh?.date === reportId ? fresh : saved.find((r) => r.date === reportId);
+	// A report older than the listing's newest 50 is asked for by its id.
+	const oneQuery = useQuery({
+		queryKey: ['reports', 'one', reportId],
+		queryFn: () => listReports(token, reportId ?? ''),
+		enabled: !!token && !!reportId && savedQuery.isSuccess && !listed
+	});
+	const answer: ReportAnswer | undefined = listed ?? oneQuery.data?.reports.find((r) => r.date === reportId);
+	const options = answer && !saved.some((r) => r.date === answer.date) ? [...saved, answer] : saved;
+	const labels = reportLabels(options);
 
 	const objectUrls = useRef<string[]>([]);
 	useEffect(
@@ -299,7 +323,7 @@ export function ReportPage() {
 				</div>
 			)}
 
-			{saved.length > 0 && (
+			{options.length > 0 && (
 				<div className="flex min-w-0 flex-col gap-1">
 					<Label htmlFor="report-saved">Saved report</Label>
 					<Select value={answer ? answer.date : ''} onValueChange={(v) => setParam({ report: v }, true)}>
@@ -307,9 +331,9 @@ export function ReportPage() {
 							<SelectValue placeholder={`Open one of ${saved.length} saved reports`} />
 						</SelectTrigger>
 						<SelectContent>
-							{saved.map((r) => (
+							{options.map((r) => (
 								<SelectItem key={r.date} value={r.date}>
-									{reportLabel(r)}
+									{labels.get(r.date)}
 								</SelectItem>
 							))}
 						</SelectContent>
@@ -322,10 +346,12 @@ export function ReportPage() {
 					Generating the report… this can take a while for large runs.
 				</p>
 			) : reportId && !answer ? (
-				savedQuery.isLoading ? (
+				savedQuery.isLoading || oneQuery.isLoading ? (
 					<p className="text-foreground-muted my-6">Loading the saved report…</p>
 				) : savedQuery.isError ? (
 					<LoadFailed what="saved reports" error={savedQuery.error} onRetry={() => void savedQuery.refetch()} />
+				) : oneQuery.isError ? (
+					<LoadFailed what="the saved report" error={oneQuery.error} onRetry={() => void oneQuery.refetch()} />
 				) : (
 					<div className="my-6 flex flex-col items-start gap-2">
 						<p className="text-title font-title">This report no longer exists</p>
