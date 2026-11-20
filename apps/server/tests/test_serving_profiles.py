@@ -177,6 +177,8 @@ def test_valid_definition_round_trips(valid):
         ({'extra': ['--chat-template-kwargs', '{"reasoning_effort":"high"}']}, 'reasoning_effort_default'),
         ({'colour': 'blue'}, 'unknown'),
         ({'spec': ['off']}, 'leave spec empty'),
+        ({'spec': ['OFF']}, 'leave spec empty'),
+        ({'spec': ['Off']}, 'leave spec empty'),
         ({'spec': ['--spec-type', 'draft-mtp', '--host', '0.0.0.0']}, "'--host' is not a speculative"),
     ],
     ids=[
@@ -187,6 +189,8 @@ def test_valid_definition_round_trips(valid):
         'reasoning-in-extra',
         'unknown',
         'spec-off',
+        'spec-OFF',
+        'spec-Off',
         'host-in-spec',
     ],
 )

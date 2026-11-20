@@ -273,7 +273,7 @@ def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     # 'off' is an override's word for "no speculation" (Overrides.from_env),
     # not an argument: stored, it would reach llama-server as a bare `off`,
     # which refuses to start (docs/history/bug-review-2026-09-27.md M6).
-    if spec == ['off']:
+    if [a.lower() for a in spec] == ['off']:
         raise ProfileError("speculation is off when its arguments are empty; leave spec empty instead of 'off'")
     # The same rule as an override's (resolve); checked on save, so versions already stored are unaffected.
     check_speculative_args(spec)

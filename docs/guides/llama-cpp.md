@@ -200,7 +200,7 @@ profile's flags, empty/`off` turns them off, anything else replaces them),
 now a typed field instead of an environment variable. A stored profile
 version's `spec` holds arguments only: speculation is off when it is empty,
 and a literal `off` there is refused when the version is saved, since it would
-reach `llama-server` as a bare argument. Both an
+reach `llama-server` as a bare argument (in any case: `OFF` too). Both an
 override's `spec` and a stored version's hold only speculative-decoding options
 (since 2026-11-20): every token that starts with `-` and is not a number must be
 one of llama.cpp build 11875's speculative options (`--spec-*`, `--draft*`,
