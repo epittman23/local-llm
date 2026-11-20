@@ -335,8 +335,19 @@ describe('ServePage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
 		await waitFor(() => expect(screen.queryByText('Discard changes?')).toBeNull());
 		expect((screen.getByRole('textbox', { name: 'GPU layers' }) as HTMLInputElement).value).toBe('22');
+		// Escape on the dialog and Cancel ask first too (item 12 names both).
+		fireEvent.keyDown(screen.getByRole('dialog', { name: 'New version of qwen38' }), { key: 'Escape' });
+		expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+		expect(router.state.location.search).toContain('edit=qwen38');
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByText('Discard changes?')).toBeNull());
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+		expect(router.state.location.search).toContain('edit=qwen38');
+		// Cancel goes back to the list; the link comes off when the dialog closes.
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByRole('heading', { name: 'Manage profiles' })).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-		fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
 		await waitFor(() => expect(router.state.location.search).not.toContain('edit='));
 	});
 });
