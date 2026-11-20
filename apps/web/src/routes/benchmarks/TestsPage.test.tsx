@@ -357,8 +357,9 @@ describe('TestsPage target, tiers, progress and datasets (#918, #938, #1047, #10
 		const bar = await screen.findByRole('progressbar', { name: 'Run progress' });
 		await waitFor(() => expect(bar.getAttribute('aria-valuenow')).toBe('2'));
 		expect(bar.getAttribute('aria-valuetext')).toBe('2 of 4 items');
-		expect(screen.getByText(/2 of 4 items · 1 passed \(50%\)/)).toBeInTheDocument();
-		expect(screen.getByText('Final: 1 of 2 passed')).toBeInTheDocument();
+		// One pass rate, skipped items left out, in the progress line and the final line alike.
+		expect(screen.getByText(/2 of 4 items · 1 of 2 passed \(50%\)/)).toBeInTheDocument();
+		expect(screen.getByText('Final: 1 of 2 passed (50%)')).toBeInTheDocument();
 		expect(screen.getByText('Cancelled')).toBeInTheDocument();
 		expect(screen.getByRole('link', { name: 'Open in Answers' }).getAttribute('href')).toBe(
 			'/benchmarks/answers?run=smoke-1'

@@ -111,6 +111,14 @@ export const runProgress = (items: Graded[], total: number, elapsedMs: number) =
 	return { done, total, passed, skipped, attempted, rate, leftMs: left };
 };
 
+/**
+ * A pass rate, said one way wherever it is shown: passes of the items
+ * attempted, skipped items left out of both ("7 of 11 passed (64%)").
+ * The server's `attempted` already leaves skipped items out.
+ */
+export const passText = (passed: number, attempted: number, word = 'passed'): string =>
+	`${passed} of ${attempted} ${word}${attempted ? ` (${Math.round((passed / attempted) * 100)}%)` : ''}`;
+
 /** The fetch button says what it will download: the ticked increments and their size (#1048). */
 export const fetchLabel = (increments: WindowIncrement[], chosen: string[]): string => {
 	const picked = increments.filter((inc) => chosen.includes(inc.name));

@@ -277,7 +277,7 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await expect(page.getByText('HumanEval/0')).toBeVisible();
 	await expect(page.getByText('HumanEval/1')).toBeVisible();
 	await expect(page.getByText('AssertionError')).toBeVisible();
-	await expect(page.getByText('Final: 1 of 2 passed')).toBeVisible();
+	await expect(page.getByText('Final: 1 of 2 passed (50%)')).toBeVisible();
 });
 
 // The Tests page's dataset actions (#141): each POSTs, then follows the one Tests stream.

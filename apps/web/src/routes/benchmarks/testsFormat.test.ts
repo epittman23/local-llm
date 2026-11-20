@@ -154,6 +154,13 @@ describe('tiers, durations, progress and the fetch label', () => {
 		expect(runProgress([], 10, 0)).toMatchObject({ done: 0, rate: null, leftMs: null });
 	});
 
+	it('says a pass rate one way: passes of the attempted items, skipped left out', async () => {
+		const { passText } = await import('./testsFormat');
+		expect(passText(7, 11)).toBe('7 of 11 passed (64%)');
+		expect(passText(0, 0)).toBe('0 of 0 passed');
+		expect(passText(3, 4, 'reference solutions pass')).toBe('3 of 4 reference solutions pass (75%)');
+	});
+
 	it('says what a fetch downloads', async () => {
 		const { fetchLabel } = await import('./testsFormat');
 		const inc = (name: string, bytes: number) => ({ name, bytes, items: 1, first: '', last: '', fetched: false });

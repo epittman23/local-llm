@@ -37,6 +37,7 @@ import {
 	incrementLabel,
 	missingIncrements,
 	orderTiers,
+	passText,
 	runProgress,
 	TIER_SIZE,
 	windowError
@@ -742,17 +743,14 @@ export function TestsPage() {
 						</div>
 					)}
 					<p className="text-dense tabular-nums">
-						{progress.done} of {progress.total || '–'} items · {progress.passed} {passWord}
-						{progress.rate !== null && ` (${Math.round(progress.rate * 100)}%)`}
-						{progress.skipped + skipped > 0 && ` · ${progress.skipped + skipped} skipped`}
+						{progress.done} of {progress.total || '–'} items · {passText(progress.passed, progress.attempted, passWord)}
+						{progress.skipped + skipped > 0 && ` · ${progress.skipped + skipped} skipped, not counted`}
 						{startedAt !== null && ` · ${formatDuration(now - startedAt)} elapsed`}
 						{running && progress.leftMs !== null && ` · about ${formatDuration(progress.leftMs)} left`}
 						{runWindow && ` · release-date window ${runWindow}`}
 					</p>
 					{done?.attempted !== undefined && (
-						<p className="text-dense">
-							Final: {done.passed} of {done.attempted} {passWord}
-						</p>
+						<p className="text-dense">Final: {passText(done.passed ?? 0, done.attempted, passWord)}</p>
 					)}
 
 					<div className="flex items-center gap-2 text-dense">
