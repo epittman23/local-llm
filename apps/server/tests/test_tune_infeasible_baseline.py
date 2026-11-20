@@ -16,6 +16,9 @@ Run from apps/server:
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
+
+import pytest
 
 from local_llm.benchmarks.tuning import tune
 from local_llm.benchmarks.tuning.tune_schedule import Candidate
@@ -133,3 +136,23 @@ def test_the_other_verdicts_are_unchanged(monkeypatch):
     assert sweep.verdict_for(blocked=['a', 'b'], winner=alive[1]) == ('indeterminate', 'a; b')
     sweep.ended_reason = 'budget'
     assert sweep.verdict_for(blocked=[], winner=None) == ('incomplete', 'the time budget ran out mid-sweep')
+
+
+def test_resume_refuses_a_sweep_still_open_in_another_process(monkeypatch):
+    """After the stale reclaim, an open sweep has a live tuner elsewhere: never start a second one on it."""
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def get_by_id(sweep_id):
+        return SimpleNamespace(sweep_id=sweep_id, ended_at=None, pid=4242)
+
+    async def never(*a, **k):
+        raise AssertionError('a second tuner was created')
+
+    monkeypatch.setattr(tune, 'reclaim_stale_sweeps', nothing)
+    monkeypatch.setattr(tune, 'reclaim_stale_runs', nothing)
+    monkeypatch.setattr(tune.BenchmarkTuneSweeps, 'get_by_id', staticmethod(get_by_id))
+    monkeypatch.setattr(tune.Sweep, 'create', staticmethod(never))
+    with pytest.raises(tune.TuneRefused, match='still running in another process'):
+        asyncio.run(tune.resume_sweep('s-open', tune.SweepOptions(), session=None))

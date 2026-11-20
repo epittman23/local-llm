@@ -181,6 +181,49 @@ describe('ServePage', () => {
 		expect(screen.getByRole('combobox', { name: 'Speculative decoding' })).not.toBeDisabled();
 	});
 
+	it('never takes flags other than speculative ones from a link, and names them instead', async () => {
+		const router = renderPage('/benchmarks/serve?profile=qwen38&spec=--host+0.0.0.0');
+		await waitFor(() => expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38' }));
+		const select = screen.getByRole('combobox', { name: 'Speculative decoding' });
+		expect(select.textContent).toBe('Default (the profile’s flags)');
+		expect(screen.getByText('Not taken from the link')).toBeInTheDocument();
+		expect(screen.getByText('--host 0.0.0.0')).toBeInTheDocument();
+		expect(screen.queryByText(/From the link/)).toBeNull();
+		fireEvent.keyDown(select, { key: 'Enter' });
+		expect(screen.queryByRole('option', { name: '--host 0.0.0.0' })).toBeNull();
+		fireEvent.keyDown(screen.getByRole('option', { name: 'Off' }), { key: 'Escape' });
+		expect(router.state.location.search).not.toContain('spec=');
+		for (const call of vi.mocked(api.previewServe).mock.calls) expect(call[1]).not.toHaveProperty('spec');
+		vi.mocked(api.startServe).mockResolvedValue({ started: true, warning: null } as never);
+		vi.mocked(api.streamServe).mockResolvedValue(stream([]));
+		fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+		await waitFor(() => expect(api.startServe).toHaveBeenCalledWith('test-token', { profile: 'qwen38' }));
+	});
+
+	it("drops a link's flags on another profile, and takes them back on the link's own", async () => {
+		const flags = '--spec-type draft-mtp --spec-draft-n-max 3';
+		const router = renderPage(`/benchmarks/serve?profile=qwen38&spec=${encodeURIComponent(flags)}`);
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38', spec: flags })
+		);
+		const pick = async (name: RegExp) => {
+			const picker = screen.getByRole('combobox', { name: 'Profile' });
+			await waitFor(() => expect(picker).not.toBeDisabled());
+			fireEvent.keyDown(picker, { key: 'Enter' });
+			fireEvent.click(await screen.findByRole('option', { name }));
+		};
+		await pick(/^qwen25c/);
+		await waitFor(() => expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen25c' }));
+		expect(screen.getByRole('combobox', { name: 'Speculative decoding' }).textContent).toBe('Default (off)');
+		expect(screen.queryByText(/From the link/)).toBeNull();
+		expect(router.state.location.search).not.toContain('spec=');
+		await pick(/^qwen38/);
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38', spec: flags })
+		);
+		expect(new URLSearchParams(router.state.location.search).get('spec')).toBe(flags);
+	});
+
 	it('checks an override when it is left, and Start sends nothing while one is wrong (FRM-2)', async () => {
 		renderPage();
 		const ngl = await screen.findByRole('textbox', { name: /GPU layers/ });
@@ -292,8 +335,19 @@ describe('ServePage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
 		await waitFor(() => expect(screen.queryByText('Discard changes?')).toBeNull());
 		expect((screen.getByRole('textbox', { name: 'GPU layers' }) as HTMLInputElement).value).toBe('22');
+		// Escape on the dialog and Cancel ask first too (item 12 names both).
+		fireEvent.keyDown(screen.getByRole('dialog', { name: 'New version of qwen38' }), { key: 'Escape' });
+		expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+		expect(router.state.location.search).toContain('edit=qwen38');
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		await waitFor(() => expect(screen.queryByText('Discard changes?')).toBeNull());
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+		expect(router.state.location.search).toContain('edit=qwen38');
+		// Cancel goes back to the list; the link comes off when the dialog closes.
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(await screen.findByRole('heading', { name: 'Manage profiles' })).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-		fireEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
 		await waitFor(() => expect(router.state.location.search).not.toContain('edit='));
 	});
 });

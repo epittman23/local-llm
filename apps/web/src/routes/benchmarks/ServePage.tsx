@@ -30,6 +30,7 @@ import { routePaths } from '@/routes/routePaths';
 import { ChoiceSelect, FlagLabel } from './fields';
 import { ProfilesPanel } from './ProfilesPanel';
 import { argvToText, type DefinitionKey, FIELD_META, isEditParam, showValue } from './profileForm';
+import { speculativeOnly } from './resultLinks';
 import { type LogLine, ServeLog } from './ServeLog';
 
 const CHECK_POLL_MS = 5000;
@@ -119,8 +120,15 @@ export function ServePage() {
 	const [reasoning, setReasoning] = useState(() => params.get('reasoning') ?? '');
 	// '' keeps the profile's flags, 'off' drops them, anything else (a Tune
 	// winner's link) replaces them: the three states Start takes (llama-cpp.md).
-	const [spec, setSpec] = useState(() => (params.get('spec') ?? '').trim());
-	const [specFromLink] = useState(() => (spec === 'off' ? '' : spec));
+	// A link's flags are taken only when they are all speculative options
+	// (the server refuses the rest with a 422): `spec=--host 0.0.0.0` is
+	// named in a notice and never becomes an option, let alone the chosen one.
+	const [linkSpec] = useState(() => (params.get('spec') ?? '').trim());
+	const [refusedLinkSpec] = useState(() => (speculativeOnly(linkSpec) ? '' : linkSpec));
+	const [spec, setSpec] = useState(() => (refusedLinkSpec ? '' : linkSpec));
+	const [specFromLink] = useState(() => (linkSpec === 'off' || refusedLinkSpec ? '' : linkSpec));
+	// The profile a link's flags were chosen for: another model may have no use for them (MTP needs its head).
+	const [linkProfile, setLinkProfile] = useState(() => params.get('profile') ?? '');
 	const [actionError, setActionError] = useState<{ title: string; reason: string } | null>(null);
 	const [profilesPanelOpen, setProfilesPanelOpen] = useState(() => params.has('edit'));
 
@@ -149,6 +157,8 @@ export function ServePage() {
 		const fallback = list.find((e) => e.profile.is_default)?.profile.name ?? list[0]?.profile.name;
 		const name = fromCheck && list.some((e) => e.profile.name === fromCheck) ? fromCheck : fallback;
 		if (name) setSelectedProfile(name);
+		// A link with flags and no profile meant whichever profile it opens on.
+		if (name) setLinkProfile((was) => was || name);
 	}, [checkQuery.data, profilesQuery.data]);
 
 	// While a server runs, the form shows its profile and is locked (#976).
@@ -170,12 +180,17 @@ export function ServePage() {
 	});
 	const run = running ? (liveQuery.data?.run ?? null) : null;
 
+	// A link's flags hold only on the link's profile: after a switch they are
+	// neither shown, sent nor kept in the address, and they come back on a switch back.
+	const linkApplies = !!specFromLink && selectedProfile === linkProfile;
+	const shownSpec = spec === specFromLink && !linkApplies ? '' : spec;
+
 	// The address follows the form (NAV-1), replacing the entry: changing a field is not a destination.
 	useEffect(() => {
 		setParams(
 			(current) => {
 				const next = new URLSearchParams(current);
-				const values: Record<string, string> = { profile: selectedProfile, ...numbers, ot, reasoning, spec };
+				const values: Record<string, string> = { profile: selectedProfile, ...numbers, ot, reasoning, spec: shownSpec };
 				for (const [key, value] of Object.entries(values)) {
 					if (value.trim()) next.set(key, value.trim());
 					else next.delete(key);
@@ -184,7 +199,7 @@ export function ServePage() {
 			},
 			{ replace: true }
 		);
-	}, [selectedProfile, numbers, ot, reasoning, spec, setParams]);
+	}, [selectedProfile, numbers, ot, reasoning, shownSpec, setParams]);
 
 	const problems: Partial<Record<NumberField, string>> = {};
 	for (const field of NUMBER_FIELDS) {
@@ -197,7 +212,7 @@ export function ServePage() {
 	const noThinking = !!definition && !definition.reasoning_effort_default;
 	const noSpec = !!definition && !(definition.spec ?? []).length;
 	// Flags from a link are a one-off override even on a profile with none of its own.
-	const linkedSpec = specFromLink && spec === specFromLink ? spec : '';
+	const linkedSpec = linkApplies && shownSpec === specFromLink ? shownSpec : '';
 
 	const form = useMemo<ServeStartForm>(() => {
 		const out: ServeStartForm = {};
@@ -205,9 +220,9 @@ export function ServePage() {
 		for (const field of NUMBER_FIELDS) if (numbers[field].trim()) out[field] = Number(numbers[field]);
 		if (ot.trim()) out.ot = ot.trim();
 		if (reasoning && !noThinking) out.reasoning = reasoning;
-		if (linkedSpec || (spec && !noSpec)) out.spec = spec;
+		if (linkedSpec || (shownSpec && !noSpec)) out.spec = shownSpec;
 		return out;
-	}, [selectedProfile, numbers, ot, reasoning, spec, linkedSpec, noThinking, noSpec]);
+	}, [selectedProfile, numbers, ot, reasoning, shownSpec, linkedSpec, noThinking, noSpec]);
 
 	// B-D5: what Start would launch, while stopped and the form is valid.
 	const previewForm = useDebounced(form, PREVIEW_DEBOUNCE_MS);
@@ -483,18 +498,27 @@ export function ServePage() {
 								{(props) => (
 									<ChoiceSelect
 										{...props}
-										value={noSpec && !linkedSpec ? '' : spec}
+										value={noSpec && !linkedSpec ? '' : shownSpec}
 										onChange={setSpec}
-										disabled={locked || (noSpec && !specFromLink)}
+										disabled={locked || (noSpec && !linkApplies)}
 										options={[
 											['', noSpec ? 'Default (off)' : 'Default (the profile’s flags)'],
 											...(noSpec ? [] : [['off', 'Off'] as const]),
-											...(specFromLink ? [[specFromLink, specFromLink] as const] : [])
+											...(linkApplies ? [[specFromLink, specFromLink] as const] : [])
 										]}
 									/>
 								)}
 							</FormField>
 						</fieldset>
+						{refusedLinkSpec && (
+							<StatusNotice tone="warning" title="Not taken from the link">
+								<p>
+									<span className="font-mono break-all">{refusedLinkSpec}</span> is not speculative decoding, so Serve
+									leaves it out. A flag like that needs a profile version: add it to the profile’s extra arguments under
+									Manage profiles.
+								</p>
+							</StatusNotice>
+						)}
 					</section>
 				</div>
 			)}

@@ -85,7 +85,8 @@ been measured on either build yet.
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and
   request timing into the app's own Postgres. Out-of-range overrides are a
-  422, and the read-only `GET /benchmarks/serve/preview` shows the command
+  422, as is a `spec` override holding anything but speculative-decoding
+  options (since 2026-11-20), and the read-only `GET /benchmarks/serve/preview` shows the command
   and `config_id` a Start would use (since 2026-11-16).
 - **Text completion**: the Playground's Completions tab goes through the
   backend's `POST /openai/completions` to the connection's OpenAI-compatible

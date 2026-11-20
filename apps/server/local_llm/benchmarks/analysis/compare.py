@@ -397,12 +397,24 @@ def block_words(key: tuple, names: dict[str, str]) -> str:
     return words
 
 
+#: The adapters' names, read once: the adapter files ship with the code.
+_names: dict[str, str] | None = None
+
+
 def _benchmark_names() -> dict[str, str]:
-    """Each benchmark's name as its authors write it (the adapter's `name`); {} if the adapters cannot be read."""
-    try:
-        return {bench: str(a.get('name') or bench) for bench, a in load_adapters().items()}
-    except (OSError, ValueError):
-        return {}
+    """Each benchmark's name as its authors write it (the adapter's `name`); {} if the adapters cannot be read.
+
+    Any failure is caught, because the names only word a note: an adapter of
+    an unexpected shape must not fail /compare. A failed read is not kept,
+    so the next call tries again.
+    """
+    global _names
+    if _names is None:
+        try:
+            _names = {bench: str(a.get('name') or bench) for bench, a in load_adapters().items()}
+        except Exception:
+            return {}
+    return _names
 
 
 # ---------------------------------------------------------------------------

@@ -218,10 +218,44 @@ describe('ComparePage', () => {
 		expect(screen.queryByText('Loading the comparison')).toBeNull();
 	});
 
-	it('falls back to all tiers for a tier the server does not offer, and rewrites the address (NAV-3)', async () => {
+	it('falls back to all tiers for a tier the server neither offers nor has results for, and rewrites the address (NAV-3)', async () => {
+		vi.mocked(api.getCompare).mockImplementation(
+			async (_token, { tier }) => (tier ? { rows: [], derived: [], notes: [] } : configBody()) as never
+		);
 		renderPage('/benchmarks/compare?tier=nightly&by=serving');
 		await waitFor(() => expect(location).toBe('/benchmarks/compare?by=serving'));
 		expect(screen.getByRole('combobox', { name: 'Tier' })).toHaveTextContent('All tiers');
+	});
+
+	it("keeps a tier the Tests options don't list while it still has results, and offers it", async () => {
+		vi.mocked(api.getCompare).mockResolvedValue({ ...configBody(), rows: [row({ tier: 'quick' })] } as never);
+		renderPage('/benchmarks/compare?tier=quick');
+		expect(await screen.findByRole('region', { name: /^Configurations/ })).toBeTruthy();
+		expect(api.getCompare).toHaveBeenCalledWith('test-token', { by: 'config', tier: 'quick', baseline: null });
+		const select = screen.getByRole('combobox', { name: 'Tier' });
+		expect(select).toHaveTextContent('quick');
+		expect(location).toBe('/benchmarks/compare?tier=quick');
+		fireEvent.keyDown(select, { key: 'Enter' });
+		expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['All tiers', 'smoke', 'quick']);
+	});
+
+	it("never shows the old baseline's differences under a new one while it loads", async () => {
+		vi.mocked(api.getCompare).mockResolvedValueOnce(configBody([{ vs_baseline: 0.1 }, { vs_baseline: 0 }]) as never);
+		let land: (value: unknown) => void = () => {};
+		vi.mocked(api.getCompare).mockReturnValueOnce(new Promise((resolve) => (land = resolve)) as never);
+		renderPage('/benchmarks/compare?baseline=bd04a851');
+		const region = await screen.findByRole('region', { name: 'Configurations, HumanEval+, smoke' });
+		fireEvent.click(within(region).getByRole('button', { name: 'Set as baseline, 47714ce1' }));
+		await waitFor(() => expect(location).toBe('/benchmarks/compare?baseline=47714ce1'));
+		let rows = within(region).getAllByRole('row');
+		expect(rows[1]).toHaveAttribute('data-baseline');
+		// bd04a851's 0.0 was against itself: while the new numbers load, it shows none.
+		expect(within(rows[2]).getByText('Loading')).toBeTruthy();
+		expect(rows[1]).not.toHaveTextContent('+10.0');
+		land(configBody([{ vs_baseline: 0 }, { vs_baseline: -0.1 }]));
+		await waitFor(() => expect(within(region).getAllByRole('row')[2]).toHaveTextContent('-10.0'));
+		rows = within(region).getAllByRole('row');
+		expect(within(rows[2]).queryByText('Loading')).toBeNull();
 	});
 
 	it('says when the baseline in the address is not in the results, and clears it (#1044)', async () => {

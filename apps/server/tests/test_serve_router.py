@@ -155,6 +155,20 @@ def test_start_400_on_profile_error(client, monkeypatch):
     assert _StubServeProcess.instances == []
 
 
+@pytest.mark.parametrize('spec', ['--host 0.0.0.0', '--spec-type draft-mtp --port 9999', '--log_file /tmp/x'])
+def test_start_422_on_a_non_speculative_spec_and_constructs_no_server(client, monkeypatch, spec):
+    """A link's spec reaches Start as text; a flag other than a speculative one must never reach llama-server."""
+
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    resp = client.post('/start', json={'profile': 'qwen25c', 'spec': spec})
+    assert resp.status_code == 422
+    assert spec.split()[-2] in resp.json()['detail']
+    assert _StubServeProcess.instances == []
+
+
 def test_start_400_when_serveprocess_fails_to_start(client, monkeypatch):
     async def fake_get_by_name(name, db=None):
         return _entry(name=name)
@@ -421,6 +435,12 @@ def test_preview_refuses_what_start_refuses(client, real_launcher):
     assert client.get('/preview', params={'profile': 'qwen25c', 'ctx': '1.5'}).status_code == 422
     assert client.get('/preview', params={'profile': 'qwen25c', 'spec': '--parallel 2'}).status_code == 400
     assert client.get('/preview', params={'profile': 'qwen25c', 'bogus': '1'}).status_code == 422
+
+
+def test_preview_refuses_a_non_speculative_spec_with_a_plain_reason(client, real_launcher):
+    resp = client.get('/preview', params={'profile': 'qwen25c', 'spec': '--host 0.0.0.0'})
+    assert resp.status_code == 422
+    assert resp.json()['detail'].startswith("'--host' is not a speculative-decoding option")
 
 
 def test_preview_404_when_profile_missing(client, real_launcher, monkeypatch):

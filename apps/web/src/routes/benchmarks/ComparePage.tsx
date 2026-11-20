@@ -102,12 +102,7 @@ export function ComparePage() {
 		enabled: !!token
 	});
 	const tiers: string[] = tierOptionsQuery.data?.tiers ?? [];
-	// A tier the server doesn't offer (an old link, `?tier=nightly`) would
-	// leave the select blank: fall back to all tiers and say so in the address (NAV-3).
-	const unknownTier = tierOptionsQuery.isSuccess && tier !== ALL_TIER && !tiers.includes(tier);
-	useEffect(() => {
-		if (unknownTier) setParam('tier', null);
-	});
+	const offeredTier = tier === ALL_TIER || tiers.includes(tier);
 
 	const compareQuery = useQuery({
 		queryKey: ['compare', by, tier, by === 'config' ? baseline : ''],
@@ -126,6 +121,32 @@ export function ComparePage() {
 	const baselineSelect = useRef<HTMLButtonElement>(null);
 
 	const data = compareQuery.data;
+	const isEmpty =
+		by === 'config'
+			? (data?.blocks ?? []).length === 0
+			: by === 'serving'
+				? (data?.rows ?? []).length === 0 && (data?.derived ?? []).length === 0
+				: (data?.rows ?? []).length === 0;
+	// The Tests options list the suite files, but results are filed under a
+	// suite's `id`, which nothing checks against its file name, and they
+	// outlive a suite that is renamed or removed: a tier the options lack is
+	// kept, and offered, while it has results. One with none (an old link,
+	// `?tier=nightly`) would leave the select blank: fall back to all tiers
+	// and say so in the address (NAV-3).
+	const unknownTier =
+		tierOptionsQuery.isSuccess && !offeredTier && compareQuery.isSuccess && !compareQuery.isPlaceholderData && isEmpty;
+	useEffect(() => {
+		if (!unknownTier) return;
+		setParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				next.delete('tier');
+				return next;
+			},
+			{ replace: true }
+		);
+	}, [unknownTier, setParams]);
+	const tierChoices = offeredTier ? tiers : [...tiers, tier];
 	const notes = [...new Set<string>(data?.notes ?? [])].map(parseNote);
 	const warnings = notes.filter((note) => note.tone === 'warning');
 	const readingNotes = notes.filter((note) => note.tone === 'note');
@@ -144,13 +165,6 @@ export function ComparePage() {
 		onSuccess: (result) => toast.success(`Exported ${result.exported} answers to ${result.directory}`),
 		onError: (error) => toastFailure("Couldn't export the answers. Check the run id and try again.", error)
 	});
-
-	const isEmpty =
-		by === 'config'
-			? (config?.blocks ?? []).length === 0
-			: by === 'serving'
-				? (data?.rows ?? []).length === 0 && (data?.derived ?? []).length === 0
-				: (data?.rows ?? []).length === 0;
 
 	const renderView = () => {
 		if (isEmpty) {
@@ -174,6 +188,7 @@ export function ComparePage() {
 					blocks={config?.blocks ?? []}
 					rows={configRows}
 					baseline={baselineKnown ? baseline : null}
+					baselinePending={compareQuery.isPlaceholderData}
 					onBaseline={(id) => {
 						setParam('baseline', id);
 						// The pressed button goes with its row's new state: focus moves to
@@ -257,7 +272,7 @@ export function ComparePage() {
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value={ALL_TIER}>All tiers</SelectItem>
-								{tiers.map((t) => (
+								{tierChoices.map((t) => (
 									<SelectItem key={t} value={t}>
 										{t}
 									</SelectItem>

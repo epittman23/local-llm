@@ -32,7 +32,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from local_llm.benchmarks.serving import env_profile, launcher
 from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
-from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ResolvedConfig, resolve
+from local_llm.benchmarks.serving.profiles import (
+    Overrides,
+    ProfileError,
+    ResolvedConfig,
+    SpeculativeArgsError,
+    resolve,
+)
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.benchmarks.configs import BenchmarkRuns
 from local_llm.models.benchmarks.profiles import BenchmarkProfileEntry, BenchmarkProfiles
@@ -136,6 +142,10 @@ async def _resolve_form(form_data: ServeStartForm) -> tuple[BenchmarkProfileEntr
     env_like = {var: str(values[field]) for field, var in _OVERRIDE_ENV.items() if values[field] is not None}
     try:
         return entry, resolve(entry.to_serving_profile(), Overrides.from_env(env_like))
+    except SpeculativeArgsError as e:
+        # A value the form cannot hold, refused like the ranges above (a
+        # link's `spec=--host 0.0.0.0` must never reach the command line).
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 

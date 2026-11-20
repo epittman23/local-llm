@@ -99,8 +99,8 @@ const VERDICTS: Record<string, { label: string; tone: Tone }> = {
 	indeterminate: { label: 'No verdict', tone: 'warning' },
 	incomplete: { label: 'Incomplete', tone: 'warning' },
 	running: { label: 'In progress', tone: 'secondary' },
-	// No verdict, and no sweep task alive in this backend: it stopped before the end (a backend that died mid-sweep).
-	interrupted: { label: 'Stopped before the end', tone: 'warning' }
+	// No verdict, and no sweep task alive in this backend: a backend that died mid-sweep cut it off.
+	interrupted: { label: 'Interrupted', tone: 'warning' }
 };
 
 /** A round's stage, a pause's cause and its outcome in words (WRD-2; models/benchmarks/tune.py). */
@@ -521,7 +521,11 @@ export function TunePage() {
 					...recentSweeps
 				]
 			: recentSweeps;
-	const resumable = hasSweep && status.resumable === true && !running;
+	// The server calls only an `incomplete` sweep resumable, but resume_sweep() also takes one a dead
+	// backend left without a verdict (it closes it first, and refuses one whose tuner is alive elsewhere):
+	// the banner's "interrupted".
+	const interrupted = hasSweep && !running && !status.verdict;
+	const resumable = hasSweep && !running && (status.resumable === true || interrupted);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -799,9 +803,11 @@ export function TunePage() {
 						help={
 							running
 								? 'Stop sweep loses the round in progress; the sweep can be resumed later.'
-								: resumable
-									? 'This sweep stopped before the end: Resume sweep runs the rounds left.'
-									: 'Resume sweep is for a sweep that stopped before the end, and Stop sweep for one that is running.'
+								: interrupted
+									? 'Resume sweep continues this interrupted sweep.'
+									: resumable
+										? 'This sweep stopped before the end: Resume sweep runs the rounds left.'
+										: 'Resume sweep is for a sweep that stopped before the end, and Stop sweep for one that is running.'
 						}
 					/>
 				)}
@@ -868,7 +874,7 @@ export function TunePage() {
 						<StatTile label="Benchmark" value={status.benchmark ?? 'All benchmarks'} />
 						<StatTile label="Budget" value={BUDGETS[status.budget_mode ?? '']?.label ?? status.budget_mode ?? NONE} />
 						<StatTile label="Items" value={status.item_count ?? NONE} />
-						<StatTile label="Resumable" value={status.resumable ? 'Yes' : 'No'} />
+						<StatTile label="Resumable" value={resumable ? 'Yes' : 'No'} />
 						<StatTile label="Time spent cooling" value={fmtPercent(status.time?.cooling_share)} />
 						<StatTile label="Pauses" value={status.time?.pauses ?? (status.pauses ?? []).length} />
 					</div>
@@ -1098,7 +1104,8 @@ export function TunePage() {
  */
 function ResultBanner({ status }: { status: TuneStatus }) {
 	const running = status.running === true;
-	const verdictKey: string = running ? 'running' : (status.verdict ?? 'running');
+	// No verdict and no sweep task alive here: the backend running it stopped, so it is not in progress.
+	const verdictKey: string = running ? 'running' : (status.verdict ?? 'interrupted');
 	const verdict = VERDICTS[verdictKey] ?? { label: verdictKey, tone: 'secondary' as Tone };
 	const winner = (status.candidates ?? []).find((c) => c.status === 'winner');
 	const baseline = (status.candidates ?? []).find((c) => c.is_baseline);
@@ -1116,7 +1123,9 @@ function ResultBanner({ status }: { status: TuneStatus }) {
 					? 'The sweep stopped before the end'
 					: verdictKey === 'indeterminate'
 						? 'The sweep could not decide'
-						: 'No verdict recorded';
+						: verdictKey === 'interrupted'
+							? 'The backend stopped during the sweep'
+							: 'No verdict recorded';
 
 	return (
 		<section
@@ -1130,7 +1139,11 @@ function ResultBanner({ status }: { status: TuneStatus }) {
 				{adoption?.reduces_context && <StatusBadge label="Reduces context" tone="warning" />}
 			</div>
 
-			{(verdictKey === 'adopted' || verdictKey === 'incomplete' || status.guard || status.verdict_reason) && (
+			{(verdictKey === 'adopted' ||
+				verdictKey === 'incomplete' ||
+				verdictKey === 'interrupted' ||
+				status.guard ||
+				status.verdict_reason) && (
 				<div className="text-dense flex flex-col gap-1">
 					{verdictKey === 'adopted' && winner && (
 						<p>
@@ -1146,6 +1159,12 @@ function ResultBanner({ status }: { status: TuneStatus }) {
 						</p>
 					)}
 					{verdictKey === 'incomplete' && <p>Resume it to finish the remaining rounds.</p>}
+					{verdictKey === 'interrupted' && (
+						<p>
+							It has no verdict, and no sweep is running in this backend. Resume sweep picks it up from the rounds
+							already finished.
+						</p>
+					)}
 					{status.verdict_reason && <p className="text-muted-foreground">{status.verdict_reason}</p>}
 				</div>
 			)}

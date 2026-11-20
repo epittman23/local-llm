@@ -38,14 +38,21 @@ function Table({
 	const [clipped, setClipped] = React.useState({ start: false, end: false, rows: false });
 	const [fit, setFit] = React.useState<number | null>(null);
 
-	// LAY-7: a sticky frame no taller than the area that scrolls the page.
+	// LAY-7: a sticky frame no taller than the area that scrolls the page. That area
+	// also changes height without a window resize (a notice above it in the layout).
 	React.useEffect(() => {
 		const el = scroller.current;
 		if (!stickyHeader || !el) return;
 		const measure = () => setFit(scrollAreaHeight(el));
 		measure();
 		window.addEventListener('resize', measure);
-		return () => window.removeEventListener('resize', measure);
+		const area = scrollArea(el);
+		const observer = area && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+		if (area) observer?.observe(area);
+		return () => {
+			window.removeEventListener('resize', measure);
+			observer?.disconnect();
+		};
 	}, [stickyHeader]);
 
 	React.useEffect(() => {
@@ -117,15 +124,20 @@ function Table({
 /** The smallest frame worth fitting: below it, a short window scrolls the page instead. */
 const MIN_FIT_PX = 192;
 
+/** The nearest element that scrolls `el` vertically; null when it is the window. */
+function scrollArea(el: HTMLElement): HTMLElement | null {
+	for (let node = el.parentElement; node; node = node.parentElement)
+		if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node;
+	return null;
+}
+
 /** The height of the nearest area that scrolls `el` vertically, inside its padding; null when it has none. */
 function scrollAreaHeight(el: HTMLElement): number | null {
-	for (let node = el.parentElement; node; node = node.parentElement) {
-		const style = getComputedStyle(node);
-		if (!/(auto|scroll)/.test(style.overflowY)) continue;
-		const inner = node.clientHeight - Number.parseFloat(style.paddingTop) - Number.parseFloat(style.paddingBottom);
-		return inner > 0 ? Math.max(inner, MIN_FIT_PX) : null;
-	}
-	return window.innerHeight > 0 ? Math.max(window.innerHeight, MIN_FIT_PX) : null;
+	const node = scrollArea(el);
+	if (!node) return window.innerHeight > 0 ? Math.max(window.innerHeight, MIN_FIT_PX) : null;
+	const style = getComputedStyle(node);
+	const inner = node.clientHeight - Number.parseFloat(style.paddingTop) - Number.parseFloat(style.paddingBottom);
+	return inner > 0 ? Math.max(inner, MIN_FIT_PX) : null;
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {

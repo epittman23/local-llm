@@ -108,8 +108,16 @@ export function AnswersPage() {
 	// address, so a reload or a shared link stays on it after a newer run (NAV-1).
 	const runParam = params.get('run');
 	useEffect(() => {
-		if (!runParam && effectiveRun) update({ run: effectiveRun });
-	});
+		if (runParam || !effectiveRun) return;
+		setParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				next.set('run', effectiveRun);
+				return next;
+			},
+			{ replace: true }
+		);
+	}, [runParam, effectiveRun, setParams]);
 
 	const rowsQuery = useQuery({
 		queryKey: ['answers', effectiveRun, filter],
