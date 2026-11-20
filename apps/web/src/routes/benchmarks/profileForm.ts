@@ -138,6 +138,10 @@ export function prefillFromParams(params: URLSearchParams): {
 		if (NUMBER_KEYS.has(key)) {
 			if (/^\d+$/.test(raw.trim())) changes[key] = Number(raw);
 			else if (key === 'moe' && raw.trim() === '') changes[key] = null;
+		} else if (key === 'spec' && (raw.trim() === 'off' || raw.trim() === '')) {
+			// A Tune grid's spec-off value is an override's word, not an argument:
+			// saved as `off` it would reach llama-server bare (serving/profiles.py refuses it too).
+			changes[key] = [];
 		} else if (ARGV_KEYS.has(key)) changes[key] = textToArgv(raw);
 		else changes[key] = raw;
 	}

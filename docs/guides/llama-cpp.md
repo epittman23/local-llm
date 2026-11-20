@@ -197,7 +197,10 @@ page's `spec` override field turns it off for an A/B (empty replaces the
 profile's flags with none) or replaces them with a different set entirely —
 the same three-valued behavior `LLAMA_SPEC` had in the shell (unset keeps the
 profile's flags, empty/`off` turns them off, anything else replaces them),
-now a typed field instead of an environment variable. `qwen36` sets none of
+now a typed field instead of an environment variable. A stored profile
+version's `spec` holds arguments only: speculation is off when it is empty,
+and a literal `off` there is refused when the version is saved, since it would
+reach `llama-server` as a bare argument. `qwen36` sets none of
 this: its weights are not on disk here, so its MTP support is unverified.
 
 Every profile serves with `--parallel 1` (one server slot), overridable with

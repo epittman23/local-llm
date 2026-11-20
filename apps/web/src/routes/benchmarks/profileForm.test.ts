@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { errorMessage } from '@/lib/apis/benchmarks/profiles';
-import { argvToText, textToArgv } from './profileForm';
+import { argvToText, prefillFromParams, textToArgv } from './profileForm';
 
 // docs/history/bug-review-2026-09-27.md M7 and L7.
 describe('profile argv fields', () => {
@@ -34,5 +34,29 @@ describe('errorMessage', () => {
 	it('passes strings and errors through', () => {
 		expect(errorMessage('Not found')).toBe('Not found');
 		expect(errorMessage(new TypeError('Failed to fetch'))).toBe('Failed to fetch');
+	});
+});
+
+describe('prefillFromParams', () => {
+	it('turns a spec-off link into no speculative arguments, never a bare off', () => {
+		for (const value of ['off', '', ' off ']) {
+			const prefill = prefillFromParams(new URLSearchParams({ edit: 'qwen38', 'def.spec': value }));
+			expect(prefill?.changes.spec).toEqual([]);
+		}
+	});
+
+	it('keeps real speculative flags as one argument list', () => {
+		const prefill = prefillFromParams(
+			new URLSearchParams({ edit: 'qwen38', 'def.spec': '--spec-type draft-mtp --spec-draft-n-max 3' })
+		);
+		expect(prefill?.changes.spec).toEqual(['--spec-type', 'draft-mtp', '--spec-draft-n-max', '3']);
+	});
+
+	it('reads numbers, a note, and ignores unknown or malformed fields', () => {
+		const prefill = prefillFromParams(
+			new URLSearchParams({ edit: 'qwen38', 'def.ngl': '22', 'def.ctx': 'lots', 'def.colour': 'blue', note: 'n' })
+		);
+		expect(prefill).toEqual({ name: 'qwen38', changes: { ngl: 22 }, note: 'n' });
+		expect(prefillFromParams(new URLSearchParams({ 'def.ngl': '22' }))).toBeNull();
 	});
 });
