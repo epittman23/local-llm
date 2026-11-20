@@ -17,15 +17,20 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from local_llm.benchmarks.serving.fingerprint import SHELL_LINES, config_id, config_lines
 from local_llm.benchmarks.serving.profiles import (
+    SPEC_OPTIONS,
     Overrides,
     ProfileError,
     ServingProfile,
+    SpeculativeArgsError,
+    check_speculative_args,
     resolve,
     validate_definition,
 )
@@ -172,6 +177,7 @@ def test_valid_definition_round_trips(valid):
         ({'extra': ['--chat-template-kwargs', '{"reasoning_effort":"high"}']}, 'reasoning_effort_default'),
         ({'colour': 'blue'}, 'unknown'),
         ({'spec': ['off']}, 'leave spec empty'),
+        ({'spec': ['--spec-type', 'draft-mtp', '--host', '0.0.0.0']}, "'--host' is not a speculative"),
     ],
     ids=[
         'moe-on-dense',
@@ -181,6 +187,7 @@ def test_valid_definition_round_trips(valid):
         'reasoning-in-extra',
         'unknown',
         'spec-off',
+        'host-in-spec',
     ],
 )
 def test_invalid_definitions_are_refused(valid, change, message):
@@ -253,3 +260,104 @@ def test_short_and_inline_parallel_forms_are_refused(valid, args):
         validate_definition({**valid, 'extra': args})
     with pytest.raises(ProfileError, match='parallel'):
         resolve(ServingProfile.from_definition('example', valid), Overrides(spec=tuple(args)))
+
+
+# ---------------------------------------------------------------------------
+# Speculative arguments hold only speculative-decoding options
+# ---------------------------------------------------------------------------
+
+DATA_DIR = SERVER_DIR / 'local_llm' / 'benchmarks' / 'data'
+
+
+def _grid_spec_values() -> list[str]:
+    """Every LLAMA_SPEC a tuning or pre-screen grid offers, and every one the serving baseline records."""
+    values = set()
+    for path in sorted([*(DATA_DIR / 'tuning').glob('*.toml'), *(DATA_DIR / 'prescreen').glob('*.toml')]):
+        knob = tomllib.loads(path.read_text()).get('knob', {}).get('LLAMA_SPEC')
+        values.update(knob['values'] if knob else [])
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, child in node.items():
+                if key == 'LLAMA_SPEC':
+                    values.add(child)
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    for name in ('fingerprints.json', 'fingerprints-v2.json'):
+        walk(_load_json(name))
+    return sorted(values)
+
+
+def test_the_grids_offer_speculative_flags():
+    """The parametrize below must not be vacuous: qwen38's grid offers draft depths."""
+    assert '--spec-type draft-mtp --spec-draft-n-max 4' in _grid_spec_values()
+
+
+@pytest.mark.parametrize('value', _grid_spec_values())
+def test_every_spec_a_grid_or_the_baseline_uses_still_resolves(seed, value):
+    profile = ServingProfile.from_definition('qwen38', seed['qwen38']['definition'])
+    resolved = resolve(profile, Overrides.from_env({'LLAMA_SPEC': value}))
+    assert resolved.spec == tuple(value.split()) or value in ('', 'off')
+
+
+@pytest.mark.parametrize(
+    'args',
+    [
+        ['--host', '0.0.0.0'],
+        ['--spec-type', 'draft-mtp', '--port', '9999'],
+        ['--spec-type', 'ngram-mod', '--log-file', '/tmp/x'],
+        ['--spec-type', 'draft-mtp', '--api-key', 'k'],
+        ['--spec-type', 'draft-mtp', '-m', 'other.gguf'],
+        ['--spec-type', 'draft-mtp', '--model', 'other.gguf'],
+        ['--spec-type', 'draft-mtp', '-c', '128'],
+        ['--host=0.0.0.0'],
+        ['--spec-type=draft-mtp'],
+        ['--spec-draft-hf', 'someone/model'],
+        ['-hfd', 'someone/model'],
+        ['draft-mtp'],
+        ['on'],
+    ],
+)
+def test_an_override_with_anything_but_speculative_options_is_refused(seed, args):
+    profile = ServingProfile.from_definition('qwen38', seed['qwen38']['definition'])
+    with pytest.raises(SpeculativeArgsError):
+        resolve(profile, Overrides(spec=tuple(args)))
+    with pytest.raises(SpeculativeArgsError):
+        validate_definition({**seed['qwen38']['definition'], 'spec': args})
+
+
+@pytest.mark.parametrize(
+    'args',
+    [
+        ['--spec-type', 'draft-mtp', '--spec-draft-n-max', '3'],
+        ['--spec_type', 'ngram-mod', '--spec-ngram-mod-n-min', '48'],
+        ['-md', '/models/draft.gguf', '-ngld', '-1', '--spec-draft-p-min', '0.5'],
+        ['--spec-default'],
+        ['--no-spec-draft-backend-sampling', '-ctkd', 'q8_0'],
+    ],
+)
+def test_speculative_options_and_their_values_pass(args):
+    check_speculative_args(args)
+
+
+def test_a_stored_versions_spec_is_not_rechecked_at_launch(seed):
+    """validate_definition runs on save, so a version stored before the rule still serves."""
+    profile = ServingProfile.from_definition(
+        'qwen38', {**seed['qwen38']['definition'], 'spec': ['--spec-type', 'x', '--foo']}
+    )
+    assert resolve(profile).spec == ('--spec-type', 'x', '--foo')
+
+
+def test_spec_options_hold_no_server_or_model_flag():
+    assert not SPEC_OPTIONS & {'--host', '--port', '-m', '--model', '--api-key', '--log-file', '-c', '--parallel'}
+
+
+def test_the_serve_pages_copy_of_the_speculative_options_matches():
+    """Serve decides from its own copy whether to take a link's spec; the server's list is the one enforced."""
+    source = (REPO_ROOT / 'apps' / 'web' / 'src' / 'routes' / 'benchmarks' / 'resultLinks.ts').read_text()
+    block = source[source.index('export const SPEC_OPTIONS') :]
+    block = block[: block.index(']);')]
+    assert set(re.findall(r"'([^']+)'", block)) == SPEC_OPTIONS

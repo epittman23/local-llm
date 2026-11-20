@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { knobKey, knobName, knobsText, profileVersionLink, serveLink, splitKnobs } from './resultLinks';
+import {
+	knobKey,
+	knobName,
+	knobsText,
+	profileVersionLink,
+	serveLink,
+	speculativeOnly,
+	splitKnobs
+} from './resultLinks';
 
 const params = (link: string | null) => Object.fromEntries(new URL(link ?? '', 'http://x').searchParams);
 
@@ -66,5 +74,34 @@ describe('result links (B-D8)', () => {
 			unsupported: ['fa']
 		});
 		expect(splitKnobs(undefined)).toEqual({ serve: [], version: [], unsupported: [] });
+	});
+
+	it('takes only speculative options as speculative flags, the rule the server enforces', () => {
+		for (const ok of [
+			'',
+			'off',
+			'--spec-type draft-mtp --spec-draft-n-max 3',
+			'--spec_type ngram-mod',
+			'-md /models/d.gguf -ngld -1',
+			'--spec-default'
+		])
+			expect(speculativeOnly(ok), ok).toBe(true);
+		for (const bad of [
+			'--host 0.0.0.0',
+			'--spec-type draft-mtp --port 9999',
+			'--host=0.0.0.0',
+			'--spec-draft-hf someone/model',
+			'draft-mtp',
+			'OFF'
+		])
+			expect(speculativeOnly(bad), bad).toBe(false);
+	});
+
+	it('puts flags other than speculative ones in neither link', () => {
+		const overrides = { LLAMA_NGL: '22', LLAMA_SPEC: '--host 0.0.0.0' };
+		expect(params(serveLink('qwen38', overrides))).toEqual({ profile: 'qwen38', ngl: '22' });
+		expect(params(profileVersionLink('qwen38', overrides))).toEqual({ edit: 'qwen38', 'def.ngl': '22' });
+		expect(splitKnobs(overrides)).toEqual({ serve: ['ngl'], version: ['ngl'], unsupported: ['spec'] });
+		expect(serveLink('qwen38', { LLAMA_SPEC: 'off' })).toBe('/benchmarks/serve?profile=qwen38&spec=off');
 	});
 });

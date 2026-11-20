@@ -181,6 +181,49 @@ describe('ServePage', () => {
 		expect(screen.getByRole('combobox', { name: 'Speculative decoding' })).not.toBeDisabled();
 	});
 
+	it('never takes flags other than speculative ones from a link, and names them instead', async () => {
+		const router = renderPage('/benchmarks/serve?profile=qwen38&spec=--host+0.0.0.0');
+		await waitFor(() => expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38' }));
+		const select = screen.getByRole('combobox', { name: 'Speculative decoding' });
+		expect(select.textContent).toBe('Default (the profile’s flags)');
+		expect(screen.getByText('Not taken from the link')).toBeInTheDocument();
+		expect(screen.getByText('--host 0.0.0.0')).toBeInTheDocument();
+		expect(screen.queryByText(/From the link/)).toBeNull();
+		fireEvent.keyDown(select, { key: 'Enter' });
+		expect(screen.queryByRole('option', { name: '--host 0.0.0.0' })).toBeNull();
+		fireEvent.keyDown(screen.getByRole('option', { name: 'Off' }), { key: 'Escape' });
+		expect(router.state.location.search).not.toContain('spec=');
+		for (const call of vi.mocked(api.previewServe).mock.calls) expect(call[1]).not.toHaveProperty('spec');
+		vi.mocked(api.startServe).mockResolvedValue({ started: true, warning: null } as never);
+		vi.mocked(api.streamServe).mockResolvedValue(stream([]));
+		fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+		await waitFor(() => expect(api.startServe).toHaveBeenCalledWith('test-token', { profile: 'qwen38' }));
+	});
+
+	it("drops a link's flags on another profile, and takes them back on the link's own", async () => {
+		const flags = '--spec-type draft-mtp --spec-draft-n-max 3';
+		const router = renderPage(`/benchmarks/serve?profile=qwen38&spec=${encodeURIComponent(flags)}`);
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38', spec: flags })
+		);
+		const pick = async (name: RegExp) => {
+			const picker = screen.getByRole('combobox', { name: 'Profile' });
+			await waitFor(() => expect(picker).not.toBeDisabled());
+			fireEvent.keyDown(picker, { key: 'Enter' });
+			fireEvent.click(await screen.findByRole('option', { name }));
+		};
+		await pick(/^qwen25c/);
+		await waitFor(() => expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen25c' }));
+		expect(screen.getByRole('combobox', { name: 'Speculative decoding' }).textContent).toBe('Default (off)');
+		expect(screen.queryByText(/From the link/)).toBeNull();
+		expect(router.state.location.search).not.toContain('spec=');
+		await pick(/^qwen38/);
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38', spec: flags })
+		);
+		expect(new URLSearchParams(router.state.location.search).get('spec')).toBe(flags);
+	});
+
 	it('checks an override when it is left, and Start sends nothing while one is wrong (FRM-2)', async () => {
 		renderPage();
 		const ngl = await screen.findByRole('textbox', { name: /GPU layers/ });

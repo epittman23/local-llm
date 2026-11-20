@@ -26,6 +26,7 @@ measurement rather than reasoning:
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -158,6 +159,85 @@ def _has_fit(args) -> bool:
     return any(a in FIT_FLAGS or a.startswith(('-fit=', '--fit=')) for a in args)
 
 
+#: llama-server's speculative-decoding options in llama.cpp build 11875
+#: (f0fb5984b), read from common/arg.cpp: every option it marks `set_spec()`
+#: (its --help's "speculative params"), with their aliases and the one
+#: negative form, plus the draft model's two KV cache types and
+#: --spec-default, which it leaves unmarked. --spec-draft-hf (-hfd, -hfrd,
+#: --hf-repo-draft) is left out on purpose: it downloads a draft model, and
+#: an override's spec can come from a link.
+SPEC_OPTIONS = frozenset(
+    {
+        *('--spec-draft-threads', '-td', '--threads-draft'),
+        *('--spec-draft-threads-batch', '-tbd', '--threads-batch-draft'),
+        *('--spec-draft-cpu-mask', '-Cd', '--cpu-mask-draft'),
+        *('--spec-draft-cpu-range', '-Crd', '--cpu-range-draft'),
+        *('--spec-draft-cpu-strict', '--cpu-strict-draft'),
+        *('--spec-draft-prio', '--prio-draft'),
+        *('--spec-draft-poll', '--poll-draft'),
+        *('--spec-draft-cpu-mask-batch', '-Cbd', '--cpu-mask-batch-draft'),
+        *('--spec-draft-cpu-range-batch', '-Crbd', '--cpu-range-batch-draft'),
+        *('--spec-draft-cpu-strict-batch', '--cpu-strict-batch-draft'),
+        *('--spec-draft-prio-batch', '--prio-batch-draft'),
+        *('--spec-draft-poll-batch', '--poll-batch-draft'),
+        *('--spec-draft-type-k', '-ctkd', '--cache-type-k-draft'),
+        *('--spec-draft-type-v', '-ctvd', '--cache-type-v-draft'),
+        *('--spec-draft-override-tensor', '-otd', '--override-tensor-draft'),
+        *('--spec-draft-cpu-moe', '-cmoed', '--cpu-moe-draft'),
+        *('--spec-draft-n-cpu-moe', '--spec-draft-ncmoe', '-ncmoed', '--n-cpu-moe-draft'),
+        *('--spec-draft-n-max', '--spec-draft-n-min', '--spec-draft-n-ubatch'),
+        *('--spec-synth-len', '--spec-synth-rates'),
+        *('--spec-draft-p-split', '--draft-p-split'),
+        *('--spec-draft-p-min', '--draft-p-min'),
+        *('--spec-draft-backend-sampling', '--no-spec-draft-backend-sampling'),
+        '--spec-draft-sampling',
+        *('--spec-draft-device', '-devd', '--device-draft'),
+        *('--spec-draft-ngl', '-ngld', '--gpu-layers-draft', '--n-gpu-layers-draft'),
+        *('--spec-draft-model', '-md', '--model-draft'),
+        '--spec-type',
+        *('--spec-ngram-mod-n-min', '--spec-ngram-mod-n-max', '--spec-ngram-mod-n-match'),
+        *('--spec-ngram-simple-size-n', '--spec-ngram-simple-size-m', '--spec-ngram-simple-min-hits'),
+        *('--spec-ngram-map-k-size-n', '--spec-ngram-map-k-size-m', '--spec-ngram-map-k-min-hits'),
+        *('--spec-ngram-map-k4v-size-n', '--spec-ngram-map-k4v-size-m', '--spec-ngram-map-k4v-min-hits'),
+        *('--draft', '--draft-n', '--draft-max', '--draft-min', '--draft-n-min'),
+        *('--spec-ngram-size-n', '--spec-ngram-size-m', '--spec-ngram-min-hits'),
+        '--spec-default',
+    }
+)
+
+_NUMBER = re.compile(r'-\d+(\.\d+)?')
+
+
+class SpeculativeArgsError(ProfileError):
+    """Speculative arguments holding something other than speculative options (a 422 at the API)."""
+
+
+def check_speculative_args(args) -> None:
+    """Refuse speculative arguments that hold anything but speculative-decoding options.
+
+    llama-server reads its arguments in order and the last of a repeated
+    option wins, and the launcher passes these after its own --host and
+    --port, so `--host 0.0.0.0` here would serve on every interface. Every
+    token that starts with '-' and is not a number must be in SPEC_OPTIONS,
+    spelled as llama-server reads it (`_` becomes `-` after `--`; it has no
+    `--option=value` form), and the first token must be one. The values in
+    between are not checked: llama-server refuses a stray one.
+    """
+    for i, arg in enumerate(args):
+        if not arg.startswith('-') or _NUMBER.fullmatch(arg):
+            if i == 0:
+                raise SpeculativeArgsError(
+                    f"speculative arguments start with an option such as --spec-type, not '{arg}'"
+                )
+            continue
+        name = '--' + arg[2:].replace('_', '-') if arg.startswith('--') else arg
+        if name not in SPEC_OPTIONS:
+            raise SpeculativeArgsError(
+                f"'{arg}' is not a speculative-decoding option, and speculative arguments take only those"
+                " (--spec-*, --draft-*, -md, ...); other llama-server flags belong in a profile's extra arguments"
+            )
+
+
 def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     """Check a profile definition before it is stored, and normalise its lists.
 
@@ -195,6 +275,8 @@ def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     # which refuses to start (docs/history/bug-review-2026-09-27.md M6).
     if spec == ['off']:
         raise ProfileError("speculation is off when its arguments are empty; leave spec empty instead of 'off'")
+    # The same rule as an override's (resolve); checked on save, so versions already stored are unaffected.
+    check_speculative_args(spec)
     # The thinking budget is a field, and the launcher builds
     # --chat-template-kwargs from the *resolved* effort. A literal here would
     # be fingerprinted as the override but launched as the literal.
@@ -314,7 +396,9 @@ def resolve(profile: ServingProfile, overrides: Overrides | None = None) -> Reso
     Raises `ProfileError` if --parallel is smuggled in through a speculative
     override: it would be passed to llama-server twice, and recorded as the
     profile's slot count rather than the served one, which is the exact
-    confusion an explicit parallel field exists to end.
+    confusion an explicit parallel field exists to end. Raises
+    `SpeculativeArgsError` if an override's spec holds anything but
+    speculative-decoding options (`check_speculative_args`).
     """
     overrides = overrides or Overrides()
 
@@ -323,6 +407,10 @@ def resolve(profile: ServingProfile, overrides: Overrides | None = None) -> Reso
         raise ProfileError('--parallel does not belong in a speculative override; set the parallel field instead')
     if _has_fit(spec) or _has_fit(profile.extra):
         raise ProfileError('-fit is always off and is set by the launcher; it does not belong in a profile')
+    # Only an override's: a stored version's was checked when it was saved,
+    # and one saved before that check still serves as it always did.
+    if overrides.spec is not None:
+        check_speculative_args(overrides.spec)
 
     moe = profile.moe if overrides.moe is None else overrides.moe
     if profile.arch == ARCH_DENSE and moe is not None:

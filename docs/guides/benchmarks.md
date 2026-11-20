@@ -71,7 +71,12 @@ list until it is resumed, and the chip goes by the task, not the row:
   (`?profile=&ngl=&ctx=&threads=&parallel=&ot=&reasoning=&spec=`), which
   fills the form and never starts anything (`spec=off` drops the profile's
   speculative flags, and any other `spec` text, a Tune winner's flags, is
-  offered in the select and replaces them for that run); `?edit=<profile>&def.<field>=…`
+  offered in the select and replaces them for that run, on the link's own
+  profile only: after a switch to another profile the flags are dropped, and
+  they come back on a switch back. `spec` text holding anything but
+  speculative-decoding options, such as `--host 0.0.0.0`, is never taken: the
+  page names it as needing a profile version, and the server refuses it with
+  a 422 (llama-cpp.md); `?edit=<profile>&def.<field>=…`
   opens a new profile version prefilled, saved only on Save.
 - **Live** (`/benchmarks/live`) polls the run being recorded right now, every
   5s to match the recorder's own sample interval: peak VRAM with its

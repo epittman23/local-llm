@@ -200,7 +200,19 @@ profile's flags, empty/`off` turns them off, anything else replaces them),
 now a typed field instead of an environment variable. A stored profile
 version's `spec` holds arguments only: speculation is off when it is empty,
 and a literal `off` there is refused when the version is saved, since it would
-reach `llama-server` as a bare argument. `qwen36` sets none of
+reach `llama-server` as a bare argument. Both an
+override's `spec` and a stored version's hold only speculative-decoding options
+(since 2026-11-20): every token that starts with `-` and is not a number must be
+one of llama.cpp build 11875's speculative options (`--spec-*`, `--draft*`,
+`-md`, `-ngld`, ...; the list is `SPEC_OPTIONS` in `serving/profiles.py`, read
+from `common/arg.cpp`), and the first token must be one. The launcher passes
+`spec` after its own `--host` and `--port`, and the last of a repeated option
+wins, so without this a Serve link's `spec=--host 0.0.0.0` would have served on
+every interface. `--spec-draft-hf` is left out because it downloads a model.
+An override that breaks the rule is a 422 from Serve's preview and Start, naming
+the flag; a version that breaks it is refused on save, so versions stored
+before the rule are unaffected and still serve as they did. Other flags belong
+in a version's extra arguments. `qwen36` sets none of
 this: its weights are not on disk here, so its MTP support is unverified.
 
 Every profile serves with `--parallel 1` (one server slot), overridable with
@@ -238,7 +250,7 @@ What the old shell functions became, now that `scripts/` is gone (Phase 2c,
 
 | shell command | now |
 | --- | --- |
-| `lllm-serve [profile]` | Serve page, `/benchmarks/serve` — pick a profile, set overrides (`ngl`, `ctx`, `threads`, `parallel`, `ot`, `reasoning`, `spec`), start. Overrides are range-checked in the page and by the server (`ngl` ≥ 0; `ctx`, `threads`, `parallel` ≥ 1; anything else is a 422). While stopped, the page shows a launch preview: the exact `llama-server` command and the `config_id` the run would be recorded under, from `GET /benchmarks/serve/preview` (the same resolution Start uses, `build_argv` and `serving/fingerprint.py`; read-only, starts nothing). Server log streams live in the page. `--metrics` and `-lv 4` are still always passed underneath, for the same reasons as before (server-wide token totals; the load-info block), and are still excluded from the config fingerprint |
+| `lllm-serve [profile]` | Serve page, `/benchmarks/serve` — pick a profile, set overrides (`ngl`, `ctx`, `threads`, `parallel`, `ot`, `reasoning`, `spec`), start. Overrides are range-checked in the page and by the server (`ngl` ≥ 0; `ctx`, `threads`, `parallel` ≥ 1; anything else is a 422; a `spec` holding anything but speculative-decoding options is a 422 too). While stopped, the page shows a launch preview: the exact `llama-server` command and the `config_id` the run would be recorded under, from `GET /benchmarks/serve/preview` (the same resolution Start uses, `build_argv` and `serving/fingerprint.py`; read-only, starts nothing). Server log streams live in the page. `--metrics` and `-lv 4` are still always passed underneath, for the same reasons as before (server-wide token totals; the load-info block), and are still excluded from the config fingerprint |
 | `lllm-fetch [profile]` | no UI: `serving/weights.py`'s `FetchProcess` exists but no route mounts it, so it is the `hf` CLI by hand, see [model-downloads.md](model-downloads.md) |
 | `lllm-sweep-threads`, `lllm-sweep-ngl` | deleted outright; since 2026-10-28 the Pre-screen page, `/benchmarks/prescreen`, runs llama-bench over a profile's grid (see "Preflight sweeps" below, which keeps the raw invocations as a fallback) |
 | `lllm-check` | the Serve page shows whether a server is running directly, no separate check |
