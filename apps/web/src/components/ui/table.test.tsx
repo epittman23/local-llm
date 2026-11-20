@@ -154,6 +154,38 @@ describe('Table (DAT-6)', () => {
 		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('min(40rem, 192px)');
 	});
 
+	it('refits a sticky-header frame when its scroll area changes height without a window resize (LAY-7)', () => {
+		const observed = new Map<Element, () => void>();
+		class FakeResizeObserver {
+			constructor(private readonly callback: () => void) {}
+			observe(target: Element) {
+				observed.set(target, this.callback);
+			}
+			disconnect() {
+				for (const [target, callback] of observed) if (callback === this.callback) observed.delete(target);
+			}
+		}
+		vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+		const { unmount } = render(
+			<div data-testid="area" style={{ overflowY: 'auto', paddingTop: '0px', paddingBottom: '0px' }}>
+				<Table aria-label="Configurations" stickyHeader maxHeight="40rem">
+					{rows()}
+				</Table>
+			</div>
+		);
+		const area = screen.getByTestId('area');
+		Object.defineProperty(area, 'clientHeight', { configurable: true, value: 600 });
+		// A notice above the table opens: the area shrinks, and the window does not resize.
+		act(() => observed.get(area)?.());
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('min(40rem, 600px)');
+		Object.defineProperty(area, 'clientHeight', { configurable: true, value: 400 });
+		act(() => observed.get(area)?.());
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('min(40rem, 400px)');
+		unmount();
+		expect(observed.has(area)).toBe(false);
+		vi.unstubAllGlobals();
+	});
+
 	it('draws its focus ring on an overlay above the sticky cells (A11Y-1, DAT-6)', () => {
 		const { container } = render(
 			<Table aria-label="Configurations" stickyHeader stickyFirstColumn>
