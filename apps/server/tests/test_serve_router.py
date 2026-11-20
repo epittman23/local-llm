@@ -405,6 +405,17 @@ def test_preview_spec_on_keeps_the_profiles_own_flags(client, real_launcher):
     assert on['argv'] == default['argv']
 
 
+def test_preview_takes_a_tune_winners_free_text_spec(client, real_launcher):
+    """Serve's link from a Tune result carries the winner's flags as text; the preview launches exactly those."""
+    flags = '--spec-type draft-mtp --spec-draft-n-max 3'
+    winner = client.get('/preview', params={'profile': 'qwen25c', 'spec': flags}).json()
+    default = client.get('/preview', params={'profile': 'qwen25c'}).json()
+    argv = winner['argv']
+    assert argv[argv.index('--spec-type') + 1] == 'draft-mtp'
+    assert argv[argv.index('--spec-draft-n-max') + 1] == '3'
+    assert winner['config_id'] != default['config_id']
+
+
 def test_preview_refuses_what_start_refuses(client, real_launcher):
     assert client.get('/preview', params={'profile': 'qwen25c', 'ngl': -5}).status_code == 422
     assert client.get('/preview', params={'profile': 'qwen25c', 'ctx': '1.5'}).status_code == 422

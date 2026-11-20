@@ -69,7 +69,9 @@ list until it is resumed, and the chip goes by the task, not the row:
   config_id before Start, and streams the server's output. The profile and
   overrides are in the address
   (`?profile=&ngl=&ctx=&threads=&parallel=&ot=&reasoning=&spec=`), which
-  fills the form and never starts anything; `?edit=<profile>&def.<field>=…`
+  fills the form and never starts anything (`spec=off` drops the profile's
+  speculative flags, and any other `spec` text, a Tune winner's flags, is
+  offered in the select and replaces them for that run); `?edit=<profile>&def.<field>=…`
   opens a new profile version prefilled, saved only on Save.
 - **Live** (`/benchmarks/live`) polls the run being recorded right now, every
   5s to match the recorder's own sample interval: peak VRAM with its

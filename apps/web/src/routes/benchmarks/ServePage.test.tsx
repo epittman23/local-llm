@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/lib/apis/benchmarks';
 import * as profilesApi from '@/lib/apis/benchmarks/profiles';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { serveLink } from './resultLinks';
 import { overrideProblem, ServePage, uptime } from './ServePage';
 
 // Every API helper is mocked: nothing here reaches a server or starts one.
@@ -155,6 +156,29 @@ describe('ServePage', () => {
 			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen25c', ngl: 18, ctx: 8192 })
 		);
 		expect(api.startServe).not.toHaveBeenCalled();
+	});
+
+	it("takes a Tune winner's speculative flags from its Serve link as a one-off override", async () => {
+		const flags = '--spec-type draft-mtp --spec-draft-n-max 3';
+		const link = serveLink('qwen38', { LLAMA_NGL: 22, LLAMA_SPEC: flags }) ?? '';
+		const router = renderPage(link);
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen38', ngl: 22, spec: flags })
+		);
+		const select = screen.getByRole('combobox', { name: 'Speculative decoding' });
+		expect(select.textContent).toBe(flags);
+		expect(screen.getByText('From the link: these flags replace the profile’s for this run.')).toBeInTheDocument();
+		// The address keeps the flags, so a reload serves the same winner.
+		expect(new URLSearchParams(router.state.location.search).get('spec')).toBe(flags);
+		expect(api.startServe).not.toHaveBeenCalled();
+	});
+
+	it('sends link flags even on a profile with none of its own, and Off only where there are flags to drop', async () => {
+		renderPage('/benchmarks/serve?profile=qwen25c&spec=--spec-type+ngram');
+		await waitFor(() =>
+			expect(api.previewServe).toHaveBeenLastCalledWith('test-token', { profile: 'qwen25c', spec: '--spec-type ngram' })
+		);
+		expect(screen.getByRole('combobox', { name: 'Speculative decoding' })).not.toBeDisabled();
 	});
 
 	it('checks an override when it is left, and Start sends nothing while one is wrong (FRM-2)', async () => {

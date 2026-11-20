@@ -117,7 +117,10 @@ export function ServePage() {
 	}));
 	const [ot, setOt] = useState(() => params.get('ot') ?? '');
 	const [reasoning, setReasoning] = useState(() => params.get('reasoning') ?? '');
-	const [spec, setSpec] = useState(() => (params.get('spec') === 'off' ? 'off' : ''));
+	// '' keeps the profile's flags, 'off' drops them, anything else (a Tune
+	// winner's link) replaces them: the three states Start takes (llama-cpp.md).
+	const [spec, setSpec] = useState(() => (params.get('spec') ?? '').trim());
+	const [specFromLink] = useState(() => (spec === 'off' ? '' : spec));
 	const [actionError, setActionError] = useState<{ title: string; reason: string } | null>(null);
 	const [profilesPanelOpen, setProfilesPanelOpen] = useState(() => params.has('edit'));
 
@@ -193,6 +196,8 @@ export function ServePage() {
 
 	const noThinking = !!definition && !definition.reasoning_effort_default;
 	const noSpec = !!definition && !(definition.spec ?? []).length;
+	// Flags from a link are a one-off override even on a profile with none of its own.
+	const linkedSpec = specFromLink && spec === specFromLink ? spec : '';
 
 	const form = useMemo<ServeStartForm>(() => {
 		const out: ServeStartForm = {};
@@ -200,9 +205,9 @@ export function ServePage() {
 		for (const field of NUMBER_FIELDS) if (numbers[field].trim()) out[field] = Number(numbers[field]);
 		if (ot.trim()) out.ot = ot.trim();
 		if (reasoning && !noThinking) out.reasoning = reasoning;
-		if (spec && !noSpec) out.spec = spec;
+		if (linkedSpec || (spec && !noSpec)) out.spec = spec;
 		return out;
-	}, [selectedProfile, numbers, ot, reasoning, spec, noThinking, noSpec]);
+	}, [selectedProfile, numbers, ot, reasoning, spec, linkedSpec, noThinking, noSpec]);
 
 	// B-D5: what Start would launch, while stopped and the form is valid.
 	const previewForm = useDebounced(form, PREVIEW_DEBOUNCE_MS);
@@ -467,17 +472,24 @@ export function ServePage() {
 							<FormField
 								id="serve-spec"
 								label="Speculative decoding"
-								help={noSpec ? 'This profile has no speculative decoding to turn off.' : undefined}
+								help={
+									linkedSpec
+										? 'From the link: these flags replace the profile’s for this run.'
+										: noSpec
+											? 'This profile has no speculative decoding to turn off.'
+											: undefined
+								}
 							>
 								{(props) => (
 									<ChoiceSelect
 										{...props}
-										value={noSpec ? '' : spec}
+										value={noSpec && !linkedSpec ? '' : spec}
 										onChange={setSpec}
-										disabled={locked || noSpec}
+										disabled={locked || (noSpec && !specFromLink)}
 										options={[
 											['', noSpec ? 'Default (off)' : 'Default (the profile’s flags)'],
-											['off', 'Off']
+											...(noSpec ? [] : [['off', 'Off'] as const]),
+											...(specFromLink ? [[specFromLink, specFromLink] as const] : [])
 										]}
 									/>
 								)}
