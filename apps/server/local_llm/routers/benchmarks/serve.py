@@ -96,9 +96,10 @@ _OVERRIDE_ENV = {
 class ServeStartForm(BaseModel):
     """A start request's profile and one-off overrides.
 
-    The ranges are llama-server's own: a negative layer count or an empty
-    context is refused here with a 422, before anything is resolved, rather
-    than reaching the launcher (#1051).
+    The ranges are B-D5's bounds (the owner's choice, narrower than
+    llama-server's, which also takes `-c 0` and `-t -1`): a negative layer
+    count or an empty context is refused here with a 422, before anything is
+    resolved, rather than reaching the launcher (#1051).
     """
 
     profile: str | None = None
