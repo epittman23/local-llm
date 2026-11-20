@@ -98,11 +98,16 @@ export const formatDuration = (ms: number): string => {
 	return m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.floor(m / 60)} h`;
 };
 
-type Graded = { outcome: string; i: number };
+type Graded = { outcome: string };
 
-/** Where a run stands: items done of the total, passes, skips, the pass rate, and the time left at the mean pace so far. */
+/**
+ * Where a run stands: items done of the total, passes, skips, the pass rate,
+ * and the time left at the mean pace so far. Every item received is done,
+ * skipped ones included, as `total` counts them; the rate leaves skipped
+ * items out (passText).
+ */
 export const runProgress = (items: Graded[], total: number, elapsedMs: number) => {
-	const done = items.length ? Math.max(...items.map((it) => it.i)) : 0;
+	const done = items.length;
 	const passed = items.filter((it) => it.outcome === 'pass').length;
 	const skipped = items.filter((it) => it.outcome === 'skipped').length;
 	const attempted = items.length - skipped;

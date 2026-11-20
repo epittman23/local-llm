@@ -385,4 +385,44 @@ describe('TestsPage target, tiers, progress and datasets (#918, #938, #1047, #10
 		expect(log.textContent).not.toContain('HumanEval/0');
 		expect(log.textContent).toContain('HumanEval/1');
 	});
+
+	it('counts a skipped item as done and numbers it in the log, but leaves it out of the pass rate', async () => {
+		serving();
+		// The server's shapes (routers/benchmarks/tests.py): `i` and `attempted` leave the skipped item out.
+		const item = (n: number, outcome: string, i: number, passed: number) => ({
+			type: 'item',
+			benchmark: 'humanevalplus',
+			item_id: `HumanEval/${n}`,
+			outcome,
+			reason: outcome === 'fail_assert' ? 'assert f(1) == 2' : '',
+			i,
+			total: 4,
+			passed,
+			attempted: i
+		});
+		vi.mocked(api.streamTestRun).mockResolvedValue(
+			stream([
+				{ type: 'start', suite_run_id: 'smoke-2', total: 4, skipped: 0 },
+				item(0, 'pass', 1, 1),
+				item(1, 'skipped', 1, 1),
+				item(2, 'fail_assert', 2, 1),
+				item(3, 'pass', 3, 2),
+				{ type: 'done', passed: 2, attempted: 3, cancelled: false }
+			])
+		);
+		renderPage();
+		fireEvent.click(await screen.findByRole('button', { name: 'Run smoke' }));
+		const bar = await screen.findByRole('progressbar', { name: 'Run progress' });
+		await waitFor(() => expect(bar.getAttribute('aria-valuenow')).toBe('4'));
+		expect(bar.getAttribute('aria-valuetext')).toBe('4 of 4 items');
+		expect(screen.getByText(/4 of 4 items · 2 of 3 passed \(67%\) · 1 skipped, not counted/)).toBeInTheDocument();
+		expect(screen.getByText('Final: 2 of 3 passed (67%)')).toBeInTheDocument();
+		// Every row its own number, the skipped one included.
+		const log = screen.getByRole('region', { name: 'Item log' });
+		const numbers = [...log.querySelectorAll('.tabular-nums')].map((el) => el.textContent);
+		expect(numbers).toEqual(['1', '2', '3', '4']);
+		// Failures only keeps each failure's own number.
+		fireEvent.click(screen.getByLabelText('Show failures only'));
+		expect([...log.querySelectorAll('.tabular-nums')].map((el) => el.textContent)).toEqual(['3']);
+	});
 });

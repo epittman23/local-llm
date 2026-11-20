@@ -53,6 +53,12 @@ type ItemEvent = {
 	total: number;
 	passed: number;
 	attempted: number;
+	/**
+	 * This item's place in the run as received, skipped ones included: the
+	 * log's number. The server's `i` counts attempted items only, so a
+	 * skipped item would repeat the previous number.
+	 */
+	n?: number;
 };
 
 /** What the one-item action reports: graded like a run item, recorded nowhere. */
@@ -237,11 +243,11 @@ export function TestsPage() {
 					for (const line of data.notes ?? []) note(line);
 				} else if (data.type === 'item') {
 					if (data.total) setTotal(data.total);
-					setItems((prev) => [...prev, data]);
+					setItems((prev) => [...prev, { ...data, n: prev.length + 1 }]);
 				} else if (data.type === 'reference') {
 					const row: ItemEvent = { ...data, type: 'item', attempted: data.i };
 					if (data.total) setTotal(data.total);
-					setItems((prev) => [...prev, row]);
+					setItems((prev) => [...prev, { ...row, n: prev.length + 1 }]);
 				} else if (data.type === 'progress') {
 					note(`${data.benchmark}: ${data.message}${data.total ? ` ${data.total} reference solutions` : ''}`);
 				} else if (data.type === 'dataset') {
@@ -795,7 +801,7 @@ export function TestsPage() {
 								key={idx}
 								className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 border-b px-2.5 py-1.5 last:border-b-0 sm:grid-cols-[3rem_9rem_minmax(0,12rem)_auto_minmax(0,1fr)]"
 							>
-								<span className="text-foreground-muted text-right tabular-nums">{item.i}</span>
+								<span className="text-foreground-muted text-right tabular-nums">{item.n ?? item.i}</span>
 								<span className="truncate">{item.benchmark}</span>
 								<span className="max-sm:col-start-3 max-sm:row-start-1 sm:col-start-4 sm:row-start-1">
 									<OutcomeBadge outcome={item.outcome} />

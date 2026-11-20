@@ -140,12 +140,8 @@ describe('tiers, durations, progress and the fetch label', () => {
 	it('works out the pass rate without skipped items, and the time left at the pace so far', async () => {
 		const { runProgress } = await import('./testsFormat');
 		const p = runProgress(
-			[
-				{ outcome: 'pass', i: 1 },
-				{ outcome: 'fail_error', i: 2 },
-				{ outcome: 'skipped', i: 3 },
-				{ outcome: 'pass', i: 4 }
-			],
+			// The server's shape: a skipped item repeats the previous `i`; every item received is still done.
+			[{ outcome: 'pass' }, { outcome: 'fail_error' }, { outcome: 'skipped' }, { outcome: 'pass' }],
 			10,
 			40_000
 		);
