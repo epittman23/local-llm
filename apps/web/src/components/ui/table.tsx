@@ -13,10 +13,13 @@ import { cn } from '@/lib/utils';
  * the row's hover tint.
  * `stickyHeader` keeps the column headings in view while the rows scroll
  * (LAY-7): the frame is then at most `maxHeight` tall (70% of the window
- * unless given) and scrolls both ways, since the page's own scroll cannot
+ * unless given), and never taller than the area the page scrolls in, so the
+ * whole frame fits on screen and reaching its last rows never scrolls its
+ * headings away. It scrolls both ways, since the page's own scroll cannot
  * hold a heading inside a frame that scrolls sideways. The headings are
  * opaque in the same surface, with their rule drawn on them so it travels
- * with them.
+ * with them. The focus ring is drawn by an overlay above the sticky cells,
+ * which would otherwise cover it.
  */
 function Table({
 	className,
@@ -33,6 +36,17 @@ function Table({
 }) {
 	const scroller = React.useRef<HTMLDivElement>(null);
 	const [clipped, setClipped] = React.useState({ start: false, end: false, rows: false });
+	const [fit, setFit] = React.useState<number | null>(null);
+
+	// LAY-7: a sticky frame no taller than the area that scrolls the page.
+	React.useEffect(() => {
+		const el = scroller.current;
+		if (!stickyHeader || !el) return;
+		const measure = () => setFit(scrollAreaHeight(el));
+		measure();
+		window.addEventListener('resize', measure);
+		return () => window.removeEventListener('resize', measure);
+	}, [stickyHeader]);
 
 	React.useEffect(() => {
 		const el = scroller.current;
@@ -75,7 +89,7 @@ function Table({
 				aria-label={ariaLabel}
 				tabIndex={ariaLabel && overflows ? 0 : undefined}
 				className={cn('relative w-full', stickyHeader ? 'overflow-auto' : 'overflow-x-auto')}
-				style={stickyHeader ? { maxHeight } : undefined}
+				style={stickyHeader ? { maxHeight: fit ? `min(${maxHeight}, ${fit}px)` : maxHeight } : undefined}
 			>
 				<table
 					data-slot="table"
@@ -95,8 +109,23 @@ function Table({
 					{...props}
 				/>
 			</div>
+			<span aria-hidden data-slot="table-focus-ring" className="pointer-events-none absolute inset-0 z-[11] hidden" />
 		</div>
 	);
+}
+
+/** The smallest frame worth fitting: below it, a short window scrolls the page instead. */
+const MIN_FIT_PX = 192;
+
+/** The height of the nearest area that scrolls `el` vertically, inside its padding; null when it has none. */
+function scrollAreaHeight(el: HTMLElement): number | null {
+	for (let node = el.parentElement; node; node = node.parentElement) {
+		const style = getComputedStyle(node);
+		if (!/(auto|scroll)/.test(style.overflowY)) continue;
+		const inner = node.clientHeight - Number.parseFloat(style.paddingTop) - Number.parseFloat(style.paddingBottom);
+		return inner > 0 ? Math.max(inner, MIN_FIT_PX) : null;
+	}
+	return window.innerHeight > 0 ? Math.max(window.innerHeight, MIN_FIT_PX) : null;
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {

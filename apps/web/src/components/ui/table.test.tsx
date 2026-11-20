@@ -99,7 +99,7 @@ describe('Table (DAT-6)', () => {
 		);
 		const region = screen.getByRole('region', { name: 'Failures' });
 		expect(region).toHaveClass('overflow-auto');
-		expect(region.style.maxHeight).toBe('24rem');
+		expect(region.style.maxHeight).toBe(`min(24rem, ${window.innerHeight}px)`);
 		const table = screen.getByRole('table');
 		expect(table).toHaveAttribute('data-sticky-header');
 		expect(table).toHaveClass(
@@ -125,8 +125,46 @@ describe('Table (DAT-6)', () => {
 				{rows()}
 			</Table>
 		);
-		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('70dvh');
+		// No area of its own scrolls it here, so the window bounds it too.
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe(
+			`min(70dvh, ${window.innerHeight}px)`
+		);
 		expect(screen.getByRole('table')).toHaveClass('[&_thead_tr>:first-child]:z-[3]', '[&_tr>:first-child]:sticky');
+	});
+
+	it('never grows a sticky-header frame taller than the area that scrolls the page (LAY-7, #1114)', () => {
+		render(
+			<div data-testid="area" style={{ overflowY: 'auto', paddingTop: '16px', paddingBottom: '16px' }}>
+				<Table aria-label="Configurations" stickyHeader maxHeight="40rem">
+					{rows()}
+				</Table>
+			</div>
+		);
+		const area = screen.getByTestId('area');
+		Object.defineProperty(area, 'clientHeight', { configurable: true, value: 552 });
+		act(() => {
+			window.dispatchEvent(new Event('resize'));
+		});
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('min(40rem, 520px)');
+		// A very short area: the frame keeps a usable height and the page scrolls instead.
+		Object.defineProperty(area, 'clientHeight', { configurable: true, value: 100 });
+		act(() => {
+			window.dispatchEvent(new Event('resize'));
+		});
+		expect(screen.getByRole('region', { name: 'Configurations' }).style.maxHeight).toBe('min(40rem, 192px)');
+	});
+
+	it('draws its focus ring on an overlay above the sticky cells (A11Y-1, DAT-6)', () => {
+		const { container } = render(
+			<Table aria-label="Configurations" stickyHeader stickyFirstColumn>
+				{rows()}
+			</Table>
+		);
+		const frame = container.querySelector('[data-slot="table-frame"]') as HTMLElement;
+		const ring = frame.querySelector(':scope > [data-slot="table-focus-ring"]') as HTMLElement;
+		expect(ring).toHaveAttribute('aria-hidden');
+		// Above the sticky headings (z 2), the corner (z 3) and the edge shading (z 10), and never in the way of a click.
+		expect(ring).toHaveClass('absolute', 'inset-0', 'z-[11]', 'pointer-events-none', 'hidden');
 	});
 
 	it('stops listening when it unmounts', () => {

@@ -653,9 +653,13 @@ out of it), and its name cell holds a button calling the same open, which
 is the keyboard's way in (NAV-5); when what it opens is another page, that
 cell is a link to it instead (Compare > Failures opens the item in Answers).
 `stickyHeader` keeps the column headings in view while the rows scroll
-(LAY-7): the frame is then at most `maxHeight` tall (`70dvh` unless given)
-and scrolls both ways, since a frame that scrolls sideways stops the page's
-own scroll from holding a heading. The headings are opaque in
+(LAY-7): the frame is then at most `maxHeight` tall (`70dvh` unless given),
+and never taller than the area the page scrolls in (but at least 12rem), so
+the whole frame fits on screen and reaching its last rows never scrolls its
+headings away. It scrolls both ways, since a frame that scrolls sideways
+stops the page's own scroll from holding a heading. Its focus ring (A11Y-1)
+is drawn on an overlay above the sticky headings and first column, which
+would cover an outline on the region itself. The headings are opaque in
 `--table-surface` with their rule drawn on them; with `stickyFirstColumn`
 the corner heading stays above both. Rows hidden below make the named region
 a tab stop too. Use it on a table long enough to scroll its headings out of

@@ -508,9 +508,19 @@
 	box-shadow: 0 12px 32px -12px oklch(0 0 0 / 50%);
 }
 
-/* DAT-6: a table's scrolling region draws its focus inside, where its frame cannot clip it. */
+/*
+ * DAT-6: a table's scrolling region shows its focus inside its edge, where the
+ * frame cannot clip it, on an overlay above the sticky headings and first
+ * column, which would cover an outline drawn on the region itself.
+ */
 :root[data-focus="keyboard"] [data-slot="table-container"]:focus-visible {
-	outline-offset: -2px;
+	outline: none;
+}
+:root[data-focus="keyboard"]
+	[data-slot="table-frame"]:has(> [data-slot="table-container"]:focus-visible)
+	> [data-slot="table-focus-ring"] {
+	display: block;
+	box-shadow: inset 0 0 0 2px var(--focus);
 }
 
 /*
