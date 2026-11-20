@@ -213,7 +213,10 @@ otherwise.
 The Live page (`/benchmarks/live`) is the run that is serving right now — its
 GPU statistics, its `/metrics` deltas and its most recent samples, refreshed
 every 5 seconds; that view is possible because samples land in the database
-as they are taken rather than being folded in when the recorder exits. The
+as they are taken rather than being folded in when the recorder exits. That
+read (`GET /benchmarks/live/`) summarises every sample of the run, so the
+Benchmarks section's status chip reads `GET /benchmarks/live/status` instead,
+which names the recorded run (its id, model and config_id) and nothing else. The
 Answers page (`/benchmarks/answers`) is the pairing for the old `--by
 failures` view: pick a suite run, list its failures (or all its items, or its
 passes), and read the response rendered as markdown. The thinking is off by

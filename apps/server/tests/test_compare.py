@@ -182,10 +182,40 @@ def test_benchmark_view_is_flat():
     assert rows[0]['humanevalplus_pass_rate'] == 1.0
 
 
+def test_failure_rows_carry_the_suite_run_id():
+    # B-D9: a Failures row links to Answers ?run=, so it names its suite run.
+    records = [
+        {**rec('aaaa', '1', 'fail_assert'), 'suite_run_id': 'run-a'},
+        {**rec('aaaa', '2', 'pass'), 'suite_run_id': 'run-a'},
+        rec('bbbb', '3', 'fail_timeout'),
+    ]
+    rows = compare.failure_rows(compare.group_records(records))
+    assert sorted((r['config_id'], r['item_id'], r['suite_run_id']) for r in rows) == [
+        ('aaaa', '1', 'run-a'),
+        ('bbbb', '3', ''),
+    ]
+
+
 def test_multi_flag_warning_within_a_block():
     records = run('aaaa', [1, 0]) + run('cccc', [1, 1])
     notes = compare.caveats(compare.group_records(records), {'aaaa': CONFIG_A, 'cccc': CONFIG_C})
     assert any('differ in 2 flags (batch, ngl)' in n for n in notes)
+
+
+def test_a_small_block_is_named_in_words_not_by_its_raw_key():
+    # WRD-2: the note starts with a capital and names the block as a reader would.
+    records = run('aaaa', [1, 0], benchmark='mbppplus', window='2025-01..2025-03')
+    notes = compare.caveats(compare.group_records(records), {'aaaa': CONFIG_A})
+    (small,) = [n for n in notes if 'Fewer than 50 problems' in n]
+    assert small.startswith('> note: Fewer than 50 problems in MBPP+ at the smoke tier, items from 2025-01..2025-03,')
+    assert ' | ' not in small and 'adapter' not in small
+
+
+def test_block_words_fall_back_to_the_benchmark_id_and_name_the_prompt_and_revision():
+    key = ('full', 'newbench', 'sha1', 'terse', '', 'abcdef0123456789')
+    words = compare.block_words(key, {})
+    assert words.startswith('newbench at the full tier, system prompt terse, revision ')
+    assert compare.block_words(('smoke', '', '', '', '', ''), {}) == 'an unnamed benchmark at the smoke tier'
 
 
 # ---------------------------------------------------------------------------

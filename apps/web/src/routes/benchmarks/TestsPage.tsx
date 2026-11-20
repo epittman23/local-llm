@@ -1,15 +1,21 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StatusNotice } from '@/components/ui/status-notice';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
 	cancelTestRun,
+	checkServe,
 	fetchDatasets,
 	getDatasets,
+	getLive,
 	getTestOptions,
 	parseBenchmarksEventStream,
 	runOneItem,
@@ -19,13 +25,21 @@ import {
 	type TestRunForm
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { OutcomeBadge } from './OutcomeBadge';
 import {
 	appendNote,
 	calibrationText,
 	type DatasetEvent,
 	datasetEventText,
+	defaultTier,
+	fetchLabel,
+	formatDuration,
 	incrementLabel,
 	missingIncrements,
+	orderTiers,
+	passText,
+	runProgress,
+	TIER_SIZE,
 	windowError
 } from './testsFormat';
 
@@ -39,6 +53,12 @@ type ItemEvent = {
 	total: number;
 	passed: number;
 	attempted: number;
+	/**
+	 * This item's place in the run as received, skipped ones included: the
+	 * log's number. The server's `i` counts attempted items only, so a
+	 * skipped item would repeat the previous number.
+	 */
+	n?: number;
 };
 
 /** What the one-item action reports: graded like a run item, recorded nowhere. */
@@ -78,48 +98,77 @@ type JobEvent =
 type Job = 'run' | 'fetch' | 'selfcheck' | 'item';
 
 const ALL_OPTION = '__all__';
+const FAILURE = /^(fail_|no_code)/;
 
-const outcomeBadgeVariant = (outcome: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
-	const o = (outcome ?? '').toLowerCase();
-	if (o === 'pass' || o === 'passed') return 'default';
-	if (o === 'fail' || o === 'failed') return 'destructive';
-	if (o === 'skip' || o === 'skipped') return 'secondary';
-	return 'outline';
-};
+/** " · profile qwen38": one labelled fact of the served target, the value in mono (DAT-4). */
+function Fact({ label, value }: { label: string; value?: string | number | null }) {
+	if (value === undefined || value === null || value === '') return null;
+	return (
+		<>
+			{' · '}
+			{label} <span className="font-mono">{value}</span>
+		</>
+	);
+}
 
 /**
  * Ports d863707:apps/openwebui/src/lib/components/benchmarks/Tests.svelte: the
  * tier/benchmark/system/slice form, Run/Cancel, and the per-item SSE log
  * (parseBenchmarksEventStream unchanged, same event shapes). "All
- * benchmarks"/"All systems" are real Select options here (ALL_OPTION)
+ * benchmarks"/"No system prompt" are real Select options here (ALL_OPTION)
  * rather than an empty NativeSelect value -- shadcn's Select can't
  * represent an empty string as a selectable item.
+ *
+ * The tier, benchmark and system prompt are in the address (NAV-1):
+ * `?tier=&benchmark=&system=`. It opens on `smoke` (B-D1).
  */
 export function TestsPage() {
 	const token = useAuthStore((state) => state.token) ?? '';
+	const [params, setParams] = useSearchParams();
 
 	const optionsQuery = useQuery({
 		queryKey: ['test-options'],
 		queryFn: () => getTestOptions(token),
 		enabled: !!token
 	});
-	const tiers: string[] = optionsQuery.data?.tiers ?? [];
+	const tiers = orderTiers(optionsQuery.data?.tiers ?? []);
 	const benchmarks: string[] = optionsQuery.data?.benchmarks ?? [];
 	const systems: string[] = optionsQuery.data?.systems ?? [];
 	const windowed = optionsQuery.data?.windows ?? {};
 	const windowedNames = Object.keys(windowed);
 
-	const [suite, setSuite] = useState('');
-	const [benchmark, setBenchmark] = useState(ALL_OPTION);
-	const [system, setSystem] = useState(ALL_OPTION);
+	// What a run will measure (#938): the model Serve started, or a run Live is recording.
+	const serveQuery = useQuery({ queryKey: ['serve-check'], queryFn: () => checkServe(token), enabled: !!token });
+	const liveQuery = useQuery({ queryKey: ['live'], queryFn: () => getLive(token), enabled: !!token });
+	const served = !!serveQuery.data?.running || !!liveQuery.data?.run;
+	const targetKnown = serveQuery.isSuccess && liveQuery.isSuccess;
+	const nothingServed = targetKnown && !served;
+
+	const setParam = (key: string, value: string | null) =>
+		setParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				if (value) next.set(key, value);
+				else next.delete(key);
+				return next;
+			},
+			{ replace: true }
+		);
+	const tierParam = params.get('tier') ?? '';
+	const suite = tiers.includes(tierParam) ? tierParam : defaultTier(tiers);
+	const benchmarkParam = params.get('benchmark') ?? '';
+	const benchmark = benchmarks.includes(benchmarkParam) ? benchmarkParam : ALL_OPTION;
+	const systemParam = params.get('system') ?? '';
+	const system = systems.includes(systemParam) ? systemParam : ALL_OPTION;
+
 	const [slice, setSlice] = useState('');
 	const [resume, setResume] = useState(false);
 	const [windowMin, setWindowMin] = useState('');
 	const [windowMax, setWindowMax] = useState('');
 	const [chosenIncrements, setChosenIncrements] = useState<string[]>([]);
 	const [runWindow, setRunWindow] = useState<string | null>(null);
+	const [confirmRefetch, setConfirmRefetch] = useState(false);
 
-	const effectiveSuite = suite || tiers[0] || '';
 	// The window applies when the run can include a windowed benchmark.
 	const windowApplies = windowedNames.length > 0 && (benchmark === ALL_OPTION || windowedNames.includes(benchmark));
 	const windowProblem = windowApplies ? windowError(windowMin, windowMax) : '';
@@ -131,7 +180,6 @@ export function TestsPage() {
 	const [suiteRunId, setSuiteRunId] = useState<string | null>(null);
 	const [total, setTotal] = useState(0);
 	const [skipped, setSkipped] = useState(0);
-	const [latest, setLatest] = useState<ItemEvent | null>(null);
 	const [items, setItems] = useState<ItemEvent[]>([]);
 	const [done, setDone] = useState<{ passed?: number; attempted?: number; cancelled: boolean } | null>(null);
 	const [job, setJob] = useState<Job>('run');
@@ -139,6 +187,9 @@ export function TestsPage() {
 	const [result, setResult] = useState<ItemResult | null>(null);
 	const [itemBenchmark, setItemBenchmark] = useState('');
 	const [itemId, setItemId] = useState('');
+	const [failuresOnly, setFailuresOnly] = useState(false);
+	const [startedAt, setStartedAt] = useState<number | null>(null);
+	const [now, setNow] = useState(() => Date.now());
 
 	const datasetsQuery = useQuery({
 		queryKey: ['test-datasets'],
@@ -149,6 +200,13 @@ export function TestsPage() {
 	const [streamError, setStreamError] = useState<string | null>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
 
+	// The elapsed time and the estimate move while a job runs.
+	useEffect(() => {
+		if (!running) return;
+		const timer = setInterval(() => setNow(Date.now()), 1000);
+		return () => clearInterval(timer);
+	}, [running]);
+
 	const stopStream = () => {
 		abortControllerRef.current?.abort();
 		abortControllerRef.current = null;
@@ -158,6 +216,8 @@ export function TestsPage() {
 	const startStream = async () => {
 		stopStream();
 		setRunning(true);
+		setStartedAt(Date.now());
+		setNow(Date.now());
 
 		const controller = new AbortController();
 		abortControllerRef.current = controller;
@@ -182,12 +242,12 @@ export function TestsPage() {
 					setRunWindow(data.window ?? null);
 					for (const line of data.notes ?? []) note(line);
 				} else if (data.type === 'item') {
-					setLatest(data);
-					setItems((prev) => [...prev, data]);
+					if (data.total) setTotal(data.total);
+					setItems((prev) => [...prev, { ...data, n: prev.length + 1 }]);
 				} else if (data.type === 'reference') {
 					const row: ItemEvent = { ...data, type: 'item', attempted: data.i };
-					setLatest(row);
-					setItems((prev) => [...prev, row]);
+					if (data.total) setTotal(data.total);
+					setItems((prev) => [...prev, { ...row, n: prev.length + 1 }]);
 				} else if (data.type === 'progress') {
 					note(`${data.benchmark}: ${data.message}${data.total ? ` ${data.total} reference solutions` : ''}`);
 				} else if (data.type === 'dataset') {
@@ -209,6 +269,7 @@ export function TestsPage() {
 		} catch (err) {
 			console.error(err);
 		}
+		setNow(Date.now());
 		void datasetsQuery.refetch();
 		void optionsQuery.refetch();
 		if (abortControllerRef.current === controller) setRunning(false);
@@ -223,12 +284,12 @@ export function TestsPage() {
 		setItems([]);
 		setNotes([]);
 		setResult(null);
-		setLatest(null);
 		setSuiteRunId(null);
 		setTotal(0);
 		setSkipped(0);
 		setRunWindow(null);
 		setStreamError(null);
+		setStartedAt(null);
 	};
 
 	// Each job is started with a POST and followed on the one Tests stream.
@@ -245,7 +306,7 @@ export function TestsPage() {
 				const form = { benchmark: itemBenchmark || benchmarks[0], item_id: itemId.trim() };
 				return runOneItem(token, system !== ALL_OPTION ? { ...form, system } : form);
 			}
-			const form: TestRunForm = { suite: effectiveSuite };
+			const form: TestRunForm = { suite };
 			if (benchmark !== ALL_OPTION) form.benchmark = benchmark;
 			if (system !== ALL_OPTION) form.system = system;
 			if (slice.trim()) form.slice = slice.trim();
@@ -263,33 +324,104 @@ export function TestsPage() {
 	});
 	const cancelMutation = useMutation({ mutationFn: () => cancelTestRun(token) });
 	const busy = jobMutation.isPending || running;
+	const failedJob = jobMutation.isError ? jobMutation.variables?.job : undefined;
+	const allIncrements = windowedNames.flatMap((name) => windowed[name].increments);
+
+	const progress = runProgress(items, total, startedAt ? now - startedAt : 0);
+	const shown = failuresOnly ? items.filter((item) => FAILURE.test(item.outcome)) : items;
+	// One dataset's cells, shared by the wide table and the narrow blocks (DAT-6).
+	const datasetName = (d: (typeof datasets)[number]) => (
+		<span className="flex flex-wrap items-center gap-2">
+			{d.name}
+			{d.vendored && <Badge variant="secondary">In the repository</Badge>}
+		</span>
+	);
+	const datasetItems = (d: (typeof datasets)[number]) =>
+		d.fetched ? (d.n_items ?? '–') : <Badge variant="secondary">Not fetched</Badge>;
+	const datasetCalibration = (d: (typeof datasets)[number]) =>
+		d.calibration_stale ? (
+			<span className="flex flex-wrap items-center gap-2">
+				<span className="text-warning">{d.calibration_stale}</span>
+				{d.fetched && (
+					<Button size="xs" variant="outline" disabled={busy} onClick={() => jobMutation.mutate({ job: 'selfcheck' })}>
+						Run selfcheck
+					</Button>
+				)}
+			</span>
+		) : (
+			calibrationText(d)
+		);
+	const showProgress = (job === 'run' || job === 'selfcheck') && (busy || items.length > 0 || done !== null);
+	const passWord = job === 'selfcheck' ? 'reference solutions pass' : 'passed';
+
+	// The log follows the newest item unless it was scrolled up to read an older one.
+	const logRef = useRef<HTMLDivElement>(null);
+	const following = useRef(true);
+	const shownCount = shown.length;
+	useEffect(() => {
+		const el = logRef.current;
+		if (el && shownCount && following.current) el.scrollTop = el.scrollHeight;
+	}, [shownCount]);
 
 	return (
-		<div className="flex flex-col gap-4">
-			<h2 className="text-lg font-medium">Tests</h2>
+		<div className="flex min-w-0 flex-col gap-4">
+			<div>
+				<h2 className="text-lg font-medium">Tests</h2>
+				<p className="text-foreground-muted text-dense">
+					Run scored coding items against the model being served, and follow each answer as it is graded.
+				</p>
+			</div>
 
-			{(jobMutation.isError || cancelMutation.isError) && (
-				<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-xs">
-					{jobMutation.error ? `Could not start: ${jobMutation.error}` : 'Failed to cancel test run'}
-				</div>
-			)}
-
-			<section aria-label="Datasets" className="flex flex-col gap-2 rounded-lg border px-3 py-2.5">
-				<div className="flex flex-wrap items-center gap-2">
-					<div className="mr-auto text-sm font-medium">Datasets</div>
-					<Button size="sm" variant="secondary" disabled={busy} onClick={() => jobMutation.mutate({ job: 'fetch' })}>
-						Fetch
-					</Button>
-					<Button
-						size="sm"
-						variant="secondary"
-						disabled={busy}
-						onClick={() => {
-							if (window.confirm('Download every dataset again, replacing the copies on disk?'))
-								jobMutation.mutate({ job: 'fetch', force: true });
-						}}
+			{targetKnown &&
+				(served ? (
+					<StatusNotice
+						tone="success"
+						title={`Serving ${serveQuery.data?.model ?? liveQuery.data?.run?.model ?? 'a model'}`}
+						action={
+							<>
+								<Button asChild variant="outline" size="sm">
+									<Link to="/benchmarks/serve">Open Serve</Link>
+								</Button>
+								<Button asChild variant="outline" size="sm">
+									<Link to="/benchmarks/live">Open Live</Link>
+								</Button>
+							</>
+						}
 					>
-						Force refetch
+						<p>
+							Tests run against this server
+							<Fact label="profile" value={serveQuery.data?.profile} />
+							<Fact label="configuration" value={liveQuery.data?.run?.config_id} />
+							<Fact label="port" value={serveQuery.data?.port} />.
+						</p>
+					</StatusNotice>
+				) : (
+					<StatusNotice
+						tone="warning"
+						title="Nothing is being served"
+						action={
+							<Button asChild variant="outline" size="sm">
+								<Link to="/benchmarks/serve">Open Serve</Link>
+							</Button>
+						}
+					>
+						<p>
+							Run and Run item are off until a model is served: a run sends every item to it, so start a profile on
+							Serve first. Selfcheck, under Datasets, grades the reference solutions and needs no model, so it stays on.
+						</p>
+					</StatusNotice>
+				))}
+
+			<section aria-labelledby="tests-datasets" className="flex flex-col gap-3 rounded-lg border px-3 py-3">
+				<div className="flex flex-wrap items-center gap-2">
+					<h3 id="tests-datasets" className="mr-auto text-body font-strong">
+						Datasets
+					</h3>
+					<Button size="sm" variant="secondary" disabled={busy} onClick={() => jobMutation.mutate({ job: 'fetch' })}>
+						{fetchLabel(allIncrements, chosenIncrements)}
+					</Button>
+					<Button size="sm" variant="secondary" disabled={busy} onClick={() => setConfirmRefetch(true)}>
+						Refetch datasets
 					</Button>
 					<Button
 						size="sm"
@@ -300,33 +432,59 @@ export function TestsPage() {
 						Selfcheck
 					</Button>
 				</div>
-				<table className="text-xs">
-					<thead className="text-muted-foreground text-left">
-						<tr>
-							<th className="font-normal">Benchmark</th>
-							<th className="font-normal">Items</th>
-							<th className="font-normal">Revision</th>
-							<th className="font-normal">Calibration</th>
-						</tr>
-					</thead>
-					<tbody>
-						{datasets.map((d) => (
-							<tr key={d.benchmark}>
-								<td>{d.name}</td>
-								<td>{d.fetched ? d.n_items : 'not fetched'}</td>
-								<td className="font-mono">{d.revision ?? '-'}</td>
-								<td className={d.calibration_stale ? 'text-warning' : ''}>{calibrationText(d)}</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
+				{(failedJob === 'fetch' || failedJob === 'selfcheck') && (
+					<p role="alert" className="text-danger text-dense">
+						Couldn't start the {failedJob}: {String(jobMutation.error)}
+					</p>
+				)}
+				{/* DAT-6: a wide table on a wide screen; on a narrow one each dataset is a block of label and value pairs. */}
+				<div className="hidden sm:block">
+					<Table aria-label="Dataset status">
+						<TableHeader>
+							<TableRow>
+								<TableHead scope="col">Benchmark</TableHead>
+								<TableHead scope="col" className="text-right">
+									Items
+								</TableHead>
+								<TableHead scope="col">Revision</TableHead>
+								<TableHead scope="col">Calibration</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{datasets.map((d) => (
+								<TableRow key={d.benchmark}>
+									<TableCell>{datasetName(d)}</TableCell>
+									<TableCell className="text-right tabular-nums">{datasetItems(d)}</TableCell>
+									<TableCell className="font-mono">{d.revision ?? '–'}</TableCell>
+									<TableCell>{datasetCalibration(d)}</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+				<ul aria-label="Dataset status" className="flex flex-col divide-y sm:hidden">
+					{datasets.map((d) => (
+						<li key={d.benchmark} className="flex flex-col gap-1.5 py-2 first:pt-0 last:pb-0">
+							{datasetName(d)}
+							<dl className="text-dense grid grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1">
+								<dt className="text-foreground-muted">Items</dt>
+								<dd className="tabular-nums">{datasetItems(d)}</dd>
+								<dt className="text-foreground-muted">Revision</dt>
+								<dd className="font-mono break-all">{d.revision ?? '–'}</dd>
+								<dt className="text-foreground-muted">Calibration</dt>
+								<dd>{datasetCalibration(d)}</dd>
+							</dl>
+						</li>
+					))}
+				</ul>
 				{windowedNames.map((name) => (
-					<fieldset key={name} className="flex flex-col gap-1 text-xs">
-						<legend className="text-muted-foreground mb-1">
-							{name} is fetched by release increment; Fetch downloads the ones ticked
+					<fieldset key={name} className="flex flex-col text-dense">
+						<legend className="text-foreground-muted mb-1">
+							{name} is fetched by release increment; the fetch downloads the ones ticked
 						</legend>
 						{windowed[name].increments.map((inc) => (
-							<div key={inc.name} className="flex w-fit items-center gap-2">
+							// LAY-3: rows 32 px apart (44 on touch), so one box's hit area never reaches the next.
+							<div key={inc.name} className="flex min-h-8 w-fit items-center gap-2 pointer-coarse:min-h-11">
 								<Checkbox
 									id={`tests-increment-${name}-${inc.name}`}
 									checked={chosenIncrements.includes(inc.name)}
@@ -336,7 +494,7 @@ export function TestsPage() {
 										)
 									}
 								/>
-								<Label htmlFor={`tests-increment-${name}-${inc.name}`} className="text-xs font-normal">
+								<Label htmlFor={`tests-increment-${name}-${inc.name}`} className="text-dense font-normal">
 									{incrementLabel(inc)}
 								</Label>
 							</div>
@@ -354,14 +512,14 @@ export function TestsPage() {
 					<div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
 						<div className="flex flex-col gap-1">
 							<Label htmlFor="tests-tier">Tier</Label>
-							<Select value={effectiveSuite} onValueChange={setSuite}>
+							<Select value={suite} onValueChange={(v) => setParam('tier', v)}>
 								<SelectTrigger id="tests-tier" className="w-full">
 									<SelectValue placeholder="Select a tier" />
 								</SelectTrigger>
 								<SelectContent>
 									{tiers.map((tier) => (
 										<SelectItem key={tier} value={tier}>
-											{tier}
+											{TIER_SIZE[tier] ? `${tier} · ${TIER_SIZE[tier]}` : tier}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -369,7 +527,7 @@ export function TestsPage() {
 						</div>
 						<div className="flex flex-col gap-1">
 							<Label htmlFor="tests-benchmark">Benchmark</Label>
-							<Select value={benchmark} onValueChange={setBenchmark}>
+							<Select value={benchmark} onValueChange={(v) => setParam('benchmark', v === ALL_OPTION ? null : v)}>
 								<SelectTrigger id="tests-benchmark" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
@@ -384,13 +542,13 @@ export function TestsPage() {
 							</Select>
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label htmlFor="tests-system">System</Label>
-							<Select value={system} onValueChange={setSystem}>
+							<Label htmlFor="tests-system">System prompt</Label>
+							<Select value={system} onValueChange={(v) => setParam('system', v === ALL_OPTION ? null : v)}>
 								<SelectTrigger id="tests-system" className="w-full">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value={ALL_OPTION}>All systems</SelectItem>
+									<SelectItem value={ALL_OPTION}>No system prompt</SelectItem>
 									{systems.map((s) => (
 										<SelectItem key={s} value={s}>
 											{s}
@@ -452,71 +610,91 @@ export function TestsPage() {
 						</div>
 					)}
 
-					<label className="flex w-fit items-center gap-2 text-xs">
-						<Checkbox checked={resume} onCheckedChange={(checked) => setResume(checked === true)} />
-						Resume previous run
-					</label>
+					<div className="flex w-fit items-center gap-2 text-dense">
+						<Checkbox id="tests-resume" checked={resume} onCheckedChange={(checked) => setResume(checked === true)} />
+						<Label htmlFor="tests-resume" className="text-dense font-normal">
+							Resume previous run
+						</Label>
+					</div>
 				</>
 			)}
 
-			<div className="flex items-center gap-2">
-				<Button
-					onClick={() => jobMutation.mutate({ job: 'run' })}
-					disabled={busy || !effectiveSuite || !!windowProblem}
-				>
-					{jobMutation.isPending && job === 'run' ? 'Starting…' : 'Run'}
-				</Button>
-				<Button
-					variant="secondary"
-					onClick={() => cancelMutation.mutate()}
-					disabled={cancelMutation.isPending || !running}
-				>
-					{cancelMutation.isPending ? 'Cancelling…' : 'Cancel'}
-				</Button>
-
-				{running && (
-					<div className="text-muted-foreground ml-2 text-xs">
-						{latest
-							? `${latest.i}/${latest.total || total} - ${latest.passed} ${job === 'selfcheck' ? 'reference solutions pass' : 'passed'}`
-							: 'Starting…'}
-					</div>
+			<div className="flex flex-col gap-1.5">
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						onClick={() => jobMutation.mutate({ job: 'run' })}
+						disabled={busy || !suite || !!windowProblem || nothingServed}
+						aria-describedby={nothingServed ? 'tests-run-reason' : undefined}
+					>
+						{jobMutation.isPending && job === 'run' ? 'Starting…' : suite ? `Run ${suite}` : 'Run'}
+					</Button>
+					<Button
+						variant="secondary"
+						onClick={() => cancelMutation.mutate()}
+						disabled={cancelMutation.isPending || !running}
+					>
+						{cancelMutation.isPending ? 'Cancelling…' : 'Cancel run'}
+					</Button>
+					{nothingServed && (
+						<span id="tests-run-reason" className="text-foreground-muted text-dense">
+							Start a profile on Serve first.
+						</span>
+					)}
+				</div>
+				{/* FBK-1: a failure to start or cancel shows beside the button that was pressed. */}
+				{failedJob === 'run' && (
+					<p role="alert" className="text-danger text-dense">
+						Couldn't start the run: {String(jobMutation.error)}
+					</p>
+				)}
+				{cancelMutation.isError && (
+					<p role="alert" className="text-danger text-dense">
+						Couldn't cancel the run: {String(cancelMutation.error)}
+					</p>
 				)}
 			</div>
 
-			<section aria-label="Run one item" className="flex flex-wrap items-end gap-2">
-				<div className="flex flex-col gap-1">
-					<Label htmlFor="tests-item-benchmark">Item benchmark</Label>
-					<Select value={itemBenchmark || benchmarks[0] || ''} onValueChange={setItemBenchmark}>
-						<SelectTrigger id="tests-item-benchmark" className="w-40">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{benchmarks.map((b) => (
-								<SelectItem key={b} value={b}>
-									{b}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+			<section aria-label="Run one item" className="flex flex-col gap-1.5">
+				<div className="flex flex-wrap items-end gap-2">
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="tests-item-benchmark">Item benchmark</Label>
+						<Select value={itemBenchmark || benchmarks[0] || ''} onValueChange={setItemBenchmark}>
+							<SelectTrigger id="tests-item-benchmark" className="w-40">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{benchmarks.map((b) => (
+									<SelectItem key={b} value={b}>
+										{b}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="tests-item-id">Item id</Label>
+						<Input
+							id="tests-item-id"
+							className="w-48"
+							placeholder="e.g. HumanEval/0"
+							value={itemId}
+							onChange={(e) => setItemId(e.target.value)}
+						/>
+					</div>
+					<Button
+						variant="secondary"
+						disabled={busy || !itemId.trim() || !benchmarks.length || nothingServed}
+						onClick={() => jobMutation.mutate({ job: 'item' })}
+					>
+						Run item
+					</Button>
+					<span className="text-muted-foreground text-xs">Graded like a run item; not recorded.</span>
 				</div>
-				<div className="flex flex-col gap-1">
-					<Label htmlFor="tests-item-id">Item id</Label>
-					<Input
-						id="tests-item-id"
-						className="w-48"
-						placeholder="e.g. HumanEval/0"
-						value={itemId}
-						onChange={(e) => setItemId(e.target.value)}
-					/>
-				</div>
-				<Button
-					variant="secondary"
-					disabled={busy || !itemId.trim() || !benchmarks.length}
-					onClick={() => jobMutation.mutate({ job: 'item' })}
-				>
-					Run item
-				</Button>
-				<span className="text-muted-foreground text-xs">Graded like a run item; not recorded.</span>
+				{failedJob === 'item' && (
+					<p role="alert" className="text-danger text-dense">
+						Couldn't run the item: {String(jobMutation.error)}
+					</p>
+				)}
 			</section>
 
 			{result && (
@@ -525,10 +703,10 @@ export function TestsPage() {
 						<span className="text-sm font-medium">
 							{result.benchmark}/{result.item_id}
 						</span>
-						<Badge variant={outcomeBadgeVariant(result.outcome)}>{result.outcome}</Badge>
+						<OutcomeBadge outcome={result.outcome} />
 						{result.reason && <span className="text-muted-foreground">{result.reason}</span>}
 						{result.wall_ms !== undefined && (
-							<span className="text-muted-foreground ml-auto">{(result.wall_ms / 1000).toFixed(1)}s</span>
+							<span className="text-muted-foreground ml-auto">{(result.wall_ms / 1000).toFixed(1)} s</span>
 						)}
 					</div>
 					{result.excluded && <div className="text-warning">A suite here leaves this item out: {result.excluded}</div>}
@@ -539,16 +717,9 @@ export function TestsPage() {
 			)}
 
 			{streamError && (
-				<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-xs">
+				<p role="alert" className="text-danger text-dense">
 					{streamError}
-				</div>
-			)}
-
-			{suiteRunId && (
-				<div className="text-muted-foreground text-xs">
-					Suite run: <span className="text-foreground">{suiteRunId}</span> · Total: {total} · Skipped: {skipped}
-					{runWindow && <Badge className="ml-2">Release-date window: {runWindow}</Badge>}
-				</div>
+				</p>
 			)}
 
 			{notes.length > 0 && (
@@ -559,33 +730,115 @@ export function TestsPage() {
 				</ul>
 			)}
 
-			<div className="flex flex-col gap-1">
-				<div className="text-sm">Item Log</div>
-				<div className="h-72 overflow-y-auto rounded-lg border text-xs">
-					{items.map((item, idx) => (
-						<div key={idx} className="flex items-center gap-2 border-b px-2.5 py-1 last:border-b-0">
-							<span className="text-muted-foreground w-10 shrink-0">{item.i}</span>
-							<span className="truncate">{item.benchmark}</span>
-							<span className="text-muted-foreground flex-1 truncate">{item.item_id}</span>
-							<Badge variant={outcomeBadgeVariant(item.outcome)}>{item.outcome}</Badge>
-							{item.reason && <span className="text-muted-foreground max-w-48 truncate">{item.reason}</span>}
+			{showProgress && (
+				<section aria-label="Progress" className="flex flex-col gap-2 rounded-lg border px-3 py-3">
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+						<h3 className="text-body font-strong">
+							{done ? 'Done' : running ? (job === 'selfcheck' ? 'Selfcheck running' : 'Running') : 'Stopped'}
+						</h3>
+						{done?.cancelled && <Badge variant="secondary">Cancelled</Badge>}
+						{suiteRunId && (
+							<span className="text-foreground-muted min-w-0 text-dense break-all">
+								Suite run <span className="text-foreground font-mono">{suiteRunId}</span>
+							</span>
+						)}
+						{suiteRunId && job === 'run' && (
+							<Button asChild variant="outline" size="sm" className="sm:ml-auto">
+								<Link to={`/benchmarks/answers?run=${encodeURIComponent(suiteRunId)}`}>Open in Answers</Link>
+							</Button>
+						)}
+					</div>
+					{progress.total > 0 && (
+						<div
+							role="progressbar"
+							aria-label={job === 'selfcheck' ? 'Selfcheck progress' : 'Run progress'}
+							aria-valuemin={0}
+							aria-valuemax={progress.total}
+							aria-valuenow={progress.done}
+							aria-valuetext={`${progress.done} of ${progress.total} items`}
+							className="bg-surface-3 h-2 w-full overflow-hidden rounded-full"
+						>
+							<div
+								className="bg-foreground-muted h-full rounded-full transition-[width]"
+								style={{ width: `${Math.min(100, (progress.done / progress.total) * 100)}%` }}
+							/>
 						</div>
-					))}
-					{items.length === 0 && <div className="text-muted-foreground px-2.5 py-4 text-center">No items yet</div>}
-				</div>
-			</div>
-
-			{done && (
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2.5 text-xs">
-					<span className="text-sm font-medium">Done</span>
-					{done.attempted !== undefined && (
-						<span className="text-muted-foreground">
-							{done.passed} / {done.attempted} passed
-						</span>
 					)}
-					{done.cancelled && <Badge variant="secondary">Cancelled</Badge>}
-				</div>
+					<p className="text-dense tabular-nums">
+						{progress.done} of {progress.total || '–'} items · {passText(progress.passed, progress.attempted, passWord)}
+						{progress.skipped + skipped > 0 && ` · ${progress.skipped + skipped} skipped, not counted`}
+						{startedAt !== null && ` · ${formatDuration(now - startedAt)} elapsed`}
+						{running && progress.leftMs !== null && ` · about ${formatDuration(progress.leftMs)} left`}
+						{runWindow && ` · release-date window ${runWindow}`}
+					</p>
+					{done?.attempted !== undefined && (
+						<p className="text-dense">Final: {passText(done.passed ?? 0, done.attempted, passWord)}</p>
+					)}
+
+					<div className="flex items-center gap-2 text-dense">
+						<Checkbox
+							id="tests-failures-only"
+							checked={failuresOnly}
+							onCheckedChange={(checked) => setFailuresOnly(checked === true)}
+						/>
+						<Label htmlFor="tests-failures-only" className="text-dense font-normal">
+							Show failures only
+						</Label>
+					</div>
+					<section
+						ref={logRef}
+						aria-label="Item log"
+						// A tab stop the arrow keys scroll, once there is something to scroll (DAT-6).
+						tabIndex={shownCount ? 0 : undefined}
+						onScroll={(e) => {
+							const el = e.currentTarget;
+							following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+						}}
+						className="max-h-[60svh] min-h-32 overflow-y-auto rounded-lg border text-dense"
+					>
+						{shown.map((item, idx) => (
+							<div
+								key={idx}
+								className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 border-b px-2.5 py-1.5 last:border-b-0 sm:grid-cols-[3rem_9rem_minmax(0,12rem)_auto_minmax(0,1fr)]"
+							>
+								<span className="text-foreground-muted text-right tabular-nums">{item.n ?? item.i}</span>
+								<span className="truncate">{item.benchmark}</span>
+								<span className="max-sm:col-start-3 max-sm:row-start-1 sm:col-start-4 sm:row-start-1">
+									<OutcomeBadge outcome={item.outcome} />
+								</span>
+								<span className="font-mono break-all max-sm:col-span-2 max-sm:col-start-2 sm:col-start-3 sm:row-start-1">
+									{item.item_id}
+								</span>
+								{item.reason && (
+									<span className="text-foreground-muted break-words max-sm:col-span-2 max-sm:col-start-2 sm:col-start-5 sm:row-start-1">
+										{item.reason}
+									</span>
+								)}
+							</div>
+						))}
+						{shownCount === 0 && (
+							<p className="text-muted-foreground px-2.5 py-4 text-center">
+								{failuresOnly && items.length ? 'No failures so far' : 'No items yet'}
+							</p>
+						)}
+					</section>
+				</section>
 			)}
+
+			<ConfirmDialog
+				open={confirmRefetch}
+				onOpenChange={setConfirmRefetch}
+				title="Refetch every dataset?"
+				confirmLabel="Refetch datasets"
+				destructive
+				onConfirm={() => {
+					setConfirmRefetch(false);
+					jobMutation.mutate({ job: 'fetch', force: true });
+				}}
+			>
+				Each dataset is downloaded again and replaces the copy on disk. Datasets kept in the repository are only
+				checked.
+			</ConfirmDialog>
 		</div>
 	);
 }

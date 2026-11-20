@@ -425,8 +425,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `field-message.tsx` (the help or error line under a field, FRM-2),
   `segmented-control.tsx` (FRM-4), `status-notice.tsx` (a section's state,
   STA-4) and `command.tsx` (a list chosen from by keyboard, on cmdk, NAV-5).
-  `table.tsx` adds `TableSortHead`, `TableRow onOpen` and `stickyFirstColumn`
-  to shadcn's table (DAT-6).
+  `table.tsx` adds `TableSortHead`, `TableRow onOpen`, `stickyFirstColumn`
+  and `stickyHeader` to shadcn's table (DAT-6).
 - **`src/routes/`** — react-router. `AppRouter.tsx` has two kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/`, the Phase 9 surfaces and, last, `NotFound`, the
@@ -434,7 +434,16 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (`public/`: `/auth`, `/error` (`ErrorPage`, which polls until the server
   answers), `/watch`, `/s/:id`), which are top-level siblings because they
   must render without a session. `benchmarks/`
-  holds all eight Benchmarks pages plus their admin/feature-flag gate.
+  holds all eight Benchmarks pages plus their admin/feature-flag gate, and
+  their shared pieces: `BenchmarksLayout.tsx` (the grouped tabs and the
+  status chip), `OutcomeBadge.tsx` (the six graded outcomes as status
+  badges, for Tests, Answers and Compare), `resultLinks.ts` (Tune and
+  Pre-screen results as Serve and profile-version links) and
+  `ResultActions.tsx` (those links as buttons, plus the status badge),
+  `ServeLog.tsx` (the served model's log panel), `fields.tsx` (the Serve and
+  profile forms' shared fields: a setting's name with its flag, a select
+  whose empty choice is the profile's own) and `profileForm.ts` (a profile definition's
+  fields, enumerations and argv text).
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
   and `workspaceAccess.ts` (the pure permission rules, unit-tested, and

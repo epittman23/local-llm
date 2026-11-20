@@ -100,8 +100,26 @@ test.beforeEach(async ({ page, context }) => {
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify([qwen38Entry.version])
+			body: JSON.stringify([{ ...qwen38Entry.version, note: 'Seeded from the shell profile' }])
 		})
+	);
+	// P1: Serve's launch preview and weights check (GETs, read-only).
+	await page.route('**/api/v1/benchmarks/serve/preview?**', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				profile: 'qwen38',
+				version: 1,
+				argv: ['llama-server', '-m', '/models/qwen38.gguf', '-ngl', '20'],
+				config_id: 'c98ef02c',
+				config_lines: [],
+				warning: null
+			})
+		})
+	);
+	await page.route('**/api/v1/benchmarks/serve/profile/**', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ weights_present: true }) })
 	);
 });
 
@@ -109,7 +127,8 @@ test('the Benchmarks gate admits an admin and Serve renders the profile list', a
 	await page.goto('/benchmarks');
 
 	// Bare /benchmarks redirects to /serve (AppRouter.tsx's index route).
-	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	// Serve then keeps its profile in the address (NAV-1).
+	await expect(page).toHaveURL(/\/benchmarks\/serve(\?profile=qwen38)?$/);
 	await expect(page.getByRole('heading', { name: 'Serve' })).toBeVisible();
 
 	// Three comboboxes exist on this page (profile, reasoning effort, spec) --
@@ -122,35 +141,37 @@ test('the Profiles panel lists profiles from the CRUD backend', async ({ page })
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await expect(page.getByRole('dialog')).toBeVisible();
-	await expect(page.getByText('qwen38')).toBeVisible();
-	// exact + case-sensitive: without it this also matches the Serve page's
-	// own "Default" reasoning/spec <Select> options underneath the dialog.
-	await expect(page.getByText('default', { exact: true })).toBeVisible();
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('qwen38', { exact: true })).toBeVisible();
+	// The default profile's status badge (#977), scoped to the dialog: the
+	// Serve page's own "Default (…)" select options sit underneath it.
+	await expect(dialog.getByText('Default', { exact: true })).toBeVisible();
 });
 
 test('Edit opens a version-history-backed form pre-filled from the current definition', async ({ page }) => {
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await page.getByRole('button', { name: 'Edit' }).click();
+	await page.getByRole('button', { name: 'Edit qwen38' }).click();
 
 	await expect(page.getByRole('heading', { name: 'New version of qwen38' })).toBeVisible();
-	// Scoped to the dialog: Serve's own "ctx" override input is still in the
-	// DOM behind it and shares the label text.
+	// Scoped to the dialog: Serve's own "Context" override input is still in
+	// the DOM behind it and shares the label text. Labels are words now (#1052).
 	const dialog = page.getByRole('dialog');
-	await expect(dialog.getByLabel('model_path')).toHaveValue('/models/qwen38.gguf');
-	await expect(dialog.getByLabel('ctx')).toHaveValue('4096');
+	await expect(dialog.getByLabel('Model file')).toHaveValue('/models/qwen38.gguf');
+	await expect(dialog.getByRole('textbox', { name: 'Context', exact: true })).toHaveValue('4096');
 });
 
 test('History shows the version table for a profile', async ({ page }) => {
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
-	await page.getByRole('button', { name: 'History' }).click();
+	await page.getByRole('button', { name: 'History of qwen38' }).click();
 
 	await expect(page.getByRole('heading', { name: 'qwen38 — version history' })).toBeVisible();
-	await expect(page.getByRole('cell', { name: 'the dense baseline profile' })).toBeVisible();
+	// Each version's own note, not the profile's notes (#978).
+	await expect(page.getByRole('dialog').getByText('Seeded from the shell profile')).toBeVisible();
 });
 
 test('Live shows the empty state when nothing is recording', async ({ page }) => {
@@ -165,8 +186,8 @@ test('Live shows the empty state when nothing is recording', async ({ page }) =>
 	await page.goto('/benchmarks/live');
 
 	await expect(page.getByRole('heading', { name: 'Live' })).toBeVisible();
-	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Kill' })).not.toBeVisible();
+	await expect(page.getByText('Nothing is being recorded')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Kill server' })).not.toBeVisible();
 });
 
 test('Live renders an active run and Kill requires AlertDialog confirmation', async ({ page }) => {
@@ -192,17 +213,18 @@ test('Live renders an active run and Kill requires AlertDialog confirmation', as
 
 	await page.goto('/benchmarks/live');
 
-	await expect(page.getByText('qwen38')).toBeVisible();
-	await expect(page.getByText('abc123')).toBeVisible();
+	// The section's status chip names the run too; these read the Live page's own copy.
+	await expect(page.getByText('qwen38', { exact: true })).toBeVisible();
+	await expect(page.getByText('abc123').and(page.locator(':not([role="status"] *)'))).toBeVisible();
 
-	await page.getByRole('button', { name: 'Kill' }).click();
-	await expect(page.getByRole('heading', { name: 'Kill active run' })).toBeVisible();
+	await page.getByRole('button', { name: 'Kill server' }).click();
+	await expect(page.getByRole('heading', { name: 'Kill the recorded server?' })).toBeVisible();
 	// AlertDialog, not Dialog, per Phase 5's own checklist wording -- clicking
 	// the trigger must not kill anything by itself.
-	await expect(page.getByText('the currently running server', { exact: false })).toBeVisible();
+	await expect(page.getByText('force-stops', { exact: false })).toBeVisible();
 
-	await page.getByRole('button', { name: 'Kill', exact: true }).last().click();
-	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
+	await page.getByRole('button', { name: 'Kill server', exact: true }).last().click();
+	await expect(page.getByText('Nothing is being recorded')).toBeVisible();
 });
 
 test('Tests runs a suite and streams per-item outcomes to completion', async ({ page }) => {
@@ -249,13 +271,13 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await page.goto('/benchmarks/tests');
 
 	await expect(page.getByRole('heading', { name: 'Tests' })).toBeVisible();
-	await page.getByRole('button', { name: 'Run', exact: true }).click();
+	await page.getByRole('button', { name: 'Run smoke' }).click();
 
 	await expect(page.getByText('20260101T000000Z-abc123')).toBeVisible();
 	await expect(page.getByText('HumanEval/0')).toBeVisible();
 	await expect(page.getByText('HumanEval/1')).toBeVisible();
 	await expect(page.getByText('AssertionError')).toBeVisible();
-	await expect(page.getByText('1 / 2 passed')).toBeVisible();
+	await expect(page.getByText('Final: 1 of 2 passed (50%)')).toBeVisible();
 });
 
 // The Tests page's dataset actions (#141): each POSTs, then follows the one Tests stream.
@@ -326,7 +348,7 @@ test('Fetch on a vendored dataset says it is in the repository', async ({ page }
 	);
 	await page.goto('/benchmarks/tests');
 	const panel = page.getByRole('region', { name: 'Datasets' });
-	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await panel.getByRole('button', { name: 'Fetch datasets', exact: true }).click();
 	await expect(
 		page.getByText('humanevalplus: in the repository, verified, 164 items, revision v0.1.10@42526ec0e7d5')
 	).toBeVisible();
@@ -340,21 +362,23 @@ test('Tests fetches the datasets and shows what was downloaded', async ({ page }
 	]);
 	await page.goto('/benchmarks/tests');
 	const panel = page.getByRole('region', { name: 'Datasets' });
-	await expect(panel.getByText('not fetched')).toBeVisible();
+	// At this width the datasets are a table; the stacked blocks are for a narrow screen (DAT-6).
+	const table = panel.getByRole('region', { name: 'Dataset status' });
+	await expect(table.getByText('Not fetched')).toBeVisible();
 	// Nothing to check before anything is fetched.
 	await expect(panel.getByRole('button', { name: 'Selfcheck' })).toBeDisabled();
-	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await panel.getByRole('button', { name: 'Fetch datasets', exact: true }).click();
 	await expect(page.getByText('humanevalplus: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
 	expect(seen.body).toEqual({});
 	// The table is read again once the job ends.
-	await expect(panel.getByText('163/164 gradeable')).toBeVisible();
+	await expect(table.getByText('163/164 gradeable')).toBeVisible();
 });
 
 test('Tests force-refetches only after confirming', async ({ page }) => {
 	const seen = await mockTestsJob(page, 'fetch', [{ type: 'done', cancelled: false }]);
 	await page.goto('/benchmarks/tests');
-	page.once('dialog', (dialog) => dialog.accept());
-	await page.getByRole('button', { name: 'Force refetch' }).click();
+	await page.getByRole('button', { name: 'Refetch datasets' }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Refetch datasets' }).click();
 	await expect.poll(() => seen.body).toEqual({ force: true });
 });
 
@@ -420,10 +444,10 @@ test('Tests runs one item and shows its answer without recording it', async ({ p
 	await form.getByRole('button', { name: 'Run item' }).click();
 	const card = page.getByTestId('item-result');
 	await expect(card).toContainText('mbppplus/2');
-	await expect(card).toContainText('fail_assert');
+	await expect(card).toContainText('assert failed');
 	await expect(card).toContainText('A suite here leaves this item out: fail_assert: its own reference fails here');
 	await expect(card).toContainText('def neg(a):');
-	await expect(card).toContainText('2.3s');
+	await expect(card).toContainText('2.3 s');
 	expect(seen.body).toEqual({ benchmark: 'mbppplus', item_id: '2' });
 });
 
@@ -526,10 +550,10 @@ test('Compare shows each block with intervals, groups and paired tests', async (
 
 	await expect(page.getByRole('heading', { name: 'Compare' })).toBeVisible();
 	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
-	await expect(page.getByText('100% [67.6, 100.0]')).toBeVisible();
-	await expect(page.getByText('25% [7.2, 59.1]')).toBeVisible();
+	await expect(page.getByText('100.0 [67.6, 100.0]')).toBeVisible();
+	await expect(page.getByText('25.0 [7.2, 59.1]')).toBeVisible();
 	await expect(page.getByText('0.412 [0.301, 0.563]')).toBeVisible();
-	await expect(page.getByText('Holm across 1 test(s)', { exact: false })).toBeVisible();
+	await expect(page.getByText('Holm-corrected across 1 test at alpha 0.05', { exact: false })).toBeVisible();
 	await expect(page.getByText('exact McNemar')).toBeVisible();
 	await expect(page.getByText('different', { exact: true })).toBeVisible();
 	await expect(page.getByText('differ in 2 flags', { exact: false })).toBeVisible();
@@ -572,18 +596,23 @@ test('Compare benchmark view renders flat per-benchmark columns and sorts on hea
 	);
 
 	await page.goto('/benchmarks/compare');
-	await page.getByRole('combobox').first().click();
+	await page.getByRole('combobox', { name: 'Compare by' }).click();
 	await page.getByRole('option', { name: 'Benchmark' }).click();
+	await expect(page).toHaveURL(/\?by=benchmark$/);
 
-	await expect(page.getByText('72%')).toBeVisible();
+	await expect(page.getByText('72.0')).toBeVisible();
 	await expect(page.getByText('18/25')).toBeVisible();
 
 	// TanStack Table defaults a numeric column's first click to descending
 	// (highest first), which is the more useful default for a rate column.
 	const firstDataRow = page.getByRole('row').nth(1);
-	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
+	await page.getByRole('button', { name: 'DS-1000 pass rate, %' }).click();
+	await expect(page.getByRole('columnheader', { name: 'DS-1000 pass rate, %' })).toHaveAttribute(
+		'aria-sort',
+		'descending'
+	);
 	await expect(firstDataRow).toContainText('bbb222');
-	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
+	await page.getByRole('button', { name: 'DS-1000 pass rate, %' }).click();
 	await expect(firstDataRow).toContainText('aaa111');
 });
 
@@ -607,12 +636,12 @@ test('Compare serving view renders the serving rows and the derived table', asyn
 	);
 
 	await page.goto('/benchmarks/compare');
-	await page.getByRole('combobox').first().click();
+	await page.getByRole('combobox', { name: 'Compare by' }).click();
 	await page.getByRole('option', { name: 'Serving' }).click();
 
-	await expect(page.getByRole('columnheader', { name: 'Gen Tps' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Gen, t/s' })).toBeVisible();
 	await expect(page.getByText('2.97')).toBeVisible();
-	await expect(page.getByRole('columnheader', { name: 'Ms Per Token' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Time per token, ms' })).toBeVisible();
 	await expect(page.getByText('336.7')).toBeVisible();
 });
 
@@ -679,7 +708,7 @@ test('Answers lists results and renders a selected transcript', async ({ page })
 	await expect(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
 	await expect(page.getByText('HumanEval/3')).toBeVisible();
 
-	await page.getByText('HumanEval/3').click();
+	await page.getByRole('button', { name: /HumanEval\/3/ }).click();
 	await expect(page.getByText('wrong on purpose')).toBeVisible();
 	await expect(page.getByText('71bc58dd')).toBeVisible();
 });
@@ -696,18 +725,24 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({
-				markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
-				figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png'],
-				windows: ['2025-01-01..2025-04-06']
-			})
+			body: JSON.stringify(
+				route.request().method() === 'GET'
+					? { reports: [] }
+					: {
+							markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
+							figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png'],
+							date: '2026-01-01-abc123',
+							windows: ['2025-01-01..2025-04-06'],
+							figures_skipped: ''
+						}
+			)
 		})
 	);
 	await page.route('**/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md', (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: 'text/plain',
-			body: '# Serving comparison\n\n<script>window.__xss = true</script>\n\nqwen38 leads on pass rate.\n'
+			body: '# Serving comparison\n\n<script>window.__xss = true</script>\n\nqwen38 leads on pass rate.\n\n![generation throughput per request](fig1.png)\n\n*Throughput over the run*\n'
 		})
 	);
 	// A 1x1 transparent PNG, just enough for the browser to accept it as a
@@ -723,12 +758,15 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 	await page.goto('/benchmarks/report');
 
 	await expect(page.getByRole('heading', { name: 'Report' })).toBeVisible();
-	await page.getByRole('button', { name: 'Generate' }).click();
+	await page.getByRole('button', { name: 'Generate report' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Serving comparison' })).toBeVisible();
 	await expect(page.getByText('qwen38 leads on pass rate.')).toBeVisible();
 	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
-	await expect(page.locator('img[alt$="fig1.png"]')).toBeVisible();
+	// The figure sits where the report references it, fetched with the token, with its caption.
+	await expect(page.getByRole('img', { name: 'generation throughput per request' })).toBeVisible();
+	await expect(page.getByText('Throughput over the run')).toBeVisible();
+	await expect(page).toHaveURL(/report=2026-01-01-abc123/);
 	// DOMPurify stripped the <script> tag -- its text must not appear as
 	// literal markup, and it must not have actually executed.
 	await expect(page.locator('script:has-text("__xss")')).toHaveCount(0);
@@ -797,13 +835,13 @@ test('Tune shows sweep status streamed as whole-object replacements, and Stop re
 	// The final (second) event's state, not an accumulation of both --
 	// two rounds, "adopted", and candidate-b as the winner rather than
 	// still "active".
-	await expect(page.getByText('adopted')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Result' }).getByText('Adopted', { exact: true })).toBeVisible();
 	await expect(page.getByRole('row', { name: /^2\s/ })).toBeVisible();
-	await expect(page.getByText('★ winner')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Candidates' }).getByText('Winner', { exact: true })).toBeVisible();
 	await expect(page.getByRole('row').filter({ hasText: 'candidate-b' })).not.toContainText('active');
 
 	// Stop is disabled once the sweep has already stopped running.
-	await expect(page.getByRole('button', { name: 'Stop' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Stop sweep' })).toBeDisabled();
 });
 
 test('Pre-screen streams a running sweep and labels its candidates as raw llama-bench throughput', async ({ page }) => {
@@ -893,7 +931,7 @@ test('Pre-screen streams a running sweep and labels its candidates as raw llama-
 	await page.goto('/benchmarks/prescreen');
 
 	await expect(page.getByRole('heading', { name: 'Pre-screen' })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Pre-screen' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pre-screen', exact: true })).toBeVisible();
 	await expect(
 		page.getByText('Candidates, raw llama-bench throughput (not a serving measurement): confirm with a full Tests run')
 	).toBeVisible();
@@ -901,9 +939,11 @@ test('Pre-screen streams a running sweep and labels its candidates as raw llama-
 	// The events replaced each other, and the final read replaced them: three
 	// points, the third an OOM, and the sweep done.
 	await expect(page.getByText('Points (3)')).toBeVisible();
-	await expect(page.getByRole('cell', { name: 'oom' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
-	await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+	await expect(page.getByRole('cell', { name: 'Out of memory' })).toBeVisible();
+	// The start form folds away while a sweep is shown.
+	await page.getByRole('button', { name: /^New pre-screen/ }).click();
+	await expect(page.getByRole('button', { name: 'Start pre-screen' })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Cancel pre-screen' })).toBeDisabled();
 });
 
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
@@ -944,7 +984,7 @@ test('Serve Start settles while the log stream is still open', async ({ page }) 
 	await page.goto('/benchmarks/serve');
 	await page.getByRole('button', { name: 'Start' }).click();
 	await expect.poll(() => started).toBe(1);
-	await expect(page.getByText('Log (streaming…)')).toBeVisible();
+	await expect(page.getByText('Streaming', { exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
 });
@@ -963,7 +1003,143 @@ test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.route('**/api/v1/benchmarks/tests/stream', () => {});
 
 	await page.goto('/benchmarks/tests');
-	await page.getByRole('button', { name: 'Run', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Run smoke' }).click();
+	await expect(page.getByRole('button', { name: 'Cancel run' })).toBeEnabled();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});
+
+// P2
+test('Tests names what is served and holds Run while nothing is', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['full', 'smoke', 'standard'], benchmarks: ['humanevalplus'], systems: [] })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ run: null }) })
+	);
+	await page.goto('/benchmarks/tests');
+	await expect(page.getByText('Nothing is being served')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run smoke' })).toBeDisabled();
+
+	await page.route('**/api/v1/benchmarks/serve/check', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ port: 8090, model: 'qwen3.8-27b', profile: 'qwen38', running: true })
+		})
+	);
+	await page.goto('/benchmarks/tests?tier=standard');
+	await expect(page.getByText('Serving qwen3.8-27b')).toBeVisible();
+	await expect(page.getByText('Tests run against this server · profile qwen38 · port 8090.')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Run standard' })).toBeEnabled();
+});
+
+// P3
+test('Compare keeps its view in the address, warns first, and keeps the failures header in view', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	const failures = Array.from({ length: 60 }, (_, i) => ({
+		config_id: 'aaa111',
+		model: 'qwen38',
+		tier: 'smoke',
+		benchmark: 'ds1000',
+		item_id: `DS/${i}`,
+		outcome: i % 2 ? 'fail_assert' : 'fail_timeout',
+		reason: 'AssertionError',
+		reasoning_chars: 1200 + i
+	}));
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) => {
+		const by = new URL(route.request().url()).searchParams.get('by');
+		const body = by === 'failures' ? { rows: failures, notes: [] } : compareConfigBody;
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+
+	await page.goto('/benchmarks/compare?baseline=nope');
+	await expect(page.getByText('No configuration nope in these results')).toBeVisible();
+	const warning = page.getByText('Read this comparison with care');
+	const firstTable = page.getByRole('region', { name: /^Configurations, DS-1000/ });
+	await expect(firstTable).toBeVisible();
+	const top = (locator: typeof warning) => locator.evaluate((el) => el.getBoundingClientRect().top);
+	expect(await top(warning)).toBeLessThan(await top(firstTable));
+	await page.getByRole('button', { name: 'Clear baseline' }).click();
+	await expect(page).toHaveURL(/\/benchmarks\/compare$/);
+
+	await page.goto('/benchmarks/compare?by=failures');
+	const region = page.getByRole('region', { name: 'Failures' });
+	await expect(region.getByText('DS/0', { exact: true })).toBeVisible();
+	await region.evaluate((el) => {
+		el.scrollTop = 600;
+	});
+	const [regionTop, headTop] = await region.evaluate((el) => [
+		el.getBoundingClientRect().top,
+		(el.querySelector('thead th') as HTMLElement).getBoundingClientRect().top
+	]);
+	expect(Math.abs(headTop - regionTop)).toBeLessThan(2);
+});
+
+test('Compare shows a failed load in place with the reason and Try again', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	let fail = true;
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) =>
+		fail
+			? route.fulfill({
+					status: 400,
+					contentType: 'application/json',
+					body: JSON.stringify({ detail: "unknown tier 'nightly'" })
+				})
+			: route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareConfigBody) })
+	);
+	await page.goto('/benchmarks/compare');
+	const content = page.locator('#content');
+	await expect(content.getByText("Couldn't load the comparison")).toBeVisible();
+	await content.getByText('Details').click();
+	await expect(content.getByText("unknown tier 'nightly'")).toBeVisible();
+	fail = false;
+	await content.getByRole('button', { name: 'Try again' }).click();
+	await expect(page.getByRole('region', { name: /^Configurations, DS-1000/ })).toBeVisible();
+});
+
+// P4
+test('the Benchmarks tabs follow the workflow, and the chip names what is served and links to Serve', async ({
+	page
+}) => {
+	await page.route('**/api/v1/benchmarks/serve/check', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ port: 8090, model: 'qwen3.8-27b', profile: 'qwen38', running: true })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ run: { run_id: 1, config_id: 'c98ef02c', model: 'qwen3.8-27b' }, recent_samples: [] })
+		})
+	);
+	// The chip reads the run by identity only, never Live's sample summary.
+	await page.route('**/api/v1/benchmarks/live/status', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ run: { run_id: 1, config_id: 'c98ef02c', model: 'qwen3.8-27b' } })
+		})
+	);
+	await page.goto('/benchmarks');
+
+	// /benchmarks opens on Serve (B-D2).
+	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	const tabs = page.getByRole('navigation', { name: 'Benchmarks' }).getByRole('link');
+	await expect(tabs).toHaveText(['Pre-screen', 'Tune', 'Serve', 'Live', 'Tests', 'Compare', 'Answers', 'Report']);
+	const chip = page.getByRole('link', { name: 'Serving qwen38 · c98ef02c' });
+	await expect(chip).toBeVisible();
+	await page.getByRole('link', { name: 'Compare', exact: true }).click();
+	await chip.click();
+	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
 });

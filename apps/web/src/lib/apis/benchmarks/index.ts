@@ -213,6 +213,35 @@ export const checkServe = async (token: string = '') => {
 	return res;
 };
 
+/** What Start would launch for a form, and the config_id the run would be recorded under. Starts nothing. */
+export type ServePreview = {
+	profile: string;
+	version: number;
+	argv: string[];
+	config_id: string;
+	config_lines: string[];
+	warning: string | null;
+};
+
+/** GET /serve/preview: the form as query parameters, empty ones left out; rejects with the server's reason. */
+export const previewServe = async (token: string = '', form: ServeStartForm = {}): Promise<ServePreview> => {
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(form)) {
+		if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+	}
+	let res: Response;
+	try {
+		res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/serve/preview?${query}`, {
+			method: 'GET',
+			headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+		});
+	} catch (err) {
+		throw requestError(err);
+	}
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
 // Returns the raw [Response, AbortController] tuple, matching the
 // established convention for streaming fetches in this codebase (see
 // `pullModel` in `$lib/apis/ollama`). Callers pass `res.body` into `parseBenchmarksEventStream`
@@ -249,6 +278,20 @@ export const streamServe = async (
 // -----------------------------------------------------------------------------
 // Live
 // -----------------------------------------------------------------------------
+
+/** The run being recorded, by identity only (no samples): the section's status chip polls this. */
+export const getLiveStatus = async (
+	token: string = ''
+): Promise<{ run: { run_id: string; model: string | null; config_id: string | null } | null }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/live/status`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
 
 export const getLive = async (token: string = '') => {
 	let error = null;
@@ -658,7 +701,20 @@ export const exportAnswers = async (token: string = '', run: string) => {
 // Answers
 // -----------------------------------------------------------------------------
 
-export const getAnswerRuns = async (token: string = '', limit: number = 20) => {
+/** One suite run in Answers' run picker. */
+export type SuiteRun = {
+	suite_run_id: string;
+	started_at: number;
+	ended_at?: number;
+	model: string;
+	tier: string;
+	/** The serving configuration the run measured (null for an unrecorded one). */
+	config_id?: string | null;
+	attempted: number;
+	passed: number;
+};
+
+export const getAnswerRuns = async (token: string = '', limit: number = 20): Promise<{ runs: SuiteRun[] }> => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -767,9 +823,49 @@ export type ReportForm = {
 	model?: string;
 	benchmark?: string;
 	figures?: boolean;
+	/** The page's theme: the figures are drawn in its colours. */
+	theme?: 'light' | 'dark';
 };
 
-export const generateReport = async (token: string = '', form: ReportForm = {}) => {
+/** A report, freshly generated or saved (GET /report/ lists these). */
+export type ReportAnswer = {
+	markdown_url: string;
+	figures: string[];
+	date: string;
+	windows: string[];
+	/** Why there are no figure files, in words; '' when there are some. */
+	figures_skipped?: string;
+	filters?: { tier?: string | null; model?: string | null; benchmark?: string | null };
+	theme?: string | null;
+	created_at?: number;
+	error?: string;
+};
+
+/** The saved reports, newest first, to reopen. */
+export const listReports = async (token: string = ''): Promise<{ reports: ReportAnswer[] }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
+/** One saved report by its id, however old (the listing holds the newest 50): an empty list when there is none. */
+export const findReport = async (token: string, id: string): Promise<{ reports: ReportAnswer[] }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/?${new URLSearchParams({ id })}`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
+export const generateReport = async (token: string = '', form: ReportForm = {}): Promise<ReportAnswer> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {
@@ -1220,6 +1316,7 @@ export const getPrescreenSweeps = async (token: string = '', limit: number = 20)
 	return res;
 };
 
+/** One pre-screen's whole detail, or null when there is no such sweep (a 404 is a state, not a failure). */
 export const getPrescreenSweep = async (token: string = '', sweepId: string) => {
 	let error = null;
 
@@ -1232,6 +1329,7 @@ export const getPrescreenSweep = async (token: string = '', sweepId: string) => 
 		}
 	})
 		.then(async (res) => {
+			if (res.status === 404) return null;
 			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})

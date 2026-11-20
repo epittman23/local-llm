@@ -313,3 +313,129 @@ def test_drain_stops_a_server_that_exits_on_its_own():
 
     asyncio.run(run())
     assert proc.stopped is True
+
+
+# ---------------------------------------------------------------------------
+# #1051 (B-D5): range checks on the overrides, and the read-only launch preview
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    'override',
+    [{'ngl': -5}, {'ctx': 0}, {'ctx': 1.5}, {'threads': 0}, {'parallel': 0}],
+)
+def test_start_422_on_an_out_of_range_override(client, monkeypatch, override):
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    resp = client.post('/start', json={'profile': 'qwen25c', **override})
+    assert resp.status_code == 422
+    assert _StubServeProcess.instances == []
+
+
+def test_start_accepts_zero_gpu_layers(client, monkeypatch):
+    """-ngl 0 is a real configuration (everything on the CPU), not an error."""
+
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    assert client.post('/start', json={'profile': 'qwen25c', 'ngl': 0}).status_code == 200
+    (proc,) = _StubServeProcess.instances
+    assert proc.config.ngl == 0
+
+
+@pytest.fixture
+def real_launcher(monkeypatch):
+    """The preview builds a real ServeProcess (construction only reads the environment)."""
+    from local_llm.benchmarks.serving import launcher
+
+    monkeypatch.setattr(serve_router, 'ServeProcess', launcher.ServeProcess)
+    monkeypatch.setenv('LLAMA_BIN', '/nonexistent-llama-bin')
+    monkeypatch.delenv('LLAMA_HOST', raising=False)
+    monkeypatch.delenv('LLAMA_PORT', raising=False)
+    monkeypatch.setenv('LLAMA_MODELS', '/models')
+
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+
+
+def test_preview_shows_the_command_and_config_id_and_starts_nothing(client, real_launcher, monkeypatch):
+    # A spawn is recorded instead of run, and the test fails on it below.
+    spawned = []
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', lambda *args, **kwargs: spawned.append(args))
+    resp = client.get('/preview', params={'profile': 'qwen25c', 'ngl': 20, 'ctx': 8192})
+    assert resp.status_code == 200
+    body = resp.json()
+    argv = body['argv']
+    assert argv[0] == 'llama-server'
+    assert argv[argv.index('-ngl') + 1] == '20'
+    assert argv[argv.index('-c') + 1] == '8192'
+    assert argv[argv.index('--host') + 1] == '127.0.0.1'
+    assert argv[argv.index('--port') + 1] == '8090'
+    assert body['profile'] == 'qwen25c'
+    assert body['version'] == 1
+    assert len(body['config_id']) == 8
+    assert body['config_lines'][0].startswith('arch: dense | ngl: 20 | ctx: 8192 (total)')
+    assert 'partial offload (ngl=20)' in body['warning']
+    assert spawned == []
+    assert serve_router._job is None
+
+
+def test_preview_config_id_is_the_one_start_would_record(client, real_launcher, monkeypatch):
+    """One source of truth: the id the preview shows is the one the recorder is given for the same form."""
+    from local_llm.benchmarks.serving.fingerprint import config_id
+
+    form = {'profile': 'qwen25c', 'ngl': 18, 'threads': 8, 'parallel': 2, 'reasoning': 'high', 'spec': 'off'}
+    preview = client.get('/preview', params=form).json()
+
+    monkeypatch.setattr(serve_router, 'ServeProcess', _StubServeProcess)
+    assert client.post('/start', json=form).status_code == 200
+    (proc,) = _StubServeProcess.instances
+    assert preview['config_id'] == config_id(proc.config)
+
+
+def test_preview_spec_on_keeps_the_profiles_own_flags(client, real_launcher):
+    on = client.get('/preview', params={'profile': 'qwen25c', 'spec': 'on'}).json()
+    default = client.get('/preview', params={'profile': 'qwen25c'}).json()
+    assert on['config_id'] == default['config_id']
+    assert on['argv'] == default['argv']
+
+
+def test_preview_takes_a_tune_winners_free_text_spec(client, real_launcher):
+    """Serve's link from a Tune result carries the winner's flags as text; the preview launches exactly those."""
+    flags = '--spec-type draft-mtp --spec-draft-n-max 3'
+    winner = client.get('/preview', params={'profile': 'qwen25c', 'spec': flags}).json()
+    default = client.get('/preview', params={'profile': 'qwen25c'}).json()
+    argv = winner['argv']
+    assert argv[argv.index('--spec-type') + 1] == 'draft-mtp'
+    assert argv[argv.index('--spec-draft-n-max') + 1] == '3'
+    assert winner['config_id'] != default['config_id']
+
+
+def test_preview_refuses_what_start_refuses(client, real_launcher):
+    assert client.get('/preview', params={'profile': 'qwen25c', 'ngl': -5}).status_code == 422
+    assert client.get('/preview', params={'profile': 'qwen25c', 'ctx': '1.5'}).status_code == 422
+    assert client.get('/preview', params={'profile': 'qwen25c', 'spec': '--parallel 2'}).status_code == 400
+    assert client.get('/preview', params={'profile': 'qwen25c', 'bogus': '1'}).status_code == 422
+
+
+def test_preview_404_when_profile_missing(client, real_launcher, monkeypatch):
+    async def fake_get_by_name(name, db=None):
+        return None
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    assert client.get('/preview', params={'profile': 'nope'}).status_code == 404
+
+
+def test_preview_uses_the_default_profile_when_none_named(client, real_launcher, monkeypatch):
+    async def fake_get_default(db=None):
+        return _entry(name='qwen25c')
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_default', fake_get_default)
+    resp = client.get('/preview')
+    assert resp.status_code == 200
+    assert resp.json()['profile'] == 'qwen25c'

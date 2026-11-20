@@ -10,6 +10,8 @@ const json = (body: unknown) => ({ status: 200, contentType: 'application/json',
 test.beforeEach(async ({ page, context }) => {
 	await context.addInitScript(() => window.localStorage.setItem('token', 'test-token'));
 	await page.route('**/api/**', (route) => route.fulfill(json({ items: [], total: 0 })));
+	// Serve lists the profiles, which the API answers as a bare array.
+	await page.route('**/api/v1/benchmarks/profiles/?*', (route) => route.fulfill(json([])));
 	await page.route('**/api/v1/auths/', (route) =>
 		route.fulfill(
 			json({

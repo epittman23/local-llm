@@ -147,8 +147,9 @@
 	.rich-text :where(img) {
 		@apply my-2 max-w-full rounded-lg;
 	}
+	/* DAT-2: figures in a rendered table line up (Tune's design audit, a note's table). */
 	.rich-text :where(table) {
-		@apply my-2 w-full border-collapse text-xs;
+		@apply my-2 w-full border-collapse text-xs tabular-nums;
 	}
 	.rich-text :where(th, td) {
 		@apply border-border border px-2 py-1 text-start align-top;

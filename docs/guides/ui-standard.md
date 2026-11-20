@@ -55,7 +55,8 @@ Functions, and their editors) was brought to the standard on 2026-11-15.
 Admin (Users and Groups, Evaluations, Analytics, Functions, and the server's
 settings, which are now pages under Admin > Settings) was brought to it on
 2026-11-16. Notes, Calendar, Automations, Channels and the Playground were
-brought to it on 2026-11-16 too.
+brought to it on 2026-11-16 too, and so was Benchmarks (Serve, Live, Tests,
+Answers, Report, Compare, Tune and Pre-screen).
 
 The rules below apply to every new or changed piece of interface.
 
@@ -149,7 +150,11 @@ under `.dark` and `light` otherwise, so native controls, scrollbars, date
 pickers and validation bubbles match. Anything the app does not draw itself
 is given a dark treatment explicitly: an embedded frame gets a themed
 container, a generated image or figure is generated per theme or framed, a
-chart reads the tokens. The theme is chosen in Settings > General or the user
+chart reads the tokens. Benchmarks' report figures are drawn by the server
+in the theme the page asks for, the dark palette taken from the tokens
+(`--surface-1`, `--foreground-strong` and `--foreground-muted`,
+`--border-divider`, `--series-1` and `--series-5`); a report made before
+that keeps its light figures, which sit framed (CNT-4). The theme is chosen in Settings > General or the user
 menu's Theme submenu, both through `useThemeChoice`
 (`lib/settings/useThemeChoice.ts`): it applies at once, is cached in
 localStorage for the first paint and is saved as `theme` in the account's `ui`
@@ -170,6 +175,20 @@ value to the keyboard and to a screen reader (A11Y-4); the drawing is
 the nearer edge so it stays inside the chart. Examples:
 `routes/admin/analytics/ChartLine.tsx` (`axisTop` picks the round top) and
 `routes/admin/evaluations/ModelActivityChart.tsx`.
+
+A sparkline is the one exception, and only on these terms: it is a single
+series inside a key-figure tile, named by the tile, drawn from zero in a
+series colour, `role="img"` with a label giving its range and latest value,
+and every value it draws is in a table on the same page. Then it may go
+without a legend, an axis and Show as table. A key-figure tile is a
+`--surface-1` panel with the figure's name, the figure with its unit
+(WRD-5), a line saying what it means (headroom, the busy share), and the
+sparkline under them (`Kpi` and `Sparkline` in
+`routes/benchmarks/LivePage.tsx`). A process's log is a bordered panel: a
+header with its state, Follow and Copy over a named scroll region the
+keyboard can scroll (DAT-6); lines wrap, warnings and errors are tinted in
+their status colours (COL-3), and Follow keeps the newest line in view until
+the person scrolls up (`routes/benchmarks/ServeLog.tsx`).
 
 **How it is checked.** `standard.contrast.test.ts` parses `standard.css` and
 asserts every pair COL-2, COL-4 and COL-5 promise, in both themes (the list is
@@ -530,6 +549,16 @@ tab with a way back. A section's sub-tabs (Admin > Users, Evaluations) are a
 strip above the content (`SubTabs`, the `SectionTabs` look), a navigation
 landmark, with counts as secondary badges. A show/hide toggle is not a menu trigger: when expanded
 it keeps the ghost button's resting look (`aria-expanded:bg-transparent`).
+A section whose tabs are steps of one workflow groups them in that order:
+`SectionTabs` takes a `group` per tab and draws a divider line, hidden from
+assistive technology, between groups (Benchmarks: Pre-screen, Tune | Serve,
+Live, Tests | Compare, Answers, Report). Such a section may end its strip
+with a status chip that says what is running, in order of precedence, and
+links to the page that owns it: a success `Badge` with an icon ('Serving
+qwen38 · c98ef02c', the id in mono), or a secondary 'Nothing running' that
+is not a link. It is a `role="status"` region, polls every 10 s, and on a
+narrow screen wraps above the strip (`StatusChip` in
+`routes/benchmarks/BenchmarksLayout.tsx`).
 
 **NAV-3. A link to something that no longer exists says so, in place:** "This
 chat no longer exists", with a way onward. It never silently opens something
@@ -581,6 +610,9 @@ is left-aligned; figures are right-aligned. A sortable heading is a button.
 the column heading ("Peak VRAM, MiB"), not repeated in every cell; thousands
 separated; a missing value is an en dash, never blank and never `0`.
 Headings are words, not field names ("Peak VRAM, MiB", not `peak_vram_mib`).
+A page that renders columns from an API keeps a header map from each key to
+its words, unit after a comma, and its one format (`compareFormat.ts`'s
+`columnSpec`), with the key title-cased only as a fallback.
 While a search or filter narrows a list, the tab keeps the whole count and
 the list says '3 of 6 <things>' (`ListMatchCount` in
 `components/common/ListChrome`).
@@ -593,7 +625,11 @@ is `variant="secondary"` with no icon. A list row's state (Hidden, Off, Read
 only) is a `Badge variant="secondary"` on its first line, never opacity on the
 row or its picture (COL-2). Admin's lists show theirs the same way (Hidden,
 Off, Default, Pinned, Pipelines, OpenAPI, MCP); with one account the Pinned
-badge is hidden.
+badge is hidden. A benchmark item's graded outcome is `OutcomeBadge`
+(`routes/benchmarks/OutcomeBadge.tsx`), one word per outcome on Tests,
+Answers and Compare: `pass` is a success "passed"; `fail_assert` "assert
+failed", `fail_error` "error", `fail_timeout` "timed out" and `no_code` "no
+code" are danger; `skipped` is a secondary "skipped".
 
 **DAT-4. An identifier is monospaced, can be copied, and links to the thing it
 identifies** when that thing has a page.
@@ -614,7 +650,21 @@ shared sort button, with `aria-sort` on the open sort's heading only. A row
 that opens something is `TableRow onOpen`: a click anywhere on it opens it,
 except on a control in it (a button, link, field or a menu item portalled
 out of it), and its name cell holds a button calling the same open, which
-is the keyboard's way in (NAV-5). Tables in rendered answers use it too,
+is the keyboard's way in (NAV-5); when what it opens is another page, that
+cell is a link to it instead (Compare > Failures opens the item in Answers).
+`stickyHeader` keeps the column headings in view while the rows scroll
+(LAY-7): the frame is then at most `maxHeight` tall (`70dvh` unless given),
+and never taller than the area the page scrolls in (but at least 12rem), so
+the whole frame fits on screen and reaching its last rows never scrolls its
+headings away. It scrolls both ways, since a frame that scrolls sideways
+stops the page's own scroll from holding a heading. Its focus ring (A11Y-1)
+is drawn on an overlay above the sticky headings and first column, which
+would cover an outline on the region itself. The headings are opaque in
+`--table-surface` with their rule drawn on them; with `stickyFirstColumn`
+the corner heading stays above both. Rows hidden below make the named region
+a tab stop too. Use it on a table long enough to scroll its headings out of
+view (Compare > Failures, Tune's rounds and candidates, Pre-screen's
+candidates and points). Tables in rendered answers use it too,
 with Copy table (tab-separated, so it pastes as cells) and Download CSV in an
 always-visible toolbar above the table, never over a heading (A11Y-4). A
 scroll region outside `Table` (a code listing, an equation) uses
@@ -647,6 +697,11 @@ A connection's URL field has Test connection beside it
 http:// or https:// first, then says under the URL what it found: 'Reachable:
 N models' in the success colour, or the server's reason in the danger colour
 with the field `aria-invalid`. An edit clears the result.
+A long job's progress is a header over its output, where the job is (Tests'
+suite run): a progress bar, 'i of n' items, the pass rate so far, skips,
+the elapsed time and an estimate of the time left, and a link to the result
+(the suite run in Answers). Its log follows new items unless the person has
+scrolled up.
 
 | Situation | Where |
 |---|---|
@@ -819,7 +874,9 @@ generated figure) sits in a frame that belongs to the theme (COL-6). The
 inside of a frame showing a page is `bg-canvas`, white in every theme: a page
 with no background of its own assumes white, and a dark one would put its
 black text on dark. The white is the page's, so it is framed (an edge, the
-themed surround) and never fills a panel edge to edge.
+themed surround) and never fills a panel edge to edge. A generated raster
+figure (a benchmark report's plots) is drawn per theme by the server; one
+made before that sits framed the same way (COL-6).
 
 **CNT-5. A reply shows its steps where they happened.** Between the texts a
 model writes, each step it took (a thought, a command, a file written, a

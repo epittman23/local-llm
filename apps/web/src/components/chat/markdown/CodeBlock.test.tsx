@@ -75,6 +75,28 @@ describe('CodeBlock Run', () => {
 		expect(within(shown).getByRole('img', { name: /fig\.png/ })).toBeTruthy();
 	});
 
+	it('makes a run output that scrolls a named region and a tab stop, and a short one neither (A11Y-1, NAV-5)', async () => {
+		const run = pending();
+		block({ onRun: run.onRun });
+		fireEvent.click(screen.getByRole('button', { name: /Run/ }));
+		await act(async () => run.resolve({ stdout: 'hi\n', stderr: '', result: '', files: [] }));
+		// Short: nothing hidden, so no region and no tab stop.
+		const short = screen.getByText('hi', { selector: 'pre' });
+		expect(short.getAttribute('tabindex')).toBeNull();
+		expect(short.getAttribute('role')).toBeNull();
+		expect(screen.queryByRole('region', { name: 'Run output' })).toBeNull();
+
+		// Long: its rows are hidden below the block's 16rem.
+		vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(2800);
+		vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(256);
+		act(() => window.dispatchEvent(new Event('resize')));
+		const region = screen.getByRole('region', { name: 'Run output' });
+		expect(region).toBe(short);
+		expect(region.getAttribute('tabindex')).toBe('0');
+		// The shared scroll region: focus drawn inside, keyboard focus only (standard.css).
+		expect(region.className).toContain('scroll-region');
+	});
+
 	it("shows the endpoint's refusal and the sandbox's error as a failed run, labelled once", async () => {
 		const run = pending();
 		block({ onRun: run.onRun });

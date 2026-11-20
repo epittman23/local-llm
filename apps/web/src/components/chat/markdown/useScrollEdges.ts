@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 
-export type ScrollEdges = { start: boolean; end: boolean };
+export type ScrollEdges = {
+	start: boolean;
+	end: boolean;
+	/** Content is hidden on either axis, so the element scrolls: a region the keyboard must reach (A11Y-1, NAV-5). */
+	overflows: boolean;
+};
 
 /**
  * Which ends of a sideways-scrolling element hide content, kept current as it
@@ -12,13 +17,16 @@ export type ScrollEdges = { start: boolean; end: boolean };
  */
 export function useScrollEdges<T extends HTMLElement>(): [(el: T | null) => void, ScrollEdges] {
 	const [el, setEl] = useState<T | null>(null);
-	const [edges, setEdges] = useState<ScrollEdges>({ start: false, end: false });
+	const [edges, setEdges] = useState<ScrollEdges>({ start: false, end: false, overflows: false });
 	useEffect(() => {
 		if (!el) return;
 		const measure = () => {
 			const start = el.scrollLeft > 0;
 			const end = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
-			setEdges((was) => (was.start === start && was.end === end ? was : { start, end }));
+			const overflows = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+			setEdges((was) =>
+				was.start === start && was.end === end && was.overflows === overflows ? was : { start, end, overflows }
+			);
 		};
 		measure();
 		el.addEventListener('scroll', measure, { passive: true });

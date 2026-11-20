@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, matchPath, useLocation } from 'react-router';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,11 @@ export interface SectionTab {
 	active?: boolean;
 	/** Match `to` exactly rather than as a prefix (an index tab). */
 	end?: boolean;
+	/**
+	 * The workflow step the tab belongs to (NAV-2: "Configure", "Run"). A line
+	 * separates one group from the next; tabs without a group are not split.
+	 */
+	group?: string;
 }
 
 /** How far the edge fade reaches into the strip. */
@@ -83,22 +88,27 @@ export function SectionTabs({ label, tabs, className }: { label: string; tabs: S
 			style={{ maskImage: maskFor(fade.start, fade.end) }}
 			className={cn('flex min-w-0 gap-4 overflow-x-auto', className)}
 		>
-			{tabs.map((tab) => {
+			{tabs.map((tab, index) => {
 				const active = isActive(tab);
+				const startsGroup = index > 0 && tab.group !== undefined && tab.group !== tabs[index - 1]?.group;
 				return (
-					<Link
-						key={tab.to}
-						to={tab.to}
-						aria-current={active ? 'page' : undefined}
-						className={cn(
-							'text-body inline-flex min-h-6 shrink-0 items-center gap-1.5 border-b-2 px-1 pt-1 pb-2 whitespace-nowrap transition-colors select-none pointer-coarse:min-h-11',
-							active
-								? 'border-foreground text-foreground font-strong'
-								: 'text-muted-foreground hover:text-foreground border-transparent'
+					<Fragment key={tab.to}>
+						{startsGroup && (
+							<span aria-hidden data-slot="tab-group-separator" className="bg-border my-2 w-px shrink-0 self-stretch" />
 						)}
-					>
-						{tab.label}
-					</Link>
+						<Link
+							to={tab.to}
+							aria-current={active ? 'page' : undefined}
+							className={cn(
+								'text-body inline-flex min-h-6 shrink-0 items-center gap-1.5 border-b-2 px-1 pt-1 pb-2 whitespace-nowrap transition-colors select-none pointer-coarse:min-h-11',
+								active
+									? 'border-foreground text-foreground font-strong'
+									: 'text-muted-foreground hover:text-foreground border-transparent'
+							)}
+						>
+							{tab.label}
+						</Link>
+					</Fragment>
 				);
 			})}
 		</nav>

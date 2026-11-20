@@ -1721,13 +1721,14 @@ def pct(value: float | None) -> str:
 
 
 def adoption_note(winner: BenchmarkTuneCandidateModel) -> dict:
-    """What to put in llama-env.sh, and the flag diff, for a human to commit.
+    """The winner's overrides and flag diff, for a human to adopt in the app.
 
-    Adoption is not automated on purpose. llama-env.sh (in the outer local-llm
-    repo) is that project's source of truth for serving configuration, and a
-    tool that rewrote it would be application code in a repo that
-    deliberately holds none. Nothing here writes any file; a future router
-    hands this dict to a UI for a human to act on.
+    Adoption is not automated on purpose: serving configuration lives in the
+    versioned profiles (serving/profiles.py), and a sweep that rewrote one
+    would change what every later run measures without anyone deciding to.
+    Nothing here writes anything. The Tune page turns this dict into its
+    "Create profile version" link (a prefilled Edit form, saved only on Save)
+    and "Serve with these overrides" (a prefilled Serve form, never started).
     """
     overrides = winner.overrides or {}
     return {
@@ -1737,8 +1738,8 @@ def adoption_note(winner: BenchmarkTuneCandidateModel) -> dict:
         'flags': ' '.join(f'{k}={v}' for k, v in sorted(overrides.items())),
         'reduces_context': 'LLAMA_CTX' in overrides,
         'note': (
-            'Adoption is manual: edit scripts/llama-env.sh (outer repo) by hand and log the decision. '
-            'Nothing in this engine writes that file.'
+            'Adoption is manual: on the Tune page, Create profile version saves these overrides as a new '
+            'version of the profile, or Serve with these overrides tries them once. Nothing here writes either.'
         ),
     }
 

@@ -7,6 +7,53 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-16** (latest, 4): **Benchmarks: the owner's decisions for the UX
+  review's section 7 (#1116).**
+  - **Tests opens on `smoke` (#918, B-D1 A),** the tiers listed by cost
+    (smoke, standard, full), and Run names its tier.
+  - **`/benchmarks` opens on Serve, with a status chip (#1053, B-D2 A).** The
+    tabs follow the workflow in three groups (Pre-screen, Tune | Serve, Live,
+    Tests | Compare, Answers, Report), and a chip at the strip's end reads
+    `serve/check`, `live/` and the sweep lists to say what is running and
+    link to it. It cannot show a Tests run's progress: no read exposes it.
+  - **Report figures follow the page's theme (#973, B-D3 A):** POST
+    `/benchmarks/report/` takes `theme` (`light` or `dark`, default `light`);
+    the server draws the dark figures from the standard's tokens, and older
+    reports keep their light PNGs.
+  - **A report says why it has no figures, and saved reports reopen (#1056,
+    B-D4 B):** the report's answer carries `figures_skipped`, and a new
+    `GET /benchmarks/report/` lists saved reports, newest first, which the
+    Report page reopens (`?report=<dir>`).
+  - **Serve checks overrides and previews the launch (#1051, B-D5 B):** the
+    page and the server range-check the overrides (`ngl` ≥ 0; `ctx`,
+    `threads`, `parallel` ≥ 1; otherwise a 422), and a new read-only
+    `GET /benchmarks/serve/preview` returns the `llama-server` command and
+    the `config_id` a Start would record, computed through the launcher's
+    own argument builder and `serving/fingerprint.py`. No serving flag and
+    no fingerprint changed, so there is no `benchmark_schema_note`.
+  - **Live draws sparklines from the samples seen while open (#1049, B-D6
+    A),** with no API change; the standard's COL-8 gained the terms on which
+    a sparkline may go without a legend and axis.
+  - **Answers' run list carries `config_id` (#1111, B-D7 A),** an additive
+    field of `GET /answers/runs`.
+  - **Enumerations are selects, and results become profile versions (#1052,
+    #1055, #1113, B-D8 A):** Tune's and Pre-screen's results link to Serve
+    with their overrides (never starting it) and to Create profile version,
+    which opens the profile's Edit form prefilled
+    (`/benchmarks/serve?edit=<profile>&def.<field>=…`), saved only on Save
+    through the existing API. Tune's adoption note says so, in place of the
+    retired `scripts/llama-env.sh`.
+  - **Compare's failures open in Answers (B-D9):** each failure row carries
+    its `suite_run_id` (additive), and a row links to Answers
+    `?run=&benchmark=&item=`.
+  - **Each new report stores `report.json` beside `report.md` (B-D10):** its
+    filters, theme, windows, figures and `figures_skipped`, for the saved
+    report list; reports made before have none and are still listed.
+  - **Tests holds Run until Serve or Live sees a server (B-D11):** a
+    `llama-server` started outside the app, which neither sees, keeps Run
+    disabled; start it from Serve.
+  - No migration and no stored data changed beyond the new `report.json`
+    files.
 - **2026-11-16** (latest, 3): **Notes, Calendar, Automations, Channels and
   the Playground: the owner's decisions for the UX review's section 6 (#1116).**
   - **A note opened is never re-saved (#1132),** fixed in its own pull request

@@ -190,6 +190,11 @@ def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
         raise ProfileError('--parallel is its own field; it does not belong in the speculative or extra arguments')
     if _has_fit(spec) or _has_fit(extra):
         raise ProfileError('-fit is always off and is set by the launcher; it does not belong in a profile')
+    # 'off' is an override's word for "no speculation" (Overrides.from_env),
+    # not an argument: stored, it would reach llama-server as a bare `off`,
+    # which refuses to start (docs/history/bug-review-2026-09-27.md M6).
+    if spec == ['off']:
+        raise ProfileError("speculation is off when its arguments are empty; leave spec empty instead of 'off'")
     # The thinking budget is a field, and the launcher builds
     # --chat-template-kwargs from the *resolved* effort. A literal here would
     # be fingerprinted as the override but launched as the literal.

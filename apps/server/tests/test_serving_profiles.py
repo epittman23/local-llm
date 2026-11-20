@@ -171,8 +171,17 @@ def test_valid_definition_round_trips(valid):
         ({'extra': ['--parallel', '2']}, '--parallel'),
         ({'extra': ['--chat-template-kwargs', '{"reasoning_effort":"high"}']}, 'reasoning_effort_default'),
         ({'colour': 'blue'}, 'unknown'),
+        ({'spec': ['off']}, 'leave spec empty'),
     ],
-    ids=['moe-on-dense', 'bad-arch', 'parallel-in-spec', 'parallel-in-extra', 'reasoning-in-extra', 'unknown'],
+    ids=[
+        'moe-on-dense',
+        'bad-arch',
+        'parallel-in-spec',
+        'parallel-in-extra',
+        'reasoning-in-extra',
+        'unknown',
+        'spec-off',
+    ],
 )
 def test_invalid_definitions_are_refused(valid, change, message):
     with pytest.raises(ProfileError, match=message):

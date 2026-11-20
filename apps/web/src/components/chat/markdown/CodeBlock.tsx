@@ -133,15 +133,26 @@ const sandboxUnavailable = (run: Run) =>
 	(run.state === 'failed' && run.error.includes(SANDBOX_UNAVAILABLE)) ||
 	(run.state === 'done' && (run.result.error ?? '').startsWith(SANDBOX_UNAVAILABLE));
 
-/** One stream of a run's output, in a scrollable block; nothing when it is empty. */
+/**
+ * One stream of a run's output, in a scrollable block; nothing when it is
+ * empty. While it overflows it is a named region and a tab stop, so the
+ * keyboard can scroll it (A11Y-1, NAV-5); a short one adds no tab stop.
+ */
 function Stream({ label, text, tone }: { label?: string; text?: string; tone?: 'error' }) {
+	const [ref, edges] = useScrollEdges<HTMLPreElement>();
 	if (!text) return null;
+	// A named region only while it scrolls: a short output is plain text, with no landmark and no tab stop.
+	const region = edges.overflows
+		? { role: 'region', 'aria-label': `Run ${label ? label.toLowerCase() : 'error'}`, tabIndex: 0 }
+		: {};
 	return (
 		<div>
 			{label && <div className="text-muted-foreground mb-0.5 text-caption">{label}</div>}
 			<pre
+				ref={ref}
+				{...region}
 				className={cn(
-					'bg-muted/50 max-h-64 overflow-auto rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
+					'scroll-region bg-muted/50 max-h-64 overflow-auto rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
 					tone === 'error' && 'text-destructive'
 				)}
 			>
