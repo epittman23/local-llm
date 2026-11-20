@@ -203,7 +203,7 @@ def test_a_report_older_than_the_limit_reopens_by_its_id(reports_dir):
         assert asyncio.run(report_router.list_reports(report_id=missing, user=None)) == {'reports': []}
 
 
-@pytest.mark.parametrize('created_at', ['2026-11-15', None, True, [1], 0])
+@pytest.mark.parametrize('created_at', ['2026-11-15', None, True, [1], 0, float('nan'), float('inf'), float('-inf')])
 def test_a_hand_edited_created_at_falls_back_to_the_file_time(reports_dir, created_at):
     now = time.time()
     _saved(reports_dir, '2026-11-15-cccccc', meta={'created_at': created_at}, mtime=now - 60)
@@ -213,3 +213,15 @@ def test_a_hand_edited_created_at_falls_back_to_the_file_time(reports_dir, creat
 
     assert [r['date'] for r in listed] == ['2026-11-15-dddddd', '2026-11-15-cccccc']
     assert listed[1]['created_at'] == int(now - 60)
+
+
+def test_a_created_at_too_large_for_a_float_falls_back_to_the_file_time(reports_dir):
+    """`1e400` is valid JSON that Python reads as inf; it must not fail the listing or `?id=`."""
+    now = time.time()
+    _saved(reports_dir, '2026-11-15-eeeeee', meta=None, mtime=now - 60)
+    (reports_dir / '2026-11-15-eeeeee' / 'report.json').write_text('{"created_at": 1e400}')
+
+    listed = asyncio.run(report_router.list_reports(limit=50, user=None))['reports']
+    assert [(r['date'], r['created_at']) for r in listed] == [('2026-11-15-eeeeee', int(now - 60))]
+    found = asyncio.run(report_router.list_reports(report_id='2026-11-15-eeeeee', user=None))['reports']
+    assert [r['created_at'] for r in found] == [int(now - 60)]

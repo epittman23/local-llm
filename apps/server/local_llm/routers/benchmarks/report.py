@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import time
 import uuid
 from pathlib import Path
@@ -120,9 +121,10 @@ def _saved_reports(limit: int, report_id: str | None = None) -> list[dict]:
         figures = meta.get('figures')
         if not isinstance(figures, list):
             figures = sorted(p.name for p in path.glob('*.png'))
-        # A hand-edited report.json can hold anything; only a number sorts (bool is an int, and is not a time).
+        # A hand-edited report.json can hold anything; only a finite number sorts (bool is an int, and is not a
+        # time; json reads NaN, Infinity and 1e400 as floats that int() refuses).
         recorded = meta.get('created_at')
-        valid_time = isinstance(recorded, (int, float)) and not isinstance(recorded, bool)
+        valid_time = isinstance(recorded, (int, float)) and not isinstance(recorded, bool) and math.isfinite(recorded)
         created = int(recorded) if valid_time and recorded else int(md.stat().st_mtime)
         found.append({**_answer(path.name, figures, meta), 'created_at': created})
     found.sort(key=lambda r: r['created_at'], reverse=True)
