@@ -841,10 +841,21 @@ export type ReportAnswer = {
 	error?: string;
 };
 
-/** The saved reports, newest first, to reopen; with `id`, only that one, however old. */
-export const listReports = async (token: string = '', id?: string): Promise<{ reports: ReportAnswer[] }> => {
-	const query = id ? `?${new URLSearchParams({ id })}` : '';
-	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/${query}`, {
+/** The saved reports, newest first, to reopen. */
+export const listReports = async (token: string = ''): Promise<{ reports: ReportAnswer[] }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
+/** One saved report by its id, however old (the listing holds the newest 50): an empty list when there is none. */
+export const findReport = async (token: string, id: string): Promise<{ reports: ReportAnswer[] }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/report/?${new URLSearchParams({ id })}`, {
 		method: 'GET',
 		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
 	}).catch((err) => {

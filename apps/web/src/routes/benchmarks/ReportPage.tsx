@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+	findReport,
 	generateReport,
 	getAnswerRuns,
 	getReportFileText,
@@ -178,7 +179,7 @@ export function ReportPage() {
 	// A report older than the listing's newest 50 is asked for by its id.
 	const oneQuery = useQuery({
 		queryKey: ['reports', 'one', reportId],
-		queryFn: () => listReports(token, reportId ?? ''),
+		queryFn: () => findReport(token, reportId ?? ''),
 		enabled: !!token && !!reportId && savedQuery.isSuccess && !listed
 	});
 	const answer: ReportAnswer | undefined = listed ?? oneQuery.data?.reports.find((r) => r.date === reportId);

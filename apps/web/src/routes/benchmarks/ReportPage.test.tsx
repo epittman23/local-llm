@@ -15,7 +15,8 @@ vi.mock('@/lib/apis/benchmarks', async (importOriginal) => {
 		generateReport: vi.fn(),
 		getReportFileText: vi.fn(),
 		getAnswerRuns: vi.fn(),
-		listReports: vi.fn()
+		listReports: vi.fn(),
+		findReport: vi.fn()
 	};
 });
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: {} }) }));
@@ -131,6 +132,7 @@ describe('ReportPage', () => {
 			runs: [{ suite_run_id: 'r', started_at: 1, model: 'qwen3.8-27b', tier: 'smoke', passed: 1, attempted: 2 }]
 		});
 		vi.mocked(api.listReports).mockResolvedValue({ reports: [] });
+		vi.mocked(api.findReport).mockResolvedValue({ reports: [] });
 		vi.mocked(api.getReportFileText).mockResolvedValue(MD);
 		vi.stubGlobal(
 			'fetch',
@@ -201,22 +203,19 @@ describe('ReportPage', () => {
 
 	it('reopens a report older than the listing by asking for it by id (B-D4)', async () => {
 		const older = { ...REPORT, date: '2026-01-02-old000' };
-		vi.mocked(api.listReports).mockImplementation(async (_token, id) => ({
-			reports: id === older.date ? [older] : [REPORT]
-		}));
+		vi.mocked(api.listReports).mockResolvedValue({ reports: [REPORT] });
+		vi.mocked(api.findReport).mockImplementation(async (_token, id) => ({ reports: id === older.date ? [older] : [] }));
 		renderPage(`/benchmarks/report?report=${older.date}`);
 		expect(
 			await screen.findByRole('heading', { name: 'Measurement report - 2026-11-16T22:49:45Z' })
 		).toBeInTheDocument();
-		expect(api.listReports).toHaveBeenCalledWith('test-token', older.date);
+		expect(api.findReport).toHaveBeenCalledWith('test-token', older.date);
 		expect(screen.getByRole('combobox', { name: 'Saved report' }).textContent).toContain('smoke');
 	});
 
 	it('says when asking for one report by id failed, with a retry', async () => {
-		vi.mocked(api.listReports).mockImplementation(async (_token, id) => {
-			if (id) throw 'disk unreadable';
-			return { reports: [] };
-		});
+		vi.mocked(api.listReports).mockResolvedValue({ reports: [] });
+		vi.mocked(api.findReport).mockRejectedValue('disk unreadable');
 		renderPage('/benchmarks/report?report=2026-01-02-old000');
 		expect(await screen.findByText(/disk unreadable/)).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
