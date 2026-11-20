@@ -104,6 +104,12 @@ export function AnswersPage() {
 	});
 	const runs = runsQuery.data?.runs ?? [];
 	const effectiveRun = params.get('run') ?? runs[0]?.suite_run_id ?? null;
+	// The newest run is a default, not a place: once shown, its id goes in the
+	// address, so a reload or a shared link stays on it after a newer run (NAV-1).
+	const runParam = params.get('run');
+	useEffect(() => {
+		if (!runParam && effectiveRun) update({ run: effectiveRun });
+	});
 
 	const rowsQuery = useQuery({
 		queryKey: ['answers', effectiveRun, filter],

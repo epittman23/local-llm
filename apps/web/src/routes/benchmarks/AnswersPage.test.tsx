@@ -103,8 +103,12 @@ describe('AnswersPage', () => {
 
 	it('opens an answer from the row button, puts it in the address and renders it (#974, #1046, #1111)', async () => {
 		renderPage();
+		// The newest run is shown by default, and its id goes in the address (NAV-1).
+		await waitFor(() => expect(location).toBe('/benchmarks/answers?run=smoke-1'));
 		fireEvent.click(await screen.findByRole('button', { name: /HumanEval\/2/ }));
-		await waitFor(() => expect(location).toBe('/benchmarks/answers?benchmark=humanevalplus&item=HumanEval%2F2'));
+		await waitFor(() =>
+			expect(location).toBe('/benchmarks/answers?run=smoke-1&benchmark=humanevalplus&item=HumanEval%2F2')
+		);
 		expect(await screen.findByText('2 of 3')).toBeInTheDocument();
 		expect(
 			await screen.findByText('412 tokens generated at 4.1 tokens/s · 1,204 prompt tokens in 16.0 s')
