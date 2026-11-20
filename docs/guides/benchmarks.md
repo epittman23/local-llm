@@ -59,7 +59,11 @@ on every page, so it reads light answers only: `GET /benchmarks/live/status`
 names the recorded run without reading its samples, and `GET
 /benchmarks/tune/recent` carries `running`, whether this backend's sweep task
 is alive. A sweep a dead backend left without a verdict reads `running` in the
-list until it is resumed, and the chip goes by the task, not the row:
+list until it is resumed, and the chip goes by the task, not the row; Tune
+calls such a sweep Interrupted, in its picker and its result, and enables
+Resume sweep for it (resume closes it first and continues from the rounds
+already finished, and refuses a sweep still open under a live tuner in
+another process, such as a second backend on the same database):
 
 - **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
   profile with the same overrides the shell layer took, now typed request

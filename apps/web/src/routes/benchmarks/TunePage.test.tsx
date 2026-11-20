@@ -108,7 +108,10 @@ describe('TunePage errors show what the server said', () => {
 	});
 
 	it('a refused resume', async () => {
-		vi.mocked(api.streamTuneLog).mockResolvedValue(stream([{ sweep_id: 's1', running: false, resumable: true }]));
+		// resumable comes with the incomplete verdict (sweep_status's `verdict == 'incomplete'`).
+		vi.mocked(api.streamTuneLog).mockResolvedValue(
+			stream([{ sweep_id: 's1', running: false, verdict: 'incomplete', resumable: true }])
+		);
 		vi.mocked(api.resumeTune).mockRejectedValue('no sweep to resume');
 		renderPage();
 		const resume = await screen.findByRole('button', { name: 'Resume sweep' });
@@ -507,7 +510,7 @@ describe('TunePage sweeps, results and form', () => {
 			],
 			[{ verdict: 'incomplete', resumable: true }, 'Incomplete', 'The sweep stopped before the end'],
 			[{ verdict: 'indeterminate' }, 'No verdict', 'The sweep could not decide'],
-			[{ verdict: null }, 'In progress', 'No verdict recorded']
+			[{ verdict: null }, 'Interrupted', 'The backend stopped during the sweep']
 		];
 		for (const [over, badge, headline] of cases) {
 			vi.mocked(api.streamTuneLog).mockResolvedValue(
@@ -520,6 +523,31 @@ describe('TunePage sweeps, results and form', () => {
 			expect(within(result).queryByRole('link')).toBeNull();
 			cleanup();
 		}
+	});
+
+	it('says a sweep a dead backend left open was interrupted, and lets Resume pick it up', async () => {
+		vi.mocked(api.streamTuneLog).mockResolvedValue(
+			stream([{ ...finished, verdict: null, resumable: false, adoption: null, guard: null, candidates: [] }])
+		);
+		vi.mocked(api.resumeTune).mockResolvedValue({ resumed: true } as never);
+		renderPage();
+		const result = await screen.findByRole('region', { name: 'Result' });
+		expect(result.getAttribute('data-verdict')).toBe('interrupted');
+		expect(within(result).queryByText('In progress')).toBeNull();
+		expect(
+			within(result).getByText(
+				'It has no verdict, and no sweep is running in this backend. Resume sweep picks it up from the rounds already finished.'
+			)
+		).toBeTruthy();
+		// Distinct from an incomplete sweep's words.
+		expect(within(result).queryByText('The sweep stopped before the end')).toBeNull();
+		const resume = screen.getByRole('button', { name: 'Resume sweep' });
+		await vi.waitFor(() => expect((resume as HTMLButtonElement).disabled).toBe(false));
+		expect(screen.getByText('Resume sweep continues this interrupted sweep.')).toBeTruthy();
+		// The facts agree with the button.
+		expect(screen.getByText('Resumable').parentElement?.textContent).toBe('ResumableYes');
+		fireEvent.click(resume);
+		await vi.waitFor(() => expect(api.resumeTune).toHaveBeenCalledWith('test-token', finished.sweep_id));
 	});
 
 	it('shows the candidate being measured while a sweep runs', async () => {
@@ -633,7 +661,7 @@ describe('sweepOptionLabel', () => {
 		const { sweepOptionLabel } = await import('./TunePage');
 		const open = { sweep_id: 's-1', profile: 'qwen38', tier: 'smoke', verdict: 'running' };
 		expect(sweepOptionLabel(open)).toMatch(/qwen38 \/ smoke · In progress$/);
-		expect(sweepOptionLabel(open, false)).toMatch(/qwen38 \/ smoke · Stopped before the end$/);
+		expect(sweepOptionLabel(open, false)).toMatch(/qwen38 \/ smoke · Interrupted$/);
 		expect(sweepOptionLabel({ ...open, verdict: 'adopted' }, false)).toMatch(/· Adopted$/);
 	});
 });
