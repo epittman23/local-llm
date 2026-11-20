@@ -202,6 +202,22 @@ def test_multi_flag_warning_within_a_block():
     assert any('differ in 2 flags (batch, ngl)' in n for n in notes)
 
 
+def test_a_small_block_is_named_in_words_not_by_its_raw_key():
+    # WRD-2: the note starts with a capital and names the block as a reader would.
+    records = run('aaaa', [1, 0], benchmark='mbppplus', window='2025-01..2025-03')
+    notes = compare.caveats(compare.group_records(records), {'aaaa': CONFIG_A})
+    (small,) = [n for n in notes if 'Fewer than 50 problems' in n]
+    assert small.startswith('> note: Fewer than 50 problems in MBPP+ at the smoke tier, items from 2025-01..2025-03,')
+    assert ' | ' not in small and 'adapter' not in small
+
+
+def test_block_words_fall_back_to_the_benchmark_id_and_name_the_prompt_and_revision():
+    key = ('full', 'newbench', 'sha1', 'terse', '', 'abcdef0123456789')
+    words = compare.block_words(key, {})
+    assert words.startswith('newbench at the full tier, system prompt terse, revision ')
+    assert compare.block_words(('smoke', '', '', '', '', ''), {}) == 'an unnamed benchmark at the smoke tier'
+
+
 # ---------------------------------------------------------------------------
 # the router's response shapes
 # ---------------------------------------------------------------------------

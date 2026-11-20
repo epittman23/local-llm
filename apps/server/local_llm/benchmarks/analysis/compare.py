@@ -56,6 +56,7 @@ from local_llm.benchmarks.analysis.stats import (
     short_ot,
     short_spec,
 )
+from local_llm.benchmarks.evaluation.adapters import load_adapters
 from local_llm.benchmarks.evaluation.datasets import short_revision
 from local_llm.models.benchmarks.configs import BenchmarkConfigs, BenchmarkRunLoadInfos, BenchmarkRuns
 from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
@@ -379,6 +380,31 @@ def block_label(key: tuple) -> str:
     return ' | '.join(parts)
 
 
+def block_words(key: tuple, names: dict[str, str]) -> str:
+    """A block in a sentence (WRD-2): "MBPP+ at the smoke tier, system prompt terse".
+
+    `names` maps a benchmark id to its adapter's name; the adapter and an
+    absent system prompt or window are left out, as nobody reads them.
+    """
+    tier, benchmark, _adapter, system, window, revision = key
+    words = f'{names.get(benchmark, benchmark) or "an unnamed benchmark"} at the {tier} tier'
+    if system:
+        words += f', system prompt {system}'
+    if window:
+        words += f', items from {window}'
+    if revision:
+        words += f', revision {short_revision(revision)}'
+    return words
+
+
+def _benchmark_names() -> dict[str, str]:
+    """Each benchmark's name as its authors write it (the adapter's `name`); {} if the adapters cannot be read."""
+    try:
+        return {bench: str(a.get('name') or bench) for bench, a in load_adapters().items()}
+    except (OSError, ValueError):
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # fetching -- the only functions here that touch the database
 # ---------------------------------------------------------------------------
@@ -692,12 +718,12 @@ def caveats(groups: list[Group], blocks: dict[str, list[str]]) -> list[str]:
             f"the file's current text is only the most recent one."
         )
 
-    small = sorted(
-        {block_label(k) for k, members in grouped.items() if any(0 < g.summary().rate.n < 50 for g in members)}
-    )
-    if small:
+    small_keys = [k for k, members in grouped.items() if any(0 < g.summary().rate.n < 50 for g in members)]
+    if small_keys:
+        names = _benchmark_names()
+        small = sorted({block_words(k, names) for k in small_keys})
         out.append(
-            f'> note: fewer than 50 problems in {"; ".join(small)}, so one problem '
+            f'> note: Fewer than 50 problems in {"; ".join(small)}, so one problem '
             f'moves the rate by more than two points. Read the intervals and the '
             f'groups, not the order of the rows.'
         )
@@ -709,7 +735,7 @@ def caveats(groups: list[Group], blocks: dict[str, list[str]]) -> list[str]:
     split = sorted(f'{b} ({", ".join(sorted(revs))})' for b, revs in seen.items() if len(revs) > 1)
     if split:
         out.append(
-            '> warning: these benchmarks were measured at more than one dataset '
+            '> warning: These benchmarks were measured at more than one dataset '
             'revision: ' + '; '.join(split) + '. Each revision is its own block and '
             'is never compared with the other: they are not the same test.'
         )

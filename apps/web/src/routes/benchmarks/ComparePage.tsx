@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { InfoIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
@@ -102,6 +102,12 @@ export function ComparePage() {
 		enabled: !!token
 	});
 	const tiers: string[] = tierOptionsQuery.data?.tiers ?? [];
+	// A tier the server doesn't offer (an old link, `?tier=nightly`) would
+	// leave the select blank: fall back to all tiers and say so in the address (NAV-3).
+	const unknownTier = tierOptionsQuery.isSuccess && tier !== ALL_TIER && !tiers.includes(tier);
+	useEffect(() => {
+		if (unknownTier) setParam('tier', null);
+	});
 
 	const compareQuery = useQuery({
 		queryKey: ['compare', by, tier, by === 'config' ? baseline : ''],
@@ -270,7 +276,12 @@ export function ComparePage() {
 								onValueChange={(v) => setParam('baseline', v === NO_BASELINE ? null : v)}
 								disabled={configs.length === 0}
 							>
-								<SelectTrigger ref={baselineSelect} id="compare-baseline" className="w-full sm:w-72">
+								{/* The value is a configuration in words: it wraps to two lines rather than clip. */}
+								<SelectTrigger
+									ref={baselineSelect}
+									id="compare-baseline"
+									className="min-h-9 w-full whitespace-normal text-start data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-2 sm:w-fit sm:max-w-md"
+								>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>

@@ -218,6 +218,12 @@ describe('ComparePage', () => {
 		expect(screen.queryByText('Loading the comparison')).toBeNull();
 	});
 
+	it('falls back to all tiers for a tier the server does not offer, and rewrites the address (NAV-3)', async () => {
+		renderPage('/benchmarks/compare?tier=nightly&by=serving');
+		await waitFor(() => expect(location).toBe('/benchmarks/compare?by=serving'));
+		expect(screen.getByRole('combobox', { name: 'Tier' })).toHaveTextContent('All tiers');
+	});
+
 	it('says when the baseline in the address is not in the results, and clears it (#1044)', async () => {
 		renderPage('/benchmarks/compare?baseline=nope');
 		expect(await screen.findByText('No configuration nope in these results')).toBeTruthy();
