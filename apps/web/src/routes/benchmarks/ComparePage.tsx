@@ -136,8 +136,16 @@ export function ComparePage() {
 	const unknownTier =
 		tierOptionsQuery.isSuccess && !offeredTier && compareQuery.isSuccess && !compareQuery.isPlaceholderData && isEmpty;
 	useEffect(() => {
-		if (unknownTier) setParam('tier', null);
-	});
+		if (!unknownTier) return;
+		setParams(
+			(prev) => {
+				const next = new URLSearchParams(prev);
+				next.delete('tier');
+				return next;
+			},
+			{ replace: true }
+		);
+	}, [unknownTier, setParams]);
 	const tierChoices = offeredTier ? tiers : [...tiers, tier];
 	const notes = [...new Set<string>(data?.notes ?? [])].map(parseNote);
 	const warnings = notes.filter((note) => note.tone === 'warning');
