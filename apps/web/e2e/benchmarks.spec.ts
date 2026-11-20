@@ -1121,6 +1121,14 @@ test('the Benchmarks tabs follow the workflow, and the chip names what is served
 			body: JSON.stringify({ run: { run_id: 1, config_id: 'c98ef02c', model: 'qwen3.8-27b' }, recent_samples: [] })
 		})
 	);
+	// The chip reads the run by identity only, never Live's sample summary.
+	await page.route('**/api/v1/benchmarks/live/status', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ run: { run_id: 1, config_id: 'c98ef02c', model: 'qwen3.8-27b' } })
+		})
+	);
 	await page.goto('/benchmarks');
 
 	// /benchmarks opens on Serve (B-D2).

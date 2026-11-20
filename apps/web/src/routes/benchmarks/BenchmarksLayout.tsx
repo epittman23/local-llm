@@ -4,7 +4,7 @@ import { Link, Outlet } from 'react-router';
 import { SectionSkeleton, SectionTabs } from '@/components/layout/SectionTabs';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
-import { checkServe, getLive, getPrescreenSweeps, getRecentSweeps } from '@/lib/apis/benchmarks';
+import { checkServe, getLiveStatus, getPrescreenSweeps, getRecentSweeps } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
 import { useBenchmarksGate } from './useBenchmarksGate';
@@ -64,14 +64,17 @@ export type ChipState = { label: string; detail?: string; to: string };
  * B-D2: what the section is doing now, linking to the page that owns it.
  * Reads the same queries the pages do (so a page's Start or Stop updates it
  * at once): a pre-screen, then a tune sweep, then a served model, then a run
- * still being recorded, else nothing. A Tests run has no status to read
+ * still being recorded, else nothing. The recorded run is read by identity
+ * only (`GET /live/status`): Live's own read summarises every sample, too
+ * much for a poll on every page. Its key sits under ['live'], so whatever
+ * refreshes Live refreshes the chip. A Tests run has no status to read
  * without consuming its stream, so it shows as the model it is served on.
  */
 export function BenchmarksStatusChip() {
 	const token = useAuthStore((state) => state.token) ?? '';
 	const options = { enabled: !!token, refetchInterval: STATUS_POLL_MS, retry: false } as const;
 	const check = useQuery({ queryKey: ['serve-check'], queryFn: () => checkServe(token), ...options });
-	const live = useQuery({ queryKey: ['live'], queryFn: () => getLive(token), ...options });
+	const live = useQuery({ queryKey: ['live', 'status'], queryFn: () => getLiveStatus(token), ...options });
 	const tune = useQuery({ queryKey: ['recent-sweeps'], queryFn: () => getRecentSweeps(token, 20), ...options });
 	const prescreen = useQuery({
 		queryKey: ['prescreen-sweeps'],
@@ -124,17 +127,18 @@ export function chipState({
 }: {
 	check?: { running?: boolean; profile?: string | null } | null;
 	live?: { run?: { config_id?: string | null; model?: string | null } | null } | null;
-	tune?: { sweeps?: { sweep_id: string; verdict?: string | null }[] } | null;
+	tune?: { sweeps?: { sweep_id: string; verdict?: string | null }[]; running?: boolean } | null;
 	prescreen?: { running?: boolean; active?: { sweep_id?: string } | null } | null;
 }): ChipState | null {
 	const sweepLink = (path: string, id?: string) => (id ? `${path}?${new URLSearchParams({ sweep: id })}` : path);
 	if (prescreen?.running) {
 		return { label: 'Pre-screen running', to: sweepLink(routePaths.benchmarksPrescreen, prescreen.active?.sweep_id) };
 	}
-	// The recent list reads an open sweep's missing verdict as 'running'.
-	const latestSweep = tune?.sweeps?.[0];
-	if (latestSweep?.verdict === 'running') {
-		return { label: 'Tune sweep running', to: sweepLink(routePaths.benchmarksTune, latestSweep.sweep_id) };
+	// The recent list reads an open sweep's missing verdict as 'running', and
+	// so does a sweep a dead backend left open: only the live task counts.
+	if (tune?.running) {
+		const open = tune.sweeps?.find((s) => s.verdict === 'running') ?? tune.sweeps?.[0];
+		return { label: 'Tune sweep running', to: sweepLink(routePaths.benchmarksTune, open?.sweep_id) };
 	}
 	const detail = live?.run?.config_id ? live.run.config_id.slice(0, 8) : undefined;
 	if (check?.running) {

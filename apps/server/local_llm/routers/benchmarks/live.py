@@ -40,6 +40,19 @@ async def get_live(user=Depends(get_admin_user)):
     }
 
 
+@router.get('/status')
+async def get_live_status(user=Depends(get_admin_user)):
+    """Which run is being recorded, if any: its identity only, for the section's status chip.
+
+    `GET /` reads every GPU sample of the run to summarise it; the chip polls
+    on every Benchmarks page and needs none of that, so it reads this instead.
+    """
+    run = await BenchmarkRuns.get_any_active_run()
+    if run is None:
+        return {'run': None}
+    return {'run': {'run_id': run.run_id, 'model': run.model, 'config_id': run.config_id}}
+
+
 @router.post('/kill')
 async def kill_active_run(user=Depends(get_admin_user)):
     """Force-stop whatever is currently being recorded, from Serve or a

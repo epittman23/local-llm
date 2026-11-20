@@ -13,6 +13,7 @@ vi.mock('@/lib/apis/benchmarks', async (importOriginal) => {
 		...real,
 		checkServe: vi.fn(),
 		getLive: vi.fn(),
+		getLiveStatus: vi.fn(),
 		getRecentSweeps: vi.fn(),
 		getPrescreenSweeps: vi.fn()
 	};
@@ -37,7 +38,7 @@ const signIn = () => {
 
 beforeEach(() => {
 	vi.mocked(api.checkServe).mockResolvedValue({ port: 8090, model: null, profile: 'qwen38', running: false });
-	vi.mocked(api.getLive).mockResolvedValue({ run: null });
+	vi.mocked(api.getLiveStatus).mockResolvedValue({ run: null });
 	vi.mocked(api.getRecentSweeps).mockResolvedValue({ sweeps: [] });
 	vi.mocked(api.getPrescreenSweeps).mockResolvedValue({ sweeps: [], running: false, active: null, last_error: null });
 });
@@ -82,7 +83,9 @@ describe('BenchmarksLayout', () => {
 
 	it("says what is served, with the recorded run's config, and links to Serve (B-D2)", async () => {
 		vi.mocked(api.checkServe).mockResolvedValue({ port: 8090, model: 'qwen3.8-27b', profile: 'qwen38', running: true });
-		vi.mocked(api.getLive).mockResolvedValue({ run: { config_id: 'c98ef02c11aa', model: 'qwen3.8-27b' } });
+		vi.mocked(api.getLiveStatus).mockResolvedValue({
+			run: { run_id: 'r1', config_id: 'c98ef02c11aa', model: 'qwen3.8-27b' }
+		});
 		signIn();
 		renderAt('/benchmarks/compare');
 		const chip = await screen.findByRole('link', { name: 'Serving qwen38 · c98ef02c' });
@@ -91,6 +94,9 @@ describe('BenchmarksLayout', () => {
 		expect(chip.textContent).not.toContain('11aa');
 		// The chip is beside the strip, not one of its tabs.
 		expect(within(screen.getByRole('navigation', { name: 'Benchmarks' })).queryByText(/Serving/)).toBeNull();
+		// The light read, never Live's sample summary, on every tab.
+		expect(api.getLiveStatus).toHaveBeenCalledWith('t');
+		expect(api.getLive).not.toHaveBeenCalled();
 	});
 
 	it('says the status is unavailable when a read fails and nothing else is known (STA-4)', async () => {
@@ -104,7 +110,7 @@ describe('BenchmarksLayout', () => {
 describe('chipState', () => {
 	it('puts a pre-screen first, then a tune sweep, then a served model, then a recorded run, else nothing', () => {
 		const serving = { running: true, profile: 'qwen38' };
-		const sweeps = { sweeps: [{ sweep_id: 't-1', verdict: 'running' }] };
+		const sweeps = { sweeps: [{ sweep_id: 't-1', verdict: 'running' }], running: true };
 		expect(
 			chipState({ check: serving, tune: sweeps, prescreen: { running: true, active: { sweep_id: 'p 1' } } })
 		).toEqual({ label: 'Pre-screen running', to: '/benchmarks/prescreen?sweep=p+1' });
@@ -124,5 +130,22 @@ describe('chipState', () => {
 		).toEqual({ label: 'Recording qwen3.8-27b', detail: 'bd04a851', to: '/benchmarks/live' });
 		expect(chipState({ live: { run: { config_id: null, model: null } } })?.label).toBe('Recording a run');
 		expect(chipState({ check: { running: false }, live: { run: null }, tune: { sweeps: [] } })).toBeNull();
+	});
+
+	it('does not call a sweep running when no sweep task is alive, however its row reads (#1053)', () => {
+		// A backend that died mid-sweep leaves the row without a verdict, which the list reads as 'running'.
+		const dead = { sweeps: [{ sweep_id: 't-dead', verdict: 'running' }], running: false };
+		expect(chipState({ tune: dead })).toBeNull();
+		expect(chipState({ tune: { sweeps: dead.sweeps } })).toBeNull();
+		// A resumed older sweep is the open one, not the newest row.
+		const resumed = {
+			sweeps: [
+				{ sweep_id: 't-new', verdict: 'adopted' },
+				{ sweep_id: 't-old', verdict: 'running' }
+			],
+			running: true
+		};
+		expect(chipState({ tune: resumed })?.to).toBe('/benchmarks/tune?sweep=t-old');
+		expect(chipState({ tune: { sweeps: [], running: true } })?.to).toBe('/benchmarks/tune');
 	});
 });

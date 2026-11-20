@@ -54,7 +54,12 @@ none of them a thin passthrough to a CLI that no longer exists. `/benchmarks`
 opens on Serve. The tabs follow the workflow in three groups (Pre-screen,
 Tune | Serve, Live, Tests | Compare, Answers, Report), and a chip at the end
 of the strip says what is running (a pre-screen, a tune sweep, a served
-model, a run being recorded) and links to its page:
+model, a run being recorded) and links to its page. The chip polls every 10 s
+on every page, so it reads light answers only: `GET /benchmarks/live/status`
+names the recorded run without reading its samples, and `GET
+/benchmarks/tune/recent` carries `running`, whether this backend's sweep task
+is alive. A sweep a dead backend left without a verdict reads `running` in the
+list until it is resumed, and the chip goes by the task, not the row:
 
 - **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
   profile with the same overrides the shell layer took, now typed request

@@ -174,7 +174,9 @@ async def get_grids(user=Depends(get_admin_user)):
 
 @router.get('/recent')
 async def get_recent(limit: int = 20, user=Depends(get_admin_user)):
-    return {'sweeps': await tune.list_recent_sweeps(limit=limit)}
+    # `running` is this backend's sweep task: a sweep row left without a
+    # verdict by a backend that died reads 'running' in the list forever.
+    return {'sweeps': await tune.list_recent_sweeps(limit=limit), 'running': running()}
 
 
 @router.get('/log')

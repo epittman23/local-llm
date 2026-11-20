@@ -279,6 +279,20 @@ export const streamServe = async (
 // Live
 // -----------------------------------------------------------------------------
 
+/** The run being recorded, by identity only (no samples): the section's status chip polls this. */
+export const getLiveStatus = async (
+	token: string = ''
+): Promise<{ run: { run_id: string; model: string | null; config_id: string | null } | null }> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/live/status`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
 export const getLive = async (token: string = '') => {
 	let error = null;
 
