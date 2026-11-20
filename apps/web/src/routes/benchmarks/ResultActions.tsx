@@ -33,7 +33,8 @@ export function ResultActions({
 	compareBaseline,
 	size = 'default',
 	label,
-	showNote = true
+	showNote = true,
+	compact = false
 }: {
 	profile: string;
 	overrides: Record<string, unknown> | null | undefined;
@@ -46,6 +47,8 @@ export function ResultActions({
 	label?: string;
 	/** The line saying which knobs each link carries; a table says it once instead. */
 	showNote?: boolean;
+	/** In a table's row: short labels on one line ("Serve", "Profile version"), the full action in each name. */
+	compact?: boolean;
 }) {
 	const toServe = serveLink(profile, overrides);
 	const toVersion = profileVersionLink(profile, overrides, note);
@@ -57,20 +60,20 @@ export function ResultActions({
 	const of = label ? `, ${label}` : '';
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex flex-wrap gap-2">
+			<div className={compact ? 'flex gap-2' : 'flex flex-wrap gap-2'}>
 				{toServe && (
 					<Button asChild variant="outline" size={size}>
-						<Link to={toServe} aria-label={label ? `Serve with these overrides${of}` : undefined}>
+						<Link to={toServe} aria-label={label || compact ? `Serve with these overrides${of}` : undefined}>
 							<PlayIcon aria-hidden data-icon="inline-start" />
-							Serve with these overrides
+							{compact ? 'Serve' : 'Serve with these overrides'}
 						</Link>
 					</Button>
 				)}
 				{toVersion && (
 					<Button asChild variant="outline" size={size}>
-						<Link to={toVersion} aria-label={label ? `Create profile version${of}` : undefined}>
+						<Link to={toVersion} aria-label={label || compact ? `Create profile version${of}` : undefined}>
 							<SquarePenIcon aria-hidden data-icon="inline-start" />
-							Create profile version
+							{compact ? 'Profile version' : 'Create profile version'}
 						</Link>
 					</Button>
 				)}

@@ -4,6 +4,7 @@ import { PlayIcon } from 'lucide-react';
 import { marked } from 'marked';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { Gone } from '@/components/common/Gone';
 import { ListEmptyState } from '@/components/common/ListChrome';
 import { Disclosure } from '@/components/settings/formFields';
 import {
@@ -97,8 +98,26 @@ const VERDICTS: Record<string, { label: string; tone: Tone }> = {
 	rejected: { label: 'No change', tone: 'secondary' },
 	indeterminate: { label: 'No verdict', tone: 'warning' },
 	incomplete: { label: 'Incomplete', tone: 'warning' },
-	running: { label: 'In progress', tone: 'secondary' }
+	running: { label: 'In progress', tone: 'secondary' },
+	// No verdict, and no sweep task alive in this backend: it stopped before the end (a backend that died mid-sweep).
+	interrupted: { label: 'Stopped before the end', tone: 'warning' }
 };
+
+/** A round's stage, a pause's cause and its outcome in words (WRD-2; models/benchmarks/tune.py). */
+const STAGES: Record<string, string> = { explore: 'Explore the grid', refine: 'Refine the leader' };
+const PAUSE_TRIGGERS: Record<string, string> = {
+	drift: "The baseline's speed drifted",
+	cliff: 'Speed collapsed during a visit',
+	regime: 'The GPU changed speed regime'
+};
+const PAUSE_RESOLUTIONS: Record<string, string> = {
+	recovered: 'Recovered',
+	timeout: 'Timed out',
+	abandoned: 'Abandoned'
+};
+/** A code in words, or the code itself when it is new to this page (never blank). */
+export const inWords = (map: Record<string, string>, code: string | null | undefined): string =>
+	code ? (map[code] ?? code) : NONE;
 
 /** A candidate's state (models/benchmarks/tune.py's CANDIDATE_STATUSES). */
 const CANDIDATE_STATUSES: Record<string, { label: string; tone: Tone }> = {
@@ -111,16 +130,23 @@ const CANDIDATE_STATUSES: Record<string, { label: string; tone: Tone }> = {
 	rejected: { label: 'Rejected', tone: 'danger' }
 };
 
-/** The sweep picker's words for one sweep: "2026-11-13 20:15 · qwen38 / smoke · Adopted". */
-const sweepOptionLabel = (s: {
-	sweep_id: string;
-	started_at?: number;
-	profile?: string | null;
-	tier?: string | null;
-	verdict?: string | null;
-}): string => {
+/**
+ * The sweep picker's words for one sweep: "2026-11-13 20:15 · qwen38 / smoke · Adopted".
+ * A sweep with no verdict is in progress only while a sweep task is alive (`live`).
+ */
+export const sweepOptionLabel = (
+	s: {
+		sweep_id: string;
+		started_at?: number;
+		profile?: string | null;
+		tier?: string | null;
+		verdict?: string | null;
+	},
+	live = true
+): string => {
 	const when = typeof s.started_at === 'number' ? shownTime(s.started_at).exact : s.sweep_id;
-	const verdict = VERDICTS[s.verdict ?? 'running']?.label ?? s.verdict;
+	const key = s.verdict ?? 'running';
+	const verdict = VERDICTS[key === 'running' && !live ? 'interrupted' : key]?.label ?? s.verdict;
 	return `${when} · ${s.profile ?? NONE} / ${s.tier ?? NONE} · ${verdict}`;
 };
 
@@ -487,8 +513,9 @@ export function TunePage() {
 	// The form is open while there is nothing to show, folded once a sweep is (#1114).
 	const newSweepOpen = formOpen ?? (loaded && !hasSweep);
 	const shownSweepId: string = sweepParam ?? status?.sweep_id ?? '';
+	// A sweep that doesn't exist gets no entry: the picker shows nothing chosen, never "In progress" (NAV-3).
 	const sweepChoices =
-		shownSweepId && !recentSweeps.some((s) => s.sweep_id === shownSweepId)
+		shownSweepId && status?.sweep_id === shownSweepId && !recentSweeps.some((s) => s.sweep_id === shownSweepId)
 			? [
 					{ sweep_id: shownSweepId, profile: status?.profile, tier: status?.tier, verdict: status?.verdict },
 					...recentSweeps
@@ -703,7 +730,7 @@ export function TunePage() {
 				<div className="flex min-w-0 grow basis-72 flex-col gap-1">
 					<Label htmlFor="tune-sweep">Sweep</Label>
 					<Select
-						value={shownSweepId}
+						value={sweepChoices.some((s) => s.sweep_id === shownSweepId) ? shownSweepId : ''}
 						disabled={sweepChoices.length === 0}
 						onValueChange={(val) => {
 							if (val) selectSweep(val);
@@ -711,14 +738,20 @@ export function TunePage() {
 					>
 						<SelectTrigger id="tune-sweep" className="w-full">
 							<SelectValue
-								placeholder={recentSweepsQuery.isLoading ? 'Loading sweeps…' : 'None recorded'}
+								placeholder={
+									recentSweepsQuery.isLoading
+										? 'Loading sweeps…'
+										: sweepChoices.length === 0
+											? 'None recorded'
+											: 'Choose a sweep'
+								}
 								className="truncate"
 							/>
 						</SelectTrigger>
 						<SelectContent>
 							{sweepChoices.map((sweep) => (
 								<SelectItem key={sweep.sweep_id} value={sweep.sweep_id}>
-									{sweepOptionLabel(sweep)}
+									{sweepOptionLabel(sweep, running || recentSweepsQuery.data?.running === true)}
 								</SelectItem>
 							))}
 						</SelectContent>
@@ -804,10 +837,16 @@ export function TunePage() {
 				loaded &&
 				!statusError &&
 				(sweepParam && missing ? (
-					<ListEmptyState
-						title={`No sweep ${sweepParam}`}
-						description="It may have been deleted, or the link is wrong."
-						action={
+					<Gone
+						level={3}
+						title="This sweep no longer exists"
+						description={
+							<>
+								No sweep is called <span className="font-mono">{sweepParam}</span>. It may have been deleted, or the
+								link is wrong.
+							</>
+						}
+						actions={
 							<Button variant="outline" size="sm" type="button" onClick={() => selectSweep(null)}>
 								Show the latest sweep
 							</Button>
@@ -836,7 +875,7 @@ export function TunePage() {
 
 					<section className="flex flex-col gap-1">
 						<h3 className="text-sm font-medium">Rounds</h3>
-						<Table aria-label="Rounds">
+						<Table aria-label="Rounds" stickyHeader>
 							<TableHeader>
 								<TableRow>
 									<TableHead className="text-right">Round</TableHead>
@@ -852,7 +891,7 @@ export function TunePage() {
 								{(status.rounds ?? []).map((r: TuneRound) => (
 									<TableRow key={r.round}>
 										<TableCell className="text-muted-foreground text-right">{r.round}</TableCell>
-										<TableCell>{r.stage ?? NONE}</TableCell>
+										<TableCell>{inWords(STAGES, r.stage)}</TableCell>
 										<TableCell className="text-right">
 											{r.item_from}–{r.item_to}
 										</TableCell>
@@ -875,7 +914,7 @@ export function TunePage() {
 
 					<section className="flex flex-col gap-1">
 						<h3 className="text-sm font-medium">Candidates</h3>
-						<Table aria-label="Candidates" stickyFirstColumn>
+						<Table aria-label="Candidates" stickyFirstColumn stickyHeader>
 							<TableHeader>
 								<TableRow>
 									<TableHead>Candidate</TableHead>
@@ -951,7 +990,7 @@ export function TunePage() {
 									<TableBody>
 										{(status.pauses ?? []).map((p: TunePause, idx: number) => (
 											<TableRow key={p.pause_id ?? idx}>
-												<TableCell>{p.trigger_kind ?? NONE}</TableCell>
+												<TableCell>{inWords(PAUSE_TRIGGERS, p.trigger_kind)}</TableCell>
 												<TableCell className="text-right">{p.round ?? NONE}</TableCell>
 												<TableCell className="text-right">
 													{fmtNum(p.temp_before, 1)} → {fmtNum(p.temp_after, 1)}
@@ -960,7 +999,7 @@ export function TunePage() {
 													{fmtNum(p.power_before, 1)} → {fmtNum(p.power_after, 1)}
 												</TableCell>
 												<TableCell className="text-right">{fmtNum(p.drift_ratio, 3)}</TableCell>
-												<TableCell>{p.resolution ?? NONE}</TableCell>
+												<TableCell>{inWords(PAUSE_RESOLUTIONS, p.resolution)}</TableCell>
 											</TableRow>
 										))}
 									</TableBody>

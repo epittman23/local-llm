@@ -414,7 +414,12 @@ describe('TunePage sweeps, results and form', () => {
 	it('says a linked sweep is gone and offers the latest (NAV-3)', async () => {
 		vi.mocked(api.streamTuneLog).mockResolvedValue(stream([{ error: "llama-tune: no sweep 'gone'" }]));
 		renderPage('/benchmarks/tune?sweep=gone');
-		expect(await screen.findByText('No sweep gone')).toBeTruthy();
+		// NAV-3: the in-place Gone panel, and the picker names no sweep rather than calling it in progress.
+		expect(await screen.findByRole('heading', { name: 'This sweep no longer exists' })).toBeTruthy();
+		expect(screen.getByText('gone').closest('[data-slot="gone"]')).toBeTruthy();
+		const picker = screen.getByRole('combobox', { name: 'Sweep' });
+		expect(picker.textContent).not.toContain('In progress');
+		expect(picker.textContent).not.toContain('gone');
 		expect(api.streamTuneLog).toHaveBeenCalledWith('test-token', 'gone', expect.any(AbortController));
 		fireEvent.click(screen.getByRole('button', { name: 'Show the latest sweep' }));
 		await vi.waitFor(() => expect(router.state.location.search).toBe(''));
@@ -460,8 +465,12 @@ describe('TunePage sweeps, results and form', () => {
 		expect(screen.getByText('Eliminated')).toBeTruthy();
 		expect(screen.getByText('bottom half of round 1')).toBeTruthy();
 		expect(screen.getByText('11.8%')).toBeTruthy();
-		expect(screen.getByRole('region', { name: 'Rounds' })).toBeTruthy();
-		expect(screen.getByRole('region', { name: 'Candidates' })).toBeTruthy();
+		const rounds = screen.getByRole('region', { name: 'Rounds' });
+		expect(within(rounds).getByText('Explore the grid')).toBeTruthy();
+		// #1114: the tables that grow keep their headings in view.
+		expect(rounds.querySelector('table')?.getAttribute('data-sticky-header')).toBe('true');
+		const candidates = screen.getByRole('region', { name: 'Candidates' });
+		expect(candidates.querySelector('table')?.getAttribute('data-sticky-header')).toBe('true');
 		// The sweep picker shows the sweep in view, though the recent list does not hold it.
 		expect(screen.getByRole('combobox', { name: 'Sweep' }).textContent).toContain('20261113T201502Z-7c1d');
 	});
@@ -483,6 +492,9 @@ describe('TunePage sweeps, results and form', () => {
 		fireEvent.click(screen.getByRole('button', { name: /^Pauses/ }));
 		expect(screen.getByRole('region', { name: 'Pauses' })).toBeTruthy();
 		expect(screen.getByText('86.0 → 71.0')).toBeTruthy();
+		// WRD-2: the cause and the outcome in words, not codes.
+		expect(screen.getByText("The baseline's speed drifted")).toBeTruthy();
+		expect(screen.getByText('Recovered')).toBeTruthy();
 	});
 
 	it('names every verdict in words, never a phantom "running"', async () => {
@@ -534,7 +546,8 @@ describe('TunePage sweeps, results and form', () => {
 			sweeps: [
 				{ sweep_id: 's-new', started_at: 1794600000, profile: 'qwen38', tier: 'smoke', verdict: 'running' },
 				{ sweep_id: 's-old', started_at: 1794500000, profile: 'qwen36', tier: 'standard', verdict: 'rejected' }
-			]
+			],
+			running: true
 		});
 		vi.mocked(api.streamTuneLog).mockResolvedValue(stream([{ ...finished, sweep_id: 's-new' }]));
 		renderPage();
@@ -612,5 +625,24 @@ describe('TunePage sweeps, results and form', () => {
 			candidates: undefined,
 			stages: ['explore']
 		});
+	});
+});
+
+describe('sweepOptionLabel', () => {
+	it('calls a sweep with no verdict in progress only while a sweep task is alive (#1053)', async () => {
+		const { sweepOptionLabel } = await import('./TunePage');
+		const open = { sweep_id: 's-1', profile: 'qwen38', tier: 'smoke', verdict: 'running' };
+		expect(sweepOptionLabel(open)).toMatch(/qwen38 \/ smoke · In progress$/);
+		expect(sweepOptionLabel(open, false)).toMatch(/qwen38 \/ smoke · Stopped before the end$/);
+		expect(sweepOptionLabel({ ...open, verdict: 'adopted' }, false)).toMatch(/· Adopted$/);
+	});
+});
+
+describe('inWords', () => {
+	it('says a known code in words, keeps an unknown one, and marks a missing one', async () => {
+		const { inWords } = await import('./TunePage');
+		expect(inWords({ drift: 'Drifted' }, 'drift')).toBe('Drifted');
+		expect(inWords({ drift: 'Drifted' }, 'later')).toBe('later');
+		expect(inWords({}, null)).toBe('–');
 	});
 });

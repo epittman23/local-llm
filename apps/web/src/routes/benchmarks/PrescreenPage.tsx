@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlayIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { Gone } from '@/components/common/Gone';
 import { ListEmptyState } from '@/components/common/ListChrome';
 import { Disclosure } from '@/components/settings/formFields';
 import {
@@ -41,6 +42,7 @@ import { listProfiles } from '@/lib/apis/benchmarks/profiles';
 import { errorMessage } from '@/lib/apis/errors';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useFieldErrors } from '@/lib/ui/useFieldErrors';
+import { cn } from '@/lib/utils';
 import { shownTime } from '@/lib/utils/dates';
 import { ResultActions, StatusBadge, type Tone } from './ResultActions';
 import { knobsText } from './resultLinks';
@@ -166,6 +168,22 @@ const SAMPLER_HELP = {
 	grid: 'Measures every point of the grid.',
 	tpe: "Optuna's TPE sampler proposes the number of trials set below."
 } as const;
+/**
+ * A heading over short numbers wraps to two lines rather than widen its
+ * column, so the candidates' Use it column fits a 1280 px window (#1113).
+ */
+const WRAP_HEAD = 'h-auto py-2 whitespace-normal';
+
+/** The sampler and objective in the words the form uses (WRD-2). */
+const SAMPLER_NAMES: Record<string, string> = { auto: 'Auto', grid: 'Grid', tpe: 'TPE' };
+const OBJECTIVE_NAMES: Record<string, string> = { tg: 'Generation', pp: 'Prompt processing', both: 'Both' };
+/** "Grid / Generation": how a sweep searched and what it ranked by. */
+export const searchText = (sampler: string, objective: string): string =>
+	`${SAMPLER_NAMES[sampler] ?? sampler} / ${OBJECTIVE_NAMES[objective] ?? objective}`;
+/** A point's phase in words: a search point, or a second measurement of an earlier one. */
+export const phaseText = (phase: string, remeasureOf?: number | null): string =>
+	phase === 'remeasure' ? `Again (point ${remeasureOf ?? '?'})` : phase === 'search' ? 'Search' : phase;
+
 const OBJECTIVE_HELP = {
 	tg: 'Ranks candidates by generation speed (tg).',
 	pp: 'Ranks candidates by prompt processing speed (pp).',
@@ -615,7 +633,7 @@ export function PrescreenPage() {
 							{sweeps.map((s) => (
 								<SelectItem key={s.sweep_id} value={s.sweep_id}>
 									{typeof s.started_at === 'number' ? shownTime(s.started_at).exact : s.sweep_id} · {s.profile} ·{' '}
-									{s.sampler} / {s.objective} · {statusOf(SWEEP_STATUS, s.status).label}
+									{searchText(s.sampler, s.objective)} · {statusOf(SWEEP_STATUS, s.status).label}
 								</SelectItem>
 							))}
 						</SelectContent>
@@ -673,10 +691,16 @@ export function PrescreenPage() {
 				loaded &&
 				!detailError &&
 				(sweepParam && missing === sweepParam ? (
-					<ListEmptyState
-						title={`No pre-screen ${sweepParam}`}
-						description="It may have been deleted, or the link is wrong."
-						action={
+					<Gone
+						level={3}
+						title="This pre-screen no longer exists"
+						description={
+							<>
+								No pre-screen is called <span className="font-mono">{sweepParam}</span>. It may have been deleted, or
+								the link is wrong.
+							</>
+						}
+						actions={
 							<Button variant="outline" size="sm" type="button" onClick={() => setSearchParams({})}>
 								Show the latest pre-screen
 							</Button>
@@ -698,7 +722,7 @@ export function PrescreenPage() {
 							value={sweepStatus && <StatusBadge label={sweepStatus.label} tone={sweepStatus.tone} />}
 						/>
 						<StatTile label="Profile / grid" value={`${sweep.profile} / ${sweep.grid_path}`} />
-						<StatTile label="Sampler / objective" value={`${sweep.sampler} / ${sweep.objective}`} />
+						<StatTile label="Sampler / objective" value={searchText(sweep.sampler, sweep.objective)} />
 						<StatTile label="Study" value={sweep.study_name} />
 						<StatTile label="Model" value={sweep.model_file} />
 						<StatTile
@@ -706,7 +730,10 @@ export function PrescreenPage() {
 							value={sweep.build_commit ? `${sweep.build_commit} (${sweep.build_number ?? '?'})` : NONE}
 						/>
 						<StatTile label="GPU / driver" value={`${sweep.gpu_info ?? NONE} / ${sweep.driver_version ?? NONE}`} />
-						<StatTile label="-p / -n / -r" value={`${sweep.n_prompt} / ${sweep.n_gen} / ${sweep.reps}`} />
+						<StatTile
+							label="Prompt / generated tokens, runs"
+							value={`${sweep.n_prompt} / ${sweep.n_gen}, ${sweep.reps}`}
+						/>
 					</div>
 					{sweep.status_reason && <p className="text-muted-foreground text-xs">Reason: {sweep.status_reason}</p>}
 
@@ -714,16 +741,16 @@ export function PrescreenPage() {
 						<h3 className="text-sm font-medium">
 							Candidates, raw llama-bench throughput (not a serving measurement): confirm with a full Tests run
 						</h3>
-						<Table aria-label="Candidates">
+						<Table aria-label="Candidates" stickyHeader>
 							<TableHeader>
 								<TableRow>
 									<TableHead className="text-right">#</TableHead>
 									<TableHead>Changes from the profile</TableHead>
-									<TableHead className="text-right">Generation, tokens/s</TableHead>
-									<TableHead className="text-right">Prompt, tokens/s</TableHead>
+									<TableHead className={cn('text-right', WRAP_HEAD)}>Generation, tokens/s</TableHead>
+									<TableHead className={cn('text-right', WRAP_HEAD)}>Prompt, tokens/s</TableHead>
 									<TableHead className="text-right">Runs</TableHead>
-									<TableHead className="text-right">Peak VRAM, MiB</TableHead>
-									<TableHead>Load at the profile's context</TableHead>
+									<TableHead className={cn('text-right', WRAP_HEAD)}>Peak VRAM, MiB</TableHead>
+									<TableHead className={WRAP_HEAD}>Load at the profile's context</TableHead>
 									<TableHead>Use it</TableHead>
 								</TableRow>
 							</TableHeader>
@@ -773,6 +800,7 @@ export function PrescreenPage() {
 														size="sm"
 														label={`candidate ${c.rank}`}
 														showNote={false}
+														compact
 													/>
 												)}
 											</TableCell>
@@ -789,15 +817,15 @@ export function PrescreenPage() {
 							</TableBody>
 						</Table>
 						<p className="text-muted-foreground mt-1 text-xs">
-							Serve with these overrides fills the Serve form with the GPU layers and threads a candidate changes;
-							Create profile version opens the profile's Edit form with all of them (batch, micro-batch, MoE layers).
-							Nothing starts or is saved until you do it there.
+							Serve fills the Serve form with the GPU layers and threads a candidate changes; Profile version opens the
+							profile's Edit form with all of them (batch, micro-batch, MoE layers). Nothing starts or is saved until
+							you do it there.
 						</p>
 					</section>
 
 					<section className="flex flex-col gap-1">
 						<h3 className="text-sm font-medium">Points ({points.length})</h3>
-						<Table aria-label="Points">
+						<Table aria-label="Points" stickyHeader>
 							<TableHeader>
 								<TableRow>
 									<TableHead className="text-right">Point</TableHead>
@@ -817,7 +845,7 @@ export function PrescreenPage() {
 										<TableRow key={p.point_id}>
 											<TableCell className="text-muted-foreground text-right">{p.point_id}</TableCell>
 											<TableCell className="text-right">{p.optuna_trial_number ?? NONE}</TableCell>
-											<TableCell>{p.phase === 'remeasure' ? `again (${p.remeasure_of})` : p.phase}</TableCell>
+											<TableCell>{phaseText(p.phase, p.remeasure_of)}</TableCell>
 											<TableCell className="text-xs">{flagsText(p.overrides)}</TableCell>
 											<TableCell>
 												<span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">

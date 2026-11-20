@@ -148,13 +148,15 @@ describe('PrescreenPage', () => {
 	it('names a sweep the address asks for that does not exist, and offers the latest (NAV-3)', async () => {
 		vi.mocked(api.getPrescreenSweep).mockImplementation(async (_token, id) => (id === 'gone' ? null : detail('done')));
 		renderPage('/benchmarks/prescreen?sweep=gone');
-		expect(await screen.findByText('No pre-screen gone')).toBeTruthy();
+		// NAV-3: the in-place Gone panel, naming the id it was asked for.
+		expect(await screen.findByRole('heading', { name: 'This pre-screen no longer exists' })).toBeTruthy();
+		expect(screen.getByText('gone').closest('[data-slot="gone"]')).toBeTruthy();
 		expect(screen.queryByText("Couldn't load the pre-screen")).toBeNull();
 		fireEvent.click(screen.getByRole('button', { name: 'Show the latest pre-screen' }));
 		await waitFor(() => expect(api.getPrescreenSweep).toHaveBeenCalledWith('test-token', '1793-abc'));
 		expect(router.state.location.search).toBe('');
 		expect(await screen.findByText("The profile's settings")).toBeTruthy();
-		expect(screen.queryByText('No pre-screen gone')).toBeNull();
+		expect(screen.queryByRole('heading', { name: 'This pre-screen no longer exists' })).toBeNull();
 	});
 
 	it('treats a sweep that vanishes while streaming as missing', async () => {
@@ -164,7 +166,8 @@ describe('PrescreenPage', () => {
 			.mockResolvedValue(null);
 		vi.mocked(api.streamPrescreen).mockResolvedValue(stream([]));
 		renderPage('/benchmarks/prescreen?sweep=1793-abc');
-		expect(await screen.findByText('No pre-screen 1793-abc')).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'This pre-screen no longer exists' })).toBeTruthy();
+		expect(screen.getByText('1793-abc').closest('[data-slot="gone"]')).toBeTruthy();
 	});
 
 	it('shows the latest sweep, labelled as raw llama-bench throughput', async () => {
@@ -489,7 +492,18 @@ describe('PrescreenPage form, candidates and address', () => {
 		// Batch alone is not a Serve override.
 		expect(within(table).queryByRole('link', { name: 'Serve with these overrides, candidate 2' })).toBeNull();
 		expect(within(table).getByRole('link', { name: 'Create profile version, candidate 2' })).toBeTruthy();
-		expect(screen.getByRole('combobox', { name: 'Pre-screen' }).textContent).toContain('qwen38 · grid / tg · Done');
+		expect(screen.getByRole('combobox', { name: 'Pre-screen' }).textContent).toContain(
+			'qwen38 · Grid / Generation · Done'
+		);
+		// In the row the actions are short, on one line, and keep the whole action in their names.
+		expect(serve.textContent).toBe('Serve');
+		expect(within(table).getAllByText('Profile version')).toHaveLength(3);
+		// WRD-2: the tiles say how it searched in words, and the long tables keep their headings in view (#1114).
+		expect(screen.getByText('Grid / Generation', { selector: 'dd, dd *, p, span, div' })).toBeTruthy();
+		expect(table.querySelector('table')?.getAttribute('data-sticky-header')).toBe('true');
+		expect(
+			screen.getByRole('region', { name: 'Points' }).querySelector('table')?.getAttribute('data-sticky-header')
+		).toBe('true');
 	});
 
 	it('shows the sweep in the address, and a pick adds a history entry (NAV-1, #1045)', async () => {
@@ -513,5 +527,16 @@ describe('PrescreenPage form, candidates and address', () => {
 		await screen.findByText('Points (3)');
 		await choose('Pre-screen', /Cancelled/);
 		await waitFor(() => expect(router.state.location.search).toBe('?sweep=1792-old'));
+	});
+});
+
+describe('Pre-screen words', () => {
+	it('names a point phase and the search in words (WRD-2)', async () => {
+		const { phaseText, searchText } = await import('./PrescreenPage');
+		expect(phaseText('search')).toBe('Search');
+		expect(phaseText('remeasure', 4)).toBe('Again (point 4)');
+		expect(phaseText('later')).toBe('later');
+		expect(searchText('tpe', 'both')).toBe('TPE / Both');
+		expect(searchText('new', 'pp')).toBe('new / Prompt processing');
 	});
 });

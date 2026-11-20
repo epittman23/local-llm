@@ -663,7 +663,8 @@ would cover an outline on the region itself. The headings are opaque in
 `--table-surface` with their rule drawn on them; with `stickyFirstColumn`
 the corner heading stays above both. Rows hidden below make the named region
 a tab stop too. Use it on a table long enough to scroll its headings out of
-view (Compare > Failures). Tables in rendered answers use it too,
+view (Compare > Failures, Tune's rounds and candidates, Pre-screen's
+candidates and points). Tables in rendered answers use it too,
 with Copy table (tab-separated, so it pastes as cells) and Download CSV in an
 always-visible toolbar above the table, never over a heading (A11Y-4). A
 scroll region outside `Table` (a code listing, an equation) uses
