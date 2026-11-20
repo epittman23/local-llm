@@ -268,3 +268,34 @@ def test_benchmark_response_has_columns(client):
     body = client.get('/compare/', params={'by': 'benchmark'}).json()
     assert body['columns'][:4] == ['model', 'config_id', 'tier', 'system']
     assert body['rows'][0]['ds1000_passed'] == '2/3'
+
+
+@pytest.mark.parametrize(
+    'adapters',
+    [KeyError('id'), TypeError('bad'), OSError('gone'), {'humanevalplus': ['not', 'a', 'table']}],
+    ids=['key-error', 'type-error', 'os-error', 'non-dict-entry'],
+)
+def test_benchmark_names_word_a_note_and_never_fail_compare(monkeypatch, adapters):
+    def fake_load():
+        if isinstance(adapters, Exception):
+            raise adapters
+        return adapters
+
+    monkeypatch.setattr(compare, '_names', None)
+    monkeypatch.setattr(compare, 'load_adapters', fake_load)
+    assert compare._benchmark_names() == {}
+    assert compare._names is None  # a failure is retried, not kept
+
+
+def test_benchmark_names_are_read_once(monkeypatch):
+    calls = []
+
+    def fake_load():
+        calls.append(1)
+        return {'humanevalplus': {'name': 'HumanEval+'}, 'x': {}}
+
+    monkeypatch.setattr(compare, '_names', None)
+    monkeypatch.setattr(compare, 'load_adapters', fake_load)
+    assert compare._benchmark_names() == {'humanevalplus': 'HumanEval+', 'x': 'x'}
+    assert compare._benchmark_names() == {'humanevalplus': 'HumanEval+', 'x': 'x'}
+    assert len(calls) == 1
