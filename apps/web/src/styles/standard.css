@@ -520,7 +520,9 @@
 	[data-slot="table-frame"]:has(> [data-slot="table-container"]:focus-visible)
 	> [data-slot="table-focus-ring"] {
 	display: block;
-	box-shadow: inset 0 0 0 2px var(--focus);
+	/* An outline, as A11Y-1 says, so forced-colors mode keeps it (it drops box-shadow). */
+	outline: 2px solid var(--focus);
+	outline-offset: -2px;
 }
 
 /*
