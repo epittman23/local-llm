@@ -362,14 +362,16 @@ test('Tests fetches the datasets and shows what was downloaded', async ({ page }
 	]);
 	await page.goto('/benchmarks/tests');
 	const panel = page.getByRole('region', { name: 'Datasets' });
-	await expect(panel.getByText('Not fetched')).toBeVisible();
+	// At this width the datasets are a table; the stacked blocks are for a narrow screen (DAT-6).
+	const table = panel.getByRole('region', { name: 'Dataset status' });
+	await expect(table.getByText('Not fetched')).toBeVisible();
 	// Nothing to check before anything is fetched.
 	await expect(panel.getByRole('button', { name: 'Selfcheck' })).toBeDisabled();
 	await panel.getByRole('button', { name: 'Fetch datasets', exact: true }).click();
 	await expect(page.getByText('humanevalplus: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
 	expect(seen.body).toEqual({});
 	// The table is read again once the job ends.
-	await expect(panel.getByText('163/164 gradeable')).toBeVisible();
+	await expect(table.getByText('163/164 gradeable')).toBeVisible();
 });
 
 test('Tests force-refetches only after confirming', async ({ page }) => {

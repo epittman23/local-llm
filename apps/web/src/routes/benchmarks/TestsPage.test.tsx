@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '@/lib/apis/benchmarks';
@@ -177,9 +177,19 @@ describe('TestsPage datasets and item result', () => {
 			}
 		]);
 		renderPage();
-		const stale = await screen.findByText('the file changed since it was calibrated');
+		const table = await screen.findByRole('region', { name: 'Dataset status' });
+		const stale = await within(table).findByText('the file changed since it was calibrated');
 		expect(stale.className).toContain('text-warning');
-		expect(screen.getByText('160/164 gradeable').className).not.toContain('text-warning');
+		expect(within(table).getByText('160/164 gradeable').className).not.toContain('text-warning');
+		// DAT-6: below sm the same facts are label and value pairs, one block per dataset (the table is hidden there).
+		const blocks = screen.getByRole('list', { name: 'Dataset status' });
+		expect(blocks.className).toContain('sm:hidden');
+		expect(table.closest('.hidden.sm\\:block')).not.toBeNull();
+		const ds1000 = within(blocks).getAllByRole('listitem')[0];
+		expect(within(ds1000).getByText('DS-1000')).toBeInTheDocument();
+		expect(within(ds1000).getByText('Revision').nextElementSibling?.textContent).toBe('abc123');
+		expect(within(ds1000).getByText('Items').nextElementSibling?.textContent).toBe('1000');
+		expect(within(ds1000).getByText('the file changed since it was calibrated').className).toContain('text-warning');
 	});
 
 	it('shows a single item result with the suites that leave it out', async () => {
@@ -309,9 +319,9 @@ describe('TestsPage target, tiers, progress and datasets (#918, #938, #1047, #10
 		vi.mocked(api.runSelfcheck).mockResolvedValue({ started: true });
 		vi.mocked(api.streamTestRun).mockResolvedValue(stream([]));
 		renderPage();
-		expect(await screen.findByRole('region', { name: 'Dataset status' })).toBeInTheDocument();
-		expect(await screen.findByText('In the repository')).toBeInTheDocument();
-		fireEvent.click(screen.getByRole('button', { name: 'Run selfcheck' }));
+		const table = await screen.findByRole('region', { name: 'Dataset status' });
+		expect(await within(table).findByText('In the repository')).toBeInTheDocument();
+		fireEvent.click(within(table).getByRole('button', { name: 'Run selfcheck' }));
 		await waitFor(() => expect(api.runSelfcheck).toHaveBeenCalled());
 	});
 

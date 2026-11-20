@@ -323,6 +323,28 @@ export function TestsPage() {
 
 	const progress = runProgress(items, total, startedAt ? now - startedAt : 0);
 	const shown = failuresOnly ? items.filter((item) => FAILURE.test(item.outcome)) : items;
+	// One dataset's cells, shared by the wide table and the narrow blocks (DAT-6).
+	const datasetName = (d: (typeof datasets)[number]) => (
+		<span className="flex flex-wrap items-center gap-2">
+			{d.name}
+			{d.vendored && <Badge variant="secondary">In the repository</Badge>}
+		</span>
+	);
+	const datasetItems = (d: (typeof datasets)[number]) =>
+		d.fetched ? (d.n_items ?? '–') : <Badge variant="secondary">Not fetched</Badge>;
+	const datasetCalibration = (d: (typeof datasets)[number]) =>
+		d.calibration_stale ? (
+			<span className="flex flex-wrap items-center gap-2">
+				<span className="text-warning">{d.calibration_stale}</span>
+				{d.fetched && (
+					<Button size="xs" variant="outline" disabled={busy} onClick={() => jobMutation.mutate({ job: 'selfcheck' })}>
+						Run selfcheck
+					</Button>
+				)}
+			</span>
+		) : (
+			calibrationText(d)
+		);
 	const showProgress = (job === 'run' || job === 'selfcheck') && (busy || items.length > 0 || done !== null);
 	const passWord = job === 'selfcheck' ? 'reference solutions pass' : 'passed';
 
@@ -409,53 +431,46 @@ export function TestsPage() {
 						Couldn't start the {failedJob}: {String(jobMutation.error)}
 					</p>
 				)}
-				<Table aria-label="Dataset status">
-					<TableHeader>
-						<TableRow>
-							<TableHead scope="col">Benchmark</TableHead>
-							<TableHead scope="col" className="text-right">
-								Items
-							</TableHead>
-							<TableHead scope="col">Revision</TableHead>
-							<TableHead scope="col">Calibration</TableHead>
-						</TableRow>
-					</TableHeader>
-					<TableBody>
-						{datasets.map((d) => (
-							<TableRow key={d.benchmark}>
-								<TableCell>
-									<span className="flex items-center gap-2">
-										{d.name}
-										{d.vendored && <Badge variant="secondary">In the repository</Badge>}
-									</span>
-								</TableCell>
-								<TableCell className="text-right tabular-nums">
-									{d.fetched ? (d.n_items ?? '–') : <Badge variant="secondary">Not fetched</Badge>}
-								</TableCell>
-								<TableCell className="font-mono">{d.revision ?? '–'}</TableCell>
-								<TableCell>
-									{d.calibration_stale ? (
-										<span className="flex flex-wrap items-center gap-2">
-											<span className="text-warning">{d.calibration_stale}</span>
-											{d.fetched && (
-												<Button
-													size="xs"
-													variant="outline"
-													disabled={busy}
-													onClick={() => jobMutation.mutate({ job: 'selfcheck' })}
-												>
-													Run selfcheck
-												</Button>
-											)}
-										</span>
-									) : (
-										calibrationText(d)
-									)}
-								</TableCell>
+				{/* DAT-6: a wide table on a wide screen; on a narrow one each dataset is a block of label and value pairs. */}
+				<div className="hidden sm:block">
+					<Table aria-label="Dataset status">
+						<TableHeader>
+							<TableRow>
+								<TableHead scope="col">Benchmark</TableHead>
+								<TableHead scope="col" className="text-right">
+									Items
+								</TableHead>
+								<TableHead scope="col">Revision</TableHead>
+								<TableHead scope="col">Calibration</TableHead>
 							</TableRow>
-						))}
-					</TableBody>
-				</Table>
+						</TableHeader>
+						<TableBody>
+							{datasets.map((d) => (
+								<TableRow key={d.benchmark}>
+									<TableCell>{datasetName(d)}</TableCell>
+									<TableCell className="text-right tabular-nums">{datasetItems(d)}</TableCell>
+									<TableCell className="font-mono">{d.revision ?? '–'}</TableCell>
+									<TableCell>{datasetCalibration(d)}</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
+				</div>
+				<ul aria-label="Dataset status" className="flex flex-col divide-y sm:hidden">
+					{datasets.map((d) => (
+						<li key={d.benchmark} className="flex flex-col gap-1.5 py-2 first:pt-0 last:pb-0">
+							{datasetName(d)}
+							<dl className="text-dense grid grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1">
+								<dt className="text-foreground-muted">Items</dt>
+								<dd className="tabular-nums">{datasetItems(d)}</dd>
+								<dt className="text-foreground-muted">Revision</dt>
+								<dd className="font-mono break-all">{d.revision ?? '–'}</dd>
+								<dt className="text-foreground-muted">Calibration</dt>
+								<dd>{datasetCalibration(d)}</dd>
+							</dl>
+						</li>
+					))}
+				</ul>
 				{windowedNames.map((name) => (
 					<fieldset key={name} className="flex flex-col text-dense">
 						<legend className="text-foreground-muted mb-1">
