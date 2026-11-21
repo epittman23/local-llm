@@ -582,3 +582,40 @@ test('the model picker chooses by keyboard, and Make default saves the selection
 	expect(saved[0]).toMatchObject({ ui: { models: ['llama'] } });
 	await expect(page.getByText('Default model saved')).toBeVisible();
 });
+
+test('a long chat scrolls only its messages, never the page past its end', async ({ page }) => {
+	const messages = Array.from({ length: 10 }, (_, i) => [
+		{ id: `u${i}`, role: 'user', content: `Question ${i}` },
+		{
+			id: `a${i}`,
+			role: 'assistant',
+			content: `Answer ${i}\n\n${'A long paragraph. '.repeat(80)}\n\n\`\`\`python\nprint(${i})\n\`\`\``,
+			model: 'qwen',
+			done: true
+		}
+	]).flat();
+	// Runnable code blocks (the sandbox engine, as in code-run.spec.ts) carry an sr-only status line.
+	await mockChat(page, {
+		chats: [savedChat('long', 'Long chat', messages)],
+		user: {
+			features: { enable_code_execution: true, enable_code_interpreter: true },
+			config: { code: { engine: 'sandbox' } },
+			featurePermissions: { code_interpreter: true }
+		}
+	});
+	await page.goto('/c/long');
+	const list = page.getByTestId('chat-messages');
+	await expect(page.getByTestId('response-message').last()).toContainText('Answer 9');
+	const box = await list.boundingBox();
+	if (!box) throw new Error('the message list has no box');
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	for (let i = 0; i < 20; i++) await page.mouse.wheel(0, 1000);
+	// A code block's sr-only status (and a formula's hidden MathML) is absolutely placed: it must stay inside
+	// the scroller, not stretch <main> so the page scrolls past the end of the chat.
+	const main = await page.evaluate(() => {
+		const el = document.querySelector('main');
+		return el && { overflow: el.scrollHeight - el.clientHeight, top: el.scrollTop };
+	});
+	expect(main).toEqual({ overflow: 0, top: 0 });
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeInViewport();
+});
