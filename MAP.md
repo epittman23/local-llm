@@ -143,7 +143,8 @@ Start here for "how do I run/use this."
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
   server, with a section on where its retrieval (embedding and reranker)
   models would run; `retrieval-evaluation.md`, a planned test for comparing
-  retrieval models and settings. The sandbox proposal is built and lives in `history/` now;
+  retrieval models and settings; `speech.md`, planned dictation input,
+  server speech models and their tests. The sandbox proposal is built and lives in `history/` now;
   `sandbox-code-interpreter.md` here is only a notice pointing there, kept
   because the never-edited decisions entries and an applied migration link
   to this path.
