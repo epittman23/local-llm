@@ -7,6 +7,19 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-20** (latest): **The first pre-screen ran on the GPU (`qwen38`), and
+  the profile stays as it is.** The owner ran it from Benchmarks > Pre-screen
+  on the RTX 3060 Laptop with llama.cpp build 11875.
+  - **Run:** `data/prescreen/qwen38.toml` as a 40-point grid, objective `tg`,
+    `-p 512 -n 128 -r 5`. All 43 llama-bench points completed (40 searched, 3
+    re-measured), plus 3 load checks.
+  - **Result:** the leaders generate at 2.6 to 3.1 tokens/s, within noise of
+    one another. The profile's own settings (`-ngl 20 -t 12 -b 512 -ub 512`)
+    are the only leader that loads at the profile's context, with 559 MiB
+    free; both `-ngl 24` leaders run out of memory creating the context.
+  - **Docs:** the "nothing has been pre-screened yet" lines in AGENTS.md,
+    llama-cpp.md and benchmarks.md are replaced. The numbers, with their
+    configuration, are in llama-cpp.md.
 - **2026-11-16** (latest, 4): **Benchmarks: the owner's decisions for the UX
   review's section 7 (#1116).**
   - **Tests opens on `smoke` (#918, B-D1 A),** the tiers listed by cost

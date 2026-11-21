@@ -80,7 +80,10 @@ been measured on either build yet.
   context. Its numbers are raw llama-bench throughput, kept in
   `benchmark_prescreen_*` and never compared with served runs. Optuna's
   studies live in the `optuna` Postgres schema, and optuna-dashboard is a
-  loopback process on `127.0.0.1:8091`. Nothing has been pre-screened yet.
+  loopback process on `127.0.0.1:8091`. The first pre-screen ran on
+  2026-11-20 (`qwen38`, build 11875): no candidate beat the profile's own
+  settings, the only leader that loads at its full context, so the profile
+  stays as it is (details in llama-cpp.md).
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and
