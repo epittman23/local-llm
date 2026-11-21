@@ -1133,13 +1133,15 @@ test('the Benchmarks tabs follow the workflow, and the chip names what is served
 	);
 	await page.goto('/benchmarks');
 
-	// /benchmarks opens on Serve (B-D2).
-	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	// /benchmarks opens on Serve (B-D2). Serve then writes its profile into the address once the
+	// profiles load, so either form may be on screen when this looks.
+	const onServe = /\/benchmarks\/serve(\?profile=[^&]+)?$/;
+	await expect(page).toHaveURL(onServe);
 	const tabs = page.getByRole('navigation', { name: 'Benchmarks' }).getByRole('link');
 	await expect(tabs).toHaveText(['Pre-screen', 'Tune', 'Serve', 'Live', 'Tests', 'Compare', 'Answers', 'Report']);
 	const chip = page.getByRole('link', { name: 'Serving qwen38 · c98ef02c' });
 	await expect(chip).toBeVisible();
 	await page.getByRole('link', { name: 'Compare', exact: true }).click();
 	await chip.click();
-	await expect(page).toHaveURL(/\/benchmarks\/serve$/);
+	await expect(page).toHaveURL(onServe);
 });
