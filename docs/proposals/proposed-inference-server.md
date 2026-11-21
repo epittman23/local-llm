@@ -540,6 +540,103 @@ throughput and substantially eases the passive-cooling problem.
 | Frontend           | Local LLM (apps/web)                                                                             |
 | Client integration | VS Code Copilot Chat BYOK custom endpoint; only `base_url` changes from the laptop configuration |
 
+## Retrieval models
+
+Added 2026-11-21. Nothing in this section is running; it records the options for the
+knowledge-retrieval (RAG) models once this server exists. How to choose between them is in
+[retrieval-evaluation.md](retrieval-evaluation.md).
+
+### Current state
+
+Since 2026-10-24 (see `docs/guides/assistant-tools.md`, "Knowledge retrieval"):
+
+| Role       | Model                     | Parameters | Runs on                         |
+| ---------- | ------------------------- | ---------- | ------------------------------- |
+| Embeddings | `BAAI/bge-m3`             | ~0.6 B     | backend process, CPU torch      |
+| Reranker   | `BAAI/bge-reranker-v2-m3` | ~0.6 B     | backend process, CPU torch      |
+
+Hybrid search (pgvector plus Postgres full-text search, fused by reciprocal rank) returns
+`TOP_K` 5 candidates; the reranker keeps `TOP_K_RERANKER` 3. Chunks are 1,000 characters
+with 100 overlap (the defaults). These numbers were sized for a laptop CPU.
+
+### Why retrieval matters for quality
+
+The chat model can only answer from the passages it is given. The embedding model sets
+**recall** (whether the right chunk is among the candidates at all; the reranker cannot
+recover a chunk that was never retrieved). The reranker sets **precision** (which few
+candidates reach the prompt, and in what order). Weak precision puts plausible but wrong
+passages in context, a main cause of confident wrong answers. Both can be improved without
+changing the chat model.
+
+### Deployment options
+
+| Option | Where the models run                                       | Change needed                                                                                                    | Trade-off                                                                                         |
+| ------ | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| A      | Backend process, CPU (as today)                            | None                                                                                                             | Simplest; reranking many candidates or a larger reranker is slow on CPU.                         |
+| B      | Backend process, GPU                                       | CUDA torch build, reversing the 2026-10 CPU-torch decision (`docs/guides/dependencies.md`)                       | Fast, but torch and llama.cpp share VRAM in one process tree; adds ~5 GB to the venv.             |
+| C      | Separate `llama-server` instances on the V100 (preferred) | Admin > Settings > Documents: embedding engine `openai` at the `/v1/embeddings` URL; reranking engine `external` | Fits the "only a URL and key change" rule; each model is served and measured like the chat model. |
+
+Option C detail:
+
+- Embeddings: `llama-server --embedding --pooling <model's pooling>` serves `/v1/embeddings`,
+  which the backend's `openai` engine calls (`retrieval/utils.py`).
+- Reranking: `llama-server --reranking` serves `/v1/rerank`. The backend's external reranker
+  (`retrieval/models/external.py`) sends `{model, query, documents, top_n}` and reads
+  `results[].index` and `results[].relevance_score`, which matches that endpoint's
+  response shape by reading the code. **Not verified against a running server.**
+- These are additional processes beside the chat model's `llama-server`. They are outside
+  the Benchmarks > Serve launcher today, which serves one profile at a time.
+- Volta has no BF16; run these models at F16 or Q8_0.
+
+### Candidate models
+
+Point-in-time knowledge as of mid-2026; re-check current retrieval leaderboards (MTEB) before
+choosing.
+
+| Role       | Candidate                        | Notes                                                                                     |
+| ---------- | -------------------------------- | ----------------------------------------------------------------------------------------- |
+| Embeddings | `bge-m3` (keep)                  | Baseline. 1,024 dimensions.                                                               |
+| Embeddings | Qwen3-Embedding-0.6B / 4B / 8B   | Strong multilingual and code retrieval at release (2025). 1,024 / 2,560 / 4,096 dims.     |
+| Reranker   | `bge-reranker-v2-m3` (keep)      | Baseline.                                                                                 |
+| Reranker   | Qwen3-Reranker-0.6B / 4B / 8B    | Same family; GGUF builds exist.                                                           |
+
+Constraints specific to this repo:
+
+- **Vector width.** The column is `vector(1536)`; shorter vectors are zero-padded. The 4B and
+  8B embedding models exceed it. They are trained for truncation (Matryoshka), so truncating
+  to ≤1,536 needs no migration at a small quality cost. A wider column needs a migration, and
+  pgvector's HNSW index supports at most 2,000 dimensions for the `vector` type.
+- **Query instructions.** Qwen3-Embedding expects an instruction prefix on queries but not
+  on documents. The app has `RAG_EMBEDDING_QUERY_PREFIX` and `RAG_EMBEDDING_CONTENT_PREFIX`
+  for this; leaving them unset would understate the model.
+- **Re-embedding.** Any embedding change, including a different quantization of the same
+  model, makes stored vectors incomparable: every knowledge base must be re-embedded
+  (Admin > Settings > Documents > Reindex). A reranker change needs no re-indexing.
+
+### VRAM budget (estimates, unmeasured)
+
+| Item                                  | Approx. VRAM |
+| ------------------------------------- | ------------ |
+| Chat model at target (see above)      | 22 GB        |
+| 4B reranker, Q8_0, plus working space | 5-6 GB       |
+| 0.6B-1B embedding model, F16          | 1.5-2.5 GB   |
+| Total                                 | ~29-30 GB    |
+
+Two 8B retrieval models (~9 GB each at Q8_0) do not fit beside the chat model. A 4B embedding
+model in place of the small one would push the total to ~33 GB and does not fit either
+unless the chat model's context is reduced. Measure on the card before committing.
+
+### Recommended order
+
+1. **Settings first** (no new models): retrieve 30-50 candidates (`TOP_K`), keep 5-8
+   (`TOP_K_RERANKER`). Raises recall; costs reranking time only.
+2. **Upgrade the reranker** (e.g. Qwen3-Reranker-4B under option C). Largest expected
+   precision gain; no re-indexing.
+3. **Upgrade the embedding model only if measured recall is the bottleneck**, since it
+   forces a full re-embed.
+
+Each step is adopted only if it wins under [retrieval-evaluation.md](retrieval-evaluation.md).
+
 ## Thermal limits
 
 Source: NVIDIA Tesla V100 PCIe Product Brief PB-08744-001_v05.
