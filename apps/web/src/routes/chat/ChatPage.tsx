@@ -610,7 +610,10 @@ export function ChatPage() {
 					<div
 						ref={scroller}
 						// The first message starts below the short phone's floating buttons, and scrolls under them.
-						className={`min-h-0 flex-1 overflow-y-auto ${SHORT_PHONE_TOP}`}
+						// `relative` makes this the containing block of the messages' absolutely placed parts (each
+						// reply's `sr-only` text): without it they were placed against the column outside this
+						// scroller, so they escaped its clipping and let the page scroll past the end of the chat.
+						className={`relative min-h-0 flex-1 overflow-y-auto ${SHORT_PHONE_TOP}`}
 						data-testid="chat-messages"
 						onScroll={(e) => {
 							const el = e.currentTarget;
