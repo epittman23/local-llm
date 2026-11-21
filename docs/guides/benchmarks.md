@@ -305,9 +305,10 @@ importance, and its trials match the page's points by trial number.
   does (a pid file lets the next backend stop it), and is stopped only by
   `LLLM_STOP_JOBS_ON_SHUTDOWN`.
 
-**Not yet run on the GPU** (2026-10-28). Everything above is tested against
-fake llama-bench, llama-server and nvidia-smi binaries, and no grid has been
-pre-screened on this machine yet. The raw llama-bench commands the page
+**First run on the GPU: 2026-11-20** (`qwen38`). Its 43 points and 3 load
+checks all completed, with the result recorded in
+[llama-cpp.md](llama-cpp.md#preflight-sweeps). The tests run against fake
+llama-bench, llama-server and nvidia-smi binaries. The raw llama-bench commands the page
 replaces are kept in [llama-cpp.md](llama-cpp.md#preflight-sweeps) as a
 fallback.
 

@@ -278,8 +278,32 @@ these are run now. It runs `llama-bench`, found beside `llama-server` in
 
 Every number is stored with its model file, build, GPU, driver and flags.
 How it works, and what it does not measure, is in
-[benchmarks.md](benchmarks.md#the-pre-screen). Nothing has been
-pre-screened on this machine yet (2026-10-28).
+[benchmarks.md](benchmarks.md#the-pre-screen).
+
+**First pre-screen, 2026-11-20: `qwen38`.** The owner ran it from Benchmarks >
+Pre-screen (sweep `1795220306-7a23ae`):
+- Configuration: `data/prescreen/qwen38.toml` as a grid with a budget of 40
+  points, objective `tg`, `-p 512 -n 128 -r 5`, a 900 s point timeout and 3
+  load checks.
+- Machine: NVIDIA GeForce RTX 3060 Laptop (6,144 MiB, driver 615.71.09),
+  i9-12900H, 64 GB RAM, Fedora 44 (kernel 7.2.8), llama.cpp build 11875
+  (`f0fb5984b`).
+- Model and fixed flags: `Qwen3.8-27B-UD-Q3_K_XL.gguf`, with `-ctk q8_0 -ctv q8_0
+  -fa on -ot output\.weight=CUDA0;blk\.64\..*=CUDA0`.
+
+It took about 3 h 10 min, and all 43 llama-bench points finished (40 searched,
+3 re-measured).
+- **Generation:** 1.87 to 3.09 tokens/s across the grid, and 2.6 to 3.1 for the
+  leaders, which is within the noise of one another.
+- **Prompt processing:** 190 to 337 tokens/s.
+- **Load checks:** the profile's own settings (`-ngl 20 -t 12 -b 512 -ub 512`;
+  3.09, then 2.60 when re-measured; 5,191 MiB peak) loaded at the profile's
+  context with 559 MiB free. Both `-ngl 24` leaders (2.90/2.82 and 2.82; 5,845
+  MiB peak) failed to create the context (`oom_at_ctx`).
+
+So nothing the grid offers beats the profile, and `qwen38` is unchanged. These
+are raw llama-bench numbers at a test-sized context, not comparable with served
+runs.
 
 The pre-screen is a feasibility and throughput filter, not a source of
 comparable measurements: it measures the model at a test-sized context,
