@@ -139,7 +139,7 @@ function Notes() {
 	const pinnedIds = new Set(pinnedItems.map((n) => n.id));
 	// A failed first page is shown in place of the list (STA-4); a failed later
 	// page leaves the notes already shown alone.
-	const failed = list.data === undefined && (list.isError || list.isPaused);
+	const failed = list.data === undefined && list.isError;
 	const seen = new Set<string>();
 	const items: NoteListItem[] = (list.data?.pages ?? [])
 		.flatMap((p) => p.items ?? [])

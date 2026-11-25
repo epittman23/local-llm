@@ -79,7 +79,12 @@ colours, hand-styled buttons, removed focus outlines and six more).
 `src/styles/standard.ratchet.test.ts`, a Vitest test in `make test-web`,
 fails when a count rises and when one falls without the baseline being
 lowered. How to lower it, and who may add an exception, is in
-[ui-standard.md](ui-standard.md#the-ratchet).
+[ui-standard.md](ui-standard.md#the-ratchet). Since the test and the
+baseline can change in the same pull request, the PR gate holds the file
+too (#1122): a count may fall but not rise, except under a pattern the
+baseline did not count before; a pattern may be added to `patterns` but not
+dropped from it (renaming one counts as dropping it); and an exception may be removed or lowered but not added
+or raised.
 
 ## Coverage of the changed lines
 

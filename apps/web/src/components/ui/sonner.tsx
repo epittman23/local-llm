@@ -161,6 +161,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
 			}}
 			style={
 				{
+					// A modal sets pointer-events: none on <body>, which the toaster (outside
+					// the dialog's DOM) inherits; a toast's buttons must stay pressable.
+					pointerEvents: 'auto',
 					// A floating layer: --surface-2 with an edge (OVL-2, COL-5).
 					'--normal-bg': 'var(--surface-2)',
 					'--normal-text': 'var(--foreground)',

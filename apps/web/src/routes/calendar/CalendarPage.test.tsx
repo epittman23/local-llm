@@ -1,4 +1,5 @@
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/query/QueryProvider';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
@@ -45,9 +46,16 @@ const openMenu = async (name: string) => {
 	return screen.findByRole('menu');
 };
 
-const show = () =>
+const offlineClient = () => {
+	const client = createQueryClient();
+	const defaults = client.getDefaultOptions();
+	client.setDefaultOptions({ ...defaults, queries: { ...defaults.queries, retry: false } });
+	return client;
+};
+
+const show = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
 	render(
-		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+		<QueryClientProvider client={client}>
 			<TooltipProvider>
 				<MemoryRouter>
 					<CalendarPage />
@@ -235,10 +243,18 @@ describe('a calendar that cannot load (STA-4, #981)', () => {
 		await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
 	});
 
-	it('shows an offline load as a failure, not an empty calendar', async () => {
+	it('loads from a reachable server while the browser reports offline, and shows a failed load as a failure (#1123)', async () => {
 		onlineManager.setOnline(false);
 		try {
-			show();
+			getCalendars.mockResolvedValue(calendars);
+			getCalendarEvents.mockResolvedValue([]);
+			const loaded = show(offlineClient());
+			expect(await screen.findByText('Work')).toBeInTheDocument();
+			expect(screen.queryByRole('alert')).toBeNull();
+			loaded.unmount();
+
+			getCalendars.mockRejectedValue('Database is locked');
+			show(offlineClient());
 			expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load calendars");
 			expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
 		} finally {

@@ -368,7 +368,7 @@ def load_speech_pipeline(request):
 async def _raise_tts_error(exc: Exception, r=None) -> None:
     """Raise a standardised HTTPException from a TTS provider failure."""
     code = r.status if r is not None else 500
-    detail = 'Local LLM: Server Connection Error'
+    detail = ERROR_MESSAGES.AUDIO_SERVER_CONNECTION_ERROR
     if r is not None:
         try:
             res = await r.json()
@@ -749,7 +749,7 @@ async def _transcribe_openai(request, file_path, filename, languages, file_dir, 
                     detail = f'External: {res["error"].get("message", "")}'
             except Exception:
                 detail = f'External: {e}'
-        raise Exception(detail if detail else 'Local LLM: Server Connection Error')
+        raise Exception(detail if detail else ERROR_MESSAGES.AUDIO_SERVER_CONNECTION_ERROR)
 
 
 async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
@@ -799,7 +799,7 @@ async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
 
     except Exception as e:
         log.exception(e)
-        detail = 'Local LLM: Server Connection Error'
+        detail = ERROR_MESSAGES.AUDIO_SERVER_CONNECTION_ERROR
         if r is not None:
             try:
                 res = await r.json()
@@ -930,7 +930,7 @@ async def _transcribe_azure(request, file_path, filename, file_dir, id):
             detail = f'External: {e}'
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Local LLM: Server Connection Error',
+            detail=detail if detail else ERROR_MESSAGES.AUDIO_SERVER_CONNECTION_ERROR,
         )
 
 
@@ -1114,7 +1114,7 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
             detail = f'External: {e}'
         raise HTTPException(
             status_code=e.status if e.status else 500,
-            detail=detail if detail else 'Local LLM: Server Connection Error',
+            detail=detail if detail else ERROR_MESSAGES.AUDIO_SERVER_CONNECTION_ERROR,
         )
 
 
