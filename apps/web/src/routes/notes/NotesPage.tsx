@@ -38,6 +38,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { askAboutNote } from './noteChat';
 import {
 	contentFromMarkdown,
 	fullTime,
@@ -54,7 +55,6 @@ import {
 	safeFileName,
 	shortTime
 } from './notesModel';
-import { askAboutNote } from './noteChat';
 
 /** Creates a note and returns its id. */
 export async function createNote(token: string, title = NEW_NOTE_TITLE, md = '') {

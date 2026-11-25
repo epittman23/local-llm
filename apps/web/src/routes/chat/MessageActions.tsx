@@ -6,8 +6,8 @@ import {
 	PlayCircle,
 	RotateCcw,
 	Send,
-	StickyNote,
 	Sparkles,
+	StickyNote,
 	ThumbsDown,
 	ThumbsUp,
 	Trash2,
@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { canUseFeature } from '@/lib/access/features';
 import type { FeedbackDetails } from '@/lib/chat/feedback';
-import { canContinue, type History, type Message, siblingsOf } from '@/lib/chat/history';
+import { canContinue, type History, type Message, siblingsOf, visibleText } from '@/lib/chat/history';
 import { canChat } from '@/lib/chat/permissions';
 import { isTemporaryChatId } from '@/lib/chat/request';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -306,7 +306,7 @@ export function useMessageActions(
 			<SaveToNoteDialog
 				open
 				onOpenChange={(o) => !o && setSavingToNote(null)}
-				markdown={m.content}
+				markdown={visibleText(m)}
 				chatTitle={session.title ?? ''}
 			/>
 		);
@@ -396,7 +396,7 @@ export function useMessageActions(
 		const tts = !errorOnly && canChat(user, 'tts');
 		const canContinueHere = isLast && !cutOff && canContinue(m) && canChat(user, 'continue_response');
 		const actions = models.find((x) => x.id === m.model)?.actions ?? [];
-		const canSave = notesEnabled && !errorOnly && Boolean(m.content.trim());
+		const canSave = notesEnabled && !errorOnly && Boolean(visibleText(m));
 		const menu = canEdit || tts || canContinueHere || canSave || actions.length > 0 || canDelete;
 		return (
 			<>

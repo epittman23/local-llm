@@ -330,23 +330,23 @@ export function ChatPage() {
 	// `?note=<id>` (a note's "Ask in a new chat", "Explain in a new chat") attaches that note to a
 	// new chat the way Attach notes does, and a quoted selection from the note's page (navigation
 	// state, not the URL) starts the composer's draft. Each is applied once and then taken out of
-	// the history entry, so a reload or Back does not repeat it (#1135). Where notes are off, ignored.
+	// the history entry, so a reload or Back does not repeat it (#1135). Where notes are off, ignored;
+	// on a saved chat the parameter is only dropped.
 	const notesEnabled = canUseFeature('notes', user, config);
 	const noteAsked = useRef<string | null>(null);
+	const [pendingDraft, setPendingDraft] = useState<string | null>(null);
 	const addNote = attachments.addItem;
 	useEffect(() => {
 		const noteId = search.get('note');
 		if (!noteId) noteAsked.current = null;
-		if (!noteId || id || !notesEnabled || noteAsked.current === noteId) return;
+		if (!noteId || !notesEnabled || noteAsked.current === noteId) return;
 		noteAsked.current = noteId;
 		const draft = (location.state as NoteChatState | null)?.draft;
-		if (draft) {
-			input.current?.setText(draft);
-			input.current?.focus();
-		}
 		const next = new URLSearchParams(search);
 		next.delete('note');
 		setSearch(next, { replace: true, state: null });
+		if (id) return;
+		if (draft) setPendingDraft(draft);
 		getNoteById(token, noteId)
 			.then((note: { id: string; title?: string } | null) => {
 				if (!note?.id) throw new Error('not found');
@@ -356,6 +356,13 @@ export function ChatPage() {
 				toastFailure("Couldn't attach the note. It may have been deleted, or you may not have access to it.", error)
 			);
 	}, [search, id, notesEnabled, location.state, token, addNote, setSearch]);
+	// The draft waits for the composer and for the models, as `?q=` does, and is spent only once it is in the box.
+	useEffect(() => {
+		if (pendingDraft === null || id || !input.current || !selectedModels[0]) return;
+		input.current.setText(pendingDraft);
+		input.current.focus();
+		setPendingDraft(null);
+	}, [pendingDraft, id, selectedModels]);
 
 	// `?q=` fills the input and (unless `submit=false`) sends it, once models are
 	// chosen. The send waits like an early one, so it goes with the models'

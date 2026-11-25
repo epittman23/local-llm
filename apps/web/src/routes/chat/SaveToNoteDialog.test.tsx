@@ -100,6 +100,19 @@ describe('the Save to note dialog (#1135)', () => {
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Saved to "Beta"', expect.anything()));
 	});
 
+	it('lists only notes the user may write, and says so when a chosen one turns out read only (FBK-4)', async () => {
+		vi.mocked(searchNotes).mockResolvedValue({ items: [{ id: 'a', title: 'Alpha' }] });
+		vi.mocked(getNoteById).mockResolvedValue({ id: 'a', title: 'Alpha', write_access: false, data: { content: {} } });
+		show();
+		fireEvent.click(screen.getByRole('radio', { name: 'Add to an existing note' }));
+		fireEvent.click(await screen.findByRole('option', { name: 'Alpha' }));
+		expect(vi.mocked(searchNotes).mock.calls[0].slice(2, 4)).toEqual([null, 'write']);
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('you can only read it')));
+		expect(updateNoteById).not.toHaveBeenCalled();
+		expect(onOpenChange).not.toHaveBeenCalledWith(false);
+	});
+
 	it('does not save until a note is chosen', async () => {
 		vi.mocked(searchNotes).mockResolvedValue({ items: [{ id: 'a', title: 'Alpha' }] });
 		show();

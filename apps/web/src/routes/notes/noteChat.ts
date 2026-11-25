@@ -28,6 +28,13 @@ export const quoteMarkdown = (md: string) =>
 /** The composer's draft for a selection: the quote, a blank line, then the request. */
 export const explainDraft = (selectionMd: string) => `${quoteMarkdown(selectionMd)}\n\n${EXPLAIN_PROMPT}`;
 
+/** The note chosen to add to is one this user may only read. */
+export class NoteReadOnlyError extends Error {
+	constructor() {
+		super('The note is read only');
+	}
+}
+
 export type SaveTarget = { kind: 'new'; title: string } | { kind: 'existing'; id: string };
 
 /**
@@ -51,9 +58,12 @@ export async function saveReplyToNote(token: string, target: SaveTarget, md: str
 	const note = (await getNoteById(token, target.id)) as {
 		id: string;
 		title: string;
+		write_access?: boolean;
 		data?: { content?: { md?: string } } | null;
 	} | null;
 	if (!note) throw new Error('The note could not be read');
+	if (note.write_access === false) throw new NoteReadOnlyError();
+	// Read, then written whole: like the editor's autosave, the last writer wins if the note changed in between.
 	const existing = note.data?.content?.md ?? '';
 	const merged = existing.trim() ? `${existing}\n\n${md}` : md;
 	await updateNoteById(token, note.id, {

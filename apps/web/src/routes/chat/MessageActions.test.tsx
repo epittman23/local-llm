@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { visibleText } from '@/lib/chat/history';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -141,6 +142,23 @@ describe('Save to note on a reply (#1135)', () => {
 		fireEvent.click(within(menu).getByRole('menuitem', { name: 'Save to note' }));
 		expect(await screen.findByRole('dialog', { name: 'Save to note' })).toBeTruthy();
 		expect((screen.getByRole('textbox', { name: 'Title' }) as HTMLInputElement).value).toBe('Sums');
+	});
+
+	it('offers the reply as read, without its reasoning and tool-call blocks', async () => {
+		state.features = { enable_message_rating: true, enable_notes: true };
+		const content =
+			'<details type="reasoning" done="true"><summary>Thought</summary>\n> hmm</details>\nIt is 4\n<details type="tool_calls" done="true"><summary>Tool</summary>x</details>';
+		show(reply({ content }));
+		fireEvent.click(within(await openMenu('More actions')).getByRole('menuitem', { name: 'Save to note' }));
+		await screen.findByRole('dialog', { name: 'Save to note' });
+		// What is saved is what Copy copies.
+		expect(visibleText(reply({ content }))).toBe('It is 4');
+	});
+
+	it('is not offered on a reply that is only reasoning', async () => {
+		state.features = { enable_message_rating: true, enable_notes: true };
+		show(reply({ content: '<details type="reasoning" done="true"><summary>Thought</summary>x</details>' }));
+		expect(within(await openMenu('More actions')).queryByRole('menuitem', { name: 'Save to note' })).toBeNull();
 	});
 
 	it('is hidden where notes are off', async () => {

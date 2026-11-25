@@ -21,7 +21,7 @@ import { searchNotes } from '@/lib/apis/notes';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { type SaveTarget, saveReplyToNote } from '@/routes/notes/noteChat';
+import { NoteReadOnlyError, type SaveTarget, saveReplyToNote } from '@/routes/notes/noteChat';
 import { PINNED_NOTES_KEY } from '@/routes/notes/notesModel';
 
 type Mode = 'new' | 'existing';
@@ -56,7 +56,7 @@ export function SaveToNoteDialog({
 		queryKey: ['notes', 'save-targets', search],
 		enabled: open && mode === 'existing',
 		queryFn: async () => {
-			const items = (await searchNotes(token, search || null))?.items;
+			const items = (await searchNotes(token, search || null, null, 'write'))?.items;
 			return (Array.isArray(items) ? items : []) as {
 				id: string;
 				title: string;
@@ -82,7 +82,9 @@ export function SaveToNoteDialog({
 			void queryClient.invalidateQueries({ queryKey: ['notes'] });
 			void queryClient.invalidateQueries({ queryKey: PINNED_NOTES_KEY });
 		} catch (error) {
-			toastFailure("Couldn't save the reply to the note. Try again.", error);
+			if (error instanceof NoteReadOnlyError)
+				toast.error("Couldn't add to that note: you can only read it. Choose another note, or save to a new one.");
+			else toastFailure("Couldn't save the reply to the note. Try again.", error);
 		} finally {
 			setSaving(false);
 		}

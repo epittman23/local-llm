@@ -16,8 +16,10 @@ import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { ChatPage } from './ChatPage';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), warning: vi.fn() }) }));
+const modelsState = vi.hoisted(() => ({ ready: true }));
+const MODELS = vi.hoisted(() => [{ id: 'm1', name: 'Model One' }]);
 vi.mock('./useModels', () => ({
-	useModels: () => ({ models: [{ id: 'm1', name: 'Model One' }], loaded: true, failed: false })
+	useModels: () => ({ models: modelsState.ready ? MODELS : [], loaded: modelsState.ready, failed: false })
 }));
 vi.mock('./ChatControls', () => ({ ChatControls: () => <div data-testid="controls-panel" /> }));
 vi.mock('@/lib/settings/userSettings', () => ({
@@ -389,6 +391,45 @@ describe('ChatPage: ?note=<id> (#1135)', () => {
 		expect(getNoteById).not.toHaveBeenCalled();
 		expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
 		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('keeps the quoted draft until the models are in, then puts it in the box once', async () => {
+		notes(true);
+		modelsState.ready = false;
+		vi.mocked(getNoteById).mockResolvedValue(NOTE as never);
+		showNewChat({ pathname: '/', search: '?note=n1', state: { draft: '> a\n\nExplain this.' } });
+		const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLTextAreaElement;
+		await screen.findByRole('button', { name: 'Remove Study plan' });
+		expect(box.value).toBe('');
+		modelsState.ready = true;
+		// Any render of the page lets it see the models.
+		fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+		await waitFor(() => expect(box.value).toBe('> a\n\nExplain this.'));
+		fireEvent.change(box, { target: { value: 'mine' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+		expect(box.value).toBe('mine');
+		modelsState.ready = true;
+	});
+
+	it('only drops the parameter on a saved chat, attaching nothing', async () => {
+		notes(true);
+		vi.mocked(getChatById).mockResolvedValueOnce(SAVED as never);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<MemoryRouter initialEntries={['/c/c1?note=n1']}>
+						<Probe />
+						<Routes>
+							<Route path="/c/:id" element={<ChatPage />} />
+						</Routes>
+					</MemoryRouter>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		await waitFor(() => expect(screen.getByTestId('probe').textContent).not.toContain('note='));
+		await screen.findByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+		expect(getNoteById).not.toHaveBeenCalled();
+		expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
 	});
 
 	it('starts the composer from the quoted selection in the navigation state, once, and clears the state', async () => {

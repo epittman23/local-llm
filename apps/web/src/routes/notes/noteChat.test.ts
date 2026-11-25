@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNewNote, getNoteById, updateNoteById } from '@/lib/apis/notes';
-import { askAboutNote, explainDraft, quoteMarkdown, saveReplyToNote } from './noteChat';
+import { askAboutNote, explainDraft, NoteReadOnlyError, quoteMarkdown, saveReplyToNote } from './noteChat';
 
 vi.mock('@/lib/apis/notes', () => ({
 	createNewNote: vi.fn(),
@@ -74,6 +74,12 @@ describe('saving a reply to a note', () => {
 		await saveReplyToNote('t', { kind: 'existing', id: 'n1' }, 'reply');
 		const content = (vi.mocked(updateNoteById).mock.calls[0][2].data as { content: { md: string } }).content;
 		expect(content.md).toBe('reply');
+	});
+
+	it('refuses a note the user may only read, writing nothing', async () => {
+		vi.mocked(getNoteById).mockResolvedValue({ id: 'n1', title: 'Shared', write_access: false, data: { content: {} } });
+		await expect(saveReplyToNote('t', { kind: 'existing', id: 'n1' }, 'x')).rejects.toBeInstanceOf(NoteReadOnlyError);
+		expect(updateNoteById).not.toHaveBeenCalled();
 	});
 
 	it('fails when the note cannot be read, writing nothing', async () => {
