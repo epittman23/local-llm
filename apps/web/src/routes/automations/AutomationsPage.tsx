@@ -239,7 +239,7 @@ function Automations() {
 	const refresh = () => queryClient.invalidateQueries({ queryKey: ['automations'] });
 	const items = list.data?.items ?? [];
 	// A list that did not load is a failure, not an empty list (STA-4).
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 	const narrowed = query.trim() !== '' || status !== 'all';
 	const clearFilters = () => {
 		setSearch('');

@@ -275,8 +275,8 @@ function Calendar() {
 	// A failed load is shown in place of what it would have filled (STA-4). The
 	// events kept on screen while a new range loads belong to the old range, so
 	// a range that cannot load is not shown as them.
-	const calendarsFailed = calendars.isError || (calendars.isPaused && calendars.data === undefined);
-	const eventsFailed = events.isError || (events.isPaused && (events.data === undefined || events.isPlaceholderData));
+	const calendarsFailed = calendars.isError;
+	const eventsFailed = events.isError;
 
 	const list = calendars.data ?? [];
 	const visibleEvents = (events.data ?? []).filter((e) => !hidden.has(e.calendar_id));
