@@ -871,9 +871,10 @@ returns while the caret is in it; the stored text is never converted.
 
 **CNT-4. Output the app did not write** (an HTML preview, a sandbox's file, a
 generated figure) sits in a frame that belongs to the theme (COL-6). The
-inside of a frame showing a page is `bg-canvas`, white in every theme: a page
-with no background of its own assumes white, and a dark one would put its
-black text on dark. The white is the page's, so it is framed (an edge, the
+inside of a frame showing a page is white in every theme once the page
+paints: a page with no background of its own assumes white, and a dark one
+would put its black text on dark. The browser paints such a light page white
+inside a dark app; until it paints, the frame shows the surround (CNV-5). The white is the page's, so it is framed (an edge, the
 themed surround) and never fills a panel edge to edge. A generated raster
 figure (a benchmark report's plots) is drawn per theme by the server; one
 made before that sits framed the same way (COL-6). An HTML preview loads nothing from the
@@ -970,7 +971,8 @@ longer in the chat says so in the canvas (NAV-3).
 
 **CNV-8. Escape closes the canvas when nothing inside it is open, and focus
 returns to the card that opened it** (NAV-4). Opening a document moves focus
-to the canvas's heading. While focus is inside a page's frame the keys
+to the canvas's heading; opening by itself when a reply finishes (decision 3
+in `docs/plans/canvas.md`) does not, so the message box keeps focus. While focus is inside a page's frame the keys
 belong to the page, so Close is always one Tab away from the frame.
 
 ## Words
