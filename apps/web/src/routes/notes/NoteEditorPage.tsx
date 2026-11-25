@@ -1,6 +1,21 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getHTMLFromFragment } from '@tiptap/core';
+import type { Editor } from '@tiptap/react';
 import saveAs from 'file-saver';
-import { ChevronLeft, Copy, Download, Link2, Lock, MoreHorizontal, Pin, PinOff, Sparkles, Trash2 } from 'lucide-react';
+import {
+	ChevronLeft,
+	Copy,
+	Download,
+	Link2,
+	Lock,
+	MessageSquare,
+	MessageSquareQuote,
+	MoreHorizontal,
+	Pin,
+	PinOff,
+	Sparkles,
+	Trash2
+} from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
@@ -23,6 +38,7 @@ import {
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import { deleteNoteById, getNoteById, toggleNotePinnedStatusById, updateNoteById } from '@/lib/apis/notes';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
+import { htmlToMarkdown } from '@/lib/editor/markdown';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
@@ -30,6 +46,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { initialModel } from '@/routes/playground/playgroundModel';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { askAboutNote, explainDraft } from './noteChat';
 import {
 	editorContent,
 	isUntouchedNote,
@@ -215,6 +232,13 @@ function NoteEditor() {
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const latest = useRef<NoteContent | null>(null);
 	const titleInput = useRef<HTMLInputElement>(null);
+	// The editor, for Explain in a new chat: it keeps its selection while the menu has focus.
+	const editorRef = useRef<Editor | null>(null);
+	const [hasSelection, setHasSelection] = useState(false);
+	const onEditorReady = useCallback((editor: Editor) => {
+		editorRef.current = editor;
+		editor.on('selectionUpdate', () => setHasSelection(!editor.state.selection.empty));
+	}, []);
 	const gone = note.isError && isNotFound(note.error);
 	useDocumentTitle(gone ? 'Note not found' : title || 'Note');
 
@@ -323,6 +347,19 @@ function NoteEditor() {
 		if (generated) onTitle(generated);
 		else if (res) toast.error("Couldn't generate a title: the model's reply had none.");
 	};
+	const askInNewChat = (draft?: string) => {
+		// Using the note: a new one is kept.
+		edited.current = true;
+		const { to, options } = askAboutNote(n.id, draft);
+		navigate(to, options);
+	};
+	const explainSelection = () => {
+		const editor = editorRef.current;
+		if (!editor || editor.state.selection.empty) return;
+		const html = getHTMLFromFragment(editor.state.selection.content().content, editor.schema);
+		const selected = htmlToMarkdown(html).trim();
+		if (selected) askInNewChat(explainDraft(selected));
+	};
 	const download = (ext: 'md' | 'txt') =>
 		saveAs(new Blob([md()], { type: ext === 'md' ? 'text/markdown' : 'text/plain' }), safeFileName(title, ext));
 	const copy = async (value: string, ok: string) =>
@@ -422,7 +459,14 @@ function NoteEditor() {
 							</Button>
 						</DropdownMenuTrigger>
 					</Tip>
-					<DropdownMenuContent align="end" className="min-w-44">
+					<DropdownMenuContent align="end" className="min-w-52">
+						<DropdownMenuItem onSelect={() => askInNewChat()}>
+							<MessageSquare /> Ask in a new chat
+						</DropdownMenuItem>
+						<DropdownMenuItem disabled={!hasSelection} onSelect={explainSelection}>
+							<MessageSquareQuote /> Explain in a new chat
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
 						<DropdownMenuItem onSelect={() => download('md')}>
 							<Download /> Download (.md)
 						</DropdownMenuItem>
@@ -477,6 +521,7 @@ function NoteEditor() {
 						onChange={onContent}
 						editable={editable}
 						ariaLabel="Note content"
+						onReady={onEditorReady}
 					/>
 				</Suspense>
 			</div>

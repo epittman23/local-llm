@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Download, LayoutGrid, Link2, List, MoreHorizontal, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Download, LayoutGrid, Link2, List, MessageSquare, MoreHorizontal, Pin, PinOff, Trash2 } from 'lucide-react';
 import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -54,6 +54,7 @@ import {
 	safeFileName,
 	shortTime
 } from './notesModel';
+import { askAboutNote } from './noteChat';
 
 /** Creates a note and returns its id. */
 export async function createNote(token: string, title = NEW_NOTE_TITLE, md = '') {
@@ -245,7 +246,11 @@ function Notes() {
 						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
-				<DropdownMenuContent align="end" className="min-w-44">
+				<DropdownMenuContent align="end" className="min-w-52">
+					<DropdownMenuItem onSelect={() => navigate(askAboutNote(n.id).to)}>
+						<MessageSquare /> Ask in a new chat
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={() => download(n, 'md')}>
 						<Download /> Download (.md)
 					</DropdownMenuItem>

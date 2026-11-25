@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -14,6 +15,7 @@ const state = vi.hoisted(() => ({
 	prefs: {} as Record<string, unknown>
 }));
 
+vi.mock('@/lib/apis/notes', () => ({ searchNotes: vi.fn(async () => ({ items: [] })) }));
 vi.mock('./useModels', () => ({ useModels: () => ({ models: state.models }) }));
 vi.mock('./useChatPrefs', () => ({ useChatPrefs: () => chatPrefs(state.prefs) }));
 vi.mock('./useReadAloud', () => ({ useReadAloud: () => ({ speakingId: null, speak: vi.fn(), stop: vi.fn() }) }));
@@ -70,7 +72,9 @@ function show(message: Message, over: Partial<Session> = {}, ctx: ExtraActionsCo
 	render(
 		<QueryClientProvider client={new QueryClient()}>
 			<TooltipProvider>
-				<Harness message={message} session={session} ctx={ctx} />
+				<MemoryRouter>
+					<Harness message={message} session={session} ctx={ctx} />
+				</MemoryRouter>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -123,6 +127,33 @@ beforeEach(() => {
 	state.prefs = {};
 });
 afterEach(cleanup);
+
+describe('Save to note on a reply (#1135)', () => {
+	it('is in the More actions menu, before Delete, where notes are on, and opens the dialog named for the chat', async () => {
+		state.features = { enable_message_rating: true, enable_notes: true };
+		show(reply(), { title: 'Sums' });
+		const menu = await openMenu('More actions');
+		expect(
+			within(menu)
+				.getAllByRole('menuitem')
+				.map((i) => i.textContent)
+		).toEqual(['Edit', 'Read aloud', 'Continue', 'Save to note', 'Delete']);
+		fireEvent.click(within(menu).getByRole('menuitem', { name: 'Save to note' }));
+		expect(await screen.findByRole('dialog', { name: 'Save to note' })).toBeTruthy();
+		expect((screen.getByRole('textbox', { name: 'Title' }) as HTMLInputElement).value).toBe('Sums');
+	});
+
+	it('is hidden where notes are off', async () => {
+		show(reply());
+		expect(within(await openMenu('More actions')).queryByRole('menuitem', { name: 'Save to note' })).toBeNull();
+	});
+
+	it('is not offered on a reply with nothing to save', async () => {
+		state.features = { enable_message_rating: true, enable_notes: true };
+		show(reply({ content: '  ' }));
+		expect(within(await openMenu('More actions')).queryByRole('menuitem', { name: 'Save to note' })).toBeNull();
+	});
+});
 
 describe('a reply’s More actions menu (#995)', () => {
 	it('holds Edit, Read aloud, Continue, the model’s actions, then Delete last below a separator', async () => {

@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, Search, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { overriddenCount } from '@/components/common/advancedParamDefs';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { toastFailure } from '@/components/common/failureToast';
 import { Gone, isNotFound } from '@/components/common/Gone';
 import { LoadFailed } from '@/components/common/LoadFailed';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { canUseFeature } from '@/lib/access/features';
 import { updateChatById } from '@/lib/apis/chats';
 import { getFolderById } from '@/lib/apis/folders';
+import { getNoteById } from '@/lib/apis/notes';
 import { PENDING_WORKSPACE_IDS_KEY } from '@/lib/apis/sandbox';
 import { getTools } from '@/lib/apis/tools';
 import {
@@ -36,6 +38,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import type { NoteChatState } from '@/routes/notes/noteChat';
 import { ArtifactDownload, ArtifactPanel } from './ArtifactPanel';
 import { ChatBanners } from './ChatBanners';
 import { ChatControls } from './ChatControls';
@@ -78,6 +81,7 @@ type Folder = { id: string; name: string; data?: { model_ids?: string[]; system_
 export function ChatPage() {
 	const { id = null, folderId = null } = useParams();
 	const [search, setSearch] = useSearchParams();
+	const location = useLocation();
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
@@ -322,6 +326,36 @@ export function ChatPage() {
 		next.delete('temporary-chat');
 		setSearch(next, { replace: true });
 	}, [search, id, temporaryAllowed, setSearch]);
+
+	// `?note=<id>` (a note's "Ask in a new chat", "Explain in a new chat") attaches that note to a
+	// new chat the way Attach notes does, and a quoted selection from the note's page (navigation
+	// state, not the URL) starts the composer's draft. Each is applied once and then taken out of
+	// the history entry, so a reload or Back does not repeat it (#1135). Where notes are off, ignored.
+	const notesEnabled = canUseFeature('notes', user, config);
+	const noteAsked = useRef<string | null>(null);
+	const addNote = attachments.addItem;
+	useEffect(() => {
+		const noteId = search.get('note');
+		if (!noteId) noteAsked.current = null;
+		if (!noteId || id || !notesEnabled || noteAsked.current === noteId) return;
+		noteAsked.current = noteId;
+		const draft = (location.state as NoteChatState | null)?.draft;
+		if (draft) {
+			input.current?.setText(draft);
+			input.current?.focus();
+		}
+		const next = new URLSearchParams(search);
+		next.delete('note');
+		setSearch(next, { replace: true, state: null });
+		getNoteById(token, noteId)
+			.then((note: { id: string; title?: string } | null) => {
+				if (!note?.id) throw new Error('not found');
+				addNote({ type: 'note', id: note.id, name: note.title || 'Untitled', description: 'Note' } as ChatFile);
+			})
+			.catch((error) =>
+				toastFailure("Couldn't attach the note. It may have been deleted, or you may not have access to it.", error)
+			);
+	}, [search, id, notesEnabled, location.state, token, addNote, setSearch]);
 
 	// `?q=` fills the input and (unless `submit=false`) sends it, once models are
 	// chosen. The send waits like an early one, so it goes with the models'
@@ -677,7 +711,7 @@ export function ChatPage() {
 								onItem={attachments.addItem}
 								canUpload={canUploadFiles(user)}
 								canWeb={canUploadWeb(user)}
-								notesEnabled={canUseFeature('notes', user, config)}
+								notesEnabled={notesEnabled}
 							/>
 							<IntegrationsMenu
 								tools={tools.data ?? []}
