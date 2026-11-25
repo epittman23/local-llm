@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { errorMessage } from '@/lib/apis/errors';
 import { getSandboxOutputHtml, getSandboxOutputText } from '@/lib/apis/sandbox';
+import { UUID } from '@/lib/chat/documents';
 import type { ChatFile } from '@/lib/chat/history';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -61,8 +62,6 @@ const metaOf = (f: unknown): OutputMeta => {
 
 /** A sandbox output: the server stores each as a file, so each has a UUID, the only id put into a URL. */
 type OutputFile = ChatFile & { id: string };
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const isSandboxOutput = (f: unknown): f is OutputFile =>
 	Boolean(f) &&

@@ -18,8 +18,14 @@ describe('chat prefs', () => {
 			temporaryByDefault: false,
 			webSearchAlways: false,
 			largeTextAsFile: false,
+			canvasAutoOpen: true,
 			backgroundImageUrl: null
 		});
+	});
+	it('reads canvasAutoOpen: on unless saved off', () => {
+		expect(chatPrefs({}).canvasAutoOpen).toBe(true);
+		expect(chatPrefs({ canvasAutoOpen: null }).canvasAutoOpen).toBe(true);
+		expect(chatPrefs({ canvasAutoOpen: false }).canvasAutoOpen).toBe(false);
 	});
 	it('reads the saved values; null counts as unset', () => {
 		const p = chatPrefs({

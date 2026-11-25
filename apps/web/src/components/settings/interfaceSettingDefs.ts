@@ -48,7 +48,7 @@ export type CustomDef = { kind: 'custom'; id: 'textScale' | 'fontFamily' | 'back
 
 export type RowDef = (SwitchDef & { kind?: 'switch' }) | CycleDef | CustomDef;
 
-export type Section = 'UI' | 'Chat' | 'Input' | 'Artifacts' | 'Voice' | 'File';
+export type Section = 'UI' | 'Chat' | 'Input' | 'Canvas' | 'Voice' | 'File';
 
 const cycle = (
 	key: string,
@@ -91,8 +91,6 @@ const UNPORTED = {
 	PDF: 'Chats cannot be exported to PDF (docs/decisions.md).',
 	FLOATING: 'The floating quick-action toolbar is not ported.',
 	RICH_INPUT: 'The composer is a plain textarea, not the rich editor (docs/decisions.md).',
-	ARTIFACTS: "Artifacts open from a code block's Preview button only.",
-	SANDBOX: 'The artifact preview has a fixed sandbox: scripts without same-origin (ArtifactPanel.tsx).',
 	VOICE: 'Voice calls are not ported (docs/decisions.md).',
 	CHANNEL_IMAGES: 'Channel uploads are not compressed (docs/decisions.md).'
 } as const;
@@ -309,37 +307,12 @@ export const ROWS: Record<Section, RowDef[]> = {
 		),
 		sw('largeTextAsFile', 'Paste Large Text as File', 'Convert long pasted text into a file attachment.', false)
 	],
-	Artifacts: [
+	Canvas: [
 		sw(
-			'detectArtifacts',
-			'Detect Artifacts Automatically',
-			'Detect generated artifacts and show them in the artifact workspace.',
-			true,
-			{ unported: UNPORTED.ARTIFACTS }
-		),
-		sw('iframeSandboxAllowScripts', 'iframe Sandbox Allow Scripts', 'Allow scripts inside sandboxed iframes.', true, {
-			unported: UNPORTED.SANDBOX
-		}),
-		sw(
-			'iframeSandboxAllowSameOrigin',
-			'iframe Sandbox Allow Same Origin',
-			'Allow artifacts to access same-origin browser APIs inside the sandbox.',
-			false,
-			{ unported: UNPORTED.SANDBOX }
-		),
-		sw(
-			'iframeSandboxAllowForms',
-			'iframe Sandbox Allow Forms',
-			'Allow forms inside sandboxed artifact iframes.',
-			true,
-			{ unported: UNPORTED.SANDBOX }
-		),
-		sw(
-			'iframeSandboxAllowDownloads',
-			'iframe Sandbox Allow Downloads',
-			'Allow downloads inside sandboxed iframes.',
-			true,
-			{ unported: UNPORTED.SANDBOX }
+			'canvasAutoOpen',
+			'Open the canvas automatically',
+			'When a reply provides one document, show it beside the chat. Wide windows only.',
+			true
 		)
 	],
 	Voice: [

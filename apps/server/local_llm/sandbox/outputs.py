@@ -73,6 +73,7 @@ PREVIEWS_DIR: Final = f'{WORKSPACE}/.lllm/previews'
 #: from data: and blob:), no form submissions, inline script and style only, and no <base> (base-uri does not fall
 #: back to default-src). It is not "no network": CSP covers neither the frame navigating itself nor WebRTC (plan
 #: Q4). A policy the document sets itself can only narrow it further.
+#: Mirrored in apps/web/src/lib/chat/htmlPolicy.ts; a Vitest test compares the two.
 HTML_POLICY: Final = (
     "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; "
     "style-src 'unsafe-inline'; img-src data: blob:; font-src data:; form-action 'none'; base-uri 'none'\">"

@@ -49,7 +49,7 @@ describe('only what the app does is offered (docs/history/code-review.md M7)', (
 	it('rows for unported features are never shown', () => {
 		for (const key of [
 			'richTextInput',
-			'iframeSandboxAllowScripts',
+			'terminalPreviewAllowSameOrigin',
 			'voiceInterruption',
 			'showUpdateToast',
 			'landingPageMode',
@@ -59,6 +59,14 @@ describe('only what the app does is offered (docs/history/code-review.md M7)', (
 			expect(isShown(row, ctx), key).toBe(false);
 		}
 		expect(isShown(allRows.find((r) => keyOf(r) === 'chatBubble')!, ctx)).toBe(true);
+	});
+
+	it('offers the canvas row, and it is a switch that defaults on', () => {
+		const row = allRows.find((r) => keyOf(r) === 'canvasAutoOpen');
+		expect(row).toMatchObject({ label: 'Open the canvas automatically', fallback: true });
+		expect(row && isShown(row, ctx)).toBe(true);
+		expect(Object.keys(ROWS)).toContain('Canvas');
+		expect(Object.keys(ROWS)).not.toContain('Artifacts');
 	});
 
 	it('every row still offered is read somewhere outside the Settings modal', () => {

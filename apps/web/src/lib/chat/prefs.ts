@@ -35,6 +35,8 @@ export type ChatPrefs = {
 	webSearchAlways: boolean;
 	/** Pasting more than PASTED_TEXT_LIMIT characters attaches a text file instead. */
 	largeTextAsFile: boolean;
+	/** A reply that provides exactly one document opens the canvas by itself (wide windows only). */
+	canvasAutoOpen: boolean;
 	/** The chat's background image (a data URL), if the user chose one. */
 	backgroundImageUrl: string | null;
 };
@@ -65,6 +67,7 @@ export function chatPrefs(settings: Record<string, unknown> | null | undefined):
 		temporaryByDefault: read('temporaryChatByDefault', false),
 		webSearchAlways: read<unknown>('webSearch', null) === 'always',
 		largeTextAsFile: read('largeTextAsFile', false),
+		canvasAutoOpen: read('canvasAutoOpen', true),
 		backgroundImageUrl: read<string | null>('backgroundImageUrl', null) || null
 	};
 }
