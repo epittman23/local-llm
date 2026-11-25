@@ -91,7 +91,7 @@ export function ToolsPage() {
 		[list.data, query, viewOption, user?.id, sortKey, sortDirection]
 	);
 
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
 	const filtered = query.trim() !== '' || viewOption !== '';
 	useEffect(() => {

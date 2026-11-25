@@ -94,7 +94,7 @@ export function SkillsPage() {
 	const skills = list.data?.items ?? null;
 	const total = list.data?.total ?? 0;
 
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
 	const filtered = debouncedQuery !== '' || viewOption !== '';
 	const wholeCount = useWorkspaceStore((s) => s.counts.skills);

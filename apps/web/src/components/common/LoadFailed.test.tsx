@@ -35,11 +35,19 @@ describe('LoadFailed', () => {
 describe('failureCause', () => {
 	afterEach(() => vi.unstubAllGlobals());
 
-	it('says the computer is offline when the browser knows it is', () => {
+	it('says the computer is offline when a request got no answer and the browser knows it is', () => {
 		vi.stubGlobal('navigator', { onLine: false });
-		expect(failureCause(null)).toEqual({
+		expect(failureCause(new TypeError('Failed to fetch'))).toEqual({
 			cause: 'This computer is offline. It loads again when the connection is back.',
 			detail: null
+		});
+	});
+
+	it('says what the server answered even while the browser reports offline (#1123)', () => {
+		vi.stubGlobal('navigator', { onLine: false });
+		expect(failureCause('Database is locked')).toEqual({
+			cause: 'The server answered with an error.',
+			detail: 'Database is locked'
 		});
 	});
 
