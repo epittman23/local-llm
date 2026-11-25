@@ -737,6 +737,14 @@ id taken from the message, so a repeated failure updates one toast. A caller's
 `duration` or `id` still wins. Once a session has expired, failure toasts are
 held back until the next sign-in; the sign-in page's inline message explains
 them.
+A toast raised while a dialog, alert dialog or sheet is open can be pressed
+there: the toaster keeps `pointer-events` the modal takes from `<body>`, and
+the shared contents (`components/ui/toastOutside.ts`) do not count a press on
+it as a press outside, so it never closes the modal under it (#1133). It cannot
+be reached from the keyboard while the modal is open, since the modal holds
+focus inside itself, so an action that must be reachable from inside a dialog
+(an Undo for something done there) is said in the dialog, with its own button,
+not only in a toast.
 Several results of one action are worded: 'Added "<name>"' for one; '4 files
 added'; '3 added, 1 failed'; '2 files couldn't be added'; 'N already here' for
 skipped duplicates. A failure toast's description points to the rows that
