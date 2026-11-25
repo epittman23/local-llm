@@ -140,7 +140,7 @@ export function UserList() {
 	const users = list.data?.users ?? null;
 	const total = list.data?.total ?? null;
 
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 	useEffect(() => {
 		// The tab keeps the whole count while a search narrows the list (DAT-2).
 		if (total !== null && debouncedQuery === '') setCount('users', total);

@@ -112,7 +112,7 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 		return (list.data?.pages ?? []).flatMap((p) => p.items ?? []).filter((i) => !seen.has(i.id) && seen.add(i.id));
 	})();
 	const total = list.data?.pages[0]?.total ?? null;
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 
 	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
 	const filtered = debouncedQuery !== '' || viewOption !== '' || sourceOption !== '';

@@ -4,10 +4,12 @@ import { isServerUnreachable } from '@/lib/apis/errors';
 
 /** Why a load failed, in words for the person using the app (FBK-4). */
 export function failureCause(error: unknown): { cause: string; detail: string | null } {
-	if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-		return { cause: 'This computer is offline. It loads again when the connection is back.', detail: null };
-	}
 	if (isServerUnreachable(error) || error instanceof TypeError) {
+		// Requests are made while the browser reports offline (#1123), so being offline only explains one
+		// that got no answer; a server that answered with an error says so whatever the browser reports.
+		if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+			return { cause: 'This computer is offline. It loads again when the connection is back.', detail: null };
+		}
 		return { cause: 'The server did not answer. It may be restarting or stopped.', detail: null };
 	}
 	const detail = error === null || error === undefined ? '' : String(error).trim();

@@ -30,6 +30,8 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentProps<typeof
 	);
 }
 
+// Radix's AlertDialog already ignores every outside pointer-down and interact, so a
+// press on a toast (sonner.tsx lifts the toaster's pointer-events) never closes it.
 function AlertDialogContent({
 	className,
 	size = 'default',
