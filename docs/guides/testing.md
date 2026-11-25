@@ -451,8 +451,10 @@ the machine. The smoke then uses the running backend:
 3. Gets a chat completion back from the stub.
 4. Calls every GET route that takes no path parameter, failing on any 5xx.
 5. Checks that `/` and a deep link (`/notes`) return the app shell, and a
-   missing `.js` a 404: `SPAStaticFiles`' fallback, which the e2e suite
-   only imitates (`e2e/static-server.ts`). Only when there is a build.
+   missing `.js` and an unknown route under a backend prefix
+   (`/api/v1/no-such-route`, `/ollama/no-such`) a 404: `SPAStaticFiles`'
+   fallback, which the e2e suite only imitates (`e2e/static-server.ts`).
+   Only when there is a build.
 6. Checks that the API refuses a request without a token.
 7. Stops it with SIGINT and expects a clean exit.
 

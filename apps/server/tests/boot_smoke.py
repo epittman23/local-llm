@@ -14,7 +14,8 @@ machine, then:
 4. calls every GET route that takes no path parameter, as the admin, and
    fails on any 5xx;
 5. when there is a frontend build, checks that `/` and a deep link return
-   the app shell and that a missing script is a 404 (SPAStaticFiles);
+   the app shell, and that a missing script and an unknown API route are
+   404s (SPAStaticFiles);
 6. checks that the API refuses a request without a token;
 7. stops it with SIGINT and expects a clean exit through the lifespan
    teardown.
@@ -278,6 +279,10 @@ def run_checks(api: Backend, proc: subprocess.Popen, env: dict) -> None:
         if '<html' not in str(page).lower():
             raise Failure('GET /notes did not fall back to the frontend')
         api.expect('GET', '/_astro/missing.js', status=404, auth=False)
+        # An unknown route under a backend prefix is a missing route, not a page (#1131).
+        for path in ('/api/v1/no-such-route', '/ollama/no-such'):
+            if api.expect('GET', path, status=404) != {'detail': 'Not Found'}:
+                raise Failure(f'GET {path} did not answer a JSON 404')
 
     # Nothing without a token.
     api.expect('GET', '/api/v1/chats/', status=401, auth=False)
