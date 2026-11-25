@@ -2587,7 +2587,7 @@
    "outcome": {
     "kind": "HTTPException",
     "status": 500,
-    "detail": "Local LLM: Server Connection Error"
+    "detail": "Couldn't reach the model server. Check its connection in Admin > Settings > Connections."
    },
    "form_data_after": {
     "model": "m",
@@ -2627,7 +2627,7 @@
    "outcome": {
     "kind": "HTTPException",
     "status": 502,
-    "detail": "Local LLM: Server Connection Error"
+    "detail": "Couldn't reach the model server. Check its connection in Admin > Settings > Connections."
    },
    "form_data_after": {
     "model": "m",

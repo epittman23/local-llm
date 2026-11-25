@@ -96,7 +96,7 @@ export function FunctionsPage() {
 		queryKey: LIST_KEY,
 		queryFn: async () => ((await getFunctionList(token)) ?? []) as FunctionListItem[]
 	});
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 
 	const items = useMemo(
 		() =>

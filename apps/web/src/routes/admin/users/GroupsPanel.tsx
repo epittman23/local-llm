@@ -60,7 +60,7 @@ export function GroupsPanel() {
 
 	// Both are needed: without the defaults, New Group and Default permissions
 	// would start from nothing and could save that over the stored ones.
-	const failedQuery = [groupsQuery, defaultsQuery].find((q) => q.isError || (q.isPaused && q.data === undefined));
+	const failedQuery = [groupsQuery, defaultsQuery].find((q) => q.isError);
 	useEffect(() => {
 		if (groupsQuery.data) setCount('groups', filtered.length);
 	}, [groupsQuery.data, filtered.length, setCount]);
