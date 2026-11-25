@@ -11,7 +11,7 @@ import {
 	Star,
 	Zap
 } from 'lucide-react';
-import { Fragment, type ReactNode, useState } from 'react';
+import { Fragment, type ReactNode, useContext, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { CheckboxMark } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table as DataTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
+import { codeBlocks } from '@/lib/chat/documents';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { unescapeHtml } from '@/lib/markdown/content';
 import { lexChat, type MdToken } from '@/lib/markdown/lexer';
@@ -38,6 +39,8 @@ import {
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useCopy } from '@/lib/ui/useCopy';
 import { cn } from '@/lib/utils';
+import { CanvasContext } from '@/routes/chat/canvas/CanvasContext';
+import { DocumentCard } from '@/routes/chat/canvas/DocumentCard';
 import { CodeBlock } from './CodeBlock';
 import { Katex } from './Katex';
 import { useMarkdownEnv } from './MarkdownContext';
@@ -304,7 +307,42 @@ function Collapsible({
 	);
 }
 
-function Details({ token }: { token: MdToken }) {
+// How many fenced blocks a token holds, with the walker the documents use (lib/chat/documents.ts), so a block's
+// ordinal here is its ordinal there. Remembered per token: a streaming message re-renders every token each time.
+const blockCounts = new WeakMap<object, number>();
+function blocksIn(token: MdToken | MdToken[]): number {
+	let count = blockCounts.get(token);
+	if (count === undefined) {
+		count = codeBlocks(Array.isArray(token) ? token : [token]).length;
+		blockCounts.set(token, count);
+	}
+	return count;
+}
+
+/**
+ * A fenced block: a card when the message's documents hold it as an html or svg page (a complete one, or a long
+ * one), else a code block; a long block of other code stays a code block with an Open in canvas button. The
+ * message's documents decide which, so what is a document is settled in one place (lib/chat/documents.ts).
+ */
+function FencedBlock({ id, token, ordinal }: { id: string; token: MdToken; ordinal: number }) {
+	const env = useMarkdownEnv();
+	const canvas = useContext(CanvasContext);
+	const doc = env.messageId ? env.documents?.find((d) => d.id === `block:${env.messageId}:${ordinal}`) : undefined;
+	if (doc?.kind === 'html') return <DocumentCard document={doc} />;
+	return (
+		<CodeBlock
+			id={id}
+			lang={token.lang ?? ''}
+			code={token.text ?? ''}
+			complete={/(```|~~~)\s*$/.test(token.raw)}
+			defaultCollapsed={env.collapseCodeBlocks}
+			onRun={env.onRun}
+			onOpenInCanvas={doc && canvas ? () => canvas.open(doc.id) : undefined}
+		/>
+	);
+}
+
+function Details({ token, base }: { token: MdToken; base: number }) {
 	const env = useMarkdownEnv();
 	const token_ = useAuthStore((s) => s.token) ?? '';
 	const [resolving, setResolving] = useState(false);
@@ -344,12 +382,12 @@ function Details({ token }: { token: MdToken }) {
 	if (!text) return <Collapsible title={token.summary} attributes={attributes} defaultOpen={false} disabled />;
 	return (
 		<Collapsible title={token.summary} attributes={attributes} defaultOpen={env.expandDetails}>
-			<Blocks tokens={lexChat(unescapeHtml(token.text))} />
+			<Blocks tokens={lexChat(unescapeHtml(token.text))} base={base} />
 		</Collapsible>
 	);
 }
 
-function DetailGroupView({ group }: { group: DetailGroup }) {
+function DetailGroupView({ group, base }: { group: DetailGroup; base: number }) {
 	const env = useMarkdownEnv();
 	const [open, setOpen] = useState(env.expandDetails);
 	const running = !env.done;
@@ -369,7 +407,7 @@ function DetailGroupView({ group }: { group: DetailGroup }) {
 			{open && (
 				<div className="border-muted mt-1 border-l-2 pl-3">
 					{group.items.map((t, i) => (
-						<Details key={i} token={t} />
+						<Details key={i} token={t} base={base + group.items.slice(0, i).reduce((n, d) => n + blocksIn(d), 0)} />
 					))}
 				</div>
 			)}
@@ -444,22 +482,27 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 }
 
 /** A task item's box is a picture of its state (CheckboxMark), read out as "Done" or "Not done". */
-function ListItems({ token }: { token: MdToken }) {
+function ListItems({ token, base }: { token: MdToken; base: number }) {
+	let n = base;
 	return (
 		<>
-			{token.items.map((item: MdToken, i: number) => (
-				<li key={i} className={item.task ? 'flex list-none gap-2' : undefined}>
-					{item.task && (
-						<>
-							<CheckboxMark checked={Boolean(item.checked)} className={token.loose ? 'mt-3' : 'mt-1'} />
-							<span className="sr-only">{item.checked ? 'Done: ' : 'Not done: '}</span>
-						</>
-					)}
-					<div className="min-w-0">
-						<Blocks tokens={item.tokens} top={token.loose} />
-					</div>
-				</li>
-			))}
+			{token.items.map((item: MdToken, i: number) => {
+				const at = n;
+				n += blocksIn(item.tokens ?? []);
+				return (
+					<li key={i} className={item.task ? 'flex list-none gap-2' : undefined}>
+						{item.task && (
+							<>
+								<CheckboxMark checked={Boolean(item.checked)} className={token.loose ? 'mt-3' : 'mt-1'} />
+								<span className="sr-only">{item.checked ? 'Done: ' : 'Not done: '}</span>
+							</>
+						)}
+						<div className="min-w-0">
+							<Blocks tokens={item.tokens} top={token.loose} base={at} />
+						</div>
+					</li>
+				);
+			})}
 		</>
 	);
 }
@@ -467,17 +510,27 @@ function ListItems({ token }: { token: MdToken }) {
 export function Blocks({
 	tokens,
 	top = true,
-	paragraphSpan = false
+	paragraphSpan = false,
+	base
 }: {
 	tokens: MdToken[];
 	top?: boolean;
 	paragraphSpan?: boolean;
+	/** The ordinal of the first fenced block in `tokens`; the message's own base at the top level. */
+	base?: number;
 }) {
 	const env = useMarkdownEnv();
+	let n = base ?? env.blockBase ?? 0;
 	return (
 		<>
 			{groupDetails(tokens).map((t, i) => {
-				if (t.type === 'detail_group') return <DetailGroupView key={i} group={t as DetailGroup} />;
+				// This token's blocks are numbered from `at`, the next token's from after them.
+				const at = n;
+				n +=
+					t.type === 'detail_group'
+						? (t as DetailGroup).items.reduce((c, d) => c + blocksIn(d), 0)
+						: blocksIn(t as MdToken);
+				if (t.type === 'detail_group') return <DetailGroupView key={i} group={t as DetailGroup} base={at} />;
 				const token = t as MdToken;
 				switch (token.type) {
 					case 'hr':
@@ -500,16 +553,7 @@ export function Blocks({
 					}
 					case 'code':
 						return token.raw.includes('```') || token.raw.includes('~~~') ? (
-							<CodeBlock
-								key={i}
-								id={`${env.id}-${i}`}
-								lang={token.lang ?? ''}
-								code={token.text ?? ''}
-								complete={/(```|~~~)\s*$/.test(token.raw)}
-								defaultCollapsed={env.collapseCodeBlocks}
-								onPreview={env.onPreview}
-								onRun={env.onRun}
-							/>
+							<FencedBlock key={i} id={`${env.id}-${i}`} token={token} ordinal={at} />
 						) : (
 							<pre key={i} className="bg-muted overflow-x-auto rounded-lg p-3 text-sm">
 								{token.text}
@@ -527,28 +571,28 @@ export function Blocks({
 										<Icon className="size-4" />
 										{alert.type[0] + alert.type.slice(1).toLowerCase()}
 									</div>
-									<Blocks tokens={alert.tokens} />
+									<Blocks tokens={alert.tokens} base={at} />
 								</div>
 							);
 						}
 						return (
 							<blockquote key={i} dir="auto" className="text-muted-foreground my-2 border-l-4 pl-3">
-								<Blocks tokens={token.tokens} />
+								<Blocks tokens={token.tokens} base={at} />
 							</blockquote>
 						);
 					}
 					case 'list':
 						return token.ordered ? (
 							<ol key={i} start={token.start || 1} dir="auto" className="my-2 list-decimal pl-6">
-								<ListItems token={token} />
+								<ListItems token={token} base={at} />
 							</ol>
 						) : (
 							<ul key={i} dir="auto" className="my-2 list-disc pl-6">
-								<ListItems token={token} />
+								<ListItems token={token} base={at} />
 							</ul>
 						);
 					case 'details':
-						return <Details key={i} token={token} />;
+						return <Details key={i} token={token} base={at} />;
 					case 'html':
 						return <HtmlToken key={i} text={token.text ?? token.raw} />;
 					case 'paragraph':
@@ -577,7 +621,7 @@ export function Blocks({
 					case 'colonFence':
 						return (
 							<div key={i} className="bg-muted/30 my-2 rounded-xl border p-3" data-fence={token.fenceType}>
-								<Blocks tokens={token.tokens ?? []} />
+								<Blocks tokens={token.tokens ?? []} base={at} />
 							</div>
 						);
 					case 'space':

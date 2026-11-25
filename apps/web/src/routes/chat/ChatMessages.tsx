@@ -9,14 +9,15 @@ import {
 	PlayCircle,
 	RotateCcw
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useContext, useState } from 'react';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ReplyOrb, ReplySteps } from '@/components/chat/ReplySteps';
-import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Tip } from '@/components/common/Tip';
 import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RowButton } from '@/components/ui/row-button';
+import { type CanvasDocument, messageDocuments } from '@/lib/chat/documents';
 import type { CodeRunner } from '@/lib/chat/codeRun';
 import {
 	canContinue,
@@ -40,6 +41,8 @@ import { ErrorReply } from './ErrorReply';
 import { modelImage } from './ModelSelector';
 import { StatusLine } from './StatusLine';
 import { useChatPrefs } from './useChatPrefs';
+import { CanvasContext } from './canvas/CanvasContext';
+import { DocumentCard } from './canvas/DocumentCard';
 import { useModels } from './useModels';
 
 /** What a message's extra actions are told about it (see MessageActions.tsx). */
@@ -67,8 +70,6 @@ export type MessageHandlers = {
 	regenerate?: (m: Message) => ReactNode;
 	/** Replaces a message's body while it is being edited. */
 	editing?: (m: Message) => ReactNode | null;
-	/** An html/svg code block's Preview button (the artifacts panel). */
-	onPreview?: (code: string) => void;
 	/** A python code block's Run button in a reply (lib/chat/codeRun.ts); none when the server has no runner. */
 	onRun?: CodeRunner;
 	/** Regenerates a reply from a labelled button (a failed reply's Retry, a stopped reply's Regenerate); not offered without it. */
@@ -147,28 +148,70 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
 	);
 }
 
-function Attachments({ files }: { files: NonNullable<Message['files']> }) {
+/**
+ * A message's attachments: a picture or a chip each. One the chat has as a canvas document opens it (NAV-4: focus
+ * returns here when the canvas closes); a pasted picture with no file id stays as it is.
+ */
+function Attachment({
+	file: f,
+	documents
+}: {
+	file: NonNullable<Message['files']>[number];
+	documents: CanvasDocument[];
+}) {
+	const canvas = useContext(CanvasContext);
+	const doc = f.id ? documents.find((d) => d.id === f.id) : undefined;
+	const open = doc && canvas ? () => canvas.open(doc.id) : undefined;
+	const current = doc && canvas?.openId === doc.id ? 'true' : undefined;
+	if (f.type === 'image' || (f.content_type ?? '').startsWith('image/')) {
+		const picture = (
+			<img
+				src={
+					f.url?.startsWith('data') || f.url?.startsWith('http') ? f.url : `${WEBUI_API_BASE_URL}/files/${f.id}/content`
+				}
+				alt={f.name ?? ''}
+				className="max-h-60 rounded-xl"
+			/>
+		);
+		return open ? (
+			<RowButton
+				className="w-auto shrink-0 rounded-xl"
+				aria-label={`Open ${f.name ?? 'image'}`}
+				aria-current={current}
+				onClick={open}
+			>
+				{picture}
+			</RowButton>
+		) : (
+			picture
+		);
+	}
+	const chip = (
+		<>
+			<FileText className="size-4" />
+			<span className="max-w-60 truncate">{f.name ?? 'File'}</span>
+		</>
+	);
+	return open ? (
+		<RowButton
+			className="flex w-auto items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+			aria-label={`Open ${f.name ?? 'file'}`}
+			aria-current={current}
+			onClick={open}
+		>
+			{chip}
+		</RowButton>
+	) : (
+		<div className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">{chip}</div>
+	);
+}
+
+function Attachments({ files, documents }: { files: NonNullable<Message['files']>; documents: CanvasDocument[] }) {
 	return (
 		<div className="flex flex-wrap justify-end gap-2">
-			{files.map((f, i) =>
-				f.type === 'image' || (f.content_type ?? '').startsWith('image/') ? (
-					<img
-						key={i}
-						src={
-							f.url?.startsWith('data') || f.url?.startsWith('http')
-								? f.url
-								: `${WEBUI_API_BASE_URL}/files/${f.id}/content`
-						}
-						alt={f.name ?? ''}
-						className="max-h-60 rounded-xl"
-					/>
-				) : (
-					<div key={i} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
-						<FileText className="size-4" />
-						<span className="max-w-60 truncate">{f.name ?? 'File'}</span>
-					</div>
-				)
-			)}
+			{files.map((f, i) => (
+				<Attachment key={i} file={f} documents={documents} />
+			))}
 		</div>
 	);
 }
@@ -219,7 +262,7 @@ function UserMessage({
 				/>
 				<div className="min-w-0 flex-1">
 					<div className="text-sm font-medium">{prefs.showUsername ? (user?.name ?? 'You') : 'You'}</div>
-					{message.files?.length ? <Attachments files={message.files} /> : null}
+					{message.files?.length ? <Attachments files={message.files} documents={messageDocuments(message)} /> : null}
 					{edit ?? (
 						<div className="text-reading" dir="auto">
 							{body}
@@ -232,7 +275,7 @@ function UserMessage({
 	}
 	return (
 		<div className="group flex w-full flex-col items-end gap-1" data-testid="user-message" id={`message-${message.id}`}>
-			{message.files?.length ? <Attachments files={message.files} /> : null}
+			{message.files?.length ? <Attachments files={message.files} documents={messageDocuments(message)} /> : null}
 			{edit ?? (
 				<div className="bg-muted max-w-[90%] rounded-3xl px-4 py-2" dir="auto">
 					{body}
@@ -311,6 +354,8 @@ export function ResponseMessage({
 	const modelName = models.find((m) => m.id === message.model)?.name ?? message.modelName ?? message.model;
 	const sourceIds = sourceIdsOf(message.sources, citationsEnabled);
 	const edit = h.editing?.(message);
+	// What the reply gave the canvas: its fenced pages render in the text, its files as cards below.
+	const documents = messageDocuments(message);
 	const empty = !message.content && !message.error && !message.output?.length;
 	// A reply that is nothing but an error: no text to copy, rate or read aloud (#992).
 	const errorOnly = Boolean(message.error) && !message.content?.trim();
@@ -353,7 +398,7 @@ export function ResponseMessage({
 							sourceIds={sourceIds}
 							onSourceClick={(id) => h.onSourceClick?.(message, id)}
 							onToolCallResolved={h.onToolCallResolved}
-							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
+							documents={documents}
 							onRun={
 								message.role === 'assistant' && h.onRun && chatId
 									? (code) => (h.onRun as CodeRunner)(code, chatId)
@@ -376,7 +421,7 @@ export function ResponseMessage({
 							sourceIds={sourceIds}
 							onSourceClick={(id) => h.onSourceClick?.(message, id)}
 							onToolCallResolved={h.onToolCallResolved}
-							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
+							documents={documents}
 							onRun={
 								message.role === 'assistant' && h.onRun && chatId
 									? (code) => (h.onRun as CodeRunner)(code, chatId)
@@ -386,7 +431,8 @@ export function ResponseMessage({
 					))}
 				{/* The reply's spinner, below everything shown so far, while it is written. */}
 				{!edit && message.done === false && !message.error && <ReplyOrb output={message.output} />}
-				{!edit && <SandboxOutputs files={message.files} />}
+				{!edit &&
+					documents.filter((d) => d.source.type !== 'block').map((d) => <DocumentCard key={d.id} document={d} />)}
 				{message.error ? (
 					<ErrorReply
 						message={message}

@@ -4,6 +4,9 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import type { Message } from '@/lib/chat/history';
+import { messageDocuments } from '@/lib/chat/documents';
+import { CanvasContext } from '@/routes/chat/canvas/CanvasContext';
 import { Markdown } from './Markdown';
 
 const { saveAs, copyToClipboard, toastError } = vi.hoisted(() => ({
@@ -150,5 +153,114 @@ describe('Markdown', () => {
 		expect(inline.getAttribute('aria-label')).toBeNull();
 		expect(block).toBe(screen.getByRole('figure', { name: 'Equation' }));
 		error.mockRestore();
+	});
+});
+
+describe('a fenced block that is a document', () => {
+	const reply = (content: string, done = true): Message => ({
+		id: 'm1',
+		parentId: null,
+		childrenIds: [],
+		role: 'assistant',
+		content,
+		done
+	});
+	const page = (title: string) => `\`\`\`html\n<!doctype html><title>${title}</title><p>${title}</p>\n\`\`\`\n`;
+	/** Renders a reply's text as ChatMessages does: with its documents, and a canvas that `open` stands for. */
+	const renderMdIn = (
+		message: Message,
+		open: (id: string) => void,
+		shown: { content?: string; blockBase?: number } = {}
+	) =>
+		render(
+			<CanvasContext.Provider value={{ openId: null, open }}>
+				<QueryClientProvider client={new QueryClient()}>
+					<TooltipProvider>
+						<MemoryRouter>
+							<Markdown
+								id={message.id}
+								messageId={message.id}
+								content={shown.content ?? message.content}
+								documents={messageDocuments(message)}
+								blockBase={shown.blockBase}
+								done={message.done !== false}
+							/>
+						</MemoryRouter>
+					</TooltipProvider>
+				</QueryClientProvider>
+			</CanvasContext.Provider>
+		);
+
+	it('renders a complete page as a card, not a code block', () => {
+		const message = reply(page('Chart'));
+		const open = vi.fn();
+		renderMdIn(message, open);
+		const card = screen.getByRole('button', { name: /Chart/ });
+		expect(card.getAttribute('data-testid')).toBe('document-card');
+		expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
+		fireEvent.click(card);
+		expect(open).toHaveBeenCalledWith('block:m1:0');
+	});
+
+	it('keeps a short snippet inline as code, with no Preview button', () => {
+		renderMdIn(reply('```html\n<p>hi</p>\n```\n'), vi.fn());
+		expect(screen.queryByTestId('document-card')).toBeNull();
+		expect(screen.queryByRole('button', { name: /Preview/ })).toBeNull();
+		expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+	});
+
+	it('numbers a block as the documents do, in a list, a quote, an alert and a details body', () => {
+		const html = (t: string) => page(t).trimEnd();
+		const content = [
+			'```python\nprint(1)\n```',
+			`- item\n\n  ${html('InList').replaceAll('\n', '\n  ')}`,
+			`> ${html('InQuote').replaceAll('\n', '\n> ')}`,
+			`> [!NOTE]\n> ${html('InAlert').replaceAll('\n', '\n> ')}`,
+			`<details type="reasoning" done="true" duration="2">\n<summary>Thinking</summary>\n${html('InDetails')}\n</details>`,
+			html('AtTop')
+		].join('\n\n');
+		const message = reply(content);
+		const documents = messageDocuments(message);
+		expect(documents.map((d) => d.name)).toEqual(['InList', 'InQuote', 'InAlert', 'InDetails', 'AtTop']);
+		const open = vi.fn();
+		renderMdIn(message, open);
+		fireEvent.click(screen.getByRole('button', { name: 'Thought for 2 seconds' }));
+		const cards = screen.getAllByTestId('document-card');
+		expect(cards.map((c) => c.textContent)).toEqual(documents.map((d) => expect.stringContaining(d.name)));
+		cards.forEach((card, i) => {
+			fireEvent.click(card);
+			expect(open).toHaveBeenLastCalledWith(documents[i].id);
+		});
+		// The python block takes ordinal 0 although it is no document.
+		expect(documents.map((d) => d.id)).toEqual([1, 2, 3, 4, 5].map((n) => `block:m1:${n}`));
+	});
+
+	it('numbers the blocks of a second text after those of the first', () => {
+		const message = reply(page('First') + '\n' + page('Second'));
+		const documents = messageDocuments(message);
+		const open = vi.fn();
+		renderMdIn(message, open, { content: page('Second'), blockBase: 1 });
+		// As the second text of a reply, its first block is the message's second.
+		fireEvent.click(screen.getByTestId('document-card'));
+		expect(open).toHaveBeenCalledWith(documents[1].id);
+	});
+
+	it('shows a block still being written as a card that says so', () => {
+		renderMdIn(reply('```html\n<!doctype html>\n<p>half', false), vi.fn());
+		expect(screen.getByTestId('document-card').textContent).toContain('Writing…');
+	});
+
+	it('offers Open in canvas on a long block of other code, which stays a code block', () => {
+		const code = Array.from({ length: 16 }, (_, i) => `x${i} = ${i}`).join('\n');
+		const open = vi.fn();
+		renderMdIn(reply(`\`\`\`python\n${code}\n\`\`\`\n`), open);
+		expect(screen.queryByTestId('document-card')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Open in canvas' }));
+		expect(open).toHaveBeenCalledWith('block:m1:0');
+	});
+
+	it('offers no Open in canvas on a short block', () => {
+		renderMdIn(reply('```python\nprint(1)\n```\n'), vi.fn());
+		expect(screen.queryByRole('button', { name: 'Open in canvas' })).toBeNull();
 	});
 });

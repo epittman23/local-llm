@@ -337,18 +337,18 @@ describe('CodeBlock header (CNT-2)', () => {
 			return { observe: vi.fn(), disconnect: vi.fn(), unobserve: vi.fn() };
 		});
 		vi.stubGlobal('ResizeObserver', Observer);
-		block({ lang: 'html', code: '<p>hi</p>', onPreview: vi.fn() });
-		const preview = screen.getByRole('button', { name: 'Preview' });
-		preview.focus();
+		block({ lang: 'html', code: '<p>hi</p>' });
+		const download = screen.getByRole('button', { name: 'Download' });
+		download.focus();
 		// The side panel opening beside the chat narrows the block.
 		const entry = { contentRect: { width: 320 } } as ResizeObserverEntry;
 		act(() => {
 			for (const report of callbacks) report([entry], {} as ResizeObserver);
 		});
-		expect(preview.textContent).toBe('');
-		expect(preview.isConnected).toBe(true);
-		expect(screen.getByRole('button', { name: 'Preview' })).toBe(preview);
-		expect(document.activeElement).toBe(preview);
+		expect(download.textContent).toBe('');
+		expect(download.isConnected).toBe(true);
+		expect(screen.getByRole('button', { name: 'Download' })).toBe(download);
+		expect(document.activeElement).toBe(download);
 		vi.unstubAllGlobals();
 	});
 });

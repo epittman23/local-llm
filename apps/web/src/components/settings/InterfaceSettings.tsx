@@ -29,7 +29,7 @@ import {
 
 /**
  * Ports common/InterfaceSettings.svelte: every interface preference, grouped
- * UI / Chat / Input / Artifacts / Voice / File. Controlled: it shows `values`
+ * UI / Chat / Input / Canvas / Voice / File. Controlled: it shows `values`
  * and reports each change as a patch through `onChange`; the caller decides
  * what saving means. The rows are the table in interfaceSettingDefs.ts.
  *

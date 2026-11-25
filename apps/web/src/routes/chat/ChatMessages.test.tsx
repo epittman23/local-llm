@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { History, Message } from '@/lib/chat/history';
 import { copyToClipboard } from '@/lib/utils';
+import { CanvasContext } from './canvas/CanvasContext';
 import { ChatMessages, type MessageHandlers, ResponseMessage } from './ChatMessages';
 
 vi.mock('./useModels', () => ({ useModels: () => ({ models: [] }) }));
@@ -274,5 +275,72 @@ describe('copying a message (#942)', () => {
 			expect(toastError).toHaveBeenCalledWith("Couldn't copy the message: the browser blocked clipboard access")
 		);
 		expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+	});
+});
+
+describe('documents in the chat (canvas)', () => {
+	const fileId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+	const open = vi.fn();
+	const inCanvas = (message: Message) => {
+		const history: History = { messages: { [message.id]: message }, currentId: message.id };
+		const h = handlers();
+		render(
+			wrap(
+				<CanvasContext.Provider value={{ openId: null, open }}>
+					<ChatMessages history={history} h={h} chatId="c1" />
+				</CanvasContext.Provider>
+			)
+		);
+	};
+
+	it('shows a card for each sandbox output of a reply, which opens the canvas', () => {
+		open.mockClear();
+		inCanvas({
+			...reply,
+			sources: undefined,
+			followUps: undefined,
+			files: [
+				{
+					type: 'file',
+					id: fileId(1),
+					name: 'report.pdf',
+					size: 2048,
+					meta: { source: 'sandbox_output', content_type: 'application/pdf' }
+				},
+				{ type: 'file', id: fileId(2), name: 'data.csv', size: 5, meta: { source: 'sandbox_output' } }
+			]
+		});
+		const cards = screen.getAllByTestId('document-card');
+		expect(cards.map((c) => c.getAttribute('data-kind'))).toEqual(['pdf', 'csv']);
+		fireEvent.click(cards[1]);
+		expect(open).toHaveBeenCalledWith(fileId(2));
+	});
+
+	it('makes an attachment the chat has as a document open the canvas, and leaves a pasted picture alone', () => {
+		open.mockClear();
+		const ask: Message = {
+			id: 'u1',
+			parentId: null,
+			childrenIds: ['a1'],
+			role: 'user',
+			content: 'look',
+			done: true,
+			files: [
+				{ type: 'file', id: fileId(3), name: 'page.html', size: 9 },
+				{ type: 'image', url: 'data:image/png;base64,AAAA', name: 'pasted.png' }
+			]
+		};
+		const history: History = { messages: { u1: ask }, currentId: 'u1' };
+		render(
+			wrap(
+				<CanvasContext.Provider value={{ openId: null, open }}>
+					<ChatMessages history={history} h={handlers()} chatId="c1" />
+				</CanvasContext.Provider>
+			)
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Open page.html' }));
+		expect(open).toHaveBeenCalledWith(fileId(3));
+		expect(screen.getByAltText('pasted.png')).toBeTruthy();
+		expect(screen.queryByRole('button', { name: /Open pasted/ })).toBeNull();
 	});
 });

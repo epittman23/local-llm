@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { docOf, output, renderWithClient } from '../testing';
 import { MarkdownView } from './MarkdownView';
@@ -13,24 +14,36 @@ beforeEach(() => {
 });
 
 describe('MarkdownView', () => {
-	it('renders a Markdown file as formatted text through the safe renderer', async () => {
+	it('renders a Markdown file as the chat does, headings included', async () => {
 		api.text.mockResolvedValue({
-			text: 'A **bold** point\n\n- one',
+			text: '## A heading\n\nA **bold** point\n\n- one',
 			truncated: false
 		});
-		const { container } = renderWithClient(<MarkdownView doc={docOf(output('5', 'notes.md'))} />);
-		expect(await screen.findByText('bold')).toBeInTheDocument();
+		const { container } = renderWithClient(
+			<MemoryRouter>
+				<MarkdownView doc={docOf(output('5', 'notes.md'))} />
+			</MemoryRouter>
+		);
+		expect(await screen.findByRole('heading', { level: 2, name: 'A heading' })).toBeInTheDocument();
 		expect(container.querySelector('strong')).toHaveTextContent('bold');
 		expect(container.querySelector('li')).toHaveTextContent('one');
 	});
 
 	it('says when it is cut, and when it cannot be fetched', async () => {
 		api.text.mockResolvedValueOnce({ text: 'hello', truncated: true });
-		const { unmount } = renderWithClient(<MarkdownView doc={docOf(output('5', 'notes.md'))} />);
+		const { unmount } = renderWithClient(
+			<MemoryRouter>
+				<MarkdownView doc={docOf(output('5', 'notes.md'))} />
+			</MemoryRouter>
+		);
 		expect(await screen.findByText(/Showing the first 256 KiB/)).toBeInTheDocument();
 		unmount();
 		api.text.mockRejectedValueOnce({ detail: 'Not found' });
-		renderWithClient(<MarkdownView doc={docOf(output('6', 'other.md'))} />);
+		renderWithClient(
+			<MemoryRouter>
+				<MarkdownView doc={docOf(output('6', 'other.md'))} />
+			</MemoryRouter>
+		);
 		expect(await screen.findByText(/Could not show this file: Not found/)).toBeInTheDocument();
 	});
 });
