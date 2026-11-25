@@ -126,6 +126,7 @@ SHRINK_ONLY = {
     'apps/server/basedpyright-baseline.json': 'counts',  # .github/scripts/lint_ratchet.py
     'apps/web/biome-baseline.json': 'counts',
     'apps/server/tests/fixtures/schema_drift.json': 'list',  # tests/test_schema_drift.py
+    'apps/web/ui-standard-baseline.json': 'ui-standard',  # src/styles/standard.ratchet.test.ts (#1122)
 }
 
 SUPPRESSIONS = {
@@ -292,6 +293,40 @@ def _structured_findings(change: FileChange, read_file: ReadFile) -> list[str]:
     return findings
 
 
+def _counts_growth(was: dict, now: dict, *, new_groups: Iterable[str] = ()) -> list[str]:
+    """Every `{group: {key: n}}` count that rose; a group in `new_groups` was never counted before and may hold any."""
+    fresh = set(new_groups)
+    return [
+        f'{group}: {key} {was.get(group, {}).get(key, 0)} -> {n}'
+        for group, keys in now.items()
+        if group not in fresh
+        for key, n in keys.items()
+        if n > was.get(group, {}).get(key, 0)
+    ]
+
+
+def _ui_standard_growth(base: dict, head: dict) -> list[str]:
+    """How the interface standard's ratchet baseline allows more than before.
+
+    Its counts are `{pattern: {file: n}}` and may only fall, except under a pattern the baseline did not count
+    before: a new pattern is a stricter standard, and its first recording is its starting point. A pattern
+    dropped from `patterns` would stop being counted, and re-adding it would record it from scratch, so the list
+    may only gain names. An exception keeps a count above zero for good and only the owner grants one: none may
+    be added, and none may allow more.
+    """
+    was_patterns, now_patterns = set(base.get('patterns', [])), set(head.get('patterns', []))
+    grown = [f'patterns: {name} removed' for name in sorted(was_patterns - now_patterns)]
+    grown += _counts_growth(base.get('counts', {}), head.get('counts', {}), new_groups=now_patterns - was_patterns)
+    allowed = {(e.get('file'), e.get('pattern')): e.get('count', 0) for e in base.get('exceptions', [])}
+    for e in head.get('exceptions', []):
+        key = (e.get('file'), e.get('pattern'))
+        if key not in allowed:
+            grown.append(f'exceptions: {key[0]} {key[1]} added')
+        elif e.get('count', 0) > allowed[key]:
+            grown.append(f'exceptions: {key[0]} {key[1]} {allowed[key]} -> {e.get("count", 0)}')
+    return grown
+
+
 def _shrink_only_findings(change: FileChange, read_file: ReadFile) -> list[str]:
     path = change.filename
     if change.status == 'removed' or change.previous_filename:
@@ -302,14 +337,10 @@ def _shrink_only_findings(change: FileChange, read_file: ReadFile) -> list[str]:
             return [f'`{path}`: a new baseline of allowed findings (it exempts every finding it lists).']
         if SHRINK_ONLY[path] == 'list':
             grown = sorted(set(json.loads(head or '[]')) - set(json.loads(base)))
+        elif SHRINK_ONLY[path] == 'ui-standard':
+            grown = _ui_standard_growth(json.loads(base), json.loads(head or '{}'))
         else:
-            was, now = json.loads(base)['counts'], json.loads(head or '{}').get('counts', {})
-            grown = [
-                f'{f}: {rule} {was.get(f, {}).get(rule, 0)} -> {n}'
-                for f, rules in now.items()
-                for rule, n in rules.items()
-                if n > was.get(f, {}).get(rule, 0)
-            ]
+            grown = _counts_growth(json.loads(base)['counts'], json.loads(head or '{}').get('counts', {}))
     except (ValueError, KeyError, TypeError) as exc:
         return [f'`{path}`: could not be read to compare it with the base ({exc}).']
     if not grown:

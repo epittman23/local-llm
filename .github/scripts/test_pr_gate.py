@@ -301,6 +301,42 @@ class ShrinkOnlyTests(unittest.TestCase):
         self.assertEqual(self.check(path, '["a", "b"]', '["a"]'), [])
         self.assertTrue(self.check(path, '["a"]', '["a", "c"]'))
 
+    UI = 'apps/web/ui-standard-baseline.json'
+
+    def ui(self, patterns=('raw-button',), counts=None, exceptions=()):
+        return json.dumps({'patterns': list(patterns), 'exceptions': list(exceptions), 'counts': counts or {}})
+
+    def test_the_ui_standard_baseline_may_shrink(self):
+        base = self.ui(counts={'raw-button': {'a.tsx': 2, 'b.tsx': 1}})
+        head = self.ui(counts={'raw-button': {'a.tsx': 1}})
+        self.assertEqual(self.check(self.UI, base, head), [])
+
+    def test_the_ui_standard_baseline_may_not_grow(self):
+        base = self.ui(counts={'raw-button': {'a.tsx': 2}})
+        for head in (
+            self.ui(counts={'raw-button': {'a.tsx': 3}}),
+            self.ui(counts={'raw-button': {'a.tsx': 2, 'c.tsx': 1}}),
+        ):
+            self.assertTrue(self.check(self.UI, base, head))
+
+    def test_a_new_ui_pattern_may_start_with_counts_but_may_not_be_dropped(self):
+        base = self.ui(counts={'raw-button': {'a.tsx': 2}})
+        added = self.ui(
+            patterns=('raw-button', 'raw-input'), counts={'raw-button': {'a.tsx': 2}, 'raw-input': {'d.tsx': 4}}
+        )
+        self.assertEqual(self.check(self.UI, base, added), [])
+        # Dropping a pattern stops it being counted, so it trips even with its counts left as they were.
+        dropped = self.ui(patterns=(), counts={'raw-button': {'a.tsx': 2}})
+        self.assertTrue(self.check(self.UI, base, dropped))
+
+    def test_ui_exceptions_may_only_be_removed_or_lowered(self):
+        one = {'file': 'a.tsx', 'pattern': 'raw-button', 'count': 2, 'reason': 'owner'}
+        base = self.ui(exceptions=[one])
+        self.assertEqual(self.check(self.UI, base, self.ui()), [])
+        self.assertEqual(self.check(self.UI, base, self.ui(exceptions=[{**one, 'count': 1}])), [])
+        self.assertTrue(self.check(self.UI, base, self.ui(exceptions=[{**one, 'count': 3}])))
+        self.assertTrue(self.check(self.UI, base, self.ui(exceptions=[one, {**one, 'file': 'b.tsx'}])))
+
     def test_adding_or_removing_a_baseline_trips(self):
         path = 'apps/web/biome-baseline.json'
         self.assertTrue(self.check(path, None, self.counts(), status='added'))
