@@ -96,12 +96,17 @@ def frames(*parts: tuple[int, bytes]) -> bytes:
 
 
 class FakeRaw:
-    """A raw exec socket: hands out `data`, then blocks (when held) until released, shut down or closed."""
+    """A raw exec socket: hands out `data`, then blocks (when held) until released, shut down or closed.
 
-    def __init__(self, data: bytes = b'', *, held: bool = False) -> None:
+    With `reads_stdin`, it also blocks until its writing side is shut down: the command reads its stdin to EOF
+    before it exits, as `cat` does.
+    """
+
+    def __init__(self, data: bytes = b'', *, held: bool = False, reads_stdin: bool = False) -> None:
         self.buffer = bytearray(data)
         self.cond = threading.Condition()
-        self.ended = not held
+        self.ended = not held and not reads_stdin
+        self.reads_stdin = reads_stdin
         self.sent = bytearray()
         self.shutdowns: list[int] = []
         self.timeout: object = 'unset'
@@ -127,7 +132,7 @@ class FakeRaw:
 
     def shutdown(self, how: int) -> None:
         self.shutdowns.append(how)
-        if how == socket.SHUT_RDWR:
+        if how == socket.SHUT_RDWR or (how == socket.SHUT_WR and self.reads_stdin):
             self.release()
 
     def settimeout(self, value: object) -> None:
@@ -186,6 +191,8 @@ class FakeAPI:
         # how many inspects report it running first (None: until the kill).
         self.output = frames((1, b'out\n'), (2, b'err\n'))
         self.held = False
+        # Whether the main command reads its stdin to EOF before it exits (#1146).
+        self.reads_stdin = False
         self.exit_code: int | None = 0
         self.running_for: int | None = 0
         self.main_raw: FakeRaw | None = None
@@ -249,7 +256,7 @@ class FakeAPI:
         self.order.append(f'start {record.kind}')
         if record.kind == 'main':
             assert socket and not detach
-            self.main_raw = FakeRaw(self.output, held=self.held)
+            self.main_raw = FakeRaw(self.output, held=self.held, reads_stdin=self.reads_stdin)
             return FakeSock(self.main_raw)
         if record.kind == 'kill':
             assert detach
@@ -1272,10 +1279,12 @@ def test_exec_streams_both_outputs_and_kills_after(backend: KataDockerBackend, d
 
 def test_exec_with_stdin(backend: KataDockerBackend, docker_client: FakeDocker) -> None:
     docker_client.add_container()
-    run_exec(backend, 'cat > f', stdin=b'x' * 1000)
     api = docker_client.api
+    # `cat` exits only at its stdin's EOF; a stream that ended at once raced the writer's half-close (#1146).
+    api.reads_stdin = True
+    run_exec(backend, 'cat > f', stdin=b'x' * 1000)
     assert api.main_raw is not None and bytes(api.main_raw.sent) == b'x' * 1000
-    assert api.main_raw.shutdowns[0] == socket.SHUT_WR
+    assert api.main_raw.shutdowns == [socket.SHUT_WR, socket.SHUT_RDWR]
     assert next(iter(api.execs.values())).kwargs['stdin'] is True
 
 

@@ -301,19 +301,47 @@ async def emit_chat_list_event(metadata: dict, chat_id: str):
         await event_emitter({'type': 'chat:list', 'data': {'chat_id': chat_id, 'folder_id': folder_id}})
 
 
+def backend_path_segments(routes) -> frozenset[str]:
+    """The first path segment of every route and mount the backend serves itself (`api`, `ollama`, `ws`, ...).
+
+    Read from the app's own route table, so a router added under a new prefix is covered without a list to
+    keep in step (#1131). The catch-all mount at `/` contributes nothing.
+    """
+    segments = set()
+    for route in routes:
+        first = getattr(route, 'path', '').lstrip('/').split('/', 1)[0]
+        if first and '{' not in first:
+            segments.add(first)
+    return frozenset(segments)
+
+
 class SPAStaticFiles(StaticFiles):
+    """The built web app, with its page for any unknown path so client-side routes load on reload.
+
+    An unknown path under one of the backend's own prefixes (`/api/...`, `/ollama/...`) is a missing route,
+    not a page, so it stays a 404 (FastAPI's JSON `{"detail": "Not Found"}`), as does a missing `.js` file.
+    """
+
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
         except (HTTPException, StarletteHTTPException) as ex:
-            if ex.status_code == 404:
-                if path.endswith('.js'):
-                    # Return 404 for javascript files
-                    raise ex
-                else:
-                    return await super().get_response('index.html', scope)
-            else:
+            if ex.status_code != 404 or path.endswith('.js') or self._is_backend_path(path, scope):
                 raise ex
+            return await super().get_response('index.html', scope)
+
+    @staticmethod
+    def _is_backend_path(path: str, scope) -> bool:
+        app = scope.get('app')
+        routes = getattr(getattr(app, 'router', None), 'routes', None)
+        if routes is None:
+            return False
+        # Routes are all registered before the app serves; the count only guards a test app built up later.
+        cached = getattr(app.state, '_backend_path_segments', None)
+        if cached is None or cached[0] != len(routes):
+            cached = (len(routes), backend_path_segments(routes))
+            app.state._backend_path_segments = cached
+        return path.lstrip('/').split('/', 1)[0] in cached[1]
 
 
 if LOG_FORMAT != 'json':
