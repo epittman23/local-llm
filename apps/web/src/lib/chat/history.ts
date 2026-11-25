@@ -288,7 +288,7 @@ export type ChatEffect =
 	| { kind: 'dialog'; type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any };
 
 /** Strips `<details>` blocks (reasoning, tool calls) from a finished reply: what is copied or spoken. */
-const visibleText = (m: Message) =>
+export const visibleText = (m: Message) =>
 	getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
 
 /**

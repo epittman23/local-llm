@@ -107,6 +107,7 @@ timeline
       2026-11-16 : Owner decisions for the UX review's Notes, Calendar, Automations, Channels and Playground section : Channels hidden while one account exists, pinned notes in the sidebar, an empty new note dropped, a real text completion at /openai/completions, the Images tab hidden while image generation is off : automation runs may post into the same chat every time, with no migration
       2026-11-16 : Owner decisions for the UX review's Benchmarks section : the section opens on Serve with a status chip, Tests opens on smoke and holds Run until a server is seen, report figures follow the theme and saved reports reopen, Serve previews its command and config_id : results become profile versions, Compare's failures open in Answers, no fingerprint change
       2026-11-20 : First pre-screen on the GPU (qwen38, build 11875) : 43 llama-bench points and 3 load checks : no candidate beats the profile's own settings, the only leader that fits at its context, so qwen38 is unchanged
+      2026-11-25 : Notes and chat connect : a note opens in a new chat, a reply saves to a note, and a selected passage is explained in a new chat
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : First measurements on native Linux : pre-screen each local profile, then confirm the leaders with Tests runs

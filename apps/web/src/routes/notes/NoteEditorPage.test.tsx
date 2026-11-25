@@ -10,6 +10,9 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { NoteEditorPage, SaveState, useNoteSaver } from './NoteEditorPage';
 
+// The selection's HTML: ProseMirror's own serializer is the editor's business.
+vi.mock('@tiptap/core', () => ({ getHTMLFromFragment: () => '<p>one</p><p>two **x**</p>' }));
+const editor = vi.hoisted(() => ({ selected: false }));
 vi.mock('@/lib/apis/notes', () => ({
 	updateNoteById: vi.fn(async () => ({})),
 	getNoteById: vi.fn(),
@@ -44,11 +47,38 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
 }));
 // The editor itself is RichTextEditor's own tests' business: here a textarea reports edits.
 vi.mock('@/components/common/RichTextEditor', () => ({
-	default: ({ onChange }: { onChange: (v: { html: string; json: null; md: string }) => void }) => (
-		<textarea
-			aria-label="Note content"
-			onChange={(e) => onChange({ html: `<p>${e.target.value}</p>`, json: null, md: e.target.value })}
-		/>
+	default: ({
+		onChange,
+		onReady
+	}: {
+		onChange: (v: { html: string; json: null; md: string }) => void;
+		onReady?: (e: unknown) => void;
+	}) => (
+		<>
+			<textarea
+				aria-label="Note content"
+				onChange={(e) => onChange({ html: `<p>${e.target.value}</p>`, json: null, md: e.target.value })}
+			/>
+			<button
+				type="button"
+				onClick={() => {
+					// A stand-in editor whose selection the test sets.
+					const listeners: (() => void)[] = [];
+					onReady?.({
+						on: (_: string, fn: () => void) => listeners.push(fn),
+						schema: {},
+						state: {
+							get selection() {
+								return { empty: !editor.selected, content: () => ({ content: {} }) };
+							}
+						}
+					});
+					for (const fn of listeners) fn();
+				}}
+			>
+				select
+			</button>
+		</>
 	)
 }));
 
@@ -148,7 +178,8 @@ function openNote(state?: unknown) {
 		[
 			{ path: '/notes', element: <p>notes list</p> },
 			{ path: '/notes/:id', element: <NoteEditorPage /> },
-			{ path: '/elsewhere', element: <p>elsewhere</p> }
+			{ path: '/elsewhere', element: <p>elsewhere</p> },
+			{ path: '/', element: <p>new chat</p> }
 		],
 		{ initialEntries: [{ pathname: '/notes/n1', state }] }
 	);
@@ -347,6 +378,36 @@ describe('the note page', () => {
 		fireEvent.click(await screen.findByRole('button', { name: 'Delete note' }));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Couldn't delete the note.", expect.anything()));
 		expect(router.state.location.pathname).toBe('/notes/n1');
+	});
+
+	it('asks about the note in a new chat from its menu, with the note in the URL and no draft (#1135)', async () => {
+		vi.mocked(getNoteById).mockResolvedValue(stored({ title: 'Plan' }));
+		const router = openNote();
+		await screen.findByDisplayValue('Plan');
+		openMenu();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Ask in a new chat' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+		expect(router.state.location.search).toBe('?note=n1');
+		expect(router.state.location.state).toBeNull();
+	});
+
+	it('offers Explain in a new chat only with a selection, quoting it in the navigation state (#1135)', async () => {
+		vi.mocked(getNoteById).mockResolvedValue(stored({ title: 'Plan' }));
+		const router = openNote();
+		await screen.findByDisplayValue('Plan');
+		openMenu();
+		const item = await screen.findByRole('menuitem', { name: 'Explain in a new chat' });
+		expect(item).toHaveAttribute('aria-disabled', 'true');
+		fireEvent.keyDown(item, { key: 'Escape' });
+
+		editor.selected = true;
+		fireEvent.click(screen.getByRole('button', { name: 'select' }));
+		openMenu();
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Explain in a new chat' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+		expect(router.state.location.search).toBe('?note=n1');
+		expect(router.state.location.state).toEqual({ draft: '> one\n> two **x**\n\nExplain this.' });
+		editor.selected = false;
 	});
 
 	it('offers Access only where there is someone to share with (WRD-4)', async () => {

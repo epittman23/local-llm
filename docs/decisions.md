@@ -7,6 +7,19 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-25** (latest): **Notes and chat now connect in three ways (#1135).**
+  Chat could attach a note as context, but a note had no way into a chat and a
+  reply had no way into a note; this was the follow-up the owner chose for #1039
+  (S6-D5, 2026-11-16).
+  - **Ask in a new chat** (a note's menu) opens a new chat with the note
+    attached, through a `?note=<id>` parameter on the new-chat page.
+  - **Save to note** (a reply's More actions menu) writes the reply as Markdown
+    into a new note or at the end of an existing one the user can write to.
+  - **Explain in a new chat** (the editor's note menu, with text selected)
+    opens a chat with the note attached and the selection quoted in the
+    composer.
+  - **Why:** they are frontend work over the existing endpoints, and keep
+    notes and the assistant's context one step apart.
 - **2026-11-20** (latest): **The first pre-screen ran on the GPU (`qwen38`), and
   the profile stays as it is.** The owner ran it from Benchmarks > Pre-screen
   on the RTX 3060 Laptop with llama.cpp build 11875.

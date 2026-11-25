@@ -7,6 +7,7 @@ import {
 	RotateCcw,
 	Send,
 	Sparkles,
+	StickyNote,
 	ThumbsDown,
 	ThumbsUp,
 	Trash2,
@@ -28,8 +29,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { canUseFeature } from '@/lib/access/features';
 import type { FeedbackDetails } from '@/lib/chat/feedback';
-import { canContinue, type History, type Message, siblingsOf } from '@/lib/chat/history';
+import { canContinue, type History, type Message, siblingsOf, visibleText } from '@/lib/chat/history';
 import { canChat } from '@/lib/chat/permissions';
 import { isTemporaryChatId } from '@/lib/chat/request';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -37,12 +39,15 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import type { ExtraActionsContext, MessageHandlers } from './ChatMessages';
 import { GenerationInfo } from './GenerationInfo';
+import { SaveToNoteDialog } from './SaveToNoteDialog';
 import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
 import { useReadAloud } from './useReadAloud';
 
 type Session = {
 	chatId: string | null;
+	/** The chat's title, which a reply saved to a new note starts from. */
+	title?: string;
 	history: History;
 	editMessage: (m: Message, content: string, mode: 'save' | 'resend' | 'copy') => Promise<void>;
 	removeMessage: (m: Message) => Promise<void>;
@@ -249,6 +254,9 @@ export function useMessageActions(
 	// The thumb last pressed: it shows the spinner while its reply's rating is saved (ACT-5).
 	const [pressedThumb, setPressedThumb] = useState<{ id: string; value: 1 | -1 } | null>(null);
 	const [deleting, setDeleting] = useState<Message | null>(null);
+	const [savingToNote, setSavingToNote] = useState<Message | null>(null);
+	const config = useConfigStore((s) => s.config);
+	const notesEnabled = canUseFeature('notes', user, config);
 	const { speakingId, speak, stop } = useReadAloud();
 	const saved = Boolean(session.chatId) && !isTemporaryChatId(session.chatId);
 	const prefs = useChatPrefs();
@@ -291,6 +299,16 @@ export function useMessageActions(
 					? 'This reply and everything after it are deleted.'
 					: 'This message and the replies under it are deleted.'}
 			</ConfirmDialog>
+		);
+
+	const saveToNoteDialog = (m: Message) =>
+		savingToNote?.id === m.id && (
+			<SaveToNoteDialog
+				open
+				onOpenChange={(o) => !o && setSavingToNote(null)}
+				markdown={visibleText(m)}
+				chatTitle={session.title ?? ''}
+			/>
 		);
 
 	const extraActions = (m: Message, { isLast, errorOnly = false, cutOff = false }: ExtraActionsContext) => {
@@ -378,7 +396,8 @@ export function useMessageActions(
 		const tts = !errorOnly && canChat(user, 'tts');
 		const canContinueHere = isLast && !cutOff && canContinue(m) && canChat(user, 'continue_response');
 		const actions = models.find((x) => x.id === m.model)?.actions ?? [];
-		const menu = canEdit || tts || canContinueHere || actions.length > 0 || canDelete;
+		const canSave = notesEnabled && !errorOnly && Boolean(visibleText(m));
+		const menu = canEdit || tts || canContinueHere || canSave || actions.length > 0 || canDelete;
 		return (
 			<>
 				{rates && (
@@ -441,6 +460,12 @@ export function useMessageActions(
 									Continue
 								</DropdownMenuItem>
 							)}
+							{canSave && (
+								<DropdownMenuItem onSelect={() => setSavingToNote(m)}>
+									<StickyNote aria-hidden />
+									Save to note
+								</DropdownMenuItem>
+							)}
 							{/* The model's Action functions (ResponseMessage.svelte; docs/history/code-review.md M6). */}
 							{actions.map((action) => (
 								<DropdownMenuItem key={action.id} onSelect={() => void session.runAction(action.id, m)}>
@@ -457,7 +482,9 @@ export function useMessageActions(
 									{action.name}
 								</DropdownMenuItem>
 							))}
-							{canDelete && (canEdit || tts || canContinueHere || actions.length > 0) && <DropdownMenuSeparator />}
+							{canDelete && (canEdit || tts || canContinueHere || canSave || actions.length > 0) && (
+								<DropdownMenuSeparator />
+							)}
 							{canDelete && (
 								<DropdownMenuItem variant="destructive" onSelect={() => setDeleting(m)}>
 									<Trash2 aria-hidden />
@@ -468,6 +495,7 @@ export function useMessageActions(
 					</DropdownMenu>
 				)}
 				{deleteDialog(m)}
+				{saveToNoteDialog(m)}
 			</>
 		);
 	};

@@ -41,7 +41,8 @@ const open = (entry: string) => {
 		[
 			{ path: '/notes', element: <NotesPage /> },
 			{ path: '/notes/new', element: <NewNotePage /> },
-			{ path: '/notes/:id', element: <NoteProbe /> }
+			{ path: '/notes/:id', element: <NoteProbe /> },
+			{ path: '/', element: <p>new chat</p> }
 		],
 		{ initialEntries: [entry] }
 	);
@@ -153,6 +154,16 @@ describe('the Notes list (#1036, #1073, #963, #1037)', () => {
 		expect(pinned).toHaveTextContent('Log');
 		expect(screen.getByRole('region', { name: 'Today' })).not.toHaveTextContent('Log');
 		expect(screen.getAllByRole('img', { name: 'Pinned' })).toHaveLength(1);
+	});
+
+	it('asks about a note in a new chat from its row menu (#1135)', async () => {
+		vi.mocked(searchNotes).mockResolvedValue({ items: [item('a', 'Plan')], total: 1 });
+		const router = open('/notes');
+		await screen.findByText('Plan');
+		openMenu('Plan');
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Ask in a new chat' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+		expect(router.state.location.search).toBe('?note=a');
 	});
 
 	it('opens a note from its row', async () => {
