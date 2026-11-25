@@ -17,7 +17,7 @@ import { ProfileAvatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RowButton } from '@/components/ui/row-button';
-import { type CanvasDocument, messageDocuments } from '@/lib/chat/documents';
+import { type CanvasDocument, messageDocuments, UUID } from '@/lib/chat/documents';
 import type { CodeRunner } from '@/lib/chat/codeRun';
 import {
 	canContinue,
@@ -163,16 +163,15 @@ function Attachment({
 	const doc = f.id ? documents.find((d) => d.id === f.id) : undefined;
 	const open = doc && canvas ? () => canvas.open(doc.id) : undefined;
 	const current = doc && canvas?.openId === doc.id ? 'true' : undefined;
-	if (f.type === 'image' || (f.content_type ?? '').startsWith('image/')) {
-		const picture = (
-			<img
-				src={
-					f.url?.startsWith('data') || f.url?.startsWith('http') ? f.url : `${WEBUI_API_BASE_URL}/files/${f.id}/content`
-				}
-				alt={f.name ?? ''}
-				className="max-h-60 rounded-xl"
-			/>
-		);
+	// An image is shown from this server or inline data only: a URL in a message's files (an imported chat)
+	// must not make the page load a third party's image. Anything else falls through to a chip.
+	const imageSrc = f.url?.startsWith('data:image/')
+		? f.url
+		: typeof f.id === 'string' && UUID.test(f.id)
+			? `${WEBUI_API_BASE_URL}/files/${encodeURIComponent(f.id)}/content`
+			: null;
+	if ((f.type === 'image' || (f.content_type ?? '').startsWith('image/')) && imageSrc) {
+		const picture = <img src={imageSrc} alt={f.name ?? ''} className="max-h-60 rounded-xl" />;
 		return open ? (
 			<RowButton
 				className="w-auto shrink-0 rounded-xl"

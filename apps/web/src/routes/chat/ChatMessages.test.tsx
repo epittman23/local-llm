@@ -343,4 +343,31 @@ describe('documents in the chat (canvas)', () => {
 		expect(screen.getByAltText('pasted.png')).toBeTruthy();
 		expect(screen.queryByRole('button', { name: /Open pasted/ })).toBeNull();
 	});
+
+	it("never loads an attachment's picture from another site or an id that is not a file's", () => {
+		const ask: Message = {
+			id: 'u2',
+			parentId: null,
+			childrenIds: [],
+			role: 'user',
+			content: 'look',
+			done: true,
+			files: [
+				{ type: 'image', url: 'https://tracker.example/pixel.png', name: 'remote.png' },
+				{ type: 'image', id: '../../users/me', name: 'odd.png' },
+				{ type: 'image', id: fileId(4), url: 'https://tracker.example/x.png', name: 'mine.png' }
+			]
+		};
+		render(
+			wrap(
+				<CanvasContext.Provider value={{ openId: null, open }}>
+					<ChatMessages history={{ messages: { u2: ask }, currentId: 'u2' }} h={handlers()} chatId="c1" />
+				</CanvasContext.Provider>
+			)
+		);
+		expect(screen.queryByAltText('remote.png')).toBeNull();
+		expect(screen.queryByAltText('odd.png')).toBeNull();
+		expect(screen.getByAltText('mine.png').getAttribute('src')).toMatch(new RegExp(`/files/${fileId(4)}/content$`));
+		expect(screen.getByText('remote.png')).toBeTruthy();
+	});
 });
