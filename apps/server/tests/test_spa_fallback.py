@@ -48,6 +48,11 @@ def test_an_unknown_backend_path_is_a_json_404(client: TestClient, path: str) ->
     assert response.json() == {'detail': 'Not Found'}
 
 
+def test_a_head_request_for_an_unknown_backend_path_is_a_404(client: TestClient) -> None:
+    assert client.head('/api/v1/no-such-route').status_code == 404
+    assert client.head('/workspace/models').status_code == 200
+
+
 @pytest.mark.parametrize('path', ['/workspace/models', '/admin/settings/connections', '/c/123', '/'])
 def test_an_app_page_is_the_web_app(client: TestClient, path: str) -> None:
     response = client.get(path)

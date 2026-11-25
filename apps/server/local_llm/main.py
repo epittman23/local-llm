@@ -336,6 +336,7 @@ class SPAStaticFiles(StaticFiles):
         routes = getattr(getattr(app, 'router', None), 'routes', None)
         if routes is None:
             return False
+        # Routes are all registered before the app serves; the count only guards a test app built up later.
         cached = getattr(app.state, '_backend_path_segments', None)
         if cached is None or cached[0] != len(routes):
             cached = (len(routes), backend_path_segments(routes))
