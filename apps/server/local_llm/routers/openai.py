@@ -689,7 +689,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
 
             raise HTTPException(
                 status_code=_upstream_error_status(r),
-                detail=detail if detail else 'Local LLM: Server Connection Error',
+                detail=detail if detail else ERROR_MESSAGES.SERVER_CONNECTION_ERROR,
             )
 
     except ValueError:
@@ -942,7 +942,7 @@ async def get_models(request: Request, url_idx: int | None = None, user=Depends(
             except aiohttp.ClientError as e:
                 # ClientError covers all aiohttp requests issues
                 log.exception(f'Client error: {str(e)}')
-                raise HTTPException(status_code=500, detail='Local LLM: Server Connection Error')
+                raise HTTPException(status_code=500, detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR)
             except Exception as e:
                 log.exception(f'Unexpected error: {e}')
                 error_detail = f'Unexpected error: {str(e)}'
@@ -2221,7 +2221,7 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
         log.exception(e)
         raise HTTPException(
             status_code=_upstream_error_status(r),
-            detail='Local LLM: Server Connection Error',
+            detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR,
         )
     finally:
         if not streaming:

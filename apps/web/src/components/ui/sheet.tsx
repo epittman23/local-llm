@@ -6,6 +6,7 @@ import { Dialog as SheetPrimitive } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
 import { XIcon } from 'lucide-react';
+import { toastSafeOutside } from '@/components/ui/toastOutside';
 import { useReturnFocus } from '@/lib/ui/returnFocus';
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -44,6 +45,9 @@ function SheetContent({
 	showCloseButton = true,
 	onOpenAutoFocus,
 	onCloseAutoFocus,
+	onPointerDownOutside,
+	onInteractOutside,
+	onFocusOutside,
 	...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
 	side?: 'top' | 'right' | 'bottom' | 'left';
@@ -61,6 +65,7 @@ function SheetContent({
 					className
 				)}
 				{...props}
+				{...toastSafeOutside(onPointerDownOutside, onInteractOutside, onFocusOutside)}
 				{...returnFocus}
 			>
 				{children}

@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Download, LayoutGrid, Link2, List, MoreHorizontal, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Download, LayoutGrid, Link2, List, MessageSquare, MoreHorizontal, Pin, PinOff, Trash2 } from 'lucide-react';
 import { type DragEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { useSingleUser } from '@/routes/workspace/workspaceAccess';
+import { askAboutNote } from './noteChat';
 import {
 	contentFromMarkdown,
 	fullTime,
@@ -138,7 +139,7 @@ function Notes() {
 	const pinnedIds = new Set(pinnedItems.map((n) => n.id));
 	// A failed first page is shown in place of the list (STA-4); a failed later
 	// page leaves the notes already shown alone.
-	const failed = list.data === undefined && (list.isError || list.isPaused);
+	const failed = list.data === undefined && list.isError;
 	const seen = new Set<string>();
 	const items: NoteListItem[] = (list.data?.pages ?? [])
 		.flatMap((p) => p.items ?? [])
@@ -245,7 +246,11 @@ function Notes() {
 						</Button>
 					</DropdownMenuTrigger>
 				</Tip>
-				<DropdownMenuContent align="end" className="min-w-44">
+				<DropdownMenuContent align="end" className="min-w-52">
+					<DropdownMenuItem onSelect={() => navigate(askAboutNote(n.id).to)}>
+						<MessageSquare /> Ask in a new chat
+					</DropdownMenuItem>
+					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={() => download(n, 'md')}>
 						<Download /> Download (.md)
 					</DropdownMenuItem>

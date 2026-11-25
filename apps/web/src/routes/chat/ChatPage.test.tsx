@@ -1,20 +1,25 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellBarSlotContext } from '@/components/layout/ShellBarSlot';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getChatById } from '@/lib/apis/chats';
 import { getFolderById } from '@/lib/apis/folders';
+import { getNoteById } from '@/lib/apis/notes';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { usePageTitleStore } from '@/lib/ui/pageTitle';
 import { ChatPage } from './ChatPage';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), warning: vi.fn() }) }));
+const modelsState = vi.hoisted(() => ({ ready: true }));
+const MODELS = vi.hoisted(() => [{ id: 'm1', name: 'Model One' }]);
 vi.mock('./useModels', () => ({
-	useModels: () => ({ models: [{ id: 'm1', name: 'Model One' }], loaded: true, failed: false })
+	useModels: () => ({ models: modelsState.ready ? MODELS : [], loaded: modelsState.ready, failed: false })
 }));
 vi.mock('./ChatControls', () => ({ ChatControls: () => <div data-testid="controls-panel" /> }));
 vi.mock('@/lib/settings/userSettings', () => ({
@@ -31,6 +36,7 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 	getTagsById: vi.fn(async () => [])
 }));
 vi.mock('@/lib/apis/folders', async (orig) => ({ ...(await orig<object>()), getFolderById: vi.fn() }));
+vi.mock('@/lib/apis/notes', async (orig) => ({ ...(await orig<object>()), getNoteById: vi.fn() }));
 
 function show() {
 	render(
@@ -323,5 +329,118 @@ describe('ChatPage: a folder’s page (#998)', () => {
 		await waitFor(() => expect(usePageTitleStore.getState().dynamic).toBe('Statistics'));
 		expect(screen.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'New chat in Statistics');
 		expect(screen.queryByTestId('chat-folder')).toBeNull();
+	});
+});
+
+/** The new-chat page at `entry`, with the URL and navigation state it ends up with shown. */
+function Probe() {
+	const { search, state } = useLocation();
+	return <div data-testid="probe">{JSON.stringify({ search, state })}</div>;
+}
+function showNewChat(entry: string | { pathname: string; search: string; state: unknown }) {
+	render(
+		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+			<TooltipProvider>
+				<MemoryRouter initialEntries={[entry]}>
+					<Probe />
+					<Routes>
+						<Route path="/" element={<ChatPage />} />
+					</Routes>
+				</MemoryRouter>
+			</TooltipProvider>
+		</QueryClientProvider>
+	);
+}
+
+describe('ChatPage: ?note=<id> (#1135)', () => {
+	const NOTE = { id: 'n1', title: 'Study plan', data: { content: { md: 'Week 1' } } };
+	const notes = (on: boolean) => useConfigStore.setState({ config: { features: { enable_notes: on } } } as never);
+	afterEach(() => {
+		useConfigStore.setState({ config: null } as never);
+		vi.clearAllMocks();
+	});
+
+	it('attaches the note as Attach notes does, and takes the parameter out of the URL', async () => {
+		notes(true);
+		vi.mocked(getNoteById).mockResolvedValue(NOTE as never);
+		showNewChat('/?note=n1');
+		expect(await screen.findByRole('button', { name: 'Remove Study plan' })).toBeInTheDocument();
+		expect(getNoteById).toHaveBeenCalledWith('t', 'n1');
+		await waitFor(() => expect(screen.getByTestId('probe').textContent).not.toContain('note='));
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('says so, and attaches nothing, when the note is gone or cannot be read (FBK-4)', async () => {
+		notes(true);
+		vi.mocked(getNoteById).mockRejectedValue('We could not find what you are looking for');
+		showNewChat('/?note=gone');
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith(
+				"Couldn't attach the note. It may have been deleted, or you may not have access to it.",
+				expect.anything()
+			)
+		);
+		expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+		await waitFor(() => expect(screen.getByTestId('probe').textContent).not.toContain('note='));
+	});
+
+	it('ignores the parameter where notes are off', async () => {
+		notes(false);
+		showNewChat('/?note=n1');
+		await screen.findByRole('textbox', { name: 'Message' });
+		expect(getNoteById).not.toHaveBeenCalled();
+		expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('keeps the quoted draft until the models are in, then puts it in the box once', async () => {
+		notes(true);
+		modelsState.ready = false;
+		vi.mocked(getNoteById).mockResolvedValue(NOTE as never);
+		showNewChat({ pathname: '/', search: '?note=n1', state: { draft: '> a\n\nExplain this.' } });
+		const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLTextAreaElement;
+		await screen.findByRole('button', { name: 'Remove Study plan' });
+		expect(box.value).toBe('');
+		modelsState.ready = true;
+		// Any render of the page lets it see the models.
+		fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+		await waitFor(() => expect(box.value).toBe('> a\n\nExplain this.'));
+		fireEvent.change(box, { target: { value: 'mine' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+		expect(box.value).toBe('mine');
+		modelsState.ready = true;
+	});
+
+	it('only drops the parameter on a saved chat, attaching nothing', async () => {
+		notes(true);
+		vi.mocked(getChatById).mockResolvedValueOnce(SAVED as never);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<MemoryRouter initialEntries={['/c/c1?note=n1']}>
+						<Probe />
+						<Routes>
+							<Route path="/c/:id" element={<ChatPage />} />
+						</Routes>
+					</MemoryRouter>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		await waitFor(() => expect(screen.getByTestId('probe').textContent).not.toContain('note='));
+		await screen.findByRole('button', { name: 'Chat title: Arithmetic. Rename' });
+		expect(getNoteById).not.toHaveBeenCalled();
+		expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+	});
+
+	it('starts the composer from the quoted selection in the navigation state, once, and clears the state', async () => {
+		notes(true);
+		vi.mocked(getNoteById).mockResolvedValue(NOTE as never);
+		showNewChat({ pathname: '/', search: '?note=n1', state: { draft: '> a\n> b\n\nExplain this.' } });
+		const box = (await screen.findByRole('textbox', { name: 'Message' })) as HTMLTextAreaElement;
+		await waitFor(() => expect(box.value).toBe('> a\n> b\n\nExplain this.'));
+		expect(await screen.findByRole('button', { name: 'Remove Study plan' })).toBeInTheDocument();
+		await waitFor(() =>
+			expect(screen.getByTestId('probe').textContent).toBe(JSON.stringify({ search: '', state: null }))
+		);
 	});
 });

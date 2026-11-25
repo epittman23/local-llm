@@ -6,6 +6,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui';
 
 import { Button } from '@/components/ui/button';
 import { XIcon } from 'lucide-react';
+import { toastSafeOutside } from '@/components/ui/toastOutside';
 import { useReturnFocus } from '@/lib/ui/returnFocus';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -53,6 +54,9 @@ function DialogContent({
 	showCloseButton = true,
 	onOpenAutoFocus,
 	onCloseAutoFocus,
+	onPointerDownOutside,
+	onInteractOutside,
+	onFocusOutside,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
 	showCloseButton?: boolean;
@@ -68,6 +72,7 @@ function DialogContent({
 					className
 				)}
 				{...props}
+				{...toastSafeOutside(onPointerDownOutside, onInteractOutside, onFocusOutside)}
 				{...returnFocus}
 			>
 				{children}
