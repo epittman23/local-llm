@@ -341,7 +341,7 @@ def _shrink_only_findings(change: FileChange, read_file: ReadFile) -> list[str]:
             grown = _ui_standard_growth(json.loads(base), json.loads(head or '{}'))
         else:
             grown = _counts_growth(json.loads(base)['counts'], json.loads(head or '{}').get('counts', {}))
-    except (ValueError, KeyError, TypeError) as exc:
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
         return [f'`{path}`: could not be read to compare it with the base ({exc}).']
     if not grown:
         return []

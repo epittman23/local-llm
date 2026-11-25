@@ -337,6 +337,16 @@ class ShrinkOnlyTests(unittest.TestCase):
         self.assertTrue(self.check(self.UI, base, self.ui(exceptions=[{**one, 'count': 3}])))
         self.assertTrue(self.check(self.UI, base, self.ui(exceptions=[one, {**one, 'file': 'b.tsx'}])))
 
+    def test_a_malformed_ui_baseline_is_a_finding_not_a_crash(self):
+        base = self.ui(counts={'raw-button': {'a.tsx': 2}})
+        for head in ('[]', '"x"', json.dumps({'counts': [1]}), json.dumps({'exceptions': [1]})):
+            self.assertTrue(self.check(self.UI, base, head), head)
+
+    def test_a_count_under_a_pattern_the_list_does_not_name_cannot_grow(self):
+        base = self.ui(counts={'raw-button': {'a.tsx': 2}})
+        head = self.ui(counts={'raw-button': {'a.tsx': 2}, 'unlisted': {'b.tsx': 1}})
+        self.assertTrue(self.check(self.UI, base, head))
+
     def test_adding_or_removing_a_baseline_trips(self):
         path = 'apps/web/biome-baseline.json'
         self.assertTrue(self.check(path, None, self.counts(), status='added'))
