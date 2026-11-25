@@ -7,6 +7,32 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-25** (latest): **Canvas Phase 2 built: the viewer beside the chat.**
+  A file or a page of HTML a model provides is a card in the reply that opens
+  in the canvas (`docs/plans/canvas.md`; the owner's decisions 1, 3, 4 and 5
+  of 2026-11-14 apply as written).
+  - **Documents.** Sandbox outputs, uploads, fenced `html` and `svg` blocks
+    that are complete or over 15 lines, and (opened from a button) any other
+    fenced block of over 15 lines are documents. The open one is in the URL
+    as `?canvas=<file-id>` or `?canvas=block:<message>:<n>`. `ArtifactPanel`
+    and `SandboxOutputs` are gone, with the Preview button.
+  - **One frame.** Every HTML preview is a frame with `allow-scripts` and
+    nothing else, so a form submission, `alert`, `confirm` and `prompt` stop
+    working. A fenced block's page now also runs under the same
+    content-security policy as a sandbox output, prepended in the browser, so
+    a preview loads nothing from the network: a page that takes a script,
+    style or font from a CDN renders without it. The orchestrating session
+    chose this on 2026-11-25 for safety; relaxing it is a possible follow-up.
+  - **Settings.** The five unported Artifacts settings (`detectArtifacts` and
+    the four `iframeSandboxAllow*`) are removed; one `canvasAutoOpen` setting
+    in Settings > Interface replaces them.
+  - **The prompt.** The system prompt gains one line saying previews run
+    scripts but do not submit forms or show dialogs. The benchmark's copy,
+    `benchmarks/data/prompts/assistant.txt`, changed with it, so runs made
+    after this date carry a new system-prompt sha and are not comparable with
+    earlier ones. The owner adds the same line to each Workspace > Models
+    entry's system prompt in the app; that is not a repo change.
+  - **Next.** Phase 3, the text editor.
 - **2026-11-20** (latest): **The first pre-screen ran on the GPU (`qwen38`), and
   the profile stays as it is.** The owner ran it from Benchmarks > Pre-screen
   on the RTX 3060 Laptop with llama.cpp build 11875.

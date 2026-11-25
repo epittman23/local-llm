@@ -10,7 +10,7 @@ eight, and so that two pages doing the same job look and behave the same.
   sections lists the rules it shows; rules about whole pages, words and
   behaviour over time (for example NAV-1 and most WRD rules) are not
   shown there and are checked on the page being changed. Its Canvas section
-  shows a design whose first phase, the side panel, is built and the rest
+  shows a design whose viewer (Phases 1 and 2) is built and whose editor is
   planned (see "Canvas").
 - **Tokens:** `apps/web/src/styles/standard.css`.
 - **Automated checks:** `apps/web/src/styles/standard.contrast.test.ts`
@@ -876,7 +876,8 @@ with no background of its own assumes white, and a dark one would put its
 black text on dark. The white is the page's, so it is framed (an edge, the
 themed surround) and never fills a panel edge to edge. A generated raster
 figure (a benchmark report's plots) is drawn per theme by the server; one
-made before that sits framed the same way (COL-6).
+made before that sits framed the same way (COL-6). An HTML preview loads nothing from the
+network (CNV-5).
 
 **CNT-5. A reply shows its steps where they happened.** Between the texts a
 model writes, each step it took (a thought, a command, a file written, a
@@ -904,8 +905,8 @@ settled, neither exception is part of the standard.
 The panel beside a chat that shows a document: a file the model produced, a
 page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
 decided. Phase 1, the side-panel shell (`components/layout/SidePanel.tsx`),
-is built and holds Controls and the code-block preview; the canvas itself
-(Phases 2 and 3) is not built.** Its plan is
+and Phase 2, the viewer (`routes/chat/canvas/`), are built; editing (Phase
+3, CNV-6) is not, and `/ui` mocks it.** Its plan is
 [docs/plans/canvas.md](../plans/canvas.md).
 
 **CNV-1. What a model provides is a card in the reply and a document in the
@@ -926,8 +927,10 @@ rail, or at 1024 px, a column). Each occupant has its own default and
 minimum width, remembered per occupant: Controls 20 rem (minimum 18 rem),
 the preview 28 rem (minimum 20 rem). The separator takes a pointer drag,
 ArrowLeft and ArrowRight (16 px, 64 px with Shift), Home for the widest and
-End for the narrowest, and states its width. Starting at half the space is
-the Phase 2 canvas's default.
+End for the narrowest, and states its width. The canvas starts at half the space (`SidePanel`'s `defaultWidth`
+takes a function of the space), and its Expand button gives it all the space
+beside the sidebar (`expanded`, which has no separator; the chat stays
+mounted, hidden). `focusOnOpen` is false when the canvas opens by itself.
 
 **CNV-3. One header, the same for every kind**, left to right: the Preview /
 Source switch when the kind has both; the document's name and kind; then the
@@ -937,7 +940,7 @@ name (ACT-4). Below `md` everything but the switch and Close folds into one
 menu.
 
 **CNV-4. A kind has one renderer**, the same one wherever that kind is shown.
-A page of HTML, and an `svg` code block: a sandboxed frame. Markdown: the
+A page of HTML, and an `svg` code block: a sandboxed frame that loads nothing from the network (CNV-5). Markdown: the
 chat's rendering, at reading width (TYP-5). Text and code: the standard's code block with line numbers
 (CNT-2). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
 included, always as an image) and PDF: fitted to the canvas. Anything else: its name, its size and a Download button.
@@ -947,7 +950,11 @@ themed surround.** The frame has `allow-scripts` and nothing else, is filled
 through `srcdoc`, and is never a `blob:` URL or a new window. The surround is
 `--surface-1` with an edge and is what shows before the page paints; it is
 never white in dark. The page's own colours are the page's business and are
-not altered.
+not altered. The page runs under a content-security policy (a sandbox output
+gets it from the server, a fenced block in the browser through
+`lib/chat/htmlPolicy.ts`), so a preview loads nothing from the network: a CDN
+script, style or font does not arrive, and a form, `alert`, `confirm` or
+`prompt` does nothing.
 
 **CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
 document, then a bar with "Unsaved changes", Discard changes and Save

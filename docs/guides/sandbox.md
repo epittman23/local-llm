@@ -1035,38 +1035,48 @@ one.
 
 ### On the reply
 
-`apps/web/src/components/chat/SandboxOutputs.tsx`, rendered by
-`ResponseMessage` (`routes/chat/ChatMessages.tsx`), shows the message's
-files whose `meta.source` is `sandbox_output` and whose id is a UUID (the
-only id it puts into a URL), each under its `name`, which the server
-cleaned of control and format characters (never the raw `sandbox_path`),
-with a download link (`/content?attachment=true`). An entry of the wrong
-shape (from a plugin's event or an imported chat) is skipped. It picks a
-renderer by the name's extension, then by `meta.content_type`:
-- PNG, JPEG and SVG: an `<img>` of `/content`, never inline SVG. An SVG
-  shows only because the route keeps its `image/svg+xml` type
+The reply shows a card per file (`routes/chat/canvas/DocumentCard.tsx`,
+rendered by `ResponseMessage` in `routes/chat/ChatMessages.tsx`): its icon,
+`name`, kind and size; an image also keeps a thumbnail. A card is a button
+that opens the file in the canvas (`routes/chat/canvas/`), which holds the
+renderers; nothing is rendered inline on the reply. `lib/chat/documents.ts`
+lists a message's documents: the files whose `meta.source` is
+`sandbox_output` and whose id is a UUID (the only id it puts into a URL),
+each under its `name`, which the server cleaned of control and format
+characters (never the raw `sandbox_path`), with a download link
+(`/content?attachment=true`). An entry of the wrong shape (from a plugin's
+event or an imported chat) is skipped. A document's view is picked by the
+name's extension, then by `content_type` (the file's own, then
+`meta.content_type`):
+- PNG, JPEG, GIF, WebP and SVG: an `<img>` of `/content`, never inline SVG.
+  An SVG shows only because the route keeps its `image/svg+xml` type
   (`served_type`); browsers never sniff SVG.
 - HTML: `SandboxedHtmlFrame`, an iframe with `sandbox="allow-scripts"` and
-  nothing else, whose `srcdoc` is the route's `html`. A frame of an opaque
-  origin cannot report its own height, so it starts at 360 px and the user
-  sets it: by dragging its corner, or with the Taller and Shorter buttons,
-  which work from the keyboard and announce the new height. An Enlarge
-  button shows the same component, with the same document, in a dialog.
-  Never a `blob:` URL or a new window. It does not reuse `ArtifactPanel`'s
-  frame, whose flags are wider. A file over 5 MiB, or one the route
-  refuses, gets a note instead.
+  nothing else, whose `srcdoc` is the route's `html`, filling the canvas
+  and sitting on the theme's surface. Never a `blob:` URL or a new window.
+  A file over 5 MiB, or one the route refuses, gets a note instead.
 - PDF: the preview PNGs (`meta.preview_of`), in `meta.preview_page` order.
-- `.tex`, `.py`, `.R`, `.json`, `.md`, `.txt`, `.log` and `text/plain`: the
-  chat's code-block renderer, highlighted, with no Run or Preview button.
-  Only the first 256 KiB is fetched. Registering LaTeX for `.tex` also
-  highlights ```` ```latex ```` blocks in replies, and puts LaTeX among the
-  languages an unlabelled code block is auto-detected as, so a block of
-  math with no language can now highlight as LaTeX.
+- `.tex`, `.py`, `.R`, `.json`, `.md`, `.txt`, `.log` and `text/plain`, and
+  a modest map of other code extensions: the Source view (the highlighted,
+  line-numbered `components/chat/CodeSurface.tsx`; past 2,000 lines without
+  per-line highlighting); a `.md` file also has a Preview, rendered with the
+  chat's renderer. Only the first 256 KiB is fetched. Registering LaTeX for
+  `.tex` also highlights ```` ```latex ```` blocks in replies, and puts LaTeX
+  among the languages an unlabelled code block is auto-detected as, so a
+  block of math with no language can now highlight as LaTeX.
 - CSV: a table of the first 200 rows, from at most 1 MiB, its first row as
   the header. A row is at most 50 columns and a cell 1,000 characters, so a
   file of nothing but commas stays a small table; a row the 1 MiB cut short
   is left out, and a note says what was cut.
-- Anything else: the download link alone.
+- Anything else: the name, size and a download link alone.
+
+A fenced `html` or `svg` code block of a reply (a complete document, or
+over 15 lines) is a canvas document too, with the same frame. Its text is
+already in the browser, so the same content-security policy is prepended
+there, as a `<meta>`, by `lib/chat/htmlPolicy.ts`; a Vitest test compares
+that text with the server's `HTML_POLICY`. The consequence: a preview loads
+nothing from the network (no CDN script, style, font or image), and forms,
+`alert`, `confirm` and `prompt` do nothing, as for an output.
 
 A fetch stops when the reply leaves the page (React Query's abort signal).
 
@@ -1079,12 +1089,13 @@ entry unless an identical one is there; every sender re-sends identical
 entries, so a reload shows the same list. An unsaved chat's earlier outputs
 stay when a later call sends only its new ones.
 
-`SandboxOutputs.test.tsx` checks each renderer, the frame's exact `sandbox`
-attribute and the dialog's reuse of it, the height controls, the caps and
-malformed entries; `e2e/sandbox-outputs.spec.ts` shows a reply's outputs in
-Chromium with mocked routes that send T17's headers (an SVG among them),
-and checks that the frame's script runs but reaches neither the page nor
-its cookies.
+The canvas's Vitest files (`routes/chat/canvas/`, `lib/chat/documents.test.ts`
+and `htmlPolicy.test.ts`) check each view, the frame's exact `sandbox`
+attribute, the caps, malformed entries and the policy's parity with the
+server's; `e2e/sandbox-outputs.spec.ts` opens a reply's outputs in the
+canvas in Chromium with mocked routes that send T17's headers (an SVG among
+them), and checks that the frame's script runs but reaches neither the page
+nor its cookies.
 
 **What the frame can still send out.** The policy blocks fetches, images,
 fonts and form posts, but the frame's script is not cut off from the
@@ -1108,7 +1119,7 @@ network:
   sub-frame showing `about:srcdoc` or `about:blank` go only to another of
   those, unless the app's own page starts the navigation (an iframe's `src`
   loading), and refuses a navigation it cannot check. It covers every such
-  frame, so the chat's artifact preview cannot navigate itself away in the
+  frame, so the canvas's frame cannot navigate itself away in the
   desktop app either. It stops navigation only, not WebRTC.
 
 `tests/test_sandbox_outputs.py` runs everywhere. It covers:
@@ -1177,7 +1188,7 @@ caps as `bash` (Q25), so the next `bash` call never attaches them again.
   sends the block with its chat's id. The block's stdout, stderr and result, an error (the endpoint's refusal, or
   the sandbox's own failure), a non-zero exit code, a note when the output
   was cut, and the files the run left in `/workspace/outputs` (as
-  `SandboxOutputs` shows a reply's) appear under the block until it is
+  the canvas shows a reply's, but as a small list in `CodeBlock`, not cards) appear under the block until it is
   closed; they are not saved with the chat, so a reload, or a chat reload
   while the run is in flight, loses them. A screen reader hears only the
   run's status.

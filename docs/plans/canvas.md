@@ -1,7 +1,9 @@
 # Canvas: a document viewer and text editor beside the chat
 
-> **Status: Phase 1 built (2026-11-15, #1129): `SidePanel` holds Controls
-> and the preview; Phases 2-3 planned.** The interface design is shown on
+> **Status: Phases 1 and 2 built (Phase 1 2026-11-15, #1129; Phase 2
+> 2026-11-25, this PR): documents a model provides are cards in the reply
+> that open in the canvas, a viewer. Phase 3 (the text editor) is next;
+> Phase 4 is not scheduled.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
 > implementation plan. The owner settled all five of its decisions on
@@ -17,7 +19,10 @@ side panel other assistants have:
 2. When the model's output is HTML, show it in the panel, not inline.
 3. The panel is a viewer and a text editor.
 
-## What exists today
+## What existed before Phase 2
+
+This table describes the code Phase 2 replaced, as the plan was written;
+"Phase 2: what was built" below says what exists now.
 
 | Piece | Where | What it does | What happens to it |
 |---|---|---|---|
@@ -152,14 +157,14 @@ Fixes #901 on its own, before any canvas exists.
   at 390 px (the chat is not squeezed; the sheet closes back to the chat) and
   at 1440 px.
 
-### Phase 2: the canvas as a viewer
+### Phase 2: the canvas as a viewer (built 2026-11-25, this PR)
 
-- **C4.** `lib/chat/documents.ts`: one pure function from a chat's messages to
+- **C4 (done).** `lib/chat/documents.ts`: one pure function from a chat's messages to
   its documents (`{ id, name, kind, bytes, messageId, source }`), covering
   sandbox outputs, uploads and qualifying code blocks (decision 1). `kind`
   comes from the extension, then `meta.content_type`, as `SandboxOutputs`
   does today. Defensive about the shape of `message.files`, as that file is.
-- **C5.** `routes/chat/canvas/`: `Canvas.tsx` (header, modes, file list) and
+- **C5 (done).** `routes/chat/canvas/`: `Canvas.tsx` (header, modes, file list) and
   one renderer per kind, moved out of `SandboxOutputs.tsx` with their limits
   (256 KiB of text, 1 MiB and 200 rows of CSV, 5 MiB of HTML) and their
   fetches. `SandboxedHtmlFrame` is reused as it is; its Taller, Shorter and
@@ -172,21 +177,21 @@ Fixes #901 on its own, before any canvas exists.
   constant so the two cannot drift). HTML the owner uploaded is not
   previewed: it has no route that serves it with the policy, so it gets
   Source and Download only. An SVG file stays an `<img>`.
-- **C6.** The themed surround for a frame (COL-6, CNT-4, #941): the frame sits
+- **C6 (done).** The themed surround for a frame (COL-6, CNT-4, #941): the frame sits
   on `--surface-1` with an edge; before its document paints it shows the
   surface, not white. The document's own background is the document's
   business.
-- **C7.** `DocumentCard` replaces the inline renderers on a reply and the
+- **C7 (done).** `DocumentCard` replaces the inline renderers on a reply and the
   `html`/`svg` blocks that qualify. `Attachments` chips open the canvas.
-- **C8.** `?canvas=` in the URL (`useSearchParams`); a document id that no
+- **C8 (done).** `?canvas=` in the URL (`useSearchParams`); a document id that no
   longer exists shows "This document is no longer in the chat" in the canvas
   (NAV-3).
-- **C9.** Streaming: the "Writing…" card and Source-while-streaming.
-- **C10.** Auto-open and its setting (decision 3), in Settings > Interface,
+- **C9 (done).** Streaming: the "Writing…" card and Source-while-streaming.
+- **C10 (done).** Auto-open and its setting (decision 3), in Settings > Interface,
   replacing the five unported "Artifacts" rows.
-- **C11.** Delete `ArtifactPanel.tsx` and the Preview button's plumbing
+- **C11 (done).** Delete `ArtifactPanel.tsx` and the Preview button's plumbing
   (decision 5).
-- **C11a.** The system prompt line (decision 5), added in the same pull
+- **C11a (done).** The system prompt line (decision 5), added in the same pull
   request as C11, because it is only true once every preview is
   scripts-only:
 
@@ -203,12 +208,57 @@ Fixes #901 on its own, before any canvas exists.
   owner's approval under a `## Gate changes` heading, and benchmark runs
   made after it carry a new system-prompt sha and are not comparable with
   earlier ones.
-- **C12.** Tests: Vitest for `documents.ts` (every kind, hostile shapes,
+- **C12 (done).** Tests: Vitest for `documents.ts` (every kind, hostile shapes,
   branch switches) and each renderer; the existing
   `e2e/sandbox-outputs.spec.ts` cases re-pointed at the canvas, since they
   are the security checks (an HTML output never renders on the app's origin;
   an SVG only as an image); a real-backend run with a sandbox producing an
   HTML file, a CSV and a PDF, because Playwright mocks the backend.
+
+#### Phase 2: what was built
+
+Where the build goes beyond the text above, or settles a point it left open
+(the owner's orchestrator settled these on 2026-11-25):
+
+- **Where it lives.** `lib/chat/documents.ts` (the pure model),
+  `lib/chat/htmlPolicy.ts` (the shared policy), `routes/chat/canvas/` (the
+  panel, cards, `?canvas=` state, auto-open and one view per kind),
+  `components/layout/SidePanel.tsx` (extended: a default width computed from
+  the space, a heading and leading slot, `expanded`, `focusOnOpen`). The
+  Controls occupant is unchanged. `ArtifactPanel`, `SandboxOutputs` and
+  their tests are gone.
+- **SVG blocks.** An `svg` block is complete when it starts with `<svg`
+  (after an optional `<?xml?>`) and ends with `</svg>`, or when it is a
+  complete HTML document; any block of more than 15 lines qualifies.
+- **The policy on fenced blocks.** A fenced block's preview gets the same
+  Content-Security-Policy as a sandbox output (`withHtmlPolicy`), so a
+  preview loads nothing from the network: a page that pulls a script, style
+  or font from a CDN renders without it. A Vitest test keeps the browser's
+  text equal to the server's.
+- **`CodeSurface` moved** from `routes/ui/` to `components/chat/` and is
+  used read-only for Source; `/ui` imports it from there. A source over
+  2,000 lines is shown without per-line highlighting.
+- **Expand** makes the canvas column take all the space beside the sidebar;
+  the chat stays mounted, hidden.
+- **History.** Opening a card and Close push a history entry, so Back
+  closes the canvas; auto-open replaces the entry instead.
+- **"Open in canvas" for long code blocks.** A fenced block of another
+  language of more than 15 lines stays inline as `CodeBlock`, gains an Open
+  in canvas button, and is a document of kind `code` (language from the
+  fence) with Source only. Block ordinals count every fenced code block of
+  a message, of any language, so `block:<message>:<n>` ids stay stable;
+  these blocks do not count toward auto-open, which counts outputs and
+  qualifying html or svg blocks only.
+- **Markdown** documents use the chat's own renderer (`Markdown`), at 72ch.
+- **A Run's output files** (the code interpreter's Run button) show under
+  the block as a small list in `CodeBlock`, not as cards; they are still
+  not saved with the chat.
+- **Extensions widened:** gif and webp as images, `md` as markdown, and a
+  modest map of code extensions.
+- **Settings.** One `canvasAutoOpen` setting replaces the five Artifacts
+  rows.
+- **Gate.** The edited `assistant.txt` and the deleted `ArtifactPanel.test.ts`
+  and `SandboxOutputs.test.tsx` were approved by the owner in advance.
 
 ### Phase 3: the canvas as a text editor
 

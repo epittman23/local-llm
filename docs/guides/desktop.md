@@ -207,7 +207,7 @@ storage with the login.
   - the app window runs sandboxed, with context isolation and no Node;
   - navigation off the server's origin goes to the system browser;
   - a sub-frame showing `about:srcdoc` or `about:blank` (a sandbox output's
-    HTML frame, the chat's artifact preview) may navigate only to another of
+    HTML frame, the canvas's preview of a fenced block) may navigate only to another of
     those, unless the app's own page starts the navigation, as an iframe's
     `src` does, and a navigation the handler cannot check is refused
     (`will-frame-navigate`). This stops model-written script sending what it
@@ -216,7 +216,7 @@ storage with the login.
     TURN host it names, which neither this rule nor the frame's
     content-security policy covers, and so leak what the model wrote, what
     the user types into the output, and the user's IP. The owner accepted
-    this (docs/guides/sandbox.md, "Outputs"). A link clicked in an artifact
+    this (docs/guides/sandbox.md, "Outputs"). A link clicked in the canvas's
     preview goes nowhere in the desktop app;
   - only the server's origin gets the permissions the app uses
     (notifications, clipboard, microphone, fullscreen). The rules are in
