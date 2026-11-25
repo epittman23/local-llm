@@ -108,7 +108,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const total = list.data?.total ?? 0;
 	const tags = tagsQuery.data ?? [];
 
-	const failed = list.isError || (list.isPaused && list.data === undefined);
+	const failed = list.isError;
 	// DAT-2, #955: the tab counts the whole list; a search or filter only narrows what is shown here.
 	const filtered = debouncedQuery !== '' || viewOption !== '' || selectedTag !== '';
 	const wholeCount = useWorkspaceStore((s) => s.counts.prompts);

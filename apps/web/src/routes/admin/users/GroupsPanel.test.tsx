@@ -1,4 +1,5 @@
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/query/QueryProvider';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { toast } from 'sonner';
@@ -171,10 +172,17 @@ describe('GroupsPanel', () => {
 	});
 });
 
+const offlineClient = () => {
+	const client = createQueryClient();
+	const defaults = client.getDefaultOptions();
+	client.setDefaultOptions({ ...defaults, queries: { ...defaults.queries, retry: false } });
+	return client;
+};
+
 describe('GroupsPanel when a load fails (STA-4, #981)', () => {
-	const renderFailing = () =>
+	const renderFailing = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
 		render(
-			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+			<QueryClientProvider client={client}>
 				<MemoryRouter initialEntries={['/admin/users/groups']}>
 					<TooltipProvider>
 						<GroupsPanel />
@@ -205,10 +213,17 @@ describe('GroupsPanel when a load fails (STA-4, #981)', () => {
 		expect(screen.queryByRole('button', { name: 'New group' })).toBeNull();
 	});
 
-	it('shows an offline load as a failure, not a spinner that never ends', async () => {
+	it('loads from a reachable server while the browser reports offline, and shows a failed load as a failure (#1123)', async () => {
 		onlineManager.setOnline(false);
 		try {
-			renderFailing();
+			vi.mocked(getGroups).mockResolvedValue(GROUPS as never);
+			const loaded = renderFailing(offlineClient());
+			expect(await screen.findByText('Research')).toBeInTheDocument();
+			expect(screen.queryByRole('alert')).toBeNull();
+			loaded.unmount();
+
+			vi.mocked(getGroups).mockRejectedValue('Database is locked');
+			renderFailing(offlineClient());
 			expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't load groups");
 			expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
 		} finally {
