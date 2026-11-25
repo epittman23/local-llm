@@ -803,7 +803,10 @@ never shown as an empty list, a `0` or a spinner that does not end. Use
 `components/common/LoadFailed` (`what`, `error`, `onRetry`, `retrying`). It is
 shown in place of the list and says 'Couldn't load <what>'. The cause is in
 plain words (offline, no answer, or an error from the server), the server's
-own message sits behind 'Details', and it offers 'Try again'.
+own message sits behind 'Details', and it offers 'Try again'. A load is tried
+even while the browser reports offline, since the server is often on this
+machine or the LAN (`lib/query/QueryProvider.tsx`, networkMode 'always',
+#1123): offline is the cause only of a request that got no answer.
 A single row that failed (an upload) stays in place: a danger icon, its name,
 the reason in plain words, the server's text behind Details, and Retry and
 Dismiss; Dismiss alone when retrying cannot help (duplicate content). It is
