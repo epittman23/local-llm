@@ -174,7 +174,9 @@ class ERROR_MESSAGES(StrEnum):
     def INPUT_TOO_LONG(size=''):
         return f'Input prompt exceeds maximum length of {size}'
 
-    SERVER_CONNECTION_ERROR = 'Local LLM: Server Connection Error'
+    # FBK-4: what failed and where to fix it, in plain words (#1124).
+    SERVER_CONNECTION_ERROR = "Couldn't reach the model server. Check its connection in Admin > Settings > Connections."
+    AUDIO_SERVER_CONNECTION_ERROR = "Couldn't reach the speech server. Check it in Admin > Settings > Audio."
 
     def REQUIRED_FIELD_EMPTY(name=''):
         return f'Required field {name} is empty'
