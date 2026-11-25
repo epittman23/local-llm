@@ -19,20 +19,25 @@ export const CONTENT_MIN = 384;
 const STEP = 16;
 const BIG_STEP = 64;
 
-const MD_UP = '(min-width: 768px)';
-
-/** Whether the screen is `md` or wider. Without `matchMedia` (a test's DOM) it counts as wide. */
-export function useMdUp(): boolean {
+/** Whether a media query matches. Without `matchMedia` (a test's DOM) it counts as matching. */
+export function useMediaQuery(query: string): boolean {
 	return useSyncExternalStore(
 		(onChange) => {
-			const mq = window.matchMedia?.(MD_UP);
+			const mq = window.matchMedia?.(query);
 			mq?.addEventListener('change', onChange);
 			return () => mq?.removeEventListener('change', onChange);
 		},
-		() => window.matchMedia?.(MD_UP).matches ?? true,
+		() => window.matchMedia?.(query).matches ?? true,
 		() => true
 	);
 }
+
+/** Whether the screen is `sm` (40 rem) or wider. */
+export const useSmUp = () => useMediaQuery('(min-width: 640px)');
+/** Whether the screen is `md` (48 rem) or wider. */
+export const useMdUp = () => useMediaQuery('(min-width: 768px)');
+/** Whether the screen is `lg` (64 rem) or wider. */
+export const useLgUp = () => useMediaQuery('(min-width: 1024px)');
 
 /**
  * Column or sheet, by the space the panel shares with the content (CNV-2,
@@ -67,12 +72,13 @@ export function stepFor(key: string, shift: boolean): number | 'max' | 'min' | n
 	return null;
 }
 
-function readWidth(key: string, fallback: number): number {
+/** The width kept under `key`, or null when none is (or storage cannot be read). */
+function readWidth(key: string): number | null {
 	try {
 		const n = Number(localStorage.getItem(key));
-		return Number.isFinite(n) && n > 0 ? n : fallback;
+		return Number.isFinite(n) && n > 0 ? n : null;
 	} catch {
-		return fallback;
+		return null;
 	}
 }
 
@@ -103,6 +109,10 @@ export function SidePanel({
 	defaultWidth,
 	minWidth,
 	actions,
+	leading,
+	heading: headingContent,
+	expanded = false,
+	focusOnOpen = true,
 	children
 }: {
 	open: boolean;
@@ -110,12 +120,20 @@ export function SidePanel({
 	title: string;
 	/** Where the column's width is kept in `localStorage`. */
 	storageKey: string;
-	/** In px. */
-	defaultWidth: number;
+	/** In px; or, from the space the panel shares with the content, the px to start at (the canvas: half of it). */
+	defaultWidth: number | ((space: number) => number);
 	/** In px. */
 	minWidth: number;
 	/** Header buttons, shown before Close. */
 	actions?: ReactNode;
+	/** Before the heading in the header (the canvas's Preview / Source switch). */
+	leading?: ReactNode;
+	/** What the heading shows; `title` stays the landmark's name and the Close label. */
+	heading?: ReactNode;
+	/** A column that takes all the space beside the page's other content, which collapses; it has no separator. */
+	expanded?: boolean;
+	/** Whether opening moves focus to the heading (NAV-4). False for a panel that opens by itself, so the person typing keeps focus. */
+	focusOnOpen?: boolean;
 	children: ReactNode;
 }) {
 	const isMd = useMdUp();
@@ -135,8 +153,11 @@ export function SidePanel({
 	}, []);
 	const mode = panelMode(space, minWidth, isMd);
 
-	const [stored, setStored] = useState(() => readWidth(storageKey, defaultWidth));
-	const width = clampWidth(stored, minWidth, space);
+	// An unmeasured space has no half to take: start at the minimum.
+	const startWidth =
+		typeof defaultWidth === 'function' ? (Number.isFinite(space) ? defaultWidth(space) : minWidth) : defaultWidth;
+	const [stored, setStored] = useState(() => readWidth(storageKey));
+	const width = clampWidth(stored ?? startWidth, minWidth, space);
 	const setWidth = (w: number) => {
 		const next = clampWidth(w, minWidth, space);
 		setStored(next);
@@ -158,14 +179,14 @@ export function SidePanel({
 	useLayoutEffect(() => {
 		if (!column) return;
 		const opener = openerOf(document.activeElement);
-		heading.current?.focus();
+		if (focusOnOpen) heading.current?.focus();
 		const el = panel.current;
 		return () => {
 			const active = document.activeElement;
 			const inside = !active || active === document.body || el?.contains(active);
 			if (inside && opener?.isConnected) opener.focus({ preventScroll: true });
 		};
-	}, [column]);
+	}, [column, focusOnOpen]);
 
 	// NAV-4: Escape closes a column only from inside it, and only when nothing
 	// inside it took the key. A native listener on the panel, so an Escape in a
@@ -216,6 +237,7 @@ export function SidePanel({
 	const lower = title.toLowerCase();
 	const header = (titleEl: ReactNode) => (
 		<div className="flex items-center gap-1 py-2 ps-4 pe-2">
+			{leading}
 			{titleEl}
 			{actions}
 			<Tip content="Close">
@@ -234,23 +256,26 @@ export function SidePanel({
 				<aside
 					ref={panel}
 					aria-label={title}
-					style={{ width }}
+					style={{ width: expanded ? (Number.isFinite(space) ? space : '100%') : width }}
+					data-expanded={expanded ? '' : undefined}
 					className="relative flex h-full min-h-0 shrink-0 flex-col border-l"
 				>
-					<hr
-						aria-orientation="vertical"
-						aria-label={`Resize ${lower}`}
-						aria-valuenow={width}
-						aria-valuemin={minWidth}
-						aria-valuemax={Number.isFinite(space) ? maxWidth(minWidth, space) : undefined}
-						tabIndex={0}
-						data-testid="side-panel-separator"
-						className="m-0 h-auto border-0 after:bg-border-control absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1.5 after:w-px after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:opacity-100 motion-reduce:after:transition-none"
-						{...separator}
-					/>
+					{!expanded && (
+						<hr
+							aria-orientation="vertical"
+							aria-label={`Resize ${lower}`}
+							aria-valuenow={width}
+							aria-valuemin={minWidth}
+							aria-valuemax={Number.isFinite(space) ? maxWidth(minWidth, space) : undefined}
+							tabIndex={0}
+							data-testid="side-panel-separator"
+							className="m-0 h-auto border-0 after:bg-border-control absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1.5 after:w-px after:opacity-0 after:transition-opacity hover:after:opacity-100 focus-visible:after:opacity-100 motion-reduce:after:transition-none"
+							{...separator}
+						/>
+					)}
 					{header(
 						<h2 ref={heading} tabIndex={-1} className={headingClass}>
-							{title}
+							{headingContent ?? title}
 						</h2>
 					)}
 					<div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -265,12 +290,12 @@ export function SidePanel({
 						className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none"
 						onOpenAutoFocus={(e) => {
 							e.preventDefault();
-							heading.current?.focus();
+							if (focusOnOpen) heading.current?.focus();
 						}}
 					>
 						{header(
 							<SheetTitle ref={heading} tabIndex={-1} className={headingClass}>
-								{title}
+								{headingContent ?? title}
 							</SheetTitle>
 						)}
 						<div className="flex min-h-0 flex-1 flex-col">{children}</div>

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { CodeSurface } from '@/components/chat/CodeSurface';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { panelMode, SidePanel } from '@/components/layout/SidePanel';
 import {
@@ -41,7 +42,6 @@ import {
 import { RowButton } from '@/components/ui/row-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { CodeSurface } from './CodeSurface';
 import { Example, Section } from './parts';
 
 // /ui, "Canvas": the design of the document panel beside a chat (CNV rules;
