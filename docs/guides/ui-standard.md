@@ -1023,17 +1023,19 @@ also has "Save to workspace" in the Copy menu (the actions menu below `sm`)
 and as the second button of the save's toast, beside "Attach to next
 message"; it writes the version shown over the workspace file, is not
 offered while a reply is being written or while editing, and never for an
-upload, a block, a knowledge file or a temporary chat. Success says "Saved to
+upload, a block, a knowledge file, a temporary chat or a chat the signed-in
+user does not own (an admin reading it: only the owner may write into a
+workspace). Success says "Saved to
 the workspace. The model sees it the next time it reads the file."; a busy
 workspace says "The workspace is busy. Try again when the reply has
 finished."; a failure says "Could not save to the workspace. Try again." with
 the details behind Details (FBK-4). When the file in the workspace changed
-since this document held it, a dialog asks "Replace the file in the
-workspace?" ("The file in the workspace changed after this version. Saving
-replaces it.", Replace and Cancel), or "Create the file in the workspace?"
-when it is gone ("The file is no longer in the workspace. Saving creates it
-again.", Create and Cancel); Replace and Create repeat the request with
-`force`.
+since this document held it, a dialog asks "Replace the workspace file?"
+("The file in the workspace changed after this version. Replace it with this
+version?", Replace and Cancel), or "Create the workspace file?" when it is
+gone ("The file is no longer in the workspace. Create it with this version?",
+Create and Cancel); Replace and Create repeat the request with `force`. `/ui`
+shows the menu item and both dialogs, with the wording of `workspaceDialog`.
 
 An HTML page the model wrote (an
 output, up to 256 KiB) is edited with its preview beside the source: the

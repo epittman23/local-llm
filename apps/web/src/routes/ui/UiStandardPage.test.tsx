@@ -237,6 +237,29 @@ describe('UiStandardPage (/ui)', () => {
 		expect(canvas().textContent).toContain('Quadrupling the sample halves the standard error.');
 	});
 
+	it('shows Save to workspace and the dialog of each answer the server can give (CNV-6)', async () => {
+		renderPage();
+		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
+		const press = async () => {
+			fireEvent.pointerDown(within(canvas()).getByRole('button', { name: 'Copy' }), {
+				button: 0,
+				pointerType: 'mouse'
+			});
+			fireEvent.click(await screen.findByRole('menuitem', { name: 'Save to workspace' }));
+			return screen.findByRole('alertdialog');
+		};
+		const first = await press();
+		expect(first.textContent).toContain('Replace the workspace file?');
+		expect(first.textContent).toContain('Replace it with this version?');
+		fireEvent.click(within(first).getByRole('button', { name: 'Cancel' }));
+		const second = await press();
+		expect(second.textContent).toContain('Create the workspace file?');
+		fireEvent.click(within(second).getByRole('button', { name: 'Create' }));
+		expect(
+			await screen.findByText('Saved to the workspace. The model sees it the next time it reads the file.')
+		).toBeTruthy();
+	});
+
 	it('compares a text document with its earlier version in Changes, read-only (CNV-9)', () => {
 		renderPage();
 		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });

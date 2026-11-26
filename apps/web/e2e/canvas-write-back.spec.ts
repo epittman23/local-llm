@@ -18,31 +18,36 @@ type Answer = { status: number; json: Record<string, unknown> };
 const WRITTEN: Answer = { status: 200, json: { path: 'outputs/fit.py', bytes: 41 } };
 
 /** A chat with one output script that has a saved version 2, and a write-back route that answers from `answers`. */
-async function mockWriteBack(page: Page, answers: Answer[]) {
+async function mockWriteBack(page: Page, answers: Answer[], owner = 'u1') {
 	const posts: { id: string; body: unknown }[] = [];
 	await mockChat(page, {
 		chats: [
-			savedChat('c1', 'Fit', [
-				{ id: 'u1', role: 'user', content: 'Fit it' },
-				{
-					id: 'a1',
-					role: 'assistant',
-					content: 'Done.',
-					model: 'qwen',
-					modelName: 'Qwen',
-					done: true,
-					files: [
-						{
-							type: 'file',
-							id: FIT,
-							name: 'fit.py',
-							url: `/api/v1/files/${FIT}/content`,
-							size: SOURCE.length,
-							meta: { source: 'sandbox_output', sandbox_path: '/workspace/outputs/fit.py' }
-						}
-					]
-				}
-			])
+			savedChat(
+				'c1',
+				'Fit',
+				[
+					{ id: 'u1', role: 'user', content: 'Fit it' },
+					{
+						id: 'a1',
+						role: 'assistant',
+						content: 'Done.',
+						model: 'qwen',
+						modelName: 'Qwen',
+						done: true,
+						files: [
+							{
+								type: 'file',
+								id: FIT,
+								name: 'fit.py',
+								url: `/api/v1/files/${FIT}/content`,
+								size: SOURCE.length,
+								meta: { source: 'sandbox_output', sandbox_path: '/workspace/outputs/fit.py' }
+							}
+						]
+					}
+				],
+				{ user_id: owner }
+			)
 		]
 	});
 	await page.route('**/api/v1/files/*/content*', (route) =>
@@ -103,9 +108,11 @@ test('a changed file asks first, and Replace repeats the request with force', as
 	const server = await mockWriteBack(page, [changed, WRITTEN]);
 	await openFit(page);
 	await saveToWorkspace(page);
-	const ask = page.getByRole('alertdialog', { name: 'Replace the file in the workspace?' });
+	const ask = page.getByRole('alertdialog', { name: 'Replace the workspace file?' });
 	await expect(ask).toBeVisible();
-	await expect(ask).toContainText('The file in the workspace changed after this version. Saving replaces it.');
+	await expect(ask).toContainText(
+		'The file in the workspace changed after this version. Replace it with this version?'
+	);
 	await ask.getByRole('button', { name: 'Replace' }).click();
 	await expect(page.getByText(SAVED)).toBeVisible();
 	expect(server.posts.map((p) => p.body)).toEqual([{ force: false }, { force: true }]);
@@ -116,8 +123,8 @@ test('a file that is gone says it will be created, and Cancel writes nothing', a
 	const server = await mockWriteBack(page, [gone]);
 	await openFit(page);
 	await saveToWorkspace(page);
-	const ask = page.getByRole('alertdialog', { name: 'Create the file in the workspace?' });
-	await expect(ask).toContainText('The file is no longer in the workspace. Saving creates it again.');
+	const ask = page.getByRole('alertdialog', { name: 'Create the workspace file?' });
+	await expect(ask).toContainText('The file is no longer in the workspace. Create it with this version?');
 	await ask.getByRole('button', { name: 'Cancel' }).click();
 	await expect(ask).toHaveCount(0);
 	expect(server.posts).toHaveLength(1);
@@ -149,4 +156,12 @@ test('after a save the toast offers Save to workspace beside Attach to next mess
 	await toast.getByRole('button', { name: 'Save to workspace' }).click();
 	await expect(page.getByText(SAVED)).toBeVisible();
 	expect(server.posts).toEqual([{ id: V2, body: { force: false } }]);
+});
+
+test('a chat that is not the signed-in user’s own offers no Save to workspace', async ({ page }) => {
+	await mockWriteBack(page, [WRITTEN], 'someone-else');
+	await openFit(page);
+	await canvas(page).getByRole('button', { name: 'Copy' }).click();
+	await expect(page.getByRole('menuitem', { name: 'Download' })).toBeVisible();
+	await expect(page.getByRole('menuitem', { name: 'Save to workspace' })).toHaveCount(0);
 });

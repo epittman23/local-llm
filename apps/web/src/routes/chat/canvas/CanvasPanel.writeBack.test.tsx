@@ -40,8 +40,10 @@ function Harness({
 	files,
 	generating = false,
 	editable = true,
+	ownChat = true,
 	role = 'assistant'
 }: {
+	ownChat?: boolean;
 	role?: Message['role'];
 	files: ChatFile[];
 	generating?: boolean;
@@ -49,20 +51,30 @@ function Harness({
 }) {
 	const canvas = useCanvas(reply(files, role), false);
 	return (
-		<CanvasContext.Provider value={{ openId: canvas.openId, open: canvas.open, attach: () => true, generating }}>
+		<CanvasContext.Provider
+			value={{ openId: canvas.openId, open: canvas.open, attach: () => true, generating, ownChat }}
+		>
 			<CanvasPanel canvas={canvas} editable={editable} />
 		</CanvasContext.Provider>
 	);
 }
 
 const show = (
-	opts: { files?: ChatFile[]; open?: string; generating?: boolean; editable?: boolean; role?: Message['role'] } = {}
+	opts: {
+		files?: ChatFile[];
+		open?: string;
+		generating?: boolean;
+		editable?: boolean;
+		ownChat?: boolean;
+		role?: Message['role'];
+	} = {}
 ) =>
 	renderWithRouter(
 		<Harness
 			files={opts.files ?? [output('1', 'fit.py')]}
 			generating={opts.generating}
 			editable={opts.editable}
+			ownChat={opts.ownChat}
 			role={opts.role}
 		/>,
 		[`/c/x?canvas=${opts.open ?? FIT}`]
@@ -117,6 +129,7 @@ describe('Save to workspace', () => {
 	it.each([
 		['an upload', () => ({ files: [upload('1', 'fit.py')], role: 'user' as const })],
 		['a temporary chat', () => ({ editable: false })],
+		['a chat that is not the signed-in user’s own (an admin reading it)', () => ({ ownChat: false })],
 		['a reply being written', () => ({ generating: true })]
 	])('is not offered for %s', async (_name, opts) => {
 		show(opts());
@@ -138,7 +151,7 @@ describe('Save to workspace', () => {
 		show();
 		await settled();
 		fireEvent.click(item(await openMenu('Copy')) as HTMLElement);
-		expect(await screen.findByRole('alertdialog')).toHaveTextContent('Replace the file in the workspace?');
+		expect(await screen.findByRole('alertdialog')).toHaveTextContent('Replace the workspace file?');
 		fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
 		await waitFor(() => expect(api.write).toHaveBeenLastCalledWith('', FIT, true));
 		await waitFor(() => expect(toast.success).toHaveBeenCalled());
@@ -170,4 +183,14 @@ describe('Save to workspace', () => {
 		await waitFor(() => expect(toast.success).toHaveBeenCalled());
 		expect((vi.mocked(toast.success).mock.calls[0][1] as { cancel?: unknown }).cancel).toBeUndefined();
 	});
+});
+
+it('has no toast action to save to the workspace in a chat the user does not own', async () => {
+	api.create.mockResolvedValue({ id: V2, filename: 'fit.py', data: {}, meta: { version: 2, size: 6 } });
+	show({ ownChat: false });
+	fireEvent.click(await settled());
+	fireEvent.change(await screen.findByRole('textbox', { name: 'Edit fit.py' }), { target: { value: 'x = 2\n' } });
+	fireEvent.click(screen.getByRole('button', { name: 'Save document' }));
+	await waitFor(() => expect(toast.success).toHaveBeenCalled());
+	expect((vi.mocked(toast.success).mock.calls[0][1] as { cancel?: unknown }).cancel).toBeUndefined();
 });

@@ -449,9 +449,11 @@ export function ChatPage() {
 		},
 		[inTemporary, maxFiles, attachedCount, attachedIds, addAttachment]
 	);
+	// The chat's owner alone may write into its workspace (the write-back route's rule): an admin reading it may not.
+	const ownChat = Boolean(user) && session.chat?.user_id === user?.id;
 	const canvasContext = useMemo(
-		() => ({ openId: canvas.openId, open: canvas.open, attach, generating: session.generating }),
-		[canvas.openId, canvas.open, attach, session.generating]
+		() => ({ openId: canvas.openId, open: canvas.open, attach, generating: session.generating, ownChat }),
+		[canvas.openId, canvas.open, attach, session.generating, ownChat]
 	);
 
 	const actions = useMessageActions(session);

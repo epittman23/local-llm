@@ -201,6 +201,7 @@ export function CanvasPanel({
 	const token = useAuthStore((s) => s.token) ?? '';
 	const attach = useContext(CanvasContext)?.attach;
 	const generating = useContext(CanvasContext)?.generating ?? false;
+	const ownChat = useContext(CanvasContext)?.ownChat ?? false;
 	const writeBack = useWriteBack();
 	const smUp = useSmUp();
 	const mdUp = useMdUp();
@@ -277,9 +278,10 @@ export function CanvasPanel({
 		// A sheet covers the composer: close it so the attached file shows, unless a draft is still open in it.
 		if (!mdUp && !hadDraft.current) canvas.close();
 	};
-	// Only a saved version of a file the model wrote to its workspace goes back there: an upload is read-only
-	// in the sandbox, a block and a knowledge file have no workspace file, and a running reply holds the workspace.
-	const offerWriteBack = editable && !generating && doc?.source.type === 'output' && editableDoc !== null;
+	// Only a saved version of a file the model wrote to its workspace goes back there, and only by the chat's owner
+	// (`editable` is false in a temporary chat): an upload is read-only in the sandbox, a block and a knowledge
+	// file have no workspace file, and a running reply holds the workspace.
+	const offerWriteBack = editable && ownChat && !generating && doc?.source.type === 'output' && editableDoc !== null;
 	const edit = useDocumentEdit({
 		fileId: editFileId,
 		rootId,

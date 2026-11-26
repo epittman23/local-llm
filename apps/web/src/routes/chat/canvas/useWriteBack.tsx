@@ -8,6 +8,20 @@ import { useAuthStore } from '@/lib/stores/authStore';
 export const SAVED_TO_WORKSPACE = 'Saved to the workspace. The model sees it the next time it reads the file.';
 export const WORKSPACE_BUSY = 'The workspace is busy. Try again when the reply has finished.';
 
+/** The words of the dialog the server's `changed` answer opens (WRD-1); `/ui` shows the same ones. */
+export const workspaceDialog = (missing: boolean) =>
+	missing
+		? {
+				title: 'Create the workspace file?',
+				body: 'The file is no longer in the workspace. Create it with this version?',
+				confirm: 'Create'
+			}
+		: {
+				title: 'Replace the workspace file?',
+				body: 'The file in the workspace changed after this version. Replace it with this version?',
+				confirm: 'Replace'
+			};
+
 export type WriteBack = {
 	/** Writes the saved version `id` over its file in the workspace; a `changed` answer asks first (the dialog). */
 	run: (id: string) => Promise<void>;
@@ -49,25 +63,22 @@ export function useWriteBack(): WriteBack {
 		}
 	};
 
+	const words = workspaceDialog(asking?.missing === true);
 	const dialog = (
 		<ConfirmDialog
 			open={asking !== null}
 			onOpenChange={(open) => {
 				if (!open) setAsking(null);
 			}}
-			title={asking?.missing ? 'Create the file in the workspace?' : 'Replace the file in the workspace?'}
-			confirmLabel={asking?.missing ? 'Create' : 'Replace'}
+			title={words.title}
+			confirmLabel={words.confirm}
 			onConfirm={() => {
 				const id = asking?.id;
 				setAsking(null);
 				if (id) void send(id, true);
 			}}
 		>
-			<p>
-				{asking?.missing
-					? 'The file is no longer in the workspace. Saving creates it again.'
-					: 'The file in the workspace changed after this version. Saving replaces it.'}
-			</p>
+			<p>{words.body}</p>
 		</ConfirmDialog>
 	);
 

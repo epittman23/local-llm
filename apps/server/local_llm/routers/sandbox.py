@@ -208,19 +208,20 @@ async def write_back_sandbox_output(
         raise not_text
     try:
         async with AsyncExitStack() as stack:
-            session = await asyncio.wait_for(
-                stack.enter_async_context(manager.session(chat_id, user)), WRITE_BACK_WAIT_S
-            )
+            try:
+                session = await asyncio.wait_for(
+                    stack.enter_async_context(manager.session(chat_id, user)), WRITE_BACK_WAIT_S
+                )
+            except TimeoutError:
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content={
+                        'code': 'busy',
+                        'detail': 'The workspace is busy. Try again when the reply has finished.',
+                    },
+                )
             await write_back(session, root, path, data, file.id, force=form_data.force)
             await _mark_written_back(file.id, path, db)
-    except TimeoutError:
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content={
-                'code': 'busy',
-                'detail': 'The workspace is busy. Try again when the reply has finished.',
-            },
-        )
     except OutputChanged as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -247,11 +248,15 @@ async def _mark_written_back(file_id: str, path: str, db: AsyncSession) -> None:
     """Record on the version row that it is the workspace file's content now, so the next listing of the outputs
     sees a row with that hash as the file's last (outputs.chat_usage); the write stands when this fails."""
     try:
-        await Files.update_file_metadata_by_id(
+        # update_file_metadata_by_id answers None, rather than raising, for a row it could not update.
+        marked = await Files.update_file_metadata_by_id(
             file_id, {'sandbox_path': path, 'written_back_ns': time.time_ns()}, db=db
         )
     except Exception:
         log.warning('could not record that file %s was written back', file_id, exc_info=True)
+        return
+    if marked is None:
+        log.warning('could not record that file %s was written back', file_id)
 
 
 # The workspace cap and deletion dialog (owner decision Q15, T24). Every route acts only on the caller's own

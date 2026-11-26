@@ -51,9 +51,9 @@ describe('useWriteBack', () => {
 		render(<Probe />);
 		await act(() => current.run('f1'));
 		expect(toast.success).not.toHaveBeenCalled();
-		expect(await screen.findByText('Replace the file in the workspace?')).toBeInTheDocument();
+		expect(await screen.findByText('Replace the workspace file?')).toBeInTheDocument();
 		expect(
-			screen.getByText('The file in the workspace changed after this version. Saving replaces it.')
+			screen.getByText('The file in the workspace changed after this version. Replace it with this version?')
 		).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
 		await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
@@ -66,8 +66,10 @@ describe('useWriteBack', () => {
 		api.write.mockResolvedValue({ status: 'changed', missing: true });
 		render(<Probe />);
 		await act(() => current.run('f1'));
-		expect(await screen.findByText('Create the file in the workspace?')).toBeInTheDocument();
-		expect(screen.getByText('The file is no longer in the workspace. Saving creates it again.')).toBeInTheDocument();
+		expect(await screen.findByText('Create the workspace file?')).toBeInTheDocument();
+		expect(
+			screen.getByText('The file is no longer in the workspace. Create it with this version?')
+		).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 		expect(api.write).toHaveBeenCalledTimes(1);

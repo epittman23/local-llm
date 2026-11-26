@@ -484,3 +484,56 @@ def test_a_stored_version_whose_blob_is_gone_is_404():
 
     assert asyncio.run(go())[0] == 404
     assert rig.guest() == b'v1'
+
+
+def test_a_workspace_file_over_the_cap_is_changed_not_missing():
+    rig = Rig()
+
+    async def go():
+        root = await rig.output('v1')
+        version = await _version(root, b'edit')
+        rig.backend.sandboxes[rig.chat_id].files[PAGE].content = b'x' * (WRITE_BACK_MAX_BYTES + 1)
+        refused = await rig.write_back(version.id)
+        del rig.backend.sandboxes[rig.chat_id].files[PAGE]
+        gone = await rig.write_back(version.id)
+        return refused, gone
+
+    refused, gone = asyncio.run(go())
+
+    assert (refused[0], refused[1]['code'], refused[1]['missing']) == (409, 'changed', False)
+    assert (gone[0], gone[1]['missing']) == (409, True)
+
+
+def test_a_timeout_inside_the_write_is_not_a_busy_workspace(monkeypatch):
+    rig = Rig()
+
+    async def slow(*_a, **_k):
+        raise TimeoutError
+
+    async def go():
+        root = await rig.output('v1')
+        version = await _version(root, b'edit')
+        monkeypatch.setattr(sandbox_router, 'write_back', slow)
+        return await rig.write_back(version.id)
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(go())
+
+
+def test_a_row_that_could_not_be_marked_is_logged(monkeypatch, caplog):
+    rig = Rig()
+
+    async def none(*_a, **_k):
+        return None
+
+    async def go():
+        root = await rig.output('v1')
+        version = await _version(root, b'edit')
+        monkeypatch.setattr(sandbox_router.Files, 'update_file_metadata_by_id', none)
+        return version, await rig.write_back(version.id)
+
+    with caplog.at_level('WARNING', logger=sandbox_router.log.name):
+        version, written = asyncio.run(go())
+
+    assert written[0] == 200
+    assert f'could not record that file {version.id} was written back' in caplog.text

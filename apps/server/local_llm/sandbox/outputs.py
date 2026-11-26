@@ -720,6 +720,7 @@ async def write_back(
         known.update((version.meta or {}).get('file_hash') for version in await Files.get_versions(root.id))
         current = (await session.get_files([path], WRITE_BACK_MAX_BYTES + 1)).get(path)
         if current is None or hashlib.sha256(current).hexdigest() not in known:
-            raise OutputChanged(path, missing=current is None)
+            # get_files leaves out a file over the cap or a non-regular one: only an absent path is missing.
+            raise OutputChanged(path, missing=current is None and await session.stat(path) is None)
     await write(session, path, data, overwrite=True)
     session.outputs_memory.stored[path] = (hashlib.sha256(data).hexdigest(), version_id)
