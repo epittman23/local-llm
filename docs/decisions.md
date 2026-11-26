@@ -11,6 +11,11 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   `workflow` skill, with a throwaway stack for real-backend checks.** The
   owner settled these points after the 2026-11-25 unattended run
   (`.claude/skills/workflow/SKILL.md`, `scripts/throwaway-stack/`).
+  - **A new idea starts with intake.** The owner only explains the idea;
+    the agent explores the code first, asks every foreseeable question up
+    front as options with a recommendation, writes a plan in `docs/plans/`
+    with the answers recorded, and builds nothing until the plan is
+    approved.
   - **One focused PR per issue or plan phase, one open at a time.** A
     failure then has one suspect and the squash merges stay readable. Later
     items may be built meanwhile on stacked branches; after each squash
