@@ -106,19 +106,28 @@ test('the header shows the chat title and renames it in place, by keyboard (#928
 	await expect(page.getByRole('button', { name: 'Chat title: Sums. Rename' })).toBeFocused();
 });
 
-test('an html code block previews in a sandboxed frame', async ({ page }) => {
-	await mockChat(page, { chats: convo('Here:\n\n```html\n<h1 id="x">Hello artifact</h1>\n```') });
+test('an html page in a reply is a card that opens the canvas, framed in a sandbox', async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
+	const html = '<!doctype html><title>Hello page</title><h1 id="x">Hello artifact</h1>';
+	await mockChat(page, { chats: convo(`Here:\n\n\`\`\`html\n${html}\n\`\`\``) });
 	await page.goto('/c/c1');
-	await page.getByTestId('code-block').getByRole('button', { name: 'Preview' }).click();
-	// The side panel holds the preview (canvas C2), titled Preview, with its Download beside Close.
-	const panel = page.getByRole('complementary', { name: 'Preview' });
-	await expect(panel.getByRole('heading', { name: 'Preview' })).toBeFocused();
-	await expect(panel.getByRole('button', { name: 'Download preview' })).toBeVisible();
+	const card = page.getByTestId('document-card');
+	await expect(card).toContainText('Hello page');
+	await expect(page.getByTestId('code-block')).toHaveCount(0);
+	await card.click();
+	// The canvas holds the page (CNV-2), its id in the address (CNV-7), focus on its heading (NAV-4).
+	await expect(page).toHaveURL(/\?canvas=block%3Aa1%3A0$/);
+	const panel = page.getByRole('complementary', { name: 'Canvas' });
+	await expect(panel.getByRole('heading')).toBeFocused();
+	await expect(card).toHaveAttribute('aria-current', 'true');
 	const frame = panel.locator('iframe');
-	await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
-	await expect(frame).not.toHaveAttribute('sandbox', /allow-same-origin/);
-	await expect(page.frameLocator('iframe[title="Artifact preview"]').locator('#x')).toHaveText('Hello artifact');
-	await panel.getByRole('button', { name: 'Close preview' }).click();
+	await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+	await expect(page.frameLocator('iframe[title="Preview of Hello page"]').locator('#x')).toHaveText('Hello artifact');
+	await panel.getByRole('button', { name: 'Source' }).click();
+	await expect(panel.locator('iframe')).toHaveCount(0);
+	await expect(panel).toContainText('Hello artifact');
+	await panel.getByRole('button', { name: 'Close canvas' }).click();
 	await expect(panel).toHaveCount(0);
-	await expect(page.getByTestId('code-block').getByRole('button', { name: 'Preview' })).toBeFocused();
+	await expect(page).not.toHaveURL(/canvas=/);
+	await expect(card).toBeFocused();
 });

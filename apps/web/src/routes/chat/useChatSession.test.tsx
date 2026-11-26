@@ -437,6 +437,24 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 
+	it('moving a new chat to its id keeps the open canvas in the address', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const { send, answer } = await holdNextPost();
+			const router = renderAt(null);
+			await waitFor(() => expect(session.loading).toBe(false));
+			act(() => void session.submit('first', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+			await act(() => router.navigate('/?canvas=block%3Am1%3A0&q=x'));
+			await act(async () => answer.resolve({ chat_id: 'X', task_ids: ['t1'] }));
+
+			await waitFor(() => expect(router.state.location.pathname).toBe('/c/X'));
+			expect(router.state.location.search).toBe('?canvas=block%3Am1%3A0');
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('a new chat left before its POST answers is not opened when the user starts another (#515)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {

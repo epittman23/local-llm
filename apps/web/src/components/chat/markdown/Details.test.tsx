@@ -2,9 +2,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CodeBlock } from './CodeBlock';
 import { Markdown } from './Markdown';
 
 const renderMd = (content: string, props: Partial<Parameters<typeof Markdown>[0]> = {}) =>
@@ -81,21 +80,5 @@ describe('a tool call in a response', () => {
 		fireEvent.click(showAll);
 		expect(pre().textContent).toHaveLength(2500);
 		expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull();
-	});
-});
-
-describe('CodeBlock Preview', () => {
-	it('offers Preview for html and svg blocks, handing the code to the callback', () => {
-		const onPreview = vi.fn();
-		render(<CodeBlock id="b1" lang="html" code="<p>hi</p>" complete onPreview={onPreview} />, {
-			wrapper: TooltipProvider
-		});
-		fireEvent.click(screen.getByRole('button', { name: /Preview/ }));
-		expect(onPreview).toHaveBeenCalledWith('<p>hi</p>');
-	});
-
-	it('does not offer Preview for other languages', () => {
-		render(<CodeBlock id="b1" lang="python" code="1" complete onPreview={vi.fn()} />, { wrapper: TooltipProvider });
-		expect(screen.queryByRole('button', { name: /Preview/ })).toBeNull();
 	});
 });

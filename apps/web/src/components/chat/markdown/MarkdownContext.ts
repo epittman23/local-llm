@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { CodeRunResult } from '@/lib/apis/utils';
+import type { CanvasDocument } from '@/lib/chat/documents';
 
 /** What every token in one message needs, passed down once instead of through each level. */
 export type MarkdownEnv = {
@@ -11,7 +12,10 @@ export type MarkdownEnv = {
 	resolvable: boolean;
 	sourceIds: string[];
 	onSourceClick?: (id: string | number) => void;
-	onPreview?: (code: string) => void;
+	/** The message's canvas documents (lib/chat/documents.ts): a fenced block that is one renders as a card, not a code block. */
+	documents?: CanvasDocument[];
+	/** How many fenced blocks the message's earlier texts hold: the ordinal this text's first block takes in `block:<messageId>:<n>`. */
+	blockBase?: number;
 	/** A python code block's Run button: the code's output, shown under the block. */
 	onRun?: (code: string) => Promise<CodeRunResult>;
 	onToolCallResolved?: (res: unknown) => void;

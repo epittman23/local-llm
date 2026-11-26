@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { CONTENT_MIN, clampWidth, maxWidth, panelMode, SidePanel, stepFor } from './SidePanel';
+import { CONTENT_MIN, clampWidth, maxWidth, panelMode, SidePanel, stepFor, useLgUp, useMediaQuery } from './SidePanel';
 
 /** Gives every observed row a width, since jsdom lays nothing out, and lets a test change it. */
 let rowWidth = 1200;
@@ -295,5 +295,112 @@ describe('SidePanel as a sheet', () => {
 		resizeRow(1024);
 		expect(screen.queryByRole('dialog')).toBeNull();
 		expect(screen.getByRole('complementary', { name: 'Controls' })).toBeInTheDocument();
+	});
+});
+
+function Extended(props: Partial<React.ComponentProps<typeof SidePanel>>) {
+	const [open, setOpen] = useState(false);
+	return (
+		<TooltipProvider>
+			<div>
+				<input aria-label="Message" />
+				<button type="button" onClick={() => setOpen(true)}>
+					Open canvas
+				</button>
+				<SidePanel
+					open={open}
+					onClose={() => setOpen(false)}
+					title="Canvas"
+					storageKey="test.canvas"
+					defaultWidth={(space) => space / 2}
+					minWidth={320}
+					{...props}
+				>
+					<p>Body</p>
+				</SidePanel>
+			</div>
+		</TooltipProvider>
+	);
+}
+
+function Probe() {
+	return (
+		<p>
+			{String(useLgUp())} {String(useMediaQuery('(min-width: 1px)'))}
+		</p>
+	);
+}
+
+describe('SidePanel extensions', () => {
+	it('starts at the width a function of the space gives, and keeps a width the person chose', () => {
+		render(<Extended />);
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		expect(screen.getByRole('complementary', { name: 'Canvas' }).style.width).toBe('600px');
+		fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowLeft' });
+		expect(localStorage.getItem('test.canvas')).toBe('616');
+		cleanup();
+		render(<Extended />);
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		expect(screen.getByRole('complementary', { name: 'Canvas' }).style.width).toBe('616px');
+	});
+
+	it('shows leading and heading content, and keeps the title as the landmark name and the Close label', () => {
+		render(
+			<Extended leading={<span>Switch</span>} heading={<span data-testid="heading-content">report.html HTML</span>} />
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		const region = screen.getByRole('complementary', { name: 'Canvas' });
+		expect(screen.getByText('Switch')).toBeInTheDocument();
+		expect(screen.getByRole('heading', { level: 2 })).toContainElement(screen.getByTestId('heading-content'));
+		expect(region).toContainElement(screen.getByRole('button', { name: 'Close canvas' }));
+	});
+
+	it('expanded takes all the space and has no separator', () => {
+		render(<Extended expanded />);
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		const region = screen.getByRole('complementary', { name: 'Canvas' });
+		expect(region.style.width).toBe('1200px');
+		expect(region).toHaveAttribute('data-expanded');
+		expect(screen.queryByRole('separator')).toBeNull();
+	});
+
+	it('does not take focus on opening when focusOnOpen is false', () => {
+		render(<Extended focusOnOpen={false} />);
+		const message = screen.getByRole('textbox', { name: 'Message' });
+		message.focus();
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		expect(screen.getByRole('complementary', { name: 'Canvas' })).toBeInTheDocument();
+		expect(document.activeElement).toBe(message);
+	});
+
+	it('does not take focus in a sheet either when focusOnOpen is false', () => {
+		setMdUp(false);
+		render(<Extended focusOnOpen={false} />);
+		const message = screen.getByRole('textbox', { name: 'Message' });
+		message.focus();
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		expect(screen.getByRole('dialog', { name: 'Canvas' })).toBeInTheDocument();
+		expect(document.activeElement).not.toBe(screen.getByRole('heading', { name: 'Canvas' }));
+	});
+
+	it('starts a function default at the minimum while the space is unmeasured', () => {
+		vi.stubGlobal('ResizeObserver', undefined);
+		render(<Extended />);
+		fireEvent.click(screen.getByRole('button', { name: 'Open canvas' }));
+		expect(screen.getByRole('complementary', { name: 'Canvas' }).style.width).toBe('320px');
+	});
+
+	it('reads a media query, and lg is 64 rem', () => {
+		const seen: string[] = [];
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => {
+				seen.push(query);
+				return { matches: query === '(min-width: 1024px)', addEventListener: vi.fn(), removeEventListener: vi.fn() };
+			})
+		);
+		render(<Probe />);
+		expect(screen.getByText('true false')).toBeInTheDocument();
+		expect(seen).toContain('(min-width: 1024px)');
 	});
 });

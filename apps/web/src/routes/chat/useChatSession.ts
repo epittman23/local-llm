@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { isNotFound } from '@/components/common/Gone';
 import { chatAction, generateTags, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
@@ -115,6 +115,10 @@ export function useChatSession({
 	const { socket } = useSocket();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	// Read at the move to /c/<id>, so the canvas a person opened meanwhile (?canvas=) survives it.
+	const location = useLocation();
+	const searchRef = useRef(location.search);
+	searchRef.current = location.search;
 
 	const [history, setHistoryState] = useState<History>(emptyHistory);
 	const [chat, setChat] = useState<ChatRecord | null>(null);
@@ -541,7 +545,11 @@ export function useChatSession({
 					if (Object.keys(l.params).length) void updateChatById(token, res.chat_id, { params: l.params });
 					if (!chatIdRef.current && stillOpen(req)) {
 						chatIdRef.current = adoptedRef.current = res.chat_id;
-						navigate(`/c/${res.chat_id}`, { replace: true });
+						const canvas = new URLSearchParams(searchRef.current).get('canvas');
+						navigate(
+							{ pathname: `/c/${res.chat_id}`, search: canvas ? `?${new URLSearchParams({ canvas })}` : '' },
+							{ replace: true }
+						);
 					}
 				}
 			} finally {

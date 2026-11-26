@@ -50,9 +50,10 @@ const out = (key: string) => {
 	};
 };
 
-test('a reply shows its sandbox outputs: images, SVG, sandboxed HTML frame, PDF previews and a download', async ({
+test('a reply shows its sandbox outputs as cards, and the canvas shows each: images, SVG, sandboxed HTML frame, PDF previews and a download', async ({
 	page
 }) => {
+	await page.setViewportSize({ width: 1440, height: 900 });
 	await mockChat(page, {
 		chats: [
 			savedChat('c1', 'Plots', [
@@ -91,45 +92,55 @@ test('a reply shows its sandbox outputs: images, SVG, sandboxed HTML frame, PDF 
 	await page.goto('/c/c1');
 
 	const reply = page.getByTestId('response-message');
-	const plot = reply.getByRole('img', { name: 'plot.png' });
+	const panel = page.getByRole('complementary', { name: 'Canvas' });
+	const card = (name: string) => reply.getByTestId('document-card').filter({ hasText: name });
+	// A card for each output, the PDF's page images folded into it, an image with its thumbnail.
+	await expect(reply.getByTestId('document-card')).toHaveCount(5);
+	await expect(card('plot.png').locator('img')).toHaveAttribute('src', content('a1'));
+
+	// An image: an <img> from the content route, though it is sent as an attachment with nosniff and a sandboxing policy.
+	await card('plot.png').click();
+	await expect(page).toHaveURL(new RegExp(`canvas=${id('a1')}$`));
+	const plot = panel.getByRole('img', { name: 'plot.png' });
 	await expect(plot).toHaveAttribute('src', content('a1'));
-	// It renders, though the route sends it as an attachment with nosniff and a sandboxing policy.
 	await expect.poll(() => plot.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(1);
-	// SVG too, as an <img> (never inline), which needs the route to keep its image/svg+xml type.
-	const chart = reply.getByRole('img', { name: 'chart.svg' });
+
+	// SVG too, as an <img> (never inline, never framed), which needs the route to keep its image/svg+xml type.
+	await card('chart.svg').click();
+	const chart = panel.getByRole('img', { name: 'chart.svg' });
 	await expect(chart).toHaveAttribute('src', content('a2'));
 	await expect.poll(() => chart.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(10);
 	await expect(reply.locator('svg:not(.lucide)')).toHaveCount(0);
+	await expect(panel.locator('svg:not(.lucide)')).toHaveCount(0);
+	await expect(page.locator('iframe')).toHaveCount(0);
 
-	const frame = reply.locator('iframe[title="Output report.html"]');
-	await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
-	const inside = page.frameLocator('iframe[title="Output report.html"]');
+	// HTML: one frame with allow-scripts only; its script runs and reaches neither the parent nor the cookies.
+	await card('report.html').click();
+	await expect(panel.locator('iframe')).toHaveAttribute('sandbox', 'allow-scripts');
+	const inside = page.frameLocator('iframe[title="Preview of report.html"]');
 	await expect(inside.locator('#ran')).toHaveText('script ran');
 	await expect(inside.locator('#parent')).toHaveText('parent blocked');
 	await expect(inside.locator('#cookie')).toHaveText('cookie blocked');
 
-	await expect(reply.getByRole('img', { name: /^paper\.pdf, page/ })).toHaveCount(2);
-	const page1 = reply.getByRole('img', { name: 'paper.pdf, page 1' });
+	// A PDF is its page images, in page order, with a download.
+	await card('paper.pdf').click();
+	await expect(panel.getByRole('img', { name: /^paper\.pdf, page/ })).toHaveCount(2);
+	const page1 = panel.getByRole('img', { name: 'paper.pdf, page 1' });
 	await expect(page1).toHaveAttribute('src', content('a5'));
 	await expect.poll(() => page1.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBe(1);
-	const pdf = reply.getByTestId('sandbox-output').filter({ hasText: 'paper.pdf' });
-	await expect(pdf.getByRole('link', { name: 'Download paper.pdf' })).toHaveAttribute(
+	await expect(panel.getByRole('link', { name: 'Download' })).toHaveAttribute(
 		'href',
 		`${content('a4')}?attachment=true`
 	);
-	const bin = reply.getByTestId('sandbox-output').filter({ hasText: 'model.pkl' });
-	await expect(bin).toHaveAttribute('data-kind', 'download');
-	await expect(bin.getByRole('link', { name: 'Download model.pkl' })).toHaveAttribute(
+
+	// Anything else is a download.
+	await card('model.pkl').click();
+	await expect(card('model.pkl')).toHaveAttribute('data-kind', 'download');
+	await expect(panel.getByRole('link', { name: 'Download model.pkl' })).toHaveAttribute(
 		'href',
 		`${content('a7')}?attachment=true`
 	);
 
-	await reply.getByRole('button', { name: 'Enlarge' }).click();
-	const dialog = page.getByRole('dialog');
-	await expect(dialog.locator('iframe')).toHaveAttribute('sandbox', 'allow-scripts');
-	await expect(page.frameLocator('iframe[title="Output report.html, enlarged"]').locator('#ran')).toHaveText(
-		'script ran'
-	);
-	// The HTML output is never fetched from the file content route.
+	// The HTML output is never fetched from the file content route, only through the policy route.
 	expect(asked).not.toContain(content('a3'));
 });

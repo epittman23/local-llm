@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { CodeSurface } from '@/components/chat/CodeSurface';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { panelMode, SidePanel } from '@/components/layout/SidePanel';
 import {
@@ -41,14 +42,14 @@ import {
 import { RowButton } from '@/components/ui/row-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { CodeSurface } from './CodeSurface';
 import { Example, Section } from './parts';
 
 // /ui, "Canvas": the design of the document panel beside a chat (CNV rules;
-// docs/plans/canvas.md is the plan to build it). This is a self-contained
-// mock: the documents are invented constants and nothing is fetched or
-// saved. The real canvas will reuse SandboxedHtmlFrame and the sandbox
-// routes; the frame here has the same `allow-scripts`-only sandbox.
+// docs/plans/canvas.md is the plan). The viewer is built (routes/chat/canvas/);
+// editing (Phase 3) is not. This is a self-contained mock of both: the
+// documents are invented constants and nothing is fetched or saved. The real
+// canvas reuses SandboxedHtmlFrame and the sandbox routes; the frame here has
+// the same `allow-scripts`-only sandbox.
 
 type Kind = 'HTML' | 'Markdown' | 'Python' | 'CSV';
 
@@ -269,7 +270,7 @@ export function CanvasSection() {
 		<Section
 			id="canvas"
 			title="Canvas"
-			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The side panel it opens in is built and holds the chat's Controls and its code preview; the canvas itself is a design that is planned and not yet built, and the documents below are invented."
+			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The viewer is built and the side panel it opens in is shared with the chat's Controls; editing is a design that is planned and not yet built, and the documents below are invented."
 			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNT-4', 'LAY-4', 'NAV-4']}
 		>
 			<Example

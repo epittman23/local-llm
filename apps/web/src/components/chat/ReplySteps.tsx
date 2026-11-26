@@ -18,6 +18,7 @@ import { Markdown } from '@/components/chat/markdown/Markdown';
 import type { MarkdownEnv } from '@/components/chat/markdown/MarkdownContext';
 import { Button } from '@/components/ui/button';
 import { resolveChatMessageToolCall } from '@/lib/apis/chats';
+import { codeBlocks } from '@/lib/chat/documents';
 import {
 	currentStep,
 	fence,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/chat/replySteps';
 import type { OutputItem } from '@/lib/chat/structuredOutput';
 import { removeAllDetails } from '@/lib/markdown/content';
+import { lexMessage } from '@/lib/markdown/lexer';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -62,7 +64,8 @@ type Props = {
 	sourceIds?: string[];
 	onSourceClick?: MarkdownEnv['onSourceClick'];
 	onToolCallResolved?: () => void;
-	onPreview?: MarkdownEnv['onPreview'];
+	/** The reply's canvas documents: its fenced html and svg pages render as cards. */
+	documents?: MarkdownEnv['documents'];
 	onRun?: MarkdownEnv['onRun'];
 };
 
@@ -87,10 +90,22 @@ export function ReplySteps({
 	sourceIds,
 	onSourceClick,
 	onToolCallResolved,
-	onPreview,
+	documents,
 	onRun
 }: Props) {
 	const segments = useMemo(() => replySegments(output, done), [output, done]);
+	// A block's id counts the fenced blocks of the texts before it (lib/chat/documents.ts), so each text starts from that count.
+	const blockBases = useMemo(() => {
+		const bases = new Map<string, number>();
+		const texts = segments.flatMap((s) => (s.type === 'text' ? [s] : []));
+		let count = 0;
+		texts.forEach((s, i) => {
+			bases.set(s.id, count);
+			// The last text's own blocks number nothing after it, so it is not lexed here.
+			if (documents && i < texts.length - 1) count += codeBlocks(lexMessage(s.text, modelName)).length;
+		});
+		return bases;
+	}, [segments, documents, modelName]);
 	return (
 		<div className="flex flex-col gap-1" data-testid="reply-steps">
 			{segments.map((segment) =>
@@ -110,7 +125,8 @@ export function ReplySteps({
 							messageId={messageId}
 							sourceIds={sourceIds}
 							onSourceClick={onSourceClick}
-							onPreview={onPreview}
+							documents={documents}
+							blockBase={blockBases.get(segment.id)}
 							onRun={onRun}
 						/>
 					)

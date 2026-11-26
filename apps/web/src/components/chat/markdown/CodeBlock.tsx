@@ -8,8 +8,8 @@ import {
 	Copy,
 	Download,
 	ExternalLink,
-	Eye,
 	Loader2,
+	PanelRight,
 	Play,
 	TextWrap,
 	X
@@ -17,10 +17,12 @@ import {
 import 'highlight.js/styles/github-dark.min.css';
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
-import { SandboxOutputs } from '@/components/chat/SandboxOutputs';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { CodeRunResult } from '@/lib/apis/utils';
+import { documentKind, UUID } from '@/lib/chat/documents';
+import type { ChatFile } from '@/lib/chat/history';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useCopy } from '@/lib/ui/useCopy';
@@ -87,7 +89,7 @@ const EXTENSIONS: Record<string, string> = {
 export const extensionOf = (language: string) =>
 	EXTENSIONS[language] ?? (/^[a-z0-9]{1,5}$/.test(language) ? language : 'txt');
 
-// The common set has no LaTeX, which `.tex` sandbox outputs (components/chat/SandboxOutputs.tsx) are shown in.
+// The common set has no LaTeX, which the canvas shows `.tex` sandbox outputs in (routes/chat/canvas/).
 hljs.registerLanguage('latex', latex);
 
 let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
@@ -200,9 +202,42 @@ function SandboxSetup() {
 	);
 }
 
+const contentOf = (id: string, attachment = false) =>
+	`${WEBUI_API_BASE_URL}/files/${id}/content${attachment ? '?attachment=true' : ''}`;
+
+/**
+ * The files a Run put in /workspace/outputs: an image as a picture (only ever an `<img>`, SVG included), anything
+ * else as a download link, which the server always sends as an attachment. They belong to the run, not the chat,
+ * so they are not canvas documents.
+ */
+function RunFiles({ files }: { files?: unknown[] }) {
+	const shown = (Array.isArray(files) ? files : []).filter(
+		(f): f is ChatFile & { id: string } =>
+			Boolean(f) &&
+			typeof f === 'object' &&
+			typeof (f as ChatFile).id === 'string' &&
+			UUID.test((f as ChatFile).id as string)
+	);
+	if (!shown.length) return null;
+	return (
+		<div className="flex flex-col gap-2" data-testid="run-files">
+			{shown.map((f) => {
+				const name = typeof f.name === 'string' && f.name ? f.name : 'output';
+				return documentKind(f, 'output').kind === 'image' ? (
+					<img key={f.id} src={contentOf(f.id)} alt={name} className="max-h-60 max-w-full self-start rounded-lg" />
+				) : (
+					<a key={f.id} href={contentOf(f.id, true)} download={name} className="text-brand self-start underline">
+						Download {name}
+					</a>
+				);
+			})}
+		</div>
+	);
+}
+
 /**
  * What a Run left: its stdout, stderr and result, an error (the endpoint's refusal, or the sandbox's own failure),
- * and the files it put in /workspace/outputs, shown as a reply's sandbox outputs are (SandboxOutputs). The status
+ * and the files it put in /workspace/outputs, listed under the result (RunFiles). The status
  * line names a failure, so its text follows without a second label.
  */
 function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
@@ -245,7 +280,7 @@ function RunOutput({ run, onClose }: { run: Run; onClose: () => void }) {
 								!run.result.stderr &&
 								!run.result.result &&
 								!run.result.files?.length && <div className="text-muted-foreground text-xs">No output</div>}
-							<SandboxOutputs files={run.result.files} />
+							<RunFiles files={run.result.files} />
 						</>
 					)}
 				</>
@@ -299,8 +334,8 @@ function HeaderButton({
  * languages), and a header of actions (CNT-2): Collapse for a block over 25 lines (collapsed by default under the
  * user's "collapse code blocks" setting), Wrap lines (remembered), Run for Python when the caller provides a runner
  * (its output and outputs shown under the block until closed; a second press while it runs does nothing; disabled
- * for the session once the sandbox says it cannot start here), Preview for HTML and SVG when the caller offers one
- * (artifacts), Download (named by the language) and Copy. Long lines scroll inside the block, which is a named tab
+ * for the session once the sandbox says it cannot start here), Open in canvas when the caller offers it
+ * (a long block of code, which is also a canvas document), Download (named by the language) and Copy. Long lines scroll inside the block, which is a named tab
  * stop while they do. Mermaid diagrams are drawn once the fence is complete.
  */
 export function CodeBlock({
@@ -309,7 +344,7 @@ export function CodeBlock({
 	code,
 	complete,
 	defaultCollapsed = false,
-	onPreview,
+	onOpenInCanvas,
 	onRun
 }: {
 	id: string;
@@ -317,7 +352,8 @@ export function CodeBlock({
 	code: string;
 	complete: boolean;
 	defaultCollapsed?: boolean;
-	onPreview?: (code: string) => void;
+	/** Opens this block as a canvas document (a long block of code); the header shows Open in canvas when it is given. */
+	onOpenInCanvas?: () => void;
 	onRun?: (code: string) => Promise<CodeRunResult>;
 }) {
 	const [collapsedChoice, setCollapsed] = useState(defaultCollapsed);
@@ -414,8 +450,13 @@ export function CodeBlock({
 							aria-disabled={blocked}
 						/>
 					)}
-					{onPreview && ['html', 'svg'].includes(language) && (
-						<HeaderButton narrow={narrow} label="Preview" icon={<Eye aria-hidden />} onClick={() => onPreview(code)} />
+					{onOpenInCanvas && (
+						<HeaderButton
+							narrow={narrow}
+							label="Open in canvas"
+							icon={<PanelRight aria-hidden />}
+							onClick={onOpenInCanvas}
+						/>
 					)}
 					<HeaderButton
 						narrow={narrow}

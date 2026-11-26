@@ -25,6 +25,7 @@ flowchart LR
     chatPick["Model picker and @ mention: one Workspace model entry per task"]
     chatAttach["Attach files, knowledge bases, a URL or a YouTube video"]
     chatTools["Per-chat toggles: web search, image generation, code interpreter"]
+    chatCanvas["Canvas: files and HTML the model provides are cards that open beside the chat"]
     chatOrg["Folders, pins, archive, temporary chat"]
     chatShare["Share links: read-only /s/share-id"]
   end
@@ -100,6 +101,14 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   interpreter. With native function calling (the default) they are tools
   the model chooses to call; see
   [How a chat reaches a model](#how-a-chat-reaches-a-model).
+- **Documents.** A file the model leaves in the sandbox's outputs, a page of
+  HTML or SVG it writes (complete, or over 15 lines), a file you upload, and
+  a long code block you open are cards in the reply. A card opens the canvas
+  beside the chat (a sheet below `md`), which previews the document, shows
+  its source, copies or downloads it and, for HTML, runs it in a sandboxed
+  frame that loads nothing from the network. The open document is in the
+  URL (`?canvas=`), and Settings > Interface can stop the canvas opening by
+  itself. Editing a document is planned (docs/plans/canvas.md, Phase 3).
 - **Organising.** Folders, pins, archive, temporary chats
   (`?temporary-chat=true`, nothing saved) and read-only share links at
   `/s/<share-id>`.
