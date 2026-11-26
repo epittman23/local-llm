@@ -7,6 +7,45 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 4 (b) built: editing a CSV as a
+  table.** A CSV file in the canvas is edited as a table, a field in every
+  cell, and saved as a new version like any text (`docs/plans/canvas.md`,
+  CNV-4, CNV-6, DAT-1). The orchestrating session settled these points on
+  2026-11-26.
+  - **The table is offered only when it is faithful.** The viewer cuts at 200
+    rows, 50 columns and 1,000 characters a cell, so saving what it shows
+    would silently destroy data. The table is offered only for a file with at
+    most 500 rows, 50 columns and 1,000 characters a cell, one line ending,
+    comma separators, and whose rows read the same after being written back
+    (`parseCsvTable`). Anything else is edited as text, in Source, with a Note
+    saying which limit it is; a CSV over 256 KiB, cut at the fetch, has no
+    edit at all. 500 x 50 is at most 25,000 fields in plain DOM with each row
+    memoised and no virtual list; the limit drops if that proves slow.
+  - **Writing does not use `csvCell`.** `csvCell` prefixes a quote to a cell
+    starting with `=`, `+`, `-` or `@`, which is right for a report an admin
+    opens in a spreadsheet and wrong here: `=SUM(A1:A3)` would be saved as
+    `'=SUM(A1:A3)`. `stringifyCsvTable` quotes by RFC 4180 only (a comma,
+    quote, CR, LF, or a leading or trailing space), and a test pins that a
+    formula-like cell and `-5` come back unchanged. The formula-injection risk
+    is that of the original file: the app stores and returns text and never
+    evaluates a cell.
+  - **Comma only.** A semicolon or tab file is edited as text; guessing a
+    delimiter would rewrite the file on the first save.
+  - **The draft stays text.** The table writes every change to the draft, so
+    Save, the unsaved-changes guard, the version route and Attach are Phase
+    3's, unforked. "Dirty" compares canonical text (the table as it would be
+    written), so a file written differently from the table's quoting is not
+    changed until a cell is. The first save normalises quoting and pads short
+    rows, and says so.
+  - **Keys.** Tab moves cell to cell (no grid role), Enter down, Shift+Enter
+    up, Alt+Enter a line break in the cell, Ctrl or Cmd+S saves. Rows and
+    columns are added and removed with named buttons; nothing asks first, as
+    the draft is not saved until Save and Discard changes undoes it.
+  - **A byte order mark survives an edit.** The canvas's text fetch used to
+    drop a leading BOM, so a file edited in Source lost it on save; it now
+    decodes with `ignoreBOM`, and the table and Source editors both save it
+    back. A pytest case pins that the version route stores it byte for byte.
+    No migration.
 - **2026-11-26** (latest): **Canvas Phase 4 (e) built: a cited knowledge file
   in the canvas.** The citation dialog's Open in canvas shows a knowledge
   file a reply cited, read-only, beside the passages cited from it

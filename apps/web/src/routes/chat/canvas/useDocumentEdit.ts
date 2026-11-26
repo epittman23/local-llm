@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toastFailure } from '@/components/common/failureToast';
 import { createFileVersion, type FileVersion, type SavedVersion } from '@/lib/apis/files/versions';
@@ -35,6 +35,10 @@ export type DocumentEdit = {
  * `draftOnly` (a fenced block, which has no file to version) keeps the draft and
  * never saves it: `fileId` is then only the key the draft belongs to, and `save` does nothing.
  *
+ * `canonical` (a CSV edited as a table) maps a text to the form the editor writes it in, and the draft is
+ * dirty when its canonical form differs from the baseline's: a file the table writes differently (its
+ * quoting) is not changed until a cell is, and changing a cell back clears it (FRM-3).
+ *
  * A saved version is put in the text cache under its own id, so the canvas
  * shows it at once, and in the version list; `onSaved` hears of it.
  */
@@ -43,12 +47,14 @@ export function useDocumentEdit({
 	rootId,
 	text,
 	draftOnly = false,
+	canonical,
 	onSaved
 }: {
 	fileId: string | null;
 	rootId: string | null;
 	text: string | undefined;
 	draftOnly?: boolean;
+	canonical?: (text: string) => string;
 	onSaved: (saved: SavedVersion) => void;
 }): DocumentEdit {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -64,7 +70,10 @@ export function useDocumentEdit({
 	const crlf = text !== undefined && usesCrlf(text);
 	const baseline = text === undefined ? '' : crlf ? text.replace(/\r\n/g, '\n') : text;
 	const draft = editing ? state.draft : baseline;
-	const dirty = editing && draft !== baseline;
+	const dirty = useMemo(
+		() => editing && (canonical ? canonical(draft) !== canonical(baseline) : draft !== baseline),
+		[editing, canonical, draft, baseline]
+	);
 
 	const start = useCallback(() => {
 		if (fileId !== null && text !== undefined) setState({ fileId, draft: baseline });

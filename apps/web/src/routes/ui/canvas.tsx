@@ -15,6 +15,7 @@ import {
 	PencilIcon,
 	RotateCwIcon,
 	TableIcon,
+	TextIcon,
 	XIcon
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -45,8 +46,11 @@ import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { CanvasDocument } from '@/lib/chat/documents';
 import { withHtmlPolicy } from '@/lib/chat/htmlPolicy';
+import { tableNote } from '@/routes/chat/canvas/present';
 import { DiffView } from '@/routes/chat/canvas/views/ChangesView';
+import { CsvEditView } from '@/routes/chat/canvas/views/CsvEditView';
 import { Note } from '@/routes/chat/canvas/views/parts';
 import { PassagesNote } from '@/routes/chat/canvas/views/PassagesNote';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -156,7 +160,17 @@ const PREVIOUS: Record<string, string> = {
 		'\n\nrng'
 	)
 };
-const EDITABLE: Record<Kind, boolean> = { HTML: true, Markdown: true, Python: true, CSV: false };
+const EDITABLE: Record<Kind, boolean> = { HTML: true, Markdown: true, Python: true, CSV: true };
+
+/** What the real `CsvEditView` is given for the invented table: it needs only the document's name. */
+const CSV_DOCUMENT: CanvasDocument = {
+	id: 'summary',
+	name: 'summary.csv',
+	kind: 'csv',
+	bytes: null,
+	messageId: 'm1',
+	source: { type: 'upload', fileId: '00000000-0000-4000-8000-000000000001' }
+};
 
 /** CNV-1: a document in a reply is a card that opens the canvas. */
 function DocumentCard({
@@ -238,6 +252,9 @@ export function CanvasSection() {
 	const [openId, setOpenId] = useState<string | null>('explorer');
 	const [mode, setMode] = useState<'preview' | 'source' | 'changes'>('preview');
 	const [draft, setDraft] = useState<string | null>(null);
+	// CNV-6: a CSV is edited as a table; Edit as text turns it into its source.
+	const [asText, setAsText] = useState(false);
+	const firstCell = useRef<HTMLElement>(null);
 	// CNV-5, CNV-6: what the preview beside an HTML draft shows: the draft as of the last Update preview.
 	const [applied, setApplied] = useState('');
 	const [live, setLive] = useState(false);
@@ -267,6 +284,7 @@ export function CanvasSection() {
 		const next = DOCUMENTS.find((d) => d.id === id);
 		setOpenId(id);
 		setDraft(null);
+		setAsText(false);
 		if (next) setMode(HAS_PREVIEW[next.kind] ? 'preview' : 'source');
 		else setExpanded(false);
 		// CNV-8: opening moves focus to the canvas's heading; closing returns it to the card.
@@ -277,6 +295,7 @@ export function CanvasSection() {
 	/** CNV-6: leaving the editor, by saving or discarding, puts focus back on the heading. */
 	const leaveEditor = () => {
 		setDraft(null);
+		setAsText(false);
 		requestAnimationFrame(() => heading.current?.focus());
 	};
 	const save = () => {
@@ -291,6 +310,12 @@ export function CanvasSection() {
 		setApplied(text);
 		if (doc.kind === 'HTML') setMode('source');
 	};
+	const csvTable = doc?.kind === 'CSV' && !asText;
+	const editAsText = () => {
+		setAsText(true);
+		setMode('source');
+		if (draft === null) setDraft(text);
+	};
 	// "Update as I type": the preview follows the draft 800 ms after typing stops.
 	useEffect(() => {
 		if (!live || draft === null || applied === draft) return;
@@ -299,7 +324,7 @@ export function CanvasSection() {
 	}, [live, draft, applied]);
 	// CNV-6: entering the editor moves focus into it.
 	useEffect(() => {
-		if (editing) editor.current?.focus();
+		if (editing) (editor.current ?? firstCell.current)?.focus();
 	}, [editing]);
 
 	// CNV-8: Escape closes the canvas when nothing inside it (a menu) is open.
@@ -323,11 +348,24 @@ export function CanvasSection() {
 			id="canvas"
 			title="Canvas"
 			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text and pages, edited. The viewer, the editor and the page editor with its preview beside the source are built, and the side panel they open in is shared with the chat's Controls; the documents below are invented and nothing is saved."
-			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNV-9', 'CNT-4', 'LAY-4', 'NAV-4']}
+			rules={[
+				'CNV-1',
+				'CNV-2',
+				'CNV-3',
+				'CNV-4',
+				'CNV-5',
+				'CNV-6',
+				'CNV-8',
+				'CNV-9',
+				'DAT-1',
+				'CNT-4',
+				'LAY-4',
+				'NAV-4'
+			]}
 		>
 			<Example
 				title="A reply with five documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The page, the Markdown and the Python documents can be edited, and Changes compares the last two with their earlier version: the editor is the Source view with a caret, highlighted as you type, and saving is on request. A page has its preview beside the source (one pane at a time, by the View switch, when the canvas is narrower than 44 rem); it updates on Update preview or Ctrl or Cmd+Enter, says Out of date until it does, and updates as you type only when that is switched on. The greeting page stands for a fenced block: Try changes edits a draft that is never saved. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The page, the Markdown, the Python and the CSV documents can be edited (the table is edited as a table, with Edit as text in the Copy menu), and Changes compares the last two with their earlier version: the editor is the Source view with a caret, highlighted as you type, and saving is on request. A page has its preview beside the source (one pane at a time, by the View switch, when the canvas is narrower than 44 rem); it updates on Update preview or Ctrl or Cmd+Enter, says Out of date until it does, and updates as you type only when that is switched on. The greeting page stands for a fenced block: Try changes edits a draft that is never saved. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
 			>
 				<div
 					ref={frame}
@@ -438,6 +476,12 @@ export function CanvasSection() {
 												<CopyIcon aria-hidden />
 												Copy
 											</DropdownMenuItem>
+											{csvTable && (
+												<DropdownMenuItem onSelect={editAsText}>
+													<TextIcon aria-hidden />
+													Edit as text
+												</DropdownMenuItem>
+											)}
 											<DropdownMenuItem onSelect={() => toast.success('Downloaded')}>
 												<DownloadIcon aria-hidden />
 												Download
@@ -462,6 +506,12 @@ export function CanvasSection() {
 												<CopyIcon aria-hidden />
 												Copy
 											</DropdownMenuItem>
+											{csvTable && (
+												<DropdownMenuItem onSelect={editAsText}>
+													<TextIcon aria-hidden />
+													Edit as text
+												</DropdownMenuItem>
+											)}
 											<DropdownMenuItem onSelect={() => toast.success('Downloaded')}>
 												<DownloadIcon aria-hidden />
 												Download
@@ -537,6 +587,13 @@ export function CanvasSection() {
 											</div>
 										</div>
 									</div>
+								) : editing && csvTable ? (
+									// CNV-6, DAT-1: a CSV is a table with a field in every cell, written back as text.
+									<CsvEditView
+										doc={CSV_DOCUMENT}
+										edit={{ draft, setDraft, inputRef: editor, onSave: save }}
+										extras={{ cellRef: firstCell, dirty, rewrites: false }}
+									/>
 								) : editing ? (
 									// CNV-6: the same surface as Source, with a caret.
 									<CodeSurface
@@ -636,6 +693,15 @@ export function CanvasSection() {
 						</AlertDialogFooter>
 					</AlertDialogContent>
 				</AlertDialog>
+			</Example>
+			<Example
+				title="A CSV that is edited as text"
+				note="A file the table cannot hold faithfully (past 500 rows or 50 columns, a cell over 1,000 characters, not comma-separated, or mixed line endings) is edited in Source with one of these Notes above it. Editing a table never clips: what is not faithful is not offered as a table."
+			>
+				<div className="border-border bg-background flex max-w-xl flex-col overflow-hidden rounded-panel border">
+					<Note>{tableNote('size')}</Note>
+					<Note>{tableNote('delimiter')}</Note>
+				</div>
 			</Example>
 			<Example
 				title="A knowledge file a reply cites"

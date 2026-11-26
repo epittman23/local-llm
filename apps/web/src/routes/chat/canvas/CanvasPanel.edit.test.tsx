@@ -278,8 +278,8 @@ describe('which documents can be edited', () => {
 		return renderWithRouter(<CanvasPanel canvas={canvas} />);
 	};
 
-	it('offers no Edit for a Python block, a table or an image', async () => {
-		for (const doc of [blockDoc('x = 1', 'python'), docOf(output('4', 'table.csv')), docOf(output('5', 'plot.png'))]) {
+	it('offers no Edit for a Python block, a file that only downloads or an image', async () => {
+		for (const doc of [blockDoc('x = 1', 'python'), docOf(output('4', 'data.bin')), docOf(output('5', 'plot.png'))]) {
 			renderStatic(doc);
 			await screen.findByRole('complementary');
 			expect(screen.queryByRole('button', { name: 'Edit document' })).toBeNull();
@@ -520,5 +520,82 @@ describe('editing a page', () => {
 		renderStaticDoc(blockDoc('<p>hi', 'html', false));
 		await screen.findByRole('complementary');
 		expect(screen.queryByRole('button', { name: 'Try changes' })).toBeNull();
+	});
+});
+
+describe('editing a CSV as a table', () => {
+	const CSV = id('c');
+	const csvFiles = [output('c', 'data.csv')];
+	const showCsv = (text: string) => {
+		api.text.mockImplementation(async () => ({ text, truncated: false }));
+		api.list.mockImplementation(async (_t, file) => [entry(file, 1)]);
+		return show({ files: csvFiles, open: CSV });
+	};
+	const cellBox = (name: string) => screen.findByRole('textbox', { name }) as Promise<HTMLTextAreaElement>;
+
+	it('opens a faithful file as a table with focus in its first cell, and Save posts the text', async () => {
+		showCsv('name,qty\nAda,3\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		const heading = await cellBox('Heading of column 1');
+		await waitFor(() => expect(heading).toHaveFocus());
+		expect(screen.queryByRole('textbox', { name: 'Edit data.csv' })).toBeNull();
+		type(await cellBox('Row 1, column 1'), 'Ada L');
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Save document' }));
+		await waitFor(() => expect(api.create).toHaveBeenCalledWith('', CSV, 'name,qty\nAda L,3\n'));
+	});
+
+	it('clears Unsaved changes when a cell is put back, and does not mark a file changed for its quoting alone', async () => {
+		showCsv('name,qty\n"Ada",3\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		const cell = await cellBox('Row 1, column 1');
+		expect(screen.getByText('All changes saved')).toBeInTheDocument();
+		type(cell, 'Bo');
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		expect(screen.getByText('Saving normalises quoting.')).toBeInTheDocument();
+		type(cell, 'Ada');
+		expect(screen.queryByText('Unsaved changes')).toBeNull();
+	});
+
+	it('keeps a CRLF file CRLF, and a quoted line break in a cell as it was', async () => {
+		showCsv('a,b\r\n"x\r\ny",2\r\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		type(await cellBox('Row 1, column 2'), '3');
+		fireEvent.click(screen.getByRole('button', { name: 'Save document' }));
+		await waitFor(() => expect(api.create).toHaveBeenCalledWith('', CSV, 'a,b\r\n"x\r\ny",3\r\n'));
+	});
+
+	it('opens a file with more than 500 rows as text, with a Note saying why', async () => {
+		showCsv(Array.from({ length: 501 }, (_, i) => `${i},x`).join('\n'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		expect(await screen.findByRole('textbox', { name: 'Edit data.csv' })).toBeInTheDocument();
+		expect(screen.getByText('Too large to edit as a table. Edit it as text.')).toBeInTheDocument();
+		expect(screen.queryByRole('textbox', { name: 'Heading of column 1' })).toBeNull();
+	});
+
+	it('opens a semicolon file as text, with its own Note', async () => {
+		showCsv('a;b\n1;2\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		expect(await screen.findByRole('textbox', { name: 'Edit data.csv' })).toBeInTheDocument();
+		expect(screen.getByText(/Only comma-separated files/)).toBeInTheDocument();
+	});
+
+	it('Edit as text turns the table into its text with the draft kept', async () => {
+		showCsv('a,b\n1,2\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		type(await cellBox('Row 1, column 1'), '9');
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Copy' }), { button: 0, pointerType: 'mouse' });
+		fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit as text' }));
+		const box = (await screen.findByRole('textbox', { name: 'Edit data.csv' })) as HTMLTextAreaElement;
+		expect(box).toHaveValue('a,b\n9,2\n');
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+	});
+
+	it('asks before the canvas closes with unsaved cell changes', async () => {
+		showCsv('a,b\n1,2\n');
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		type(await cellBox('Row 1, column 1'), '9');
+		fireEvent.click(screen.getByRole('button', { name: 'Close canvas' }));
+		expect(await ask()).toBeInTheDocument();
 	});
 });

@@ -605,6 +605,10 @@ never inside it. `/ui` shows both under Pages and navigation.
 
 **DAT-1. Use the shared `Table`.** Column headings are `th scope="col"`. Text
 is left-aligned; figures are right-aligned. A sortable heading is a button.
+A table whose cells are edited in place (the canvas's CSV editor, CNV-6) is the
+one exception to "a cell is text": each cell is a field named by its place
+("Row 2, column 3", "Heading of column 3"), with its row and column actions
+as named buttons, and no grid role.
 
 **DAT-2. Figures.** Tabular numerals; one precision per column; the unit in
 the column heading ("Peak VRAM, MiB"), not repeated in every cell; thousands
@@ -968,7 +972,7 @@ menu.
 **CNV-4. A kind has one renderer**, the same one wherever that kind is shown.
 A page of HTML, and an `svg` code block: a sandboxed frame that loads nothing from the network (CNV-5). Markdown: the
 chat's rendering, at reading width (TYP-5). Text and code: the standard's code block with line numbers
-(CNT-2). Changes (a text document with more than one version): a unified line diff, text only (CNV-9). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
+(CNT-2). Changes (a text document with more than one version): a unified line diff, text only (CNV-9). CSV: the standard's table (DAT-1, DAT-2), in both modes: while it is edited it is the same table with a field in every cell (CNV-6). Image (an SVG file
 included, always as an image) and PDF: fitted to the canvas. Anything else: its name, its size and a Download button.
 A knowledge file a reply cites (CNV-1) uses the same renderers, read-only, with the passages cited from it as text in a "Cited in this reply" Note above; its HTML is source only, never framed, and a PDF is a Download with Open at page N.
 
@@ -986,7 +990,7 @@ policy, as `srcDoc` and nothing else, and reaches it when the person asks
 (Update preview), not on every keystroke.
 
 **CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
-document (offered for Markdown, text and code files up to 256 KiB whose
+document (offered for Markdown, text, code and CSV files up to 256 KiB whose
 text was fetched whole and is UTF-8, and HTML pages, below; not for a block
 of code), then a bar
 with "Unsaved changes", Discard changes and Save document. The editor is the Source view with a caret: the same face, size,
@@ -1030,6 +1034,19 @@ the same split editor, with nothing saved and no versions, a bar that says
 changes, and Copy and Download acting on the draft. The unsaved-changes guard
 covers it as it does a file.
 
+A CSV is edited as that table when it is faithful, as text in the Source view otherwise
+(CNV-6). Its table never clips: a file the viewer would cut is not offered as a table. Editing it:
+the table's cells are fields in the standard's `Table` with no grid role, so Tab moves from cell to
+cell; Enter moves down, Shift+Enter up, Alt+Enter is a line break in the cell and Ctrl or Cmd+S
+saves, and the sentence under the table says so, tied to it with `aria-describedby`. Each body row
+has "Insert row below" and "Delete row" buttons and each heading a menu with "Add column after" and
+"Delete column" (ACT-4: every icon is named and has a tooltip), "Add row" is under the table, the
+last column cannot be deleted and a table stops at 500 rows and 50 columns, said where Add row is.
+Nothing asks before a row or column goes: Discard changes puts the table back (FRM-3). "Edit as
+text" (the Copy menu) turns the table into its source with the draft kept; "Saving normalises
+quoting." is shown once a cell has changed in a file the table writes differently, and short rows
+are padded.
+
 **CNV-7. The open document is in the address** (NAV-1). A document that is no
 longer in the chat says so in the canvas (NAV-3). A knowledge file is
 `?canvas=file:<id>`; it opens only when a reply on the branch cites it, and
@@ -1046,8 +1063,8 @@ belong to the page, so Close is always one Tab away from the frame.
 
 **CNV-9. Changes compares two saved versions as a unified line diff, read-only
 and as text.** The header's third segment, Changes, is offered only for a
-Markdown, text, code or HTML file with more than one version (never for a
-block, a table, an image or a PDF), so its trigger is "Changes" beside Preview
+Markdown, text, code, CSV or HTML file with more than one version (never for a
+block, an image or a PDF), so its trigger is "Changes" beside Preview
 and Source. Edit document is not offered in it, and switching to it with
 unsaved edits asks first ('Discard changes?', FRM-3). Two selectors, From and
 To, list the versions as the Versions menu does; they start at the version

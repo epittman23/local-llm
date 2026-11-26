@@ -387,6 +387,22 @@ def test_text_round_trips_byte_exact(stubs):
     assert asyncio.run(scenario()) == text.encode('utf-8')
 
 
+def test_a_csv_root_round_trips_its_bom_crlf_and_quoted_newline_byte_exact(stubs):
+    text = '\ufeffname,note\r\n"Ada","likes ""quotes"", commas\r\nand a line break"\r\n=SUM(A1:A3),-5\r\n'
+
+    async def scenario():
+        owner = await _user()
+        root = await _root(owner, name='table.csv', data=b'name,note\n', content_type='text/csv')
+        new = await _save(owner, root.id, text)
+        return new, _bytes(new)
+
+    new, stored = asyncio.run(scenario())
+
+    assert stored == text.encode('utf-8')
+    assert new.filename == 'table.csv'
+    assert new.meta['size'] == len(text.encode('utf-8'))
+
+
 def test_deleting_the_root_deletes_its_versions_and_a_version_goes_alone(stubs):
     async def scenario():
         owner = await _user()
