@@ -223,8 +223,8 @@ Project skills in `.claude/skills/` turn the rules below into procedures:
 `docs-sync` (the maintenance policy), `pr-gate` (the CI tripwire),
 `new-migration` (the append-only schema), `serving-change` (launch flags
 and the `config_id` fingerprint), `ui-standard` (checking a UI change
-against the interface standard) and `reindex` (refreshing the code-graph
-index below). Use the one that matches the change. The
+against the interface standard), `reindex` (refreshing the code-graph
+index below) and `workflow` (issue to merged PR, and unattended runs). Use the one that matches the change. The
 `reviewer` subagent (`.claude/agents/`) reviews a branch before
 its PR. `.claude/settings.json` turns off Claude Code's attribution
 defaults, which the commit policy below forbids. `.mcp.json` registers `codebase-memory-mcp`, a local code-graph

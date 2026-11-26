@@ -7,6 +7,33 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (workflow): **How work is done is written down as the
+  `workflow` skill, with a throwaway stack for real-backend checks.** The
+  owner settled these points after the 2026-11-25 unattended run
+  (`.claude/skills/workflow/SKILL.md`, `scripts/throwaway-stack/`).
+  - **One focused PR per issue or plan phase, one open at a time.** A
+    failure then has one suspect and the squash merges stay readable. Later
+    items may be built meanwhile on stacked branches; after each squash
+    merge, main is merged into the next branch (never rebased), with
+    conflicts resolved to the branch side because main holds the squash of
+    the same commits.
+  - **A gate finding that was not pre-approved stops the work.** The agent
+    writes `## Gate changes`, notifies the owner and waits; it never adds
+    the label, rewords or restructures to slip past a pattern. The patterns
+    are textual and match inside strings (a `def fit(x)` fixture tripped
+    "focused tests" in #1165), so new fixtures avoid those spellings.
+  - **Subagents default to Sonnet,** with effort chosen by the task, and
+    every brief names its branch, files, decisions, checkpoints and gate
+    cautions; the orchestrator reviews before it commits or pushes. This
+    keeps cost down without letting an agent's own "done" stand.
+  - **A change across the frontend/backend seam, or touching the sandbox,
+    needs a real-backend run** on the throwaway stack, never the owner's
+    ports, data or containers, because Playwright mocks the backend. The
+    scripts moved from a private kit into the repo so every session has them.
+  - **Unattended runs pace themselves and stay quiet.** Above about 85% of
+    the 5-hour usage window no new subagents start; push notifications are
+    for a decision only the owner can make, a blocking failure, or run
+    complete. No quality gate is self-certified.
 - **2026-11-26** (latest): **Canvas Phase 4 (d) built: writing an edit back
   into the sandbox workspace.** A saved version of a file the model wrote to
   its workspace can be put back there from the canvas, as a separate action
