@@ -145,4 +145,6 @@ test('a reply shows its sandbox outputs as cards, and the canvas shows each: ima
 	// it, never displayed), and never loaded as a document or a frame.
 	const page3 = asked.filter((request) => request.path === content('a3'));
 	expect(page3.every((request) => request.type === 'fetch')).toBe(true);
+	expect(page.frames().some((frame) => frame.url().includes(content('a3')))).toBe(false);
+	expect(page.url()).not.toContain(content('a3'));
 });
