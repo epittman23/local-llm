@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { blockDoc, docOf, id, output, renderWithClient, upload } from '../testing';
 import { SourceView } from './SourceView';
@@ -32,7 +32,9 @@ describe('SourceView', () => {
 	it('says when only the start of a file is shown', async () => {
 		api.text.mockResolvedValue({ text: '\\section{Intro}', truncated: true });
 		renderWithClient(<SourceView doc={docOf(output('2', 'paper.tex'))} />);
-		expect(await screen.findByText(/Showing the first 256 KiB/)).toBeInTheDocument();
+		expect(
+			await screen.findByText(/Showing the first 256 KiB; download it for the rest, or to change it/)
+		).toBeInTheDocument();
 	});
 
 	it('says when a file cannot be fetched', async () => {
@@ -61,5 +63,57 @@ describe('SourceView', () => {
 		const { container } = renderWithClient(<SourceView doc={{ ...blockDoc(long, 'python'), kind: 'code' }} />);
 		expect(container.querySelector('.hljs-keyword')).toBeNull();
 		expect(container).toHaveTextContent('import os');
+	});
+
+	describe('as an editor', () => {
+		const edit = (draft: string, setDraft = vi.fn(), onSave = vi.fn()) => ({
+			draft,
+			setDraft,
+			onSave,
+			inputRef: { current: null }
+		});
+
+		it('shows the draft, not the fetched text, in a labelled textarea with its key help written under it', async () => {
+			api.text.mockResolvedValue({ text: 'fetched', truncated: false });
+			const setDraft = vi.fn();
+			renderWithClient(<SourceView doc={docOf(output('1', 'fit.py'))} edit={edit('my draft', setDraft)} />);
+			const box = await screen.findByRole('textbox', { name: 'Edit fit.py' });
+			expect(box).toHaveValue('my draft');
+			expect(screen.queryByText('fetched')).toBeNull();
+			const hint = screen.getByText('Tab indents. Press Esc, then Tab, to leave the editor.');
+			expect(hint).toBeVisible();
+			expect(box).toHaveAccessibleDescription(hint.textContent ?? '');
+			fireEvent.change(box, { target: { value: 'typed' } });
+			expect(setDraft).toHaveBeenCalledWith('typed');
+		});
+
+		it('saves with Ctrl+S', async () => {
+			api.text.mockResolvedValue({ text: 'x', truncated: false });
+			const onSave = vi.fn();
+			renderWithClient(<SourceView doc={docOf(output('1', 'fit.py'))} edit={edit('x', vi.fn(), onSave)} />);
+			fireEvent.keyDown(await screen.findByRole('textbox'), { key: 's', ctrlKey: true });
+			expect(onSave).toHaveBeenCalledTimes(1);
+		});
+
+		it('has no textarea or hint without edit', async () => {
+			api.text.mockResolvedValue({ text: 'x', truncated: false });
+			renderWithClient(<SourceView doc={docOf(output('1', 'fit.py'))} />);
+			await screen.findByText('x');
+			expect(screen.queryByRole('textbox')).toBeNull();
+			expect(screen.queryByText(/Tab indents/)).toBeNull();
+		});
+	});
+
+	it('says an editable file that is not UTF-8 text must be downloaded to be changed', async () => {
+		api.text.mockResolvedValue({ text: 'caf\uFFFD', truncated: false });
+		renderWithClient(<SourceView doc={docOf(output('1', 'notes.txt'))} />);
+		expect(await screen.findByText('This file is not UTF-8 text; download it to change it.')).toBeInTheDocument();
+	});
+
+	it('does not say so of a page, which is never edited', async () => {
+		api.text.mockResolvedValue({ text: 'caf\uFFFD', truncated: false });
+		const { container } = renderWithClient(<SourceView doc={docOf(upload('9', 'mine.html'), 'user')} />);
+		await waitFor(() => expect(container).toHaveTextContent('caf'));
+		expect(screen.queryByText(/not UTF-8/)).toBeNull();
 	});
 });

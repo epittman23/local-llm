@@ -60,7 +60,7 @@ import { ModelSelector } from './ModelSelector';
 import { openModelPicker } from './modelPickerStore';
 import { ServerDialogs } from './ServerDialogs';
 import { TemporaryNotice, TemporaryToggle, useLeaveWarning } from './TemporaryNotice';
-import { useAttachments } from './useAttachments';
+import { uploadCountLimit, useAttachments } from './useAttachments';
 import { useChatPrefs } from './useChatPrefs';
 import { useChatSession } from './useChatSession';
 import { useHeldSend } from './useHeldSend';
@@ -426,7 +426,33 @@ export function ChatPage() {
 		if (controlsOpen && !controlsWas.current && canvasOpen) canvas.close();
 		controlsWas.current = controlsOpen;
 	}, [controlsOpen, canvasOpen, canvas.close]);
-	const canvasContext = useMemo(() => ({ openId: canvas.openId, open: canvas.open }), [canvas.openId, canvas.open]);
+	// A saved version of a document joins the next message (docs/plans/canvas.md, C16); a temporary chat has no
+	// server files to attach, and the file limit counts it as any other.
+	const inTemporary = temporary && !id;
+	const maxFiles = uploadCountLimit(config as { file?: { max_count?: number | null } } | null);
+	const attachedCount = attachments.files.length;
+	const attachedIds = attachments.files.map((f) => f.id).join();
+	const addAttachment = attachments.addItem;
+	const attach = useCallback(
+		(file: ChatFile) => {
+			if (inTemporary) {
+				toast.error('A temporary chat keeps no files to attach.');
+				return false;
+			}
+			if (attachedIds.split(',').includes(String(file.id))) return true;
+			if (maxFiles !== null && attachedCount + 1 > maxFiles) {
+				toast.error(`You can only chat with a maximum of ${maxFiles} file(s) at a time.`);
+				return false;
+			}
+			addAttachment(file);
+			return true;
+		},
+		[inTemporary, maxFiles, attachedCount, attachedIds, addAttachment]
+	);
+	const canvasContext = useMemo(
+		() => ({ openId: canvas.openId, open: canvas.open, attach }),
+		[canvas.openId, canvas.open, attach]
+	);
 
 	const actions = useMessageActions(session);
 	const [citation, setCitation] = useState<Citation | null>(null);
@@ -780,7 +806,7 @@ export function ChatPage() {
 					<CitationDialog source={citation} onClose={() => setCitation(null)} />
 				</div>
 				{/* One side panel (CNV-2): the canvas while a document is open, else Controls. */}
-				<CanvasPanel canvas={canvas} focusOnOpen={canvas.openId !== autoOpened} />
+				<CanvasPanel canvas={canvas} focusOnOpen={canvas.openId !== autoOpened} editable={!inTemporary} />
 				<SidePanel
 					open={controlsOpen && !canvasOpen}
 					onClose={() => setControlsOpen(false)}

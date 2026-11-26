@@ -78,6 +78,20 @@ describe('CodeSurface', () => {
 		expect(pass({ key: 'Tab' })).toBe(true);
 	});
 
+	it('takes Escape before a listener on a parent sees it, so a panel around it does not close, and says so on the textarea', () => {
+		const { container } = render(<Editor initial="" />);
+		const seen: boolean[] = [];
+		container.addEventListener('keydown', (e) => seen.push(e.defaultPrevented));
+		fireEvent.keyDown(box(), { key: 'Escape' });
+		expect(seen).toEqual([false]);
+		expect(box().hasAttribute('data-escape-kept')).toBe(false);
+		type('a');
+		expect(box().hasAttribute('data-escape-kept')).toBe(true);
+		fireEvent.keyDown(box(), { key: 'Escape' });
+		expect(seen).toEqual([false, true]);
+		expect(box().hasAttribute('data-escape-kept')).toBe(false);
+	});
+
 	it('indents with a tab for go', () => {
 		render(<Editor initial="" language="go" />);
 		type('x');

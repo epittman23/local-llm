@@ -17,6 +17,7 @@ export function SaveBar({
 	dirty,
 	saving = false,
 	disabled = false,
+	note,
 	onDiscard,
 	onSave,
 	saveLabel = 'Save',
@@ -25,8 +26,10 @@ export function SaveBar({
 }: {
 	dirty: boolean;
 	saving?: boolean;
-	/** Saving is off for another reason (the form did not load); say why next to it. */
+	/** Saving is off for another reason (the form did not load); say why in `note`. */
 	disabled?: boolean;
+	/** A sentence after the status line: why Save is off, or what else the person should know. */
+	note?: string;
 	onDiscard: () => void;
 	onSave?: () => void;
 	saveLabel?: string;
@@ -39,6 +42,7 @@ export function SaveBar({
 			<p role="status" className="text-foreground-muted me-auto inline-flex items-center gap-2 text-dense max-sm:w-full">
 				{dirty && <span aria-hidden className="bg-warning size-2 rounded-full" />}
 				{dirty ? 'Unsaved changes' : creating ? 'Nothing to save yet' : 'All changes saved'}
+				{note && <span>{note}</span>}
 			</p>
 			<Button type="button" variant="ghost" disabled={!dirty || saving} onClick={onDiscard}>
 				Discard changes

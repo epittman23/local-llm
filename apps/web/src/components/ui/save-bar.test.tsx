@@ -22,6 +22,13 @@ describe('SaveBar (FRM-3)', () => {
 		expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
 	});
 
+	it('says why Save is off in a note after the status line', () => {
+		render(<SaveBar dirty disabled note="A document can’t be saved empty" onDiscard={() => {}} onSave={() => {}} />);
+		expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+		expect(screen.getByRole('status')).toHaveTextContent('A document can’t be saved empty');
+		expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+	});
+
 	it('says what is unsaved, discards, and saves through onSave outside a form', () => {
 		const onDiscard = vi.fn();
 		const onSave = vi.fn();

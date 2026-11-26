@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
-import type { ReactElement, ReactNode } from 'react';
+import { createContext, type ReactElement, type ReactNode, useContext } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { type CanvasDocument, messageDocuments } from '@/lib/chat/documents';
 import type { ChatFile, Message } from '@/lib/chat/history';
@@ -73,4 +74,26 @@ export const renderWithClient = (ui: ReactElement) => {
 			</QueryClientProvider>
 		)
 	});
+};
+
+const Slot = createContext<ReactNode>(null);
+const SlotOutlet = () => useContext(Slot);
+
+/**
+ * `renderWithClient` inside a data router (the unsaved-changes guard's `useBlocker` needs one), which
+ * `rerender` keeps. Returns the router, to read the address and to navigate.
+ */
+export const renderWithRouter = (ui: ReactElement, initialEntries = ['/']) => {
+	const client = new QueryClient();
+	const router = createMemoryRouter([{ path: '*', element: <SlotOutlet /> }], { initialEntries });
+	const wrapper = ({ children }: { children: ReactNode }) => (
+		<QueryClientProvider client={client}>
+			<TooltipProvider>
+				<Slot.Provider value={children}>
+					<RouterProvider router={router} />
+				</Slot.Provider>
+			</TooltipProvider>
+		</QueryClientProvider>
+	);
+	return { ...render(ui, { wrapper }), router, client };
 };

@@ -1,4 +1,14 @@
-import { type KeyboardEvent, type ReactNode, type Ref, useDeferredValue, useId, useMemo, useRef } from 'react';
+import {
+	type KeyboardEvent,
+	type ReactNode,
+	type Ref,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useId,
+	useMemo,
+	useRef
+} from 'react';
 import { hljs } from '@/lib/markdown/highlight';
 
 // CNT-2, CNV-4, CNV-6: one code surface for reading and for editing. Source
@@ -99,6 +109,8 @@ export function CodeSurface({
 		inputRef?: Ref<HTMLTextAreaElement>;
 		/** Ctrl or Cmd+S in the editor; the browser's own save dialog is suppressed. */
 		onSave?: () => void;
+		/** The id of a visible element that says how Tab and Esc work (TAB_HELP); without it a screen-reader-only line does. */
+		describedBy?: string;
 	};
 }) {
 	// The textarea shows the live value (its text is transparent); only the colour may lag a frame behind typing.
@@ -106,18 +118,43 @@ export function CodeSurface({
 	const nodes = useMemo(() => highlight(shown, language), [shown, language]);
 	const lines = useMemo(() => shown.split('\n').map((_, i) => i + 1), [shown]);
 	// False until something is typed (an input event) and again after Escape, so Tab still leaves the editor
-	// for a keyboard user who has not typed, and Escape then Tab always leaves it.
+	// for a keyboard user who has not typed, and Escape then Tab always leaves it. The `data-escape-kept`
+	// attribute says so to the panel around it (SidePanel), whose sheet reads it before the editor can.
 	const typed = useRef(false);
+	const area = useRef<HTMLTextAreaElement | null>(null);
+	const setTyped = useCallback((value: boolean) => {
+		typed.current = value;
+		area.current?.toggleAttribute('data-escape-kept', value);
+	}, []);
 	const helpId = useId();
+	const editing = edit !== undefined;
+	const inputRef = edit?.inputRef;
+	const setArea = useCallback(
+		(el: HTMLTextAreaElement | null) => {
+			area.current = el;
+			if (typeof inputRef === 'function') inputRef(el);
+			else if (inputRef) inputRef.current = el;
+		},
+		[inputRef]
+	);
+	// Escape is handled on the textarea itself, natively: the panel's own listener is on an ancestor and runs
+	// before React's, which sits at the root, so a React handler could not stop the canvas closing.
+	useEffect(() => {
+		const el = area.current;
+		if (!editing || !el) return;
+		const onEscape = (event: globalThis.KeyboardEvent) => {
+			if (event.key !== 'Escape' || event.isComposing || !typed.current) return;
+			event.preventDefault();
+			setTyped(false);
+		};
+		el.addEventListener('keydown', onEscape);
+		return () => el.removeEventListener('keydown', onEscape);
+	}, [editing, setTyped]);
 	const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (!edit || event.nativeEvent.isComposing) return;
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && edit.onSave) {
 			event.preventDefault();
 			edit.onSave();
-		} else if (event.key === 'Escape' && typed.current) {
-			// Handled here, not by the canvas: SidePanel ignores an Escape that is already prevented.
-			event.preventDefault();
-			typed.current = false;
 		} else if (event.key === 'Tab' && typed.current && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.preventDefault();
 			indentSelection(event.currentTarget, indentOf(language), event.shiftKey);
@@ -143,23 +180,23 @@ export function CodeSurface({
 							{shown.endsWith('\n') ? ' ' : null}
 						</code>
 					</pre>
-					{edit && (
+					{edit && !edit.describedBy && (
 						<span id={helpId} className="sr-only">
 							{TAB_HELP}
 						</span>
 					)}
 					{edit && (
 						<textarea
-							ref={edit.inputRef}
+							ref={setArea}
 							data-code-editor
 							aria-label={edit.label}
 							value={code}
 							onChange={(event) => {
-								typed.current = true;
+								setTyped(true);
 								edit.onChange(event.target.value);
 							}}
 							onKeyDown={onKeyDown}
-							aria-describedby={helpId}
+							aria-describedby={edit.describedBy ?? helpId}
 							wrap="off"
 							spellCheck={false}
 							autoCapitalize="off"
