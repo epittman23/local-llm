@@ -2,6 +2,7 @@ import { FileCodeIcon, FileIcon, FileTextIcon, GlobeIcon, ImageIcon, TableIcon }
 import type { FileVersion } from '@/lib/apis/files/versions';
 import { type CanvasDocument, UUID } from '@/lib/chat/documents';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import type { CsvNotFaithful } from '@/lib/utils/csvTable';
 import { dayjs } from '@/lib/utils/dates';
 import { TEXT_MAX_BYTES } from './limits';
 
@@ -74,11 +75,12 @@ export type Editability = {
 const NOT_EDITABLE: Editability = { canEdit: false, draftOnly: false, preview: false };
 
 /**
- * The one rule for what the canvas edits (CNV-6, docs/plans/canvas.md C14): Markdown, text, code and
+ * The one rule for what the canvas edits (CNV-6, docs/plans/canvas.md C14): Markdown, text, code, CSV and
  * HTML that is a file, a sandbox output or an upload, no larger than the most the canvas loads. A page the
  * model wrote (an output) has its draft previewed in the sandboxed frame; an uploaded page is the person's
  * file and is never framed, so it is edited as source only. A closed `html` or `svg` block can be tried
- * (`draftOnly`) but has no file to save; any other block, a table, an image and a PDF are not edited.
+ * (`draftOnly`) but has no file to save; any other block, an image and a PDF are not edited. A CSV is edited
+ * as a table when it is faithful (`parseCsvTable`) and as text otherwise.
  */
 export function editabilityOf(doc: CanvasDocument): Editability {
 	const { source } = doc;
@@ -87,7 +89,7 @@ export function editabilityOf(doc: CanvasDocument): Editability {
 		if (!markup || !source.closed || new TextEncoder().encode(source.text).length > TEXT_MAX_BYTES) return NOT_EDITABLE;
 		return { canEdit: true, draftOnly: true, preview: true };
 	}
-	if (doc.kind !== 'markdown' && doc.kind !== 'code' && doc.kind !== 'html') return NOT_EDITABLE;
+	if (doc.kind !== 'markdown' && doc.kind !== 'code' && doc.kind !== 'html' && doc.kind !== 'csv') return NOT_EDITABLE;
 	if (source.type !== 'output' && source.type !== 'upload') return NOT_EDITABLE;
 	if (!UUID.test(source.fileId)) return NOT_EDITABLE;
 	if (doc.bytes !== null && doc.bytes > TEXT_MAX_BYTES) return NOT_EDITABLE;
@@ -106,6 +108,18 @@ export function uneditableText(text: { text: string; truncated: boolean }): 'tru
 	return text.text.includes('\uFFFD') ? 'encoding' : null;
 }
 
+/** The Note under a CSV that is edited as text because it cannot be edited as a table. */
+export function tableNote(reason: CsvNotFaithful): string {
+	switch (reason) {
+		case 'size':
+			return 'Too large to edit as a table. Edit it as text.';
+		case 'delimiter':
+			return 'Only comma-separated files can be edited as a table. Edit it as text.';
+		default:
+			return 'Saving it as a table would change more than its quoting. Edit it as text.';
+	}
+}
+
 /** The document as one of its saved versions: its file is the version's, so every view, Copy and Download use that one. */
 export function withVersion(doc: CanvasDocument, version: Pick<FileVersion, 'id' | 'size'> | null): CanvasDocument {
 	if (!version || (doc.source.type !== 'output' && doc.source.type !== 'upload')) return doc;
@@ -122,7 +136,7 @@ export function versionLabel(version: FileVersion, index: number): string {
 
 /**
  * Whether the document has a Changes view (CNV-9): a text document with more than one saved version.
- * Versions are only listed for what `canEditDocument` accepts, so a block, an image, a PDF, a page and a table have none.
+ * Versions are only listed for what `canEditDocument` accepts, so a block, an image and a PDF have none.
  */
 export function hasChanges(doc: CanvasDocument, versions: readonly unknown[]): boolean {
 	return versions.length > 1 && canEditDocument(doc);

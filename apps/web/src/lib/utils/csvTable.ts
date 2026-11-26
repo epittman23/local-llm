@@ -127,3 +127,12 @@ export function parseCsvTable(text: string): CsvTableParse {
 		}
 	};
 }
+
+/**
+ * The text as the table editor writes it with nothing changed: quoting normalised and short rows padded.
+ * A text that is not a faithful table is returned as it is. Two texts with the same canonical text hold the same table.
+ */
+export function canonicalCsvText(text: string): string {
+	const parsed = parseCsvTable(text);
+	return 'table' in parsed ? stringifyCsvTable(parsed.table) : text;
+}

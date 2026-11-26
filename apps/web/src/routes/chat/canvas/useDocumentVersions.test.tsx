@@ -28,10 +28,10 @@ describe('useDocumentVersions', () => {
 		expect(api.list).toHaveBeenCalledWith('', id('1'), expect.any(AbortSignal));
 	});
 
-	it('asks nothing for a block, a table or an image, nor when disabled', () => {
+	it('asks nothing for a block, a file that only downloads or an image, nor when disabled', () => {
 		for (const doc of [
 			blockDoc('x = 1', 'python'),
-			docOf(output('1', 'table.csv')),
+			docOf(output('1', 'data.bin')),
 			docOf(upload('2', 'a.png'), 'user')
 		])
 			renderHook(() => useDocumentVersions(doc), { wrapper });

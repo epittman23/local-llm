@@ -8,8 +8,12 @@ describe('canEditDocument', () => {
 		expect(canEditDocument(docOf(upload('2', 'notes.md'), 'user'))).toBe(true);
 		expect(canEditDocument(docOf(output('3', 'run.sh', {}, { size: undefined })))).toBe(true);
 	});
-	it('is false for a table, an SVG, an image, a PDF and a file that only downloads', () => {
-		for (const name of ['table.csv', 'drawing.svg', 'plot.png', 'paper.pdf', 'data.bin'])
+	it('is true for a table, as a CSV file is edited as a table or as text', () => {
+		expect(canEditDocument(docOf(output('1', 'table.csv')))).toBe(true);
+		expect(canEditDocument(docOf(upload('2', 'data.csv'), 'user'))).toBe(true);
+	});
+	it('is false for an SVG, an image, a PDF and a file that only downloads', () => {
+		for (const name of ['drawing.svg', 'plot.png', 'paper.pdf', 'data.bin'])
 			expect(canEditDocument(docOf(output('1', name))), name).toBe(false);
 	});
 	it('is true for a page (an output or an upload) and false for a fenced block, whatever its language: a block is not saved', () => {
@@ -85,8 +89,11 @@ describe('hasChanges', () => {
 		expect(hasChanges(docOf(output('1', 'fit.py')), [{}])).toBe(false);
 		expect(hasChanges(docOf(output('1', 'fit.py')), [])).toBe(false);
 	});
-	it('is false for an image, a PDF, a table and a fenced block, whatever the versions', () => {
-		for (const name of ['plot.png', 'paper.pdf', 'table.csv'])
+	it('is true for a table, whose saved versions are compared as text', () => {
+		expect(hasChanges(docOf(output('1', 'table.csv')), two)).toBe(true);
+	});
+	it('is false for an image, a PDF, a file that only downloads and a fenced block, whatever the versions', () => {
+		for (const name of ['plot.png', 'paper.pdf', 'data.bin'])
 			expect(hasChanges(docOf(output('1', name)), two), name).toBe(false);
 		expect(hasChanges(blockDoc('x = 1', 'python'), two)).toBe(false);
 	});

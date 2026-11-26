@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { csvCell } from './csv';
-import { parseCsvTable, stringifyCsvTable } from './csvTable';
+import { canonicalCsvText, parseCsvTable, stringifyCsvTable } from './csvTable';
 
 const table = (text: string) => {
 	const parsed = parseCsvTable(text);
@@ -152,5 +152,16 @@ describe('round trip', () => {
 					const text = stringifyCsvTable({ rows, eol, trailingNewline, bom: false });
 					expect(table(text).rows, JSON.stringify({ rows, trailingNewline, eol })).toEqual(rows);
 				}
+	});
+});
+
+describe('canonicalCsvText', () => {
+	it('is the text as the table writes it: quoting normalised, short rows padded', () => {
+		expect(canonicalCsvText('"a",b\n1\n')).toBe('a,b\n1,\n');
+		expect(canonicalCsvText('a,b\n1,2\n')).toBe('a,b\n1,2\n');
+	});
+
+	it('returns a text that is not a faithful table as it is', () => {
+		expect(canonicalCsvText('a;b\n1;2\n')).toBe('a;b\n1;2\n');
 	});
 });

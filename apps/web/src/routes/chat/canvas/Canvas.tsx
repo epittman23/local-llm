@@ -1,6 +1,7 @@
 import type { FileVersion } from '@/lib/apis/files/versions';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { ChangesView } from './views/ChangesView';
+import { CsvEditView, type CsvEditExtras } from './views/CsvEditView';
 import { CsvView } from './views/CsvView';
 import { DownloadView } from './views/DownloadView';
 import { HtmlEditView } from './views/HtmlEditView';
@@ -19,7 +20,7 @@ export type ChangesOf = { versions: FileVersion[]; shownIndex: number };
 /**
  * CNV-4: which views a document has. A page the model wrote or drew has both;
  * an uploaded page or a knowledge file's has only its source (it is never framed). Markdown and CSV
- * have both. Code has only its source. An image, a PDF and anything else have
+ * have both; a CSV being edited as a table is the table itself. Code has only its source. An image, a PDF and anything else have
  * only their one view.
  */
 export function viewsOf(doc: CanvasDocument): { preview: boolean; source: boolean } {
@@ -42,6 +43,7 @@ export function Canvas({
 	mode,
 	reloads = 0,
 	edit,
+	csvTable,
 	changes
 }: {
 	doc: CanvasDocument;
@@ -49,6 +51,8 @@ export function Canvas({
 	reloads?: number;
 	/** The draft being edited: the source view becomes its editor, and a page the model wrote gets its preview beside it. */
 	edit?: SourceEdit;
+	/** With `edit`, a CSV is edited as a table (CNV-6) instead of as text. */
+	csvTable?: CsvEditExtras;
 	/** Needed for mode `changes`, which compares two saved versions (CNV-9). */
 	changes?: ChangesOf;
 }) {
@@ -66,6 +70,8 @@ export function Canvas({
 		);
 	else if (edit && doc.kind === 'html' && views.preview)
 		view = <HtmlEditView key={doc.id} doc={doc} edit={edit} mode={showing} />;
+	else if (edit && csvTable && doc.kind === 'csv')
+		view = <CsvEditView key={doc.id} doc={doc} edit={edit} extras={csvTable} />;
 	else if (showing === 'source') view = <SourceView doc={doc} edit={edit} />;
 	else {
 		switch (doc.kind) {

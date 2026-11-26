@@ -13,9 +13,10 @@ import {
 	Minimize2Icon,
 	PaperclipIcon,
 	PencilIcon,
-	RotateCwIcon
+	RotateCwIcon,
+	TextIcon
 } from 'lucide-react';
-import { type ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Gone } from '@/components/common/Gone';
 import { Tip } from '@/components/common/Tip';
@@ -38,6 +39,7 @@ import type { FileVersion, SavedVersion } from '@/lib/apis/files/versions';
 import { getSandboxOutputText } from '@/lib/apis/sandbox';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { canonicalCsvText, parseCsvTable } from '@/lib/utils/csvTable';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { Canvas, type Mode, viewsOf } from './Canvas';
@@ -51,6 +53,7 @@ import {
 	hasChanges,
 	kindIcon,
 	kindLabel,
+	tableNote,
 	uneditableText,
 	versionLabel,
 	withVersion
@@ -210,6 +213,10 @@ export function CanvasPanel({
 	const [viewing, setViewing] = useState<{ docId: string; versionId: string } | null>(null);
 	const headingRef = useRef<{ focus: () => void }>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	// The first cell of a table being edited: where focus goes, as the textarea is for the source editor.
+	const cellRef = useRef<HTMLElement>(null);
+	// A CSV the person chose to edit as text although it could be a table.
+	const [asText, setAsText] = useState<string | null>(null);
 	useEffect(() => {
 		if (!open) setExpanded(false);
 	}, [open]);
@@ -226,6 +233,12 @@ export function CanvasPanel({
 	const tryingDoc = shown && editabilityOf(shown).draftOnly ? shown : null;
 	const text = useDocumentText(editableDoc, TEXT_MAX_BYTES);
 	const reason = text.data ? uneditableText(text.data) : null;
+	// A CSV is edited as a table when it is faithful, and as text otherwise (CNV-6).
+	const csvParse = useMemo(
+		() => (shown?.kind === 'csv' && text.data ? parseCsvTable(text.data.text) : null),
+		[shown?.kind, text.data]
+	);
+	const tableMode = csvParse !== null && 'table' in csvParse && asText !== doc?.id;
 	let editFileId: string | null = null;
 	if (tryingDoc) editFileId = tryingDoc.id;
 	else if (editableDoc && isLatest && reason === null) editFileId = fileIdOf(editableDoc);
@@ -265,8 +278,10 @@ export function CanvasPanel({
 		rootId,
 		text: tryingDoc?.source.type === 'block' ? tryingDoc.source.text : text.data?.text,
 		draftOnly: tryingDoc !== null,
+		canonical: tableMode ? canonicalCsvText : undefined,
 		onSaved: (saved: SavedVersion) => {
 			setViewing(null);
+			setAsText(null);
 			// A saved page is shown as the page, through the server's policy route, not as the source just typed.
 			if (doc && doc.kind === 'html' && viewsOf(doc).preview) setChoice({ id: doc.id, mode: 'preview' });
 			headingRef.current?.focus();
@@ -289,7 +304,7 @@ export function CanvasPanel({
 	const guard = useUnsavedChanges(edit.dirty, {
 		message: 'Your edits to this document are not saved. They are lost if you leave.',
 		// Keep editing goes back to the editor (NAV-4), not to the Close button that raised the question.
-		keepFocus: () => inputRef.current
+		keepFocus: () => inputRef.current ?? cellRef.current
 	});
 	const canStartEdit =
 		editFileId !== null &&
@@ -298,7 +313,7 @@ export function CanvasPanel({
 		!removed &&
 		!edit.editing;
 	useEffect(() => {
-		if (edit.editing) inputRef.current?.focus();
+		if (edit.editing) (inputRef.current ?? cellRef.current)?.focus();
 	}, [edit.editing]);
 
 	const views = doc ? viewsOf(doc) : { preview: false, source: false };
@@ -309,10 +324,13 @@ export function CanvasPanel({
 	const chosen = choice && choice.id === doc?.id ? choice.mode : null;
 	// A page being edited keeps Preview: its draft is shown beside the source, or in place of it below 44 rem.
 	const splitEdit = edit.editing && views.preview && shown?.kind === 'html';
+	// A CSV being edited as a table is the Preview slot's table; the Source switch turns it into the text.
+	const tableEdit = edit.editing && tableMode;
 	let mode: Mode = 'preview';
 	if (!views.preview) mode = 'source';
 	else if (views.source) {
-		if (writing || (edit.editing && !splitEdit)) mode = 'source';
+		if (tableEdit) mode = 'preview';
+		else if (writing || (edit.editing && !splitEdit)) mode = 'source';
 		else if (chosen === 'source' || chosen === 'preview') mode = chosen;
 		else mode = edit.editing ? 'source' : 'preview';
 	}
@@ -322,10 +340,17 @@ export function CanvasPanel({
 		if (doc && previewEnabled) setChoice({ id: doc.id, mode: next });
 	};
 	const startEdit = () => {
-		if (doc && views.preview) setChoice({ id: doc.id, mode: 'source' });
+		if (doc && views.preview && !tableMode) setChoice({ id: doc.id, mode: 'source' });
 		edit.start();
 	};
+	const editAsText = () => {
+		if (!doc) return;
+		setAsText(doc.id);
+		setChoice({ id: doc.id, mode: 'source' });
+		if (!edit.editing) edit.start();
+	};
 	const discard = () => {
+		setAsText(null);
 		edit.discard();
 		headingRef.current?.focus();
 	};
@@ -359,6 +384,12 @@ export function CanvasPanel({
 		<DropdownMenuItem onSelect={doCopy}>
 			<CopyIcon aria-hidden />
 			Copy
+		</DropdownMenuItem>
+	);
+	const editAsTextItem = tableMode && (canEdit || tableEdit) && (
+		<DropdownMenuItem onSelect={editAsText}>
+			<TextIcon aria-hidden />
+			Edit as text
 		</DropdownMenuItem>
 	);
 	const canAttach = attach !== undefined && shownVersion !== undefined && shownVersion !== null && versions.length > 1;
@@ -419,6 +450,7 @@ export function CanvasPanel({
 						<DropdownMenuContent align="end">
 							{copyItem}
 							{attachItem}
+							{editAsTextItem}
 							<DownloadItem doc={shown} draft={draftText} />
 						</DropdownMenuContent>
 					</DropdownMenu>
@@ -467,6 +499,7 @@ export function CanvasPanel({
 					)}
 					{canCopy && copyItem}
 					{attachItem}
+					{editAsTextItem}
 					<DownloadItem doc={shown} draft={draftText} />
 					{canReload && (
 						<DropdownMenuItem onSelect={doReload}>
@@ -510,7 +543,7 @@ export function CanvasPanel({
 					aria-pressed={mode === 'preview'}
 					disabled={!previewEnabled}
 					onClick={() =>
-						splitEdit
+						splitEdit || tableEdit
 							? choose('preview')
 							: guard.confirmLeave(() => {
 									edit.discard();
@@ -528,7 +561,7 @@ export function CanvasPanel({
 					aria-label="Source"
 					className={segment}
 					aria-pressed={mode === 'source'}
-					onClick={() => choose('source')}
+					onClick={() => (tableEdit ? editAsText() : choose('source'))}
 				>
 					<CodeIcon aria-hidden />
 				</Button>
@@ -567,7 +600,7 @@ export function CanvasPanel({
 	const tooLargeToEdit =
 		editable &&
 		shown !== null &&
-		shown.kind === 'html' &&
+		(shown.kind === 'html' || shown.kind === 'csv') &&
 		shown.source.type !== 'block' &&
 		typeof shown.bytes === 'number' &&
 		shown.bytes > TEXT_MAX_BYTES;
@@ -593,7 +626,21 @@ export function CanvasPanel({
 				)}
 				{removed && <Note>This document was removed from the chat. Your edits can still be copied.</Note>}
 				{!edit.editing && tooLargeToEdit && <Note>Too large to edit; download it to change it.</Note>}
-				<Canvas doc={shown} mode={mode} reloads={reloads} edit={editProps} changes={{ versions, shownIndex }} />
+				{edit.editing && shown.kind === 'csv' && csvParse && 'notFaithful' in csvParse && (
+					<Note>{tableNote(csvParse.notFaithful)}</Note>
+				)}
+				<Canvas
+					doc={shown}
+					mode={mode}
+					reloads={reloads}
+					edit={editProps}
+					csvTable={
+						tableEdit && text.data
+							? { cellRef, dirty: edit.dirty, rewrites: canonicalCsvText(text.data.text) !== text.data.text }
+							: undefined
+					}
+					changes={{ versions, shownIndex }}
+				/>
 				{edit.editing && tryingDoc && (
 					<div className="px-3 pb-3">
 						<div data-keep-clear className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
