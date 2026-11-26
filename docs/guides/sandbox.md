@@ -971,6 +971,14 @@ rather than replace it.
 In a benchmark run (`request.state.benchmark_harness`) the files are
 listed, but nothing is read or stored.
 
+An edit saved from the canvas is a version of the output: another File row
+(`POST /api/v1/files/{id}/versions`, `meta.version_of` the output's id), which
+keeps the output's `meta.source` and `meta.chat_id`, so it counts toward the
+chat's 1 GiB cap in `chat_usage`, and the file routes serve it the same way
+(a download, `nosniff`, the policy). It does not copy `sandbox_path`,
+`preview_of` or `preview_page`, and it never reaches `message.files`.
+Deleting the output deletes its versions.
+
 A PDF, at most 3 per call, gets PNG previews of its first 10 pages at 80
 dpi, cropped to 1600 pixels a side (`pdftoppm -png -r 80 -l 10 -W 1600 -H
 1600`). The crop keeps a normal page at 80 dpi and never rasterises a huge

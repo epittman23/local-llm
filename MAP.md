@@ -232,7 +232,8 @@ fork's pre-import history is kept read-only at
 `apps/web/`:
 
 - **`local_llm/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
-  `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
+  `routers/` (API endpoints, including `routers/benchmarks/`; `routers/files.py` also
+  keeps a text file's saved edits as versions, `/files/{id}/versions`), `models/` (DB
   models, including `models/benchmarks/`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, `sandbox/`

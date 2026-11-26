@@ -2854,6 +2854,14 @@ class ChatTable:
         except Exception:
             return False
 
+    async def get_chat_files_by_file_id(self, file_id: str, db: AsyncSession | None = None) -> list[ChatFileModel]:
+        """Every chat_file row that links this file to a chat and message."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(ChatFile).filter_by(file_id=file_id).order_by(ChatFile.created_at.asc())
+            )
+            return [ChatFileModel.model_validate(chat_file) for chat_file in result.scalars().all()]
+
     async def get_shared_chat_ids_by_file_id(self, file_id: str, db: AsyncSession | None = None) -> list[str]:
         """Return IDs of chats that contain this file and have an active share link."""
         async with get_async_db_context(db) as session:
