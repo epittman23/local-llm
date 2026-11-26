@@ -40,7 +40,7 @@ local-llm/
 └── infra/                     docker-compose for Postgres + pgvector, Redis, SearXNG and the sandbox mirror
 ```
 
-The old `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
+The old shell orchestrator and `llama-console` CLI helpers (the former `scripts/`) and
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
 (2026-09-18) — see `docs/decisions.md`. `make backend`/
 `make frontend` are the replacement entry points; serving configuration

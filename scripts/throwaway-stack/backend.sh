@@ -15,15 +15,20 @@ DIST=${2:-$LLLM_TW_REPO/apps/web/dist}
 DATA=${3:-$LLLM_TW_STATE/data-$PORT}
 SERVER=${4:-$LLLM_TW_REPO/apps/server}
 
-case $PORT in
-4000 | 5432 | 6379)
-	echo "refusing owner port $PORT" >&2
+tw_refuse_owner_port "$PORT"
+tw_refuse_owner_port "$LLLM_TW_PG_PORT"
+tw_refuse_owner_port "$LLLM_TW_REDIS_PORT"
+real=$(realpath -m "$LLLM_TW_REPO/apps/server/data")
+data_abs=$(realpath -m "$DATA")
+case "$data_abs/" in
+"$real"/*)
+	echo "refusing DATA $DATA: it is or is inside the real DATA_DIR" >&2
 	exit 1
 	;;
 esac
-case $DATA in
-*apps/server/data*)
-	echo "refusing the real DATA_DIR" >&2
+case "$real/" in
+"${data_abs%/}"/*)
+	echo "refusing DATA $DATA: it contains the real DATA_DIR" >&2
 	exit 1
 	;;
 esac

@@ -6,12 +6,7 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 PORT=${1:-4190}
-case $PORT in
-4000 | 5432 | 6379 | 8090)
-	echo "refusing port $PORT" >&2
-	exit 1
-	;;
-esac
+tw_refuse_owner_port "$PORT"
 mkdir -p "$LLLM_TW_STATE"
 tw_stop_pidfile "$LLLM_TW_STATE/stub.pid"
 if [ -n "$(ss -ltnH "sport = :$PORT")" ]; then

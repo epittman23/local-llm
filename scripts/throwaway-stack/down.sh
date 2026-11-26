@@ -12,7 +12,7 @@ done
 tw_stop_pidfile "$LLLM_TW_STATE/stub.pid"
 rm -f "$LLLM_TW_STATE/stub.port"
 for name in "$LLLM_TW_PG_NAME" "$LLLM_TW_REDIS_NAME"; do
-	if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+	if tw_container_exists "$name"; then
 		docker stop "$name" >/dev/null
 	fi
 done

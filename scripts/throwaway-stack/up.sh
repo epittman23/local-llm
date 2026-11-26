@@ -6,12 +6,14 @@ set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
+tw_refuse_owner_port "$LLLM_TW_PG_PORT"
+tw_refuse_owner_port "$LLLM_TW_REDIS_PORT"
 mkdir -p "$LLLM_TW_STATE"
 
 ensure() { # name, create command...
 	local name=$1
 	shift
-	if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
+	if tw_container_exists "$name"; then
 		docker start "$name" >/dev/null
 	else
 		"$@" >/dev/null
