@@ -89,6 +89,18 @@ describe('useCanvas', () => {
 		expect(setup(`/c/x?canvas=file:${file}`, [], true).result.current.canvas.gone).toBe(false);
 	});
 
+	it('moves file:<uuid> to the document id when the cited file is one of the chat’s own documents', () => {
+		const cites = {
+			...reply,
+			id: 'a3',
+			sources: [{ document: ['a passage'], metadata: [{ file_id: docId, name: 'report.html', source: 'report.html' }] }]
+		} as Message;
+		const { result } = setup(`/c/x?canvas=file:${docId}`, [reply, cites]);
+		expect(result.current.canvas.openId).toBe(docId);
+		expect(result.current.canvas.doc?.id).toBe(docId);
+		expect(result.current.location.search).toBe(`?canvas=${docId}`);
+	});
+
 	it('pushes a history entry on open, so Back closes it; an auto-open replaces, so Back leaves the chat', () => {
 		const back = () => {
 			const { result } = renderHook(

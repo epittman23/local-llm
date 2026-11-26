@@ -175,7 +175,7 @@ test('Tab leaves the editor until something is typed, then indents; Escape then 
 	await box.pressSequentially('a');
 	await box.press('Tab');
 	await expect(box).toBeFocused();
-	await expect(box).toHaveValue(`a  ${SOURCE}`.replace('a  import', 'a  import'));
+	await expect(box).toHaveValue(`a  ${SOURCE}`);
 	await box.press('Escape');
 	await expect(canvas(page)).toBeVisible();
 	await page.keyboard.press('Tab');

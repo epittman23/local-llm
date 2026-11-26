@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { type CanvasDocument, chatDocuments, KNOWLEDGE_ID, knowledgeDocument } from '@/lib/chat/documents';
 import type { Message } from '@/lib/chat/history';
@@ -50,6 +50,11 @@ export function useCanvas(messages: Message[], loading: boolean): CanvasState {
 			),
 		[setParams]
 	);
+	// A cited file that is also one of the chat's own documents opens as that document: the address moves to its
+	// own id (replacing the entry), so the open card and the file menu agree with it.
+	useEffect(() => {
+		if (doc && openId && doc.id !== openId) open(doc.id, { replace: true });
+	}, [doc, openId, open]);
 	const close = useCallback(
 		() =>
 			setParams((prev) => {
