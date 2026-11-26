@@ -46,7 +46,8 @@ import { Example, Section } from './parts';
 
 // /ui, "Canvas": the design of the document panel beside a chat (CNV rules;
 // docs/plans/canvas.md is the plan). The viewer is built (routes/chat/canvas/);
-// editing (Phase 3) is not. This is a self-contained mock of both: the
+// the editor's keyboard behaviour is the real CodeSurface's, and its save flow
+// (Phase 3) is not built. This is a self-contained mock of both: the
 // documents are invented constants and nothing is fetched or saved. The real
 // canvas reuses SandboxedHtmlFrame and the sandbox routes; the frame here has
 // the same `allow-scripts`-only sandbox.
@@ -245,6 +246,12 @@ export function CanvasSection() {
 		setDraft(null);
 		requestAnimationFrame(() => heading.current?.focus());
 	};
+	const save = () => {
+		if (!doc || draft === null || !dirty) return;
+		setTexts({ ...texts, [doc.id]: draft });
+		leaveEditor();
+		toast.success('Document saved');
+	};
 	// CNV-6: entering the editor moves focus into it.
 	useEffect(() => {
 		if (editing) editor.current?.focus();
@@ -270,7 +277,7 @@ export function CanvasSection() {
 		<Section
 			id="canvas"
 			title="Canvas"
-			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The viewer is built and the side panel it opens in is shared with the chat's Controls; editing is a design that is planned and not yet built, and the documents below are invented."
+			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The viewer is built and the side panel it opens in is shared with the chat's Controls; the editor's surface and keys are built and its save flow is a design, not yet built, and the documents below are invented."
 			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNT-4', 'LAY-4', 'NAV-4']}
 		>
 			<Example
@@ -433,7 +440,7 @@ export function CanvasSection() {
 									<CodeSurface
 										code={draft}
 										language={LANGUAGE[doc.kind]}
-										edit={{ label: `Edit ${doc.name}`, onChange: setDraft, inputRef: editor }}
+										edit={{ label: `Edit ${doc.name}`, onChange: setDraft, inputRef: editor, onSave: save }}
 									/>
 								) : showPreview && doc.kind === 'HTML' ? (
 									// CNV-5: scripts only, an opaque origin, filled through srcdoc; the surround is themed.
@@ -467,15 +474,7 @@ export function CanvasSection() {
 											<Button variant="ghost" size="sm" onClick={leaveEditor}>
 												Discard changes
 											</Button>
-											<Button
-												size="sm"
-												disabled={!dirty}
-												onClick={() => {
-													setTexts({ ...texts, [doc.id]: draft });
-													leaveEditor();
-													toast.success('Document saved');
-												}}
-											>
+											<Button size="sm" disabled={!dirty} onClick={save}>
 												Save document
 											</Button>
 										</div>

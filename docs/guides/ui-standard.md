@@ -855,7 +855,12 @@ every theme, held by the contrast test to 7:1, the same promise as body text.
 
 **CNT-2. Code blocks have one theme, built from the tokens, in both app
 themes.** Code is highlighted by highlight.js and coloured by the `.hljs-*`
-rules in `standard.css`; no highlight.js stylesheet supplies colours. The block sits on `--surface-1` with an edge; its header names the
+rules in `standard.css`; no highlight.js stylesheet is imported anywhere, so
+the chat's blocks, the canvas's Source view and its editor are one theme
+(`lib/markdown/highlight.ts` is the one highlighter, LaTeX registered). Every
+token colour is at least 4.5:1 on `--surface-1` in dark, black and light
+(light's lowest is `--series-5` at 4.86:1), which `standard.contrast.test.ts`
+holds. The block sits on `--surface-1` with an edge; its header names the
 language and offers Wrap lines (one setting for every block, remembered),
 Download (named by the language) and Copy; Collapse appears only for a block
 over 25 lines, and a collapsed block shows 25 lines and ends in "Show all N
@@ -975,7 +980,15 @@ script, style or font does not arrive, and a form, `alert`, `confirm` or
 document, then a bar with "Unsaved changes", Discard changes and Save
 document. The editor is the Source view with a caret: the same face, size,
 line numbers and highlighting, updated as you type, so nothing moves or
-changes colour when editing starts. It has no focus outline: the caret, and
+changes colour when editing starts. Its keys are built in `CodeSurface`:
+Tab indents (two spaces, a tab for Go and Makefile) and Shift+Tab outdents,
+on the caret's line or every selected line, only once something has been
+typed, so a keyboard user who has not typed still Tabs out; Escape, then Tab,
+always leaves, and that Escape does not close the canvas. The sentence 'Tab
+indents. Press Esc, then Tab, to leave the editor.' is tied to the field with
+`aria-describedby`, and Ctrl or Cmd+S saves. The save flow, bar and version
+history that use these keys come with the rest of canvas Phase 3 and are not
+built yet. It has no focus outline: the caret, and
 the bar that appears below it, show that it has focus. Entering the editor moves focus into it; saving or discarding
 moves focus back to the document's heading. Closing the canvas, switching
 document or leaving the chat with unsaved changes asks first.

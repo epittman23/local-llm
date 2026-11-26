@@ -1,6 +1,4 @@
 import saveAs from 'file-saver';
-import hljs from 'highlight.js/lib/common';
-import latex from 'highlight.js/lib/languages/latex';
 import {
 	Check,
 	ChevronDown,
@@ -14,7 +12,6 @@ import {
 	TextWrap,
 	X
 } from 'lucide-react';
-import 'highlight.js/styles/github-dark.min.css';
 import { type ComponentProps, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { Button } from '@/components/ui/button';
@@ -23,6 +20,7 @@ import type { CodeRunResult } from '@/lib/apis/utils';
 import { documentKind, UUID } from '@/lib/chat/documents';
 import type { ChatFile } from '@/lib/chat/history';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { hljs } from '@/lib/markdown/highlight';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useCopy } from '@/lib/ui/useCopy';
@@ -88,9 +86,6 @@ const EXTENSIONS: Record<string, string> = {
 };
 export const extensionOf = (language: string) =>
 	EXTENSIONS[language] ?? (/^[a-z0-9]{1,5}$/.test(language) ? language : 'txt');
-
-// The common set has no LaTeX, which the canvas shows `.tex` sandbox outputs in (routes/chat/canvas/).
-hljs.registerLanguage('latex', latex);
 
 let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
 const loadMermaid = () => {
