@@ -7,6 +7,33 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 4 (a) built: editing HTML with
+  its preview beside the source.** A page the model wrote (a sandbox output
+  up to 256 KiB) is edited in the canvas with a sandboxed preview of the draft
+  beside the source (`docs/plans/canvas.md`, CNV-5, CNV-6). The orchestrating
+  session settled these points on 2026-11-26.
+  - **The preview updates on request, not per keystroke.** Update preview, or
+    Ctrl or Cmd+Enter in the editor, sends the draft to the frame; "Out of
+    date" shows until it does. "Update as I type" exists but is off by
+    default and waits 800 ms after typing stops. Why: a script typed half
+    way, such as `while(true){}`, is run again on every key, and a sandboxed
+    frame is not guaranteed a process of its own, so it can freeze the tab.
+  - **The draft reaches the frame only as `srcDoc = withHtmlPolicy(draft)`**
+    in the existing `SandboxedHtmlFrame` (`allow-scripts` alone, no `src`, no
+    `blob:`, no new window), and is never put in the app's DOM. It goes to the
+    server only on Save. A saved version of an output is shown through the
+    existing `GET /sandbox/outputs/{id}/html` route (a pytest case checks that
+    a version of an HTML output is served by it, policy first). An uploaded
+    page is never framed, so it is edited as source only.
+  - **A fenced block is tried, not saved.** An `html` or `svg` block has no
+    file to version, and saving it as an upload would make a page the preview
+    never serves. It gets "Try changes": the same split editor, no versions,
+    the note "Changes to a code block are not saved. Copy or download them.",
+    and Copy and Download acting on the draft.
+  - **A consequence worth knowing.** An HTML output's text is now fetched from
+    the file route (as `fetch`, never displayed) so it can be edited, so
+    `e2e/sandbox-outputs.spec.ts` asserts that route is only ever read as a
+    fetch instead of never read. No backend change and no migration.
 - **2026-11-26** (latest): **Canvas Phase 4 (c) built: a comparison of two
   versions.** A Markdown, text or code file with more than one saved version
   gets a third header segment, Changes, beside Preview and Source

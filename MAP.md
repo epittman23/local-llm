@@ -125,7 +125,8 @@ Start here for "how do I run/use this."
   backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
   `canvas.md` (the document viewer and text editor beside a chat: the viewer
-  and the editor are built, the version comparison too; its interface is on `/ui` and in the
+  and the editor are built, the version comparison and the HTML editor with
+  its preview too; its interface is on `/ui` and in the
   standard's CNV rules),
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -507,7 +508,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `useDocumentEdit.ts` the draft and the save, `useDocumentVersions.ts` a
   document's saved versions, and `present.ts`'s `canEditDocument` and
   `withVersion`; the comparison: `views/ChangesView.tsx`, a diff of two
-  versions, over `lib/utils/lineDiff.ts`, the line diff), `ChatMenu`,
+  versions, over `lib/utils/lineDiff.ts`, the line diff; the page editor:
+  `views/HtmlEditView.tsx`, the source and the sandboxed preview side by side,
+  and `present.ts`'s `editabilityOf`), `ChatMenu`,
   `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,
   `DropOverlay` (the drop target for files), `TemporaryNotice` (the
   temporary-chat switch and chip), `ErrorReply` (a failed reply, FBK-4),

@@ -1063,6 +1063,15 @@ name's extension, then by `content_type` (the file's own, then
   nothing else, whose `srcdoc` is the route's `html`, filling the canvas
   and sitting on the theme's surface. Never a `blob:` URL or a new window.
   A file over 5 MiB, or one the route refuses, gets a note instead.
+  A saved edit of an HTML output (`POST /files/{id}/versions`) is a version
+  that keeps `meta.source='sandbox_output'` and the name, so this same route
+  serves it, with the server's policy first; a draft not yet saved is
+  previewed in the browser through `withHtmlPolicy` (the fenced block's path)
+  in this same frame, only when the person presses Update preview (or turns
+  on "Update as I type"), never as a `blob:` URL or a new window. An
+  uploaded HTML file is never framed or sent to this route; it is edited as
+  source only. A page of HTML now has its file route read as text
+  (`fetch`, for editing; never displayed).
 - PDF: the preview PNGs (`meta.preview_of`), in `meta.preview_page` order.
 - `.tex`, `.py`, `.R`, `.json`, `.md`, `.txt`, `.log` and `text/plain`, and
   a modest map of other code extensions: the Source view (the highlighted,

@@ -4,8 +4,8 @@
 > 2026-11-25, #1159; Phase 3 2026-11-26): documents a model provides are
 > cards in the reply that open in the canvas, a viewer, and a text file can
 > be edited there and saved as a version. Phase 4 is under way: the
-> comparison of two versions is built (2026-11-26); the rest is not
-> scheduled.** The interface design is shown on
+> comparison of two versions and the editing of HTML with its preview beside
+> the source are built (2026-11-26); the rest is not scheduled.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
 > implementation plan. The owner settled all five of its decisions on
@@ -71,8 +71,8 @@ The interface is specified by CNV-1 to CNV-9 in the standard and shown on
 
   | Kind | Preview | Source | Editable |
   |---|---|---|---|
-  | HTML (a sandbox output, or a fenced `html` or `svg` block) | Sandboxed frame inside a themed surround | Highlighted, line-numbered | Phase 4 |
-  | HTML the owner uploaded | none: Source and Download only | Highlighted, line-numbered | No |
+  | HTML (a sandbox output, or a fenced `html` or `svg` block) | Sandboxed frame inside a themed surround | Highlighted, line-numbered | Yes (outputs: split preview; blocks: draft only) |
+  | HTML the owner uploaded | none: Source and Download only | Highlighted, line-numbered | Yes (source only) |
   | Markdown | Rendered with the chat's renderer, at reading width | Plain text | Yes |
   | Text, code, LaTeX, JSON, logs | none: Source only | Highlighted, line-numbered | Yes |
   | CSV | Table (first 200 rows, the existing limits) | Plain text | Phase 4 |
@@ -352,10 +352,46 @@ Where the build goes beyond the text above, or settles a point it left open
 
 ### Phase 4: later
 
-Built: a comparison of two versions (below). Not scheduled: editing HTML
-with a live preview beside the source; editing a CSV as a table; writing an
+Built: a comparison of two versions and editing HTML with a preview beside
+the source (both below). Not scheduled: editing a CSV as a table; writing an
 edit back into the sandbox workspace; showing a cited knowledge file in the
 canvas.
+
+#### Phase 4: what was built (editing HTML with a preview beside the source)
+
+- **What is editable** (`editabilityOf` in `canvas/present.ts`, the one rule;
+  `canEditDocument` is its saved-file case): an HTML sandbox output, up to
+  256 KiB, with the split preview; an uploaded HTML file, source only (an
+  upload is never framed); a closed `html` or `svg` block, as a draft that is
+  never saved ("Try changes"). An SVG file is an image and is not edited. A
+  page over 256 KiB is shown and says "Too large to edit; download it to
+  change it."
+- **The draft reaches the frame only as `srcDoc = withHtmlPolicy(draft)`**
+  in the same `SandboxedHtmlFrame` (`sandbox="allow-scripts"`, no `src`, no
+  `blob:`, no window), never in the app's DOM. It reaches the server only on
+  Save, as the JSON of `POST /files/{id}/versions`. After Save the saved
+  version is shown as the page, through the existing `GET
+  /sandbox/outputs/{id}/html` route and the server's policy (a pytest case
+  checks that a version of an HTML output is served by it, policy first).
+- **The preview updates on request, not per keystroke.** Update preview, or
+  Ctrl or Cmd+Enter in the editor; "Out of date" shows while the draft
+  differs from what the frame shows. "Update as I type" is off by default and
+  waits 800 ms after the last keystroke. Reason: a half-typed script such as
+  `while(true){}`, run again on every key, can freeze the tab, as a sandboxed
+  frame is not guaranteed a process of its own.
+- **Layout** (`views/HtmlEditView.tsx`): source on the left and preview on
+  the right when the panel is 44 rem wide (a container query), the View
+  switch showing one pane at a time when it is narrower and always in the
+  sheet below `md`. Preview stays enabled while editing and shows the draft;
+  it does not leave edit mode.
+- **A block's draft** has the same split editor, no versions, and instead of
+  Save document the note "Changes to a code block are not saved. Copy or
+  download them." with Discard changes; Copy and Download act on the draft,
+  and the unsaved-changes guard applies as for a file. A block still being
+  written is not offered it.
+- **Cuts, deliberate.** No second separator between the panes (fixed 50/50),
+  no diff of the draft, no saving a block as a file. No backend change and no
+  migration.
 
 #### Phase 4: what was built (a comparison of two versions)
 
