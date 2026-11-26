@@ -30,3 +30,44 @@ describe('CitationDialog', () => {
 		expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull();
 	});
 });
+
+describe('CitationDialog, Open in canvas', () => {
+	const file = '00000000-0000-4000-8000-000000000077';
+	const of = (metadata: Record<string, unknown>): Citation => ({
+		id: 'x',
+		source: { name: 'x' },
+		document: ['passage'],
+		metadata: [metadata],
+		distances: []
+	});
+
+	it('is offered for a passage from a knowledge file, closes the dialog and opens that file', () => {
+		const onClose = vi.fn();
+		const onOpenFile = vi.fn();
+		render(
+			<CitationDialog
+				source={of({ file_id: file, name: 'notes.md', source: 'notes.md' })}
+				onClose={onClose}
+				onOpenFile={onOpenFile}
+			/>
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Open in canvas' }));
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(onOpenFile).toHaveBeenCalledWith(file);
+		// The link to the file stays.
+		expect(screen.getByRole('link', { name: /notes\.md/ })).toHaveAttribute('href', `/api/v1/files/${file}/content`);
+	});
+
+	it('is not offered for a web page, a note, a chat or an id that is not a UUID, nor without a handler', () => {
+		const none = (metadata: Record<string, unknown>) => {
+			render(<CitationDialog source={of(metadata)} onClose={vi.fn()} onOpenFile={vi.fn()} />);
+			expect(screen.queryByRole('button', { name: 'Open in canvas' })).toBeNull();
+			cleanup();
+		};
+		none({ source: 'https://a.example/doc' });
+		none({ file_id: file, name: 'A note' });
+		none({ file_id: 'external-123', source: 'a.md' });
+		render(<CitationDialog source={of({ file_id: file, source: 'a.md' })} onClose={vi.fn()} />);
+		expect(screen.queryByRole('button', { name: 'Open in canvas' })).toBeNull();
+	});
+});

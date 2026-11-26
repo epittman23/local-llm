@@ -803,7 +803,14 @@ export function ChatPage() {
 						dialog={session.dialog ?? askUser.dialog}
 						onClose={session.dialog ? session.closeDialog : askUser.close}
 					/>
-					<CitationDialog source={citation} onClose={() => setCitation(null)} />
+					<CitationDialog
+						source={citation}
+						onClose={() => setCitation(null)}
+						// A file the chat already holds opens as that document, not as a second one.
+						onOpenFile={(fileId) =>
+							canvas.open(canvas.documents.some((d) => d.id === fileId) ? fileId : `file:${fileId}`)
+						}
+					/>
 				</div>
 				{/* One side panel (CNV-2): the canvas while a document is open, else Controls. */}
 				<CanvasPanel canvas={canvas} focusOnOpen={canvas.openId !== autoOpened} editable={!inTemporary} />

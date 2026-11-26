@@ -179,6 +179,10 @@ function FilesMenu({ canvas, trigger }: { canvas: CanvasState; trigger?: ReactNo
  * the header's own actions: one `useUnsavedChanges` asks before anything
  * leaves a draft behind (Close, Escape, another document, Back, leaving the
  * chat, a reload, Preview, another version).
+ *
+ * A knowledge file a reply cites (`file:<uuid>`, CNV-1) is shown read-only, with its heading saying where it
+ * is from: no Edit, no versions, no Reload. Its cited passages and the Note for a file the server refuses
+ * are part of its view (`KnowledgeFrame`).
  */
 export function CanvasPanel({
 	canvas,
@@ -552,7 +556,10 @@ export function CanvasPanel({
 	const heading = doc ? (
 		<span title={doc.name}>
 			<span className="font-strong">{doc.name}</span>{' '}
-			<span className="text-foreground-muted text-dense">{kindLabel(doc)}</span>
+			<span className="text-foreground-muted text-dense">
+				{kindLabel(doc)}
+				{doc.source.type === 'knowledge' ? ', from a knowledge source' : ''}
+			</span>
 		</span>
 	) : undefined;
 

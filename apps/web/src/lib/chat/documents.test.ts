@@ -7,6 +7,9 @@ import {
 	codeBlocks,
 	countsForAutoOpen,
 	documentKind,
+	KNOWLEDGE_ID,
+	knowledgeDocument,
+	knowledgeFileId,
 	messageDocuments,
 	qualifies,
 	UUID
@@ -463,5 +466,73 @@ describe('UUID', () => {
 		expect(UUID.test(id(1))).toBe(true);
 		expect(UUID.test(`${id(1)}/../x`)).toBe(false);
 		expect(UUID.test('')).toBe(false);
+	});
+});
+
+describe('knowledge files', () => {
+	const file = id(77);
+	const cited = (metadata: unknown[], document: unknown[] = ['a passage']) =>
+		msg({ sources: [{ source: { name: 'notes.md' }, document, metadata }] } as unknown as Partial<Message>);
+	const reply = cited([{ file_id: file, name: 'notes.md', source: 'notes.md', page: 2 }], ['first']);
+
+	it('knows a file by a UUID file_id and a source that is not a URL; a note, a chat and a web page are not', () => {
+		expect(knowledgeFileId({ file_id: file, source: 'notes.md' })).toBe(file);
+		expect(knowledgeFileId({ file_id: file, name: 'A note' })).toBeNull();
+		expect(knowledgeFileId({ file_id: file, source: 'https://a.example/x' })).toBeNull();
+		expect(knowledgeFileId({ file_id: 'not-a-uuid', source: 'a.md' })).toBeNull();
+		expect(knowledgeFileId({ file_id: `${file}/../x`, source: 'a.md' })).toBeNull();
+		expect(knowledgeFileId(null)).toBeNull();
+		expect(knowledgeFileId('text')).toBeNull();
+	});
+
+	it('is addressed as file:<uuid>', () => {
+		expect(KNOWLEDGE_ID.exec(`file:${file}`)?.[1]).toBe(file);
+		expect(KNOWLEDGE_ID.test(`file:${file}/x`)).toBe(false);
+		expect(KNOWLEDGE_ID.test('file:abc')).toBe(false);
+		expect(KNOWLEDGE_ID.test(file)).toBe(false);
+	});
+
+	it('resolves only a file the branch cites, as a read-only document with its passages and first page', () => {
+		const doc = knowledgeDocument([reply], file, []);
+		expect(doc).toMatchObject({ id: `file:${file}`, name: 'notes.md', kind: 'markdown', messageId: 'm1', bytes: null });
+		expect(doc?.source).toEqual({ type: 'knowledge', fileId: file, page: 3, passages: ['first'] });
+		expect(knowledgeDocument([reply], id(78), [])).toBeNull();
+		expect(knowledgeDocument([], file, [])).toBeNull();
+		expect(knowledgeDocument([reply], 'file:nope', [])).toBeNull();
+	});
+
+	it('is not one of the chat’s documents', () => {
+		expect(chatDocuments([reply])).toEqual([]);
+	});
+
+	it('does not resolve a note, a chat or a page that carries the same id', () => {
+		expect(knowledgeDocument([cited([{ file_id: file, name: 'A note' }])], file, [])).toBeNull();
+		expect(
+			knowledgeDocument([cited([{ file_id: file, source: 'https://a.example/x', name: 'x' }])], file, [])
+		).toBeNull();
+	});
+
+	it('opens the chat’s own document when the cited file is one of its uploads or outputs', () => {
+		const [own] = messageDocuments(msg({ files: [out(77, 'notes.md')] }));
+		expect(knowledgeDocument([reply], file, [own])).toBe(own);
+	});
+
+	it('does not throw on hostile sources', () => {
+		const hostile = msg({
+			sources: [
+				null,
+				'x',
+				{ document: 'not a list', metadata: [] },
+				{ document: ['a'], metadata: 'not a list' },
+				{ document: ['a', 'b', 'c'], metadata: [null, 'a string', { file_id: file, source: 'notes.md', name: 5 }] }
+			]
+		} as unknown as Partial<Message>);
+		expect(() => knowledgeDocument([hostile, null as unknown as Message], file, [])).not.toThrow();
+		expect(knowledgeDocument([hostile], file, [])?.name).toBe('notes.md');
+	});
+
+	it('shows an html file as source only: its kind is html, never framed (the views decide that)', () => {
+		const html = cited([{ file_id: file, name: 'page.html', source: 'page.html' }]);
+		expect(knowledgeDocument([html], file, [])?.kind).toBe('html');
 	});
 });
