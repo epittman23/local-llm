@@ -119,8 +119,12 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   model wrote is edited with its preview beside the source (Update preview,
   or Ctrl or Cmd+Enter, runs the draft in the sandboxed frame; "Update as I
   type" is opt-in); an uploaded page is edited as source only, and a fenced
-  `html` or `svg` block offers Try changes, a draft that is never saved. CSV
-  and other fenced code blocks are not editable (docs/plans/canvas.md). A
+  `html` or `svg` block offers Try changes, a draft that is never saved. A CSV
+  file is edited as a table (a field in every cell, rows and columns added and
+  removed with named buttons, Edit as text for its source) when nothing in it
+  would be cut: at most 500 rows and 50 columns, comma-separated; any other CSV
+  is edited as text. Other fenced code blocks are not editable
+  (docs/plans/canvas.md). A
   knowledge file a reply cites opens from the citation dialog's Open in canvas
   (`?canvas=file:<id>`): read-only, with the passages cited from it above its
   view, HTML as source only, and one Note when you can no longer read it.

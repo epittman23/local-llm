@@ -126,7 +126,7 @@ Start here for "how do I run/use this."
 - **`plans/`** — implementation plans awaiting or under execution:
   `canvas.md` (the document viewer and text editor beside a chat: the viewer
   and the editor are built, the version comparison, the HTML editor with
-  its preview and a cited knowledge file too; its interface is on `/ui` and in the
+  its preview, a cited knowledge file and the CSV table editor too; its interface is on `/ui` and in the
   standard's CNV rules),
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -510,7 +510,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `withVersion`; the comparison: `views/ChangesView.tsx`, a diff of two
   versions, over `lib/utils/lineDiff.ts`, the line diff; the page editor:
   `views/HtmlEditView.tsx`, the source and the sandboxed preview side by side,
-  and `present.ts`'s `editabilityOf`; a cited knowledge file:
+  and `present.ts`'s `editabilityOf`; a CSV edited as a table:
+  `views/CsvEditView.tsx` over `lib/utils/csvTable.ts`, its faithful model;
+  a cited knowledge file:
   `views/KnowledgeFrame.tsx` and `views/PassagesNote.tsx`, opened from
   `CitationDialog.tsx` as `?canvas=file:<id>`), `ChatMenu`,
   `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,

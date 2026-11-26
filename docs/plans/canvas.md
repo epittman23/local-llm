@@ -4,8 +4,9 @@
 > 2026-11-25, #1159; Phase 3 2026-11-26): documents a model provides are
 > cards in the reply that open in the canvas, a viewer, and a text file can
 > be edited there and saved as a version. Phase 4 is under way: the
-> comparison of two versions and the editing of HTML with its preview beside
-> the source are built (2026-11-26); the rest is not scheduled.** The interface design is shown on
+> comparison of two versions, the editing of HTML with its preview beside
+> the source, a cited knowledge file and the editing of a CSV as a table are
+> built (2026-11-26); writing an edit back into the sandbox is not scheduled.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
 > implementation plan. The owner settled all five of its decisions on
@@ -75,7 +76,7 @@ The interface is specified by CNV-1 to CNV-9 in the standard and shown on
   | HTML the owner uploaded | none: Source and Download only | Highlighted, line-numbered | Yes (source only) |
   | Markdown | Rendered with the chat's renderer, at reading width | Plain text | Yes |
   | Text, code, LaTeX, JSON, logs | none: Source only | Highlighted, line-numbered | Yes |
-  | CSV | Table (first 200 rows, the existing limits) | Plain text | Phase 4 |
+  | CSV | Table (first 200 rows, the existing limits) | Plain text | Yes (Phase 4): as a table when it is faithful (at most 500 rows and 50 columns, no cell cut, comma-separated), as text otherwise |
   | Image, including an SVG file | An `<img>`, fitted, on a neutral surround. An SVG file is never inlined or framed | none | No |
   | PDF | Page images (the existing previews) | none | No |
   | Anything else | Name, size and a Download button | none | No |
@@ -352,10 +353,10 @@ Where the build goes beyond the text above, or settles a point it left open
 
 ### Phase 4: later
 
-Built: a comparison of two versions and editing HTML with a preview beside
-the source (both below). Not scheduled: editing a CSV as a table; writing an
-edit back into the sandbox workspace; showing a cited knowledge file in the
-canvas.
+Built: a comparison of two versions, editing HTML with a preview beside
+the source, and editing a CSV as a table (each below), and a cited knowledge
+file (see "A knowledge file cited by a reply" above). Not scheduled: writing
+an edit back into the sandbox workspace.
 
 #### Phase 4: what was built (editing HTML with a preview beside the source)
 
@@ -392,6 +393,43 @@ canvas.
 - **Cuts, deliberate.** No second separator between the panes (fixed 50/50),
   no diff of the draft, no saving a block as a file. No backend change and no
   migration.
+
+#### Phase 4: what was built (editing a CSV as a table)
+
+- **The table is offered only when it is faithful** (`parseCsvTable` in
+  `lib/utils/csvTable.ts`): at most 500 rows, 50 columns and 1,000
+  characters in a cell (the viewer cuts at 200 rows, so saving what it shows
+  would lose data), comma-separated, with one line ending, and writing it
+  back must read the same records. Otherwise the file is edited as text, in
+  Source, with a Note saying which of these it is. A CSV over 256 KiB has no
+  edit at all ("Too large to edit; download it to change it.").
+- **Each cell is a field** (`views/CsvEditView.tsx`, the standard's `Table`):
+  no grid role, so Tab moves cell to cell; Enter moves down, Shift+Enter up,
+  Alt+Enter is a line break in the cell, Ctrl or Cmd+S saves. Rows have
+  "Insert row below" and "Delete row" buttons; a heading's menu has "Add
+  column after" and "Delete column"; "Add row" is under the table. Nothing
+  asks first: the draft is not saved until Save document, and Discard
+  changes puts the table back.
+- **The draft stays text.** The view keeps the rows and writes every change
+  to the draft with `stringifyCsvTable`, so the Save bar, the guard,
+  `POST /files/{id}/versions` and Attach are the editor's own. "Edit as
+  text" (the Copy menu, or the Source switch while editing) turns the table
+  into the same draft as text. `useDocumentEdit`'s `canonical` option makes
+  the draft dirty by the table it holds, not its bytes (FRM-3): a file the
+  table writes differently is not changed until a cell is, and putting a cell
+  back clears it.
+- **Quoting is RFC 4180 only, never `csvCell`.** `csvCell` prefixes a quote to
+  a cell that starts with `=`, `+`, `-` or `@`, which is right for a report
+  opened in a spreadsheet and would rewrite a person's `=SUM(A1:A3)`. A cell
+  is quoted when it holds a comma, quote or line break, or begins or ends
+  with a space. The line ending and the final newline are kept; a first save
+  normalises quoting ("Saving normalises quoting.") and pads short rows with
+  empty cells. A cell is only ever a field's value, never markup.
+- **Known gap.** The text is read with `TextDecoder`, which drops a leading
+  byte order mark, so a file that had one is saved without it. The model
+  (`parseCsvTable`, `stringifyCsvTable`) keeps a BOM; the shared fetch is
+  unchanged. No backend change and no migration; a pytest case pins that the
+  version route stores a BOM, CRLF and a quoted line break byte for byte.
 
 #### Phase 4: what was built (a comparison of two versions)
 
