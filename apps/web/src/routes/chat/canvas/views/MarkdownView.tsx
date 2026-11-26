@@ -12,7 +12,8 @@ export function MarkdownView({ doc }: { doc: CanvasDocument }) {
 	if (!text.data) return <Loading />;
 	return (
 		<div className="h-full overflow-auto p-4">
-			<Markdown id={`canvas-${doc.id}`} content={text.data.text} className="max-w-[72ch]" />
+			{/* A leading byte-order mark is kept in the text for saving; Markdown would read it as text before the first heading. */}
+			<Markdown id={`canvas-${doc.id}`} content={text.data.text.replace(/^\uFEFF/, '')} className="max-w-[72ch]" />
 			{text.data.truncated ? (
 				<Note>Showing the first {TEXT_MAX_BYTES / 1024} KiB; download it for the rest.</Note>
 			) : null}
