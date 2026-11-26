@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { CodeRunResult } from '@/lib/apis/utils';
@@ -350,5 +352,12 @@ describe('CodeBlock header (CNT-2)', () => {
 		expect(screen.getByRole('button', { name: 'Download' })).toBe(download);
 		expect(document.activeElement).toBe(download);
 		vi.unstubAllGlobals();
+	});
+});
+
+describe('the code theme (CNT-2)', () => {
+	it('imports no highlight.js stylesheet; the colours come from standard.css', () => {
+		const source = readFileSync(resolve(process.cwd(), 'src/components/chat/markdown/CodeBlock.tsx'), 'utf8');
+		expect(source).not.toContain('highlight.js/styles');
 	});
 });

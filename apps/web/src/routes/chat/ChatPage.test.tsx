@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
+import { createMemoryRouter, Outlet, RouterProvider, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShellBarSlotContext } from '@/components/layout/ShellBarSlot';
@@ -42,9 +42,7 @@ function show() {
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<MemoryRouter>
-					<ChatPage />
-				</MemoryRouter>
+				<RouterProvider router={createMemoryRouter([{ path: '*', element: <ChatPage /> }])} />
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -139,13 +137,16 @@ function showAt(path: string) {
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<MemoryRouter initialEntries={[path]}>
-					<Routes>
-						<Route path="/" element={<Where />} />
-						<Route path="/c/:id" element={<ChatPage />} />
-						<Route path="/folders/:folderId" element={<ChatPage />} />
-					</Routes>
-				</MemoryRouter>
+				<RouterProvider
+					router={createMemoryRouter(
+						[
+							{ path: '/', element: <Where /> },
+							{ path: '/c/:id', element: <ChatPage /> },
+							{ path: '/folders/:folderId', element: <ChatPage /> }
+						],
+						{ initialEntries: [path] }
+					)}
+				/>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -194,12 +195,22 @@ describe('ChatPage: a saved chat', () => {
 		render(
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 				<TooltipProvider>
-					<MemoryRouter initialEntries={['/c/c1']}>
-						<Go />
-						<Routes>
-							<Route path="/c/:id" element={<ChatPage />} />
-						</Routes>
-					</MemoryRouter>
+					<RouterProvider
+						router={createMemoryRouter(
+							[
+								{
+									element: (
+										<>
+											<Go />
+											<Outlet />
+										</>
+									),
+									children: [{ path: '/c/:id', element: <ChatPage /> }]
+								}
+							],
+							{ initialEntries: ['/c/c1'] }
+						)}
+					/>
 				</TooltipProvider>
 			</QueryClientProvider>
 		);
@@ -263,9 +274,7 @@ describe('ChatPage on a phone (#1091)', () => {
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 				<TooltipProvider>
 					<ShellBarSlotContext.Provider value={slot}>
-						<MemoryRouter>
-							<ChatPage />
-						</MemoryRouter>
+						<RouterProvider router={createMemoryRouter([{ path: '*', element: <ChatPage /> }])} />
 					</ShellBarSlotContext.Provider>
 				</TooltipProvider>
 			</QueryClientProvider>
@@ -341,12 +350,22 @@ function showNewChat(entry: string | { pathname: string; search: string; state: 
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
-				<MemoryRouter initialEntries={[entry]}>
-					<Probe />
-					<Routes>
-						<Route path="/" element={<ChatPage />} />
-					</Routes>
-				</MemoryRouter>
+				<RouterProvider
+					router={createMemoryRouter(
+						[
+							{
+								element: (
+									<>
+										<Probe />
+										<Outlet />
+									</>
+								),
+								children: [{ path: '/', element: <ChatPage /> }]
+							}
+						],
+						{ initialEntries: [entry] }
+					)}
+				/>
 			</TooltipProvider>
 		</QueryClientProvider>
 	);
@@ -417,12 +436,22 @@ describe('ChatPage: ?note=<id> (#1135)', () => {
 		render(
 			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 				<TooltipProvider>
-					<MemoryRouter initialEntries={['/c/c1?note=n1']}>
-						<Probe />
-						<Routes>
-							<Route path="/c/:id" element={<ChatPage />} />
-						</Routes>
-					</MemoryRouter>
+					<RouterProvider
+						router={createMemoryRouter(
+							[
+								{
+									element: (
+										<>
+											<Probe />
+											<Outlet />
+										</>
+									),
+									children: [{ path: '/c/:id', element: <ChatPage /> }]
+								}
+							],
+							{ initialEntries: ['/c/c1?note=n1'] }
+						)}
+					/>
 				</TooltipProvider>
 			</QueryClientProvider>
 		);

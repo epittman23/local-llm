@@ -191,7 +191,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/error` | "Can't reach the server": shown when the server does not answer. Asks it again every 3 s and on "Try now"; once it answers, loads `?redirect=<path>` (a same-origin app path; home if none) |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat with a header (app name, when it was captured, Continue this chat for a signed-in viewer). The id comes from a chat's Share dialog (sidebar chat menu > Share, which first asks whether anyone with the link or only you (signed in) can open it). To the owner of the shared chat it also offers Open original and Stop sharing (which asks first). A link that no longer works says so in place, signed in or not (the server answers 404); a share that exists but is not open sends an anonymous viewer to sign in and back, and tells a signed-in one it is not open to them |
-| `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch, and a design for the canvas's editing phase ([docs/plans/canvas.md](docs/plans/canvas.md), Phase 3, not built; the viewer is built and is not on this page). Static; shows nothing from the backend |
+| `/ui` | The interface standard's demo page: the rules of [docs/guides/ui-standard.md](docs/guides/ui-standard.md) on the shared components, with a Dark / Black / Light switch, and a mock of the canvas's editor ([docs/plans/canvas.md](docs/plans/canvas.md), Phase 3; the real viewer and editor are in a chat's canvas, not on this page). Static; shows nothing from the backend |
 
 ### Signed-in
 

@@ -623,8 +623,11 @@
 
 /*
  * CNT-2: one code theme, from the tokens, in every app theme. These are
- * highlight.js's token classes; :root's specificity beats the highlight.js
- * stylesheet the chat's code blocks import.
+ * highlight.js's token classes. No highlight.js stylesheet is imported
+ * anywhere (a test guards CodeBlock), so chat code blocks, Source and the
+ * editor are coloured by these rules alone; a class not named here inherits
+ * the text colour from .hljs. Every colour is held to 4.5:1 on --surface-1 by
+ * standard.contrast.test.ts.
  */
 :root .hljs {
 	background-color: var(--surface-1);

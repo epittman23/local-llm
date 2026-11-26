@@ -7,11 +7,11 @@ import { fileIdOf } from '../present';
 /**
  * A file document's start as text, at most `cap` bytes (GET /files/{id}/content),
  * keyed by file id so an upload and an output share the entry. A fenced block
- * has its text already and is never fetched.
+ * has its text already and is never fetched; no document is asked for nothing.
  */
-export function useDocumentText(doc: CanvasDocument, cap: number) {
+export function useDocumentText(doc: CanvasDocument | null, cap: number) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const fileId = fileIdOf(doc);
+	const fileId = doc ? fileIdOf(doc) : null;
 	return useQuery({
 		queryKey: ['sandbox-output-text', fileId, cap],
 		queryFn: ({ signal }) => getSandboxOutputText(token, fileId as string, cap, signal),

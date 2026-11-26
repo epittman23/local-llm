@@ -5,7 +5,7 @@ import { HtmlView } from './views/HtmlView';
 import { ImageView } from './views/ImageView';
 import { MarkdownView } from './views/MarkdownView';
 import { PdfView } from './views/PdfView';
-import { SourceView } from './views/SourceView';
+import { SourceView, type SourceEdit } from './views/SourceView';
 
 export type Mode = 'preview' | 'source';
 
@@ -29,12 +29,23 @@ export function viewsOf(doc: CanvasDocument): { preview: boolean; source: boolea
 	}
 }
 
-/** The canvas's body: one view of one document. A mode the document lacks falls back to the one it has. */
-export function Canvas({ doc, mode, reloads = 0 }: { doc: CanvasDocument; mode: Mode; reloads?: number }) {
+/** The canvas's body: one view of one document. A mode the document lacks falls back to the one it has; an edit is the source's. */
+export function Canvas({
+	doc,
+	mode,
+	reloads = 0,
+	edit
+}: {
+	doc: CanvasDocument;
+	mode: Mode;
+	reloads?: number;
+	/** The draft being edited: the source view becomes its editor. */
+	edit?: SourceEdit;
+}) {
 	const views = viewsOf(doc);
 	const showing = mode === 'source' && views.source ? 'source' : views.preview ? 'preview' : 'source';
 	let view: React.ReactNode;
-	if (showing === 'source') view = <SourceView doc={doc} />;
+	if (showing === 'source') view = <SourceView doc={doc} edit={edit} />;
 	else {
 		switch (doc.kind) {
 			case 'html':

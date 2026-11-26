@@ -108,7 +108,13 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   its source, copies or downloads it and, for HTML, runs it in a sandboxed
   frame that loads nothing from the network. The open document is in the
   URL (`?canvas=`), and Settings > Interface can stop the canvas opening by
-  itself. Editing a document is planned (docs/plans/canvas.md, Phase 3).
+  itself. A Markdown, text or code file (a sandbox output or an upload, up to
+  256 KiB) can be edited there: Edit document, then Save document stores it
+  as a new version of the file and keeps the original, with a "Version 2 of 2"
+  menu to go back. The model sees an edit only
+  when "Attach to next message" puts that version on the next message.
+  Unsaved edits ask before anything leaves them. HTML, CSV and fenced code
+  blocks are not editable (docs/plans/canvas.md).
 - **Organising.** Folders, pins, archive, temporary chats
   (`?temporary-chat=true`, nothing saved) and read-only share links at
   `/s/<share-id>`.

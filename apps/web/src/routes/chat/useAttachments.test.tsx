@@ -3,6 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Message } from '@/lib/chat/history';
+import { pathFiles } from '@/lib/chat/request';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useAttachments } from './useAttachments';
@@ -152,5 +154,36 @@ describe('useAttachments', () => {
 		);
 		act(() => result.current.addFiles([new File([new Uint8Array([255, 216])], 'photo.heic', { type: 'image/jpeg' })]));
 		expect(result.current.files).toEqual([expect.objectContaining({ name: 'photo.heic', status: 'uploading' })]);
+	});
+
+	it('a saved version of a document is attached whole by reference, once, and goes to the model with the message (C16)', () => {
+		const { result } = renderHook(
+			() => useAttachments({ temporary: false, selectedModels: ['m'], models, chatId: 'c1' }),
+			{ wrapper }
+		);
+		const version = {
+			type: 'file',
+			id: 'v2',
+			name: 'fit.py',
+			url: 'v2',
+			size: 6,
+			content_type: 'text/plain',
+			collection_name: '',
+			context: 'full'
+		};
+		act(() => result.current.addItem(version));
+		act(() => result.current.addItem(version));
+		expect(result.current.files).toEqual([expect.objectContaining({ ...version, status: 'processed' })]);
+		// A sent message keeps the file as it is, and the request carries it with its full context.
+		const sent: Message = {
+			id: 'u1',
+			parentId: null,
+			childrenIds: [],
+			role: 'user',
+			content: 'Read it',
+			done: true,
+			files: result.current.files
+		};
+		expect(pathFiles([sent])).toEqual([expect.objectContaining({ id: 'v2', context: 'full' })]);
 	});
 });

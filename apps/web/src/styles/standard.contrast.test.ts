@@ -59,6 +59,24 @@ describe('the interface standard’s colour tokens', () => {
 	}
 });
 
+describe('the code theme (CNT-2, #1064)', () => {
+	// Chat code blocks, Source and the editor all take their colours from these rules, on --surface-1.
+	const rules = [...css.matchAll(/^:root :is\(([^)]*\.hljs-[^)]*)\) \{\s*color: var\((--[\w-]+)\);/gm)];
+	const codeColours = [...new Set(rules.map((m) => m[2]))];
+
+	it('colours every highlight.js token class from a token', () => {
+		expect(rules.length).toBeGreaterThanOrEqual(7);
+		expect(css).toMatch(/:root \.hljs \{\s*background-color: var\(--surface-1\);/);
+	});
+
+	for (const theme of ['dark', 'black', 'light']) {
+		it.each(codeColours)(`${theme}: %s on --surface-1 is at least 4.5:1`, (name) => {
+			const ratio = contrastRatio(color(theme, name), color(theme, '--surface-1'));
+			expect(ratio, `measured ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+		});
+	}
+});
+
 describe('the contrast helpers', () => {
 	it('parse oklch with and without alpha, and reject anything else', () => {
 		expect(parseOklch('oklch(0.5 0.1 200)')).toEqual({ l: 0.5, c: 0.1, h: 200, alpha: 1 });

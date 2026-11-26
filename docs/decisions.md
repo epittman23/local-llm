@@ -7,6 +7,44 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 3 built: the editor.** A Markdown,
+  text or code file can be edited in the canvas and saved as a new version
+  (`docs/plans/canvas.md`; decision 2 of 2026-11-14 applies as written). The
+  orchestrating session settled these points on 2026-11-26.
+  - **Versions are not in `message.files`.** `pathFiles()` sends every
+    non-image file of every user message to the model each turn, so a
+    version there would reach the model beside the original without a click.
+    A version is its own `File` row (`meta.version_of`, `meta.version`,
+    `meta.edited_by`), found with `GET /api/v1/files/{id}/versions`; the
+    document keeps the original's id, and the version viewed is local state,
+    not in the URL. The model sees an edit only through "Attach to next
+    message", which sends it whole (`context: 'full'`) and refuses a version
+    the server could not prepare. No migration.
+  - **Whose version.** The original's owner owns a version whoever saves it
+    (an admin or a write grantee), so it is visible wherever the original is;
+    `meta.edited_by` records the editor. A stranger or a read-only grantee
+    gets 404. Deleting the original deletes its versions.
+  - **What is editable.** Markdown, text and code files that are sandbox
+    outputs or uploads, up to 256 KiB, fetched whole and UTF-8, in a saved
+    chat. A fenced code block is not editable (it is message text, not a
+    file; editing a reply is the message's own Edit); a "save as a file"
+    action is Phase 4 with HTML and CSV editing. An empty text cannot be
+    saved (storage cannot write an empty file).
+  - **Code colours.** The chat's code blocks no longer import the
+    `github-dark` highlight.js stylesheet; Source, the editor and the chat
+    are one theme built from the series tokens, each at least 4.5:1 on
+    `--surface-1` in dark, black and light, held by the contrast test. That
+    closes #1064 (a 1.92:1 token in light).
+  - **Escape in the editor** is taken on the textarea natively
+    (`data-escape-kept`), because the panel's own Escape listener runs
+    before React's root handler and the sheet's before the textarea's.
+  - **Known limit.** A router keeps one blocker, and the Settings dialog
+    registers its own while open: opening Settings over a canvas with unsaved
+    edits swaps the guard, so leaving then does not ask. A reload still does.
+    A shared guard registry is the fix and is not built.
+  - **Not decided here.** Two concurrent saves of one original can get the
+    same version number (no unique constraint on a JSON field; accepted); the
+    list orders by version, `created_at` and id.
 - **2026-11-25** (latest): **Canvas Phase 2 built: the viewer beside the chat.**
   A file or a page of HTML a model provides is a card in the reply that opens
   in the canvas (`docs/plans/canvas.md`; the owner's decisions 1, 3, 4 and 5

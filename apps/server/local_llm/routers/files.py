@@ -1,6 +1,7 @@
 import asyncio
 import errno
 import hashlib
+import io
 import logging
 import os
 import uuid
@@ -29,6 +30,7 @@ from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db_context, get_async_session
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
+from local_llm.models.chats import Chats
 from local_llm.models.config import Config
 from local_llm.models.files import (
     FileForm,
@@ -849,6 +851,179 @@ async def update_file_data_content_by_id(
 
 
 ############################
+# File versions
+############################
+
+# The largest text a version may hold. Mirrors TEXT_MAX_BYTES in
+# apps/web/src/routes/chat/canvas/limits.ts, the most the canvas loads to edit.
+VERSION_MAX_BYTES = 256 * 1024
+
+
+class VersionForm(BaseModel):
+    content: str
+
+
+class FileVersionEntry(BaseModel):
+    id: str
+    version: int
+    size: int | None = None
+    created_at: int | None = None
+    name: str
+
+
+def _root_id(file: FileModel) -> str:
+    return (file.meta or {}).get('version_of') or file.id
+
+
+@router.post('/{id}/versions', response_model=FileModel)
+async def create_file_version(
+    request: Request,
+    id: str,
+    form_data: VersionForm,
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Save edited text as a new version of a file; the original stays as it was.
+
+    `id` may be the root or any version. The version is its own file row
+    (owned by the root's owner, linked to the root's chats), so it is served,
+    counted and deleted like any file. Versions are not in `message.files`,
+    so the model sees one only when it is attached to a message.
+    """
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    file = await Files.get_file_by_id(id, db=db)
+    if not file:
+        raise not_found
+    if not (file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'write', user, db=db)):
+        raise not_found
+    root = file if _root_id(file) == file.id else await Files.get_file_by_id(_root_id(file), db=db)
+    if not root:
+        raise not_found
+
+    content_type = (root.meta or {}).get('content_type') or ''
+    if content_type.startswith('image/') or not (root.path and await asyncio.to_thread(_is_text_file, root.path)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Only a text file can be edited'),
+        )
+    data = form_data.content.encode('utf-8')
+    if len(data) > VERSION_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=ERROR_MESSAGES.DEFAULT(f'A file can be edited up to {VERSION_MAX_BYTES // 1024} KiB'),
+        )
+    if not data:
+        # Storage refuses to write an empty file.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('A file cannot be saved empty'),
+        )
+
+    new_id = str(uuid.uuid4())
+    name = (root.meta or {}).get('name') or root.filename
+    tags = {
+        'LLLM-User-Email': user.email,
+        'LLLM-User-Id': user.id,
+        'LLLM-User-Name': user.name,
+        'LLLM-File-Id': new_id,
+    }
+    try:
+        _, file_path = await asyncio.to_thread(Storage.upload_file, io.BytesIO(data), f'{new_id}_{name}', tags)
+    except OSError as e:
+        if e.errno != errno.ENAMETOOLONG:
+            log.exception(e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT(e.strerror or 'Error saving file'),
+            )
+        extension = os.path.splitext(name)[1][1:].lower()
+        try:
+            _, file_path = await asyncio.to_thread(
+                Storage.upload_file, io.BytesIO(data), f'{new_id}.{extension}' if extension else new_id, tags
+            )
+        except OSError as e:
+            log.exception(e)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT(e.strerror or 'Error saving file'),
+            )
+
+    root_meta = root.meta or {}
+    meta = {
+        'name': name,
+        'content_type': content_type or None,
+        'size': len(data),
+        'file_hash': hashlib.sha256(data).hexdigest(),
+        'version_of': root.id,
+        'version': await Files.next_version(root.id, db=db),
+        'edited_by': user.id,
+    }
+    for key in ('source', 'chat_id'):
+        if root_meta.get(key):
+            meta[key] = root_meta[key]
+    new = await Files.insert_new_file(
+        root.user_id, FileForm(id=new_id, filename=root.filename, path=file_path, meta=meta), db=db
+    )
+    if not new:
+        await asyncio.to_thread(Storage.delete_file, file_path)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Error saving file'),
+        )
+
+    # The same chat and message as the root, so a shared chat shows it and the
+    # chat's files include it. A failed link does not fail the save.
+    try:
+        links = await Chats.get_chat_files_by_file_id(root.id, db=db)
+    except Exception as e:
+        log.warning('Could not list the chats of %s to link version %s: %s', root.id, new.id, e)
+        links = []
+    for link in links:
+        if not link.message_id:
+            continue
+        try:
+            await Chats.insert_chat_files(link.chat_id, link.message_id, [new.id], root.user_id, db=db)
+        except Exception as e:
+            log.warning('Could not link version %s to chat %s of %s: %s', new.id, link.chat_id, root.id, e)
+
+    # Fill data.content (and the vector collection) so the model can read the
+    # version when it is attached. The save stands when this fails.
+    try:
+        owner = await Users.get_user_by_id(root.user_id, db=db)
+        await process_file(request, ProcessFileForm(file_id=new.id, content=form_data.content), user=owner, db=db)
+    except Exception as e:
+        log.warning('Could not process version %s of %s: %s', new.id, root.id, e)
+        await Files.update_file_data_by_id(
+            new.id, {'status': 'failed', 'error': str(getattr(e, 'detail', None) or e)}, db=db
+        )
+    return await Files.get_file_by_id(new.id, db=db)
+
+
+@router.get('/{id}/versions', response_model=list[FileVersionEntry])
+async def list_file_versions(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
+    """The file and its saved edits, oldest first; the root is version 1."""
+    file = await Files.get_file_by_id(id, db=db)
+    if not file or not (
+        file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    root = file if _root_id(file) == file.id else await Files.get_file_by_id(_root_id(file), db=db)
+    if not root:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    entries = [root, *await Files.get_versions(root.id, db=db)]
+    return [
+        FileVersionEntry(
+            id=f.id,
+            version=1 if f.id == root.id else (f.meta or {}).get('version') or 2,
+            size=(f.meta or {}).get('size'),
+            created_at=f.created_at,
+            name=f.filename,
+        )
+        for f in entries
+    ]
+
+
+############################
 # Get File Content By Id
 ############################
 
@@ -1113,6 +1288,16 @@ async def delete_file_by_id(
                 await delete_file_chunks(knowledge.id, file, db)
             except Exception as e:
                 log.debug('KB embedding cleanup for %s: %s', knowledge.id, e)
+
+        # A root takes its saved edits with it; a version goes alone.
+        for version in await Files.get_versions(id, db=db):
+            await Files.delete_file_by_id(version.id, db=db)
+            try:
+                if version.path:
+                    await asyncio.to_thread(Storage.delete_file, version.path)
+                await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name=f'file-{version.id}')
+            except Exception as e:
+                log.warning('Error deleting version %s of %s: %s', version.id, id, e)
 
         result = await Files.delete_file_by_id(id, db=db)
         if result:

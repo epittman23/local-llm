@@ -172,6 +172,22 @@ class FilesTable:
         except Exception:
             return None
 
+    async def get_versions(self, root_id: str, db: AsyncSession | None = None) -> list[FileModel]:
+        """The saved edits of a file (`meta.version_of` is the root's id), oldest first.
+
+        The root is not included. Ordered by (version, created_at), so two
+        edits that raced to the same number still list in a stable order.
+        """
+        async with get_async_db_context(db) as db:
+            result = await db.execute(select(File).filter(File.meta['version_of'].as_string() == root_id))
+            rows = [FileModel.model_validate(file) for file in result.scalars().all()]
+        return sorted(rows, key=lambda f: ((f.meta or {}).get('version') or 0, f.created_at or 0, f.id))
+
+    async def next_version(self, root_id: str, db: AsyncSession | None = None) -> int:
+        """The number the next edit of `root_id` takes: the root counts as 1, the first edit is 2."""
+        versions = await self.get_versions(root_id, db=db)
+        return max([1, *((f.meta or {}).get('version') or 1 for f in versions)]) + 1
+
     async def get_file_by_id_and_user_id(
         self, id: str, user_id: str, db: AsyncSession | None = None
     ) -> FileModel | None:

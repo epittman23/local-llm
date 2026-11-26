@@ -80,6 +80,14 @@ describe('useCanvasAutoOpen', () => {
 		}
 	});
 
+	it('never moves the address while a document is open, which is where an unsaved draft lives (CNV-6)', () => {
+		const open = vi.fn();
+		const message = reply('a1', [output('e', 'report.html')]);
+		const { finish } = setup([message], { canvas: { openId: id('1'), open } });
+		finish();
+		expect(open).not.toHaveBeenCalled();
+	});
+
 	it('opens once per message', () => {
 		const message = reply('a1', [output('e', 'report.html')]);
 		const open = vi.fn();

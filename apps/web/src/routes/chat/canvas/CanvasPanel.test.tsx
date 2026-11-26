@@ -3,7 +3,7 @@ import saveAs from 'file-saver';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { CanvasPanel } from './CanvasPanel';
-import { blockDoc, content, docOf, id, output, renderWithClient, upload } from './testing';
+import { blockDoc, content, docOf, id, output, renderWithRouter, upload } from './testing';
 import type { CanvasState } from './useCanvas';
 
 const api = vi.hoisted(() => ({
@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe('CanvasPanel header', () => {
 	it('has the switch, name and kind, Copy menu, Reload, Expand and Close for a page', async () => {
-		renderWithClient(panel(state(docOf(output('e', 'report.html')))));
+		renderWithRouter(panel(state(docOf(output('e', 'report.html')))));
 		const region = screen.getByRole('complementary', { name: 'Canvas' });
 		expect(within(region).getByRole('heading', { name: 'report.html HTML' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true');
@@ -60,7 +60,7 @@ describe('CanvasPanel header', () => {
 	});
 
 	it('hides the switch where the kind has one view, and offers Download for a file it cannot copy', () => {
-		renderWithClient(panel(state(docOf(output('a', 'plot.png')))));
+		renderWithRouter(panel(state(docOf(output('a', 'plot.png')))));
 		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Source' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
@@ -70,7 +70,7 @@ describe('CanvasPanel header', () => {
 	});
 
 	it('shows only the source of code, with no switch and no Reload', async () => {
-		renderWithClient(panel(state(docOf(output('1', 'fit.py')))));
+		renderWithRouter(panel(state(docOf(output('1', 'fit.py')))));
 		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
 		expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
 		expect(await screen.findByText(/source text/)).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('CanvasPanel header', () => {
 
 	it('shows an uploaded page as source with Download, never framed, and never asks the sandbox route', async () => {
 		const doc = docOf(upload('9', 'mine.html'), 'user');
-		renderWithClient(panel(state(doc)));
+		renderWithRouter(panel(state(doc)));
 		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Reload the page' })).toBeNull();
 		expect(await screen.findByText(/source text/)).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('CanvasPanel header', () => {
 
 	it('switches between Preview and Source and keeps the choice for the document', async () => {
 		const doc = docOf(output('e', 'report.html'));
-		const { rerender } = renderWithClient(panel(state(doc)));
+		const { rerender } = renderWithRouter(panel(state(doc)));
 		await screen.findByTitle('Preview of report.html');
 		fireEvent.click(screen.getByRole('button', { name: 'Source' }));
 		expect(document.querySelector('iframe')).toBeNull();
@@ -105,7 +105,7 @@ describe('CanvasPanel header', () => {
 		const a = docOf(output('e', 'report.html'));
 		const b = docOf(output('1', 'fit.py'));
 		const canvas = state(a, { documents: [a, b] });
-		renderWithClient(panel(canvas));
+		renderWithRouter(panel(canvas));
 		const menu = await openMenu('2 documents in this chat');
 		fireEvent.click(within(menu).getByRole('menuitem', { name: 'fit.py' }));
 		expect(canvas.open).toHaveBeenCalledWith(b.id);
@@ -113,7 +113,7 @@ describe('CanvasPanel header', () => {
 
 	it('closes from Close, and from Escape inside it', () => {
 		const canvas = state(docOf(output('a', 'plot.png')));
-		renderWithClient(panel(canvas));
+		renderWithRouter(panel(canvas));
 		fireEvent.click(screen.getByRole('button', { name: 'Close canvas' }));
 		expect(canvas.close).toHaveBeenCalledTimes(1);
 		fireEvent.keyDown(screen.getByRole('heading', { name: /plot\.png/ }), { key: 'Escape' });
@@ -121,7 +121,7 @@ describe('CanvasPanel header', () => {
 	});
 
 	it('Expand makes the column take all the space, and says how to undo it', () => {
-		renderWithClient(panel(state(docOf(output('a', 'plot.png')))));
+		renderWithRouter(panel(state(docOf(output('a', 'plot.png')))));
 		const region = screen.getByRole('complementary', { name: 'Canvas' });
 		expect(region).not.toHaveAttribute('data-expanded');
 		fireEvent.click(screen.getByRole('button', { name: 'Expand to the full width' }));
@@ -131,7 +131,7 @@ describe('CanvasPanel header', () => {
 	});
 
 	it('Reload remounts the page', async () => {
-		renderWithClient(panel(state(docOf(output('e', 'report.html')))));
+		renderWithRouter(panel(state(docOf(output('e', 'report.html')))));
 		const frame = await screen.findByTitle('Preview of report.html');
 		fireEvent.click(screen.getByRole('button', { name: 'Reload the page' }));
 		await waitFor(() => expect(screen.getByTitle('Preview of report.html')).not.toBe(frame));
@@ -147,7 +147,7 @@ describe('CanvasPanel header', () => {
 				removeEventListener: vi.fn()
 			}))
 		);
-		renderWithClient(panel(state(docOf(output('e', 'report.html')))));
+		renderWithRouter(panel(state(docOf(output('e', 'report.html')))));
 		expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Close canvas' })).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
@@ -163,7 +163,7 @@ describe('CanvasPanel header', () => {
 
 describe('CanvasPanel blocks', () => {
 	it('shows a block still being written as Source filling in, with Preview unavailable, then Preview once it closes', async () => {
-		const { rerender } = renderWithClient(panel(state(blockDoc('<p>he', 'html', false))));
+		const { rerender } = renderWithRouter(panel(state(blockDoc('<p>he', 'html', false))));
 		expect(screen.getByRole('button', { name: 'Preview' })).toBeDisabled();
 		expect(screen.getByRole('button', { name: 'Source' })).toHaveAttribute('aria-pressed', 'true');
 		expect(document.querySelector('iframe')).toBeNull();
@@ -175,7 +175,7 @@ describe('CanvasPanel blocks', () => {
 	});
 
 	it('keeps the view the person chose when the block closes', () => {
-		const { rerender } = renderWithClient(panel(state(blockDoc('<p>hi</p>', 'html', true))));
+		const { rerender } = renderWithRouter(panel(state(blockDoc('<p>hi</p>', 'html', true))));
 		fireEvent.click(screen.getByRole('button', { name: 'Source' }));
 		expect(document.querySelector('iframe')).toBeNull();
 		rerender(panel(state(blockDoc('<p>hi</p>', 'html', true))));
@@ -183,19 +183,19 @@ describe('CanvasPanel blocks', () => {
 	});
 
 	it('shows a code block as source only', () => {
-		renderWithClient(panel(state({ ...blockDoc('x = 1\n'.repeat(20), 'python', true, 'python code'), kind: 'code' })));
+		renderWithRouter(panel(state({ ...blockDoc('x = 1\n'.repeat(20), 'python', true, 'python code'), kind: 'code' })));
 		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
 		expect(screen.getByRole('complementary')).toHaveTextContent('x = 1');
 	});
 
 	it('downloads a block as a Blob named for its document: .html or .svg', async () => {
-		renderWithClient(panel(state(blockDoc('<svg></svg>', 'svg', true, 'SVG drawing'))));
+		renderWithRouter(panel(state(blockDoc('<svg></svg>', 'svg', true, 'SVG drawing'))));
 		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Download' }));
 		const [blob, name] = vi.mocked(saveAs).mock.calls[0] as unknown as [Blob, string];
 		expect(name).toBe('SVG drawing.svg');
 		expect(await blob.text()).toBe('<svg></svg>');
 		cleanup();
-		renderWithClient(panel(state(blockDoc('<p>hi</p>'))));
+		renderWithRouter(panel(state(blockDoc('<p>hi</p>'))));
 		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Download' }));
 		expect(vi.mocked(saveAs).mock.calls[1][1]).toBe('HTML page.html');
 	});
@@ -203,7 +203,7 @@ describe('CanvasPanel blocks', () => {
 	it('copies a block’s text without asking the server', async () => {
 		const write = vi.fn().mockResolvedValue(undefined);
 		vi.stubGlobal('navigator', { clipboard: { writeText: write } });
-		renderWithClient(panel(state(blockDoc('<p>hi</p>'))));
+		renderWithRouter(panel(state(blockDoc('<p>hi</p>'))));
 		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Copy' }));
 		await waitFor(() => expect(write).toHaveBeenCalledWith('<p>hi</p>'));
 		expect(api.text).not.toHaveBeenCalled();
@@ -214,7 +214,7 @@ describe('CanvasPanel states', () => {
 	it('says a document is no longer in the chat, with a way onward (NAV-3)', async () => {
 		const other = docOf(output('1', 'fit.py'));
 		const canvas = state(null, { openId: 'block:m9:0', gone: true, documents: [other] });
-		renderWithClient(panel(canvas));
+		renderWithRouter(panel(canvas));
 		expect(screen.getByText('This document is no longer in the chat')).toBeInTheDocument();
 		fireEvent.click(screen.getByRole('button', { name: 'Close the canvas' }));
 		expect(canvas.close).toHaveBeenCalled();
@@ -224,10 +224,10 @@ describe('CanvasPanel states', () => {
 	});
 
 	it('shows loading while the chat loads, and nothing when no document is open', () => {
-		renderWithClient(panel(state(null, { openId: 'x' })));
+		renderWithRouter(panel(state(null, { openId: 'x' })));
 		expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
 		cleanup();
-		renderWithClient(panel(state(null)));
+		renderWithRouter(panel(state(null)));
 		expect(screen.queryByRole('complementary')).toBeNull();
 	});
 
@@ -235,7 +235,7 @@ describe('CanvasPanel states', () => {
 		const field = document.createElement('input');
 		document.body.append(field);
 		field.focus();
-		renderWithClient(<CanvasPanel canvas={state(docOf(output('a', 'plot.png')))} focusOnOpen={false} />);
+		renderWithRouter(<CanvasPanel canvas={state(docOf(output('a', 'plot.png')))} focusOnOpen={false} />);
 		expect(document.activeElement).toBe(field);
 		field.remove();
 	});

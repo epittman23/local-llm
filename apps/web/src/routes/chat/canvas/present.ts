@@ -1,6 +1,8 @@
 import { FileCodeIcon, FileIcon, FileTextIcon, GlobeIcon, ImageIcon, TableIcon } from 'lucide-react';
-import type { CanvasDocument } from '@/lib/chat/documents';
+import type { FileVersion } from '@/lib/apis/files/versions';
+import { type CanvasDocument, UUID } from '@/lib/chat/documents';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { TEXT_MAX_BYTES } from './limits';
 
 /** Where a file's bytes are served (GET /files/{id}/content). `id` is a UUID (`documents.ts` accepts nothing else). */
 export const contentUrl = (id: string, attachment = false) =>
@@ -57,4 +59,28 @@ export function formatSize(bytes: number | null): string {
 	if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} kB`;
 	const mb = kb / 1024;
 	return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
+
+/**
+ * Whether the document is one the canvas can edit (CNV-6, docs/plans/canvas.md C14): Markdown, text or code
+ * that is a file, a sandbox output or an upload, and no larger than the most the canvas loads. A fenced
+ * block is message text with no file to version; a page, a table, an image and a PDF are not edited yet.
+ */
+export function canEditDocument(doc: CanvasDocument): boolean {
+	if (doc.kind !== 'markdown' && doc.kind !== 'code') return false;
+	if (doc.source.type !== 'output' && doc.source.type !== 'upload') return false;
+	if (!UUID.test(doc.source.fileId)) return false;
+	return doc.bytes === null || doc.bytes <= TEXT_MAX_BYTES;
+}
+
+/** Why the fetched text cannot be edited, or null when it can: cut at the cap, or not UTF-8 (saving would corrupt it). */
+export function uneditableText(text: { text: string; truncated: boolean }): 'truncated' | 'encoding' | null {
+	if (text.truncated) return 'truncated';
+	return text.text.includes('\uFFFD') ? 'encoding' : null;
+}
+
+/** The document as one of its saved versions: its file is the version's, so every view, Copy and Download use that one. */
+export function withVersion(doc: CanvasDocument, version: Pick<FileVersion, 'id' | 'size'> | null): CanvasDocument {
+	if (!version || (doc.source.type !== 'output' && doc.source.type !== 'upload')) return doc;
+	return { ...doc, bytes: version.size ?? doc.bytes, source: { ...doc.source, fileId: version.id } };
 }
