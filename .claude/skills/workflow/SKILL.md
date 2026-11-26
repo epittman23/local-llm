@@ -1,6 +1,6 @@
 ---
 name: workflow
-description: How work is done in this repo, from issue to merged PR, and how an unattended multi-PR run is driven. Use when starting any change, opening or watching a PR, briefing a subagent, verifying against a real backend, or planning a long unattended run.
+description: How work is done in this repo, from a new idea or issue to merged PR, and how an unattended multi-PR run is driven. Use when the owner describes a new feature or idea, when starting any change, opening or watching a PR, briefing a subagent, verifying against a real backend, or planning a long unattended run.
 ---
 
 # workflow
@@ -8,6 +8,46 @@ description: How work is done in this repo, from issue to merged PR, and how an 
 The rules are in `AGENTS.md`; this skill is the order of work. It points at
 the other project skills instead of repeating them. Sections B to G are
 owner decisions of 2026-11-26 (`docs/decisions.md`).
+
+## Intake: from an idea to an approved plan
+
+The owner explains the idea in their own words and nothing more is required
+of them (owner decision 2026-11-26). Turning it into a plan is this skill's
+job, and nothing is built until the plan is approved.
+
+1. **Restate it.** One or two sentences: the problem, who meets it, what
+   "done" lets the owner do. If the restatement could be wrong, it is the
+   first question.
+2. **Explore before asking.** Read the code, docs, decisions log, open
+   issues and existing plans that touch it (Explore or a planning agent for
+   anything broad). Never ask what the repository can answer; reuse what
+   exists.
+3. **Ask every foreseeable question at once, up front,** with AskUserQuestion
+   (several rounds if needed, up to four questions each), before planning:
+   - Only what only the owner can decide: scope and what is out, phasing,
+     behaviour choices, where it lives in the interface, privacy or
+     self-hosting constraints, trade-off priorities, anything touching their
+     real stack or data, PR-gate findings the work will predictably raise
+     (asked as pre-approvals, listing each one).
+   - Each question gives 2-4 concrete options, the recommended one first and
+     marked, with what each would mean, so the owner can answer by picking.
+   - Whether the owner will be present or the work runs unattended (section
+     G); for an unattended run, ask everything now, since there is no later.
+   - Anything decidable from the code, the interface standard or AGENTS.md
+     is decided, not asked, and stated in the plan.
+4. **Write the plan** in `docs/plans/<feature>.md` (the canvas plan is the
+   model): what the owner asked for; what exists today and what changes;
+   the design; a **Decisions** section recording each owner answer with its
+   date; phases, each one PR with its tasks, tests and docs; risks and how
+   they are handled; the docs that move with it. Mark it planned, not built.
+5. **Get explicit approval** of the plan (ExitPlanMode or a direct yes).
+   Open questions found while planning go back to the owner before
+   approval, not after. The plan lands in the first phase's PR, or in its
+   own docs PR when the owner wants to read it first.
+6. **Build by phase** with section A for each PR. A choice the plan did not
+   settle and that only the owner can make stops the work for a question;
+   anything else is decided, recorded in the plan and `docs/decisions.md`,
+   and named in the PR body.
 
 ## A. Every change
 
