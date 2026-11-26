@@ -225,3 +225,37 @@ export const answerPendingWorkspace = async (
 	});
 	if (!res.ok) throw await errorBody(res);
 };
+
+/** What POST /sandbox/outputs/{id}/write-back answered: written, or one of its two 409s, which the person can act on. */
+export type WriteBackResult =
+	| { status: 'written'; path: string; bytes: number }
+	| { status: 'changed'; missing: boolean }
+	| { status: 'busy' };
+
+/**
+ * Writes a saved version of a sandbox output over its own file in the chat's
+ * workspace (POST /sandbox/outputs/{id}/write-back). The server picks the path
+ * and takes the bytes from the stored version, so the body holds only `force`:
+ * replace the file although it is not one this document held. A `changed` 409
+ * (the file differs, or is gone: `missing`) and a `busy` 409 (a command is
+ * running) are results; any other refusal throws the response's error body.
+ */
+export const writeBackOutput = async (token: string, id: string, force = false): Promise<WriteBackResult> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/sandbox/outputs/${encodeURIComponent(id)}/write-back`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${token}` },
+		credentials: 'include',
+		body: JSON.stringify({ force })
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (res.status === 409) {
+		const body = (await res.json().catch(() => null)) as { code?: unknown; missing?: unknown } | null;
+		if (body?.code === 'changed') return { status: 'changed', missing: body.missing === true };
+		if (body?.code === 'busy') return { status: 'busy' };
+		throw body ?? { detail: '409 Conflict' };
+	}
+	if (!res.ok) throw await errorBody(res);
+	const body = (await res.json()) as { path?: unknown; bytes?: unknown };
+	return { status: 'written', path: String(body.path ?? ''), bytes: Number(body.bytes ?? 0) };
+};

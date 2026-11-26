@@ -10,6 +10,7 @@ import {
 	FilesIcon,
 	FileTextIcon,
 	GlobeIcon,
+	HardDriveUploadIcon,
 	Maximize2Icon,
 	Minimize2Icon,
 	PencilIcon,
@@ -49,6 +50,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { withHtmlPolicy } from '@/lib/chat/htmlPolicy';
 import { tableNote } from '@/routes/chat/canvas/present';
+import { SAVED_TO_WORKSPACE, workspaceDialog } from '@/routes/chat/canvas/useWriteBack';
 import { DiffView } from '@/routes/chat/canvas/views/ChangesView';
 import { CsvEditView } from '@/routes/chat/canvas/views/CsvEditView';
 import { Note } from '@/routes/chat/canvas/views/parts';
@@ -278,6 +280,11 @@ export function CanvasSection() {
 	// `pending` is what was asked for: a document id, or null for Close.
 	const [pending, setPending] = useState<{ id: string | null } | null>(null);
 	const editor = useRef<HTMLTextAreaElement>(null);
+	// CNV-6: Save to workspace. The demo alternates the two answers the server's `changed` 409 gives, so both show.
+	const [workspaceAsk, setWorkspaceAsk] = useState<{ missing: boolean } | null>(null);
+	const workspacePresses = useRef(0);
+	const saveToWorkspace = () => setWorkspaceAsk({ missing: workspacePresses.current++ % 2 === 1 });
+	const workspaceWords = workspaceDialog(workspaceAsk?.missing === true);
 
 	const show = (id: string | null) => {
 		const from = openId;
@@ -476,6 +483,12 @@ export function CanvasSection() {
 												<CopyIcon aria-hidden />
 												Copy
 											</DropdownMenuItem>
+											{!isBlock && doc.kind !== 'CSV' && (
+												<DropdownMenuItem onSelect={saveToWorkspace}>
+													<HardDriveUploadIcon aria-hidden />
+													Save to workspace
+												</DropdownMenuItem>
+											)}
 											{csvTable && (
 												<DropdownMenuItem onSelect={editAsText}>
 													<TextIcon aria-hidden />
@@ -506,6 +519,12 @@ export function CanvasSection() {
 												<CopyIcon aria-hidden />
 												Copy
 											</DropdownMenuItem>
+											{!isBlock && doc.kind !== 'CSV' && (
+												<DropdownMenuItem onSelect={saveToWorkspace}>
+													<HardDriveUploadIcon aria-hidden />
+													Save to workspace
+												</DropdownMenuItem>
+											)}
 											{csvTable && (
 												<DropdownMenuItem onSelect={editAsText}>
 													<TextIcon aria-hidden />
@@ -671,6 +690,20 @@ export function CanvasSection() {
 						</div>
 					)}
 				</div>
+				<AlertDialog open={workspaceAsk !== null} onOpenChange={(isOpen) => !isOpen && setWorkspaceAsk(null)}>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>{workspaceWords.title}</AlertDialogTitle>
+							<AlertDialogDescription>{workspaceWords.body}</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction onClick={() => toast.success(SAVED_TO_WORKSPACE)}>
+								{workspaceWords.confirm}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 				<AlertDialog open={pending !== null} onOpenChange={(isOpen) => !isOpen && setPending(null)}>
 					<AlertDialogContent>
 						<AlertDialogHeader>

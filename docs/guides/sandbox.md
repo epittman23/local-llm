@@ -853,6 +853,12 @@ Nothing in the guest can change, move or remove it, so nothing needs
 checking before a copy, and the model cannot leave copies behind that it
 is unable to delete.
 
+An edit made in the canvas reaches `/workspace/uploads` only by being
+attached to a message (it is then one more uploaded file on the next call).
+It cannot be written back over an upload: the mount is read-only on purpose,
+and the write-back route (see "Writing an edit back" under "Outputs") answers
+404 for a file that is not a sandbox output.
+
 A call whose files (name, id, and the size and hash recorded at upload)
 are those of the last copy on the running sandbox copies nothing and
 fetches nothing from storage; any change hands the whole current set to
@@ -1040,6 +1046,73 @@ ignored, and a comment first could hide a fake doctype, so neither is
 skipped; a real doctype after the policy is then ignored, which costs only
 quirks mode. A policy the document declares itself can only narrow this
 one.
+
+### Writing an edit back
+
+`POST /api/v1/sandbox/outputs/{id}/write-back` (`routers/sandbox.py`) writes a
+saved version of an output over the output's own file in the chat's
+workspace, so the model finds the edit the next time it reads the file. The
+body is `{"force": false}` and nothing else (any other key is a 422); there
+is no path and no content in it.
+
+- **Owner only.** The caller must own the file. Another user, an admin and a
+  grantee get the same 404 as a missing file: an admin would be writing into
+  another person's workspace, and the manager's admin access (Q14) is for
+  tool calls the owner started.
+- **The server chooses the path and the bytes.** `{id}` is an output's root
+  or one of its versions. The path is the root's `meta.sandbox_path`, which
+  the server set when it attached the file, and must be a normalised path
+  under `/workspace/outputs`; the content is the stored version, read from
+  storage (so already capped, text-checked and owner-bound). 404 for an
+  upload, an output with no recorded path, an output of a temporary chat or
+  a file that is not the caller's; 400 for an image, audio, video, a PDF, or
+  bytes that are not UTF-8 text (a NUL counts as binary); 413 over 256 KiB.
+- **The write is `workspace.write`'s**, not `put_files` (which makes a
+  root-owned read-only directory): confined on the host, resolved in the
+  guest as UID 1000 without symlinks, and atomic (a temporary file renamed
+  over the target), so the file is the caller's UID 1000 file like anything
+  the model writes, and the model can overwrite it again. A symlink or
+  directory at the path, a read-only file or a full disk is a 503 with a
+  fixed text (the guest's own message is only logged).
+- **The precondition is this document's own history.** Inside the session,
+  the file in the workspace is read (at most 256 KiB plus one byte) and its
+  SHA-256 must equal the root's `meta.file_hash` or that of any saved
+  version of the root (a previous write back wrote one of them), so it is
+  still something this document held. Anything else is 409 `{"code":
+  "changed", "missing": <bool>, "detail": ...}` and nothing is written: a
+  missing file (`missing` is true, so the dialog can say it will be created)
+  and a newer rewrite by the model too, even one a later `bash` call
+  attached as another output. The same request with `"force": true` writes
+  (and creates the file when it is missing). The check reads the database,
+  not the manager's memory, so it is the same after a restart.
+- **A busy workspace.** The route takes the chat's sandbox through
+  `SandboxManager.session`, so the manager's rules apply (admission, the
+  per-owner cap, a slot, and a stopped sandbox is started, which is the
+  person's explicit action). The wait is bounded: after 20 s without the
+  session (a running `bash` call holds the chat's lock) it answers 409
+  `{"code": "busy", "detail": ...}` and writes nothing.
+- **503** with the sandbox's own public text for a `SandboxError` (a
+  sandbox that cannot start included), and a fixed text for a refused
+  write; **404** for a chat the manager refuses. The response is
+  `{"path": "outputs/<name>", "bytes": <n>}`. Each write is logged at info
+  with the user and file ids, never the content.
+- **No duplicate attach.** `outputs.write_back` sets
+  `outputs_memory.stored[path]` to the written bytes' hash, and the route
+  records `sandbox_path` and `written_back_ns` in the version row's `meta`.
+  `chat_usage` orders a row with `written_back_ns` as stored at that time,
+  so the written version is the path's last row, in the database as well as
+  in memory. The next `bash` call that lists the file (its modification time
+  changed) reads it, finds the hash it already knows and attaches nothing,
+  and that holds after a restart, when the memory is empty and is seeded from
+  the rows. The one worst case: if recording the row fails (logged), a
+  restart before the model touches the file leaves the database naming the
+  model's earlier content as the last, and the next `bash` call that changes
+  the file's modification time attaches one duplicate row. Nothing is lost.
+- Any saved version may be written back, not only the latest, which is also
+  how to put an older version back in the workspace. The model is not told
+  (`assistant.txt` is unchanged); it sees the edit when it reads the file.
+
+`tests/test_sandbox_write_back.py` covers all of it on the FakeBackend.
 
 ### On the reply
 
