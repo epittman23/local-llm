@@ -994,11 +994,14 @@ or discarding moves focus back to the document's heading. Closing the
 canvas, Escape, switching document, the Preview switch, another version,
 leaving the chat, Back and a reload with unsaved changes ask first
 ('Discard changes?', FRM-3). Save stores a new version of the file and the
-original stays: the heading then reads "Version 2 of 2", a Versions menu
-lists "Version 1 (original)" and "Version 2, 14:05", and an older version is
-read-only, with "You are viewing version 1 of 2." and "Back to version 2".
-The model sees an edit only when it is attached: the save's toast, and the
-Copy menu, offer "Attach to next message". An empty text cannot be saved,
+original stays: the Versions menu's own trigger then reads "Version 2 of 2"
+(the one place the count shows, so the heading stays the name and the kind
+and fits; below `sm` it is the menu's label), and the menu lists "Version 1
+(original)" and "Version 2, 14:05". An older version is read-only, with "You
+are viewing version 1 of 2." and "Back to version 2". The model sees an edit
+only when it is attached: the save's toast, and the Copy menu, offer "Attach
+to next message", and below `md` an attach closes the sheet so the composer
+and its new chip show. Keep editing returns focus to the editor. An empty text cannot be saved,
 and the bar says why.
 
 **CNV-7. The open document is in the address** (NAV-1). A document that is no

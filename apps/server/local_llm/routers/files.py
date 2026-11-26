@@ -974,12 +974,17 @@ async def create_file_version(
     # The same chat and message as the root, so a shared chat shows it and the
     # chat's files include it. A failed link does not fail the save.
     try:
-        for link in await Chats.get_chat_files_by_file_id(root.id, db=db):
-            if not link.message_id:
-                continue
-            await Chats.insert_chat_files(link.chat_id, link.message_id, [new.id], root.user_id, db=db)
+        links = await Chats.get_chat_files_by_file_id(root.id, db=db)
     except Exception as e:
-        log.warning('Could not link version %s to the chats of %s: %s', new.id, root.id, e)
+        log.warning('Could not list the chats of %s to link version %s: %s', root.id, new.id, e)
+        links = []
+    for link in links:
+        if not link.message_id:
+            continue
+        try:
+            await Chats.insert_chat_files(link.chat_id, link.message_id, [new.id], root.user_id, db=db)
+        except Exception as e:
+            log.warning('Could not link version %s to chat %s of %s: %s', new.id, link.chat_id, root.id, e)
 
     # Fill data.content (and the vector collection) so the model can read the
     # version when it is attached. The save stands when this fails.

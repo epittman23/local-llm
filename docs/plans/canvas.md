@@ -329,7 +329,8 @@ Where the build goes beyond the text above, or settles a point it left open
   collection) so that an attached version is readable; if that fails the save
   stands and `data.status` is `failed`. No migration: `File.meta` carries it.
 - **Attach to next message** puts the version on the composer as a file with
-  `context: 'full'`, so the model gets the whole text, not retrieved parts. It
+  `context: 'full'`, so the model gets the whole text, not retrieved parts
+  (below `md` the sheet then closes, so the composer shows it). It
   is in the save toast and in the Copy menu (for a document with more than one
   version, so an older one can be attached on purpose). It refuses with
   "This version could not be prepared for the model" when `data.status` is

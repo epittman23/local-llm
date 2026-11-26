@@ -85,7 +85,7 @@ test.beforeEach(async ({ page }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 });
 
-test('edit, save as a version, and the heading says Version 2 of 2', async ({ page }) => {
+test('edit, save as a version, and the Versions menu says Version 2 of 2', async ({ page }) => {
 	const server = await mockEditable(page);
 	await openFit(page);
 	await canvas(page).getByRole('button', { name: 'Edit document' }).click();
@@ -96,18 +96,22 @@ test('edit, save as a version, and the heading says Version 2 of 2', async ({ pa
 	await expect(canvas(page).getByText('Unsaved changes')).toBeVisible();
 	await canvas(page).getByRole('button', { name: 'Save document' }).click();
 	await expect(page.getByText('Saved as version 2')).toBeVisible();
-	await expect(canvas(page).getByRole('heading', { level: 2 })).toContainText('Version 2 of 2');
-	await expect(canvas(page).getByRole('heading', { level: 2 })).toBeFocused();
+	await expect(canvas(page).getByRole('button', { name: 'Version 2 of 2' })).toBeVisible();
+	// The heading is the name and the kind, whole (not cut to "Version 2…").
+	const title = canvas(page).getByRole('heading', { level: 2 });
+	await expect(title).toHaveText('fit.py Python');
+	expect(await title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+	await expect(title).toBeFocused();
 	await expect(editor(page)).toHaveCount(0);
 	await expect(canvas(page)).toContainText('# edited');
 	expect(server.posts).toEqual([{ path: `/api/v1/files/${FIT}/versions`, content: `${SOURCE}# edited` }]);
 	// Version 1 is one choice away, read-only, with the way back.
-	await canvas(page).getByRole('button', { name: 'Versions' }).click();
+	await canvas(page).getByRole('button', { name: 'Version 2 of 2' }).click();
 	await page.getByRole('menuitemradio', { name: 'Version 1 (original)' }).click();
 	await expect(canvas(page).getByText('You are viewing version 1 of 2.')).toBeVisible();
 	await expect(canvas(page).getByRole('button', { name: 'Edit document' })).toHaveCount(0);
 	await canvas(page).getByRole('button', { name: 'Back to version 2' }).click();
-	await expect(canvas(page).getByRole('heading', { level: 2 })).toContainText('Version 2 of 2');
+	await expect(canvas(page).getByRole('button', { name: 'Version 2 of 2' })).toBeVisible();
 });
 
 test('Discard changes puts the text back, and Ctrl+S saves', async ({ page }) => {
@@ -147,8 +151,8 @@ test('unsaved edits are guarded: Close, Escape on the panel, and the browser’s
 	await ask.getByRole('button', { name: 'Keep editing' }).click();
 	await expect(ask).toHaveCount(0);
 	await expect(editor(page)).toHaveValue(`x${SOURCE}`);
-	// Keep editing puts focus back on what raised the question: the Close button.
-	await expect(canvas(page).getByRole('button', { name: 'Close canvas' })).toBeFocused();
+	// Keep editing puts focus back in the editor (NAV-4).
+	await expect(editor(page)).toBeFocused();
 
 	await page.goBack();
 	await expect(ask).toBeVisible();
@@ -224,4 +228,41 @@ test('the editor looks like the source: one face, one box, the same pixels', asy
 	// Same text in the same place: the first lines are identical to the pixel.
 	const writing = await page.screenshot({ clip: area, animations: 'disabled', caret: 'hide' });
 	expect(writing.equals(reading)).toBe(true);
+});
+
+test('the heading keeps the name and kind at the default width, at the minimum, and in the sheet', async ({ page }) => {
+	await mockEditable(page);
+	await openFit(page);
+	await canvas(page).getByRole('button', { name: 'Edit document' }).click();
+	await editor(page).pressSequentially('!');
+	await canvas(page).getByRole('button', { name: 'Save document' }).click();
+	const title = canvas(page).getByRole('heading', { level: 2 });
+	await expect(canvas(page).getByRole('button', { name: 'Version 2 of 2' })).toBeVisible();
+	const whole = () => title.evaluate((el) => el.scrollWidth <= el.clientWidth);
+	expect(await whole()).toBe(true);
+	// The narrowest the column goes (End on its separator): the header's buttons may crowd it, never the count into it.
+	await canvas(page).getByTestId('side-panel-separator').focus();
+	await page.keyboard.press('End');
+	await expect(title).toHaveText('fit.py Python');
+	expect(await whole()).toBe(true);
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	const sheet = page.getByRole('dialog', { name: /fit\.py/ });
+	await sheet.getByRole('button', { name: 'More actions for this document' }).click();
+	await expect(page.getByRole('menu').getByText('Version 2 of 2')).toBeVisible();
+});
+
+test('Attach to next message closes the sheet below md so the composer shows the file', async ({ page }) => {
+	await mockEditable(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/c/c1');
+	await page.getByTestId('document-card').filter({ hasText: 'fit.py' }).click();
+	const sheet = page.getByRole('dialog', { name: /fit\.py/ });
+	await sheet.getByRole('button', { name: 'More actions for this document' }).click();
+	await page.getByRole('menuitem', { name: 'Edit document' }).click();
+	await sheet.getByRole('textbox', { name: 'Edit fit.py' }).pressSequentially('!');
+	await sheet.getByRole('button', { name: 'Save document' }).click();
+	await page.getByRole('button', { name: 'Attach to next message' }).click();
+	await expect(sheet).toHaveCount(0);
+	await expect(page).not.toHaveURL(/canvas=/);
 });

@@ -111,15 +111,17 @@ function versionLabel(version: FileVersion, index: number): string {
 function VersionItems({
 	versions,
 	shownId,
+	label,
 	onChoose
 }: {
 	versions: FileVersion[];
 	shownId: string | undefined;
+	label: string;
 	onChoose: (id: string) => void;
 }) {
 	return (
 		<>
-			<DropdownMenuLabel>Versions</DropdownMenuLabel>
+			<DropdownMenuLabel>{label}</DropdownMenuLabel>
 			<DropdownMenuRadioGroup value={shownId} onValueChange={onChoose}>
 				{versions.map((v, i) => (
 					<DropdownMenuRadioItem key={v.id} value={v.id}>
@@ -241,7 +243,10 @@ export function CanvasPanel({
 			collection_name: '',
 			context: 'full'
 		});
-		if (attached) toast.success(`Attached version ${number}`);
+		if (!attached) return;
+		toast.success(`Attached version ${number}`);
+		// A sheet covers the composer: close it so the attached file shows, unless a draft is still open in it.
+		if (!mdUp && !hadDraft.current) canvas.close();
 	};
 	const edit = useDocumentEdit({
 		fileId: editFileId,
@@ -267,7 +272,9 @@ export function CanvasPanel({
 	});
 	hadDraft.current = edit.dirty;
 	const guard = useUnsavedChanges(edit.dirty, {
-		message: 'Your edits to this document are not saved. They are lost if you leave.'
+		message: 'Your edits to this document are not saved. They are lost if you leave.',
+		// Keep editing goes back to the editor (NAV-4), not to the Close button that raised the question.
+		keepFocus: () => inputRef.current
 	});
 	const canStartEdit = editFileId !== null && text.data !== undefined && !versionsLoading && !removed && !edit.editing;
 	useEffect(() => {
@@ -331,6 +338,8 @@ export function CanvasPanel({
 			Attach to next message
 		</DropdownMenuItem>
 	);
+	// The count shows once, as the Versions menu's own label; the heading stays the name and the kind.
+	const versionCount = shownIndex >= 0 ? `Version ${shownIndex + 1} of ${versions.length}` : 'Versions';
 	const reloadLabel = 'Reload the page';
 	let actions: ReactNode = null;
 	if (shown) {
@@ -339,20 +348,29 @@ export function CanvasPanel({
 			<>
 				{canvas.documents.length > 1 && <FilesMenu canvas={canvas} />}
 				{canStartEdit && isLatest && (
-					<Button variant="outline" size="sm" onClick={startEdit}>
+					<Button
+						variant="outline"
+						size="sm"
+						aria-label="Edit document"
+						className="px-1.5 @min-[30rem]:px-2.5"
+						onClick={startEdit}
+					>
 						<PencilIcon aria-hidden />
-						Edit document
+						{/* Only with room: at the panel's narrowest the header keeps its heading whole. */}
+						<span className="hidden @min-[30rem]:inline">Edit document</span>
 					</Button>
 				)}
 				{versions.length > 1 && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="ghost" size="icon-sm" aria-label="Versions">
+							<Button variant="ghost" size="sm" aria-label={versionCount} className="px-1.5 @min-[30rem]:px-2.5">
 								<HistoryIcon aria-hidden />
+								<span className="hidden @min-[30rem]:inline">{versionCount}</span>
+								<ChevronDownIcon aria-hidden className="hidden @min-[30rem]:block" />
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
-							<VersionItems versions={versions} shownId={shownVersion?.id} onChoose={showVersion} />
+							<VersionItems versions={versions} shownId={shownVersion?.id} label="Versions" onChoose={showVersion} />
 						</DropdownMenuContent>
 					</DropdownMenu>
 				)}
@@ -425,7 +443,12 @@ export function CanvasPanel({
 					{versions.length > 1 && (
 						<>
 							<DropdownMenuSeparator />
-							<VersionItems versions={versions} shownId={shownVersion?.id} onChoose={showVersion} />
+							<VersionItems
+								versions={versions}
+								shownId={shownVersion?.id}
+								label={versionCount}
+								onChoose={showVersion}
+							/>
 						</>
 					)}
 					{canvas.documents.length > 1 && (
@@ -472,10 +495,7 @@ export function CanvasPanel({
 	const heading = doc ? (
 		<span title={doc.name}>
 			<span className="font-strong">{doc.name}</span>{' '}
-			<span className="text-foreground-muted text-dense">
-				{kindLabel(doc)}
-				{versions.length > 1 && shownIndex >= 0 ? ` · Version ${shownIndex + 1} of ${versions.length}` : ''}
-			</span>
+			<span className="text-foreground-muted text-dense">{kindLabel(doc)}</span>
 		</span>
 	) : undefined;
 

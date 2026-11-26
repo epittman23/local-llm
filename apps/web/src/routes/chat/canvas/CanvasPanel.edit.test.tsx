@@ -126,7 +126,8 @@ describe('editing a document', () => {
 		);
 		// The editor is gone, the heading counts the versions and holds focus, and the new text is shown at once.
 		expect(screen.queryByRole('textbox')).toBeNull();
-		expect(heading()).toHaveTextContent('Version 2 of 2');
+		expect(await screen.findByRole('button', { name: 'Version 2 of 2' })).toBeInTheDocument();
+		expect(heading()).toHaveTextContent(/^fit\.py Python$/);
 		expect(heading()).toHaveFocus();
 		await code('x = 2');
 		expect(api.text).not.toHaveBeenCalledWith('', V2, expect.anything(), expect.anything());
@@ -184,7 +185,8 @@ describe('the guard on unsaved edits', () => {
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
 		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 		expect(await textbox()).toHaveValue('x = 9\n');
-		await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+		// NAV-4: focus is back in the editor, not on the Close button that raised the question.
+		await waitFor(() => expect(screen.getByRole('textbox', { name: 'Edit fit.py' })).toHaveFocus());
 		expect(hasCanvas(router)).toBe(true);
 		fireEvent.click(screen.getByRole('button', { name: 'Close canvas' }));
 		fireEvent.click(within(await ask()).getByRole('button', { name: 'Discard changes' }));
@@ -255,7 +257,9 @@ describe('the guard on unsaved edits', () => {
 		api.list.mockResolvedValue([entry(FIT, 1), entry(V2, 2)]);
 		show();
 		type(await editFit(), 'x = 9\n');
-		fireEvent.click(within(await openMenu('Versions')).getByRole('menuitemradio', { name: 'Version 1 (original)' }));
+		fireEvent.click(
+			within(await openMenu('Version 2 of 2')).getByRole('menuitemradio', { name: 'Version 1 (original)' })
+		);
 		expect(await ask()).toBeInTheDocument();
 	});
 });
@@ -320,7 +324,7 @@ describe('which documents can be edited', () => {
 		show();
 		await code('x = 1');
 		expect(await screen.findByRole('button', { name: 'Edit document' })).toBeInTheDocument();
-		expect(screen.queryByRole('button', { name: 'Versions' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /^Version \d of \d$/ })).toBeNull();
 		expect(heading()).not.toHaveTextContent('Version');
 	});
 });
@@ -328,20 +332,21 @@ describe('which documents can be edited', () => {
 describe('versions', () => {
 	beforeEach(() => api.list.mockResolvedValue([entry(FIT, 1), entry(V2, 2)]));
 
-	it('counts them in the heading, shows an older one read-only with the way back, and edits only the latest', async () => {
+	it('counts them on the Versions menu, shows an older one read-only with the way back, and edits only the latest', async () => {
 		show();
-		await waitFor(() => expect(heading()).toHaveTextContent('fit.py Python · Version 2 of 2'));
+		expect(await screen.findByRole('button', { name: 'Version 2 of 2' })).toBeInTheDocument();
+		expect(heading()).toHaveTextContent(/^fit\.py Python$/);
 		await code('x = 2');
 		expect(await screen.findByRole('button', { name: 'Edit document' })).toBeInTheDocument();
-		const menu = await openMenu('Versions');
+		const menu = await openMenu('Version 2 of 2');
 		expect(within(menu).getByRole('menuitemradio', { name: /^Version 2, / })).toBeChecked();
 		fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Version 1 (original)' }));
 		expect(await screen.findByText('You are viewing version 1 of 2.')).toBeInTheDocument();
-		expect(heading()).toHaveTextContent('Version 1 of 2');
+		expect(screen.getByRole('button', { name: 'Version 1 of 2' })).toBeInTheDocument();
 		await code('x = 1');
 		expect(screen.queryByRole('button', { name: 'Edit document' })).toBeNull();
 		fireEvent.click(screen.getByRole('button', { name: 'Back to version 2' }));
-		await waitFor(() => expect(heading()).toHaveTextContent('Version 2 of 2'));
+		expect(await screen.findByRole('button', { name: 'Version 2 of 2' })).toBeInTheDocument();
 		expect(screen.queryByText(/You are viewing/)).toBeNull();
 		expect(await screen.findByRole('button', { name: 'Edit document' })).toBeInTheDocument();
 	});
@@ -388,5 +393,30 @@ describe('versions', () => {
 		show();
 		await code('x = 2');
 		expect(within(await openMenu('Copy')).queryByRole('menuitem', { name: 'Attach to next message' })).toBeNull();
+	});
+
+	it('closes the sheet below md after an attach, so the composer shows, but not an open canvas column', async () => {
+		const stub = (mdUp: boolean) =>
+			vi.stubGlobal(
+				'matchMedia',
+				vi.fn((query: string) => ({
+					matches: query === '(min-width: 768px)' ? mdUp : true,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn()
+				}))
+			);
+		const attach = vi.fn(() => true);
+		stub(false);
+		const { router } = show({ attach });
+		await code('x = 2');
+		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Attach to next message' }));
+		await waitFor(() => expect(router.state.location.search).toBe(''));
+		cleanup();
+		stub(true);
+		const wide = show({ attach });
+		await code('x = 2');
+		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Attach to next message' }));
+		await waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
+		expect(wide.router.state.location.search).toContain('canvas=');
 	});
 });

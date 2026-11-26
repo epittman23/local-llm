@@ -264,7 +264,7 @@ export function SidePanel({
 					aria-label={title}
 					style={{ width: expanded ? (Number.isFinite(space) ? space : '100%') : width }}
 					data-expanded={expanded ? '' : undefined}
-					className="relative flex h-full min-h-0 shrink-0 flex-col border-l"
+					className="@container relative flex h-full min-h-0 shrink-0 flex-col border-l"
 				>
 					{!expanded && (
 						<hr
@@ -293,7 +293,7 @@ export function SidePanel({
 						side="right"
 						showCloseButton={false}
 						aria-describedby={undefined}
-						className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none"
+						className="@container gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-none"
 						onOpenAutoFocus={(e) => {
 							e.preventDefault();
 							if (focusOnOpen) heading.current?.focus();

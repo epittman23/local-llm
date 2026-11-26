@@ -455,6 +455,34 @@ def test_a_failed_chat_link_does_not_fail_the_save(monkeypatch, stubs):
     assert asyncio.run(scenario()).meta['version'] == 2
 
 
+def test_one_failed_chat_link_does_not_drop_the_others(monkeypatch, stubs):
+    async def scenario():
+        owner = await _user()
+        root = await _root(owner)
+        first, second = str(uuid.uuid4()), str(uuid.uuid4())
+        message_id = str(uuid.uuid4())
+        await Chats.insert_chat_files(first, message_id, [root.id], owner.id)
+        await Chats.insert_chat_files(second, message_id, [root.id], owner.id)
+        real = Chats.insert_chat_files
+        calls = []
+
+        async def flaky(chat_id, *args, **kwargs):
+            calls.append(chat_id)
+            if len(calls) == 1:
+                raise RuntimeError('database busy')
+            return await real(chat_id, *args, **kwargs)
+
+        monkeypatch.setattr(files_router.Chats, 'insert_chat_files', flaky)
+        saved = await _save(owner, root.id, 'saved anyway')
+        links = await Chats.get_chat_files_by_file_id(saved.id)
+        return calls, [c.chat_id for c in links]
+
+    calls, linked = asyncio.run(scenario())
+
+    assert len(calls) == 2
+    assert linked == [calls[1]]
+
+
 def test_an_orphaned_version_has_no_root_to_edit_or_list(stubs):
     async def scenario():
         owner = await _user()

@@ -42,9 +42,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     registers its own while open: opening Settings over a canvas with unsaved
     edits swaps the guard, so leaving then does not ask. A reload still does.
     A shared guard registry is the fix and is not built.
-  - **Not decided here.** Versions' numbering can repeat if two tabs save at
-    the same instant (no unique constraint on a JSON field); the list orders
-    by version and time.
+  - **Not decided here.** Two concurrent saves of one original can get the
+    same version number (no unique constraint on a JSON field; accepted); the
+    list orders by version, `created_at` and id.
 - **2026-11-25** (latest): **Canvas Phase 2 built: the viewer beside the chat.**
   A file or a page of HTML a model provides is a card in the reply that opens
   in the canvas (`docs/plans/canvas.md`; the owner's decisions 1, 3, 4 and 5

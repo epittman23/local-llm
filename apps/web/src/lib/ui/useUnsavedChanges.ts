@@ -29,7 +29,7 @@ const DEFAULT_MESSAGE = 'Your changes are not saved. They are lost if you leave 
  * then it goes back to the control focused last before that, or, if that has
  * gone, to the first control of the dialog still open underneath.
  */
-export function useUnsavedChanges(dirty: boolean, options: { message?: string } = {}): LeaveGuard {
+export function useUnsavedChanges(dirty: boolean, options: GuardOptions = {}): LeaveGuard {
 	return useLeaveGuard(dirty, options, useBlocker, true);
 }
 
@@ -40,9 +40,15 @@ export function useUnsavedChanges(dirty: boolean, options: { message?: string } 
  * router keeps one blocker, the one registered last, so a second would
  * silently replace the host's.
  */
-export function useConfirmLeave(dirty: boolean, options: { message?: string } = {}): LeaveGuard {
+export function useConfirmLeave(dirty: boolean, options: GuardOptions = {}): LeaveGuard {
 	return useLeaveGuard(dirty, options, useNoBlocker, false);
 }
+
+type GuardOptions = {
+	message?: string;
+	/** Where Keep editing puts focus when the editor is known (a code editor whose Close button raised the question), instead of what had focus. */
+	keepFocus?: () => HTMLElement | null;
+};
 
 type LeaveGuard = { dialog: ReactElement; allowNext: () => void; confirmLeave: (action: () => void) => void };
 
@@ -51,7 +57,7 @@ const useNoBlocker = (_shouldBlock: BlockerFunction): Blocker => UNBLOCKED;
 
 function useLeaveGuard(
 	dirty: boolean,
-	{ message = DEFAULT_MESSAGE }: { message?: string },
+	{ message = DEFAULT_MESSAGE, keepFocus }: GuardOptions,
 	useGuardBlocker: (shouldBlock: BlockerFunction) => Blocker,
 	askOnUnload: boolean
 ): LeaveGuard {
@@ -65,9 +71,13 @@ function useLeaveGuard(
 	const returnTo = useRef<HTMLElement | null>(null);
 	const discarding = useRef(false);
 	const lastFocused = useRef<HTMLElement | null>(null);
+	const keepFocusRef = useRef(keepFocus);
+	keepFocusRef.current = keepFocus;
 	const rememberFocus = useCallback(() => {
 		const active = document.activeElement;
-		returnTo.current = active instanceof HTMLElement && active !== document.body ? active : lastFocused.current;
+		returnTo.current =
+			keepFocusRef.current?.() ??
+			(active instanceof HTMLElement && active !== document.body ? active : lastFocused.current);
 	}, []);
 	useEffect(() => {
 		if (!dirty) return;
