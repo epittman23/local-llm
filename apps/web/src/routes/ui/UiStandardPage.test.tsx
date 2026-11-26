@@ -77,7 +77,7 @@ describe('UiStandardPage (/ui)', () => {
 		renderPage();
 		const context = screen.getByLabelText('Context size, tokens');
 		expect(context.getAttribute('aria-invalid')).toBeNull();
-		expect(screen.getByText('All changes saved')).toBeTruthy();
+		expect(within(context.closest('form') as HTMLFormElement).getByText('All changes saved')).toBeTruthy();
 
 		// Typing does not raise the error; leaving the field does (FRM-2).
 		fireEvent.change(context, { target: { value: '40000' } });
@@ -93,13 +93,13 @@ describe('UiStandardPage (/ui)', () => {
 		expect(screen.getByText('Unsaved changes')).toBeTruthy();
 
 		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
-		expect(screen.getByText('All changes saved')).toBeTruthy();
+		expect(within(context.closest('form') as HTMLFormElement).getByText('All changes saved')).toBeTruthy();
 		expect(context.getAttribute('aria-invalid')).toBeNull();
 
 		fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'demo-b' } });
 		fireEvent.change(context, { target: { value: '4096' } });
 		fireEvent.submit(context.closest('form') as HTMLFormElement);
-		expect(screen.getByText('All changes saved')).toBeTruthy();
+		expect(within(context.closest('form') as HTMLFormElement).getByText('All changes saved')).toBeTruthy();
 	});
 
 	it('asks before unloading only while changes are unsaved', () => {
@@ -292,6 +292,28 @@ describe('UiStandardPage (/ui)', () => {
 		fireEvent.keyDown(canvas(), { key: 'Escape' });
 		expect(screen.queryByRole('complementary', { name: 'Canvas' })).toBeNull();
 		expect(screen.getByText(/The canvas is closed/)).toBeTruthy();
+	});
+
+	it('edits a page with its preview beside the source, updated on request, and only tries a block (CNV-5, CNV-6)', () => {
+		renderPage();
+		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Edit document' }));
+		const editor = within(canvas()).getByLabelText('Edit Standard error explorer');
+		const frame = () => within(canvas()).getByTitle('Preview of Standard error explorer');
+		expect(frame().getAttribute('sandbox')).toBe('allow-scripts');
+		expect(frame().getAttribute('srcdoc')).toContain('Standard error explorer');
+		fireEvent.change(editor, { target: { value: '<p>draft</p>' } });
+		expect(within(canvas()).getByText('Out of date')).toBeTruthy();
+		expect(frame().getAttribute('srcdoc')).not.toContain('draft');
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Update preview' }));
+		expect(frame().getAttribute('srcdoc')).toContain('<p>draft</p>');
+		expect(within(canvas()).queryByText('Out of date')).toBeNull();
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Discard changes' }));
+
+		fireEvent.click(screen.getByRole('button', { name: /Greeting page/ }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Try changes' }));
+		expect(within(canvas()).getByText('Changes to a code block are not saved. Copy or download them.')).toBeTruthy();
+		expect(within(canvas()).queryByRole('button', { name: 'Save document' })).toBeNull();
 	});
 
 	it('marks the open row, and names the picture button', () => {

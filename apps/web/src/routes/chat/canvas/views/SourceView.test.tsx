@@ -110,9 +110,9 @@ describe('SourceView', () => {
 		expect(await screen.findByText('This file is not UTF-8 text; download it to change it.')).toBeInTheDocument();
 	});
 
-	it('does not say so of a page, which is never edited', async () => {
+	it('does not say so of a table, which is not edited', async () => {
 		api.text.mockResolvedValue({ text: 'caf\uFFFD', truncated: false });
-		const { container } = renderWithClient(<SourceView doc={docOf(upload('9', 'mine.html'), 'user')} />);
+		const { container } = renderWithClient(<SourceView doc={docOf(output('9', 'table.csv'))} />);
 		await waitFor(() => expect(container).toHaveTextContent('caf'));
 		expect(screen.queryByText(/not UTF-8/)).toBeNull();
 	});

@@ -70,10 +70,10 @@ test('a reply shows its sandbox outputs as cards, and the canvas shows each: ima
 			])
 		]
 	});
-	const asked: string[] = [];
+	const asked: { path: string; type: string }[] = [];
 	await page.route('**/api/v1/files/*/content*', (route) => {
 		const path = new URL(route.request().url()).pathname;
-		asked.push(path);
+		asked.push({ path, type: route.request().resourceType() });
 		const f = Object.entries(FILES).find(([key]) => path === content(key))?.[1];
 		if (!f) return route.fulfill({ status: 404 });
 		// As the server sends every sandbox output (routers/files.py): an attachment, never sniffed, inert as a page.
@@ -141,6 +141,10 @@ test('a reply shows its sandbox outputs as cards, and the canvas shows each: ima
 		`${content('a7')}?attachment=true`
 	);
 
-	// The HTML output is never fetched from the file content route, only through the policy route.
-	expect(asked).not.toContain(content('a3'));
+	// The HTML output is shown only through the policy route. Its file route is read as text (a fetch, for editing
+	// it, never displayed), and never loaded as a document or a frame.
+	const page3 = asked.filter((request) => request.path === content('a3'));
+	expect(page3.every((request) => request.type === 'fetch')).toBe(true);
+	expect(page.frames().some((frame) => frame.url().includes(content('a3')))).toBe(false);
+	expect(page.url()).not.toContain(content('a3'));
 });

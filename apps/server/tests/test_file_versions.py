@@ -17,6 +17,7 @@ Run from apps/server:
 import asyncio
 import errno
 import io
+import json
 import os
 import uuid
 from types import SimpleNamespace
@@ -30,7 +31,8 @@ from local_llm.models.files import FileForm, Files
 from local_llm.models.users import Users
 from local_llm.routers import files as files_router
 from local_llm.routers import retrieval as retrieval_router
-from local_llm.sandbox.outputs import SANDBOX_OUTPUT
+from local_llm.routers import sandbox as sandbox_router
+from local_llm.sandbox.outputs import HTML_POLICY, SANDBOX_OUTPUT
 from local_llm.storage.provider import Storage
 
 
@@ -305,6 +307,28 @@ def test_a_version_of_a_sandbox_output_stays_a_download(stubs):
     assert 'sandbox_path' not in new.meta and 'preview_of' not in new.meta
     assert response.headers['content-disposition'].startswith('attachment')
     assert response.headers['x-content-type-options'] == 'nosniff'
+
+
+def test_a_version_of_an_html_output_is_served_by_the_html_route_with_the_policy_first(stubs):
+    async def scenario():
+        owner = await _user()
+        root = await _root(
+            owner,
+            data=b'<p>one</p>',
+            name='page.html',
+            content_type='text/html',
+            meta={'source': SANDBOX_OUTPUT, 'chat_id': 'chat-1', 'sandbox_path': '/x'},
+        )
+        new = await _save(owner, root.id, '<!doctype html><p>two</p>')
+        response = await sandbox_router.get_sandbox_output_html(new.id, user=owner, db=None)
+        return response
+
+    response = asyncio.run(scenario())
+
+    assert response.status_code == 200
+    assert response.headers['x-content-type-options'] == 'nosniff'
+    html = json.loads(response.body)['html']
+    assert html == '<!doctype html>' + HTML_POLICY + '<p>two</p>'
 
 
 def test_listing_versions_is_for_readers_only_and_a_lone_file_lists_itself(stubs):

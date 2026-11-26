@@ -32,6 +32,7 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
@@ -40,16 +41,19 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
 import { RowButton } from '@/components/ui/row-button';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { withHtmlPolicy } from '@/lib/chat/htmlPolicy';
 import { DiffView } from '@/routes/chat/canvas/views/ChangesView';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Example, Section } from './parts';
 
 // /ui, "Canvas": the design of the document panel beside a chat (CNV rules;
-// docs/plans/canvas.md is the plan). The viewer is built (routes/chat/canvas/);
-// the editor's keyboard behaviour is the real CodeSurface's, and its save flow
-// (Phase 3) is not built. This is a self-contained mock of both: the
+// docs/plans/canvas.md is the plan). The viewer, the editor and the page
+// editor are built (routes/chat/canvas/); the editor's keyboard behaviour is the
+// real CodeSurface's. This is a self-contained mock of them: the
 // documents are invented constants and nothing is fetched or saved. The real
 // canvas reuses SandboxedHtmlFrame and the sandbox routes; the frame here has
 // the same `allow-scripts`-only sandbox.
@@ -63,6 +67,8 @@ interface DemoDocument {
 	size: string;
 	icon: typeof GlobeIcon;
 	text: string;
+	/** A fenced block of a reply: it can be tried but has no file, so its changes are never saved. */
+	block?: boolean;
 }
 
 const PAGE = `<!doctype html>
@@ -92,6 +98,10 @@ const PAGE = `<!doctype html>
   update();
 </script>
 </html>`;
+
+const SNIPPET = `<!doctype html>
+<h1 id="hello"></h1>
+<script>document.getElementById('hello').textContent = 'Hello from a block';</script>`;
 
 const NOTES = `## Method notes
 
@@ -124,7 +134,8 @@ const DOCUMENTS: DemoDocument[] = [
 	{ id: 'explorer', name: 'Standard error explorer', kind: 'HTML', size: '1 kB', icon: GlobeIcon, text: PAGE },
 	{ id: 'notes', name: 'method-notes.md', kind: 'Markdown', size: '300 B', icon: FileTextIcon, text: NOTES },
 	{ id: 'fit', name: 'fit.py', kind: 'Python', size: '320 B', icon: FileCodeIcon, text: SCRIPT },
-	{ id: 'summary', name: 'summary.csv', kind: 'CSV', size: '50 B', icon: TableIcon, text: CSV }
+	{ id: 'summary', name: 'summary.csv', kind: 'CSV', size: '50 B', icon: TableIcon, text: CSV },
+	{ id: 'snippet', name: 'Greeting page', kind: 'HTML', size: '110 B', icon: GlobeIcon, text: SNIPPET, block: true }
 ];
 
 /** highlight.js's name for each kind's source. */
@@ -143,7 +154,7 @@ const PREVIOUS: Record<string, string> = {
 		'\n\nrng'
 	)
 };
-const EDITABLE: Record<Kind, boolean> = { HTML: false, Markdown: true, Python: true, CSV: false };
+const EDITABLE: Record<Kind, boolean> = { HTML: true, Markdown: true, Python: true, CSV: false };
 
 /** CNV-1: a document in a reply is a card that opens the canvas. */
 function DocumentCard({
@@ -225,6 +236,9 @@ export function CanvasSection() {
 	const [openId, setOpenId] = useState<string | null>('explorer');
 	const [mode, setMode] = useState<'preview' | 'source' | 'changes'>('preview');
 	const [draft, setDraft] = useState<string | null>(null);
+	// CNV-5, CNV-6: what the preview beside an HTML draft shows: the draft as of the last Update preview.
+	const [applied, setApplied] = useState('');
+	const [live, setLive] = useState(false);
 	const [expanded, setExpanded] = useState(false);
 	const [reloads, setReloads] = useState(0);
 	const cards = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -235,6 +249,8 @@ export function CanvasSection() {
 	const text = doc ? texts[doc.id] : '';
 	const editing = draft !== null;
 	const dirty = editing && draft !== text;
+	const splitEdit = editing && doc?.kind === 'HTML';
+	const isBlock = doc?.block === true;
 	const showPreview = doc !== null && HAS_PREVIEW[doc.kind] && mode === 'preview' && !editing;
 	const previous = doc ? PREVIOUS[doc.id] : undefined;
 	const showChanges = previous !== undefined && mode === 'changes' && !editing;
@@ -267,6 +283,18 @@ export function CanvasSection() {
 		leaveEditor();
 		toast.success('Document saved');
 	};
+	const startEdit = () => {
+		if (!doc) return;
+		setDraft(text);
+		setApplied(text);
+		if (doc.kind === 'HTML') setMode('source');
+	};
+	// "Update as I type": the preview follows the draft 800 ms after typing stops.
+	useEffect(() => {
+		if (!live || draft === null || applied === draft) return;
+		const timer = setTimeout(() => setApplied(draft), 800);
+		return () => clearTimeout(timer);
+	}, [live, draft, applied]);
 	// CNV-6: entering the editor moves focus into it.
 	useEffect(() => {
 		if (editing) editor.current?.focus();
@@ -292,12 +320,12 @@ export function CanvasSection() {
 		<Section
 			id="canvas"
 			title="Canvas"
-			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The viewer is built and the side panel it opens in is shared with the chat's Controls; the editor's surface and keys are built and its save flow is a design, not yet built, and the documents below are invented."
+			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text and pages, edited. The viewer, the editor and the page editor with its preview beside the source are built, and the side panel they open in is shared with the chat's Controls; the documents below are invented and nothing is saved."
 			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNV-9', 'CNT-4', 'LAY-4', 'NAV-4']}
 		>
 			<Example
-				title="A reply with four documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited, and Changes compares them with their earlier version: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
+				title="A reply with five documents"
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The page, the Markdown and the Python documents can be edited, and Changes compares the last two with their earlier version: the editor is the Source view with a caret, highlighted as you type, and saving is on request. A page has its preview beside the source (one pane at a time, by the View switch, when the canvas is narrower than 44 rem); it updates on Update preview or Ctrl or Cmd+Enter, says Out of date until it does, and updates as you type only when that is switched on. The greeting page stands for a fenced block: Try changes edits a draft that is never saved. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
 			>
 				<div
 					ref={frame}
@@ -332,11 +360,14 @@ export function CanvasSection() {
 						<aside
 							ref={panel}
 							aria-label="Canvas"
-							className={`border-border bg-surface-1 flex min-h-0 min-w-0 flex-col lg:border-l ${expanded ? 'lg:col-span-2 lg:border-l-0' : ''}`}
+							className={`@container border-border bg-surface-1 flex min-h-0 min-w-0 flex-col lg:border-l ${expanded ? 'lg:col-span-2 lg:border-l-0' : ''}`}
 						>
 							<div className="border-border flex items-center gap-1 border-b px-2 py-1.5">
 								{(HAS_PREVIEW[doc.kind] || previous !== undefined) && (
-									<fieldset className="flex" disabled={editing}>
+									<fieldset
+										className={`flex ${splitEdit ? '@min-[44rem]:hidden' : ''}`}
+										disabled={editing && !splitEdit}
+									>
 										<legend className="sr-only">View</legend>
 										{HAS_PREVIEW[doc.kind] && (
 											<Button
@@ -463,7 +494,48 @@ export function CanvasSection() {
 							</div>
 
 							<div className="bg-background min-h-0 flex-1">
-								{editing ? (
+								{splitEdit ? (
+									// CNV-5, CNV-6: the draft's source and its preview, side by side from 44 rem.
+									<div className="flex h-full min-h-0 flex-col">
+										<div className="bg-surface-2 text-dense flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
+											<Button variant="outline" size="xs" onClick={() => setApplied(draft)}>
+												Update preview
+											</Button>
+											{applied !== draft && <Badge variant="warning">Out of date</Badge>}
+											<Label htmlFor="demo-live-preview" className="text-dense ms-auto font-normal">
+												<Switch id="demo-live-preview" size="sm" checked={live} onCheckedChange={setLive} />
+												Update as I type
+											</Label>
+										</div>
+										<div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-1 @min-[44rem]:grid-cols-2">
+											<div
+												className={`min-h-0 min-w-0 @min-[44rem]:block @min-[44rem]:border-e ${mode === 'preview' ? 'hidden' : 'block'}`}
+											>
+												<CodeSurface
+													code={draft}
+													language={LANGUAGE[doc.kind]}
+													edit={{
+														label: `Edit ${doc.name}`,
+														onChange: setDraft,
+														inputRef: editor,
+														onSave: save,
+														onRun: () => setApplied(draft)
+													}}
+												/>
+											</div>
+											<div
+												className={`bg-surface-1 min-h-0 min-w-0 p-3 @min-[44rem]:block ${mode === 'preview' ? 'block' : 'hidden'}`}
+											>
+												<iframe
+													title={`Preview of ${doc.name}`}
+													sandbox="allow-scripts"
+													srcDoc={withHtmlPolicy(applied)}
+													className="border-border bg-surface-1 size-full rounded-lg border"
+												/>
+											</div>
+										</div>
+									</div>
+								) : editing ? (
 									// CNV-6: the same surface as Source, with a caret.
 									<CodeSurface
 										code={draft}
@@ -499,23 +571,33 @@ export function CanvasSection() {
 							</div>
 
 							{EDITABLE[doc.kind] && !showChanges && (
-								<div className="border-border flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
-									<p className="text-dense text-foreground-muted" role="status">
-										{!editing ? 'All changes saved' : dirty ? 'Unsaved changes' : 'Editing. No changes yet'}
-									</p>
+								<div className="border-border flex flex-wrap items-center justify-end gap-2 border-t px-3 py-2">
+									{(isBlock ? editing : true) && (
+										<p className="text-dense text-foreground-muted me-auto" role="status">
+											{isBlock
+												? 'Changes to a code block are not saved. Copy or download them.'
+												: !editing
+													? 'All changes saved'
+													: dirty
+														? 'Unsaved changes'
+														: 'Editing. No changes yet'}
+										</p>
+									)}
 									{editing ? (
 										<div className="flex gap-2">
 											<Button variant="ghost" size="sm" onClick={leaveEditor}>
 												Discard changes
 											</Button>
-											<Button size="sm" disabled={!dirty} onClick={save}>
-												Save document
-											</Button>
+											{!isBlock && (
+												<Button size="sm" disabled={!dirty} onClick={save}>
+													Save document
+												</Button>
+											)}
 										</div>
 									) : (
-										<Button variant="outline" size="sm" onClick={() => setDraft(text)}>
+										<Button variant="outline" size="sm" onClick={startEdit}>
 											<PencilIcon aria-hidden />
-											Edit document
+											{isBlock ? 'Try changes' : 'Edit document'}
 										</Button>
 									)}
 								</div>

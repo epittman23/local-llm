@@ -38,7 +38,7 @@ import type { FileVersion, SavedVersion } from '@/lib/apis/files/versions';
 import { getSandboxOutputText } from '@/lib/apis/sandbox';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { copyToClipboard } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { Canvas, type Mode, viewsOf } from './Canvas';
 import { CanvasContext } from './CanvasContext';
@@ -46,6 +46,7 @@ import { CSV_MAX_BYTES, HTML_MAX_BYTES, TEXT_MAX_BYTES } from './limits';
 import {
 	canEditDocument,
 	contentUrl,
+	editabilityOf,
 	fileIdOf,
 	hasChanges,
 	kindIcon,
@@ -64,21 +65,22 @@ import { useDocumentText } from './views/useDocumentText';
 const COPYABLE = new Set(['html', 'markdown', 'csv', 'code']);
 
 /** What a fenced block downloads as: its own text, named for the document. */
-function saveBlock(doc: CanvasDocument) {
+function saveBlock(doc: CanvasDocument, draft?: string) {
 	if (doc.source.type !== 'block') return;
-	const { text, language } = doc.source;
+	const { language } = doc.source;
+	const text = draft ?? doc.source.text;
 	const extension = language === 'svg' ? 'svg' : language === 'html' ? 'html' : 'txt';
 	const type = language === 'svg' ? 'image/svg+xml' : language === 'html' ? 'text/html' : 'text/plain';
 	const base = doc.name.replace(/[^\w. -]+/g, '').trim() || 'document';
 	saveAs(new Blob([text], { type }), `${base}.${extension}`);
 }
 
-/** A menu entry that downloads the document: a block is saved from its text, a file asks the server for an attachment. */
-function DownloadItem({ doc }: { doc: CanvasDocument }) {
+/** A menu entry that downloads the document: a block is saved from its text (the draft, while one is tried), a file asks the server for an attachment. */
+function DownloadItem({ doc, draft }: { doc: CanvasDocument; draft?: string }) {
 	const id = fileIdOf(doc);
 	if (id === null)
 		return (
-			<DropdownMenuItem onSelect={() => saveBlock(doc)}>
+			<DropdownMenuItem onSelect={() => saveBlock(doc, draft)}>
 				<DownloadIcon aria-hidden />
 				Download
 			</DropdownMenuItem>
@@ -216,9 +218,13 @@ export function CanvasPanel({
 	const shownIndex = shownVersion ? versions.findIndex((v) => v.id === shownVersion.id) : -1;
 	const isLatest = !shownVersion || shownVersion.id === latest?.id;
 	const editableDoc = editable && shown && canEditDocument(shown) ? shown : null;
+	// A fenced block of a page can be tried but not saved: its draft is keyed by the document's id, with no file behind it.
+	const tryingDoc = shown && editabilityOf(shown).draftOnly ? shown : null;
 	const text = useDocumentText(editableDoc, TEXT_MAX_BYTES);
 	const reason = text.data ? uneditableText(text.data) : null;
-	const editFileId = editableDoc && isLatest && reason === null ? fileIdOf(editableDoc) : null;
+	let editFileId: string | null = null;
+	if (tryingDoc) editFileId = tryingDoc.id;
+	else if (editableDoc && isLatest && reason === null) editFileId = fileIdOf(editableDoc);
 	const rootId = doc && doc.source.type !== 'block' ? doc.source.fileId : null;
 
 	const attachVersion = async (version: Pick<FileVersion, 'id' | 'size'>, number: number, status?: string) => {
@@ -253,9 +259,12 @@ export function CanvasPanel({
 	const edit = useDocumentEdit({
 		fileId: editFileId,
 		rootId,
-		text: text.data?.text,
+		text: tryingDoc?.source.type === 'block' ? tryingDoc.source.text : text.data?.text,
+		draftOnly: tryingDoc !== null,
 		onSaved: (saved: SavedVersion) => {
 			setViewing(null);
+			// A saved page is shown as the page, through the server's policy route, not as the source just typed.
+			if (doc && doc.kind === 'html' && viewsOf(doc).preview) setChoice({ id: doc.id, mode: 'preview' });
 			headingRef.current?.focus();
 			const number = saved.meta?.version ?? versions.length + 1;
 			toast.success(
@@ -278,7 +287,12 @@ export function CanvasPanel({
 		// Keep editing goes back to the editor (NAV-4), not to the Close button that raised the question.
 		keepFocus: () => inputRef.current
 	});
-	const canStartEdit = editFileId !== null && text.data !== undefined && !versionsLoading && !removed && !edit.editing;
+	const canStartEdit =
+		editFileId !== null &&
+		(tryingDoc !== null || text.data !== undefined) &&
+		!versionsLoading &&
+		!removed &&
+		!edit.editing;
 	useEffect(() => {
 		if (edit.editing) inputRef.current?.focus();
 	}, [edit.editing]);
@@ -289,10 +303,15 @@ export function CanvasPanel({
 	const switchShown = Number(views.preview) + Number(views.source) + Number(changesShown) > 1;
 	const previewEnabled = !writing;
 	const chosen = choice && choice.id === doc?.id ? choice.mode : null;
+	// A page being edited keeps Preview: its draft is shown beside the source, or in place of it below 44 rem.
+	const splitEdit = edit.editing && views.preview && shown?.kind === 'html';
 	let mode: Mode = 'preview';
 	if (!views.preview) mode = 'source';
-	else if (views.source)
-		mode = writing || edit.editing ? 'source' : chosen === 'source' || chosen === 'preview' ? chosen : 'preview';
+	else if (views.source) {
+		if (writing || (edit.editing && !splitEdit)) mode = 'source';
+		else if (chosen === 'source' || chosen === 'preview') mode = chosen;
+		else mode = edit.editing ? 'source' : 'preview';
+	}
 	if (changesShown && chosen === 'changes' && !writing && !edit.editing) mode = 'changes';
 	const reloads = doc && reload?.id === doc.id ? reload.n : 0;
 	const choose = (next: Mode) => {
@@ -312,14 +331,15 @@ export function CanvasPanel({
 		});
 
 	const canEdit = canStartEdit && isLatest && mode !== 'changes';
-	const canReload = doc !== null && doc.kind === 'html' && doc.source.type !== 'upload' && mode === 'preview';
+	const canReload =
+		doc !== null && doc.kind === 'html' && doc.source.type !== 'upload' && mode === 'preview' && !edit.editing;
 	const doReload = () => doc && setReload({ id: doc.id, n: reloads + 1 });
 	const canCopy = doc !== null && COPYABLE.has(doc.kind);
 	const doCopy = async () => {
 		if (!shown) return;
 		try {
 			let text: string;
-			if (shown.source.type === 'block') text = shown.source.text;
+			if (shown.source.type === 'block') text = tryingDoc && edit.editing ? edit.draft : shown.source.text;
 			else {
 				const cap = shown.kind === 'csv' ? CSV_MAX_BYTES : shown.kind === 'html' ? HTML_MAX_BYTES : TEXT_MAX_BYTES;
 				text = (await getSandboxOutputText(token, shown.source.fileId, cap)).text;
@@ -347,6 +367,8 @@ export function CanvasPanel({
 	// The count shows once, as the Versions menu's own label; the heading stays the name and the kind.
 	const versionCount = shownIndex >= 0 ? `Version ${shownIndex + 1} of ${versions.length}` : 'Versions';
 	const reloadLabel = 'Reload the page';
+	const editLabel = tryingDoc ? 'Try changes' : 'Edit document';
+	const draftText = tryingDoc && edit.editing ? edit.draft : undefined;
 	let actions: ReactNode = null;
 	if (shown) {
 		const downloadFile = fileIdOf(shown);
@@ -357,13 +379,13 @@ export function CanvasPanel({
 					<Button
 						variant="outline"
 						size="sm"
-						aria-label="Edit document"
+						aria-label={editLabel}
 						className="px-1.5 @min-[30rem]:px-2.5"
 						onClick={startEdit}
 					>
 						<PencilIcon aria-hidden />
 						{/* Only with room: at the panel's narrowest the header keeps its heading whole. */}
-						<span className="hidden @min-[30rem]:inline">Edit document</span>
+						<span className="hidden @min-[30rem]:inline">{editLabel}</span>
 					</Button>
 				)}
 				{versions.length > 1 && (
@@ -393,7 +415,7 @@ export function CanvasPanel({
 						<DropdownMenuContent align="end">
 							{copyItem}
 							{attachItem}
-							<DownloadItem doc={shown} />
+							<DownloadItem doc={shown} draft={draftText} />
 						</DropdownMenuContent>
 					</DropdownMenu>
 				) : (
@@ -436,12 +458,12 @@ export function CanvasPanel({
 					{canEdit && (
 						<DropdownMenuItem onSelect={startEdit}>
 							<PencilIcon aria-hidden />
-							Edit document
+							{editLabel}
 						</DropdownMenuItem>
 					)}
 					{canCopy && copyItem}
 					{attachItem}
-					<DownloadItem doc={shown} />
+					<DownloadItem doc={shown} draft={draftText} />
 					{canReload && (
 						<DropdownMenuItem onSelect={doReload}>
 							<RotateCwIcon aria-hidden />
@@ -473,7 +495,7 @@ export function CanvasPanel({
 	// With a Changes segment the switch is a little smaller at the panel's narrowest, so the heading keeps its room.
 	const segment = changesShown ? 'size-6 @min-[30rem]:size-7' : undefined;
 	const leading = switchShown ? (
-		<fieldset className="flex">
+		<fieldset className={cn('flex', splitEdit && mdUp && '@min-[44rem]:hidden')}>
 			<legend className="sr-only">View</legend>
 			{views.preview && (
 				<Button
@@ -484,10 +506,12 @@ export function CanvasPanel({
 					aria-pressed={mode === 'preview'}
 					disabled={!previewEnabled}
 					onClick={() =>
-						guard.confirmLeave(() => {
-							edit.discard();
-							choose('preview');
-						})
+						splitEdit
+							? choose('preview')
+							: guard.confirmLeave(() => {
+									edit.discard();
+									choose('preview');
+								})
 					}
 				>
 					<EyeIcon aria-hidden />
@@ -532,6 +556,14 @@ export function CanvasPanel({
 		</span>
 	) : undefined;
 
+	// A page between the edit cap and the HTML route's limit is shown, and only downloaded to change it.
+	const tooLargeToEdit =
+		editable &&
+		shown !== null &&
+		shown.kind === 'html' &&
+		shown.source.type !== 'block' &&
+		typeof shown.bytes === 'number' &&
+		shown.bytes > TEXT_MAX_BYTES;
 	let body: ReactNode = <Loading />;
 	if (shown) {
 		const editProps = edit.editing
@@ -553,8 +585,21 @@ export function CanvasPanel({
 					</div>
 				)}
 				{removed && <Note>This document was removed from the chat. Your edits can still be copied.</Note>}
+				{!edit.editing && tooLargeToEdit && <Note>Too large to edit; download it to change it.</Note>}
 				<Canvas doc={shown} mode={mode} reloads={reloads} edit={editProps} changes={{ versions, shownIndex }} />
-				{edit.editing && (
+				{edit.editing && tryingDoc && (
+					<div className="px-3 pb-3">
+						<div data-keep-clear className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
+							<p role="status" className="text-foreground-muted text-dense me-auto max-sm:w-full">
+								Changes to a code block are not saved. Copy or download them.
+							</p>
+							<Button type="button" variant="ghost" onClick={discard}>
+								Discard changes
+							</Button>
+						</div>
+					</div>
+				)}
+				{edit.editing && !tryingDoc && (
 					<div className="px-3 pb-3">
 						<SaveBar
 							dirty={edit.dirty}

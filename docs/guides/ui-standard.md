@@ -926,7 +926,8 @@ The panel beside a chat that shows a document: a file the model produced, a
 page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
 decided. Phase 1, the side-panel shell (`components/layout/SidePanel.tsx`),
 Phase 2, the viewer (`routes/chat/canvas/`), and Phase 3, editing (CNV-6),
-and Phase 4's comparison of two versions (CNV-9) are built; `/ui` shows the editor's
+and Phase 4's comparison of two versions (CNV-9) and its HTML editor with a
+preview beside the source (CNV-5, CNV-6) are built; `/ui` shows the editor's
 and the comparison's design.** Its plan is
 [docs/plans/canvas.md](../plans/canvas.md).
 
@@ -976,11 +977,14 @@ not altered. The page runs under a content-security policy (a sandbox output
 gets it from the server, a fenced block in the browser through
 `lib/chat/htmlPolicy.ts`), so a preview loads nothing from the network: a CDN
 script, style or font does not arrive, and a form, `alert`, `confirm` or
-`prompt` does nothing.
+`prompt` does nothing. A draft being edited goes through the same frame and
+policy, as `srcDoc` and nothing else, and reaches it when the person asks
+(Update preview), not on every keystroke.
 
 **CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
 document (offered for Markdown, text and code files up to 256 KiB whose
-text was fetched whole and is UTF-8; not for a fenced block), then a bar
+text was fetched whole and is UTF-8, and HTML pages, below; not for a block
+of code), then a bar
 with "Unsaved changes", Discard changes and Save document. The editor is the Source view with a caret: the same face, size,
 line numbers and highlighting, updated as you type, so nothing moves or
 changes colour when editing starts. Its keys are built in `CodeSurface`:
@@ -1006,6 +1010,22 @@ to next message", and below `md` an attach closes the sheet so the composer
 and its new chip show. Keep editing returns focus to the editor. An empty text cannot be saved,
 and the bar says why.
 
+An HTML page the model wrote (an
+output, up to 256 KiB) is edited with its preview beside the source: the
+source on the left and the sandboxed preview on the right when the canvas is
+44 rem wide (a container query), the Preview and Source switch showing one
+pane at a time when it is narrower and always in the sheet below `md`. Preview
+stays enabled while editing and shows the draft; it does not discard it. The
+preview updates on Update preview or Ctrl or Cmd+Enter in the editor, says
+"Out of date" while it differs from the draft, and follows typing only when
+"Update as I type" is switched on (off by default; 800 ms after the last
+keystroke). An uploaded page is edited as source only, as it is never framed.
+A fenced `html` or `svg` block offers Try changes instead of Edit document:
+the same split editor, with nothing saved and no versions, a bar that says
+"Changes to a code block are not saved. Copy or download them." with Discard
+changes, and Copy and Download acting on the draft. The unsaved-changes guard
+covers it as it does a file.
+
 **CNV-7. The open document is in the address** (NAV-1). A document that is no
 longer in the chat says so in the canvas (NAV-3).
 
@@ -1017,8 +1037,8 @@ belong to the page, so Close is always one Tab away from the frame.
 
 **CNV-9. Changes compares two saved versions as a unified line diff, read-only
 and as text.** The header's third segment, Changes, is offered only for a
-Markdown, text or code file with more than one version (never for a block, a
-page, a table, an image or a PDF), so its trigger is "Changes" beside Preview
+Markdown, text, code or HTML file with more than one version (never for a
+block, a table, an image or a PDF), so its trigger is "Changes" beside Preview
 and Source. Edit document is not offered in it, and switching to it with
 unsaved edits asks first ('Discard changes?', FRM-3). Two selectors, From and
 To, list the versions as the Versions menu does; they start at the version

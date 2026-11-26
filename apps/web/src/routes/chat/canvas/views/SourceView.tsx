@@ -18,11 +18,13 @@ export type SourceEdit = {
 	inputRef: Ref<HTMLTextAreaElement>;
 	/** Ctrl or Cmd+S in the editor. */
 	onSave: () => void;
+	/** Ctrl or Cmd+Enter in the editor: the page's Update preview. */
+	onRun?: () => void;
 };
 
 /**
  * A document's text, read-only, with line numbers (CNV-4): the standard's
- * code surface. A fenced block shows the text the message holds, so it fills
+ * code surface. A fenced block shows the text the message holds (or, being tried, its draft), so it fills
  * in as the block streams; a file is fetched, up to a cap. A very long
  * document is shown without per-line highlighting, which would stall the panel.
  * With `edit` (CNV-6) the same surface is the editor of the draft, with how its
@@ -34,7 +36,7 @@ export function SourceView({ doc, edit }: { doc: CanvasDocument; edit?: SourceEd
 	const text = useDocumentText(doc, TEXT_MAX_BYTES);
 	let code: string;
 	let truncated = false;
-	if (doc.source.type === 'block') code = doc.source.text;
+	if (doc.source.type === 'block') code = edit ? edit.draft : doc.source.text;
 	else if (text.isError) return <Note>Could not show this file: {errorMessage(text.error)}</Note>;
 	else if (!text.data) return <Loading />;
 	else {
@@ -55,6 +57,7 @@ export function SourceView({ doc, edit }: { doc: CanvasDocument; edit?: SourceEd
 							onChange: edit.setDraft,
 							inputRef: edit.inputRef,
 							onSave: edit.onSave,
+							onRun: edit.onRun,
 							describedBy: hintId
 						}
 					}

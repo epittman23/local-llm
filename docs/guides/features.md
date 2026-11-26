@@ -115,8 +115,12 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   when "Attach to next message" puts that version on the next message.
   Unsaved edits ask before anything leaves them. With two or more versions,
   a Changes view beside Preview and Source compares any two of them as a
-  line diff (read-only, text only, within a size bound). HTML, CSV and
-  fenced code blocks are not editable (docs/plans/canvas.md).
+  line diff (read-only, text only, within a size bound). A page of HTML the
+  model wrote is edited with its preview beside the source (Update preview,
+  or Ctrl or Cmd+Enter, runs the draft in the sandboxed frame; "Update as I
+  type" is opt-in); an uploaded page is edited as source only, and a fenced
+  `html` or `svg` block offers Try changes, a draft that is never saved. CSV
+  and other fenced code blocks are not editable (docs/plans/canvas.md).
 - **Organising.** Folders, pins, archive, temporary chats
   (`?temporary-chat=true`, nothing saved) and read-only share links at
   `/s/<share-id>`.

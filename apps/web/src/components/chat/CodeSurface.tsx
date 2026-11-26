@@ -109,6 +109,8 @@ export function CodeSurface({
 		inputRef?: Ref<HTMLTextAreaElement>;
 		/** Ctrl or Cmd+S in the editor; the browser's own save dialog is suppressed. */
 		onSave?: () => void;
+		/** Ctrl or Cmd+Enter in the editor (the canvas's Update preview); no newline is typed. */
+		onRun?: () => void;
 		/** The id of a visible element that says how Tab and Esc work (TAB_HELP); without it a screen-reader-only line does. */
 		describedBy?: string;
 	};
@@ -155,6 +157,9 @@ export function CodeSurface({
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && edit.onSave) {
 			event.preventDefault();
 			edit.onSave();
+		} else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && edit.onRun) {
+			event.preventDefault();
+			edit.onRun();
 		} else if (event.key === 'Tab' && typed.current && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.preventDefault();
 			indentSelection(event.currentTarget, indentOf(language), event.shiftKey);
