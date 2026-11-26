@@ -161,8 +161,9 @@ async def write_back_sandbox_output(
     versions; the path is the root's `meta.sandbox_path`, set by the server,
     and the content is the stored version, never anything in the request.
     The sandbox is started if it is stopped (the manager's admission and slot
-    rules apply). Unless `force`, the file in the workspace must still be the
-    one the output last held, else 409 `{"code": "changed"}`; a sandbox that
+    rules apply). Unless `force`, the file in the workspace must be one this
+    document held (the root's or a version's content), else 409
+    `{"code": "changed", "missing": <bool>}`; a sandbox that
     stays busy (a running `bash` holds it) for WRITE_BACK_WAIT_S is 409
     `{"code": "busy"}`. Returns `{"path", "bytes"}`, the path relative to
     /workspace. 404: not the owner's, not a sandbox output with a recorded
@@ -210,7 +211,7 @@ async def write_back_sandbox_output(
             session = await asyncio.wait_for(
                 stack.enter_async_context(manager.session(chat_id, user)), WRITE_BACK_WAIT_S
             )
-            await write_back(session, root, data, file.id, force=form_data.force)
+            await write_back(session, root, path, data, file.id, force=form_data.force)
             await _mark_written_back(file.id, path, db)
     except TimeoutError:
         return JSONResponse(
@@ -220,11 +221,12 @@ async def write_back_sandbox_output(
                 'detail': 'The workspace is busy. Try again when the reply has finished.',
             },
         )
-    except OutputChanged:
+    except OutputChanged as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
                 'code': 'changed',
+                'missing': exc.missing,
                 'detail': 'The file in the workspace changed after this version. Replace it anyway?',
             },
         )

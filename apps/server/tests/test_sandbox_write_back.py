@@ -265,12 +265,16 @@ def test_a_changed_workspace_file_needs_force_and_a_missing_one_is_created_with_
 
     assert refused == (
         409,
-        {'code': 'changed', 'detail': 'The file in the workspace changed after this version. Replace it anyway?'},
+        {
+            'code': 'changed',
+            'missing': False,
+            'detail': 'The file in the workspace changed after this version. Replace it anyway?',
+        },
     )
     assert kept == b'model newer'
     assert forced[0] == 200
     assert again[0] == 200  # the file is what this output last held: the version just written
-    assert gone[0] == 409 and gone[1]['code'] == 'changed'
+    assert gone[0] == 409 and gone[1]['code'] == 'changed' and gone[1]['missing'] is True
     assert created[0] == 200 and rig.guest() == b'edit'
 
 
@@ -430,4 +434,53 @@ def test_an_older_version_can_be_written_back_to_revert_the_workspace():
 
     assert first[0] == 200
     assert root_back[0] == 200
+    assert rig.guest() == b'v1'
+
+
+def test_a_newer_model_rewrite_that_bash_attached_is_still_a_change():
+    rig = Rig()
+
+    async def go():
+        root = await rig.output('v1')
+        version = await _version(root, b'edit')
+        await rig.bash("printf 'model newer' > outputs/page.html")  # attached as another output row
+        refused = await rig.write_back(version.id)
+        kept = rig.guest()
+        forced = await rig.write_back(version.id, force=True)
+        return refused, kept, forced
+
+    refused, kept, forced = asyncio.run(go())
+
+    assert (refused[0], refused[1]['code']) == (409, 'changed')
+    assert kept == b'model newer'
+    assert forced[0] == 200 and rig.guest() == b'edit'
+
+
+def test_a_file_equal_to_an_earlier_version_or_the_root_is_not_a_change():
+    rig = Rig()
+
+    async def go():
+        root = await rig.output('v1')
+        v2 = await _version(root, b'two')
+        v3 = await _version(root, b'three', 3)
+        from_root = await rig.write_back(v2.id)  # the workspace holds the root's bytes
+        from_v2 = await rig.write_back(v3.id)  # now it holds version 2's
+        return from_root, from_v2
+
+    from_root, from_v2 = asyncio.run(go())
+
+    assert (from_root[0], from_v2[0]) == (200, 200)
+    assert rig.guest() == b'three'
+
+
+def test_a_stored_version_whose_blob_is_gone_is_404():
+    rig = Rig()
+
+    async def go():
+        root = await rig.output('v1')
+        version = await _version(root, b'edit')
+        Storage.delete_file(version.path)
+        return await rig.write_back(version.id)
+
+    assert asyncio.run(go())[0] == 404
     assert rig.guest() == b'v1'

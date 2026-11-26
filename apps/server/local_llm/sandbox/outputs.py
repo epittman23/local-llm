@@ -52,7 +52,7 @@ from local_llm.sandbox.limits import (
 )
 from local_llm.sandbox.manager import SandboxSession
 from local_llm.sandbox.types import SandboxError
-from local_llm.sandbox.workspace import GUEST_SHELL, WorkspaceError, image_size, image_type, write
+from local_llm.sandbox.workspace import GUEST_SHELL, image_size, image_type, write
 from local_llm.utils.chat_id import is_saved_chat_id
 
 log = logging.getLogger(__name__)
@@ -672,7 +672,11 @@ def with_policy(document: str) -> str:
 
 
 class OutputChanged(Exception):
-    """The file in the workspace is not the one this output last held (or is gone), and `force` was not given."""
+    """The file in the workspace is not one this document held, or is gone (`missing`), and `force` was not given."""
+
+    def __init__(self, path: str, *, missing: bool) -> None:
+        super().__init__(path)
+        self.missing = missing
 
 
 def output_path(meta: dict | None) -> str | None:
@@ -687,36 +691,35 @@ def output_path(meta: dict | None) -> str | None:
         return None
 
 
-async def write_back(session: SandboxSession, root: Any, data: bytes, version_id: str, *, force: bool) -> str:
+async def write_back(
+    session: SandboxSession, root: Any, path: str, data: bytes, version_id: str, *, force: bool
+) -> None:
     """Write `data`, the stored content of the file `version_id` (the root `root`, a File row, or one of its
-    versions), over the output's own path in the workspace; return that path.
+    versions), over `path`, the output's own path (output_path of the root's meta), in the workspace.
 
-    Unless `force`, the file there must still be the one the output last
-    held: its SHA-256 is compared with the last row stored for the path (the
-    manager's memory, seeded from the database as `bash` does, else the
-    root's own hash). The write is workspace.write's: confined, resolved in
-    the guest without symlinks, atomic, as UID 1000. Afterwards the sandbox's
-    memory holds `data`'s hash for the path under `version_id`, so the next
-    `bash` call does not attach the file again.
+    Unless `force`, the file there must be this document's own: its SHA-256
+    must equal the root's `meta.file_hash` or that of one of the root's
+    versions (a previous write back wrote one of them). Anything else, a
+    newer rewrite by the model that a `bash` call attached as another output
+    included, or a missing file, is OutputChanged. Nothing here depends on
+    what the manager remembers, so it holds after a restart. The write is
+    workspace.write's: confined, resolved in the guest without symlinks,
+    atomic, as UID 1000. Afterwards the sandbox's memory holds `data`'s hash
+    for the path under `version_id`, so the next `bash` call does not attach
+    the file again.
 
     Raises:
-        OutputChanged: The file differs from what was last stored, or is missing, and `force` is False.
+        OutputChanged: The file is not one of this document's contents, or is missing, and `force` is False.
         WorkspaceError: The path is refused, or the guest refused the write.
         SandboxError: The sandbox failed.
     """
-    path = output_path(root.meta)
-    if path is None:
-        raise WorkspaceError('the output has no path in the workspace')
-    memory = session.outputs_memory
     if not force:
-        if path not in memory.stored:
-            _, latest = await chat_usage(str(root.meta.get('chat_id') or ''), root.user_id)
-            for known_path, record in latest.items():
-                memory.stored.setdefault(known_path, record)
-        expected = memory.stored[path][0] if path in memory.stored else root.meta.get('file_hash')
+        from local_llm.models.files import Files
+
+        known = {root.meta.get('file_hash')}
+        known.update((version.meta or {}).get('file_hash') for version in await Files.get_versions(root.id))
         current = (await session.get_files([path], WRITE_BACK_MAX_BYTES + 1)).get(path)
-        if current is None or hashlib.sha256(current).hexdigest() != expected:
-            raise OutputChanged(path)
-    written = await write(session, path, data, overwrite=True)
-    memory.stored[path] = (hashlib.sha256(data).hexdigest(), version_id)
-    return written
+        if current is None or hashlib.sha256(current).hexdigest() not in known:
+            raise OutputChanged(path, missing=current is None)
+    await write(session, path, data, overwrite=True)
+    session.outputs_memory.stored[path] = (hashlib.sha256(data).hexdigest(), version_id)

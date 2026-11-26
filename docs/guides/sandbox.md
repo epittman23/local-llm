@@ -1074,16 +1074,17 @@ is no path and no content in it.
   the model writes, and the model can overwrite it again. A symlink or
   directory at the path, a read-only file or a full disk is a 503 with a
   fixed text (the guest's own message is only logged).
-- **The precondition.** Inside the session, the file in the workspace is read
-  (at most 256 KiB plus one byte) and its SHA-256 compared with the last
-  content this output held there: the manager's record for the path
-  (`OutputsMemory.stored`), seeded from the database as `bash` seeds it
-  (`chat_usage`) when the sandbox was started again, else the root's own
-  hash. A difference, or a missing file, is 409 `{"code": "changed",
-  "detail": ...}` and nothing is written; the same request with
-  `"force": true` writes (and creates the file when it is missing). A file
-  the model changed and a `bash` call has since attached counts as the last
-  content, since that call stored it as a new output.
+- **The precondition is this document's own history.** Inside the session,
+  the file in the workspace is read (at most 256 KiB plus one byte) and its
+  SHA-256 must equal the root's `meta.file_hash` or that of any saved
+  version of the root (a previous write back wrote one of them), so it is
+  still something this document held. Anything else is 409 `{"code":
+  "changed", "missing": <bool>, "detail": ...}` and nothing is written: a
+  missing file (`missing` is true, so the dialog can say it will be created)
+  and a newer rewrite by the model too, even one a later `bash` call
+  attached as another output. The same request with `"force": true` writes
+  (and creates the file when it is missing). The check reads the database,
+  not the manager's memory, so it is the same after a restart.
 - **A busy workspace.** The route takes the chat's sandbox through
   `SandboxManager.session`, so the manager's rules apply (admission, the
   per-owner cap, a slot, and a stopped sandbox is started, which is the
