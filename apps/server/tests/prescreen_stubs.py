@@ -56,7 +56,8 @@ mode = os.environ.get('STUB_MODE', '')
 if os.environ.get('STUB_SLOW'):
     time.sleep(float(os.environ['STUB_SLOW']))
 if mode == 'hang':
-    subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)', 'llama-bench-stub-child'])
+    # The child names its parent stub's path, so a test finds only its own (another run on the machine has its own).
+    subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)', 'llama-bench-stub-child', sys.argv[0]])
     time.sleep(600)
 if mode == 'crash':
     os.kill(os.getpid(), signal.SIGSEGV)
@@ -142,6 +143,11 @@ def invocations(log: Path) -> list[list[str]]:
     if not log.exists():
         return []
     return [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+
+
+def stub_children(bin_dir: Path) -> list[int]:
+    """Pids of live hang-mode children started by the stubs in `bin_dir` (this test's), not another run's."""
+    return stub_processes(f'llama-bench-stub-child {bin_dir}/')
 
 
 def stub_processes(marker: str = 'llama-bench') -> list[int]:

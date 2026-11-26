@@ -27,7 +27,16 @@ import time
 
 import optuna
 import pytest
-from prescreen_stubs import Entry, Points, Profiles, Sweeps, install_binaries, invocations, stub_processes
+from prescreen_stubs import (
+    Entry,
+    Points,
+    Profiles,
+    Sweeps,
+    install_binaries,
+    invocations,
+    stub_children,
+    stub_processes,
+)
 
 from local_llm.benchmarks.prescreen import PrescreenRefused
 from local_llm.benchmarks.prescreen import study as prescreen_study
@@ -301,7 +310,7 @@ def test_a_cancelled_sweep_stops_the_point_and_leaves_its_study_readable(env, mo
     assert env.sweeps.rows[ps.sweep_id]['status'] == 'cancelled'
     (point,) = env.points.rows.values()
     assert point['status'] == 'cancelled' and point['pgid']
-    assert stub_processes('llama-bench-stub-child') == []
+    assert stub_children(env.bin) == []
     (trial,) = _trials(ps)
     assert trial.state == optuna.trial.TrialState.FAIL
 
@@ -313,7 +322,7 @@ def test_a_point_timeout_is_recorded_and_the_sweep_goes_on(env, monkeypatch):
     )
     assert status == 'done'
     assert [p['status'] for p in env.points.rows.values()] == ['timeout', 'timeout']
-    assert stub_processes('llama-bench-stub-child') == []
+    assert stub_children(env.bin) == []
 
 
 @pytest.mark.parametrize(

@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
+import signal
+import subprocess
 import time
 
 import pytest
 from llama_bench_synthetic import FIELDS, jsonl_line
-from prescreen_stubs import install_binaries, stub_processes
+from prescreen_stubs import install_binaries, stub_children
 
 from local_llm.benchmarks.prescreen import PrescreenRefused, bench
 from local_llm.benchmarks.serving.profiles import ServingProfile, resolve
@@ -272,14 +275,32 @@ def test_a_timeout_kills_the_whole_tree(binaries, monkeypatch):
     result, _ = _run(binaries, point_timeout=1.5)
     assert result.status == 'timeout'
     assert time.monotonic() - started < 15
-    assert stub_processes('llama-bench-stub-child') == []
+    assert stub_children(binaries) == []
+
+
+def test_stub_children_sees_a_hang_mode_child_of_this_tests_stubs(binaries, monkeypatch):
+    """The process check the kill tests rely on is not vacuous: it finds a live child of these stubs."""
+    monkeypatch.setenv('STUB_MODE', 'hang')
+    stub = subprocess.Popen([str(binaries / 'llama-bench'), *ARGV], start_new_session=True)
+    try:
+        deadline = time.monotonic() + 10
+        while not stub_children(binaries) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert stub_children(binaries)
+    finally:
+        os.killpg(stub.pid, signal.SIGKILL)
+        stub.wait()
+    deadline = time.monotonic() + 5
+    while stub_children(binaries) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert stub_children(binaries) == []
 
 
 def test_cancel_kills_the_whole_tree(binaries, monkeypatch):
     monkeypatch.setenv('STUB_MODE', 'hang')
     result, _ = _run(binaries, cancel_after=1.5)
     assert result.status == 'cancelled'
-    assert stub_processes('llama-bench-stub-child') == []
+    assert stub_children(binaries) == []
 
 
 def test_a_cancelled_task_kills_the_whole_tree(binaries, monkeypatch):
@@ -303,9 +324,9 @@ def test_a_cancelled_task_kills_the_whole_tree(binaries, monkeypatch):
 
     asyncio.run(scenario())
     deadline = time.monotonic() + 5
-    while stub_processes('llama-bench-stub-child') and time.monotonic() < deadline:
+    while stub_children(binaries) and time.monotonic() < deadline:
         time.sleep(0.1)
-    assert stub_processes('llama-bench-stub-child') == []
+    assert stub_children(binaries) == []
 
 
 def test_a_missing_binary_is_refused(tmp_path):
