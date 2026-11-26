@@ -935,7 +935,10 @@ and the comparison's design.** Its plan is
 canvas, not inline content.** A file, or a page of HTML or SVG, appears in
 the reply as a card (an icon for its kind, its name, its kind and size) that
 is a button opening the canvas. The card of the open document is marked. An
-image keeps a thumbnail on its card.
+image keeps a thumbnail on its card. A citation is a second entry point: the
+citation dialog's Open in canvas, beside the link of a passage that came from a
+knowledge file, opens that file read-only. It is not a card and not in the
+file list, so a reply with many citations adds no menu items.
 
 **CNV-2. The canvas is a column from `md` up and a full-screen sheet below
 it.** It never squeezes the chat (LAY-4). As a column it starts at half the
@@ -967,6 +970,7 @@ A page of HTML, and an `svg` code block: a sandboxed frame that loads nothing fr
 chat's rendering, at reading width (TYP-5). Text and code: the standard's code block with line numbers
 (CNT-2). Changes (a text document with more than one version): a unified line diff, text only (CNV-9). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
 included, always as an image) and PDF: fitted to the canvas. Anything else: its name, its size and a Download button.
+A knowledge file a reply cites (CNV-1) uses the same renderers, read-only, with the passages cited from it as text in a "Cited in this reply" Note above; its HTML is source only, never framed, and a PDF is a Download with Open at page N.
 
 **CNV-5. A page the model wrote runs in a sandboxed frame and sits in a
 themed surround.** The frame has `allow-scripts` and nothing else, is filled
@@ -1027,7 +1031,12 @@ changes, and Copy and Download acting on the draft. The unsaved-changes guard
 covers it as it does a file.
 
 **CNV-7. The open document is in the address** (NAV-1). A document that is no
-longer in the chat says so in the canvas (NAV-3).
+longer in the chat says so in the canvas (NAV-3). A knowledge file is
+`?canvas=file:<id>`; it opens only when a reply on the branch cites it, and
+otherwise says the document is no longer in the chat. When the server refuses
+a cited file (removed, or no access) the canvas shows one Note, "You can’t open
+this file. It may have been removed, or you may no longer have access.", and no
+data.
 
 **CNV-8. Escape closes the canvas when nothing inside it is open, and focus
 returns to the card that opened it** (NAV-4). Opening a document moves focus

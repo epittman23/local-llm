@@ -125,8 +125,8 @@ Start here for "how do I run/use this."
   backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
   `canvas.md` (the document viewer and text editor beside a chat: the viewer
-  and the editor are built, the version comparison and the HTML editor with
-  its preview too; its interface is on `/ui` and in the
+  and the editor are built, the version comparison, the HTML editor with
+  its preview and a cited knowledge file too; its interface is on `/ui` and in the
   standard's CNV rules),
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -510,7 +510,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `withVersion`; the comparison: `views/ChangesView.tsx`, a diff of two
   versions, over `lib/utils/lineDiff.ts`, the line diff; the page editor:
   `views/HtmlEditView.tsx`, the source and the sandboxed preview side by side,
-  and `present.ts`'s `editabilityOf`), `ChatMenu`,
+  and `present.ts`'s `editabilityOf`; a cited knowledge file:
+  `views/KnowledgeFrame.tsx` and `views/PassagesNote.tsx`, opened from
+  `CitationDialog.tsx` as `?canvas=file:<id>`), `ChatMenu`,
   `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,
   `DropOverlay` (the drop target for files), `TemporaryNotice` (the
   temporary-chat switch and chip), `ErrorReply` (a failed reply, FBK-4),
@@ -519,7 +521,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   header alike). Its pure rules are in `src/lib/chat/` (history tree,
   request body, sources, attachments, import, `drafts.ts`, the message
   box's unsent text per chat in `sessionStorage`, `documents.ts`, the pure
-  function from a chat's messages to its canvas documents, and
+  function from a chat's messages to its canvas documents (and to a cited
+  knowledge file, `knowledgeDocument`), and
   `htmlPolicy.ts`, the content-security policy put in front of a fenced
   block's HTML, kept equal to the server's by a test) and its
   Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`

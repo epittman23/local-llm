@@ -7,6 +7,32 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 4 (e) built: a cited knowledge file
+  in the canvas.** The citation dialog's Open in canvas shows a knowledge
+  file a reply cited, read-only, beside the passages cited from it
+  (`docs/plans/canvas.md`, CNV-1, CNV-4, CNV-7). The orchestrating session
+  settled these points on 2026-11-26.
+  - **It is addressed as `?canvas=file:<uuid>` and is not a chat document.**
+    `chatDocuments`, the file list and the auto-open are untouched, so a
+    reply with thirty citations adds no menu items and never opens the canvas
+    by itself. A synthetic read-only document (`source.type` `knowledge`) is
+    made on demand, and only when a message on the branch cites that id;
+    any other `file:` id is "no longer in the chat" and is never fetched.
+    A cited id that is already an upload or an output of the chat opens that
+    document instead of a second one.
+  - **Access is the file route's, unchanged.** No backend route and no change
+    to `has_access_to_file`: the client's check is a convenience, and every
+    fetch is answered by `GET /files/{id}/content`, so a file removed or one
+    the viewer may not read shows the one Note "You can't open this file"
+    and no data. A pytest (`tests/test_file_content_access.py`) pins that
+    route's decision: a reader gets the file, a stranger a 404.
+  - **Only files are offered.** A note's or a chat's retrieval metadata has a
+    `file_id` that is theirs and no `source`, and a web page's `source` is a
+    URL, so `knowledgeFileId` accepts a UUID `file_id` with a non-URL
+    `source` only.
+  - **Never framed.** HTML is source only; an SVG is an image; a PDF is a
+    download with Open at page N, as a knowledge file has no page images.
+    Passages are React text nodes. No migration.
 - **2026-11-26** (latest): **Canvas Phase 4 (a) built: editing HTML with
   its preview beside the source.** A page the model wrote (a sandbox output
   up to 256 KiB) is edited in the canvas with a sandboxed preview of the draft
