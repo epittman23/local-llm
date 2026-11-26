@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatFile, Message } from '@/lib/chat/history';
+import { withHtmlPolicy } from '@/lib/chat/htmlPolicy';
 import { CanvasContext } from './CanvasContext';
 import { CanvasPanel } from './CanvasPanel';
 import { blockDoc, docOf, id, output, renderWithRouter, upload } from './testing';
@@ -277,13 +278,8 @@ describe('which documents can be edited', () => {
 		return renderWithRouter(<CanvasPanel canvas={canvas} />);
 	};
 
-	it('offers no Edit for a block, a page, a table or an image', async () => {
-		for (const doc of [
-			blockDoc('x = 1', 'python'),
-			docOf(output('3', 'page.html')),
-			docOf(output('4', 'table.csv')),
-			docOf(output('5', 'plot.png'))
-		]) {
+	it('offers no Edit for a Python block, a table or an image', async () => {
+		for (const doc of [blockDoc('x = 1', 'python'), docOf(output('4', 'table.csv')), docOf(output('5', 'plot.png'))]) {
 			renderStatic(doc);
 			await screen.findByRole('complementary');
 			expect(screen.queryByRole('button', { name: 'Edit document' })).toBeNull();
@@ -418,5 +414,111 @@ describe('versions', () => {
 		fireEvent.click(within(await openMenu('Copy')).getByRole('menuitem', { name: 'Attach to next message' }));
 		await waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
 		expect(wide.router.state.location.search).toContain('canvas=');
+	});
+});
+
+const BLOCK = '<!doctype html><html><body><p>hi</p></body></html>';
+/** A reply whose text holds one fenced html block, on the real canvas state, so Close is a guarded navigation. */
+function BlockHarness({ code }: { code: string }) {
+	const messages: Message[] = [
+		{
+			id: 'm1',
+			parentId: null,
+			childrenIds: [],
+			role: 'assistant',
+			content: `\`\`\`html\n${code}\n\`\`\``,
+			done: true
+		}
+	];
+	const canvas = useCanvas(messages, false);
+	return <CanvasPanel canvas={canvas} />;
+}
+
+describe('editing a page', () => {
+	const PAGE = id('3');
+	const PAGE_HTML = '<p>hello</p>\n';
+	const frameOf = (name: string) => screen.getByTitle(`Preview of ${name}`) as HTMLIFrameElement;
+	const showPage = (files: ChatFile[], open: string) => {
+		api.text.mockImplementation(async () => ({ text: PAGE_HTML, truncated: false }));
+		return show({ files, open });
+	};
+	const editPage = async () => {
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		return screen.findByRole('textbox', { name: 'Edit page.html' }) as Promise<HTMLTextAreaElement>;
+	};
+	const renderStaticDoc = (doc: ReturnType<typeof blockDoc>) => {
+		const canvas: CanvasState = { documents: [doc], openId: doc.id, doc, gone: false, open: vi.fn(), close: vi.fn() };
+		return renderWithRouter(<CanvasPanel canvas={canvas} />);
+	};
+	it('keeps Preview while editing a page the model wrote, and it shows the draft through the policy without leaving edit mode', async () => {
+		showPage([output('3', 'page.html')], PAGE);
+		const box = await editPage();
+		const preview = screen.getByRole('button', { name: 'Preview' });
+		expect(preview).toBeEnabled();
+		type(box, '<p>changed</p>');
+		fireEvent.click(preview);
+		// Not a discard: no question, the editor and its SaveBar stay, the draft is intact.
+		expect(screen.queryByRole('alertdialog')).toBeNull();
+		expect(screen.getByRole('textbox', { name: 'Edit page.html' })).toHaveValue('<p>changed</p>');
+		expect(screen.getByRole('button', { name: 'Save document' })).toBeEnabled();
+		expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+		expect(preview).toHaveAttribute('aria-pressed', 'true');
+		fireEvent.click(screen.getByRole('button', { name: 'Update preview' }));
+		const frame = frameOf('page.html');
+		expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
+		expect(frame.getAttribute('src')).toBeNull();
+		expect(frame.getAttribute('srcdoc')).toBe(withHtmlPolicy('<p>changed</p>'));
+	});
+
+	it('saves the draft as the text of a new version', async () => {
+		showPage([output('3', 'page.html')], PAGE);
+		type(await editPage(), '<p>v2</p>');
+		fireEvent.click(screen.getByRole('button', { name: 'Save document' }));
+		await waitFor(() => expect(api.create).toHaveBeenCalledWith('', PAGE, '<p>v2</p>'));
+	});
+
+	it('edits an uploaded page as source only: no Preview, no frame', async () => {
+		api.text.mockResolvedValue({ text: PAGE_HTML, truncated: false });
+		renderStaticDoc(docOf(upload('4', 'mine.html'), 'user'));
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit document' }));
+		expect(await screen.findByRole('textbox', { name: 'Edit mine.html' })).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Update preview' })).toBeNull();
+		expect(document.querySelector('iframe')).toBeNull();
+	});
+
+	it('shows a page between 256 KiB and 5 MiB as view only, to be downloaded to change', async () => {
+		showPage([output('3', 'page.html', {}, { size: 300 * 1024 })], PAGE);
+		expect(await screen.findByText('Too large to edit; download it to change it.')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Edit document' })).toBeNull();
+	});
+
+	it('offers Try changes on a block of HTML: a draft with a Note, no Save, no version, and closing asks', async () => {
+		renderWithRouter(<BlockHarness code={BLOCK} />, ['/c/x?canvas=block:m1:0']);
+		expect(screen.queryByRole('button', { name: 'Edit document' })).toBeNull();
+		fireEvent.click(await screen.findByRole('button', { name: 'Try changes' }));
+		const box = (await screen.findByRole('textbox', { name: /^Edit / })) as HTMLTextAreaElement;
+		expect(box).toHaveValue(BLOCK);
+		expect(screen.getByText('Changes to a code block are not saved. Copy or download them.')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Save document' })).toBeNull();
+		type(box, '<p>mine</p>');
+		fireEvent.click(screen.getByRole('button', { name: 'Update preview' }));
+		expect((screen.getByTitle(/^Preview of /) as HTMLIFrameElement).getAttribute('srcdoc')).toBe(
+			withHtmlPolicy('<p>mine</p>')
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Close canvas' }));
+		expect(await ask()).toBeInTheDocument();
+		fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+		expect(screen.queryByRole('textbox')).toBeNull();
+		expect(await screen.findByRole('button', { name: 'Try changes' })).toBeInTheDocument();
+		expect(api.create).not.toHaveBeenCalled();
+		expect(api.list).not.toHaveBeenCalled();
+	});
+
+	it('does not offer Try changes on a block still being written', async () => {
+		renderStaticDoc(blockDoc('<p>hi', 'html', false));
+		await screen.findByRole('complementary');
+		expect(screen.queryByRole('button', { name: 'Try changes' })).toBeNull();
 	});
 });

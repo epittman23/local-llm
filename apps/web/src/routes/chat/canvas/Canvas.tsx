@@ -3,6 +3,7 @@ import type { CanvasDocument } from '@/lib/chat/documents';
 import { ChangesView } from './views/ChangesView';
 import { CsvView } from './views/CsvView';
 import { DownloadView } from './views/DownloadView';
+import { HtmlEditView } from './views/HtmlEditView';
 import { HtmlView } from './views/HtmlView';
 import { ImageView } from './views/ImageView';
 import { MarkdownView } from './views/MarkdownView';
@@ -45,7 +46,7 @@ export function Canvas({
 	doc: CanvasDocument;
 	mode: Mode;
 	reloads?: number;
-	/** The draft being edited: the source view becomes its editor. */
+	/** The draft being edited: the source view becomes its editor, and a page the model wrote gets its preview beside it. */
 	edit?: SourceEdit;
 	/** Needed for mode `changes`, which compares two saved versions (CNV-9). */
 	changes?: ChangesOf;
@@ -62,6 +63,8 @@ export function Canvas({
 				shownIndex={changes.shownIndex}
 			/>
 		);
+	else if (edit && doc.kind === 'html' && views.preview)
+		view = <HtmlEditView key={doc.id} doc={doc} edit={edit} mode={showing} />;
 	else if (showing === 'source') view = <SourceView doc={doc} edit={edit} />;
 	else {
 		switch (doc.kind) {

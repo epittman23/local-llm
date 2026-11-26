@@ -118,4 +118,22 @@ describe('useDocumentEdit', () => {
 		hook.rerender({ fileId: FILE, rootId: FILE, text: 'one\ntwo', onSaved: vi.fn() });
 		expect(hook.result.current).toMatchObject({ editing: false, dirty: false, draft: 'one\ntwo' });
 	});
+
+	it('keeps the draft of a block and never saves it: draftOnly makes save do nothing', async () => {
+		const client = new QueryClient();
+		const wrapper = ({ children }: { children: ReactNode }) => (
+			<QueryClientProvider client={client}>{children}</QueryClientProvider>
+		);
+		const hook = renderHook(
+			() =>
+				useDocumentEdit({ fileId: 'block:m1:0', rootId: FILE, text: '<p>hi</p>', draftOnly: true, onSaved: vi.fn() }),
+			{ wrapper }
+		);
+		act(() => hook.result.current.start());
+		act(() => hook.result.current.setDraft('<p>changed</p>'));
+		expect(hook.result.current).toMatchObject({ editing: true, dirty: true, blocked: null });
+		await act(() => hook.result.current.save());
+		expect(api.create).not.toHaveBeenCalled();
+		expect(hook.result.current.editing).toBe(true);
+	});
 });

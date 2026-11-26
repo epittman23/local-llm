@@ -32,6 +32,9 @@ export type DocumentEdit = {
  * `text` is the fetched text, undefined until it has loaded. Editing ends when
  * the file shown changes: whatever moved it has already asked about the draft.
  *
+ * `draftOnly` (a fenced block, which has no file to version) keeps the draft and
+ * never saves it: `fileId` is then only the key the draft belongs to, and `save` does nothing.
+ *
  * A saved version is put in the text cache under its own id, so the canvas
  * shows it at once, and in the version list; `onSaved` hears of it.
  */
@@ -39,11 +42,13 @@ export function useDocumentEdit({
 	fileId,
 	rootId,
 	text,
+	draftOnly = false,
 	onSaved
 }: {
 	fileId: string | null;
 	rootId: string | null;
 	text: string | undefined;
+	draftOnly?: boolean;
 	onSaved: (saved: SavedVersion) => void;
 }): DocumentEdit {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -68,7 +73,7 @@ export function useDocumentEdit({
 	const setDraft = useCallback((value: string) => setState((s) => (s ? { ...s, draft: value } : s)), []);
 
 	const save = async () => {
-		if (!editing || !dirty || fileId === null || rootId === null || busy.current) return;
+		if (draftOnly || !editing || !dirty || fileId === null || rootId === null || busy.current) return;
 		if (draft === '') return;
 		const content = crlf ? draft.replace(/\n/g, '\r\n') : draft;
 		if (new TextEncoder().encode(content).length > TEXT_MAX_BYTES) {

@@ -62,16 +62,42 @@ export function formatSize(bytes: number | null): string {
 	return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
 }
 
+/** How a document can be edited (CNV-6) and whether the draft has a preview beside it. */
+export type Editability = {
+	canEdit: boolean;
+	/** A fenced block: the draft is tried and never saved, as a block has no file to version. */
+	draftOnly: boolean;
+	/** The draft is shown in the sandboxed frame beside its source: a page the model wrote, or a block of one. */
+	preview: boolean;
+};
+
+const NOT_EDITABLE: Editability = { canEdit: false, draftOnly: false, preview: false };
+
 /**
- * Whether the document is one the canvas can edit (CNV-6, docs/plans/canvas.md C14): Markdown, text or code
- * that is a file, a sandbox output or an upload, and no larger than the most the canvas loads. A fenced
- * block is message text with no file to version; a page, a table, an image and a PDF are not edited yet.
+ * The one rule for what the canvas edits (CNV-6, docs/plans/canvas.md C14): Markdown, text, code and
+ * HTML that is a file, a sandbox output or an upload, no larger than the most the canvas loads. A page the
+ * model wrote (an output) has its draft previewed in the sandboxed frame; an uploaded page is the person's
+ * file and is never framed, so it is edited as source only. A closed `html` or `svg` block can be tried
+ * (`draftOnly`) but has no file to save; any other block, a table, an image and a PDF are not edited.
  */
+export function editabilityOf(doc: CanvasDocument): Editability {
+	const { source } = doc;
+	if (source.type === 'block') {
+		const markup = doc.kind === 'html' && (source.language === 'html' || source.language === 'svg');
+		if (!markup || !source.closed || new TextEncoder().encode(source.text).length > TEXT_MAX_BYTES) return NOT_EDITABLE;
+		return { canEdit: true, draftOnly: true, preview: true };
+	}
+	if (doc.kind !== 'markdown' && doc.kind !== 'code' && doc.kind !== 'html') return NOT_EDITABLE;
+	if (source.type !== 'output' && source.type !== 'upload') return NOT_EDITABLE;
+	if (!UUID.test(source.fileId)) return NOT_EDITABLE;
+	if (doc.bytes !== null && doc.bytes > TEXT_MAX_BYTES) return NOT_EDITABLE;
+	return { canEdit: true, draftOnly: false, preview: doc.kind === 'html' && source.type === 'output' };
+}
+
+/** Whether the document is a file whose edit is saved as a new version (not a block, whose draft is only tried). */
 export function canEditDocument(doc: CanvasDocument): boolean {
-	if (doc.kind !== 'markdown' && doc.kind !== 'code') return false;
-	if (doc.source.type !== 'output' && doc.source.type !== 'upload') return false;
-	if (!UUID.test(doc.source.fileId)) return false;
-	return doc.bytes === null || doc.bytes <= TEXT_MAX_BYTES;
+	const editability = editabilityOf(doc);
+	return editability.canEdit && !editability.draftOnly;
 }
 
 /** Why the fetched text cannot be edited, or null when it can: cut at the cap, or not UTF-8 (saving would corrupt it). */
