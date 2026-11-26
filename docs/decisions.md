@@ -7,7 +7,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-11-26** (workflow): **How work is done is written down as the
+- **2026-11-26** (latest): **How work is done is written down as the
   `workflow` skill, with a throwaway stack for real-backend checks.** The
   owner settled these points after the 2026-11-25 unattended run
   (`.claude/skills/workflow/SKILL.md`, `scripts/throwaway-stack/`).
