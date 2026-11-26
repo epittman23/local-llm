@@ -159,7 +159,7 @@ describe('CanvasPanel header', () => {
 			within(menu)
 				.getAllByRole('menuitem')
 				.map((i) => i.textContent)
-		).toEqual(['Copy', 'Download', 'Reload the page']);
+		).toEqual(['Copy', 'Save to workspace', 'Download', 'Reload the page']);
 	});
 });
 

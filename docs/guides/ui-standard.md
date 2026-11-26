@@ -1018,6 +1018,23 @@ to next message", and below `md` an attach closes the sheet so the composer
 and its new chip show. Keep editing returns focus to the editor. An empty text cannot be saved,
 and the bar says why.
 
+A file the model wrote to its workspace (a sandbox output) in a saved chat
+also has "Save to workspace" in the Copy menu (the actions menu below `sm`)
+and as the second button of the save's toast, beside "Attach to next
+message"; it writes the version shown over the workspace file, is not
+offered while a reply is being written or while editing, and never for an
+upload, a block, a knowledge file or a temporary chat. Success says "Saved to
+the workspace. The model sees it the next time it reads the file."; a busy
+workspace says "The workspace is busy. Try again when the reply has
+finished."; a failure says "Could not save to the workspace. Try again." with
+the details behind Details (FBK-4). When the file in the workspace changed
+since this document held it, a dialog asks "Replace the file in the
+workspace?" ("The file in the workspace changed after this version. Saving
+replaces it.", Replace and Cancel), or "Create the file in the workspace?"
+when it is gone ("The file is no longer in the workspace. Saving creates it
+again.", Create and Cancel); Replace and Create repeat the request with
+`force`.
+
 An HTML page the model wrote (an
 output, up to 256 KiB) is edited with its preview beside the source: the
 source on the left and the sandboxed preview on the right when the canvas is

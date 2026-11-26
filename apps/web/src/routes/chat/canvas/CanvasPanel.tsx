@@ -8,6 +8,7 @@ import {
 	EllipsisIcon,
 	EyeIcon,
 	FilesIcon,
+	HardDriveUploadIcon,
 	HistoryIcon,
 	Maximize2Icon,
 	Minimize2Icon,
@@ -61,6 +62,7 @@ import {
 import type { CanvasState } from './useCanvas';
 import { useDocumentEdit } from './useDocumentEdit';
 import { useDocumentVersions } from './useDocumentVersions';
+import { useWriteBack } from './useWriteBack';
 import { Loading, Note } from './views/parts';
 import { useDocumentText } from './views/useDocumentText';
 
@@ -198,6 +200,8 @@ export function CanvasPanel({
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const attach = useContext(CanvasContext)?.attach;
+	const generating = useContext(CanvasContext)?.generating ?? false;
+	const writeBack = useWriteBack();
 	const smUp = useSmUp();
 	const mdUp = useMdUp();
 	const open = canvas.openId !== null;
@@ -273,6 +277,9 @@ export function CanvasPanel({
 		// A sheet covers the composer: close it so the attached file shows, unless a draft is still open in it.
 		if (!mdUp && !hadDraft.current) canvas.close();
 	};
+	// Only a saved version of a file the model wrote to its workspace goes back there: an upload is read-only
+	// in the sandbox, a block and a knowledge file have no workspace file, and a running reply holds the workspace.
+	const offerWriteBack = editable && !generating && doc?.source.type === 'output' && editableDoc !== null;
 	const edit = useDocumentEdit({
 		fileId: editFileId,
 		rootId,
@@ -286,18 +293,19 @@ export function CanvasPanel({
 			if (doc && doc.kind === 'html' && viewsOf(doc).preview) setChoice({ id: doc.id, mode: 'preview' });
 			headingRef.current?.focus();
 			const number = saved.meta?.version ?? versions.length + 1;
-			toast.success(
-				`Saved as version ${number}`,
-				attach
+			toast.success(`Saved as version ${number}`, {
+				// Two buttons do not fit beside the text in a toast's one row: let the second wrap under it.
+				className: offerWriteBack ? 'flex-wrap' : undefined,
+				action: attach
 					? {
-							action: {
-								label: 'Attach to next message',
-								onClick: () =>
-									void attachVersion({ id: saved.id, size: saved.meta?.size ?? null }, number, saved.data?.status)
-							}
+							label: 'Attach to next message',
+							onClick: () =>
+								void attachVersion({ id: saved.id, size: saved.meta?.size ?? null }, number, saved.data?.status)
 						}
-					: undefined
-			);
+					: undefined,
+				// The second button of a toast is its `cancel`: it is the action beside the first, not a dismissal.
+				cancel: offerWriteBack ? { label: 'Save to workspace', onClick: () => void writeBack.run(saved.id) } : undefined
+			});
 		}
 	});
 	hadDraft.current = edit.dirty;
@@ -392,6 +400,13 @@ export function CanvasPanel({
 			Edit as text
 		</DropdownMenuItem>
 	);
+	const writeBackId = offerWriteBack && !edit.editing && !removed && shown ? fileIdOf(shown) : null;
+	const writeBackItem = writeBackId !== null && (
+		<DropdownMenuItem disabled={writeBack.pending} onSelect={() => void writeBack.run(writeBackId)}>
+			<HardDriveUploadIcon aria-hidden />
+			Save to workspace
+		</DropdownMenuItem>
+	);
 	const canAttach = attach !== undefined && shownVersion !== undefined && shownVersion !== null && versions.length > 1;
 	const attachItem = canAttach && (
 		<DropdownMenuItem onSelect={() => void attachVersion(shownVersion, shownIndex + 1)}>
@@ -450,6 +465,7 @@ export function CanvasPanel({
 						<DropdownMenuContent align="end">
 							{copyItem}
 							{attachItem}
+							{writeBackItem}
 							{editAsTextItem}
 							<DownloadItem doc={shown} draft={draftText} />
 						</DropdownMenuContent>
@@ -499,6 +515,7 @@ export function CanvasPanel({
 					)}
 					{canCopy && copyItem}
 					{attachItem}
+					{writeBackItem}
 					{editAsTextItem}
 					<DownloadItem doc={shown} draft={draftText} />
 					{canReload && (
@@ -714,6 +731,7 @@ export function CanvasPanel({
 				{body}
 			</SidePanel>
 			{guard.dialog}
+			{writeBack.dialog}
 		</>
 	);
 }

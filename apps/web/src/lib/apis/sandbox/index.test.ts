@@ -6,7 +6,8 @@ import {
 	getPendingWorkspaceIds,
 	getPendingWorkspaces,
 	getSandboxOutputHtml,
-	getSandboxOutputText
+	getSandboxOutputText,
+	writeBackOutput
 } from './index';
 
 const stubFetch = (respond: (url: string, init?: RequestInit) => Response | Promise<Response>) => {
@@ -143,5 +144,40 @@ describe('the pending workspace routes', () => {
 		await expect(answerPendingWorkspace('t', 'w', 'keep', 1)).rejects.toBeInstanceOf(ServerUnreachableError);
 		await expect(getPendingWorkspaces('t')).rejects.toBeInstanceOf(ServerUnreachableError);
 		await expect(getPendingWorkspaceIds('t')).rejects.toBeInstanceOf(ServerUnreachableError);
+	});
+});
+
+describe('writeBackOutput', () => {
+	it('posts only `force` to the write-back route with the token', async () => {
+		const fetch = stubFetch(() => Response.json({ path: 'outputs/a.html', bytes: 4 }));
+		expect(await writeBackOutput('tok', 'a/b', true)).toEqual({ status: 'written', path: 'outputs/a.html', bytes: 4 });
+		const [url, init] = fetch.mock.calls[0];
+		expect(url).toBe('/api/v1/sandbox/outputs/a%2Fb/write-back');
+		expect(init?.method).toBe('POST');
+		expect(JSON.parse(String(init?.body))).toEqual({ force: true });
+		expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer tok');
+	});
+	it('does not force by default', async () => {
+		const fetch = stubFetch(() => Response.json({ path: 'outputs/a', bytes: 1 }));
+		await writeBackOutput('t', 'x');
+		expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ force: false });
+	});
+	it('returns the two 409s as results', async () => {
+		stubFetch(() => Response.json({ code: 'changed', missing: true, detail: 'd' }, { status: 409 }));
+		expect(await writeBackOutput('t', 'x')).toEqual({ status: 'changed', missing: true });
+		stubFetch(() => Response.json({ code: 'changed', detail: 'd' }, { status: 409 }));
+		expect(await writeBackOutput('t', 'x')).toEqual({ status: 'changed', missing: false });
+		stubFetch(() => Response.json({ code: 'busy', detail: 'd' }, { status: 409 }));
+		expect(await writeBackOutput('t', 'x')).toEqual({ status: 'busy' });
+	});
+	it('throws any other refusal, an unknown 409 and an unreachable server', async () => {
+		stubFetch(() => Response.json({ detail: 'no' }, { status: 503 }));
+		await expect(writeBackOutput('t', 'x')).rejects.toEqual({ detail: 'no' });
+		stubFetch(() => Response.json({ detail: 'odd' }, { status: 409 }));
+		await expect(writeBackOutput('t', 'x')).rejects.toEqual({ detail: 'odd' });
+		stubFetch(() => new Response('nope', { status: 409 }));
+		await expect(writeBackOutput('t', 'x')).rejects.toEqual({ detail: '409 Conflict' });
+		stubFetch(() => Promise.reject(new TypeError('failed')));
+		await expect(writeBackOutput('t', 'x')).rejects.toBeInstanceOf(ServerUnreachableError);
 	});
 });

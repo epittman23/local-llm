@@ -508,7 +508,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   state and history, `useCanvasAutoOpen.ts`, and `views/`, one renderer per
   kind, with `SandboxedHtmlFrame.tsx`, the scripts-only frame; the editor:
   `useDocumentEdit.ts` the draft and the save, `useDocumentVersions.ts` a
-  document's saved versions, and `present.ts`'s `canEditDocument` and
+  document's saved versions, `useWriteBack.tsx` Save to workspace (one
+  request at a time, and its Replace dialog), and `present.ts`'s `canEditDocument` and
   `withVersion`; the comparison: `views/ChangesView.tsx`, a diff of two
   versions, over `lib/utils/lineDiff.ts`, the line diff; the page editor:
   `views/HtmlEditView.tsx`, the source and the sandboxed preview side by side,

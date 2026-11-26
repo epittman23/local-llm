@@ -124,7 +124,11 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   removed with named buttons, Edit as text for its source) when nothing in it
   would be cut: at most 500 rows and 50 columns, comma-separated; any other CSV
   is edited as text. Other fenced code blocks are not editable
-  (docs/plans/canvas.md). A
+  (docs/plans/canvas.md). A file the model wrote to its workspace can be put
+  back there from the canvas: Save to workspace (the Copy menu, or the save's
+  toast) writes the version shown over the workspace file, owner only, and asks
+  first when that file is not one the document held (the model's newer rewrite,
+  say); the model sees it the next time it reads the file. A
   knowledge file a reply cites opens from the citation dialog's Open in canvas
   (`?canvas=file:<id>`): read-only, with the passages cited from it above its
   view, HTML as source only, and one Note when you can no longer read it.

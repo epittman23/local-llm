@@ -450,8 +450,8 @@ export function ChatPage() {
 		[inTemporary, maxFiles, attachedCount, attachedIds, addAttachment]
 	);
 	const canvasContext = useMemo(
-		() => ({ openId: canvas.openId, open: canvas.open, attach }),
-		[canvas.openId, canvas.open, attach]
+		() => ({ openId: canvas.openId, open: canvas.open, attach, generating: session.generating }),
+		[canvas.openId, canvas.open, attach, session.generating]
 	);
 
 	const actions = useMessageActions(session);

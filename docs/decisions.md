@@ -7,6 +7,42 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 4 (d) built: writing an edit back
+  into the sandbox workspace.** A saved version of a file the model wrote to
+  its workspace can be put back there from the canvas, as a separate action
+  (Save to workspace) and never as a side effect of saving
+  (`docs/plans/canvas.md`, CNV-6, `docs/guides/sandbox.md` "Writing an edit
+  back"). The orchestrating session settled these points on 2026-11-26.
+  - **Owner only.** The route is `POST /api/v1/sandbox/outputs/{id}/write-back`
+    and answers 404 to anyone but the file's owner, an admin and a grantee
+    included. Writing into a workspace is not reading a file: an admin would
+    be changing another person's sandbox, and the manager's admin access
+    (Q14) is for tool calls the owner started.
+  - **The server chooses the path and the bytes.** The path is the original's
+    recorded `meta.sandbox_path` (a normalised path under
+    `/workspace/outputs`) and the bytes are the stored version; the body is
+    only `{force}`. No client-supplied path or content exists to abuse. The
+    write is the model's own hardened one (`workspace.write`: confined,
+    resolved in the guest without symlinks, atomic, UID 1000), not
+    `put_files`.
+  - **The precondition is the document's own history.** The workspace file
+    must hash to the original or to one of its saved versions; anything else
+    (a newer rewrite by the model, even one a later `bash` call attached) is
+    a 409 `changed` that the person confirms (Replace, or Create when the file
+    is gone) and that repeats with `force`. An earlier draft compared with the
+    path's last stored content, which let a person overwrite the model's
+    newer attached work without being asked. The check reads the database,
+    so it holds after a restart.
+  - **It may start a stopped sandbox.** The press is the person's explicit
+    action; the wait is bounded at 20 s and the manager's admission, cap and
+    slot rules apply. A sandbox held by a running command answers 409 `busy`.
+  - **The next listing does not attach the file again.** The written version's
+    row records `sandbox_path` and `written_back_ns`, and the sandbox's
+    memory holds its hash. If recording the row fails, one duplicate attach
+    after a restart is the accepted worst case.
+  - **No prompt change.** Nothing is added to `assistant.txt` (a gate trip and
+    a break in benchmark comparability); the model sees the edit when it
+    reads the file, and the toast says so. No migration.
 - **2026-11-26** (latest): **Canvas Phase 4 (b) built: editing a CSV as a
   table.** A CSV file in the canvas is edited as a table, a field in every
   cell, and saved as a new version like any text (`docs/plans/canvas.md`,
