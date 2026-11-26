@@ -52,7 +52,7 @@ from local_llm.sandbox.limits import (
 )
 from local_llm.sandbox.manager import SandboxSession
 from local_llm.sandbox.types import SandboxError
-from local_llm.sandbox.workspace import GUEST_SHELL, image_size, image_type
+from local_llm.sandbox.workspace import GUEST_SHELL, image_size, image_type, write
 from local_llm.utils.chat_id import is_saved_chat_id
 
 log = logging.getLogger(__name__)
@@ -63,6 +63,8 @@ OUTPUTS_DIR: Final = f'{WORKSPACE}/outputs'
 SANDBOX_OUTPUT: Final = 'sandbox_output'
 #: The most bytes a listing returns; under STREAM_CAP_CHARS, so the stream cap never splices two records together.
 LISTING_CAP_BYTES: Final = 16_384
+#: The most bytes written back into the workspace, and so the most the precondition reads: a saved version's cap.
+WRITE_BACK_MAX_BYTES: Final = 256 * 1024
 #: The last record of a listing that was not cut short.
 _END: Final = 'END'
 
@@ -597,7 +599,8 @@ async def chat_usage(chat_id: str, user_id: str | None = None) -> tuple[int, dic
     The rows are counted whether or not they are linked to a message, so the
     count holds for an unsaved chat, a call with no message id, and across a
     stopped sandbox or a restarted server. "Last" is by `created_at`, then
-    `meta.stored_ns` (the store's clock in nanoseconds), then the row's id.
+    `meta.stored_ns` (the store's clock in nanoseconds), then the row's id; a
+    row with `meta.written_back_ns` (write_back) counts as stored at that time.
     """
     from sqlalchemy import select
 
@@ -625,6 +628,10 @@ async def chat_usage(chat_id: str, user_id: str | None = None) -> tuple[int, dic
 def _row_order(row: Any) -> tuple[int, int, str]:
     file_id, meta, created_at = row
     stored_ns = meta.get('stored_ns') if isinstance(meta, dict) else None
+    written_ns = meta.get('written_back_ns') if isinstance(meta, dict) else None
+    if type(written_ns) is int:
+        # A version written back into the workspace is the file's newest content there, whenever it was saved.
+        return (written_ns // 1_000_000_000, written_ns, file_id)
     return (
         created_at if type(created_at) is int else 0,
         stored_ns if type(stored_ns) is int else 0,
@@ -662,3 +669,58 @@ def with_policy(document: str) -> str:
     match = _DOCTYPE.match(document)
     at = match.end() if match else 0
     return document[:at] + HTML_POLICY + document[at:]
+
+
+class OutputChanged(Exception):
+    """The file in the workspace is not one this document held, or is gone (`missing`), and `force` was not given."""
+
+    def __init__(self, path: str, *, missing: bool) -> None:
+        super().__init__(path)
+        self.missing = missing
+
+
+def output_path(meta: dict | None) -> str | None:
+    """The workspace path the server recorded for a sandbox output (`meta.sandbox_path`), when it is a normalised
+    path under /workspace/outputs; None otherwise."""
+    path = meta.get('sandbox_path') if isinstance(meta, dict) else None
+    if not isinstance(path, str) or not path.startswith(f'{OUTPUTS_DIR}/'):
+        return None
+    try:
+        return validate_sandbox_path(path)
+    except ValueError:
+        return None
+
+
+async def write_back(
+    session: SandboxSession, root: Any, path: str, data: bytes, version_id: str, *, force: bool
+) -> None:
+    """Write `data`, the stored content of the file `version_id` (the root `root`, a File row, or one of its
+    versions), over `path`, the output's own path (output_path of the root's meta), in the workspace.
+
+    Unless `force`, the file there must be this document's own: its SHA-256
+    must equal the root's `meta.file_hash` or that of one of the root's
+    versions (a previous write back wrote one of them). Anything else, a
+    newer rewrite by the model that a `bash` call attached as another output
+    included, or a missing file, is OutputChanged. Nothing here depends on
+    what the manager remembers, so it holds after a restart. The write is
+    workspace.write's: confined, resolved in the guest without symlinks,
+    atomic, as UID 1000. Afterwards the sandbox's memory holds `data`'s hash
+    for the path under `version_id`, so the next `bash` call does not attach
+    the file again.
+
+    Raises:
+        OutputChanged: The file is not one of this document's contents, or is missing, and `force` is False.
+        WorkspaceError: The path is refused, or the guest refused the write.
+        SandboxError: The sandbox failed.
+    """
+    if not force:
+        from local_llm.models.files import Files
+
+        known = {root.meta.get('file_hash')}
+        known.update((version.meta or {}).get('file_hash') for version in await Files.get_versions(root.id))
+        current = (await session.get_files([path], WRITE_BACK_MAX_BYTES + 1)).get(path)
+        if current is None or hashlib.sha256(current).hexdigest() not in known:
+            # get_files leaves out a file over the cap or a non-regular one: only an absent path is missing.
+            raise OutputChanged(path, missing=current is None and await session.stat(path) is None)
+    await write(session, path, data, overwrite=True)
+    session.outputs_memory.stored[path] = (hashlib.sha256(data).hexdigest(), version_id)

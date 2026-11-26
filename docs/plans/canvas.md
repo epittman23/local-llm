@@ -117,9 +117,10 @@ All five were settled by the owner on 2026-11-14, as written here.
 2. **What does saving an edit do?** *Decided: it saves a new version of the
    document in the app (a new `File` row linked to the same message, the
    earlier one kept), and offers "Attach to next message" so the model sees
-   the edit.* It does not write into the sandbox's `/workspace`. Writing back
-   into the workspace is the alternative; it needs the sandbox running and a
-   new write path, so it is left to a later plan.
+   the edit.* Writing into the sandbox's `/workspace` was left to a later
+   plan, and was built in Phase 4 (d) as a separate, explicit action, Save to
+   workspace, owner-only (see "Phase 4: what was built (writing an edit back
+   into the workspace)"). A save alone never writes into the workspace.
 3. **Does the canvas open by itself?** *Decided: yes, when a reply finishes
    with exactly one new document and the window is at least `lg` wide;
    never on a phone; with a setting to turn it off.*
@@ -354,9 +355,9 @@ Where the build goes beyond the text above, or settles a point it left open
 ### Phase 4: later
 
 Built: a comparison of two versions, editing HTML with a preview beside
-the source, and editing a CSV as a table (each below), and a cited knowledge
-file (see "A knowledge file cited by a reply" above). Not scheduled: writing
-an edit back into the sandbox workspace.
+the source, editing a CSV as a table and writing an edit back into the
+sandbox workspace (each below), and a cited knowledge file (see "A knowledge
+file cited by a reply" above). Nothing in Phase 4 is left unscheduled.
 
 #### Phase 4: what was built (editing HTML with a preview beside the source)
 
@@ -459,6 +460,37 @@ an edit back into the sandbox workspace.
   `DiffView`, which `/ui` reuses), wired through `Canvas.tsx` (mode
   `changes`) and `CanvasPanel.tsx`. `versionLabel` moved to `present.ts`
   so the selectors and the Versions menu word a version the same way.
+
+#### Phase 4: what was built (writing an edit back into the workspace)
+
+- **Save to workspace** (CNV-6): an item in the Copy menu (the actions menu
+  below `sm`), and a second button on the toast after a save, beside Attach
+  to next message. It writes the saved version shown (or the original, when
+  no edit exists) over the output's own file in the chat's sandbox, through
+  `POST /api/v1/sandbox/outputs/{id}/write-back` (`docs/guides/sandbox.md`,
+  "Writing an edit back"). It is offered only for a file the model wrote to
+  its workspace (a sandbox output) in a chat the signed-in user owns (not a
+  temporary chat, not an admin reading another's), while no reply is being
+  written, and not while editing. An upload (the mount is read-only), a
+  fenced block, a knowledge file and a temporary chat do not get it.
+- **Owner only; the server chooses.** The path is the output's recorded
+  `meta.sandbox_path` and the bytes are the stored version; the request
+  carries only `force`. An admin or a grantee cannot write into another
+  person's workspace.
+- **The `changed` 409.** The workspace file must be one this document held
+  (the original's or a saved version's bytes). Otherwise the server answers
+  `changed` and a dialog asks: "Replace the workspace file?", or
+  "Create the workspace file?" when the file is gone (`missing`).
+  Replace (or Create) repeats the request with `force`. A busy workspace (a
+  command is running) and any failure are toasts; nothing is lost.
+- **The model is not told.** There is no line in the system prompt: it sees
+  the edit the next time it reads the file, as the success toast says. A save
+  may start a stopped sandbox, bounded by a 20 s wait and the manager's
+  admission and slot rules.
+- **Where it lives.** `canvas/useWriteBack.tsx` (one request at a time and
+  the dialog), `writeBackOutput` in `lib/apis/sandbox`, the item and toast
+  action in `CanvasPanel.tsx`, and a `generating` flag in `CanvasContext`
+  that `ChatPage` provides. No migration.
 
 ## Risks and how the plan handles them
 

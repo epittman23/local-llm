@@ -165,7 +165,7 @@ describe('CsvEditView', () => {
 		renderWithClient(<Harness start={rows} />);
 		expect(screen.getByRole('button', { name: 'Add row' })).toBeDisabled();
 		expect(screen.getByText('A table has at most 500 rows.')).toBeInTheDocument();
-	});
+	}, 20_000); // 500 rows of fields take seconds to render under coverage on a busy machine
 
 	it('says what saving does to quoting and to short rows, once there is a change', () => {
 		renderWithClient(<Harness start={'a,b\n1\n'} rewrites />);
