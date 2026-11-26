@@ -29,6 +29,16 @@ describe('MarkdownView', () => {
 		expect(container.querySelector('li')).toHaveTextContent('one');
 	});
 
+	it('renders the first heading of a file that starts with a byte-order mark', async () => {
+		api.text.mockResolvedValue({ text: '\uFEFF# Title\n\nBody', truncated: false });
+		renderWithClient(
+			<MemoryRouter>
+				<MarkdownView doc={docOf(output('6', 'bom.md'))} />
+			</MemoryRouter>
+		);
+		expect(await screen.findByRole('heading', { level: 1, name: 'Title' })).toBeInTheDocument();
+	});
+
 	it('says when it is cut, and when it cannot be fetched', async () => {
 		api.text.mockResolvedValueOnce({ text: 'hello', truncated: true });
 		const { unmount } = renderWithClient(
