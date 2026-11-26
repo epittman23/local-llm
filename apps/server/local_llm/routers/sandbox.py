@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
+from contextlib import AsyncExitStack
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -17,23 +19,38 @@ from local_llm.sandbox.limits import HTML_MAX_BYTES
 from local_llm.sandbox.manager import (
     ListingBusy,
     SandboxManager,
+    SandboxRefused,
     WorkspaceBusy,
     WorkspaceChanged,
     WorkspaceNotFound,
 )
-from local_llm.sandbox.outputs import decode_html, is_sandbox_output, with_policy
+from local_llm.sandbox.outputs import (
+    WRITE_BACK_MAX_BYTES,
+    OutputChanged,
+    decode_html,
+    is_sandbox_output,
+    output_path,
+    with_policy,
+    write_back,
+)
 from local_llm.sandbox.telemetry import package_report
 from local_llm.sandbox.types import SandboxError, WorkspaceListing
+from local_llm.sandbox.workspace import WorkspaceError
 from local_llm.sandbox.workspaces import WorkspaceRecord
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
+from local_llm.utils.chat_id import is_saved_chat_id
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _HTML_TYPES = ('text/html', 'application/xhtml+xml')
+#: How long a write back waits for the chat's sandbox (the lock a running `bash` holds, or a start) before it
+#: answers 409 `busy`.
+WRITE_BACK_WAIT_S = 20.0
+_NOT_TEXT_TYPES = ('image/', 'audio/', 'video/', 'application/pdf')
 
 
 @router.get('/status')
@@ -113,6 +130,126 @@ async def get_sandbox_output_html(
             detail=f'The document is over the {HTML_MAX_BYTES // (1024 * 1024)} MiB limit for showing it',
         )
     return JSONResponse({'html': with_policy(decode_html(data))}, headers={'X-Content-Type-Options': 'nosniff'})
+
+
+class WriteBackForm(BaseModel):
+    """`force` replaces the workspace file although it changed since this output last held it; nothing else is read."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    force: bool = False
+
+
+def _read_version(path: str) -> bytes:
+    """The stored version's bytes, at most WRITE_BACK_MAX_BYTES plus one."""
+    with open(path, 'rb') as handle:
+        return handle.read(WRITE_BACK_MAX_BYTES + 1)
+
+
+@router.post('/outputs/{id}/write-back')
+async def write_back_sandbox_output(
+    request: Request,
+    id: str,
+    form_data: WriteBackForm,
+    user=Depends(get_verified_user),
+    db: AsyncSession = Depends(get_async_session),
+):
+    """Write the saved version `id` (or the output itself) over its own file in the chat's sandbox workspace.
+
+    Only the owner may: another user, an admin and a grantee get the same
+    404 as a missing file. `id` may be an output's root or one of its
+    versions; the path is the root's `meta.sandbox_path`, set by the server,
+    and the content is the stored version, never anything in the request.
+    The sandbox is started if it is stopped (the manager's admission and slot
+    rules apply). Unless `force`, the file in the workspace must still be the
+    one the output last held, else 409 `{"code": "changed"}`; a sandbox that
+    stays busy (a running `bash` holds it) for WRITE_BACK_WAIT_S is 409
+    `{"code": "busy"}`. Returns `{"path", "bytes"}`, the path relative to
+    /workspace. 404: not the owner's, not a sandbox output with a recorded
+    path, a temporary chat; 400: not UTF-8 text; 413: over 256 KiB; 503: the
+    sandbox could not write it (public text only).
+    """
+    not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
+    manager = _manager(request)
+    if manager is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='The sandbox is not running')
+    file = await Files.get_file_by_id(id, db=db)
+    if file is None or file.user_id != user.id:
+        raise not_found
+    root_id = (file.meta or {}).get('version_of') or file.id
+    root = file if root_id == file.id else await Files.get_file_by_id(root_id, db=db)
+    if root is None or root.user_id != user.id or not is_sandbox_output(root.meta) or not file.path:
+        raise not_found
+    meta = root.meta or {}
+    chat_id = meta.get('chat_id')
+    path = output_path(meta)
+    if path is None or type(chat_id) is not str or not is_saved_chat_id(chat_id):
+        raise not_found
+    not_text = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail='Only a text file can be saved to the workspace'
+    )
+    if str(meta.get('content_type') or '').startswith(_NOT_TEXT_TYPES):
+        raise not_text
+    local = await asyncio.to_thread(Storage.get_file, file.path)
+    if not await asyncio.to_thread(os.path.isfile, local):
+        raise not_found
+    data = await asyncio.to_thread(_read_version, local)
+    if len(data) > WRITE_BACK_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f'A file can be saved to the workspace up to {WRITE_BACK_MAX_BYTES // 1024} KiB',
+        )
+    try:
+        data.decode('utf-8')
+    except UnicodeDecodeError:
+        raise not_text from None
+    if not data or b'\0' in data:
+        raise not_text
+    try:
+        async with AsyncExitStack() as stack:
+            session = await asyncio.wait_for(
+                stack.enter_async_context(manager.session(chat_id, user)), WRITE_BACK_WAIT_S
+            )
+            await write_back(session, root, data, file.id, force=form_data.force)
+            await _mark_written_back(file.id, path, db)
+    except TimeoutError:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                'code': 'busy',
+                'detail': 'The workspace is busy. Try again when the reply has finished.',
+            },
+        )
+    except OutputChanged:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                'code': 'changed',
+                'detail': 'The file in the workspace changed after this version. Replace it anyway?',
+            },
+        )
+    except SandboxRefused:
+        raise not_found from None
+    except (SandboxError, WorkspaceError) as exc:
+        log.warning('could not write file %s back for user %s: %s', file.id, user.id, exc)
+        public = exc.public if isinstance(exc, SandboxError) else None
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=public or 'The file could not be written to the workspace',
+        ) from None
+    log.info('wrote file %s back into the workspace for user %s', file.id, user.id)
+    return {'path': path.removeprefix('/workspace/'), 'bytes': len(data)}
+
+
+async def _mark_written_back(file_id: str, path: str, db: AsyncSession) -> None:
+    """Record on the version row that it is the workspace file's content now, so the next listing of the outputs
+    sees a row with that hash as the file's last (outputs.chat_usage); the write stands when this fails."""
+    try:
+        await Files.update_file_metadata_by_id(
+            file_id, {'sandbox_path': path, 'written_back_ns': time.time_ns()}, db=db
+        )
+    except Exception:
+        log.warning('could not record that file %s was written back', file_id, exc_info=True)
 
 
 # The workspace cap and deletion dialog (owner decision Q15, T24). Every route acts only on the caller's own

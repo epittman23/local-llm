@@ -250,7 +250,9 @@ fork's pre-import history is kept read-only at
   lifespan uses to start and stop the manager; and `outputs.py`, which
   attaches the files a `bash` call leaves in `/workspace/outputs` to the
   message, renders PDF previews, and puts the policy in front of an HTML
-  output for `routers/sandbox.py`'s `/outputs/{id}/html`; and `runs.py`,
+  output for `routers/sandbox.py`'s `/outputs/{id}/html`, and writes a saved
+  version back over its file in the workspace (`write_back`, behind
+  `/outputs/{id}/write-back`); and `runs.py`,
   where the tag path's `<code_interpreter>` blocks and the Run endpoint's
   code are written, `/workspace/.runs/<n>.py`, before
   `tools/builtin.py`'s `run_code_in_sandbox` runs them; and
