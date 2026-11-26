@@ -1,9 +1,9 @@
 # Canvas: a document viewer and text editor beside the chat
 
-> **Status: Phases 1 and 2 built (Phase 1 2026-11-15, #1129; Phase 2
-> 2026-11-25, this PR): documents a model provides are cards in the reply
-> that open in the canvas, a viewer. Phase 3 (the text editor) is next;
-> Phase 4 is not scheduled.** The interface design is shown on
+> **Status: Phases 1 to 3 built (Phase 1 2026-11-15, #1129; Phase 2
+> 2026-11-25, #1159; Phase 3 2026-11-26): documents a model provides are
+> cards in the reply that open in the canvas, a viewer, and a text file can
+> be edited there and saved as a version. Phase 4 is not scheduled.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
 > implementation plan. The owner settled all five of its decisions on
@@ -262,7 +262,9 @@ Where the build goes beyond the text above, or settles a point it left open
 
 ### Phase 3: the canvas as a text editor
 
-- **C13.** Edit mode for Markdown, text and code. The owner's requirement
+C13 to C17 are built; "Phase 3: what was built" below says how.
+
+- **C13.** (built) Edit mode for Markdown, text and code. The owner's requirement
   (2026-11-14): the editor looks identical to the Source view and is
   highlighted as the chat's code blocks are. So it is not a separate editor
   component: Source and the editor are one code surface, highlighted by
@@ -277,19 +279,73 @@ Where the build goes beyond the text above, or settles a point it left open
   offered up to the 256 KiB the Source view fetches; a larger file is
   download only. CodeMirror, already a dependency, is the fallback if
   re-highlighting on each keystroke proves slow at that size.
-- **C14.** Backend, for decision 2's default: `POST
+- **C14.** (built) Backend, for decision 2's default: `POST
   /api/v1/files/{id}/versions` creating a new `File` row with
   `meta.version_of` and the same message link, under the same ownership check
   as the file routes; a migration only if `meta` cannot carry it (it can
   today, so none is expected). The frontend's file list groups versions under
   one document and shows "Version 2 of 2" with a way back.
-- **C15.** The save bar (FRM-3): Unsaved changes, Discard changes, Save; a
+- **C15.** (built) The save bar (FRM-3): Unsaved changes, Discard changes, Save; a
   guard on closing the canvas, switching document or leaving the chat.
-- **C16.** "Attach to next message": puts the saved version in the message
+- **C16.** (built) "Attach to next message": puts the saved version in the message
   box's attachments.
-- **C17.** Tests: pytest for the route (ownership, a version of a version, a
-  file from another chat is refused); Vitest for the dirty state and the
-  guard; a real-backend run.
+- **C17.** (built) Tests: pytest for the route (ownership or a write grant,
+  a version of a version, a stranger or a read-only grantee refused with 404,
+  a file that is not text, an oversize text, an empty one); Vitest for the
+  dirty state and the guard; a real-backend run. (The plan once said "a file
+  from another chat is refused"; the rule is ownership or a grant on the
+  file, not the chat.)
+
+#### Phase 3: what was built
+
+Where the build goes beyond the text above, or settles a point it left open
+(the owner's orchestrator settled these on 2026-11-26):
+
+- **Versions are not in `message.files`.** `pathFiles()` sends every
+  non-image file of every user message to the model on each turn, so a
+  version added there would reach the model beside the original without a
+  click, against decision 2. They live on the server, as `File` rows with
+  `meta.version_of` (the original's id) and `meta.version`; the frontend
+  finds them with `GET /api/v1/files/{id}/versions` (oldest first, the
+  original is version 1). `documents.ts` is unchanged.
+- **The document keeps the original's id**, so `?canvas=<id>` is the same
+  before and after a save. The version being viewed is local state, not in
+  the URL: a reload lands on the latest. A version is owned by the
+  original's owner whoever saved it (`meta.edited_by` says who), is linked to
+  the original's chat and message, and keeps its `meta.source` and
+  `meta.chat_id`. Deleting the original deletes its versions.
+- **Who can edit.** Markdown, text and code files that are sandbox outputs or
+  uploads, up to 256 KiB, in a saved chat, whose text was fetched whole and
+  is UTF-8 (`canEditDocument` and `uneditableText` in `canvas/present.ts`). A
+  fenced code block is not editable: it is message text, not a file, and
+  editing a reply is already the message's own Edit. A file cut at the cap, or
+  with U+FFFD in it, says to download it to change it. CRLF is kept: the
+  editor works in LF and the lines are put back on save. HTML, CSV, images,
+  PDFs and downloads are Phase 4.
+- **The save** is `POST /api/v1/files/{id}/versions` with `{content}`; an
+  empty text is refused (the storage layer cannot write an empty file), so
+  Save is off with "A document can't be saved empty". The server then
+  processes the text as an upload is (`data.content` and the vector
+  collection) so that an attached version is readable; if that fails the save
+  stands and `data.status` is `failed`. No migration: `File.meta` carries it.
+- **Attach to next message** puts the version on the composer as a file with
+  `context: 'full'`, so the model gets the whole text, not retrieved parts. It
+  is in the save toast and in the Copy menu (for a document with more than one
+  version, so an older one can be attached on purpose). It refuses with
+  "This version could not be prepared for the model" when `data.status` is
+  `failed`, and in a temporary chat or over the file limit says why.
+- **Where it lives.** `lib/apis/files/versions.ts`; `canvas/useDocumentVersions.ts`,
+  `useDocumentEdit.ts` (the draft, its dirty state by value, the save);
+  `CanvasPanel` owns the state, since it must guard the header's own actions:
+  one `useUnsavedChanges` asks before Close, Escape, another document, Back,
+  leaving the chat, a reload, the Preview switch and a version switch.
+  `CanvasContext.attach` is provided by `ChatPage`.
+- **Escape.** The editor takes Escape on the textarea itself, natively,
+  because the panel's listener sits on an ancestor and runs before React's
+  root handler; `data-escape-kept` tells the sheet's own (Radix) listener.
+- **Known limit.** A router keeps one blocker. The Settings dialog also
+  registers one while open, so opening Settings over a dirty canvas swaps it;
+  leaving then does not ask (a reload still does).
 
 ### Phase 4: later, not scheduled
 

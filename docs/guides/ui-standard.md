@@ -925,8 +925,8 @@ settled, neither exception is part of the standard.
 The panel beside a chat that shows a document: a file the model produced, a
 page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
 decided. Phase 1, the side-panel shell (`components/layout/SidePanel.tsx`),
-and Phase 2, the viewer (`routes/chat/canvas/`), are built; editing (Phase
-3, CNV-6) is not, and `/ui` mocks it.** Its plan is
+Phase 2, the viewer (`routes/chat/canvas/`), and Phase 3, editing (CNV-6),
+are built; `/ui` shows the editor's design.** Its plan is
 [docs/plans/canvas.md](../plans/canvas.md).
 
 **CNV-1. What a model provides is a card in the reply and a document in the
@@ -977,21 +977,29 @@ script, style or font does not arrive, and a form, `alert`, `confirm` or
 `prompt` does nothing.
 
 **CNV-6. Editing is a mode of Source and saves on request** (FRM-3): Edit
-document, then a bar with "Unsaved changes", Discard changes and Save
-document. The editor is the Source view with a caret: the same face, size,
+document (offered for Markdown, text and code files up to 256 KiB whose
+text was fetched whole and is UTF-8; not for a fenced block), then a bar
+with "Unsaved changes", Discard changes and Save document. The editor is the Source view with a caret: the same face, size,
 line numbers and highlighting, updated as you type, so nothing moves or
 changes colour when editing starts. Its keys are built in `CodeSurface`:
 Tab indents (two spaces, a tab for Go and Makefile) and Shift+Tab outdents,
 on the caret's line or every selected line, only once something has been
 typed, so a keyboard user who has not typed still Tabs out; Escape, then Tab,
 always leaves, and that Escape does not close the canvas. The sentence 'Tab
-indents. Press Esc, then Tab, to leave the editor.' is tied to the field with
-`aria-describedby`, and Ctrl or Cmd+S saves. The save flow, bar and version
-history that use these keys come with the rest of canvas Phase 3 and are not
-built yet. It has no focus outline: the caret, and
-the bar that appears below it, show that it has focus. Entering the editor moves focus into it; saving or discarding
-moves focus back to the document's heading. Closing the canvas, switching
-document or leaving the chat with unsaved changes asks first.
+indents. Press Esc, then Tab, to leave the editor.' is shown under the
+editor and tied to the field with `aria-describedby`, and Ctrl or Cmd+S
+saves. It has no focus outline: the caret, and the bar that appears below
+it, show that it has focus. Entering the editor moves focus into it; saving
+or discarding moves focus back to the document's heading. Closing the
+canvas, Escape, switching document, the Preview switch, another version,
+leaving the chat, Back and a reload with unsaved changes ask first
+('Discard changes?', FRM-3). Save stores a new version of the file and the
+original stays: the heading then reads "Version 2 of 2", a Versions menu
+lists "Version 1 (original)" and "Version 2, 14:05", and an older version is
+read-only, with "You are viewing version 1 of 2." and "Back to version 2".
+The model sees an edit only when it is attached: the save's toast, and the
+Copy menu, offer "Attach to next message". An empty text cannot be saved,
+and the bar says why.
 
 **CNV-7. The open document is in the address** (NAV-1). A document that is no
 longer in the chat says so in the canvas (NAV-3).

@@ -503,7 +503,10 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   code), `ChatControls`, `canvas/` (the canvas, CNV: `Canvas.tsx` and `CanvasPanel.tsx` the
   panel, `DocumentCard.tsx` the reply's cards, `useCanvas.ts` the `?canvas=`
   state and history, `useCanvasAutoOpen.ts`, and `views/`, one renderer per
-  kind, with `SandboxedHtmlFrame.tsx`, the scripts-only frame), `ChatMenu`,
+  kind, with `SandboxedHtmlFrame.tsx`, the scripts-only frame; the editor:
+  `useDocumentEdit.ts` the draft and the save, `useDocumentVersions.ts` a
+  document's saved versions, and `present.ts`'s `canEditDocument` and
+  `withVersion`), `ChatMenu`,
   `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,
   `DropOverlay` (the drop target for files), `TemporaryNotice` (the
   temporary-chat switch and chip), `ErrorReply` (a failed reply, FBK-4),
@@ -519,7 +522,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (`useScrollEdges.ts` shades the hidden edge of a code listing or an
   equation that scrolls).
   `src/components/chat/CodeSurface.tsx` is the one highlighted, line-numbered
-  code surface (the canvas's Source view; `/ui` imports it).
+  code surface: the canvas's Source view and, with a transparent textarea over
+  it, its editor (`/ui` imports it); `src/lib/markdown/highlight.ts` is the
+  one highlight.js instance it and the chat's code blocks share.
   `src/components/chat/ReplySteps.tsx` shows a reply that has structured
   output as it happened: its texts and, between them, each step (thoughts,
   tool calls with their input and result), built by
@@ -530,7 +535,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
-  never had a frontend.
+  never had a frontend, and `files/versions.ts`, typed, for a file's saved
+  versions (`/files/{id}/versions`, the canvas editor's save).
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
   **`socket/`**, **`i18n/`** (i18next setup and the one shipped locale, `en-US`),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
@@ -558,9 +564,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `handle` and title format (LAY-5), `focusSource.ts` marks keyboard focus
   (A11Y-1) and `returnFocus.ts` returns focus to what opened a layer (NAV-4). **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of
-  the canvas's editing phase (`docs/plans/canvas.md`, Phase 3, not built: the
-  viewer is real, in `routes/chat/canvas/`), beside a demo of the real
-  `SidePanel`.
+  the canvas's editor (`docs/plans/canvas.md`, Phase 3; the real one is in
+  `routes/chat/canvas/`), beside a demo of the real `SidePanel`.
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
   `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a
