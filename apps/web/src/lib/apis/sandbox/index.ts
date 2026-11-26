@@ -104,7 +104,8 @@ export const getSandboxOutputText = async (
 		at += part.length;
 	}
 	// `stream: true` holds back a multi-byte character the cap cut in two instead of showing U+FFFD for it.
-	return { text: new TextDecoder('utf-8').decode(bytes, { stream: truncated }), truncated };
+	// `ignoreBOM` keeps a leading byte-order mark in the text, so an edited file saves with it as it came.
+	return { text: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes, { stream: truncated }), truncated };
 };
 
 // The workspace cap and deletion dialog (owner decision Q15). Every route acts

@@ -425,11 +425,13 @@ an edit back into the sandbox workspace.
   with a space. The line ending and the final newline are kept; a first save
   normalises quoting ("Saving normalises quoting.") and pads short rows with
   empty cells. A cell is only ever a field's value, never markup.
-- **Known gap.** The text is read with `TextDecoder`, which drops a leading
-  byte order mark, so a file that had one is saved without it. The model
-  (`parseCsvTable`, `stringifyCsvTable`) keeps a BOM; the shared fetch is
-  unchanged. No backend change and no migration; a pytest case pins that the
-  version route stores a BOM, CRLF and a quoted line break byte for byte.
+- **A byte order mark is kept.** The shared text fetch decodes with
+  `ignoreBOM`, so a leading BOM stays in the text and an edited file (as a
+  table or in Source) saves with it; before, `TextDecoder` dropped it and a
+  Source edit lost it. The table view strips it for display only. The model
+  (`parseCsvTable`, `stringifyCsvTable`) keeps it. No backend change and no
+  migration; a pytest case pins that the version route stores a BOM, CRLF and
+  a quoted line break byte for byte.
 
 #### Phase 4: what was built (a comparison of two versions)
 

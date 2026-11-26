@@ -41,11 +41,11 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     up, Alt+Enter a line break in the cell, Ctrl or Cmd+S saves. Rows and
     columns are added and removed with named buttons; nothing asks first, as
     the draft is not saved until Save and Discard changes undoes it.
-  - **A known gap, not fixed here.** The canvas reads text with
-    `TextDecoder`, which drops a leading byte order mark, so a CSV that had
-    one is saved without it, as a text file edited in Source already was. The
-    model keeps a BOM and a pytest case pins that the version route stores
-    one byte for byte; the shared fetch is unchanged. No migration.
+  - **A byte order mark survives an edit.** The canvas's text fetch used to
+    drop a leading BOM, so a file edited in Source lost it on save; it now
+    decodes with `ignoreBOM`, and the table and Source editors both save it
+    back. A pytest case pins that the version route stores it byte for byte.
+    No migration.
 - **2026-11-26** (latest): **Canvas Phase 4 (e) built: a cited knowledge file
   in the canvas.** The citation dialog's Open in canvas shows a knowledge
   file a reply cited, read-only, beside the passages cited from it

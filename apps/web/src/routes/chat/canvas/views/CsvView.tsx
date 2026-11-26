@@ -11,7 +11,10 @@ export function CsvView({ doc }: { doc: CanvasDocument }) {
 	const text = useDocumentText(doc, CSV_MAX_BYTES);
 	if (text.isError) return <Note>Could not show this file: {errorMessage(text.error)}</Note>;
 	if (!text.data) return <Loading />;
-	const parsed = parseCsvRows(text.data.text, CSV_MAX_ROWS, { maxCols: CSV_MAX_COLS, maxCell: CSV_MAX_CELL });
+	const parsed = parseCsvRows(text.data.text.replace(/^\uFEFF/, ''), CSV_MAX_ROWS, {
+		maxCols: CSV_MAX_COLS,
+		maxCell: CSV_MAX_CELL
+	});
 	// When the fetch stopped at the cap inside the rows shown, the last one is cut short: leave it out.
 	const rows = text.data.truncated && !parsed.more ? parsed.rows.slice(0, -1) : parsed.rows;
 	// A row's or cell's place is its identity: the table is drawn once per file and never reordered.

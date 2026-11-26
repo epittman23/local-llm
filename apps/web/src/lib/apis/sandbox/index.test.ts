@@ -51,6 +51,11 @@ describe('getSandboxOutputHtml', () => {
 });
 
 describe('getSandboxOutputText', () => {
+	it('keeps a leading byte-order mark, so an edited file saves with it', async () => {
+		stubFetch(() => new Response(new Uint8Array([0xef, 0xbb, 0xbf, 0x61, 0x2c, 0x62, 0x0a])));
+		expect(await getSandboxOutputText('tok', 'f', 100)).toEqual({ text: '\uFEFFa,b\n', truncated: false });
+	});
+
 	const enc = new TextEncoder();
 
 	it('reads a file under the cap whole', async () => {
