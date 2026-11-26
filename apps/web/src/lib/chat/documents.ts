@@ -18,10 +18,13 @@ export type DocumentKind = 'html' | 'markdown' | 'code' | 'csv' | 'image' | 'pdf
 export type DocumentSource =
 	| { type: 'output'; fileId: string; previews: { id: string; page: number }[] } // sandbox output
 	| { type: 'upload'; fileId: string }
-	| { type: 'block'; text: string; language: string; closed: boolean }; // fenced block, text already in the message
+	| { type: 'block'; text: string; language: string; closed: boolean } // fenced block, text already in the message
+	// A file of a knowledge base a reply cited: read-only, outside `chatDocuments`, opened as `file:<uuid>`.
+	// `page` is the first cited page, from 1; `passages` are the excerpts the retrieval gave that reply.
+	| { type: 'knowledge'; fileId: string; page?: number; passages: string[] };
 
 export type CanvasDocument = {
-	/** output/upload: the file UUID. block: `block:<messageId>:<n>`. */
+	/** output/upload: the file UUID. block: `block:<messageId>:<n>`. knowledge: `file:<uuid>`. */
 	id: string;
 	/** output/upload: ChatFile.name (server-cleaned), never meta.sandbox_path. block: its <title>, else a generic name. */
 	name: string;
@@ -331,3 +334,67 @@ export function chatDocuments(messages: Message[]): CanvasDocument[] {
 /** Whether a document counts toward opening the canvas by itself: outputs and html or svg blocks, not uploads or code. */
 export const countsForAutoOpen = (d: CanvasDocument) =>
 	d.source.type === 'output' || (d.source.type === 'block' && d.kind === 'html');
+
+/** The address form of a knowledge file (`?canvas=file:<uuid>`); the id inside is a UUID, as for every file. */
+export const KNOWLEDGE_ID = /^file:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+/**
+ * The file a retrieved passage came from, or null when it is not a knowledge file: a web page, a note
+ * and a chat (whose metadata has a `file_id` that is theirs, and no `source`) are not.
+ */
+export function knowledgeFileId(metadata: unknown): string | null {
+	if (!isObject(metadata)) return null;
+	const id = str(metadata.file_id);
+	const source = str(metadata.source);
+	if (id === undefined || !UUID.test(id) || !source || /^https?:\/\//i.test(source)) return null;
+	return id;
+}
+
+/**
+ * The knowledge file `fileId` as a document, when a message of the branch cited it, else null: the
+ * address alone never makes a file openable (the server still checks access on every fetch). A file
+ * that is already one of the chat's own documents (an upload, an output) is that document. The
+ * passages are those of the first reply that cited it.
+ */
+export function knowledgeDocument(
+	messages: Message[],
+	fileId: string,
+	documents: CanvasDocument[]
+): CanvasDocument | null {
+	if (!UUID.test(fileId)) return null;
+	const own = documents.find((d) => d.id === fileId);
+	for (const m of Array.isArray(messages) ? messages : []) {
+		if (!isObject(m) || !Array.isArray(m.sources)) continue;
+		const passages: string[] = [];
+		let name: string | undefined;
+		let type: string | undefined;
+		let page: number | undefined;
+		for (const source of m.sources) {
+			if (!isObject(source) || !Array.isArray(source.document) || !Array.isArray(source.metadata)) continue;
+			source.document.forEach((passage, i) => {
+				const metadata: unknown = source.metadata?.[i];
+				if (knowledgeFileId(metadata) !== fileId || !isObject(metadata)) return;
+				name ??= str(metadata.name) ?? str(metadata.source);
+				type ??= str(metadata.content_type);
+				const at = metadata.page;
+				if (page === undefined && typeof at === 'number' && Number.isInteger(at) && at >= 0) page = at + 1;
+				if (typeof passage === 'string' && passage) passages.push(passage);
+			});
+		}
+		if (name === undefined) continue;
+		if (own) return own;
+		const file: ChatFile = { name, ...(type ? { content_type: type } : {}) };
+		const { kind, language } = documentKind(file, 'upload');
+		const doc: CanvasDocument = {
+			id: `file:${fileId}`,
+			name,
+			kind,
+			bytes: null,
+			messageId: m.id,
+			source: { type: 'knowledge', fileId, ...(page === undefined ? {} : { page }), passages }
+		};
+		if (language) doc.language = language;
+		return doc;
+	}
+	return null;
+}

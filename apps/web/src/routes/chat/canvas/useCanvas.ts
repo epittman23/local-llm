@@ -1,10 +1,10 @@
-import { useCallback, useDeferredValue, useMemo } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { type CanvasDocument, chatDocuments } from '@/lib/chat/documents';
+import { type CanvasDocument, chatDocuments, KNOWLEDGE_ID, knowledgeDocument } from '@/lib/chat/documents';
 import type { Message } from '@/lib/chat/history';
 
 export type CanvasState = {
-	/** Every document of the branch, oldest first. */
+	/** Every document of the branch, oldest first. A knowledge file a reply cited is not one of them: it opens by its address. */
 	documents: CanvasDocument[];
 	/** The `?canvas=` parameter: the open document's id. */
 	openId: string | null;
@@ -18,7 +18,9 @@ export type CanvasState = {
 
 /**
  * The canvas's state, kept in the address (CNV-7): `?canvas=<id>`. It reads
- * and writes that one parameter and leaves the page's others alone. `messages`
+ * and writes that one parameter and leaves the page's others alone. `file:<uuid>`
+ * is a knowledge file the branch cites (read-only, outside the list); any other
+ * `file:` id is gone, and the server checks access when the file is fetched. `messages`
  * is the branch shown; `loading` is whether the chat is still loading, since
  * until then a missing document may just not have arrived.
  */
@@ -28,7 +30,13 @@ export function useCanvas(messages: Message[], loading: boolean): CanvasState {
 	// Lexing every message for its blocks is not urgent: the reply paints first.
 	const deferred = useDeferredValue(messages);
 	const documents = useMemo(() => chatDocuments(deferred), [deferred]);
-	const doc = useMemo(() => (openId ? (documents.find((d) => d.id === openId) ?? null) : null), [documents, openId]);
+	const doc = useMemo(() => {
+		if (!openId) return null;
+		const known = documents.find((d) => d.id === openId);
+		if (known) return known;
+		const fileId = KNOWLEDGE_ID.exec(openId)?.[1];
+		return fileId ? knowledgeDocument(deferred, fileId, documents) : null;
+	}, [documents, deferred, openId]);
 
 	const open = useCallback(
 		(id: string, opts?: { replace?: boolean }) =>
@@ -42,6 +50,11 @@ export function useCanvas(messages: Message[], loading: boolean): CanvasState {
 			),
 		[setParams]
 	);
+	// A cited file that is also one of the chat's own documents opens as that document: the address moves to its
+	// own id (replacing the entry), so the open card and the file menu agree with it.
+	useEffect(() => {
+		if (doc && openId && doc.id !== openId) open(doc.id, { replace: true });
+	}, [doc, openId, open]);
 	const close = useCallback(
 		() =>
 			setParams((prev) => {

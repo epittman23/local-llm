@@ -1,4 +1,4 @@
-import { DownloadIcon } from 'lucide-react';
+import { DownloadIcon, ExternalLinkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { contentUrl, fileIdOf, formatSize, kindIcon } from '../present';
@@ -17,6 +17,14 @@ export function DownloadView({ doc }: { doc: CanvasDocument }) {
 				</p>
 				{size ? <p className="text-dense text-foreground-muted">{size}</p> : null}
 			</div>
+			{id !== null && doc.source.type === 'knowledge' && doc.kind === 'pdf' && doc.source.page !== undefined && (
+				<Button asChild variant="outline">
+					<a href={`${contentUrl(id)}#page=${doc.source.page}`} target="_blank" rel="noopener noreferrer">
+						<ExternalLinkIcon aria-hidden />
+						Open at page {doc.source.page}
+					</a>
+				</Button>
+			)}
 			{id !== null && (
 				<Button asChild variant="outline">
 					<a href={contentUrl(id, true)} download={doc.name} aria-label={`Download ${doc.name}`}>

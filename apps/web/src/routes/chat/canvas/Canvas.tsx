@@ -6,6 +6,7 @@ import { DownloadView } from './views/DownloadView';
 import { HtmlEditView } from './views/HtmlEditView';
 import { HtmlView } from './views/HtmlView';
 import { ImageView } from './views/ImageView';
+import { KnowledgeFrame } from './views/KnowledgeFrame';
 import { MarkdownView } from './views/MarkdownView';
 import { PdfView } from './views/PdfView';
 import { SourceView, type SourceEdit } from './views/SourceView';
@@ -17,14 +18,14 @@ export type ChangesOf = { versions: FileVersion[]; shownIndex: number };
 
 /**
  * CNV-4: which views a document has. A page the model wrote or drew has both;
- * an uploaded page has only its source (it is never framed). Markdown and CSV
+ * an uploaded page or a knowledge file's has only its source (it is never framed). Markdown and CSV
  * have both. Code has only its source. An image, a PDF and anything else have
  * only their one view.
  */
 export function viewsOf(doc: CanvasDocument): { preview: boolean; source: boolean } {
 	switch (doc.kind) {
 		case 'html':
-			return { preview: doc.source.type !== 'upload', source: true };
+			return { preview: doc.source.type !== 'upload' && doc.source.type !== 'knowledge', source: true };
 		case 'markdown':
 		case 'csv':
 			return { preview: true, source: true };
@@ -87,5 +88,11 @@ export function Canvas({
 				view = <DownloadView doc={doc} />;
 		}
 	}
+	if (doc.source.type === 'knowledge')
+		view = (
+			<KnowledgeFrame doc={doc} preview={showing === 'preview'}>
+				{view}
+			</KnowledgeFrame>
+		);
 	return <div className="bg-background min-h-0 flex-1">{view}</div>;
 }

@@ -3,7 +3,7 @@ import { act } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router';
 import { describe, expect, it } from 'vitest';
 import type { Message } from '@/lib/chat/history';
-import { output } from './testing';
+import { id, output } from './testing';
 import { useCanvas } from './useCanvas';
 
 const reply: Message = {
@@ -66,6 +66,39 @@ describe('useCanvas', () => {
 		expect(loaded.gone).toBe(true);
 		expect(loaded.doc).toBeNull();
 		expect(loaded.openId).toBe('block:zzz:0');
+	});
+
+	it('opens a knowledge file the branch cites by file:<uuid>, outside the document list, and is gone for one it does not', () => {
+		const file = id('77');
+		const cites = {
+			...reply,
+			id: 'a2',
+			sources: [{ document: ['a passage'], metadata: [{ file_id: file, name: 'notes.md', source: 'notes.md' }] }]
+		} as Message;
+		const cited = setup(`/c/x?canvas=file:${file}`, [reply, cites]).result.current.canvas;
+		expect(cited.doc?.source.type).toBe('knowledge');
+		expect(cited.doc?.name).toBe('notes.md');
+		expect(cited.gone).toBe(false);
+		expect(cited.documents.map((d) => d.id)).toEqual([docId]);
+		for (const forged of [`file:${id('78')}`, 'file:not-a-uuid', `file:${file}/x`]) {
+			const gone = setup(`/c/x?canvas=${forged}`, [reply, cites]).result.current.canvas;
+			expect(gone.doc).toBeNull();
+			expect(gone.gone).toBe(true);
+		}
+		expect(setup(`/c/x?canvas=file:${file}`, [reply]).result.current.canvas.gone).toBe(true);
+		expect(setup(`/c/x?canvas=file:${file}`, [], true).result.current.canvas.gone).toBe(false);
+	});
+
+	it('moves file:<uuid> to the document id when the cited file is one of the chat’s own documents', () => {
+		const cites = {
+			...reply,
+			id: 'a3',
+			sources: [{ document: ['a passage'], metadata: [{ file_id: docId, name: 'report.html', source: 'report.html' }] }]
+		} as Message;
+		const { result } = setup(`/c/x?canvas=file:${docId}`, [reply, cites]);
+		expect(result.current.canvas.openId).toBe(docId);
+		expect(result.current.canvas.doc?.id).toBe(docId);
+		expect(result.current.location.search).toBe(`?canvas=${docId}`);
 	});
 
 	it('pushes a history entry on open, so Back closes it; an auto-open replaces, so Back leaves the chat', () => {

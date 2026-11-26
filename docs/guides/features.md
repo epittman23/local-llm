@@ -120,7 +120,10 @@ The page at `/` (a saved chat at `/c/<id>`, a new chat in a folder at
   or Ctrl or Cmd+Enter, runs the draft in the sandboxed frame; "Update as I
   type" is opt-in); an uploaded page is edited as source only, and a fenced
   `html` or `svg` block offers Try changes, a draft that is never saved. CSV
-  and other fenced code blocks are not editable (docs/plans/canvas.md).
+  and other fenced code blocks are not editable (docs/plans/canvas.md). A
+  knowledge file a reply cites opens from the citation dialog's Open in canvas
+  (`?canvas=file:<id>`): read-only, with the passages cited from it above its
+  view, HTML as source only, and one Note when you can no longer read it.
 - **Organising.** Folders, pins, archive, temporary chats
   (`?temporary-chat=true`, nothing saved) and read-only share links at
   `/s/<share-id>`.

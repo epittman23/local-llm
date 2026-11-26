@@ -98,7 +98,7 @@ The interface is specified by CNV-1 to CNV-9 in the standard and shown on
 | A fenced `html` or `svg` code block in a reply | Shown as code, with a Preview button | A card in place of the block; Source is in the canvas. See open decision 1 for the threshold |
 | Any other fenced code block | Shown inline | Unchanged: stays inline. A long one gets "Open in canvas" in its header |
 | A file the owner uploaded | A chip | The chip opens it in the canvas |
-| A knowledge file cited by a reply | The citation dialog | Unchanged in this plan |
+| A knowledge file cited by a reply | The citation dialog | Built (Phase 4): the dialog's Open in canvas opens it read-only as `?canvas=file:<id>`, outside this list, with the cited passages above it |
 
 While a reply is still streaming, an `html` block's card reads "Writing…"
 and the canvas, if open on it, shows Source filling in; Preview becomes

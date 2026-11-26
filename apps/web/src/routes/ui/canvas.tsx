@@ -47,6 +47,8 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { withHtmlPolicy } from '@/lib/chat/htmlPolicy';
 import { DiffView } from '@/routes/chat/canvas/views/ChangesView';
+import { Note } from '@/routes/chat/canvas/views/parts';
+import { PassagesNote } from '@/routes/chat/canvas/views/PassagesNote';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Example, Section } from './parts';
 
@@ -634,6 +636,17 @@ export function CanvasSection() {
 						</AlertDialogFooter>
 					</AlertDialogContent>
 				</AlertDialog>
+			</Example>
+			<Example
+				title="A knowledge file a reply cites"
+				note="Read-only, opened from Open in canvas in a citation (the address is ?canvas=file:<id>) and not part of the file list. The passages the reply drew from it are text above its own view; a file the server refuses is the one Note."
+			>
+				<div className="border-border bg-background flex h-[16rem] max-w-xl flex-col overflow-hidden rounded-panel border">
+					<PassagesNote
+						passages={['The standard error of the mean is the standard deviation divided by the square root of n.']}
+					/>
+					<Note>You can’t open this file. It may have been removed, or you may no longer have access.</Note>
+				</div>
 			</Example>
 			<Example
 				title="The side panel"

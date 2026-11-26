@@ -2,6 +2,8 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import saveAs from 'file-saver';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CanvasDocument } from '@/lib/chat/documents';
+import { knowledgeDocument } from '@/lib/chat/documents';
+import type { Message } from '@/lib/chat/history';
 import { CanvasPanel } from './CanvasPanel';
 import { blockDoc, content, docOf, id, output, renderWithRouter, upload } from './testing';
 import type { CanvasState } from './useCanvas';
@@ -238,5 +240,88 @@ describe('CanvasPanel states', () => {
 		renderWithRouter(<CanvasPanel canvas={state(docOf(output('a', 'plot.png')))} focusOnOpen={false} />);
 		expect(document.activeElement).toBe(field);
 		field.remove();
+	});
+});
+
+describe('CanvasPanel, a knowledge file', () => {
+	const file = id('77');
+	const knowledge = (name: string, extra: Record<string, unknown> = {}, passages = ['The cited passage.']) => {
+		const reply = {
+			id: 'a1',
+			parentId: null,
+			childrenIds: [],
+			role: 'assistant',
+			content: '',
+			done: true,
+			sources: [
+				{
+					document: passages,
+					metadata: passages.map(() => ({ file_id: file, name, source: name, ...extra }))
+				}
+			]
+		} as Message;
+		return knowledgeDocument([reply], file, []) as CanvasDocument;
+	};
+	const noActions = () => {
+		expect(screen.queryByRole('button', { name: /Edit document|Try changes/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Version/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Reload the page' })).toBeNull();
+	};
+
+	it('is read-only: no Edit, no versions, no Reload, and says where it is from; its passages are text above it', async () => {
+		renderWithRouter(panel(state(knowledge('notes.md', {}, ['<img src=x onerror=alert(1)> passage']))));
+		expect(screen.getByRole('heading', { name: 'notes.md Markdown, from a knowledge source' })).toBeInTheDocument();
+		expect(await screen.findByText(/passage/, { selector: 'div' })).toBeInTheDocument();
+		expect(screen.getByRole('heading', { name: 'Cited in this reply' })).toBeInTheDocument();
+		expect(document.querySelector('img[src="x"]')).toBeNull();
+		expect(screen.getByText('<img src=x onerror=alert(1)> passage')).toBeInTheDocument();
+		noActions();
+		expect(api.text).toHaveBeenCalledWith('', file, 256 * 1024, expect.any(AbortSignal));
+		const menu = await openMenu('Copy');
+		expect(within(menu).getByRole('menuitem', { name: 'Download' })).toHaveAttribute('href', content('77', true));
+		expect(within(menu).queryByRole('menuitem', { name: 'Attach to next message' })).toBeNull();
+	});
+
+	it('shows two cited passages and the rest on request', () => {
+		renderWithRouter(panel(state(knowledge('notes.md', {}, ['one', 'two', 'three', 'three']))));
+		expect(screen.getByText('two')).toBeInTheDocument();
+		expect(screen.queryByText('three')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Show 1 more' }));
+		expect(screen.getByText('three')).toBeInTheDocument();
+	});
+
+	it('shows an html file as source only: no frame, no Preview, no sandbox route', async () => {
+		renderWithRouter(panel(state(knowledge('page.html'))));
+		expect(await screen.findByText(/source text/)).toBeInTheDocument();
+		expect(document.querySelector('iframe')).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+		expect(api.html).not.toHaveBeenCalled();
+		noActions();
+	});
+
+	it('offers Open at page N for a PDF, and Download', () => {
+		renderWithRouter(panel(state(knowledge('paper.pdf', { page: 4 }))));
+		expect(screen.getByRole('link', { name: 'Open at page 5' })).toHaveAttribute('href', `${content('77')}#page=5`);
+		expect(screen.getAllByRole('link', { name: /Download/ })[0]).toHaveAttribute('href', content('77', true));
+	});
+
+	it('shows an image through the content route', () => {
+		renderWithRouter(panel(state(knowledge('fig.png'))));
+		expect(screen.getByRole('img', { name: 'fig.png' })).toHaveAttribute('src', content('77'));
+	});
+
+	it('says the file cannot be opened when the server answers not found, and shows no data', async () => {
+		api.text.mockRejectedValue({ detail: "We could not find what you're looking for :/" });
+		renderWithRouter(panel(state(knowledge('notes.md'))));
+		expect(
+			await screen.findByText('You can’t open this file. It may have been removed, or you may no longer have access.')
+		).toBeInTheDocument();
+		expect(screen.queryByText('source text')).toBeNull();
+	});
+
+	it('says what failed for any other error', async () => {
+		api.text.mockRejectedValue({ detail: 'Database is locked' });
+		renderWithRouter(panel(state(knowledge('notes.md'))));
+		expect(await screen.findByText(/Could not show this file: Database is locked/)).toBeInTheDocument();
 	});
 });
