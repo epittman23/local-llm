@@ -25,9 +25,20 @@ that applies it.
 | `serving-change` | any edit to `benchmarks/serving/` or a profile | every place a launch-flag change touches, so `config_id` stays right |
 | `ui-standard` | any change to what a page looks like or how it behaves | checking it against `docs/guides/ui-standard.md`: dark first, two widths, keyboard, the four states, the words; keeping the document, the tokens and `/ui` in step |
 | `reindex` | after a pull, checkout or merge, or when graph answers look stale | rebuilding the codebase-memory-mcp index, `full` vs `fast`, checking it against `grep` |
+| `workflow` | starting a change, opening or watching a PR, briefing a subagent, verifying on a real backend, planning an unattended run | the order of work from issue to merged PR, PR shape, the gate stop rule, subagent briefs, real-backend checks, the owner's stack, unattended-run pacing (added 2026-11-26) |
 
 Claude Code offers them automatically when a task matches their
 description, and `/docs-sync` (and so on) runs one by name.
+
+## Throwaway stack (`scripts/throwaway-stack/`)
+
+Added 2026-11-26. Scripts for checking a change against a real backend
+without touching the owner's stack: `up.sh` (throwaway pgvector Postgres and
+Redis containers on `:55440` and `:56380`), `stub.sh` (an OpenAI-compatible
+stub model, including the `bash` tool-call path for sandbox outputs),
+`backend.sh` (a backend without `--reload` on a port you choose) and
+`down.sh`. The `workflow` skill says when to use them; the README beside
+them has the rules (never the owner's ports, data or containers).
 
 ## Reviewer agent (`.claude/agents/reviewer.md`)
 

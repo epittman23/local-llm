@@ -20,7 +20,7 @@ local-llm/
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
 ├── .git-blame-ignore-revs     bulk formatting commits that `git blame` skips (GitHub's blame reads it)
 ├── .gitignore                 what stays untracked (see "Local/generated" below)
-├── .claude/                   agent skills, the reviewer subagent and project settings (docs/guides/agent-tooling.md)
+├── .claude/                   agent skills (incl. `.claude/skills/workflow/`), the reviewer subagent and project settings (docs/guides/agent-tooling.md)
 ├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
 ├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
@@ -31,6 +31,7 @@ local-llm/
 ├── Makefile                   make backend, make frontend, make check, make help
 ├── README.md                  what it is, running it, pages and URLs
 ├── MAP.md                     this file
+├── scripts/throwaway-stack/   up/stub/backend/down scripts for a disposable real-backend check (README beside them)
 ├── apps/                      the applications themselves
 │   ├── server/                FastAPI backend (package local_llm)
 │   ├── web/                   Astro + React + shadcn/ui frontend
@@ -39,7 +40,7 @@ local-llm/
 └── infra/                     docker-compose for Postgres + pgvector, Redis, SearXNG and the sandbox mirror
 ```
 
-`scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
+The old shell orchestrator and `llama-console` CLI helpers (the former `scripts/`) and
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
 (2026-09-18) — see `docs/decisions.md`. `make backend`/
 `make frontend` are the replacement entry points; serving configuration
@@ -68,7 +69,7 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   `benchmark_schema_note` rows), `serving-change` (launch flags and the
   `config_id` fingerprint), `ui-standard` (checking a UI change against the interface standard),
   `reindex` (refreshing the codebase-memory-mcp
-  index).
+  index), `workflow` (issue to merged PR, subagents, unattended runs).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.claude/settings.json`** — tracked project settings: only Claude Code's
   attribution setting, which keeps Claude Code's co-author trailers,
