@@ -237,6 +237,20 @@ describe('UiStandardPage (/ui)', () => {
 		expect(canvas().textContent).toContain('Quadrupling the sample halves the standard error.');
 	});
 
+	it('compares a text document with its earlier version in Changes, read-only (CNV-9)', () => {
+		renderPage();
+		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });
+		fireEvent.click(screen.getByRole('button', { name: /method-notes\.md/ }));
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Changes' }));
+		const rows = within(canvas()).getByRole('region', { name: /Changes from version 1 to version 2/ });
+		expect(rows.textContent).toContain('Added: - Quadrupling the sample halves the standard error.');
+		expect(rows.textContent).toContain('Removed: - Doubling the sample shrinks the standard error.');
+		expect(within(canvas()).getByRole('status').textContent).toMatch(/lines? added, \d+ removed/);
+		expect(within(canvas()).queryByRole('button', { name: 'Edit document' })).toBeNull();
+		fireEvent.click(within(canvas()).getByRole('button', { name: 'Source' }));
+		expect(within(canvas()).getByRole('button', { name: 'Edit document' })).toBeTruthy();
+	});
+
 	it('edits a text document on request and will not close over unsaved changes', () => {
 		renderPage();
 		const canvas = () => screen.getByRole('complementary', { name: 'Canvas' });

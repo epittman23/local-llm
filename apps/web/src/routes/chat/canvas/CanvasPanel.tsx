@@ -3,6 +3,7 @@ import {
 	ChevronDownIcon,
 	CodeIcon,
 	CopyIcon,
+	DiffIcon,
 	DownloadIcon,
 	EllipsisIcon,
 	EyeIcon,
@@ -38,12 +39,21 @@ import { getSandboxOutputText } from '@/lib/apis/sandbox';
 import type { CanvasDocument } from '@/lib/chat/documents';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { copyToClipboard } from '@/lib/utils';
-import { dayjs } from '@/lib/utils/dates';
 import { useUnsavedChanges } from '@/lib/ui/useUnsavedChanges';
 import { Canvas, type Mode, viewsOf } from './Canvas';
 import { CanvasContext } from './CanvasContext';
 import { CSV_MAX_BYTES, HTML_MAX_BYTES, TEXT_MAX_BYTES } from './limits';
-import { canEditDocument, contentUrl, fileIdOf, kindIcon, kindLabel, uneditableText, withVersion } from './present';
+import {
+	canEditDocument,
+	contentUrl,
+	fileIdOf,
+	hasChanges,
+	kindIcon,
+	kindLabel,
+	uneditableText,
+	versionLabel,
+	withVersion
+} from './present';
 import type { CanvasState } from './useCanvas';
 import { useDocumentEdit } from './useDocumentEdit';
 import { useDocumentVersions } from './useDocumentVersions';
@@ -97,14 +107,6 @@ function FileItems({ canvas }: { canvas: CanvasState }) {
 			</DropdownMenuItem>
 		);
 	});
-}
-
-/** "Version 2, 14:05": the time of day for today's, with the date for an older one. */
-function versionLabel(version: FileVersion, index: number): string {
-	if (index === 0) return 'Version 1 (original)';
-	if (!version.created_at) return `Version ${index + 1}`;
-	const at = dayjs(version.created_at * 1000);
-	return `Version ${index + 1}, ${at.format(at.isToday() ? 'HH:mm' : 'YYYY-MM-DD HH:mm')}`;
 }
 
 /** The choice among a document's versions, as a radio group (CNV-6). */
@@ -283,12 +285,15 @@ export function CanvasPanel({
 
 	const views = doc ? viewsOf(doc) : { preview: false, source: false };
 	const writing = doc?.source.type === 'block' && !doc.source.closed;
-	const switchShown = views.preview && views.source;
+	const changesShown = editable && shown !== null && hasChanges(shown, versions);
+	const switchShown = Number(views.preview) + Number(views.source) + Number(changesShown) > 1;
 	const previewEnabled = !writing;
+	const chosen = choice && choice.id === doc?.id ? choice.mode : null;
 	let mode: Mode = 'preview';
 	if (!views.preview) mode = 'source';
 	else if (views.source)
-		mode = writing || edit.editing ? 'source' : choice && choice.id === doc?.id ? choice.mode : 'preview';
+		mode = writing || edit.editing ? 'source' : chosen === 'source' || chosen === 'preview' ? chosen : 'preview';
+	if (changesShown && chosen === 'changes' && !writing && !edit.editing) mode = 'changes';
 	const reloads = doc && reload?.id === doc.id ? reload.n : 0;
 	const choose = (next: Mode) => {
 		if (doc && previewEnabled) setChoice({ id: doc.id, mode: next });
@@ -306,6 +311,7 @@ export function CanvasPanel({
 			if (doc) setViewing({ docId: doc.id, versionId });
 		});
 
+	const canEdit = canStartEdit && isLatest && mode !== 'changes';
 	const canReload = doc !== null && doc.kind === 'html' && doc.source.type !== 'upload' && mode === 'preview';
 	const doReload = () => doc && setReload({ id: doc.id, n: reloads + 1 });
 	const canCopy = doc !== null && COPYABLE.has(doc.kind);
@@ -347,7 +353,7 @@ export function CanvasPanel({
 		actions = smUp ? (
 			<>
 				{canvas.documents.length > 1 && <FilesMenu canvas={canvas} />}
-				{canStartEdit && isLatest && (
+				{canEdit && (
 					<Button
 						variant="outline"
 						size="sm"
@@ -377,9 +383,11 @@ export function CanvasPanel({
 				{canCopy ? (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="outline" size="sm">
-								Copy
-								<ChevronDownIcon aria-hidden />
+							<Button variant="outline" size="sm" aria-label="Copy" className="px-1.5 @min-[30rem]:px-2.5">
+								{/* At the panel's narrowest the menu is its icon, so the heading stays whole beside the view switch. */}
+								<CopyIcon aria-hidden className="@min-[30rem]:hidden" />
+								<span className="hidden @min-[30rem]:inline">Copy</span>
+								<ChevronDownIcon aria-hidden className="hidden @min-[30rem]:block" />
 							</Button>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="end">
@@ -425,7 +433,7 @@ export function CanvasPanel({
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
-					{canStartEdit && isLatest && (
+					{canEdit && (
 						<DropdownMenuItem onSelect={startEdit}>
 							<PencilIcon aria-hidden />
 							Edit document
@@ -462,33 +470,58 @@ export function CanvasPanel({
 		);
 	}
 
+	// With a Changes segment the switch is a little smaller at the panel's narrowest, so the heading keeps its room.
+	const segment = changesShown ? 'size-6 @min-[30rem]:size-7' : undefined;
 	const leading = switchShown ? (
 		<fieldset className="flex">
 			<legend className="sr-only">View</legend>
-			<Button
-				variant={mode === 'preview' ? 'secondary' : 'ghost'}
-				size="icon-sm"
-				aria-label="Preview"
-				aria-pressed={mode === 'preview'}
-				disabled={!previewEnabled}
-				onClick={() =>
-					guard.confirmLeave(() => {
-						edit.discard();
-						choose('preview');
-					})
-				}
-			>
-				<EyeIcon aria-hidden />
-			</Button>
-			<Button
-				variant={mode === 'source' ? 'secondary' : 'ghost'}
-				size="icon-sm"
-				aria-label="Source"
-				aria-pressed={mode === 'source'}
-				onClick={() => choose('source')}
-			>
-				<CodeIcon aria-hidden />
-			</Button>
+			{views.preview && (
+				<Button
+					variant={mode === 'preview' ? 'secondary' : 'ghost'}
+					size="icon-sm"
+					aria-label="Preview"
+					className={segment}
+					aria-pressed={mode === 'preview'}
+					disabled={!previewEnabled}
+					onClick={() =>
+						guard.confirmLeave(() => {
+							edit.discard();
+							choose('preview');
+						})
+					}
+				>
+					<EyeIcon aria-hidden />
+				</Button>
+			)}
+			{views.source && (
+				<Button
+					variant={mode === 'source' ? 'secondary' : 'ghost'}
+					size="icon-sm"
+					aria-label="Source"
+					className={segment}
+					aria-pressed={mode === 'source'}
+					onClick={() => choose('source')}
+				>
+					<CodeIcon aria-hidden />
+				</Button>
+			)}
+			{changesShown && (
+				<Button
+					variant={mode === 'changes' ? 'secondary' : 'ghost'}
+					size="icon-sm"
+					aria-label="Changes"
+					className={segment}
+					aria-pressed={mode === 'changes'}
+					onClick={() =>
+						guard.confirmLeave(() => {
+							edit.discard();
+							choose('changes');
+						})
+					}
+				>
+					<DiffIcon aria-hidden />
+				</Button>
+			)}
 		</fieldset>
 	) : undefined;
 
@@ -520,7 +553,7 @@ export function CanvasPanel({
 					</div>
 				)}
 				{removed && <Note>This document was removed from the chat. Your edits can still be copied.</Note>}
-				<Canvas doc={shown} mode={mode} reloads={reloads} edit={editProps} />
+				<Canvas doc={shown} mode={mode} reloads={reloads} edit={editProps} changes={{ versions, shownIndex }} />
 				{edit.editing && (
 					<div className="px-3 pb-3">
 						<SaveBar

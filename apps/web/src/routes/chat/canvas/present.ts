@@ -2,6 +2,7 @@ import { FileCodeIcon, FileIcon, FileTextIcon, GlobeIcon, ImageIcon, TableIcon }
 import type { FileVersion } from '@/lib/apis/files/versions';
 import { type CanvasDocument, UUID } from '@/lib/chat/documents';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { dayjs } from '@/lib/utils/dates';
 import { TEXT_MAX_BYTES } from './limits';
 
 /** Where a file's bytes are served (GET /files/{id}/content). `id` is a UUID (`documents.ts` accepts nothing else). */
@@ -83,4 +84,20 @@ export function uneditableText(text: { text: string; truncated: boolean }): 'tru
 export function withVersion(doc: CanvasDocument, version: Pick<FileVersion, 'id' | 'size'> | null): CanvasDocument {
 	if (!version || (doc.source.type !== 'output' && doc.source.type !== 'upload')) return doc;
 	return { ...doc, bytes: version.size ?? doc.bytes, source: { ...doc.source, fileId: version.id } };
+}
+
+/** "Version 2, 14:05": the time of day for today's, with the date for an older one. */
+export function versionLabel(version: FileVersion, index: number): string {
+	if (index === 0) return 'Version 1 (original)';
+	if (!version.created_at) return `Version ${index + 1}`;
+	const at = dayjs(version.created_at * 1000);
+	return `Version ${index + 1}, ${at.format(at.isToday() ? 'HH:mm' : 'YYYY-MM-DD HH:mm')}`;
+}
+
+/**
+ * Whether the document has a Changes view (CNV-9): a text document with more than one saved version.
+ * Versions are only listed for what `canEditDocument` accepts, so a block, an image, a PDF, a page and a table have none.
+ */
+export function hasChanges(doc: CanvasDocument, versions: readonly unknown[]): boolean {
+	return versions.length > 1 && canEditDocument(doc);
 }
