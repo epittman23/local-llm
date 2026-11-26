@@ -3,7 +3,9 @@
 > **Status: Phases 1 to 3 built (Phase 1 2026-11-15, #1129; Phase 2
 > 2026-11-25, #1159; Phase 3 2026-11-26): documents a model provides are
 > cards in the reply that open in the canvas, a viewer, and a text file can
-> be edited there and saved as a version. Phase 4 is not scheduled.** The interface design is shown on
+> be edited there and saved as a version. Phase 4 is under way: the
+> comparison of two versions is built (2026-11-26); the rest is not
+> scheduled.** The interface design is shown on
 > `/ui` ("Canvas") and specified by the CNV rules in
 > [docs/guides/ui-standard.md](../guides/ui-standard.md). This file is the
 > implementation plan. The owner settled all five of its decisions on
@@ -40,7 +42,7 @@ else (`docs/guides/sandbox.md`, "Outputs").
 
 ## The design
 
-The interface is specified by CNV-1 to CNV-8 in the standard and shown on
+The interface is specified by CNV-1 to CNV-9 in the standard and shown on
 `/ui`. In short:
 
 ```
@@ -348,11 +350,39 @@ Where the build goes beyond the text above, or settles a point it left open
   registers one while open, so opening Settings over a dirty canvas swaps it;
   leaving then does not ask (a reload still does).
 
-### Phase 4: later, not scheduled
+### Phase 4: later
 
-Editing HTML with a live preview beside the source; editing a CSV as a
-table; a comparison of two versions; writing an edit back into the sandbox
-workspace; showing a cited knowledge file in the canvas.
+Built: a comparison of two versions (below). Not scheduled: editing HTML
+with a live preview beside the source; editing a CSV as a table; writing an
+edit back into the sandbox workspace; showing a cited knowledge file in the
+canvas.
+
+#### Phase 4: what was built (a comparison of two versions)
+
+- **A third header segment, Changes** (CNV-3, CNV-9), offered only when a
+  text document has more than one saved version (`hasChanges` in
+  `canvas/present.ts`). It is read-only: Edit document is hidden in it, and
+  switching to it with unsaved edits asks first, through the same
+  `useUnsavedChanges` guard as Preview.
+- **From and To selectors**, local state, starting at the version shown
+  against the one before it; the same version cannot be both. Picking a
+  version in the Versions menu starts them again.
+- **An own line diff**, `lib/utils/lineDiff.ts` (Myers, with the common
+  start and end trimmed first), pure and unit-tested. No `diff` or
+  `@codemirror/merge` dependency. Bounds: 5,000 lines a side, and an edit
+  budget of 2,000 changed lines, past which it says so and points to Source.
+  CRLF is read as LF; a difference in only the line endings or the final
+  newline is named, not drawn.
+- **Each side** is read with `useDocumentText` (the cache the editor uses);
+  a version cut at 256 KiB is not compared, since a partial diff misleads.
+- **Cuts, deliberate.** Unified only: a canvas column is too narrow for side
+  by side. No diff of the unsaved draft against its baseline (the obvious
+  follow-up, a "Review changes" before Save). No word-level highlighting.
+  No backend change and no migration.
+- **Where it lives.** `canvas/views/ChangesView.tsx` (`ChangesView`, and
+  `DiffView`, which `/ui` reuses), wired through `Canvas.tsx` (mode
+  `changes`) and `CanvasPanel.tsx`. `versionLabel` moved to `present.ts`
+  so the selectors and the Versions menu word a version the same way.
 
 ## Risks and how the plan handles them
 

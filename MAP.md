@@ -125,7 +125,7 @@ Start here for "how do I run/use this."
   backend, uploads, outputs and call sites).
 - **`plans/`** — implementation plans awaiting or under execution:
   `canvas.md` (the document viewer and text editor beside a chat: the viewer
-  is built, the editor is planned; its interface is on `/ui` and in the
+  and the editor are built, the version comparison too; its interface is on `/ui` and in the
   standard's CNV rules),
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report);
@@ -506,7 +506,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   kind, with `SandboxedHtmlFrame.tsx`, the scripts-only frame; the editor:
   `useDocumentEdit.ts` the draft and the save, `useDocumentVersions.ts` a
   document's saved versions, and `present.ts`'s `canEditDocument` and
-  `withVersion`), `ChatMenu`,
+  `withVersion`; the comparison: `views/ChangesView.tsx`, a diff of two
+  versions, over `lib/utils/lineDiff.ts`, the line diff), `ChatMenu`,
   `ChatTitle` (the header's title with Rename, Pin and Tags), `JumpToLatest`,
   `DropOverlay` (the drop target for files), `TemporaryNotice` (the
   temporary-chat switch and chip), `ErrorReply` (a failed reply, FBK-4),
@@ -564,7 +565,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `handle` and title format (LAY-5), `focusSource.ts` marks keyboard focus
   (A11Y-1) and `returnFocus.ts` returns focus to what opened a layer (NAV-4). **`src/routes/ui/`** is `/ui`, the
   standard's demo page (public, static); its `canvas.tsx` is a mock of
-  the canvas's editor (`docs/plans/canvas.md`, Phase 3; the real one is in
+  the canvas's editor and its Changes view (`docs/plans/canvas.md`, Phases 3 and 4; the real one is in
   `routes/chat/canvas/`), beside a demo of the real `SidePanel`.
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s

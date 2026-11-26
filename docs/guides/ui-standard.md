@@ -926,7 +926,8 @@ The panel beside a chat that shows a document: a file the model produced, a
 page it wrote, a file that was uploaded. Shown on `/ui`. **The design is
 decided. Phase 1, the side-panel shell (`components/layout/SidePanel.tsx`),
 Phase 2, the viewer (`routes/chat/canvas/`), and Phase 3, editing (CNV-6),
-are built; `/ui` shows the editor's design.** Its plan is
+and Phase 4's comparison of two versions (CNV-9) are built; `/ui` shows the editor's
+and the comparison's design.** Its plan is
 [docs/plans/canvas.md](../plans/canvas.md).
 
 **CNV-1. What a model provides is a card in the reply and a document in the
@@ -953,7 +954,8 @@ beside the sidebar (`expanded`, which has no separator; the chat stays
 mounted, hidden). `focusOnOpen` is false when the canvas opens by itself.
 
 **CNV-3. One header, the same for every kind**, left to right: the Preview /
-Source switch when the kind has both; the document's name and kind; then the
+Source switch when the kind has both, with a third segment, Changes, when a
+text document has more than one saved version (CNV-9); the document's name and kind; then the
 file list (when the chat has more than one document), Copy with its menu
 (Copy, Download), Reload for a live page, Expand, Close. Every icon has a
 name (ACT-4). Below `md` everything but the switch and Close folds into one
@@ -962,7 +964,7 @@ menu.
 **CNV-4. A kind has one renderer**, the same one wherever that kind is shown.
 A page of HTML, and an `svg` code block: a sandboxed frame that loads nothing from the network (CNV-5). Markdown: the
 chat's rendering, at reading width (TYP-5). Text and code: the standard's code block with line numbers
-(CNT-2). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
+(CNT-2). Changes (a text document with more than one version): a unified line diff, text only (CNV-9). CSV: the standard's table (DAT-1, DAT-2). Image (an SVG file
 included, always as an image) and PDF: fitted to the canvas. Anything else: its name, its size and a Download button.
 
 **CNV-5. A page the model wrote runs in a sandboxed frame and sits in a
@@ -1012,6 +1014,34 @@ returns to the card that opened it** (NAV-4). Opening a document moves focus
 to the canvas's heading; opening by itself when a reply finishes (decision 3
 in `docs/plans/canvas.md`) does not, so the message box keeps focus. While focus is inside a page's frame the keys
 belong to the page, so Close is always one Tab away from the frame.
+
+**CNV-9. Changes compares two saved versions as a unified line diff, read-only
+and as text.** The header's third segment, Changes, is offered only for a
+Markdown, text or code file with more than one version (never for a block, a
+page, a table, an image or a PDF), so its trigger is "Changes" beside Preview
+and Source. Edit document is not offered in it, and switching to it with
+unsaved edits asks first ('Discard changes?', FRM-3). Two selectors, From and
+To, list the versions as the Versions menu does; they start at the version
+shown against the one before it (version 1 against 2 when version 1 is shown),
+the same version cannot be both (the other selector disables it), and the
+order is free: a Swap button ("Swap From and To") reads the change backwards. They are local
+state, not in the address, and start again when another version is picked in
+the Versions menu. Under them a summary reads "3 lines added, 1 removed", or
+"No differences" (or, when only the line endings or the final newline
+differ, says so). Each row has the old and new line number, a `+` or `-`
+glyph and a tint of the success or danger surface: the glyph carries the
+meaning, never the tint alone (COL-3); unchanged lines have neither. An
+unchanged run of more than 6 lines folds into one button, "20 unchanged
+lines". The rows are in one region that scrolls both ways and takes focus
+(`tabindex="0"`, A11Y-2) named "Changes from version 1 to version 2". Every
+line is a text node, so a diff of an HTML file is of its source and the page
+never renders; there is no side-by-side layout, because the canvas is a
+narrow column. The diff is computed in the browser (`lib/utils/lineDiff.ts`)
+within two bounds: more than 5,000 lines on a side says the versions are too
+long to compare, and more than 2,000 changed lines says they differ too much
+to compare line by line, each pointing to Source. A version cut at the
+256 KiB cap is not compared: "A version is too large to compare here". The
+Changes state is shown on `/ui`.
 
 ## Words
 
