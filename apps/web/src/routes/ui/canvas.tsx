@@ -2,6 +2,7 @@ import {
 	ChevronDownIcon,
 	CodeIcon,
 	CopyIcon,
+	DiffIcon,
 	DownloadIcon,
 	EllipsisIcon,
 	EyeIcon,
@@ -41,6 +42,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RowButton } from '@/components/ui/row-button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DiffView } from '@/routes/chat/canvas/views/ChangesView';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Example, Section } from './parts';
 
@@ -130,6 +132,17 @@ const LANGUAGE: Record<Kind, string> = { HTML: 'xml', Markdown: 'markdown', Pyth
 
 /** CNV-4: which kinds have a Preview as well as a Source, and which can be edited. */
 const HAS_PREVIEW: Record<Kind, boolean> = { HTML: true, Markdown: true, Python: false, CSV: true };
+/** CNV-9: an earlier version of each editable document, for the Changes view. */
+const PREVIOUS: Record<string, string> = {
+	notes: NOTES.replace('Quadrupling the sample halves', 'Doubling the sample shrinks').replace(
+		'\n- The estimate assumes independent observations.',
+		''
+	),
+	fit: SCRIPT.replace('rng = np.random.default_rng(7)', 'rng = np.random.default_rng(1)').replace(
+		'\n\n\nrng',
+		'\n\nrng'
+	)
+};
 const EDITABLE: Record<Kind, boolean> = { HTML: false, Markdown: true, Python: true, CSV: false };
 
 /** CNV-1: a document in a reply is a card that opens the canvas. */
@@ -210,7 +223,7 @@ function IconAction({ label, onClick, children }: { label: string; onClick: () =
 export function CanvasSection() {
 	const [texts, setTexts] = useState(() => Object.fromEntries(DOCUMENTS.map((d) => [d.id, d.text])));
 	const [openId, setOpenId] = useState<string | null>('explorer');
-	const [mode, setMode] = useState<'preview' | 'source'>('preview');
+	const [mode, setMode] = useState<'preview' | 'source' | 'changes'>('preview');
 	const [draft, setDraft] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(false);
 	const [reloads, setReloads] = useState(0);
@@ -223,6 +236,8 @@ export function CanvasSection() {
 	const editing = draft !== null;
 	const dirty = editing && draft !== text;
 	const showPreview = doc !== null && HAS_PREVIEW[doc.kind] && mode === 'preview' && !editing;
+	const previous = doc ? PREVIOUS[doc.id] : undefined;
+	const showChanges = previous !== undefined && mode === 'changes' && !editing;
 
 	// CNV-6: with unsaved changes, opening another document or closing asks first.
 	// `pending` is what was asked for: a document id, or null for Close.
@@ -278,11 +293,11 @@ export function CanvasSection() {
 			id="canvas"
 			title="Canvas"
 			lead="A document the model provides, whether a file or a page of HTML, is a card in the reply and opens beside the chat, where it can be read, inspected as source and, for text, edited. The viewer is built and the side panel it opens in is shared with the chat's Controls; the editor's surface and keys are built and its save flow is a design, not yet built, and the documents below are invented."
-			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNT-4', 'LAY-4', 'NAV-4']}
+			rules={['CNV-1', 'CNV-2', 'CNV-3', 'CNV-4', 'CNV-5', 'CNV-6', 'CNV-8', 'CNV-9', 'CNT-4', 'LAY-4', 'NAV-4']}
 		>
 			<Example
 				title="A reply with four documents"
-				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
+				note="Choose a card. The page is live inside a sandboxed frame and sits on a themed surround; Source shows it with line numbers. The Markdown and Python documents can be edited, and Changes compares them with their earlier version: the editor is the Source view with a caret, highlighted as you type, and saving is on request. On a narrow screen the canvas covers the chat instead of squeezing it. The real breakpoints are wider than a demo inside a page can use; the side panel below shows CNV-2's resize handle and remembered width."
 			>
 				<div
 					ref={frame}
@@ -320,27 +335,40 @@ export function CanvasSection() {
 							className={`border-border bg-surface-1 flex min-h-0 min-w-0 flex-col lg:border-l ${expanded ? 'lg:col-span-2 lg:border-l-0' : ''}`}
 						>
 							<div className="border-border flex items-center gap-1 border-b px-2 py-1.5">
-								{HAS_PREVIEW[doc.kind] && (
+								{(HAS_PREVIEW[doc.kind] || previous !== undefined) && (
 									<fieldset className="flex" disabled={editing}>
 										<legend className="sr-only">View</legend>
+										{HAS_PREVIEW[doc.kind] && (
+											<Button
+												variant={showPreview ? 'secondary' : 'ghost'}
+												size="icon-sm"
+												aria-label="Preview"
+												aria-pressed={showPreview}
+												onClick={() => setMode('preview')}
+											>
+												<EyeIcon aria-hidden />
+											</Button>
+										)}
 										<Button
-											variant={showPreview ? 'secondary' : 'ghost'}
-											size="icon-sm"
-											aria-label="Preview"
-											aria-pressed={showPreview}
-											onClick={() => setMode('preview')}
-										>
-											<EyeIcon aria-hidden />
-										</Button>
-										<Button
-											variant={showPreview ? 'ghost' : 'secondary'}
+											variant={!showPreview && !showChanges ? 'secondary' : 'ghost'}
 											size="icon-sm"
 											aria-label="Source"
-											aria-pressed={!showPreview}
+											aria-pressed={!showPreview && !showChanges}
 											onClick={() => setMode('source')}
 										>
 											<CodeIcon aria-hidden />
 										</Button>
+										{previous !== undefined && (
+											<Button
+												variant={showChanges ? 'secondary' : 'ghost'}
+												size="icon-sm"
+												aria-label="Changes"
+												aria-pressed={showChanges}
+												onClick={() => setMode('changes')}
+											>
+												<DiffIcon aria-hidden />
+											</Button>
+										)}
 									</fieldset>
 								)}
 								<h4 ref={heading} tabIndex={-1} className="min-w-0 flex-1 truncate px-2" title={doc.name}>
@@ -442,6 +470,12 @@ export function CanvasSection() {
 										language={LANGUAGE[doc.kind]}
 										edit={{ label: `Edit ${doc.name}`, onChange: setDraft, inputRef: editor, onSave: save }}
 									/>
+								) : showChanges && previous !== undefined ? (
+									// CNV-9: a unified line diff of two versions, read-only.
+									<div className="flex h-full min-h-0 flex-col">
+										<p className="text-foreground-muted text-dense border-b px-3 py-2">From version 1 to version 2</p>
+										<DiffView from={previous} to={text} label={`Changes from version 1 to version 2 of ${doc.name}`} />
+									</div>
 								) : showPreview && doc.kind === 'HTML' ? (
 									// CNV-5: scripts only, an opaque origin, filled through srcdoc; the surround is themed.
 									<div className="bg-surface-1 h-full p-3">
@@ -464,7 +498,7 @@ export function CanvasSection() {
 								)}
 							</div>
 
-							{EDITABLE[doc.kind] && (
+							{EDITABLE[doc.kind] && !showChanges && (
 								<div className="border-border flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
 									<p className="text-dense text-foreground-muted" role="status">
 										{!editing ? 'All changes saved' : dirty ? 'Unsaved changes' : 'Editing. No changes yet'}

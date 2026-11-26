@@ -7,6 +7,28 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-26** (latest): **Canvas Phase 4 (c) built: a comparison of two
+  versions.** A Markdown, text or code file with more than one saved version
+  gets a third header segment, Changes, beside Preview and Source
+  (`docs/plans/canvas.md`, CNV-9). The orchestrating session settled these
+  points on 2026-11-26.
+  - **An own line diff, not a dependency.** `lib/utils/lineDiff.ts` is a small
+    Myers diff, pure and unit-tested, with the common start and end trimmed
+    first. Neither `diff` nor `@codemirror/merge` is installed, and a line
+    diff of two text files is too small a need to add one.
+  - **Bounded, because the input is a file anyone can upload.** More than
+    5,000 lines on a side is "too long to compare here", and more than 2,000
+    changed lines is "differ too much to compare line by line"; both point
+    to Source. A version cut at the 256 KiB cap is not compared at all, since
+    a partial diff would mislead.
+  - **Unified only, no diff of the unsaved draft.** A canvas column is too
+    narrow for side by side. Comparing the draft with its baseline (a
+    "Review changes" before Save) is the obvious follow-up and is not built.
+  - **Read-only, and as text.** Edit document is hidden in Changes, switching
+    to it with unsaved edits asks first, every line is a React text node (a
+    diff of an HTML file never renders it), and a row's meaning is its `+` or
+    `-` glyph, with the tint only reinforcing it. No backend change and no
+    migration.
 - **2026-11-26** (latest): **Canvas Phase 3 built: the editor.** A Markdown,
   text or code file can be edited in the canvas and saved as a new version
   (`docs/plans/canvas.md`; decision 2 of 2026-11-14 applies as written). The

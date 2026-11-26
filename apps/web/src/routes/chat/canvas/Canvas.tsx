@@ -1,4 +1,6 @@
+import type { FileVersion } from '@/lib/apis/files/versions';
 import type { CanvasDocument } from '@/lib/chat/documents';
+import { ChangesView } from './views/ChangesView';
 import { CsvView } from './views/CsvView';
 import { DownloadView } from './views/DownloadView';
 import { HtmlView } from './views/HtmlView';
@@ -7,7 +9,10 @@ import { MarkdownView } from './views/MarkdownView';
 import { PdfView } from './views/PdfView';
 import { SourceView, type SourceEdit } from './views/SourceView';
 
-export type Mode = 'preview' | 'source';
+export type Mode = 'preview' | 'source' | 'changes';
+
+/** What the Changes view compares: the document's saved versions and which one is shown. */
+export type ChangesOf = { versions: FileVersion[]; shownIndex: number };
 
 /**
  * CNV-4: which views a document has. A page the model wrote or drew has both;
@@ -29,23 +34,35 @@ export function viewsOf(doc: CanvasDocument): { preview: boolean; source: boolea
 	}
 }
 
-/** The canvas's body: one view of one document. A mode the document lacks falls back to the one it has; an edit is the source's. */
+/** The canvas's body: one view of one document. A mode the document lacks falls back to the one it has; an edit is the source's; Changes is read-only. */
 export function Canvas({
 	doc,
 	mode,
 	reloads = 0,
-	edit
+	edit,
+	changes
 }: {
 	doc: CanvasDocument;
 	mode: Mode;
 	reloads?: number;
 	/** The draft being edited: the source view becomes its editor. */
 	edit?: SourceEdit;
+	/** Needed for mode `changes`, which compares two saved versions (CNV-9). */
+	changes?: ChangesOf;
 }) {
 	const views = viewsOf(doc);
 	const showing = mode === 'source' && views.source ? 'source' : views.preview ? 'preview' : 'source';
 	let view: React.ReactNode;
-	if (showing === 'source') view = <SourceView doc={doc} edit={edit} />;
+	if (mode === 'changes' && changes)
+		view = (
+			<ChangesView
+				key={`${doc.id}:${changes.shownIndex}`}
+				doc={doc}
+				versions={changes.versions}
+				shownIndex={changes.shownIndex}
+			/>
+		);
+	else if (showing === 'source') view = <SourceView doc={doc} edit={edit} />;
 	else {
 		switch (doc.kind) {
 			case 'html':
